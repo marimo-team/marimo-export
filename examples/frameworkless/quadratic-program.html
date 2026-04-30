@@ -1,0 +1,1349 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Quadratic program explainer</title>
+    <script type="importmap">
+      {
+        "imports": {
+          "@marimo-team/export-reader": "../../packages/reader/dist/read-export.js",
+          "@marimo-team/export-loader-anywidget": "../../packages/loader-anywidget/dist/index.js",
+          "#anywidget/runtime/buffers": "../../packages/loader-anywidget/dist/runtime/buffers.js",
+          "#anywidget/runtime/export-runtime": "../../packages/loader-anywidget/dist/runtime/export-runtime.js",
+          "#anywidget/runtime/widget-store": "../../packages/loader-anywidget/dist/runtime/widget-store.js",
+          "fflate": "https://cdn.skypack.dev/fflate@0.8.2?min"
+        }
+      }
+    </script>
+    <style>
+      :root {
+        --background: #ffffff;
+        --foreground: #0f172a;
+        --surface: #ffffff;
+        --muted-surface: #f1f5f9;
+        --border: #e2e8f0;
+        --border-strong: #94a3b8;
+        --primary: #0880ea;
+        --primary-dark: #0b68cb;
+        --accent: #edf6ff;
+        --muted: #64748b;
+        --success: #047857;
+        --warning: #946800;
+        --warning-surface: #fef2a5;
+        --danger: #b91c1c;
+        --radius-sm: 4px;
+        --radius-md: 6px;
+        --radius-lg: 8px;
+        font-family:
+          "PT Sans",
+          "Avenir Next",
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          sans-serif;
+        color: var(--foreground);
+        background: var(--background);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+      }
+
+      button,
+      input,
+      table {
+        font: inherit;
+      }
+
+      button {
+        min-height: 36px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-md);
+        background: var(--surface);
+        color: var(--foreground);
+        cursor: pointer;
+      }
+
+      button:hover {
+        border-color: var(--primary);
+      }
+
+      button:focus-visible,
+      input:focus-visible {
+        outline: 2px solid var(--primary);
+        outline-offset: 2px;
+      }
+
+      .shell {
+        width: min(1320px, calc(100vw - 32px));
+        margin: 0 auto;
+        padding: 28px 0 52px;
+      }
+
+      .topbar {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 24px;
+        align-items: start;
+        padding-bottom: 18px;
+        border-bottom: 1px solid var(--border);
+      }
+
+      .eyebrow {
+        margin: 0 0 6px;
+        color: var(--muted);
+        font-size: 13px;
+        font-weight: 700;
+        letter-spacing: 0;
+        text-transform: uppercase;
+      }
+
+      h1,
+      h2,
+      h3,
+      p {
+        margin: 0;
+      }
+
+      h1 {
+        max-width: 760px;
+        font-size: clamp(30px, 4vw, 44px);
+        line-height: 1.08;
+        letter-spacing: 0;
+      }
+
+      .lede {
+        max-width: 780px;
+        margin-top: 10px;
+        color: var(--muted);
+        font-size: 17px;
+        line-height: 1.45;
+      }
+
+      .status {
+        min-width: 250px;
+        padding: 10px 12px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        background: var(--muted-surface);
+        color: var(--muted);
+        font-size: 14px;
+        line-height: 1.35;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: minmax(330px, 0.86fr) minmax(520px, 1.14fr);
+        gap: 18px;
+        margin-top: 22px;
+      }
+
+      .panel {
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        background: var(--surface);
+      }
+
+      .panel-header {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 14px 16px;
+        border-bottom: 1px solid var(--border);
+      }
+
+      .panel-header h2 {
+        font-size: 20px;
+        line-height: 1.25;
+      }
+
+      .panel-header span {
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      .panel-body {
+        padding: 16px;
+      }
+
+      .preset-list {
+        display: grid;
+        gap: 8px;
+      }
+
+      .preset-button {
+        width: 100%;
+        padding: 10px 12px;
+        text-align: left;
+      }
+
+      .preset-button[aria-pressed="true"] {
+        border-color: var(--primary);
+        background: var(--accent);
+        color: var(--primary-dark);
+      }
+
+      .preset-button strong,
+      .preset-button span {
+        display: block;
+      }
+
+      .preset-button strong {
+        font-size: 14px;
+      }
+
+      .preset-button span {
+        margin-top: 2px;
+        color: var(--muted);
+        font-family: "Fira Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 12px;
+        line-height: 1.35;
+      }
+
+      .control-stack {
+        display: grid;
+        gap: 14px;
+        margin-top: 18px;
+      }
+
+      label {
+        display: grid;
+        gap: 7px;
+        color: var(--muted);
+        font-size: 13px;
+        font-weight: 700;
+      }
+
+      .slider-line {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 68px;
+        gap: 10px;
+        align-items: center;
+      }
+
+      input[type="range"] {
+        width: 100%;
+        accent-color: var(--primary);
+      }
+
+      .value-chip {
+        min-height: 28px;
+        padding: 5px 7px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        background: var(--muted-surface);
+        color: var(--foreground);
+        font-family: "Fira Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 12px;
+        text-align: right;
+      }
+
+      .widget-slot {
+        min-height: 192px;
+        margin-top: 12px;
+        padding: 10px;
+        border: 1px dashed var(--border-strong);
+        border-radius: var(--radius-md);
+        overflow: auto;
+      }
+
+      .widget-slot:empty::before {
+        content: "Loading wigglystuff.Matrix";
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      .plot-wrap {
+        padding: 12px;
+      }
+
+      canvas {
+        display: block;
+        width: 100%;
+        aspect-ratio: 1 / 1;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-md);
+        background: #ffffff;
+      }
+
+      .metrics {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+        margin-top: 12px;
+      }
+
+      .metric {
+        min-height: 80px;
+        padding: 10px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-md);
+        background: var(--muted-surface);
+      }
+
+      .metric span {
+        display: block;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 700;
+        text-transform: uppercase;
+      }
+
+      .metric strong {
+        display: block;
+        margin-top: 8px;
+        overflow-wrap: anywhere;
+        font-family: "Fira Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 15px;
+        line-height: 1.35;
+      }
+
+      .reading {
+        margin-top: 12px;
+        padding: 12px;
+        border-left: 4px solid var(--primary);
+        background: var(--accent);
+        color: var(--foreground);
+        line-height: 1.45;
+      }
+
+      .reading.warning {
+        border-left-color: var(--warning);
+        background: var(--warning-surface);
+      }
+
+      .bottom-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(320px, 0.7fr);
+        gap: 18px;
+        margin-top: 18px;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 14px;
+      }
+
+      th,
+      td {
+        padding: 10px;
+        border-bottom: 1px solid var(--border);
+        text-align: left;
+        vertical-align: top;
+      }
+
+      th {
+        color: var(--muted);
+        font-size: 12px;
+        text-transform: uppercase;
+      }
+
+      td code,
+      pre {
+        font-family: "Fira Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+
+      td code {
+        font-size: 12px;
+      }
+
+      pre {
+        margin: 0;
+        overflow-x: auto;
+        white-space: pre-wrap;
+        color: var(--foreground);
+        font-size: 13px;
+        line-height: 1.5;
+      }
+
+      .formula {
+        display: grid;
+        gap: 12px;
+      }
+
+      .formula-block {
+        padding: 12px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-md);
+        background: var(--muted-surface);
+      }
+
+      .formula-block h3 {
+        margin-bottom: 8px;
+        font-size: 15px;
+      }
+
+      .error {
+        margin-top: 12px;
+        padding: 10px 12px;
+        border: 1px solid #fecaca;
+        border-radius: var(--radius-md);
+        background: #fef2f2;
+        color: var(--danger);
+        white-space: pre-wrap;
+      }
+
+      @media (max-width: 980px) {
+        .topbar,
+        .grid,
+        .bottom-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .status {
+          min-width: 0;
+        }
+
+        .metrics {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+      }
+
+      @media (max-width: 560px) {
+        .shell {
+          width: min(100vw - 20px, 1320px);
+          padding-top: 18px;
+        }
+
+        .metrics {
+          grid-template-columns: 1fr;
+        }
+
+        .panel-header {
+          display: grid;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Static marimo export</p>
+          <h1>Quadratic program, from the bowl up</h1>
+          <p class="lede">
+            The exported notebook data fixes the linear constraints and vector q. Changing P
+            reshapes the quadratic bowl; the optimum moves to the lowest contour that still touches
+            the feasible region.
+          </p>
+        </div>
+        <div id="status" class="status" role="status">Loading static export...</div>
+      </header>
+
+      <section class="grid" aria-label="Quadratic program workspace">
+        <div class="panel">
+          <div class="panel-header">
+            <h2>Matrix P</h2>
+            <span>exported wigglystuff.Matrix</span>
+          </div>
+          <div class="panel-body">
+            <div id="preset-list" class="preset-list" aria-label="Preset matrices"></div>
+
+            <div class="control-stack" aria-label="Symmetric matrix controls">
+              <label for="p11">
+                P11 curvature
+                <span class="slider-line">
+                  <input id="p11" type="range" min="0.4" max="8" step="0.1" />
+                  <span id="p11-value" class="value-chip"></span>
+                </span>
+              </label>
+              <label for="p12">
+                P12 coupling
+                <span class="slider-line">
+                  <input id="p12" type="range" min="-4" max="4" step="0.1" />
+                  <span id="p12-value" class="value-chip"></span>
+                </span>
+              </label>
+              <label for="p22">
+                P22 curvature
+                <span class="slider-line">
+                  <input id="p22" type="range" min="0.4" max="8" step="0.1" />
+                  <span id="p22-value" class="value-chip"></span>
+                </span>
+              </label>
+            </div>
+
+            <div id="widget" class="widget-slot"></div>
+            <p id="widget-note" class="reading">
+              The matrix editor above is the AnyWidget bundle exported from the live notebook.
+            </p>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-header">
+            <h2>Feasible region and level curves</h2>
+            <span id="plot-caption">x1, x2 in [-5, 5]</span>
+          </div>
+          <div class="plot-wrap">
+            <canvas
+              id="plot"
+              role="img"
+              aria-label="Quadratic program contour plot with feasible region and optimum"
+            ></canvas>
+            <div class="metrics" aria-label="Solution metrics">
+              <div class="metric">
+                <span>objective</span>
+                <strong id="metric-objective">--</strong>
+              </div>
+              <div class="metric">
+                <span>x star</span>
+                <strong id="metric-x">--</strong>
+              </div>
+              <div class="metric">
+                <span>active set</span>
+                <strong id="metric-active">--</strong>
+              </div>
+              <div class="metric">
+                <span>eigenvalues</span>
+                <strong id="metric-eigs">--</strong>
+              </div>
+            </div>
+            <p id="interpretation" class="reading"></p>
+            <p id="error" class="error" hidden></p>
+          </div>
+        </div>
+      </section>
+
+      <section class="bottom-grid" aria-label="KKT and data readout">
+        <div class="panel">
+          <div class="panel-header">
+            <h2>KKT ledger</h2>
+            <span>stationarity, feasibility, complementarity</span>
+          </div>
+          <div class="panel-body">
+            <table>
+              <thead>
+                <tr>
+                  <th scope="col">Quantity</th>
+                  <th scope="col">Value</th>
+                  <th scope="col">Meaning</th>
+                </tr>
+              </thead>
+              <tbody id="kkt-body"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-header">
+            <h2>Problem data</h2>
+            <span>captured from notebook.py</span>
+          </div>
+          <div class="panel-body formula">
+            <div class="formula-block">
+              <h3>Objective</h3>
+              <pre id="objective-block">--</pre>
+            </div>
+            <div class="formula-block">
+              <h3>Constraints</h3>
+              <pre id="constraint-block">--</pre>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script type="module">
+      import { jsonLoader, readLatestExport } from "@marimo-team/export-reader";
+      import { anywidgetLoader } from "@marimo-team/export-loader-anywidget";
+
+      const SUMMARY_FORMAT = "qp.summary.json.v1";
+      const ROOT = "./exports/quadratic-program/";
+      const DOMAIN = { min: -5, max: 5 };
+      const EPS = 1e-7;
+      const PRESET_TITLES = new Map([
+        ["default-coupled", "Default coupled bowl"],
+        ["round-bowl", "Round bowl"],
+        ["wide-valley", "Wide valley"],
+        ["tilted-ridge", "Tilted ridge"],
+        ["steep-x1", "Steep x1"],
+      ]);
+
+      const $ = (selector) => document.querySelector(selector);
+      const state = {
+        export: null,
+        summaries: [],
+        base: null,
+        matrix: [
+          [4, -1.4],
+          [-1.4, 4],
+        ],
+        activePreset: "default-coupled",
+        widgetBundle: null,
+        widget: null,
+        widgetMount: null,
+        widgetRemountTimer: null,
+      };
+
+      const controls = {
+        p11: $("#p11"),
+        p12: $("#p12"),
+        p22: $("#p22"),
+      };
+
+      boot().catch(showError);
+
+      async function boot() {
+        const exported = await readLatestExport({
+          root: ROOT,
+          loaders: [jsonLoader(SUMMARY_FORMAT), anywidgetLoader()],
+        });
+        state.export = exported;
+        state.summaries = await Promise.all(
+          exported.scenarios().map(async (scenario) => ({
+            scenario,
+            title: PRESET_TITLES.get(scenario) ?? scenario,
+            summary: await exported.get({ scenario, value: "summary", format: "json" }).load(),
+          })),
+        );
+        state.summaries.sort((a, b) => presetRank(a.scenario) - presetRank(b.scenario));
+        state.base = state.summaries[0].summary;
+
+        renderPresets();
+        installControlHandlers();
+        setMatrix(state.base.P, { source: "preset", scenario: state.summaries[0].scenario });
+        await loadWigglyWidget(exported);
+        await remountWigglyWidget(state.matrix);
+        renderProblemData();
+        $("#status").textContent =
+          `Loaded ${state.summaries.length} scenarios and the wigglystuff.Matrix bundle.`;
+      }
+
+      function renderPresets() {
+        $("#preset-list").innerHTML = state.summaries
+          .map(({ scenario, title, summary }) => {
+            const matrix = formatMatrix(summary.P);
+            return `
+              <button class="preset-button" type="button" data-scenario="${escapeAttr(scenario)}" aria-pressed="false">
+                <strong>${escapeHtml(title)}</strong>
+                <span>${escapeHtml(matrix)}</span>
+              </button>
+            `;
+          })
+          .join("");
+
+        $("#preset-list").addEventListener("click", (event) => {
+          const target = event.target instanceof Element ? event.target : null;
+          const button = target?.closest("button[data-scenario]");
+          if (!button) {
+            return;
+          }
+          const item = state.summaries.find(
+            (candidate) => candidate.scenario === button.dataset.scenario,
+          );
+          if (!item) {
+            return;
+          }
+          setMatrix(item.summary.P, { source: "preset", scenario: item.scenario });
+        });
+      }
+
+      function installControlHandlers() {
+        for (const input of Object.values(controls)) {
+          input.addEventListener("input", () => {
+            setMatrix(matrixFromControls(), { source: "slider", scenario: null });
+          });
+        }
+
+        window.addEventListener("resize", () => render());
+      }
+
+      async function loadWigglyWidget(exported) {
+        try {
+          const scenario = state.summaries[0].scenario;
+          state.widgetBundle = await exported
+            .get({ scenario, value: "widget", format: "bundle" })
+            .load();
+        } catch (error) {
+          $("#widget-note").classList.add("warning");
+          $("#widget-note").textContent =
+            "The QP app is running, but the exported AnyWidget bundle did not mount.";
+          throw error;
+        }
+      }
+
+      async function remountWigglyWidget(matrix) {
+        if (!state.widgetBundle) {
+          return;
+        }
+        if (state.widgetMount) {
+          await state.widgetMount.unmount();
+        }
+        $("#widget").replaceChildren();
+        const mounted = await state.widgetBundle.mount($("#widget"), { state: { matrix } });
+        state.widget = mounted.widget;
+        state.widgetMount = mounted;
+        state.widget.host.onStateChange((patch, fullState) => {
+          if (!("matrix" in patch || "matrix" in fullState)) {
+            return;
+          }
+          setMatrix(fullState.matrix, { source: "widget", scenario: null });
+        });
+      }
+
+      function scheduleWidgetRemount(matrix) {
+        if (!state.widgetBundle) {
+          return;
+        }
+        if (state.widgetRemountTimer !== null) {
+          clearTimeout(state.widgetRemountTimer);
+        }
+        const snapshot = matrix.map((row) => [...row]);
+        state.widgetRemountTimer = setTimeout(() => {
+          state.widgetRemountTimer = null;
+          remountWigglyWidget(snapshot).catch(showError);
+        }, 80);
+      }
+
+      function setMatrix(nextMatrix, { source, scenario }) {
+        const matrix = symmetricMatrix(nextMatrix);
+        state.matrix = matrix;
+        state.activePreset = scenario ?? matchingPreset(matrix);
+        syncControls(matrix);
+        syncPresetButtons();
+
+        if (source !== "widget") {
+          scheduleWidgetRemount(matrix);
+        }
+
+        render();
+      }
+
+      function syncControls(matrix) {
+        const values = {
+          p11: matrix[0][0],
+          p12: matrix[0][1],
+          p22: matrix[1][1],
+        };
+        for (const [key, value] of Object.entries(values)) {
+          controls[key].value = String(
+            clamp(value, Number(controls[key].min), Number(controls[key].max)),
+          );
+          $(`#${key}-value`).textContent = formatNumber(value, 2);
+        }
+      }
+
+      function syncPresetButtons() {
+        for (const button of $("#preset-list").querySelectorAll("button[data-scenario]")) {
+          button.setAttribute(
+            "aria-pressed",
+            String(button.dataset.scenario === state.activePreset),
+          );
+        }
+      }
+
+      function matrixFromControls() {
+        const p11 = Number(controls.p11.value);
+        const p12 = Number(controls.p12.value);
+        const p22 = Number(controls.p22.value);
+        return [
+          [p11, p12],
+          [p12, p22],
+        ];
+      }
+
+      function render() {
+        if (!state.base) {
+          return;
+        }
+        const data = state.base;
+        const solution = solveQp(state.matrix, data.q, data.G, data.h);
+        drawPlot(solution, data);
+        renderMetrics(solution);
+        renderKkt(solution, data);
+        renderInterpretation(solution);
+      }
+
+      function renderProblemData() {
+        const data = state.base;
+        $("#objective-block").textContent =
+          "minimize  1/2 x^T P x + q^T x\n" +
+          `q = ${formatVector(data.q, 3)}\n` +
+          `P = ${formatMatrix(state.matrix)}`;
+        $("#constraint-block").textContent =
+          "subject to  Gx <= h\n" +
+          data.G.map((row, index) => {
+            return `c${index + 1}: ${formatNumber(row[0], 3)} x1 + ${formatNumber(row[1], 3)} x2 <= ${formatNumber(data.h[index], 3)}`;
+          }).join("\n");
+      }
+
+      function renderMetrics(solution) {
+        $("#metric-objective").textContent = solution.x
+          ? formatNumber(solution.objective, 5)
+          : "--";
+        $("#metric-x").textContent = solution.x ? formatVector(solution.x, 4) : "--";
+        $("#metric-active").textContent =
+          solution.active.length === 0
+            ? "none"
+            : solution.active.map((index) => `c${index + 1}`).join(", ");
+        $("#metric-eigs").textContent = formatVector(solution.eigen.values, 3);
+        $("#plot").setAttribute(
+          "aria-label",
+          solution.x
+            ? `QP contour plot. Optimum at ${formatVector(solution.x, 3)} with objective ${formatNumber(solution.objective, 3)}.`
+            : "QP contour plot. No convex optimum is available for the current matrix.",
+        );
+        renderProblemData();
+      }
+
+      function renderKkt(solution, data) {
+        const rows = [];
+        if (!solution.x) {
+          rows.push([
+            "status",
+            "no convex KKT solution",
+            "P needs positive eigenvalues for the standard convex guarantee.",
+          ]);
+        } else {
+          const gradient = add(matVec(state.matrix, solution.x), data.q);
+          const dualPush = solution.dual.reduce(
+            (acc, lambda, index) => add(acc, scale(data.G[index], lambda)),
+            [0, 0],
+          );
+          const stationarity = add(gradient, dualPush);
+          const comp = solution.dual.map((lambda, index) => lambda * solution.slack[index]);
+          rows.push([
+            "gradient",
+            formatVector(gradient, 5),
+            "The bowl pulls downhill by P x* + q.",
+          ]);
+          rows.push([
+            "dual push",
+            formatVector(dualPush, 5),
+            "Active constraint normals push back.",
+          ]);
+          rows.push([
+            "stationarity",
+            formatVector(stationarity, 6),
+            "At optimum, downhill pull plus dual push cancels.",
+          ]);
+          rows.push([
+            "slack",
+            formatVector(solution.slack, 5),
+            "Zero slack means the boundary is touched.",
+          ]);
+          rows.push([
+            "lambda",
+            formatVector(solution.dual, 5),
+            "Positive dual values mark binding inequalities.",
+          ]);
+          rows.push([
+            "lambda * slack",
+            formatVector(comp, 6),
+            "Complementarity is near zero for every constraint.",
+          ]);
+        }
+
+        $("#kkt-body").innerHTML = rows
+          .map(([name, value, meaning]) => {
+            return `
+              <tr>
+                <th scope="row"><code>${escapeHtml(name)}</code></th>
+                <td><code>${escapeHtml(value)}</code></td>
+                <td>${escapeHtml(meaning)}</td>
+              </tr>
+            `;
+          })
+          .join("");
+      }
+
+      function renderInterpretation(solution) {
+        const box = $("#interpretation");
+        box.classList.toggle("warning", !solution.isConvex);
+        if (!solution.isConvex) {
+          box.textContent =
+            "P has a nonpositive eigenvalue, so the level curves are no longer a convex bowl. The standard QP story needs P to be positive semidefinite.";
+          return;
+        }
+        if (!solution.x) {
+          box.textContent =
+            "The visible feasible polygon is empty or the active-set solver did not find a valid KKT point.";
+          return;
+        }
+        if (solution.active.length === 0) {
+          box.textContent =
+            "The unconstrained minimum of the bowl already lies inside the feasible region, so no inequality needs to push back.";
+          return;
+        }
+        box.textContent = `The unconstrained bowl would descend past the feasible region. ${solution.active
+          .map((index) => `c${index + 1}`)
+          .join(
+            " and ",
+          )} becomes active, and the dual weights supply the push that balances the gradient.`;
+      }
+
+      function drawPlot(solution, data) {
+        const canvas = $("#plot");
+        const rect = canvas.getBoundingClientRect();
+        const size = Math.max(320, Math.floor(rect.width));
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = Math.floor(size * dpr);
+        canvas.height = Math.floor(size * dpr);
+        const ctx = canvas.getContext("2d");
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.clearRect(0, 0, size, size);
+
+        const scale = size / (DOMAIN.max - DOMAIN.min);
+        const project = ([x, y]) => [(x - DOMAIN.min) * scale, (DOMAIN.max - y) * scale];
+
+        drawGrid(ctx, size, project);
+        drawFeasibleRegion(ctx, data.G, data.h, project);
+        if (solution.isConvex) {
+          drawEllipses(ctx, state.matrix, data.q, project);
+        }
+        drawConstraints(ctx, data.G, data.h, solution.active, project);
+        if (solution.x) {
+          drawPoint(ctx, solution.x, project);
+        }
+      }
+
+      function drawGrid(ctx, size, project) {
+        ctx.save();
+        ctx.strokeStyle = "#eef2f7";
+        ctx.lineWidth = 1;
+        for (let value = DOMAIN.min; value <= DOMAIN.max; value += 1) {
+          const [x0, y0] = project([DOMAIN.min, value]);
+          const [x1, y1] = project([DOMAIN.max, value]);
+          ctx.beginPath();
+          ctx.moveTo(x0, y0);
+          ctx.lineTo(x1, y1);
+          ctx.stroke();
+
+          const [x2, y2] = project([value, DOMAIN.min]);
+          const [x3, y3] = project([value, DOMAIN.max]);
+          ctx.beginPath();
+          ctx.moveTo(x2, y2);
+          ctx.lineTo(x3, y3);
+          ctx.stroke();
+        }
+        ctx.strokeStyle = "#94a3b8";
+        ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        ctx.moveTo(...project([DOMAIN.min, 0]));
+        ctx.lineTo(...project([DOMAIN.max, 0]));
+        ctx.moveTo(...project([0, DOMAIN.min]));
+        ctx.lineTo(...project([0, DOMAIN.max]));
+        ctx.stroke();
+        ctx.fillStyle = "#64748b";
+        ctx.font = "12px PT Sans, sans-serif";
+        ctx.fillText("x1", size - 22, project([0, 0])[1] - 8);
+        ctx.fillText("x2", project([0, 0])[0] + 8, 14);
+        ctx.restore();
+      }
+
+      function drawFeasibleRegion(ctx, G, h, project) {
+        const polygon = feasiblePolygon(G, h);
+        if (polygon.length === 0) {
+          return;
+        }
+        ctx.save();
+        ctx.beginPath();
+        polygon.forEach((point, index) => {
+          const [x, y] = project(point);
+          if (index === 0) {
+            ctx.moveTo(x, y);
+          } else {
+            ctx.lineTo(x, y);
+          }
+        });
+        ctx.closePath();
+        ctx.fillStyle = "rgba(100, 116, 139, 0.23)";
+        ctx.fill();
+        ctx.strokeStyle = "#64748b";
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      function drawEllipses(ctx, P, q, project) {
+        const center = scale(solve2(P, scale(q, -1)) ?? [0, 0], 1);
+        const eigen = eigen2(P);
+        const levels = [0.2, 0.5, 0.9, 1.4, 2.1, 3.0, 4.2, 5.6, 7.2, 9.0];
+        ctx.save();
+        ctx.strokeStyle = "#7c3aed";
+        ctx.lineWidth = 1.2;
+        ctx.globalAlpha = 0.76;
+        for (const delta of levels) {
+          const r0 = Math.sqrt((2 * delta) / Math.max(eigen.values[0], EPS));
+          const r1 = Math.sqrt((2 * delta) / Math.max(eigen.values[1], EPS));
+          ctx.beginPath();
+          for (let step = 0; step <= 160; step += 1) {
+            const theta = (step / 160) * Math.PI * 2;
+            const local = [r0 * Math.cos(theta), r1 * Math.sin(theta)];
+            const point = add(
+              center,
+              add(scale(eigen.vectors[0], local[0]), scale(eigen.vectors[1], local[1])),
+            );
+            const [x, y] = project(point);
+            if (step === 0) {
+              ctx.moveTo(x, y);
+            } else {
+              ctx.lineTo(x, y);
+            }
+          }
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+
+      function drawConstraints(ctx, G, h, active, project) {
+        ctx.save();
+        G.forEach((row, index) => {
+          const segment = lineSegment(row, h[index]);
+          if (!segment) {
+            return;
+          }
+          const isActive = active.includes(index);
+          ctx.strokeStyle = isActive ? "#0880ea" : "#334155";
+          ctx.lineWidth = isActive ? 3 : 1.2;
+          ctx.beginPath();
+          ctx.moveTo(...project(segment[0]));
+          ctx.lineTo(...project(segment[1]));
+          ctx.stroke();
+          const labelPoint = project(segment[1]);
+          ctx.fillStyle = isActive ? "#0b68cb" : "#334155";
+          ctx.font = "12px PT Sans, sans-serif";
+          ctx.fillText(`c${index + 1}`, labelPoint[0] - 24, labelPoint[1] - 6);
+        });
+        ctx.restore();
+      }
+
+      function drawPoint(ctx, point, project) {
+        const [x, y] = project(point);
+        ctx.save();
+        ctx.fillStyle = "#020617";
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(x, y, 6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = "#020617";
+        ctx.font = "13px PT Sans, sans-serif";
+        ctx.fillText("x*", x + 9, y - 9);
+        ctx.restore();
+      }
+
+      function solveQp(P, q, G, h) {
+        const eigen = eigen2(P);
+        const isConvex = eigen.values[0] > 1e-6;
+        const candidates = [];
+        for (const active of activeSets(G.length)) {
+          const candidate = solveActiveSet(P, q, G, h, active);
+          if (!candidate) {
+            continue;
+          }
+          const slack = h.map((limit, index) => limit - dot(G[index], candidate.x));
+          const feasible = slack.every((value) => value >= -1e-5);
+          const dualOk = candidate.lambda.every((value) => value >= -1e-5);
+          if (!feasible || !dualOk) {
+            continue;
+          }
+          const dual = G.map(() => 0);
+          active.forEach((constraintIndex, lambdaIndex) => {
+            dual[constraintIndex] = Math.max(0, candidate.lambda[lambdaIndex]);
+          });
+          candidates.push({
+            x: candidate.x,
+            active,
+            dual,
+            slack,
+            objective: objective(P, q, candidate.x),
+          });
+        }
+        candidates.sort((a, b) => a.objective - b.objective);
+        const best = candidates[0];
+        if (!best) {
+          return {
+            x: null,
+            active: [],
+            dual: G.map(() => 0),
+            slack: [],
+            objective: null,
+            eigen,
+            isConvex,
+          };
+        }
+        return { ...best, eigen, isConvex };
+      }
+
+      function solveActiveSet(P, q, G, h, active) {
+        const size = 2 + active.length;
+        const matrix = Array.from({ length: size }, () => Array(size).fill(0));
+        const rhs = Array(size).fill(0);
+        matrix[0][0] = P[0][0];
+        matrix[0][1] = P[0][1];
+        matrix[1][0] = P[1][0];
+        matrix[1][1] = P[1][1];
+        rhs[0] = -q[0];
+        rhs[1] = -q[1];
+
+        active.forEach((constraintIndex, lambdaIndex) => {
+          const column = 2 + lambdaIndex;
+          matrix[0][column] = G[constraintIndex][0];
+          matrix[1][column] = G[constraintIndex][1];
+          matrix[column][0] = G[constraintIndex][0];
+          matrix[column][1] = G[constraintIndex][1];
+          rhs[column] = h[constraintIndex];
+        });
+
+        const solved = solveLinear(matrix, rhs);
+        if (!solved) {
+          return null;
+        }
+        return {
+          x: [solved[0], solved[1]],
+          lambda: solved.slice(2),
+        };
+      }
+
+      function solveLinear(inputMatrix, inputRhs) {
+        const n = inputRhs.length;
+        const matrix = inputMatrix.map((row, index) => [...row, inputRhs[index]]);
+        for (let column = 0; column < n; column += 1) {
+          let pivot = column;
+          for (let row = column + 1; row < n; row += 1) {
+            if (Math.abs(matrix[row][column]) > Math.abs(matrix[pivot][column])) {
+              pivot = row;
+            }
+          }
+          if (Math.abs(matrix[pivot][column]) < 1e-10) {
+            return null;
+          }
+          [matrix[column], matrix[pivot]] = [matrix[pivot], matrix[column]];
+          const divisor = matrix[column][column];
+          for (let col = column; col <= n; col += 1) {
+            matrix[column][col] /= divisor;
+          }
+          for (let row = 0; row < n; row += 1) {
+            if (row === column) {
+              continue;
+            }
+            const factor = matrix[row][column];
+            for (let col = column; col <= n; col += 1) {
+              matrix[row][col] -= factor * matrix[column][col];
+            }
+          }
+        }
+        return matrix.map((row) => row[n]);
+      }
+
+      function activeSets(count) {
+        const sets = [[]];
+        for (let i = 0; i < count; i += 1) {
+          sets.push([i]);
+        }
+        for (let i = 0; i < count; i += 1) {
+          for (let j = i + 1; j < count; j += 1) {
+            sets.push([i, j]);
+          }
+        }
+        return sets;
+      }
+
+      function feasiblePolygon(G, h) {
+        let polygon = [
+          [DOMAIN.min, DOMAIN.min],
+          [DOMAIN.max, DOMAIN.min],
+          [DOMAIN.max, DOMAIN.max],
+          [DOMAIN.min, DOMAIN.max],
+        ];
+        G.forEach((row, index) => {
+          polygon = clipPolygon(polygon, row, h[index]);
+        });
+        return polygon;
+      }
+
+      function clipPolygon(polygon, normal, limit) {
+        const result = [];
+        for (let index = 0; index < polygon.length; index += 1) {
+          const current = polygon[index];
+          const previous = polygon[(index + polygon.length - 1) % polygon.length];
+          const currentInside = dot(normal, current) <= limit + EPS;
+          const previousInside = dot(normal, previous) <= limit + EPS;
+          if (currentInside !== previousInside) {
+            result.push(intersection(previous, current, normal, limit));
+          }
+          if (currentInside) {
+            result.push(current);
+          }
+        }
+        return result;
+      }
+
+      function intersection(a, b, normal, limit) {
+        const ab = [b[0] - a[0], b[1] - a[1]];
+        const denominator = dot(normal, ab);
+        if (Math.abs(denominator) < EPS) {
+          return a;
+        }
+        const t = (limit - dot(normal, a)) / denominator;
+        return [a[0] + t * ab[0], a[1] + t * ab[1]];
+      }
+
+      function lineSegment(normal, limit) {
+        const points = [];
+        const [a, b] = normal;
+        for (const x of [DOMAIN.min, DOMAIN.max]) {
+          if (Math.abs(b) > EPS) {
+            const y = (limit - a * x) / b;
+            if (y >= DOMAIN.min - EPS && y <= DOMAIN.max + EPS) {
+              points.push([x, y]);
+            }
+          }
+        }
+        for (const y of [DOMAIN.min, DOMAIN.max]) {
+          if (Math.abs(a) > EPS) {
+            const x = (limit - b * y) / a;
+            if (x >= DOMAIN.min - EPS && x <= DOMAIN.max + EPS) {
+              points.push([x, y]);
+            }
+          }
+        }
+        const unique = [];
+        for (const point of points) {
+          if (!unique.some((candidate) => distance(candidate, point) < 1e-5)) {
+            unique.push(point);
+          }
+        }
+        return unique.length >= 2 ? [unique[0], unique[1]] : null;
+      }
+
+      function eigen2(P) {
+        const a = P[0][0];
+        const b = P[0][1];
+        const d = P[1][1];
+        const trace = a + d;
+        const root = Math.sqrt((a - d) ** 2 + 4 * b * b);
+        const l0 = (trace - root) / 2;
+        const l1 = (trace + root) / 2;
+        return {
+          values: [l0, l1],
+          vectors: [eigenVector(P, l0), eigenVector(P, l1)],
+        };
+      }
+
+      function eigenVector(P, lambda) {
+        const a = P[0][0];
+        const b = P[0][1];
+        const d = P[1][1];
+        const vector = Math.abs(b) > EPS ? [b, lambda - a] : lambda <= d ? [1, 0] : [0, 1];
+        const norm = Math.hypot(vector[0], vector[1]) || 1;
+        return [vector[0] / norm, vector[1] / norm];
+      }
+
+      function solve2(matrix, rhs) {
+        const det = matrix[0][0] * matrix[1][1] - matrix[0][1] * matrix[1][0];
+        if (Math.abs(det) < EPS) {
+          return null;
+        }
+        return [
+          (rhs[0] * matrix[1][1] - matrix[0][1] * rhs[1]) / det,
+          (matrix[0][0] * rhs[1] - rhs[0] * matrix[1][0]) / det,
+        ];
+      }
+
+      function objective(P, q, x) {
+        return 0.5 * dot(x, matVec(P, x)) + dot(q, x);
+      }
+
+      function matVec(matrix, vector) {
+        return matrix.map((row) => dot(row, vector));
+      }
+
+      function dot(a, b) {
+        return a.reduce((total, value, index) => total + value * b[index], 0);
+      }
+
+      function add(a, b) {
+        return a.map((value, index) => value + b[index]);
+      }
+
+      function scale(vector, amount) {
+        return vector.map((value) => value * amount);
+      }
+
+      function distance(a, b) {
+        return Math.hypot(a[0] - b[0], a[1] - b[1]);
+      }
+
+      function symmetricMatrix(input) {
+        const matrix = [
+          [Number(input?.[0]?.[0] ?? 0), Number(input?.[0]?.[1] ?? 0)],
+          [Number(input?.[1]?.[0] ?? 0), Number(input?.[1]?.[1] ?? 0)],
+        ];
+        const off = (matrix[0][1] + matrix[1][0]) / 2;
+        return [
+          [matrix[0][0], off],
+          [off, matrix[1][1]],
+        ];
+      }
+
+      function matchingPreset(matrix) {
+        const match = state.summaries.find(({ summary }) => matrixClose(matrix, summary.P));
+        return match?.scenario ?? null;
+      }
+
+      function matrixClose(a, b) {
+        return (
+          Math.abs(a[0][0] - b[0][0]) < 1e-8 &&
+          Math.abs(a[0][1] - b[0][1]) < 1e-8 &&
+          Math.abs(a[1][0] - b[1][0]) < 1e-8 &&
+          Math.abs(a[1][1] - b[1][1]) < 1e-8
+        );
+      }
+
+      function presetRank(scenario) {
+        return [...PRESET_TITLES.keys()].indexOf(scenario);
+      }
+
+      function formatMatrix(matrix) {
+        return `[[${formatNumber(matrix[0][0], 2)}, ${formatNumber(matrix[0][1], 2)}], [${formatNumber(matrix[1][0], 2)}, ${formatNumber(matrix[1][1], 2)}]]`;
+      }
+
+      function formatVector(vector, digits = 3) {
+        return `[${vector.map((value) => formatNumber(value, digits)).join(", ")}]`;
+      }
+
+      function formatNumber(value, digits = 3) {
+        if (value === null || value === undefined || Number.isNaN(value)) {
+          return "--";
+        }
+        return Number(value)
+          .toFixed(digits)
+          .replace(/\.?0+$/, "");
+      }
+
+      function clamp(value, min, max) {
+        return Math.min(max, Math.max(min, value));
+      }
+
+      function escapeHtml(value) {
+        return String(value)
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;");
+      }
+
+      function escapeAttr(value) {
+        return escapeHtml(value).replaceAll("'", "&#39;");
+      }
+
+      function showError(error) {
+        const message = error instanceof Error ? error.stack || error.message : String(error);
+        $("#status").textContent = "Failed to load static export.";
+        $("#error").hidden = false;
+        $("#error").textContent = message;
+      }
+    </script>
+  </body>
+</html>

@@ -1,0 +1,78 @@
+scenarios:
+  - id: steady_single
+    state:
+      arrival_rate: 6.0
+      service_rate: 11.0
+      server_count: 1
+      scenario_name: steady_single
+      arrival_picker.value: 6.0
+      service_picker.value: 11.0
+      servers_picker.value: 1
+  - id: rush_single
+    state:
+      arrival_rate: 8.0
+      service_rate: 9.0
+      server_count: 1
+      scenario_name: rush_single
+      arrival_picker.value: 8.0
+      service_picker.value: 9.0
+      servers_picker.value: 1
+  - id: pooled_rush
+    state:
+      arrival_rate: 16.0
+      service_rate: 11.0
+      server_count: 2
+      scenario_name: pooled_rush
+      arrival_picker.value: 16.0
+      service_picker.value: 11.0
+      servers_picker.value: 2
+values:
+  summary:
+    source: queue_summary
+    formats:
+      json:
+        export:
+          type: ref
+          ref: moexport.exporters.core:json
+        options:
+          filename: queue-summary.json
+          format: queue.summary.json.v1
+          metadata:
+            kind: queue-summary
+  arrivals:
+    source: arrival_distribution
+    formats:
+      arrow:
+        export:
+          type: ref
+          ref: moexport.exporters.dataframe:arrow
+      parquet:
+        export:
+          type: ref
+          ref: moexport.exporters.dataframe:parquet
+  response_curve:
+    source: queue_curve
+    formats:
+      arrow:
+        export:
+          type: ref
+          ref: moexport.exporters.dataframe:arrow
+  chart:
+    source: wait_chart
+    formats:
+      vegalite:
+        export:
+          type: ref
+          ref: moexport.exporters.altair:vegalite
+  note:
+    source: queue_note
+    formats:
+      html:
+        export:
+          type: ref
+          ref: moexport.exporters.core:html
+        options:
+          filename: queue-note.html
+          format: queue.note.html.v1
+          metadata:
+            kind: marimo-markdown-output

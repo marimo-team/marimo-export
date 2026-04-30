@@ -1,0 +1,32 @@
+{
+  "name": "@marimo-team/export-reader",
+  "version": "0.1.0",
+  "description": "Browser-side reader for finished marimo export bundles.",
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "imports": {
+    "#reader/*": {
+      "types": "./dist/*.d.ts",
+      "import": "./dist/*.js"
+    }
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "build": "rm -rf dist && tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "oxlint .",
+    "format": "oxfmt --write ."
+  },
+  "dependencies": {
+    "fflate": "0.8.2"
+  }
+}

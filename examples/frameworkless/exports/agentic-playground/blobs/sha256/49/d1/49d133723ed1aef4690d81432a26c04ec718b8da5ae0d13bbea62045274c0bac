@@ -1,0 +1,100 @@
+[
+  {
+    "day": "Day 01",
+    "region": "North",
+    "mode": "balanced",
+    "demand": 104,
+    "target": 124
+  },
+  {
+    "day": "Day 02",
+    "region": "North",
+    "mode": "balanced",
+    "demand": 109,
+    "target": 127
+  },
+  {
+    "day": "Day 03",
+    "region": "North",
+    "mode": "balanced",
+    "demand": 113,
+    "target": 130
+  },
+  {
+    "day": "Day 04",
+    "region": "North",
+    "mode": "balanced",
+    "demand": 116,
+    "target": 133
+  },
+  {
+    "day": "Day 05",
+    "region": "North",
+    "mode": "balanced",
+    "demand": 116,
+    "target": 124
+  },
+  {
+    "day": "Day 06",
+    "region": "North",
+    "mode": "balanced",
+    "demand": 115,
+    "target": 127
+  },
+  {
+    "day": "Day 07",
+    "region": "North",
+    "mode": "balanced",
+    "demand": 112,
+    "target": 130
+  },
+  {
+    "day": "Day 08",
+    "region": "North",
+    "mode": "balanced",
+    "demand": 109,
+    "target": 133
+  },
+  {
+    "day": "Day 09",
+    "region": "North",
+    "mode": "balanced",
+    "demand": 106,
+    "target": 124
+  },
+  {
+    "day": "Day 10",
+    "region": "North",
+    "mode": "balanced",
+    "demand": 104,
+    "target": 127
+  },
+  {
+    "day": "Day 11",
+    "region": "North",
+    "mode": "balanced",
+    "demand": 104,
+    "target": 130
+  },
+  {
+    "day": "Day 12",
+    "region": "North",
+    "mode": "balanced",
+    "demand": 106,
+    "target": 133
+  },
+  {
+    "day": "Day 13",
+    "region": "North",
+    "mode": "balanced",
+    "demand": 110,
+    "target": 124
+  },
+  {
+    "day": "Day 14",
+    "region": "North",
+    "mode": "balanced",
+    "demand": 115,
+    "target": 127
+  }
+]

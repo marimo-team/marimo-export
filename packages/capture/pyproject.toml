@@ -1,0 +1,22 @@
+[project]
+name = "moexport"
+version = "0.1.0"
+description = "Capture live marimo notebook values into export bundles."
+readme = "README.md"
+authors = [{ name = "Péter Ferenc Gyarmati", email = "dev.petergy@gmail.com" }]
+requires-python = ">=3.12"
+dependencies = ["click>=8", "marimo", "pydantic>=2", "pyyaml>=6"]
+
+[project.optional-dependencies]
+dataframe = ["narwhals>=2", "pyarrow>=15"]
+altair = ["altair>=5", "vl-convert-python>=1.8"]
+anywidget = ["anywidget>=0.10"]
+all = ["altair>=5", "anywidget>=0.10", "narwhals>=2", "pyarrow>=15", "vl-convert-python>=1.8"]
+
+[project.scripts]
+moexport = "moexport:main"
+marimo-export = "moexport.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.11.8,<0.12.0"]
+build-backend = "uv_build"

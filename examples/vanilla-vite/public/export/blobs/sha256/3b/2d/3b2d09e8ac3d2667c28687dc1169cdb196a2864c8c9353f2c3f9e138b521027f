@@ -1,0 +1,325 @@
+
+    function render({ model, el }) {
+      const metrics = ["Open", "High", "Low", "Close"];
+      const modes = [
+        ["absolute", "Absolute"],
+        ["change", "Change"],
+      ];
+      const palette = ["#1d4ed8", "#059669", "#b91c1c", "#a16207", "#7c3aed", "#0f766e"];
+
+      const root = document.createElement("section");
+      root.className = "ohlc-widget";
+
+      const masthead = document.createElement("div");
+      masthead.className = "ohlc-masthead";
+      const kicker = document.createElement("div");
+      kicker.className = "ohlc-kicker";
+      kicker.textContent = "Market monitor";
+      const title = document.createElement("div");
+      title.className = "ohlc-title";
+      const subtitle = document.createElement("div");
+      subtitle.className = "ohlc-subtitle";
+      masthead.append(kicker, title, subtitle);
+
+      const panels = document.createElement("div");
+      panels.className = "ohlc-panels";
+
+      const metricPanel = document.createElement("div");
+      metricPanel.className = "ohlc-panel";
+      const metricLabel = document.createElement("div");
+      metricLabel.className = "ohlc-panel-label";
+      metricLabel.textContent = "Field";
+      const metricControls = document.createElement("div");
+      metricControls.className = "ohlc-controls";
+      const metricButtons = new Map();
+      metrics.forEach((metric) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.textContent = metric;
+        btn.addEventListener("click", () => {
+          model.set("metric", metric);
+          model.save_changes();
+        });
+        metricButtons.set(metric, btn);
+        metricControls.appendChild(btn);
+      });
+      metricPanel.append(metricLabel, metricControls);
+
+      const modePanel = document.createElement("div");
+      modePanel.className = "ohlc-panel";
+      const modeLabel = document.createElement("div");
+      modeLabel.className = "ohlc-panel-label";
+      modeLabel.textContent = "Scale";
+      const modeControls = document.createElement("div");
+      modeControls.className = "ohlc-controls";
+      const modeButtons = new Map();
+      modes.forEach(([mode, label]) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.textContent = label;
+        btn.addEventListener("click", () => {
+          model.set("mode", mode);
+          model.save_changes();
+        });
+        modeButtons.set(mode, btn);
+        modeControls.appendChild(btn);
+      });
+      modePanel.append(modeLabel, modeControls);
+
+      const symbolPanel = document.createElement("div");
+      symbolPanel.className = "ohlc-panel ohlc-panel-wide";
+      const symbolLabel = document.createElement("div");
+      symbolLabel.className = "ohlc-panel-label";
+      symbolLabel.textContent = "Coverage";
+      const symbolControls = document.createElement("div");
+      symbolControls.className = "ohlc-symbols";
+      symbolPanel.append(symbolLabel, symbolControls);
+
+      panels.append(metricPanel, modePanel, symbolPanel);
+
+      const summary = document.createElement("div");
+      summary.className = "ohlc-summary";
+
+      const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      svg.setAttribute("viewBox", "0 0 860 360");
+      svg.setAttribute("role", "img");
+      svg.classList.add("ohlc-chart");
+
+      const chartBg = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+      chartBg.setAttribute("x", "18");
+      chartBg.setAttribute("y", "12");
+      chartBg.setAttribute("width", "824");
+      chartBg.setAttribute("height", "304");
+      chartBg.setAttribute("rx", "18");
+      chartBg.setAttribute("class", "ohlc-chart-bg");
+
+      const grid = document.createElementNS("http://www.w3.org/2000/svg", "g");
+      const zeroLine = document.createElementNS("http://www.w3.org/2000/svg", "line");
+      zeroLine.setAttribute("class", "ohlc-zero");
+      const seriesGroup = document.createElementNS("http://www.w3.org/2000/svg", "g");
+      const xLabelStart = document.createElementNS("http://www.w3.org/2000/svg", "text");
+      const xLabelEnd = document.createElementNS("http://www.w3.org/2000/svg", "text");
+      const yLabelTop = document.createElementNS("http://www.w3.org/2000/svg", "text");
+      const yLabelBottom = document.createElementNS("http://www.w3.org/2000/svg", "text");
+      [xLabelStart, xLabelEnd, yLabelTop, yLabelBottom].forEach((label) => label.setAttribute("class", "ohlc-axis"));
+      xLabelStart.setAttribute("x", "40");
+      xLabelStart.setAttribute("y", "340");
+      xLabelEnd.setAttribute("x", "820");
+      xLabelEnd.setAttribute("y", "340");
+      xLabelEnd.setAttribute("text-anchor", "end");
+      yLabelTop.setAttribute("x", "40");
+      yLabelTop.setAttribute("y", "28");
+      yLabelBottom.setAttribute("x", "40");
+      yLabelBottom.setAttribute("y", "300");
+      svg.append(chartBg, grid, zeroLine, seriesGroup, xLabelStart, xLabelEnd, yLabelTop, yLabelBottom);
+
+      const legend = document.createElement("div");
+      legend.className = "ohlc-legend";
+
+      root.append(masthead, panels, summary, svg, legend);
+      el.append(root);
+
+      const number = (value) => Number(value ?? 0);
+      const formatValue = (value, mode) => {
+        if (!Number.isFinite(value)) return "—";
+        if (mode === "change") return `${value >= 0 ? "+" : ""}${(value * 100).toFixed(1)}%`;
+        return value.toFixed(2);
+      };
+      const fullDate = new Intl.DateTimeFormat(undefined, { day: "2-digit", month: "short", year: "numeric" });
+      const shortDate = new Intl.DateTimeFormat(undefined, { day: "2-digit", month: "short" });
+      const formatDate = (value, kind = "full") => {
+        const date = new Date(value);
+        if (Number.isNaN(date.valueOf())) return String(value);
+        return kind === "short" ? shortDate.format(date) : fullDate.format(date);
+      };
+
+      function groupedRows(rows) {
+        const map = new Map();
+        rows.forEach((row) => {
+          const symbol = row.Symbol;
+          if (!map.has(symbol)) map.set(symbol, []);
+          map.get(symbol).push(row);
+        });
+        for (const rows of map.values()) {
+          rows.sort((a, b) => new Date(a.Date) - new Date(b.Date));
+        }
+        return map;
+      }
+
+      function renderChart() {
+        const rows = model.get("rows") || [];
+        const titleText = model.get("title") || "Cross-sectional OHLC monitor";
+        const metric = model.get("metric") || "Close";
+        const mode = model.get("mode") || "absolute";
+        const grouped = groupedRows(rows);
+        const symbols = Array.from(grouped.keys());
+        const selected = model.get("selected_symbols") || symbols.slice(0, 3);
+        const selectedSet = new Set(selected.filter((symbol) => symbols.includes(symbol)));
+        if (!selectedSet.size && symbols.length) {
+          selectedSet.add(symbols[0]);
+          model.set("selected_symbols", [symbols[0]]);
+          model.save_changes();
+        }
+        const activeSymbols = symbols.filter((symbol) => selectedSet.has(symbol));
+        const valueKey = mode === "change" ? `${metric} Change` : metric;
+
+        const allRowsByDate = rows.slice().sort((a, b) => new Date(a.Date) - new Date(b.Date));
+        const firstDate = allRowsByDate[0]?.Date;
+        const lastDate = allRowsByDate.at(-1)?.Date;
+
+        title.textContent = titleText;
+        subtitle.textContent = `${metric} · ${mode === "change" ? "relative move" : "spot level"} · ${activeSymbols.length || 0} names in view`;
+
+        metricButtons.forEach((btn, name) => {
+          btn.dataset.active = name === metric ? "true" : "false";
+        });
+        modeButtons.forEach((btn, name) => {
+          btn.dataset.active = name === mode ? "true" : "false";
+        });
+
+        symbolControls.replaceChildren();
+        symbols.forEach((symbol, index) => {
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.textContent = symbol;
+          btn.dataset.active = selectedSet.has(symbol) ? "true" : "false";
+          btn.style.setProperty("--accent", palette[index % palette.length]);
+          btn.addEventListener("click", () => {
+            const next = new Set(model.get("selected_symbols") || []);
+            if (next.has(symbol)) {
+              if (next.size === 1) return;
+              next.delete(symbol);
+            } else {
+              next.add(symbol);
+            }
+            model.set("selected_symbols", Array.from(next));
+            model.save_changes();
+          });
+          symbolControls.appendChild(btn);
+        });
+
+        summary.textContent = firstDate && lastDate
+          ? `Coverage ${formatDate(firstDate)} → ${formatDate(lastDate)} · ${symbols.length} listed names in the series`
+          : "";
+
+        seriesGroup.replaceChildren();
+        grid.replaceChildren();
+        legend.replaceChildren();
+
+        if (!activeSymbols.length) {
+          subtitle.textContent = "Select at least one name";
+          xLabelStart.textContent = "";
+          xLabelEnd.textContent = "";
+          yLabelTop.textContent = "";
+          yLabelBottom.textContent = "";
+          zeroLine.setAttribute("x1", "0");
+          zeroLine.setAttribute("x2", "0");
+          zeroLine.setAttribute("y1", "0");
+          zeroLine.setAttribute("y2", "0");
+          return;
+        }
+
+        const series = activeSymbols.map((symbol) => ({
+          symbol,
+          rows: grouped.get(symbol) || [],
+        }));
+
+        const allRows = series.flatMap((entry) => entry.rows);
+        const times = allRows.map((row) => new Date(row.Date).valueOf());
+        const values = allRows.map((row) => number(row[valueKey]));
+        const left = 44;
+        const right = 820;
+        const top = 30;
+        const bottom = 294;
+        const width = right - left;
+        const height = bottom - top;
+        const minTime = Math.min(...times);
+        const maxTime = Math.max(...times);
+        let minValue = Math.min(...values.filter((value) => Number.isFinite(value)));
+        let maxValue = Math.max(...values.filter((value) => Number.isFinite(value)));
+        if (mode === "change") {
+          minValue = Math.min(minValue, 0);
+          maxValue = Math.max(maxValue, 0);
+        }
+        if (!Number.isFinite(minValue) || !Number.isFinite(maxValue)) {
+          minValue = 0;
+          maxValue = 1;
+        }
+        if (minValue === maxValue) {
+          minValue -= 1;
+          maxValue += 1;
+        }
+        const spanTime = Math.max(maxTime - minTime, 1);
+        const spanValue = maxValue - minValue;
+        const scaleX = (time) => left + ((time - minTime) / spanTime) * width;
+        const scaleY = (value) => bottom - ((value - minValue) / spanValue) * height;
+
+        [0, 0.5, 1].forEach((ratio) => {
+          const y = top + ratio * height;
+          const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+          line.setAttribute("class", "ohlc-grid");
+          line.setAttribute("x1", String(left));
+          line.setAttribute("x2", String(right));
+          line.setAttribute("y1", String(y));
+          line.setAttribute("y2", String(y));
+          grid.appendChild(line);
+        });
+
+        if (mode === "change") {
+          const y0 = scaleY(0);
+          zeroLine.setAttribute("x1", String(left));
+          zeroLine.setAttribute("x2", String(right));
+          zeroLine.setAttribute("y1", String(y0));
+          zeroLine.setAttribute("y2", String(y0));
+        } else {
+          zeroLine.setAttribute("x1", "0");
+          zeroLine.setAttribute("x2", "0");
+          zeroLine.setAttribute("y1", "0");
+          zeroLine.setAttribute("y2", "0");
+        }
+
+        xLabelStart.textContent = formatDate(firstDate || "", "short");
+        xLabelEnd.textContent = formatDate(lastDate || "", "short");
+        yLabelTop.textContent = formatValue(maxValue, mode);
+        yLabelBottom.textContent = formatValue(minValue, mode);
+
+        series.forEach((entry, index) => {
+          const color = palette[index % palette.length];
+          const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+          path.setAttribute("class", "ohlc-line");
+          path.setAttribute("stroke", color);
+          const d = entry.rows.map((row, i) => {
+            const x = scaleX(new Date(row.Date).valueOf()).toFixed(2);
+            const y = scaleY(number(row[valueKey])).toFixed(2);
+            return `${i ? "L" : "M"}${x} ${y}`;
+          }).join(" ");
+          path.setAttribute("d", d);
+          seriesGroup.appendChild(path);
+
+          const latest = number(entry.rows.at(-1)?.[valueKey]);
+          const first = number(entry.rows[0]?.[valueKey]);
+          const delta = latest - first;
+          const item = document.createElement("div");
+          item.className = "ohlc-legend-item";
+          item.innerHTML = `
+            <div class="ohlc-legend-head">
+              <span class="ohlc-swatch" style="background:${color}"></span>
+              <span class="ohlc-symbol">${entry.symbol}</span>
+            </div>
+            <div class="ohlc-legend-main">${formatValue(latest, mode)}</div>
+            <div class="ohlc-legend-sub" data-direction="${delta >= 0 ? "up" : "down"}">${formatValue(delta, mode)} vs start</div>
+          `;
+          legend.appendChild(item);
+        });
+      }
+
+      model.on("change:metric", renderChart);
+      model.on("change:mode", renderChart);
+      model.on("change:rows", renderChart);
+      model.on("change:title", renderChart);
+      model.on("change:selected_symbols", renderChart);
+      renderChart();
+    }
+
+    export default { render };
+    

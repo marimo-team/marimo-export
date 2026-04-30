@@ -1,0 +1,8 @@
+{
+  "scenario": "pooled_rush",
+  "arrival_rate": 16.0,
+  "service_rate": 11.0,
+  "server_count": 2,
+  "utilization": 0.727,
+  "response_minutes": 11.58
+}

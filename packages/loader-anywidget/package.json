@@ -1,0 +1,36 @@
+{
+  "name": "@marimo-team/export-loader-anywidget",
+  "version": "0.1.0",
+  "description": "AnyWidget loader and standalone hydration runtime for marimo export bundles.",
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "imports": {
+    "#anywidget/*": {
+      "types": "./dist/*.d.ts",
+      "import": "./dist/*.js"
+    }
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./runtime": {
+      "types": "./dist/runtime/export-runtime.d.ts",
+      "import": "./dist/runtime/export-runtime.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "build": "rm -rf dist && tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "oxlint .",
+    "format": "oxfmt --write ."
+  },
+  "dependencies": {
+    "@marimo-team/export-reader": "workspace:*"
+  }
+}

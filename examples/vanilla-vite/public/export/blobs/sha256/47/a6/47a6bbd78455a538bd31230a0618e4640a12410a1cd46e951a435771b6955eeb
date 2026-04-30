@@ -1,0 +1,15 @@
+{
+  "label": "Select symbols to compare",
+  "options": [
+    "AAPL",
+    "AMZN",
+    "CRWV",
+    "GOOGL",
+    "MSFT"
+  ],
+  "value": [
+    "AAPL",
+    "GOOGL",
+    "AMZN"
+  ]
+}

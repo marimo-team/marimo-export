@@ -1,0 +1,172 @@
+import marimo
+
+__generated_with = "0.23.4"
+app = marimo.App(width="medium")
+
+
+@app.cell
+def _():
+    import math
+
+    import altair as alt
+    import marimo as mo
+    import numpy as np
+    import pandas as pd
+    from scipy.stats import poisson
+
+    return alt, math, mo, np, pd, poisson
+
+
+@app.cell(hide_code=True)
+def _():
+    arrival_rate = 8.0
+    service_rate = 11.0
+    server_count = 1
+    scenario_name = "baseline"
+    return arrival_rate, scenario_name, server_count, service_rate
+
+
+@app.cell(hide_code=True)
+def _(arrival_rate, mo, server_count, service_rate):
+    arrival_picker = mo.ui.dropdown(
+        options=[6.0, 8.0, 12.0, 16.0],
+        value=arrival_rate,
+        label="Arrival rate",
+    )
+    service_picker = mo.ui.dropdown(
+        options=[9.0, 11.0, 13.0],
+        value=service_rate,
+        label="Service rate",
+    )
+    servers_picker = mo.ui.dropdown(
+        options=[1, 2, 3],
+        value=server_count,
+        label="Servers",
+    )
+    controls = mo.vstack([arrival_picker, service_picker, servers_picker])
+    controls
+    return arrival_picker, controls, servers_picker, service_picker
+
+
+@app.cell(hide_code=True)
+def _(math):
+    def mmc_wait_hours(arrival: float, service: float, servers: int) -> float:
+        capacity = servers * service
+        if arrival <= 0:
+            return 1 / service
+        if arrival >= capacity:
+            return math.inf
+
+        offered_load = arrival / service
+        utilization = arrival / capacity
+        partial = sum((offered_load**n) / math.factorial(n) for n in range(servers))
+        tail = (offered_load**servers) / (math.factorial(servers) * (1 - utilization))
+        p0 = 1 / (partial + tail)
+        wait_probability = tail * p0
+        queue_wait = wait_probability / (capacity - arrival)
+        return queue_wait + 1 / service
+
+    return (mmc_wait_hours,)
+
+
+@app.cell(hide_code=True)
+def _(
+    arrival_picker,
+    mmc_wait_hours,
+    scenario_name,
+    servers_picker,
+    service_picker,
+):
+    arrival = float(arrival_picker.value)
+    service = float(service_picker.value)
+    servers = int(servers_picker.value)
+    utilization = arrival / (servers * service)
+    response_minutes = mmc_wait_hours(arrival, service, servers) * 60
+    queue_summary = {
+        "scenario": scenario_name,
+        "arrival_rate": arrival,
+        "service_rate": service,
+        "server_count": servers,
+        "utilization": round(utilization, 3),
+        "response_minutes": round(response_minutes, 2),
+    }
+    return arrival, queue_summary, servers, service
+
+
+@app.cell(hide_code=True)
+def _(arrival, pd, poisson):
+    arrival_distribution = pd.DataFrame(
+        [
+            {
+                "arrivals": count,
+                "probability": float(poisson.pmf(count, arrival)),
+                "cumulative": float(poisson.cdf(count, arrival)),
+            }
+            for count in range(0, 24)
+        ]
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mmc_wait_hours, np, pd, servers, service):
+    queue_curve = pd.DataFrame(
+        [
+            {
+                "utilization": float(utilization_value),
+                "response_minutes": float(
+                    mmc_wait_hours(
+                        utilization_value * servers * service,
+                        service,
+                        servers,
+                    )
+                    * 60
+                ),
+                "servers": servers,
+            }
+            for utilization_value in np.linspace(0.35, 0.94, 24)
+        ]
+    )
+    return (queue_curve,)
+
+
+@app.cell(hide_code=True)
+def _(alt, queue_curve, queue_summary):
+    wait_chart = (
+        alt.Chart(queue_curve)
+        .mark_line(point=True, color="#0880EA")
+        .encode(
+            x=alt.X("utilization:Q", title="Utilization", axis=alt.Axis(format="%")),
+            y=alt.Y("response_minutes:Q", title="Response time (minutes)"),
+            tooltip=["utilization", "response_minutes", "servers"],
+        )
+        .properties(
+            width=620,
+            height=320,
+            title=f"Queue response curve: {queue_summary['scenario']}",
+        )
+    )
+    return (wait_chart,)
+
+
+@app.cell(hide_code=True)
+def _(mo, queue_summary):
+    queue_note = mo.md(
+        f"""
+        ### Queueing snapshot
+
+        The **{queue_summary['scenario']}** scenario runs at **{queue_summary['utilization']:.0%}** utilization with an expected response time of **{queue_summary['response_minutes']} minutes**.
+        """
+    )
+    queue_note
+    return (queue_note,)
+
+
+@app.cell(hide_code=True)
+def _(controls, mo, queue_note, wait_chart):
+    mo.vstack([controls, queue_note, mo.ui.altair_chart(wait_chart)])
+    return
+
+
+if __name__ == "__main__":
+    app.run()

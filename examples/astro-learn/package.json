@@ -1,0 +1,21 @@
+{
+  "name": "@marimo-team/export-example-astro-learn",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev --host 127.0.0.1 --port 5175",
+    "build": "astro build",
+    "typecheck": "astro check && tsc -p tsconfig.json --noEmit",
+    "lint": "oxlint .",
+    "format": "oxfmt --write .",
+    "preview": "astro preview --host 127.0.0.1 --port 4175"
+  },
+  "dependencies": {
+    "@marimo-team/export-client": "workspace:*",
+    "astro": "6.2.0"
+  },
+  "devDependencies": {
+    "@astrojs/check": "0.9.9"
+  }
+}

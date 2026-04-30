@@ -1,0 +1,12 @@
+{
+  "title": "Agentic Export Playground",
+  "scenario": "north_balanced",
+  "region": "North",
+  "mode": "balanced",
+  "window": 6,
+  "latest": 115,
+  "peak": 116,
+  "trough": 104,
+  "average": 109.9,
+  "delta_vs_target": -12
+}

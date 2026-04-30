@@ -1,0 +1,607 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>marimo static export playground</title>
+    <script type="importmap">
+      {
+        "imports": {
+          "fflate": "https://cdn.skypack.dev/fflate@0.8.2?min"
+        }
+      }
+    </script>
+    <style>
+      :root {
+        --background: #ffffff;
+        --foreground: #0f172a;
+        --surface: #ffffff;
+        --muted-surface: #f1f5f9;
+        --border: #e2e8f0;
+        --primary: #0880ea;
+        --accent: #edf6ff;
+        --on-accent: #0b68cb;
+        --muted: #64748b;
+        --success: #14b8a6;
+        --danger: #dc2626;
+        --radius-md: 6px;
+        --radius-lg: 8px;
+        --radius-xl: 12px;
+        font-family:
+          "PT Sans",
+          "Avenir Next",
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          sans-serif;
+        color: var(--foreground);
+        background: var(--background);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: var(--background);
+      }
+
+      button,
+      input,
+      table {
+        font: inherit;
+      }
+
+      .shell {
+        width: min(1160px, calc(100vw - 32px));
+        margin: 0 auto;
+        padding: 32px 0 48px;
+      }
+
+      .topbar {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 24px;
+        padding-bottom: 20px;
+        border-bottom: 1px solid var(--border);
+      }
+
+      .eyebrow {
+        margin: 0 0 8px;
+        color: var(--muted);
+        font-size: 13px;
+        font-weight: 700;
+        letter-spacing: 0;
+        text-transform: uppercase;
+      }
+
+      h1,
+      h2,
+      h3,
+      p {
+        margin: 0;
+      }
+
+      h1 {
+        font-size: clamp(28px, 4vw, 44px);
+        line-height: 1.02;
+        letter-spacing: 0;
+      }
+
+      .lede {
+        max-width: 680px;
+        margin-top: 12px;
+        color: var(--muted);
+        font-size: 17px;
+        line-height: 1.5;
+      }
+
+      .status {
+        min-width: 220px;
+        padding: 10px 12px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        background: var(--muted-surface);
+        color: var(--muted);
+        font-size: 14px;
+        line-height: 1.35;
+      }
+
+      .section {
+        margin-top: 28px;
+      }
+
+      .section-header {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 12px;
+      }
+
+      .section-header h2 {
+        font-size: 20px;
+        line-height: 1.2;
+      }
+
+      .section-header span {
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      .scenario-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+      }
+
+      .scenario-button {
+        display: block;
+        width: 100%;
+        min-height: 82px;
+        padding: 14px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        background: var(--surface);
+        color: var(--foreground);
+        text-align: left;
+        cursor: pointer;
+      }
+
+      .scenario-button[aria-pressed="true"] {
+        border-color: var(--primary);
+        background: var(--accent);
+        color: var(--on-accent);
+      }
+
+      .scenario-button strong {
+        display: block;
+        margin-bottom: 6px;
+        font-size: 16px;
+      }
+
+      .scenario-button span {
+        display: block;
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.35;
+      }
+
+      .metrics {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 12px;
+      }
+
+      .metric {
+        padding: 16px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        background: var(--surface);
+      }
+
+      .metric span {
+        display: block;
+        color: var(--muted);
+        font-size: 13px;
+        font-weight: 700;
+        letter-spacing: 0;
+        text-transform: uppercase;
+      }
+
+      .metric strong {
+        display: block;
+        margin-top: 8px;
+        font-size: 28px;
+        line-height: 1;
+      }
+
+      .delta-positive {
+        color: var(--success);
+      }
+
+      .delta-negative {
+        color: var(--danger);
+      }
+
+      .visual {
+        display: grid;
+        grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.65fr);
+        gap: 18px;
+        align-items: start;
+      }
+
+      .chart-frame,
+      .note-frame,
+      .table-frame,
+      .provenance {
+        border: 1px solid var(--border);
+        border-radius: var(--radius-xl);
+        background: var(--surface);
+      }
+
+      .chart-frame {
+        padding: 12px;
+      }
+
+      .chart-frame svg {
+        display: block;
+        width: 100%;
+        height: auto;
+      }
+
+      .note-frame {
+        padding: 18px;
+        color: var(--foreground);
+        line-height: 1.5;
+      }
+
+      .note-frame h3 {
+        margin-bottom: 10px;
+        font-size: 18px;
+      }
+
+      .note-frame .paragraph {
+        color: var(--muted);
+      }
+
+      .table-frame {
+        overflow-x: auto;
+        overflow-y: hidden;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+
+      th,
+      td {
+        padding: 11px 12px;
+        border-bottom: 1px solid var(--border);
+        text-align: left;
+        white-space: nowrap;
+      }
+
+      th {
+        background: var(--muted-surface);
+        color: var(--muted);
+        font-size: 13px;
+        font-weight: 700;
+        letter-spacing: 0;
+        text-transform: uppercase;
+      }
+
+      tbody tr:last-child td {
+        border-bottom: 0;
+      }
+
+      .provenance {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 0;
+      }
+
+      .provenance div {
+        min-width: 0;
+        padding: 14px;
+        border-right: 1px solid var(--border);
+      }
+
+      .provenance div:last-child {
+        border-right: 0;
+      }
+
+      .provenance span {
+        display: block;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0;
+        text-transform: uppercase;
+      }
+
+      .provenance code {
+        display: block;
+        margin-top: 7px;
+        overflow: hidden;
+        color: var(--foreground);
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 12px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .error {
+        margin-top: 24px;
+        padding: 14px;
+        border: 1px solid #fecaca;
+        border-radius: var(--radius-lg);
+        background: #fef2f2;
+        color: #991b1b;
+      }
+
+      [hidden] {
+        display: none !important;
+      }
+
+      @media (max-width: 820px) {
+        .topbar,
+        .visual,
+        .section-header {
+          display: block;
+        }
+
+        .status,
+        .note-frame {
+          margin-top: 16px;
+        }
+
+        .section-header span {
+          display: block;
+          margin-top: 6px;
+        }
+
+        .scenario-grid,
+        .metrics,
+        .provenance {
+          grid-template-columns: 1fr;
+        }
+
+        .provenance div {
+          border-right: 0;
+          border-bottom: 1px solid var(--border);
+        }
+
+        .provenance div:last-child {
+          border-bottom: 0;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Static marimo export</p>
+          <h1>Agentic export playground</h1>
+          <p class="lede">
+            A no-build browser app reading a marimo export bundle, resolving scenario artifacts
+            lazily, and hydrating them through page-local loaders.
+          </p>
+        </div>
+        <div id="status" class="status">Loading export bundle...</div>
+      </header>
+
+      <section class="section">
+        <div class="section-header">
+          <h2>Scenarios</h2>
+          <span id="scenario-count"></span>
+        </div>
+        <div id="scenario-grid" class="scenario-grid"></div>
+      </section>
+
+      <section class="section">
+        <div class="section-header">
+          <h2>Scenario summary</h2>
+          <span id="active-source"></span>
+        </div>
+        <div class="metrics">
+          <div class="metric">
+            <span>Latest</span>
+            <strong id="metric-latest">--</strong>
+          </div>
+          <div class="metric">
+            <span>Average</span>
+            <strong id="metric-average">--</strong>
+          </div>
+          <div class="metric">
+            <span>Peak</span>
+            <strong id="metric-peak">--</strong>
+          </div>
+          <div class="metric">
+            <span>Delta vs target</span>
+            <strong id="metric-delta">--</strong>
+          </div>
+        </div>
+      </section>
+
+      <section class="section visual">
+        <div class="chart-frame" id="sparkline"></div>
+        <div class="note-frame" id="note"></div>
+      </section>
+
+      <section class="section">
+        <div class="section-header">
+          <h2>Records</h2>
+          <span id="record-count"></span>
+        </div>
+        <div class="table-frame">
+          <table>
+            <thead>
+              <tr>
+                <th>Day</th>
+                <th>Region</th>
+                <th>Mode</th>
+                <th>Demand</th>
+                <th>Target</th>
+              </tr>
+            </thead>
+            <tbody id="records"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-header">
+          <h2>Bundle provenance</h2>
+          <span>Directly from manifest and artifact handles</span>
+        </div>
+        <div class="provenance">
+          <div>
+            <span>Bundle</span>
+            <code id="bundle-id">--</code>
+          </div>
+          <div>
+            <span>Spec SHA</span>
+            <code id="spec-sha">--</code>
+          </div>
+          <div>
+            <span>SVG blob</span>
+            <code id="svg-href">--</code>
+          </div>
+          <div>
+            <span>Formats</span>
+            <code id="formats">--</code>
+          </div>
+        </div>
+      </section>
+
+      <p id="error" class="error" hidden></p>
+    </main>
+
+    <script type="module">
+      import {
+        defineLoader,
+        htmlLoader,
+        jsonLoader,
+        readLatestExport,
+      } from "../../packages/reader/dist/read-export.js";
+
+      const root = "./exports/agentic-playground/";
+      const $ = (selector) => document.querySelector(selector);
+
+      const svgLoader = defineLoader({
+        formats: "playground.sparkline.svg.v1",
+        async load(ctx) {
+          return {
+            href: ctx.file().href,
+            markup: await ctx.text(),
+            url: ctx.url(),
+          };
+        },
+      });
+
+      const exportReader = await readLatestExport({
+        root,
+        loaders: [
+          jsonLoader(["playground.summary.json.v1", "playground.records.json.v1"]),
+          svgLoader,
+          htmlLoader("playground.note.html.v1"),
+        ],
+      });
+
+      const state = {
+        activeScenario: exportReader.scenarios()[0],
+      };
+
+      $("#bundle-id").textContent = exportReader.manifest.id;
+      $("#spec-sha").textContent =
+        exportReader.manifest.provenance?.source_spec_sha256 ?? "missing";
+      $("#formats").textContent = exportReader
+        .values()
+        .map((value) => `${value}:${exportReader.formats(value).join("|")}`)
+        .join(", ");
+      $("#scenario-count").textContent = `${exportReader.scenarios().length} finite states`;
+
+      renderScenarioButtons();
+      await loadScenario(state.activeScenario);
+
+      function renderScenarioButtons() {
+        const grid = $("#scenario-grid");
+        grid.innerHTML = "";
+
+        for (const scenario of exportReader.manifest.scenarios) {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = "scenario-button";
+          button.setAttribute("aria-pressed", String(scenario.id === state.activeScenario));
+          button.dataset.scenario = scenario.id;
+          button.innerHTML = `
+            <strong>${label(scenario.id)}</strong>
+            <span>${scenario.state.region} / ${scenario.state["mode_picker.value"]} / window ${scenario.state.window}</span>
+          `;
+          button.addEventListener("click", async () => {
+            state.activeScenario = scenario.id;
+            await loadScenario(scenario.id);
+            renderScenarioButtons();
+          });
+          grid.append(button);
+        }
+      }
+
+      async function loadScenario(scenario) {
+        try {
+          $("#status").textContent = `Loading ${scenario}...`;
+          const summaryHandle = exportReader.get({ scenario, value: "summary", format: "json" });
+          const recordsHandle = exportReader.get({ scenario, value: "records", format: "json" });
+          const sparklineHandle = exportReader.get({ scenario, value: "sparkline", format: "svg" });
+          const noteHandle = exportReader.get({ scenario, value: "note", format: "html" });
+
+          const [summary, records, sparkline, noteHtml] = await Promise.all([
+            summaryHandle.load(),
+            recordsHandle.load(),
+            sparklineHandle.load(),
+            noteHandle.load(),
+          ]);
+
+          renderSummary(summary);
+          renderSparkline(sparkline);
+          renderNote(noteHtml);
+          renderRecords(records);
+
+          $("#svg-href").textContent = sparkline.href;
+          $("#active-source").textContent =
+            `${scenario} / source: summary, rows, sparkline_svg, market_note`;
+          $("#status").textContent = `Loaded ${label(scenario)} from ${root}`;
+        } catch (error) {
+          $("#error").hidden = false;
+          $("#error").textContent = error instanceof Error ? error.message : String(error);
+          throw error;
+        }
+      }
+
+      function renderSummary(summary) {
+        $("#metric-latest").textContent = summary.latest;
+        $("#metric-average").textContent = summary.average;
+        $("#metric-peak").textContent = summary.peak;
+
+        const delta = $("#metric-delta");
+        delta.textContent =
+          summary.delta_vs_target > 0 ? `+${summary.delta_vs_target}` : summary.delta_vs_target;
+        delta.className = summary.delta_vs_target >= 0 ? "delta-positive" : "delta-negative";
+      }
+
+      function renderSparkline(sparkline) {
+        $("#sparkline").innerHTML = sparkline.markup;
+      }
+
+      function renderNote(html) {
+        $("#note").innerHTML = html;
+      }
+
+      function renderRecords(records) {
+        $("#record-count").textContent = `${records.length} rows`;
+        $("#records").innerHTML = records
+          .map(
+            (row) => `
+              <tr>
+                <td>${row.day}</td>
+                <td>${row.region}</td>
+                <td>${row.mode}</td>
+                <td>${row.demand}</td>
+                <td>${row.target}</td>
+              </tr>
+            `,
+          )
+          .join("");
+      }
+
+      function label(id) {
+        return id.replaceAll("_", " ");
+      }
+    </script>
+  </body>
+</html>

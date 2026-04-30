@@ -1,0 +1,24 @@
+{
+  "name": "@marimo-team/export-example-vanilla",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -p tsconfig.json --noEmit && vite build",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "oxlint .",
+    "format": "oxfmt --write .",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@marimo-team/export-loader-anywidget": "workspace:*",
+    "@marimo-team/export-loader-arrow": "workspace:*",
+    "@marimo-team/export-loader-parquet": "workspace:*",
+    "@marimo-team/export-loader-vegalite": "workspace:*",
+    "@marimo-team/export-reader": "workspace:*"
+  },
+  "devDependencies": {
+    "vite": "^7.2.7"
+  }
+}

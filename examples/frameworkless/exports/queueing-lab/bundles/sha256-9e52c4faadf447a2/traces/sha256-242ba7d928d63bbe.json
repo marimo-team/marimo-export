@@ -1,0 +1,1387 @@
+{
+  "schema": "moexport.invocation.v1",
+  "version": 1,
+  "id": "sha256-242ba7d928d63bbe",
+  "sha256": "242ba7d928d63bbe620dd8dd6e9d3f5f8f54aefbd69c4e1767d6ec92395f5f79",
+  "created_at": "2026-05-03T12:51:21.797299Z",
+  "bundle": {
+    "id": "sha256-9e52c4faadf447a2",
+    "sha256": "9e52c4faadf447a269715f8cb04b31635754163604eb1ff94f77941b5735e715",
+    "manifest_href": "bundles/sha256-9e52c4faadf447a2/manifest.json"
+  },
+  "notebook": {
+    "name": "queueing_lab.py",
+    "source": {
+      "href": "blobs/sha256/7c/b5/7cb55f15ed3d81c97fead5db71e3b7e56d365759bc6a73b1b240d7188998419a",
+      "media_type": "text/x-python",
+      "size": 4752,
+      "sha256": "7cb55f15ed3d81c97fead5db71e3b7e56d365759bc6a73b1b240d7188998419a"
+    }
+  },
+  "scenario_set": {
+    "id": "sha256-4ce197bb8e4d7e51",
+    "sha256": "4ce197bb8e4d7e51031c0900a9d607615901bd9a8f9cacb3878b273d6b95a6a3"
+  },
+  "export": {
+    "id": "sha256-62828a939568dc21",
+    "request_sha256": "62828a939568dc21df2662823b8c4053d29c1e91832d97a3933eee4f3ef78fa4",
+    "target": "{\n  'summary': (queue_summary),\n  'arrivals': (arrival_distribution),\n  'response_curve': (queue_curve),\n  'chart': (wait_chart),\n  'note': (queue_note)\n}"
+  },
+  "source_spec": {
+    "sha256": "3249fd1306ca044908952885e37baf2ba1458a1c8b5a410aad6c4e362b133ae8",
+    "spec": {
+      "scenarios": [
+        {
+          "id": "steady_single",
+          "state": {
+            "arrival_rate": 6.0,
+            "service_rate": 11.0,
+            "server_count": 1,
+            "scenario_name": "steady_single",
+            "arrival_picker.value": 6.0,
+            "service_picker.value": 11.0,
+            "servers_picker.value": 1
+          }
+        },
+        {
+          "id": "rush_single",
+          "state": {
+            "arrival_rate": 8.0,
+            "service_rate": 9.0,
+            "server_count": 1,
+            "scenario_name": "rush_single",
+            "arrival_picker.value": 8.0,
+            "service_picker.value": 9.0,
+            "servers_picker.value": 1
+          }
+        },
+        {
+          "id": "pooled_rush",
+          "state": {
+            "arrival_rate": 16.0,
+            "service_rate": 11.0,
+            "server_count": 2,
+            "scenario_name": "pooled_rush",
+            "arrival_picker.value": 16.0,
+            "service_picker.value": 11.0,
+            "servers_picker.value": 2
+          }
+        }
+      ],
+      "values": {
+        "summary": {
+          "source": "queue_summary",
+          "formats": {
+            "json": {
+              "export": {
+                "type": "ref",
+                "ref": "moexport.exporters.core:json"
+              },
+              "options": {
+                "filename": "queue-summary.json",
+                "format": "queue.summary.json.v1",
+                "metadata": {
+                  "kind": "queue-summary"
+                }
+              }
+            }
+          }
+        },
+        "arrivals": {
+          "source": "arrival_distribution",
+          "formats": {
+            "arrow": {
+              "export": {
+                "type": "ref",
+                "ref": "moexport.exporters.dataframe:arrow"
+              }
+            },
+            "parquet": {
+              "export": {
+                "type": "ref",
+                "ref": "moexport.exporters.dataframe:parquet"
+              }
+            }
+          }
+        },
+        "response_curve": {
+          "source": "queue_curve",
+          "formats": {
+            "arrow": {
+              "export": {
+                "type": "ref",
+                "ref": "moexport.exporters.dataframe:arrow"
+              }
+            }
+          }
+        },
+        "chart": {
+          "source": "wait_chart",
+          "formats": {
+            "vegalite": {
+              "export": {
+                "type": "ref",
+                "ref": "moexport.exporters.altair:vegalite"
+              }
+            }
+          }
+        },
+        "note": {
+          "source": "queue_note",
+          "formats": {
+            "html": {
+              "export": {
+                "type": "ref",
+                "ref": "moexport.exporters.core:html"
+              },
+              "options": {
+                "filename": "queue-note.html",
+                "format": "queue.note.html.v1",
+                "metadata": {
+                  "kind": "marimo-markdown-output"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "scenarios": [
+    {
+      "id": "pooled_rush",
+      "state": {
+        "arrival_rate": 16.0,
+        "service_rate": 11.0,
+        "server_count": 2,
+        "scenario_name": "pooled_rush",
+        "arrival_picker.value": 16.0,
+        "service_picker.value": 11.0,
+        "servers_picker.value": 2
+      },
+      "trace": {
+        "value_preview": "{'summary': {'scenario': 'pooled_rush', 'arrival_rate': 16.0, 'service_rate': 11.0, 'server_count': 2, 'utilization':...",
+        "target": {
+          "root_names": [
+            "arrival_distribution",
+            "queue_curve",
+            "queue_note",
+            "queue_summary",
+            "wait_chart"
+          ],
+          "expression_refs": [
+            "arrival_distribution",
+            "queue_curve",
+            "queue_note",
+            "queue_summary",
+            "wait_chart"
+          ],
+          "override_refs": ["arrival_rate", "scenario_name", "server_count", "service_rate"],
+          "object_patch_refs": [
+            "arrival_picker.value",
+            "servers_picker.value",
+            "service_picker.value"
+          ]
+        },
+        "state": {
+          "applied_object_patches": [
+            {
+              "target": "arrival_picker.value",
+              "root": "arrival_picker",
+              "value_preview": "16.0"
+            },
+            {
+              "target": "service_picker.value",
+              "root": "service_picker",
+              "value_preview": "11.0"
+            },
+            {
+              "target": "servers_picker.value",
+              "root": "servers_picker",
+              "value_preview": "2"
+            }
+          ]
+        },
+        "graph": {
+          "nodes": [
+            {
+              "cell_id": "Hbol",
+              "short_id": "Hbol",
+              "status": "executed",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": ["alt", "math", "mo", "np", "pd", "poisson"],
+              "refs": [],
+              "body_refs": [],
+              "overridden_defs": [],
+              "preview": ["import math", "import altair as alt", "import marimo as mo"]
+            },
+            {
+              "cell_id": "MJUe",
+              "short_id": "MJUe",
+              "status": "pruned",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": ["arrival_rate", "scenario_name", "server_count", "service_rate"],
+              "refs": [],
+              "body_refs": [],
+              "overridden_defs": ["arrival_rate", "scenario_name", "server_count", "service_rate"],
+              "preview": ["arrival_rate = 8.0", "service_rate = 11.0", "server_count = 1"]
+            },
+            {
+              "cell_id": "vblA",
+              "short_id": "vblA",
+              "status": "executed",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": ["arrival_picker", "controls", "servers_picker", "service_picker"],
+              "refs": ["arrival_rate", "mo", "server_count", "service_rate"],
+              "body_refs": ["arrival_rate", "mo", "server_count", "service_rate"],
+              "overridden_defs": [],
+              "preview": [
+                "arrival_picker = mo.ui.dropdown(",
+                "    options=[6.0, 8.0, 12.0, 16.0],",
+                "    value=arrival_rate,"
+              ]
+            },
+            {
+              "cell_id": "bkHC",
+              "short_id": "bkHC",
+              "status": "executed",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": ["mmc_wait_hours"],
+              "refs": ["float", "int", "math", "range", "sum"],
+              "body_refs": ["math"],
+              "overridden_defs": [],
+              "preview": [
+                "def mmc_wait_hours(arrival: float, service: float, servers: int) -> float:",
+                "    capacity = servers * service",
+                "    if arrival <= 0:"
+              ]
+            },
+            {
+              "cell_id": "lEQa",
+              "short_id": "lEQa",
+              "status": "executed",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": [
+                "arrival",
+                "queue_summary",
+                "response_minutes",
+                "servers",
+                "service",
+                "utilization"
+              ],
+              "refs": [
+                "arrival_picker",
+                "float",
+                "int",
+                "mmc_wait_hours",
+                "round",
+                "scenario_name",
+                "servers_picker",
+                "service_picker"
+              ],
+              "body_refs": [
+                "arrival_picker",
+                "mmc_wait_hours",
+                "scenario_name",
+                "servers_picker",
+                "service_picker"
+              ],
+              "overridden_defs": [],
+              "preview": [
+                "arrival = float(arrival_picker.value)",
+                "service = float(service_picker.value)",
+                "servers = int(servers_picker.value)"
+              ]
+            },
+            {
+              "cell_id": "PKri",
+              "short_id": "PKri",
+              "status": "executed",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": ["arrival_distribution"],
+              "refs": ["arrival", "float", "pd", "poisson", "range"],
+              "body_refs": ["arrival", "pd", "poisson"],
+              "overridden_defs": [],
+              "preview": ["arrival_distribution = pd.DataFrame(", "    [", "        {"]
+            },
+            {
+              "cell_id": "Xref",
+              "short_id": "Xref",
+              "status": "executed",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": ["queue_curve"],
+              "refs": ["float", "mmc_wait_hours", "np", "pd", "servers", "service"],
+              "body_refs": ["mmc_wait_hours", "np", "pd", "servers", "service"],
+              "overridden_defs": [],
+              "preview": ["queue_curve = pd.DataFrame(", "    [", "        {"]
+            },
+            {
+              "cell_id": "SFPL",
+              "short_id": "SFPL",
+              "status": "executed",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": ["wait_chart"],
+              "refs": ["alt", "queue_curve", "queue_summary"],
+              "body_refs": ["alt", "queue_curve", "queue_summary"],
+              "overridden_defs": [],
+              "preview": [
+                "wait_chart = (",
+                "    alt.Chart(queue_curve)",
+                "    .mark_line(point=True, color=\"#0880EA\")"
+              ]
+            },
+            {
+              "cell_id": "BYtC",
+              "short_id": "BYtC",
+              "status": "executed",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": ["queue_note"],
+              "refs": ["mo", "queue_summary"],
+              "body_refs": ["mo", "queue_summary"],
+              "overridden_defs": [],
+              "preview": ["queue_note = mo.md(", "    f\"\"\"", "    ### Queueing snapshot"]
+            },
+            {
+              "cell_id": "RGSE",
+              "short_id": "RGSE",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": [],
+              "refs": ["controls", "mo", "queue_note", "wait_chart"],
+              "body_refs": [],
+              "overridden_defs": [],
+              "preview": ["mo.vstack([controls, queue_note, mo.ui.altair_chart(wait_chart)])"]
+            }
+          ],
+          "edges": [
+            {
+              "from": "BYtC",
+              "to": "RGSE"
+            },
+            {
+              "from": "Hbol",
+              "to": "BYtC"
+            },
+            {
+              "from": "Hbol",
+              "to": "PKri"
+            },
+            {
+              "from": "Hbol",
+              "to": "RGSE"
+            },
+            {
+              "from": "Hbol",
+              "to": "SFPL"
+            },
+            {
+              "from": "Hbol",
+              "to": "Xref"
+            },
+            {
+              "from": "Hbol",
+              "to": "bkHC"
+            },
+            {
+              "from": "Hbol",
+              "to": "vblA"
+            },
+            {
+              "from": "MJUe",
+              "to": "lEQa"
+            },
+            {
+              "from": "MJUe",
+              "to": "vblA"
+            },
+            {
+              "from": "SFPL",
+              "to": "RGSE"
+            },
+            {
+              "from": "Xref",
+              "to": "SFPL"
+            },
+            {
+              "from": "bkHC",
+              "to": "Xref"
+            },
+            {
+              "from": "bkHC",
+              "to": "lEQa"
+            },
+            {
+              "from": "lEQa",
+              "to": "BYtC"
+            },
+            {
+              "from": "lEQa",
+              "to": "PKri"
+            },
+            {
+              "from": "lEQa",
+              "to": "SFPL"
+            },
+            {
+              "from": "lEQa",
+              "to": "Xref"
+            },
+            {
+              "from": "vblA",
+              "to": "RGSE"
+            },
+            {
+              "from": "vblA",
+              "to": "lEQa"
+            }
+          ],
+          "stats": {
+            "nodes": 10,
+            "edges": 20,
+            "required": 9,
+            "status_counts": {
+              "executed": 8,
+              "cached": 0,
+              "pruned": 1,
+              "skipped": 0,
+              "needed": 0,
+              "inactive": 1
+            }
+          }
+        },
+        "execution": {
+          "elapsed_ms": 914.14,
+          "required_order": [
+            "Hbol",
+            "MJUe",
+            "vblA",
+            "bkHC",
+            "lEQa",
+            "PKri",
+            "Xref",
+            "SFPL",
+            "BYtC"
+          ],
+          "scheduled_order": ["Hbol", "vblA", "bkHC", "lEQa", "PKri", "Xref", "SFPL", "BYtC"],
+          "executed_cell_ids": ["Hbol", "vblA", "bkHC", "lEQa", "PKri", "Xref", "SFPL", "BYtC"],
+          "cached_cell_ids": [],
+          "pruned_cell_ids": ["MJUe"],
+          "skipped_cell_ids": [],
+          "skip_reasons": {},
+          "steps": [
+            {
+              "cell_id": "Hbol",
+              "status": "executed",
+              "defs": ["alt", "math", "mo", "np", "pd", "poisson"],
+              "output_preview": "None",
+              "elapsed_ms": 870.13
+            },
+            {
+              "cell_id": "vblA",
+              "status": "executed",
+              "defs": ["arrival_picker", "controls", "servers_picker", "service_picker"],
+              "output_preview": "_FlexContainerHtml()",
+              "elapsed_ms": 33.39
+            },
+            {
+              "cell_id": "bkHC",
+              "status": "executed",
+              "defs": ["mmc_wait_hours"],
+              "output_preview": "None",
+              "elapsed_ms": 0.01
+            },
+            {
+              "cell_id": "lEQa",
+              "status": "executed",
+              "defs": [
+                "arrival",
+                "queue_summary",
+                "response_minutes",
+                "servers",
+                "service",
+                "utilization"
+              ],
+              "output_preview": "None",
+              "elapsed_ms": 0.02
+            },
+            {
+              "cell_id": "PKri",
+              "status": "executed",
+              "defs": ["arrival_distribution"],
+              "output_preview": "None",
+              "elapsed_ms": 3.53
+            },
+            {
+              "cell_id": "Xref",
+              "status": "executed",
+              "defs": ["queue_curve"],
+              "output_preview": "None",
+              "elapsed_ms": 0.17
+            },
+            {
+              "cell_id": "SFPL",
+              "status": "executed",
+              "defs": ["wait_chart"],
+              "output_preview": "None",
+              "elapsed_ms": 3.79
+            },
+            {
+              "cell_id": "BYtC",
+              "status": "executed",
+              "defs": ["queue_note"],
+              "output_preview": "_md()",
+              "elapsed_ms": 2.93
+            }
+          ],
+          "stats": {
+            "required": 9,
+            "scheduled": 8,
+            "executed": 8,
+            "cached": 0,
+            "pruned": 1,
+            "skipped": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "rush_single",
+      "state": {
+        "arrival_rate": 8.0,
+        "service_rate": 9.0,
+        "server_count": 1,
+        "scenario_name": "rush_single",
+        "arrival_picker.value": 8.0,
+        "service_picker.value": 9.0,
+        "servers_picker.value": 1
+      },
+      "trace": {
+        "value_preview": "{'summary': {'scenario': 'rush_single', 'arrival_rate': 8.0, 'service_rate': 9.0, 'server_count': 1, 'utilization': 0...",
+        "target": {
+          "root_names": [
+            "arrival_distribution",
+            "queue_curve",
+            "queue_note",
+            "queue_summary",
+            "wait_chart"
+          ],
+          "expression_refs": [
+            "arrival_distribution",
+            "queue_curve",
+            "queue_note",
+            "queue_summary",
+            "wait_chart"
+          ],
+          "override_refs": ["arrival_rate", "scenario_name", "server_count", "service_rate"],
+          "object_patch_refs": [
+            "arrival_picker.value",
+            "servers_picker.value",
+            "service_picker.value"
+          ]
+        },
+        "state": {
+          "applied_object_patches": [
+            {
+              "target": "arrival_picker.value",
+              "root": "arrival_picker",
+              "value_preview": "8.0"
+            },
+            {
+              "target": "service_picker.value",
+              "root": "service_picker",
+              "value_preview": "9.0"
+            },
+            {
+              "target": "servers_picker.value",
+              "root": "servers_picker",
+              "value_preview": "1"
+            }
+          ]
+        },
+        "graph": {
+          "nodes": [
+            {
+              "cell_id": "Hbol",
+              "short_id": "Hbol",
+              "status": "cached",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": ["alt", "math", "mo", "np", "pd", "poisson"],
+              "refs": [],
+              "body_refs": [],
+              "overridden_defs": [],
+              "preview": ["import math", "import altair as alt", "import marimo as mo"]
+            },
+            {
+              "cell_id": "MJUe",
+              "short_id": "MJUe",
+              "status": "pruned",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": ["arrival_rate", "scenario_name", "server_count", "service_rate"],
+              "refs": [],
+              "body_refs": [],
+              "overridden_defs": ["arrival_rate", "scenario_name", "server_count", "service_rate"],
+              "preview": ["arrival_rate = 8.0", "service_rate = 11.0", "server_count = 1"]
+            },
+            {
+              "cell_id": "vblA",
+              "short_id": "vblA",
+              "status": "executed",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": ["arrival_picker", "controls", "servers_picker", "service_picker"],
+              "refs": ["arrival_rate", "mo", "server_count", "service_rate"],
+              "body_refs": ["arrival_rate", "mo", "server_count", "service_rate"],
+              "overridden_defs": [],
+              "preview": [
+                "arrival_picker = mo.ui.dropdown(",
+                "    options=[6.0, 8.0, 12.0, 16.0],",
+                "    value=arrival_rate,"
+              ]
+            },
+            {
+              "cell_id": "bkHC",
+              "short_id": "bkHC",
+              "status": "cached",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": ["mmc_wait_hours"],
+              "refs": ["float", "int", "math", "range", "sum"],
+              "body_refs": ["math"],
+              "overridden_defs": [],
+              "preview": [
+                "def mmc_wait_hours(arrival: float, service: float, servers: int) -> float:",
+                "    capacity = servers * service",
+                "    if arrival <= 0:"
+              ]
+            },
+            {
+              "cell_id": "lEQa",
+              "short_id": "lEQa",
+              "status": "executed",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": [
+                "arrival",
+                "queue_summary",
+                "response_minutes",
+                "servers",
+                "service",
+                "utilization"
+              ],
+              "refs": [
+                "arrival_picker",
+                "float",
+                "int",
+                "mmc_wait_hours",
+                "round",
+                "scenario_name",
+                "servers_picker",
+                "service_picker"
+              ],
+              "body_refs": [
+                "arrival_picker",
+                "mmc_wait_hours",
+                "scenario_name",
+                "servers_picker",
+                "service_picker"
+              ],
+              "overridden_defs": [],
+              "preview": [
+                "arrival = float(arrival_picker.value)",
+                "service = float(service_picker.value)",
+                "servers = int(servers_picker.value)"
+              ]
+            },
+            {
+              "cell_id": "PKri",
+              "short_id": "PKri",
+              "status": "executed",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": ["arrival_distribution"],
+              "refs": ["arrival", "float", "pd", "poisson", "range"],
+              "body_refs": ["arrival", "pd", "poisson"],
+              "overridden_defs": [],
+              "preview": ["arrival_distribution = pd.DataFrame(", "    [", "        {"]
+            },
+            {
+              "cell_id": "Xref",
+              "short_id": "Xref",
+              "status": "executed",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": ["queue_curve"],
+              "refs": ["float", "mmc_wait_hours", "np", "pd", "servers", "service"],
+              "body_refs": ["mmc_wait_hours", "np", "pd", "servers", "service"],
+              "overridden_defs": [],
+              "preview": ["queue_curve = pd.DataFrame(", "    [", "        {"]
+            },
+            {
+              "cell_id": "SFPL",
+              "short_id": "SFPL",
+              "status": "executed",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": ["wait_chart"],
+              "refs": ["alt", "queue_curve", "queue_summary"],
+              "body_refs": ["alt", "queue_curve", "queue_summary"],
+              "overridden_defs": [],
+              "preview": [
+                "wait_chart = (",
+                "    alt.Chart(queue_curve)",
+                "    .mark_line(point=True, color=\"#0880EA\")"
+              ]
+            },
+            {
+              "cell_id": "BYtC",
+              "short_id": "BYtC",
+              "status": "executed",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": ["queue_note"],
+              "refs": ["mo", "queue_summary"],
+              "body_refs": ["mo", "queue_summary"],
+              "overridden_defs": [],
+              "preview": ["queue_note = mo.md(", "    f\"\"\"", "    ### Queueing snapshot"]
+            },
+            {
+              "cell_id": "RGSE",
+              "short_id": "RGSE",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": [],
+              "refs": ["controls", "mo", "queue_note", "wait_chart"],
+              "body_refs": [],
+              "overridden_defs": [],
+              "preview": ["mo.vstack([controls, queue_note, mo.ui.altair_chart(wait_chart)])"]
+            }
+          ],
+          "edges": [
+            {
+              "from": "BYtC",
+              "to": "RGSE"
+            },
+            {
+              "from": "Hbol",
+              "to": "BYtC"
+            },
+            {
+              "from": "Hbol",
+              "to": "PKri"
+            },
+            {
+              "from": "Hbol",
+              "to": "RGSE"
+            },
+            {
+              "from": "Hbol",
+              "to": "SFPL"
+            },
+            {
+              "from": "Hbol",
+              "to": "Xref"
+            },
+            {
+              "from": "Hbol",
+              "to": "bkHC"
+            },
+            {
+              "from": "Hbol",
+              "to": "vblA"
+            },
+            {
+              "from": "MJUe",
+              "to": "lEQa"
+            },
+            {
+              "from": "MJUe",
+              "to": "vblA"
+            },
+            {
+              "from": "SFPL",
+              "to": "RGSE"
+            },
+            {
+              "from": "Xref",
+              "to": "SFPL"
+            },
+            {
+              "from": "bkHC",
+              "to": "Xref"
+            },
+            {
+              "from": "bkHC",
+              "to": "lEQa"
+            },
+            {
+              "from": "lEQa",
+              "to": "BYtC"
+            },
+            {
+              "from": "lEQa",
+              "to": "PKri"
+            },
+            {
+              "from": "lEQa",
+              "to": "SFPL"
+            },
+            {
+              "from": "lEQa",
+              "to": "Xref"
+            },
+            {
+              "from": "vblA",
+              "to": "RGSE"
+            },
+            {
+              "from": "vblA",
+              "to": "lEQa"
+            }
+          ],
+          "stats": {
+            "nodes": 10,
+            "edges": 20,
+            "required": 9,
+            "status_counts": {
+              "executed": 6,
+              "cached": 2,
+              "pruned": 1,
+              "skipped": 0,
+              "needed": 0,
+              "inactive": 1
+            }
+          }
+        },
+        "execution": {
+          "elapsed_ms": 24.47,
+          "required_order": [
+            "Hbol",
+            "MJUe",
+            "vblA",
+            "bkHC",
+            "lEQa",
+            "PKri",
+            "Xref",
+            "SFPL",
+            "BYtC"
+          ],
+          "scheduled_order": ["Hbol", "vblA", "bkHC", "lEQa", "PKri", "Xref", "SFPL", "BYtC"],
+          "executed_cell_ids": ["vblA", "lEQa", "PKri", "Xref", "SFPL", "BYtC"],
+          "cached_cell_ids": ["Hbol", "bkHC"],
+          "pruned_cell_ids": ["MJUe"],
+          "skipped_cell_ids": [],
+          "skip_reasons": {},
+          "steps": [
+            {
+              "cell_id": "Hbol",
+              "status": "cached",
+              "defs": ["alt", "math", "mo", "np", "pd", "poisson"],
+              "output_preview": "None",
+              "elapsed_ms": 0.01
+            },
+            {
+              "cell_id": "vblA",
+              "status": "executed",
+              "defs": ["arrival_picker", "controls", "servers_picker", "service_picker"],
+              "output_preview": "_FlexContainerHtml()",
+              "elapsed_ms": 16.8
+            },
+            {
+              "cell_id": "bkHC",
+              "status": "cached",
+              "defs": ["mmc_wait_hours"],
+              "output_preview": "None",
+              "elapsed_ms": 0.01
+            },
+            {
+              "cell_id": "lEQa",
+              "status": "executed",
+              "defs": [
+                "arrival",
+                "queue_summary",
+                "response_minutes",
+                "servers",
+                "service",
+                "utilization"
+              ],
+              "output_preview": "None",
+              "elapsed_ms": 0.02
+            },
+            {
+              "cell_id": "PKri",
+              "status": "executed",
+              "defs": ["arrival_distribution"],
+              "output_preview": "None",
+              "elapsed_ms": 1.05
+            },
+            {
+              "cell_id": "Xref",
+              "status": "executed",
+              "defs": ["queue_curve"],
+              "output_preview": "None",
+              "elapsed_ms": 0.12
+            },
+            {
+              "cell_id": "SFPL",
+              "status": "executed",
+              "defs": ["wait_chart"],
+              "output_preview": "None",
+              "elapsed_ms": 3.43
+            },
+            {
+              "cell_id": "BYtC",
+              "status": "executed",
+              "defs": ["queue_note"],
+              "output_preview": "_md()",
+              "elapsed_ms": 2.9
+            }
+          ],
+          "stats": {
+            "required": 9,
+            "scheduled": 8,
+            "executed": 6,
+            "cached": 2,
+            "pruned": 1,
+            "skipped": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "steady_single",
+      "state": {
+        "arrival_rate": 6.0,
+        "service_rate": 11.0,
+        "server_count": 1,
+        "scenario_name": "steady_single",
+        "arrival_picker.value": 6.0,
+        "service_picker.value": 11.0,
+        "servers_picker.value": 1
+      },
+      "trace": {
+        "value_preview": "{'summary': {'scenario': 'steady_single', 'arrival_rate': 6.0, 'service_rate': 11.0, 'server_count': 1, 'utilization'...",
+        "target": {
+          "root_names": [
+            "arrival_distribution",
+            "queue_curve",
+            "queue_note",
+            "queue_summary",
+            "wait_chart"
+          ],
+          "expression_refs": [
+            "arrival_distribution",
+            "queue_curve",
+            "queue_note",
+            "queue_summary",
+            "wait_chart"
+          ],
+          "override_refs": ["arrival_rate", "scenario_name", "server_count", "service_rate"],
+          "object_patch_refs": [
+            "arrival_picker.value",
+            "servers_picker.value",
+            "service_picker.value"
+          ]
+        },
+        "state": {
+          "applied_object_patches": [
+            {
+              "target": "arrival_picker.value",
+              "root": "arrival_picker",
+              "value_preview": "6.0"
+            },
+            {
+              "target": "service_picker.value",
+              "root": "service_picker",
+              "value_preview": "11.0"
+            },
+            {
+              "target": "servers_picker.value",
+              "root": "servers_picker",
+              "value_preview": "1"
+            }
+          ]
+        },
+        "graph": {
+          "nodes": [
+            {
+              "cell_id": "Hbol",
+              "short_id": "Hbol",
+              "status": "cached",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": ["alt", "math", "mo", "np", "pd", "poisson"],
+              "refs": [],
+              "body_refs": [],
+              "overridden_defs": [],
+              "preview": ["import math", "import altair as alt", "import marimo as mo"]
+            },
+            {
+              "cell_id": "MJUe",
+              "short_id": "MJUe",
+              "status": "pruned",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": ["arrival_rate", "scenario_name", "server_count", "service_rate"],
+              "refs": [],
+              "body_refs": [],
+              "overridden_defs": ["arrival_rate", "scenario_name", "server_count", "service_rate"],
+              "preview": ["arrival_rate = 8.0", "service_rate = 11.0", "server_count = 1"]
+            },
+            {
+              "cell_id": "vblA",
+              "short_id": "vblA",
+              "status": "executed",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": ["arrival_picker", "controls", "servers_picker", "service_picker"],
+              "refs": ["arrival_rate", "mo", "server_count", "service_rate"],
+              "body_refs": ["arrival_rate", "mo", "server_count", "service_rate"],
+              "overridden_defs": [],
+              "preview": [
+                "arrival_picker = mo.ui.dropdown(",
+                "    options=[6.0, 8.0, 12.0, 16.0],",
+                "    value=arrival_rate,"
+              ]
+            },
+            {
+              "cell_id": "bkHC",
+              "short_id": "bkHC",
+              "status": "cached",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": ["mmc_wait_hours"],
+              "refs": ["float", "int", "math", "range", "sum"],
+              "body_refs": ["math"],
+              "overridden_defs": [],
+              "preview": [
+                "def mmc_wait_hours(arrival: float, service: float, servers: int) -> float:",
+                "    capacity = servers * service",
+                "    if arrival <= 0:"
+              ]
+            },
+            {
+              "cell_id": "lEQa",
+              "short_id": "lEQa",
+              "status": "executed",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": [
+                "arrival",
+                "queue_summary",
+                "response_minutes",
+                "servers",
+                "service",
+                "utilization"
+              ],
+              "refs": [
+                "arrival_picker",
+                "float",
+                "int",
+                "mmc_wait_hours",
+                "round",
+                "scenario_name",
+                "servers_picker",
+                "service_picker"
+              ],
+              "body_refs": [
+                "arrival_picker",
+                "mmc_wait_hours",
+                "scenario_name",
+                "servers_picker",
+                "service_picker"
+              ],
+              "overridden_defs": [],
+              "preview": [
+                "arrival = float(arrival_picker.value)",
+                "service = float(service_picker.value)",
+                "servers = int(servers_picker.value)"
+              ]
+            },
+            {
+              "cell_id": "PKri",
+              "short_id": "PKri",
+              "status": "executed",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": ["arrival_distribution"],
+              "refs": ["arrival", "float", "pd", "poisson", "range"],
+              "body_refs": ["arrival", "pd", "poisson"],
+              "overridden_defs": [],
+              "preview": ["arrival_distribution = pd.DataFrame(", "    [", "        {"]
+            },
+            {
+              "cell_id": "Xref",
+              "short_id": "Xref",
+              "status": "executed",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": ["queue_curve"],
+              "refs": ["float", "mmc_wait_hours", "np", "pd", "servers", "service"],
+              "body_refs": ["mmc_wait_hours", "np", "pd", "servers", "service"],
+              "overridden_defs": [],
+              "preview": ["queue_curve = pd.DataFrame(", "    [", "        {"]
+            },
+            {
+              "cell_id": "SFPL",
+              "short_id": "SFPL",
+              "status": "executed",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": ["wait_chart"],
+              "refs": ["alt", "queue_curve", "queue_summary"],
+              "body_refs": ["alt", "queue_curve", "queue_summary"],
+              "overridden_defs": [],
+              "preview": [
+                "wait_chart = (",
+                "    alt.Chart(queue_curve)",
+                "    .mark_line(point=True, color=\"#0880EA\")"
+              ]
+            },
+            {
+              "cell_id": "BYtC",
+              "short_id": "BYtC",
+              "status": "executed",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": ["queue_note"],
+              "refs": ["mo", "queue_summary"],
+              "body_refs": ["mo", "queue_summary"],
+              "overridden_defs": [],
+              "preview": ["queue_note = mo.md(", "    f\"\"\"", "    ### Queueing snapshot"]
+            },
+            {
+              "cell_id": "RGSE",
+              "short_id": "RGSE",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": [],
+              "refs": ["controls", "mo", "queue_note", "wait_chart"],
+              "body_refs": [],
+              "overridden_defs": [],
+              "preview": ["mo.vstack([controls, queue_note, mo.ui.altair_chart(wait_chart)])"]
+            }
+          ],
+          "edges": [
+            {
+              "from": "BYtC",
+              "to": "RGSE"
+            },
+            {
+              "from": "Hbol",
+              "to": "BYtC"
+            },
+            {
+              "from": "Hbol",
+              "to": "PKri"
+            },
+            {
+              "from": "Hbol",
+              "to": "RGSE"
+            },
+            {
+              "from": "Hbol",
+              "to": "SFPL"
+            },
+            {
+              "from": "Hbol",
+              "to": "Xref"
+            },
+            {
+              "from": "Hbol",
+              "to": "bkHC"
+            },
+            {
+              "from": "Hbol",
+              "to": "vblA"
+            },
+            {
+              "from": "MJUe",
+              "to": "lEQa"
+            },
+            {
+              "from": "MJUe",
+              "to": "vblA"
+            },
+            {
+              "from": "SFPL",
+              "to": "RGSE"
+            },
+            {
+              "from": "Xref",
+              "to": "SFPL"
+            },
+            {
+              "from": "bkHC",
+              "to": "Xref"
+            },
+            {
+              "from": "bkHC",
+              "to": "lEQa"
+            },
+            {
+              "from": "lEQa",
+              "to": "BYtC"
+            },
+            {
+              "from": "lEQa",
+              "to": "PKri"
+            },
+            {
+              "from": "lEQa",
+              "to": "SFPL"
+            },
+            {
+              "from": "lEQa",
+              "to": "Xref"
+            },
+            {
+              "from": "vblA",
+              "to": "RGSE"
+            },
+            {
+              "from": "vblA",
+              "to": "lEQa"
+            }
+          ],
+          "stats": {
+            "nodes": 10,
+            "edges": 20,
+            "required": 9,
+            "status_counts": {
+              "executed": 6,
+              "cached": 2,
+              "pruned": 1,
+              "skipped": 0,
+              "needed": 0,
+              "inactive": 1
+            }
+          }
+        },
+        "execution": {
+          "elapsed_ms": 23.97,
+          "required_order": [
+            "Hbol",
+            "MJUe",
+            "vblA",
+            "bkHC",
+            "lEQa",
+            "PKri",
+            "Xref",
+            "SFPL",
+            "BYtC"
+          ],
+          "scheduled_order": ["Hbol", "vblA", "bkHC", "lEQa", "PKri", "Xref", "SFPL", "BYtC"],
+          "executed_cell_ids": ["vblA", "lEQa", "PKri", "Xref", "SFPL", "BYtC"],
+          "cached_cell_ids": ["Hbol", "bkHC"],
+          "pruned_cell_ids": ["MJUe"],
+          "skipped_cell_ids": [],
+          "skip_reasons": {},
+          "steps": [
+            {
+              "cell_id": "Hbol",
+              "status": "cached",
+              "defs": ["alt", "math", "mo", "np", "pd", "poisson"],
+              "output_preview": "None",
+              "elapsed_ms": 0.01
+            },
+            {
+              "cell_id": "vblA",
+              "status": "executed",
+              "defs": ["arrival_picker", "controls", "servers_picker", "service_picker"],
+              "output_preview": "_FlexContainerHtml()",
+              "elapsed_ms": 16.63
+            },
+            {
+              "cell_id": "bkHC",
+              "status": "cached",
+              "defs": ["mmc_wait_hours"],
+              "output_preview": "None",
+              "elapsed_ms": 0.01
+            },
+            {
+              "cell_id": "lEQa",
+              "status": "executed",
+              "defs": [
+                "arrival",
+                "queue_summary",
+                "response_minutes",
+                "servers",
+                "service",
+                "utilization"
+              ],
+              "output_preview": "None",
+              "elapsed_ms": 0.02
+            },
+            {
+              "cell_id": "PKri",
+              "status": "executed",
+              "defs": ["arrival_distribution"],
+              "output_preview": "None",
+              "elapsed_ms": 0.98
+            },
+            {
+              "cell_id": "Xref",
+              "status": "executed",
+              "defs": ["queue_curve"],
+              "output_preview": "None",
+              "elapsed_ms": 0.12
+            },
+            {
+              "cell_id": "SFPL",
+              "status": "executed",
+              "defs": ["wait_chart"],
+              "output_preview": "None",
+              "elapsed_ms": 3.28
+            },
+            {
+              "cell_id": "BYtC",
+              "status": "executed",
+              "defs": ["queue_note"],
+              "output_preview": "_md()",
+              "elapsed_ms": 2.81
+            }
+          ],
+          "stats": {
+            "required": 9,
+            "scheduled": 8,
+            "executed": 6,
+            "cached": 2,
+            "pruned": 1,
+            "skipped": 0
+          }
+        }
+      }
+    }
+  ],
+  "evaluation": {
+    "batch": {
+      "result_count": 3,
+      "cache_scope": "call"
+    },
+    "execution": {
+      "elapsed_ms": 976.63,
+      "stats": {
+        "required": 27,
+        "scheduled": 24,
+        "executed": 20,
+        "cached": 4,
+        "pruned": 3,
+        "skipped": 0
+      }
+    }
+  }
+}

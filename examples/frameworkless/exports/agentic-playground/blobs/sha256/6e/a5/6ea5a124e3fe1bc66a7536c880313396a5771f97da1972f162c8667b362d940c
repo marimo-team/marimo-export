@@ -1,0 +1,10 @@
+<svg viewBox="0 0 720 240" role="img" aria-label="Demand sparkline" xmlns="http://www.w3.org/2000/svg">
+  <rect x="1" y="1" width="718" height="238" rx="10" fill="#FFFFFF" stroke="#E2E8F0"/>
+  <g transform="translate(40 28)">
+    <line x1="0" x2="640" y1="45" y2="45" stroke="#E2E8F0" stroke-dasharray="5 8"/>
+    <line x1="0" x2="640" y1="135" y2="135" stroke="#E2E8F0" stroke-dasharray="5 8"/>
+    <polyline points="0.0,180.0 49.2,105.0 98.5,45.0 147.7,0.0 196.9,0.0 246.2,15.0 295.4,60.0 344.6,105.0 393.8,150.0 443.1,180.0 492.3,180.0 541.5,150.0 590.8,90.0 640.0,15.0" fill="none" stroke="#0880EA" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+    <polyline points="0.0,180.0 49.2,132.6 98.5,90.9 147.7,56.8 196.9,36.0 246.2,24.6 295.4,0.0 344.6,0.0 393.8,22.7 443.1,60.6 492.3,98.5 541.5,126.9 590.8,132.6 640.0,113.7" fill="none" stroke="#14B8A6" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/>
+    <text x="0" y="-8" fill="#64748B" font-size="13">North / balanced</text>
+  </g>
+</svg>

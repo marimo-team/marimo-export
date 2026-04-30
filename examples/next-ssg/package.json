@@ -1,0 +1,29 @@
+{
+  "name": "@marimo-team/export-example-next-ssg",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev --port 5184",
+    "build": "next build",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "oxlint .",
+    "format": "oxfmt --write ."
+  },
+  "dependencies": {
+    "@marimo-team/export-client": "workspace:*",
+    "@marimo-team/export-loader-anywidget": "workspace:*",
+    "@marimo-team/export-loader-arrow": "workspace:*",
+    "@marimo-team/export-loader-vegalite": "workspace:*",
+    "@marimo-team/export-reader": "workspace:*",
+    "next": "16.2.4",
+    "react": "19.2.4",
+    "react-dom": "19.2.4"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "typescript": "^5"
+  }
+}

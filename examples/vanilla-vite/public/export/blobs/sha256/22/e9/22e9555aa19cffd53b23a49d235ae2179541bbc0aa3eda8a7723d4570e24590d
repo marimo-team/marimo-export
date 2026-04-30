@@ -1,0 +1,24 @@
+{
+  "rows": 1360,
+  "columns": [
+    "Date",
+    "Symbol",
+    "Open",
+    "Open Change",
+    "High",
+    "High Change",
+    "Low",
+    "Low Change",
+    "Close",
+    "Close Change"
+  ],
+  "symbols": [
+    "AAPL",
+    "AMZN",
+    "CRWV",
+    "GOOGL",
+    "MSFT"
+  ],
+  "date_start": "2025-04-01",
+  "date_end": "2026-04-30"
+}
