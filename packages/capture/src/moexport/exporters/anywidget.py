@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Any, Literal, cast
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
 
-from moexport.artifacts import Artifact, ArtifactData, JsonObject
+from moexport.artifacts import Artifact, ArtifactData, JsonObject, JsonValue
 from moexport.blobs import BlobRef
 from moexport.exporters._core import ExporterContext, ExporterOptions
 from moexport.exporters._optional import import_optional
@@ -220,12 +220,12 @@ def bundle(
         format=FORMAT,
         media_type=MEDIA_TYPE,
         data=ArtifactData(files=files, entry="descriptor"),
-        metadata={
-            "anywidget_id": anywidget_id,
-            "buffer_count": len(buffer_records),
-            "has_style": style_blob is not None,
-            "state_keys": sorted(state),
-        },
+        metadata=_metadata(
+            anywidget_id=anywidget_id,
+            buffer_count=len(buffer_records),
+            has_style=style_blob is not None,
+            state_keys=sorted(state),
+        ),
     )
 
 
@@ -353,6 +353,22 @@ def _get_widget_state(widget: Any) -> dict[str, Any]:
         "Could not serialize widget state. Expected get_state() or "
         "traitlets-style trait_values()/traits()."
     )
+
+
+def _metadata(
+    *,
+    anywidget_id: str,
+    buffer_count: int,
+    has_style: bool,
+    state_keys: list[str],
+) -> JsonObject:
+    state_key_values: list[JsonValue] = [key for key in state_keys]
+    return {
+        "anywidget_id": anywidget_id,
+        "buffer_count": buffer_count,
+        "has_style": has_style,
+        "state_keys": state_key_values,
+    }
 
 
 def _json_object(value: object) -> JsonObject:
