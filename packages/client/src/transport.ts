@@ -100,6 +100,8 @@ export function createNotebookOpener(
   options: CaptureClientOptionsBase,
 ): CaptureClient["openNotebook"] {
   const { server, WebSocket: WebSocketCtor = globalThis.WebSocket } = options;
+  const fetchImpl = options.fetch ?? globalFetch("openNotebook requires fetch.");
+  const root = baseUrl(server);
 
   return async ({ notebook, sessionId = randomSessionId(), timeoutMs = 30_000 }) => {
     if (typeof WebSocketCtor !== "function") {
@@ -149,6 +151,8 @@ export function createNotebookOpener(
       });
     });
 
+    await instantiateNotebook({ fetchImpl, options, root, sessionId });
+
     return {
       sessionId,
       name: notebookName(notebook),
@@ -156,6 +160,35 @@ export function createNotebookOpener(
       initializationId: null,
     };
   };
+}
+
+async function instantiateNotebook({
+  fetchImpl,
+  options,
+  root,
+  sessionId,
+}: {
+  fetchImpl: CaptureFetch;
+  options: CaptureClientOptionsBase;
+  root: string;
+  sessionId: string;
+}): Promise<void> {
+  const headers = requestHeaders(options);
+  headers.set("Content-Type", "application/json");
+  headers.set("Marimo-Session-Id", sessionId);
+
+  const response = await fetchImpl(
+    new Request(new URL("api/kernel/instantiate", root), {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ objectIds: [], values: [], autoRun: true }),
+    }),
+  );
+  const { ok, status, statusText } = response;
+
+  if (!ok) {
+    throw new Error(`Failed to instantiate marimo notebook: ${status} ${statusText}`);
+  }
 }
 
 export function requestHeaders({
