@@ -5,6 +5,7 @@
   "description": "Python capture runtime for marimo export bundles.",
   "scripts": {
     "build": "rm -rf dist && uv build --out-dir dist",
+    "test": "uv run python -m pytest tests -q",
     "typecheck": "uv run ty check .",
     "lint": "uv run ruff check . && uv run ruff format --check .",
     "format": "uv run ruff format ."

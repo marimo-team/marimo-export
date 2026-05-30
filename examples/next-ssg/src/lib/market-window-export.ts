@@ -7,7 +7,6 @@ import { arrowLoader, type ArrowArtifactHandle } from "@marimo-team/export-loade
 import { readExportArchive } from "@marimo-team/export-reader";
 
 import { marimoNotebook, marimoServerToken, marimoServerUrl } from "@/lib/marimo-env";
-import { jsonExporter } from "@/lib/spec";
 
 export const marketWindows = [
   {
@@ -204,14 +203,10 @@ const buildMarketWindowSpec = (start: string, end: string) => ({
   ],
   values: {
     summary: {
-      source: summarySource,
-      formats: {
-        json: {
-          export: {
-            type: "code",
-            code: jsonExporter,
-          },
-          options: {
+      source: { expr: summarySource },
+      formats: [
+        {
+          json: {
             filename: "summary.json",
             format: "finance.market_window.summary.json.v1",
             metadata: {
@@ -220,17 +215,13 @@ const buildMarketWindowSpec = (start: string, end: string) => ({
             },
           },
         },
-      },
+      ],
     },
     sample_rows: {
-      source: sampleRowsSource,
-      formats: {
-        json: {
-          export: {
-            type: "code",
-            code: jsonExporter,
-          },
-          options: {
+      source: { expr: sampleRowsSource },
+      formats: [
+        {
+          json: {
             filename: "sample-rows.json",
             format: "finance.market_window.sample_rows.json.v1",
             metadata: {
@@ -239,32 +230,15 @@ const buildMarketWindowSpec = (start: string, end: string) => ({
             },
           },
         },
-      },
+      ],
     },
     frame: {
-      source: arrowFrameSource,
-      formats: {
-        arrow: {
-          export: {
-            type: "ref",
-            ref: "moexport.exporters.dataframe:arrow",
-          },
-        },
-      },
+      source: { expr: arrowFrameSource },
+      formats: ["arrow"],
     },
     chart: {
-      source: chartSource,
-      formats: {
-        png: {
-          export: {
-            type: "ref",
-            ref: "moexport.exporters.altair:png",
-          },
-          options: {
-            scale: 2,
-          },
-        },
-      },
+      source: { expr: chartSource },
+      formats: [{ png: { scale: 2 } }],
     },
   },
 });

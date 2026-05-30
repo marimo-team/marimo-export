@@ -2,7 +2,8 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "paths": {
-      "@marimo-team/export-reader": ["../reader/src/index"]
+      "@marimo-team/export-reader": ["../reader/src/index"],
+      "#reader/*": ["../reader/src/*"]
     }
   },
   "include": ["src"]

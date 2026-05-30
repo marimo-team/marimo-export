@@ -122,6 +122,69 @@ def test_export_spec_defaults_to_one_default_scenario() -> None:
     assert spec.scenarios[0].state == {}
 
 
+def test_export_spec_accepts_product_shaped_sources_and_formats() -> None:
+    spec = parse_export_spec(
+        {
+            "values": {
+                "prices": {
+                    "source": {"expr": "df"},
+                    "formats": ["arrow", "parquet"],
+                },
+                "change_desc": {
+                    "source": {"cell": "change_desc", "output": "html"},
+                    "formats": [{"html": {"filename": "change-desc.html"}}],
+                },
+                "chart": {
+                    "source": {"expr": "symbols_chart"},
+                    "formats": [
+                        "vegalite",
+                        {"png": {"scale": 2}},
+                    ],
+                },
+            }
+        }
+    )
+
+    assert spec.values["prices"].source == "df"
+    assert spec.values["prices"].formats["arrow"].export == RefExport(
+        type="ref",
+        ref="moexport.exporters.dataframe:arrow",
+    )
+    assert spec.values["prices"].formats["parquet"].export == RefExport(
+        type="ref",
+        ref="moexport.exporters.dataframe:parquet",
+    )
+    assert (
+        spec.values["change_desc"].source == 'mox.runtime().cell("change_desc").output'
+    )
+    assert spec.values["change_desc"].formats["html"].export == RefExport(
+        type="ref",
+        ref="moexport.exporters.core:html",
+    )
+    assert spec.values["change_desc"].formats["html"].options == {
+        "filename": "change-desc.html"
+    }
+    assert spec.values["chart"].formats["vegalite"].export == RefExport(
+        type="ref",
+        ref="moexport.exporters.altair:vegalite",
+    )
+    assert spec.values["chart"].formats["png"].options == {"scale": 2}
+
+
+def test_export_spec_rejects_unknown_format_shorthand() -> None:
+    with pytest.raises(ValidationError, match="unknown built-in format"):
+        parse_export_spec(
+            {
+                "values": {
+                    "prices": {
+                        "source": {"expr": "df"},
+                        "formats": ["excel"],
+                    }
+                }
+            }
+        )
+
+
 def test_export_spec_loads_json_and_yaml_files(tmp_path: Path) -> None:
     value = {
         "scenarios": [{"id": "wide", "state": {"chart_width": 1200}}],

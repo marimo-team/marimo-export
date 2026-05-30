@@ -21,7 +21,7 @@ ModelT = TypeVar("ModelT", bound=BaseModel)
 
 
 class BundleSchemaModel(BaseModel):
-    model_config = ConfigDict(extra="allow", frozen=True, populate_by_name=True)
+    model_config = ConfigDict(extra="forbid", frozen=True, populate_by_name=True)
 
 
 class NotebookRecord(BundleSchemaModel):

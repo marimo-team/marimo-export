@@ -11,6 +11,7 @@
     "build": "pnpm -r --if-present build",
     "typecheck": "pnpm -r --if-present typecheck",
     "lint": "pnpm -r --if-present lint",
+    "test": "pnpm -r --if-present test",
     "format": "oxfmt . && pnpm -r --if-present format"
   },
   "devDependencies": {

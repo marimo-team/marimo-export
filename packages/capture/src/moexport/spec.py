@@ -108,6 +108,17 @@ ExportCallable: TypeAlias = Annotated[
 ]
 SpecFormat: TypeAlias = Literal["json", "yaml"]
 
+BUILTIN_FORMAT_EXPORTERS = {
+    "json": "moexport.exporters.core:json",
+    "text": "moexport.exporters.core:text",
+    "html": "moexport.exporters.core:html",
+    "arrow": "moexport.exporters.dataframe:arrow",
+    "parquet": "moexport.exporters.dataframe:parquet",
+    "vegalite": "moexport.exporters.altair:vegalite",
+    "png": "moexport.exporters.altair:png",
+    "anywidget": "moexport.exporters.anywidget:bundle",
+}
+
 
 class CodeStateValue(SpecModel):
     """Scenario state value computed from a Python expression."""
@@ -183,6 +194,19 @@ class ValueSpec(SpecModel):
         ),
     ]
 
+    @model_validator(mode="before")
+    @classmethod
+    def _accept_product_shorthand(cls, value: object) -> object:
+        if not isinstance(value, Mapping):
+            return value
+
+        normalized = dict(value)
+        if "source" in normalized:
+            normalized["source"] = _normalize_source(normalized["source"])
+        if "formats" in normalized:
+            normalized["formats"] = _normalize_formats(normalized["formats"])
+        return normalized
+
     @field_validator("source")
     @classmethod
     def _source_must_not_be_empty(cls, value: str) -> str:
@@ -232,6 +256,95 @@ def _validate_value_mapping(value: object, label: str) -> dict[str, object]:
             raise ValueError(f"{label} keys must be strings")
         validated[key] = _validate_state_value(state_value)
     return validated
+
+
+def _normalize_source(value: object) -> object:
+    if isinstance(value, str):
+        return value
+    if not isinstance(value, Mapping):
+        return value
+
+    mapping = cast(Mapping[object, object], value)
+    if "expr" in mapping:
+        return _required_string(mapping["expr"], "source.expr")
+    if "cell" in mapping:
+        cell = _required_string(mapping["cell"], "source.cell")
+        output = mapping.get("output", "output")
+        if output not in {"output", "html"}:
+            raise ValueError("source.output must be 'output' or 'html'")
+        return f"mox.runtime().cell({json.dumps(cell)}).output"
+    return value
+
+
+def _normalize_formats(value: object) -> object:
+    if isinstance(value, list):
+        formats: dict[str, object] = {}
+        for index, item in enumerate(value):
+            name, spec = _normalize_format_item(item, f"formats[{index}]")
+            if name in formats:
+                raise ValueError(f"duplicate format {name!r}")
+            formats[name] = spec
+        return formats
+
+    if isinstance(value, Mapping):
+        return {
+            _required_string(name, "format name"): _normalize_format_mapping(
+                _required_string(name, "format name"),
+                item,
+            )
+            for name, item in value.items()
+        }
+
+    return value
+
+
+def _normalize_format_item(value: object, label: str) -> tuple[str, object]:
+    if isinstance(value, str):
+        return value, _builtin_format(value, {})
+    if not isinstance(value, Mapping):
+        raise ValueError(f"{label} must be a format name or object")
+
+    mapping = cast(Mapping[object, object], value)
+    if "format" in mapping:
+        name = _required_string(mapping["format"], f"{label}.format")
+        options = mapping.get("options", {})
+        return name, _builtin_format(name, options)
+
+    if len(mapping) != 1:
+        raise ValueError(f"{label} must contain exactly one format name")
+    name, item = next(iter(mapping.items()))
+    format_name = _required_string(name, "format name")
+    return format_name, _normalize_format_mapping(format_name, item)
+
+
+def _normalize_format_mapping(name: str, value: object) -> object:
+    if isinstance(value, Mapping) and "export" in value:
+        return value
+    if name in BUILTIN_FORMAT_EXPORTERS:
+        return _builtin_format(name, {} if value is None else value)
+    return value
+
+
+def _builtin_format(name: str, options: object) -> dict[str, object]:
+    try:
+        ref = BUILTIN_FORMAT_EXPORTERS[name]
+    except KeyError as error:
+        raise ValueError(
+            f"unknown built-in format {name!r}; provide an explicit export config"
+        ) from error
+    return {
+        "export": {
+            "type": "ref",
+            "ref": ref,
+        },
+        "options": options,
+    }
+
+
+def _required_string(value: object, label: str) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"{label} must be a non-empty string")
+    return value
 
 
 class ExportSpec(SpecModel):

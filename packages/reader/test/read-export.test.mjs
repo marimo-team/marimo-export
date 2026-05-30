@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { readExport, readExportIndex } from "../dist/index.js";
+import { readExport, readExportIndex, validateExportManifest } from "../dist/index.js";
 
 const manifest = {
-  schema: "marimo.export.bundle.v1",
+  schema: "moexport.bundle.v1",
   version: 1,
   id: "sha256-test",
   sha256: "test",
@@ -78,12 +78,57 @@ test("readExport rejects manifest hrefs outside the hosted root", async () => {
   );
 });
 
-test("artifact URLs reject hosted file hrefs outside the export root", async () => {
-  const exp = await readExport({
-    root: "https://example.test/export/",
-    manifest: "bundles/sha256-test/manifest.json",
-    fetch: jsonFetch({
-      "https://example.test/export/bundles/sha256-test/manifest.json": {
+test("readExport rejects manifest file hrefs outside the export root", async () => {
+  await assert.rejects(
+    readExport({
+      root: "https://example.test/export/",
+      manifest: "bundles/sha256-test/manifest.json",
+      fetch: jsonFetch({
+        "https://example.test/export/bundles/sha256-test/manifest.json": {
+          ...manifest,
+          scenarios: [
+            {
+              ...manifest.scenarios[0],
+              values: {
+                value: {
+                  json: {
+                    ...manifest.scenarios[0].values.value.json,
+                    data: {
+                      ...manifest.scenarios[0].values.value.json.data,
+                      files: {
+                        data: {
+                          ...manifest.scenarios[0].values.value.json.data.files.data,
+                          href: "../secret.json",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          ],
+        },
+      }),
+    }),
+    /Invalid export manifest\.scenarios\[0\]\.values\.value\.json\.data\.files\.data\.href/,
+  );
+});
+
+test("validateExportManifest rejects the wrong schema", () => {
+  assert.throws(
+    () =>
+      validateExportManifest({
+        ...manifest,
+        schema: "marimo.export.bundle.v1",
+      }),
+    /export manifest\.schema must be "moexport\.bundle\.v1"/,
+  );
+});
+
+test("validateExportManifest rejects an entry outside the artifact files", () => {
+  assert.throws(
+    () =>
+      validateExportManifest({
         ...manifest,
         scenarios: [
           {
@@ -94,29 +139,62 @@ test("artifact URLs reject hosted file hrefs outside the export root", async () 
                   ...manifest.scenarios[0].values.value.json,
                   data: {
                     ...manifest.scenarios[0].values.value.json.data,
-                    files: {
-                      data: {
-                        ...manifest.scenarios[0].values.value.json.data.files.data,
-                        href: "../secret.json",
-                      },
-                    },
+                    entry: "missing",
                   },
                 },
               },
             },
           },
         ],
-      },
-    }),
-  });
+      }),
+    /entry must name a file/,
+  );
+});
 
-  const handle = exp.get({
-    scenario: "default",
-    value: "value",
-    format: "json",
-  });
+test("validateExportManifest rejects duplicate scenario ids", () => {
+  assert.throws(
+    () =>
+      validateExportManifest({
+        ...manifest,
+        scenarios: [manifest.scenarios[0], manifest.scenarios[0]],
+      }),
+    /duplicate scenario "default"/,
+  );
+});
 
-  assert.throws(() => handle.url(), /Invalid bundle href/);
+test("validateExportManifest rejects undeclared scenario values", () => {
+  assert.throws(
+    () =>
+      validateExportManifest({
+        ...manifest,
+        scenarios: [
+          {
+            ...manifest.scenarios[0],
+            values: {
+              ...manifest.scenarios[0].values,
+              extra: manifest.scenarios[0].values.value,
+            },
+          },
+        ],
+      }),
+    /contains undeclared value "extra"/,
+  );
+});
+
+test("validateExportManifest rejects missing declared formats", () => {
+  assert.throws(
+    () =>
+      validateExportManifest({
+        ...manifest,
+        values: {
+          value: {
+            ...manifest.values.value,
+            formats: ["json", "text"],
+          },
+        },
+      }),
+    /must include declared format "text"/,
+  );
 });
 
 function jsonFetch(files) {

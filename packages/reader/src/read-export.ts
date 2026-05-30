@@ -17,16 +17,19 @@ import type {
   StaticExportArchive,
 } from "#reader/types";
 import { unzipSync } from "fflate";
+import { safeBundlePath, validateExportManifest, validateExportRootIndex } from "./schema.js";
 
 const DEFAULT_ROOT_INDEX = "index.json";
 
 export async function readExportIndex(options: ReadExportIndexOptions): Promise<ExportRootIndex> {
   const root = rootUrl(options.root);
   const fetchImpl = options.fetch ?? globalFetch();
-  return fetchJson<ExportRootIndex>(
-    fetchImpl,
-    resolveHref(root, safeBundlePath(options.index ?? DEFAULT_ROOT_INDEX, "index href")),
-    "export root index",
+  return validateExportRootIndex(
+    await fetchJson(
+      fetchImpl,
+      resolveHref(root, safeBundlePath(options.index ?? DEFAULT_ROOT_INDEX, "index href")),
+      "export root index",
+    ),
   );
 }
 
@@ -54,7 +57,7 @@ export async function readExport(options: ReadExportOptions): Promise<StaticExpo
   const root = rootUrl(options.root);
   const fetchImpl = options.fetch ?? globalFetch();
   const source = new UrlExportSource(root, fetchImpl);
-  const manifest = await source.json<ExportManifest>(options.manifest, "export manifest");
+  const manifest = validateExportManifest(await source.json(options.manifest, "export manifest"));
   return new StaticExportReader({
     manifest,
     source,
@@ -67,7 +70,7 @@ export async function readExportArchive(
 ): Promise<StaticExportArchive> {
   const source = ArchiveExportSource.from(await archiveBytes(options.bytes));
   const manifestHref = options.manifest ?? (await latestArchiveManifestHref(source));
-  const manifest = await source.json<ExportManifest>(manifestHref, "export manifest");
+  const manifest = validateExportManifest(await source.json(manifestHref, "export manifest"));
   return new StaticExportArchiveReader({
     manifest,
     source,
@@ -422,7 +425,7 @@ function resolveHref(root: URL, href: string): string {
 }
 
 async function latestArchiveManifestHref(source: ArchiveExportSource): Promise<string> {
-  const index = await source.json<ExportRootIndex>(DEFAULT_ROOT_INDEX, "export root index");
+  const index = validateExportRootIndex(await source.json(DEFAULT_ROOT_INDEX, "export root index"));
   if (!index.latest) {
     throw new Error("Export archive index does not contain a latest bundle.");
   }
@@ -465,24 +468,11 @@ function bundleHref(href: string): string {
   return safeBundlePath(href, "bundle href");
 }
 
-function safeBundlePath(path: string, label: string): string {
-  if (!path || path.startsWith("/") || path.includes("\\")) {
-    throw new Error(`Invalid ${label} ${JSON.stringify(path)}.`);
-  }
-
-  const parts = path.split("/");
-  if (parts.some((part) => !part || part === "." || part === "..")) {
-    throw new Error(`Invalid ${label} ${JSON.stringify(path)}.`);
-  }
-
-  return parts.join("/");
-}
-
 function arrayBuffer(bytes: Uint8Array): ArrayBuffer {
   return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
 }
 
-async function fetchJson<T>(fetchImpl: FetchLike, url: string, label: string): Promise<T> {
+async function fetchJson(fetchImpl: FetchLike, url: string, label: string): Promise<unknown> {
   const response = await fetchImpl(url);
 
   if (!response.ok) {
@@ -491,7 +481,7 @@ async function fetchJson<T>(fetchImpl: FetchLike, url: string, label: string): P
     );
   }
 
-  return (await response.json()) as T;
+  return response.json();
 }
 
 function globalFetch(): FetchLike {
