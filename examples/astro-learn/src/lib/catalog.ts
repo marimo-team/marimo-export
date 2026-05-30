@@ -5,6 +5,7 @@ import {
   type WorkspaceNotebook,
 } from "@marimo-team/export-client";
 
+import { fixtureCatalog } from "@/data/catalog";
 import type { CatalogStats, LearnCatalog, LearnNotebook, TopicGroup } from "@/types";
 
 let catalogPromise: Promise<LearnCatalog> | undefined;
@@ -45,12 +46,18 @@ export function groupByTopic(notebooks: LearnNotebook[]): TopicGroup[] {
 }
 
 async function loadCatalog(): Promise<LearnCatalog> {
+  if (!process.env.MARIMO_LEARN_SERVER_URL) {
+    return {
+      notebooks: limitByPath(fixtureCatalog.notebooks),
+    };
+  }
+
   const client = createCaptureClient({
-    server: process.env.MARIMO_LEARN_SERVER_URL ?? "http://localhost:7676",
+    server: process.env.MARIMO_LEARN_SERVER_URL,
     serverToken: process.env.MARIMO_LEARN_SERVER_TOKEN ?? "learn",
   });
   const workspace = await listWorkspaceNotebooks(client);
-  const notebooks = limitNotebooks(workspace.filter(isLearnNotebook));
+  const notebooks = limitByPath(workspace.filter(isLearnNotebook));
   const records = await Promise.all(notebooks.map((notebook) => notebookRecord(client, notebook)));
 
   return {
@@ -85,7 +92,7 @@ async function readNotebookSource(client: MarimoCaptureClient, path: string): Pr
   return typeof data?.contents === "string" ? data.contents : "";
 }
 
-function limitNotebooks(notebooks: WorkspaceNotebook[]): WorkspaceNotebook[] {
+function limitByPath<T extends { path: string }>(notebooks: T[]): T[] {
   const limit = Number(process.env.MARIMO_LEARN_LIMIT ?? 0);
   const sorted = [...notebooks].sort((left, right) => left.path.localeCompare(right.path));
   return Number.isFinite(limit) && limit > 0 ? sorted.slice(0, limit) : sorted;

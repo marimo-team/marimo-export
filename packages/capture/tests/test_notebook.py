@@ -96,6 +96,37 @@ if __name__ == "__main__":
     )
 
 
+def _write_object_patch_notebook(path: Path) -> None:
+    path.write_text(
+        """
+import marimo
+
+__generated_with = "0.23.4"
+app = marimo.App()
+
+
+@app.cell
+def _():
+    class Selector:
+        def __init__(self):
+            self.value = ["AAPL"]
+
+    selector = Selector()
+    return Selector, selector
+
+
+@app.cell
+def _(selector):
+    chart = ",".join(selector.value)
+    return (chart,)
+
+
+if __name__ == "__main__":
+    app.run()
+""".lstrip()
+    )
+
+
 def _text_export_spec() -> dict[str, Any]:
     return {
         "scenarios": [{"id": "base"}],
@@ -321,6 +352,37 @@ if __name__ == "__main__":
     assert (Path(result.bundle_path).parent.parent / blob["href"]).read_text() == (
         "Selected MSFT"
     )
+
+
+def test_export_notebook_object_patch_scenarios_do_not_leak(
+    tmp_path: Path,
+) -> None:
+    notebook = tmp_path / "patched.py"
+    _write_object_patch_notebook(notebook)
+    spec = _text_export_spec()
+    spec["scenarios"] = [
+        {"id": "a-patched", "state": {"selector.value": ["CRWV", "MSFT"]}},
+        {"id": "z-default"},
+    ]
+    spec["values"]["title"]["source"] = "chart"
+
+    result = export_notebook(
+        notebook,
+        spec,
+        bundle=tmp_path / "export",
+    )
+
+    root = Path(result.bundle_path).parent.parent
+    values = []
+    for scenario in result.manifest["scenarios"]:
+        artifact = scenario["values"]["title"]["text"]
+        blob = artifact["data"]["files"]["value"]
+        values.append((scenario["id"], (root / blob["href"]).read_text()))
+
+    assert values == [
+        ("a-patched", "CRWV,MSFT"),
+        ("z-default", "AAPL"),
+    ]
 
 
 def test_export_notebook_snapshot_omits_synthetic_export_cell(

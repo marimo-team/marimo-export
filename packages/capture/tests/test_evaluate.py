@@ -580,7 +580,41 @@ selector = Selector()
             "value_preview": "['CRWV', 'MSFT']",
         }
     ]
-    assert results[1]["metadata"]["execution"]["stats"]["cached"] == 1
+    assert results[1]["metadata"]["execution"]["stats"]["cached"] == 0
+
+
+def test_evaluate_object_patches_do_not_leak_through_cache(monkeypatch) -> None:
+    graph = graph_from(
+        {
+            "selector": """
+class Selector:
+    def __init__(self):
+        self.value = ["AAPL"]
+
+selector = Selector()
+""",
+            "chart": "chart = ','.join(selector.value)",
+        }
+    )
+    ctx = FakeContext(graph=graph, globals={})
+    monkeypatch.setattr(target_module, "get_context", lambda: ctx)
+
+    response = run(
+        mox.evaluate(
+            "chart",
+            [{}, {}],
+            object_patches=[
+                {"selector.value": ["CRWV", "MSFT"]},
+                {},
+            ],
+        )
+    )
+    results = response["results"]
+
+    assert [result["value"] for result in results] == [
+        "CRWV,MSFT",
+        "AAPL",
+    ]
 
 
 def test_evaluate_shape_is_stable_for_single_and_batch(monkeypatch) -> None:

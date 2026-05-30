@@ -108,9 +108,11 @@ async def evaluate_target_once(
 
         cell = graph.cells[cid]
         cache_key = cell_cache_key(cell, glbls, object_patches)
+        patched_roots = cell.defs & patch_roots
+        cacheable = not patched_roots
         t0 = time.perf_counter()
 
-        if cache_key in cell_cache:
+        if cacheable and cache_key in cell_cache:
             produced_defs = dict(cell_cache[cache_key])
             glbls.update(produced_defs)
             cached.append(cid)
@@ -124,10 +126,10 @@ async def evaluate_target_once(
                 await execute_cell_body(cell, glbls)
 
             produced_defs = {name: glbls[name] for name in cell.defs if name in glbls}
-            cell_cache[cache_key] = produced_defs
+            if cacheable:
+                cell_cache[cache_key] = produced_defs
             executed.append(cid)
 
-        patched_roots = cell.defs & patch_roots
         if patched_roots:
             applied_object_patches.extend(
                 apply_object_patches(

@@ -22,6 +22,7 @@
   },
   "scripts": {
     "build": "rm -rf dist && tsc -p tsconfig.build.json",
+    "test": "pnpm build && node --test test/*.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "oxlint .",
     "format": "oxfmt --write ."
