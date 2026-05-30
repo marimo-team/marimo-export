@@ -16,15 +16,8 @@ spec = {
     "scenarios": [{"id": "default", "state": {}}],
     "values": {
         "prices": {
-            "source": "df",
-            "formats": {
-                "arrow": {
-                    "export": {
-                        "type": "ref",
-                        "ref": "moexport.exporters.dataframe:arrow",
-                    }
-                }
-            },
+            "source": {"expr": "df"},
+            "formats": ["arrow"],
         }
     },
 }
@@ -32,9 +25,10 @@ spec = {
 result = await mox.export(spec, bundle="notebooks/__marimo__/static-export")
 ```
 
-`source` is a Python expression evaluated in the notebook runtime. It can be a
-def such as `df`, a derived expression such as `df.head()`, or a marimo runtime
-selector such as `mox.runtime().cell("change_desc").output`.
+`source.expr` is a Python expression evaluated in the notebook runtime. It can
+name a def such as `df` or a derived expression such as `df.head()`.
+`source.cell` selects a named marimo cell output without exposing the runtime
+selector in the authored spec.
 
 ## Export A Notebook File
 
@@ -111,25 +105,13 @@ scenarios:
 
 values:
   prices:
-    source: df
-    formats:
-      arrow:
-        export:
-          type: ref
-          ref: moexport.exporters.dataframe:arrow
-      parquet:
-        export:
-          type: ref
-          ref: moexport.exporters.dataframe:parquet
+    source: { expr: df }
+    formats: [arrow, parquet]
 
   change_desc:
-    source: mox.runtime().cell("change_desc").output
+    source: { cell: change_desc, output: html }
     formats:
-      html:
-        export:
-          type: ref
-          ref: moexport.exporters.core:html
-        options:
+      - html:
           filename: change-desc.html
           format: marimo.cell_output.html.v1
 ```
@@ -144,8 +126,21 @@ provenance.
 
 ## Exporters
 
-Exporters are ordinary Python callables. A referenced exporter uses
-`module:function` import syntax:
+Built-in formats compile to exporter callables:
+
+| Format      | Exporter                               |
+| ----------- | -------------------------------------- |
+| `json`      | `moexport.exporters.core:json`         |
+| `text`      | `moexport.exporters.core:text`         |
+| `html`      | `moexport.exporters.core:html`         |
+| `arrow`     | `moexport.exporters.dataframe:arrow`   |
+| `parquet`   | `moexport.exporters.dataframe:parquet` |
+| `vegalite`  | `moexport.exporters.altair:vegalite`   |
+| `png`       | `moexport.exporters.altair:png`        |
+| `anywidget` | `moexport.exporters.anywidget:bundle`  |
+
+Use an explicit exporter config when a value needs custom projection code. A
+referenced exporter uses `module:function` import syntax:
 
 ```yaml
 export:

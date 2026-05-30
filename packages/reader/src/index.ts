@@ -4,7 +4,8 @@ export {
   readExportArchive,
   readExportIndex,
   readLatestExport,
-} from "#reader/read-export";
+} from "./read-export.js";
+export { validateExportManifest, validateExportRootIndex } from "./schema.js";
 export type {
   ArtifactData,
   ArtifactDataBundle,
@@ -33,4 +34,4 @@ export type {
   ReadLatestExportOptions,
   StaticExport,
   StaticExportArchive,
-} from "#reader/types";
+} from "./types.js";

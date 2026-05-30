@@ -50,7 +50,7 @@ export interface ManifestValue {
 export interface ManifestScenario {
   id: string;
   state: JsonObject;
-  declared_state?: JsonValue;
+  declared_state?: JsonObject | null;
   values: Record<string, Record<string, ArtifactRecord>>;
 }
 
