@@ -27,6 +27,8 @@ The finished site does not need a Python server, Pyodide, or a marimo runtime.
   examples.
 - `examples`: framework and frameworkless apps that consume the exported
   bundles.
+- `examples/self-contained`: a Markdown artifact example that turns one
+  notebook into `output.md` plus a static `media/` directory for PR review.
 
 ## Capture A Notebook
 

@@ -146,6 +146,28 @@ def _selected_export_spec() -> dict[str, Any]:
     return spec
 
 
+def _notebook_snapshot_spec() -> dict[str, Any]:
+    return {
+        "scenarios": [{"id": "base"}],
+        "values": {
+            "notebook": {
+                "source": "mox.runtime().snapshot()",
+                "formats": {
+                    "linear": {
+                        "export": {
+                            "type": "ref",
+                            "ref": "moexport.exporters.notebook:linear",
+                        },
+                        "options": {
+                            "include_empty_outputs": True,
+                        },
+                    }
+                },
+            }
+        },
+    }
+
+
 def test_export_notebook_loads_file_and_writes_bundle(tmp_path: Path) -> None:
     notebook = tmp_path / "finance.py"
     _write_notebook(notebook)
@@ -299,6 +321,30 @@ if __name__ == "__main__":
     assert (Path(result.bundle_path).parent.parent / blob["href"]).read_text() == (
         "Selected MSFT"
     )
+
+
+def test_export_notebook_snapshot_omits_synthetic_export_cell(
+    tmp_path: Path,
+) -> None:
+    notebook = tmp_path / "finance.py"
+    _write_notebook(notebook)
+
+    result = export_notebook(
+        notebook,
+        _notebook_snapshot_spec(),
+        bundle=tmp_path / "export",
+    )
+
+    artifact = result.manifest["scenarios"][0]["values"]["notebook"]["linear"]
+    blob = artifact["data"]["files"]["notebook"]
+    snapshot = (
+        Path(result.bundle_path)
+        .parent.parent.joinpath(blob["href"])
+        .read_text(encoding="utf-8")
+    )
+
+    assert "_moexport_notebook_export" not in snapshot
+    assert artifact["metadata"]["cell_count"] == 2
 
 
 def test_export_notebook_uses_marimo_name_resolution(

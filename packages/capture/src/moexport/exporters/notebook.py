@@ -26,6 +26,10 @@ class NotebookLinearOptions(ExporterOptions):
         default=False,
         description="Keep cells whose display output is empty.",
     )
+    include_internal_cells: bool = Field(
+        default=False,
+        description="Keep moexport's synthetic export cell in the snapshot.",
+    )
 
 
 _OPTIONS = TypeAdapter(NotebookLinearOptions)
@@ -41,6 +45,7 @@ def linear(value: NotebookRuntime, ctx: ExporterContext, **options: Any) -> Arti
     cells = [
         _cell_record(cell, include_source=parsed.include_source)
         for cell in value.cells()
+        if parsed.include_internal_cells or not _is_internal_cell(cell)
     ]
     if not parsed.include_empty_outputs:
         cells = [cell for cell in cells if _outputs(cell)]
@@ -88,6 +93,10 @@ def _cell_record(
 def _outputs(cell: JsonObject) -> list[JsonValue]:
     outputs = cell.get("outputs")
     return outputs if isinstance(outputs, list) else []
+
+
+def _is_internal_cell(cell: Any) -> bool:
+    return str(getattr(cell, "name", "") or "").startswith("_moexport_")
 
 
 def _format_output(value: Any) -> JsonObject | None:
