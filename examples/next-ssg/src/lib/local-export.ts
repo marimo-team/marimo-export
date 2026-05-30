@@ -144,7 +144,6 @@ const captureFinanceBundle = async (): Promise<void> => {
       ...sessionTarget,
       bundle: LOCAL_EXPORT_ROOT,
     });
-    await waitForFile(path.join(LOCAL_EXPORT_ROOT, "index.json"));
   } finally {
     await fs.rm(CAPTURE_LOCK, { recursive: true, force: true });
   }

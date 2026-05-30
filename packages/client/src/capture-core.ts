@@ -17,30 +17,22 @@ export async function captureExportWithClient(
   const { client, bundle, runtime } = options;
   const session = await resolveCaptureSession(client, options);
   await ensureCaptureRuntime(client, session, runtime);
-  const code = captureCode(spec, bundle);
-  const { response: httpResponse, data } = await client.POST("/api/kernel/scratchpad/run", {
-    params: {
-      header: {
-        "Marimo-Session-Id": session.sessionId,
-      },
-    },
-    body: { code },
+  const marker = captureMarker();
+  const code = captureCode(spec, bundle, marker);
+  const { stdout } = await client.executeScratchpad({
+    code,
+    sessionId: session.sessionId,
+    ...(options.executionTimeoutMs !== undefined ? { timeoutMs: options.executionTimeoutMs } : {}),
   });
-  const { ok, status, statusText } = httpResponse;
-
-  if (!ok) {
-    throw new Error(`Failed to dispatch marimo capture request: ${status} ${statusText}`);
-  }
-
-  const success = isRecord(data) && typeof data.success === "boolean" ? data.success : true;
-  if (!success) {
-    throw new Error("marimo capture request was not accepted.");
-  }
-
+  const payload = capturePayload(stdout, marker);
   return {
-    success,
-    dispatched: true,
     session,
+    bundlePath: stringField(payload, "bundle_path"),
+    manifestPath: stringField(payload, "manifest_path"),
+    invocationPath: stringField(payload, "invocation_path"),
+    invocationIndexPath: stringField(payload, "invocation_index_path"),
+    manifest: objectField(payload, "manifest"),
+    invocation: objectField(payload, "invocation"),
   };
 }
 
@@ -212,7 +204,11 @@ function sessionKey(notebook: RunningNotebook | undefined): string {
   return notebook ? `${notebook.path ?? ""}\0${notebook.name ?? ""}` : "";
 }
 
-function captureCode(spec: Record<string, unknown>, bundle: string | undefined): string {
+function captureCode(
+  spec: Record<string, unknown>,
+  bundle: string | undefined,
+  marker: string,
+): string {
   const specJson = JSON.stringify(spec);
   const bundleExpression = bundle === undefined ? "None" : JSON.stringify(bundle);
 
@@ -220,7 +216,16 @@ function captureCode(spec: Record<string, unknown>, bundle: string | undefined):
     "import json",
     "import moexport as mox",
     `__moexport_spec = json.loads(${JSON.stringify(specJson)})`,
-    `await mox.export(__moexport_spec, bundle=${bundleExpression})`,
+    `__moexport_result = await mox.export(__moexport_spec, bundle=${bundleExpression})`,
+    "__moexport_payload = {",
+    '    "bundle_path": __moexport_result.bundle_path,',
+    '    "manifest_path": __moexport_result.manifest_path,',
+    '    "invocation_path": __moexport_result.invocation_path,',
+    '    "invocation_index_path": __moexport_result.invocation_index_path,',
+    '    "manifest": __moexport_result.manifest,',
+    '    "invocation": __moexport_result.invocation,',
+    "}",
+    `print(${JSON.stringify(marker)} + json.dumps(__moexport_payload, allow_nan=False))`,
   ].join("\n");
 }
 
@@ -246,17 +251,50 @@ function archiveMarker(): string {
   return `__MOEXPORT_ARCHIVE_${Date.now()}_${Math.random().toString(36).slice(2)}__`;
 }
 
+function captureMarker(): string {
+  return `__MOEXPORT_CAPTURE_${Date.now()}_${Math.random().toString(36).slice(2)}__`;
+}
+
 function archivePayload(stdout: string[], marker: string): string {
+  return markedPayload(stdout, marker, "archive");
+}
+
+function capturePayload(stdout: string[], marker: string): Record<string, unknown> {
+  const payload = markedPayload(stdout, marker, "capture result");
+  const parsed = JSON.parse(payload) as unknown;
+  if (!isRecord(parsed)) {
+    throw new Error("marimo capture completed with a non-object result payload.");
+  }
+  return parsed;
+}
+
+function markedPayload(stdout: string[], marker: string, label: string): string {
   const text = stdout.join("");
   const start = text.indexOf(marker);
 
   if (start < 0) {
-    throw new Error("marimo archive capture completed without an archive payload.");
+    throw new Error(`marimo capture completed without a ${label} payload.`);
   }
 
   const payload = text.slice(start + marker.length);
   const end = payload.search(/\r?\n/);
   return (end < 0 ? payload : payload.slice(0, end)).trim();
+}
+
+function stringField(payload: Record<string, unknown>, key: string): string {
+  const value = payload[key];
+  if (typeof value !== "string") {
+    throw new Error(`marimo capture result field ${key} must be a string.`);
+  }
+  return value;
+}
+
+function objectField(payload: Record<string, unknown>, key: string): Record<string, unknown> {
+  const value = payload[key];
+  if (!isRecord(value)) {
+    throw new Error(`marimo capture result field ${key} must be an object.`);
+  }
+  return value;
 }
 
 function base64ToBytes(value: string): Uint8Array {

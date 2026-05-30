@@ -1,15 +1,21 @@
 # Astro learn gallery
 
-Astro 6.2 SSG example that builds a static gallery from a running marimo learn
-workspace.
+Astro 6.2 SSG example that builds a static gallery from marimo learn notebook
+metadata.
 
-This example lists notebooks from a marimo server, reads source metadata for
-card titles, groups notebooks by topic, and renders static HTML. It does not
-execute cells, capture bundles, render notebook outputs, or load marimo
-frontend components.
+The default build uses a committed catalog fixture, groups notebooks by topic,
+and renders static HTML. It does not execute cells, capture bundles, render
+notebook outputs, or load marimo frontend components.
 
-The gallery is scoped to the `altair`, `optimization`, and `tools` learn
-topics.
+Run the static build:
+
+```bash
+pnpm --filter @marimo-team/export-example-astro-learn build
+```
+
+The gallery is scoped to the `altair`, `optimization`, and `tools` learn topics.
+
+## Live Catalog
 
 Start the learn repository separately:
 
@@ -35,6 +41,7 @@ pnpm --filter @marimo-team/export-example-astro-learn dev
 
 Useful environment variables:
 
-- `MARIMO_LEARN_SERVER_URL`: marimo server URL.
+- `MARIMO_LEARN_SERVER_URL`: marimo server URL. When omitted, the build uses
+  the committed catalog fixture.
 - `MARIMO_LEARN_SERVER_TOKEN`: token password used to start the server.
 - `MARIMO_LEARN_LIMIT`: optional maximum number of notebooks to render.

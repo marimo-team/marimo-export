@@ -25,7 +25,7 @@ export async function readExportIndex(options: ReadExportIndexOptions): Promise<
   const fetchImpl = options.fetch ?? globalFetch();
   return fetchJson<ExportRootIndex>(
     fetchImpl,
-    resolveHref(root, options.index ?? DEFAULT_ROOT_INDEX),
+    resolveHref(root, safeBundlePath(options.index ?? DEFAULT_ROOT_INDEX, "index href")),
     "export root index",
   );
 }
@@ -280,7 +280,7 @@ class UrlExportSource implements ExportSource {
   }
 
   url(href: string): string {
-    return resolveHref(this.#root, href);
+    return resolveHref(this.#root, safeBundlePath(href, "bundle href"));
   }
 
   async fetch(href: string, _mediaType?: string | null, init?: RequestInit): Promise<Response> {

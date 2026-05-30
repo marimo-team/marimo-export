@@ -26,6 +26,8 @@ await captureExport(spec, {
 
 If `notebook` is provided and no matching session is running, the client opens a
 marimo websocket session for that notebook before dispatching capture code.
+The promise resolves after `moexport` writes the bundle and returns manifest and
+invocation paths for the completed export.
 
 By default, capture checks whether `moexport` is importable in the target kernel
 and asks marimo to install the runtime if needed:

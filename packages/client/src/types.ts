@@ -55,9 +55,13 @@ export interface CaptureExportRequest {
 }
 
 export interface CaptureExportResult {
-  success: boolean;
-  dispatched: true;
   session: RunningNotebook;
+  bundlePath: string;
+  manifestPath: string;
+  invocationPath: string;
+  invocationIndexPath: string;
+  manifest: Record<string, unknown>;
+  invocation: Record<string, unknown>;
 }
 
 export interface CaptureExportArchiveResult {
