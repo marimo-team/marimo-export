@@ -1,8 +1,12 @@
 export const EXPORT_ARCHIVE_MEDIA_TYPE = "application/vnd.marimo.static-export+zip";
-export const DEFAULT_MOEXPORT_PACKAGE =
-  "moexport @ https://files.peter.gy/pkg/py/moexport/moexport-0.1.0-py3-none-any.whl";
 
 export type CaptureFetch = (request: Request) => Promise<Response>;
+export type JsonPrimitive = string | number | boolean | null;
+export type JsonValue =
+  | JsonPrimitive
+  | readonly JsonValue[]
+  | { readonly [key: string]: JsonValue };
+export type JsonObject = { readonly [key: string]: JsonValue };
 
 export interface CaptureClientOptionsBase {
   server: string | URL;
@@ -49,7 +53,7 @@ export interface WorkspaceNotebook {
 export interface CaptureExportRequest {
   sessionId?: string;
   notebook?: string;
-  bundle?: string;
+  to?: string;
   runtime?: CaptureRuntimeOption;
   executionTimeoutMs?: number;
 }
@@ -82,16 +86,66 @@ export interface OpenNotebookOptions {
   timeoutMs?: number;
 }
 
-export type CaptureRuntimeOption = false | CaptureRuntimeInstallOptions;
+export type CaptureRuntimeOption = "preinstalled" | CaptureRuntimeInstallOptions;
 
 export interface CaptureRuntimeInstallOptions {
-  package?: string;
+  install: string;
   module?: string;
-  manager?: string;
+  manager?: "uv" | "pip" | string;
   source?: "kernel" | "server";
   force?: boolean;
   timeoutMs?: number;
   pollIntervalMs?: number;
+}
+
+export type SourceSpecInput =
+  | { def: string }
+  | { expr: string }
+  | { cell: string | number | JsonObject; on_error?: "raise" | "record" }
+  | { snapshot?: JsonObject; notebook?: JsonObject }
+  | { report: JsonObject }
+  | ({ type: string } & JsonObject);
+
+export interface RefExportInput {
+  type: "ref";
+  ref: string;
+}
+
+export interface CodeExportInput {
+  type: "code";
+  code: string;
+}
+
+export type ExportCallableInput = RefExportInput | CodeExportInput;
+
+export interface ArtifactSpecInput {
+  export: ExportCallableInput;
+  options?: JsonObject;
+}
+
+export type ArtifactInput =
+  | string
+  | { artifact: string; options?: JsonObject }
+  | Record<string, JsonObject | ArtifactSpecInput | null>;
+
+export interface ValueSpecInput {
+  source: SourceSpecInput;
+  artifacts: Record<string, ArtifactSpecInput | JsonObject | null> | ArtifactInput[];
+}
+
+export interface ScenarioSpecInput {
+  id?: string;
+  state?: JsonObject;
+  patches?: JsonObject;
+}
+
+export interface ExportSpecInput {
+  scenarios?: ScenarioSpecInput[];
+  provenance?: {
+    source?: "none" | "hash" | "source";
+    spec?: "none" | "hash" | "embed";
+  };
+  values: Record<string, ValueSpecInput>;
 }
 
 export interface ScratchpadExecutionResult {

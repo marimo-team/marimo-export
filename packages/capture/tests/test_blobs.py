@@ -72,13 +72,13 @@ def _export_bytes(value: str, ctx: ExporterContext, **options: Any) -> Artifact:
         media_type="text/plain",
     )
     return Artifact(
-        format="text.v1",
+        format_id="text.v1",
         media_type="text/plain",
         data=ArtifactData(files={"value": blob}, entry="value"),
         metadata={
             "scenario": ctx.scenario_id,
             "value": ctx.value_name,
-            "format": ctx.format_name,
+            "format_id": ctx.artifact_name,
         },
     )
 
@@ -90,13 +90,13 @@ def test_bundle_exporter_context_allows_distinct_artifacts_to_share_blob(
     first_ctx = BundleExporterContext(
         scenario_id="default",
         value_name="title",
-        format_name="text",
+        artifact_name="text",
         blob_store=store,
     )
     second_ctx = BundleExporterContext(
         scenario_id="wide-chart",
         value_name="title",
-        format_name="text",
+        artifact_name="text",
         blob_store=store,
     )
 

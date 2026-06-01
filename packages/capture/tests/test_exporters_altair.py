@@ -23,11 +23,11 @@ class CapturingExporterContext:
         *,
         scenario_id: str = "default",
         value_name: str = "chart",
-        format_name: str = "png",
+        artifact_name: str = "png",
     ) -> None:
         self.scenario_id = scenario_id
         self.value_name = value_name
-        self.format_name = format_name
+        self.artifact_name = artifact_name
         self.blobs: dict[str, bytes] = {}
 
     def write_blob(
@@ -50,14 +50,14 @@ class CapturingExporterContext:
     def artifact(
         self,
         *,
-        format: str,
+        format_id: str,
         files: dict[str, BlobRef],
         entry: str | None = None,
         media_type: str | None = None,
         metadata: JsonObject | None = None,
     ) -> Artifact:
         return Artifact(
-            format=format,
+            format_id=format_id,
             media_type=media_type,
             data=ArtifactData(files=files, entry=entry),
             metadata=metadata,
@@ -82,7 +82,7 @@ def test_vegalite_exports_blob_backed_json_spec() -> None:
 
     artifact = altair_exporters.vegalite(chart(), ctx)
 
-    assert artifact.format == "vegalite.v1"
+    assert artifact.format_id == "vegalite.v1"
     assert artifact.media_type == "application/vnd.vegalite+json"
     assert artifact.data.type == "bundle"
     blob = artifact.data.files["spec"]
@@ -98,13 +98,13 @@ def test_vegalite_dedupes_same_spec_across_value_names(tmp_path: Path) -> None:
     first_ctx = BundleExporterContext(
         scenario_id="default",
         value_name="left_chart",
-        format_name="vegalite",
+        artifact_name="vegalite",
         blob_store=store,
     )
     second_ctx = BundleExporterContext(
         scenario_id="default",
         value_name="right_chart",
-        format_name="vegalite",
+        artifact_name="vegalite",
         blob_store=store,
     )
 
@@ -137,7 +137,7 @@ def test_png_exports_chart_image_with_vl_convert(monkeypatch) -> None:
 
     assert calls[0]["scale"] == 2.0
     assert calls[0]["vl_version"] == "6.4.1"
-    assert artifact.format == "image.png.v1"
+    assert artifact.format_id == "image.png.v1"
     assert artifact.media_type == "image/png"
     assert artifact.data.type == "bundle"
     blob = artifact.data.files["image"]

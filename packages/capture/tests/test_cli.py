@@ -107,7 +107,7 @@ def _spec() -> dict[str, Any]:
         "values": {
             "title": {
                 "source": {"def": "title"},
-                "formats": {
+                "artifacts": {
                     "text": {
                         "export": {
                             "type": "code",
@@ -119,7 +119,7 @@ def export(value, ctx, **options):
         media_type="text/plain",
     )
     return {
-        "format": "text.v1",
+        "format_id": "text.v1",
         "media_type": "text/plain",
         "data": {
             "type": "bundle",
@@ -152,7 +152,7 @@ scenarios:
 values:
   title:
     source: {def: title}
-    formats:
+    artifacts:
       text:
         export:
           type: code
@@ -164,7 +164,7 @@ values:
                     media_type="text/plain",
                 )
                 return {
-                    "format": "text.v1",
+                    "format_id": "text.v1",
                     "media_type": "text/plain",
                     "data": {
                         "type": "bundle",
@@ -196,7 +196,7 @@ def test_cli_help_exposes_core_workflow_commands() -> None:
     assert {"inspect", "notebook", "query"} <= set(cli.commands)
     assert "marimo-export notebook notebooks/finance.py --spec export.yaml" in help_text
     assert (
-        "marimo-export query out entries --value summary --format json --content"
+        "marimo-export query out entries --value summary --artifact json --content"
         in help_text
     )
     assert "marimo-export query out source --scenario wide_chart" in help_text
@@ -235,7 +235,7 @@ def test_cli_exports_notebook_and_reports_query_next_steps(
                 str(notebook),
                 "--spec",
                 str(spec),
-                "--bundle",
+                "--to",
                 str(bundle_root),
             ]
         )
@@ -246,7 +246,7 @@ def test_cli_exports_notebook_and_reports_query_next_steps(
     assert payload["values"] == {
         "title": {
             "source": {"type": "definition", "name": "title"},
-            "formats": ["text"],
+            "artifacts": ["text"],
         }
     }
     assert payload["scenarios"] == [
@@ -280,7 +280,7 @@ def test_cli_full_output_is_json_safe_for_python_objects(tmp_path: Path) -> None
                 str(notebook),
                 "--spec",
                 str(spec),
-                "--bundle",
+                "--to",
                 str(bundle_root),
                 "--full",
             ]
@@ -307,7 +307,7 @@ def test_cli_accepts_yaml_specs_from_file_and_stdin(tmp_path: Path) -> None:
                 str(notebook),
                 "--spec",
                 str(spec),
-                "--bundle",
+                "--to",
                 str(bundle_root),
             ]
         )
@@ -332,7 +332,7 @@ def test_cli_query_progressive_bundle_commands(tmp_path: Path) -> None:
             str(notebook),
             "--spec",
             str(spec),
-            "--bundle",
+            "--to",
             str(bundle_root),
         ]
     )
@@ -385,7 +385,7 @@ def test_cli_query_progressive_bundle_commands(tmp_path: Path) -> None:
                 "override",
                 "--value",
                 "title",
-                "--format",
+                "--artifact",
                 "text",
                 "--content",
             ]
@@ -405,7 +405,7 @@ def test_cli_query_progressive_bundle_commands(tmp_path: Path) -> None:
                 "override",
                 "--value",
                 "title",
-                "--format",
+                "--artifact",
                 "text",
             ]
         )
@@ -424,7 +424,7 @@ def test_cli_query_progressive_bundle_commands(tmp_path: Path) -> None:
                 "override",
                 "--value",
                 "title",
-                "--format",
+                "--artifact",
                 "text",
             ]
         )
@@ -475,7 +475,7 @@ def test_cli_accepts_spec_from_stdin(
     _write_notebook(notebook)
     payload = _output_json(
         _invoke(
-            ["notebook", str(notebook), "--spec", "-", "--bundle", str(bundle_root)],
+            ["notebook", str(notebook), "--spec", "-", "--to", str(bundle_root)],
             input=json.dumps(_spec()),
         )
     )
@@ -498,7 +498,7 @@ def test_cli_passes_notebook_args_after_separator(
             str(notebook),
             "--spec",
             str(spec),
-            "--bundle",
+            "--to",
             str(bundle_root),
             "--",
             "--symbol",

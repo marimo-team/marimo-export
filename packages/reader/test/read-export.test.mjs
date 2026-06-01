@@ -1,12 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import {
-  readExport,
-  readExportIndex,
-  readLatestLocalExport,
-  validateExportManifest,
-} from "../dist/index.js";
+import { exportDirectory, exportRoot, openExport, validateExportManifest } from "../dist/index.js";
 
 const jsonPayload = '{"ok":true}';
 const jsonPayloadSha = "4062edaf750fb8074e7e83e0c9028c94e32468a8b6f1614774328ef045150f93";
@@ -33,7 +28,7 @@ const manifest = {
   values: {
     value: {
       source: { type: "definition", name: "value" },
-      formats: ["json"],
+      artifacts: ["json"],
     },
   },
   scenarios: [
@@ -65,60 +60,63 @@ const manifest = {
   ],
 };
 
-test("readExportIndex rejects index hrefs outside the hosted root", async () => {
+test("openExport rejects index hrefs outside the hosted root", async () => {
   await assert.rejects(
-    readExportIndex({
-      root: "https://example.test/export/",
-      index: "../index.json",
-      fetch: unreachableFetch,
-    }),
+    openExport(
+      exportRoot("https://example.test/export/", {
+        index: "../index.json",
+        fetch: unreachableFetch,
+      }),
+    ),
     /Invalid index href/,
   );
 });
 
-test("readExport rejects manifest hrefs outside the hosted root", async () => {
+test("openExport rejects manifest hrefs outside the hosted root", async () => {
   await assert.rejects(
-    readExport({
-      root: "https://example.test/export/",
-      manifest: "https://example.test/other/manifest.json",
-      fetch: unreachableFetch,
-    }),
+    openExport(
+      exportRoot("https://example.test/export/", {
+        manifest: "https://example.test/other/manifest.json",
+        fetch: unreachableFetch,
+      }),
+    ),
     /Invalid bundle href/,
   );
 });
 
-test("readExport rejects manifest file hrefs outside the export root", async () => {
+test("openExport rejects manifest file hrefs outside the export root", async () => {
   await assert.rejects(
-    readExport({
-      root: "https://example.test/export/",
-      manifest: "bundles/sha256-test/manifest.json",
-      fetch: jsonFetch({
-        "https://example.test/export/bundles/sha256-test/manifest.json": {
-          ...manifest,
-          scenarios: [
-            {
-              ...manifest.scenarios[0],
-              values: {
-                value: {
-                  json: {
-                    ...manifest.scenarios[0].values.value.json,
-                    data: {
-                      ...manifest.scenarios[0].values.value.json.data,
-                      files: {
-                        data: {
-                          ...manifest.scenarios[0].values.value.json.data.files.data,
-                          href: "../secret.json",
+    openExport(
+      exportRoot("https://example.test/export/", {
+        manifest: "bundles/sha256-test/manifest.json",
+        fetch: jsonFetch({
+          "https://example.test/export/bundles/sha256-test/manifest.json": {
+            ...manifest,
+            scenarios: [
+              {
+                ...manifest.scenarios[0],
+                values: {
+                  value: {
+                    json: {
+                      ...manifest.scenarios[0].values.value.json,
+                      data: {
+                        ...manifest.scenarios[0].values.value.json.data,
+                        files: {
+                          data: {
+                            ...manifest.scenarios[0].values.value.json.data.files.data,
+                            href: "../secret.json",
+                          },
                         },
                       },
                     },
                   },
                 },
               },
-            },
-          ],
-        },
+            ],
+          },
+        }),
       }),
-    }),
+    ),
     /Invalid export manifest\.scenarios\[0\]\.values\.value\.json\.data\.files\.data\.href/,
   );
 });
@@ -190,7 +188,7 @@ test("validateExportManifest rejects undeclared scenario values", () => {
   );
 });
 
-test("validateExportManifest rejects missing declared formats", () => {
+test("validateExportManifest rejects missing declared artifacts", () => {
   assert.throws(
     () =>
       validateExportManifest({
@@ -198,15 +196,15 @@ test("validateExportManifest rejects missing declared formats", () => {
         values: {
           value: {
             ...manifest.values.value,
-            formats: ["json", "text"],
+            artifacts: ["json", "text"],
           },
         },
       }),
-    /must include declared format "text"/,
+    /must include declared artifact "text"/,
   );
 });
 
-test("readLatestLocalExport opens a bundle through a file reader", async () => {
+test("openExport opens a bundle through a file reader", async () => {
   const files = {
     "export/index.json": {
       schema: "moexport.root_index.v1",
@@ -224,21 +222,22 @@ test("readLatestLocalExport opens a bundle through a file reader", async () => {
     [`export/${jsonPayloadHref}`]: jsonPayload,
   };
 
-  const exp = await readLatestLocalExport({
-    root: "export",
-    readFile: async (file) => {
-      if (!(file in files)) {
-        throw new Error(`missing ${file}`);
-      }
-      if (typeof files[file] === "string") {
-        return files[file];
-      }
-      return JSON.stringify(files[file]);
-    },
-    url: (href) => `/export/${href}`,
-  });
+  const exp = await openExport(
+    exportDirectory("export", {
+      readFile: async (file) => {
+        if (!(file in files)) {
+          throw new Error(`missing ${file}`);
+        }
+        if (typeof files[file] === "string") {
+          return files[file];
+        }
+        return JSON.stringify(files[file]);
+      },
+      url: (href) => `/export/${href}`,
+    }),
+  );
 
-  const handle = exp.get({ scenario: "default", value: "value", format: "json" });
+  const handle = exp.artifact({ scenario: "default", value: "value", artifact: "json" });
 
   assert.equal(handle.url(), `/export/${jsonPayloadHref}`);
   assert.deepEqual(await handle.json(), { ok: true });
@@ -250,33 +249,34 @@ test("readLatestLocalExport opens a bundle through a file reader", async () => {
 });
 
 test("artifact reads reject bytes that do not match the manifest digest", async () => {
-  const exp = await readLatestLocalExport({
-    root: "export",
-    readFile: async (file) => {
-      if (file.endsWith("index.json")) {
-        return JSON.stringify({
-          schema: "moexport.root_index.v1",
-          version: 1,
-          latest: {
-            id: "sha256-test",
-            sha256: "test",
-            manifest_href: "bundles/sha256-test/manifest.json",
-            updated_at: "2026-06-01T00:00:00Z",
-            latest_invocation_href: "bundles/sha256-test/traces/sha256-trace.json",
-          },
-          bundles: [],
-        });
-      }
-      if (file.endsWith("manifest.json")) {
-        const badManifest = structuredClone(manifest);
-        badManifest.scenarios[0].values.value.json.data.files.data.sha256 = "0".repeat(64);
-        return JSON.stringify(badManifest);
-      }
-      return jsonPayload;
-    },
-  });
+  const exp = await openExport(
+    exportDirectory("export", {
+      readFile: async (file) => {
+        if (file.endsWith("index.json")) {
+          return JSON.stringify({
+            schema: "moexport.root_index.v1",
+            version: 1,
+            latest: {
+              id: "sha256-test",
+              sha256: "test",
+              manifest_href: "bundles/sha256-test/manifest.json",
+              updated_at: "2026-06-01T00:00:00Z",
+              latest_invocation_href: "bundles/sha256-test/traces/sha256-trace.json",
+            },
+            bundles: [],
+          });
+        }
+        if (file.endsWith("manifest.json")) {
+          const badManifest = structuredClone(manifest);
+          badManifest.scenarios[0].values.value.json.data.files.data.sha256 = "0".repeat(64);
+          return JSON.stringify(badManifest);
+        }
+        return jsonPayload;
+      },
+    }),
+  );
 
-  const handle = exp.get({ scenario: "default", value: "value", format: "json" });
+  const handle = exp.artifact({ scenario: "default", value: "value", artifact: "json" });
   await assert.rejects(handle.bytes(), /SHA-256/);
 });
 

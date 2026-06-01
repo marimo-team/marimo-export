@@ -2,9 +2,9 @@ import { Buffer } from "node:buffer";
 import fs from "node:fs/promises";
 import path from "node:path";
 
-import { captureExportArchive } from "@marimo-team/export-client";
+import { createExportClient } from "@marimo-team/export-client";
 import { arrowLoader, type ArrowArtifactHandle } from "@marimo-team/export-loader-arrow";
-import { readExportArchive } from "@marimo-team/export-reader";
+import { exportArchive, openExport } from "@marimo-team/export-reader";
 
 import { marimoNotebook, marimoServerToken, marimoServerUrl } from "@/lib/marimo-env";
 
@@ -142,30 +142,31 @@ export const getMarketWindowPage = async (
   const serverToken = marimoServerToken();
   const sessionId = process.env.MARIMO_SESSION_ID;
   const sessionTarget = sessionId ? { sessionId } : { notebook };
+  const client = createExportClient({
+    server: marimoServerUrl(),
+    ...(serverToken ? { serverToken } : {}),
+  });
   const archive = await captureArchiveSerially(() =>
-    captureExportArchive(buildMarketWindowSpec(start, end), {
-      server: marimoServerUrl(),
-      ...(serverToken ? { serverToken } : {}),
+    client.captureArchive(buildMarketWindowSpec(start, end), {
       ...sessionTarget,
     }),
   );
-  const exp = await readExportArchive({
-    bytes: archive.bytes,
+  const exp = await openExport(exportArchive(archive.bytes), {
     loaders: [arrowLoader({ useDate: true })],
   });
 
   try {
     const summary = await exp
-      .get({ scenario, value: "summary", format: "json" })
+      .artifact({ scenario, value: "summary", artifact: "json" })
       .json<MarketWindowSummary>();
     const sampleRows = await exp
-      .get({ scenario, value: "sample_rows", format: "json" })
+      .artifact({ scenario, value: "sample_rows", artifact: "json" })
       .json<MarketWindowRow[]>();
     const frame = await exp
-      .get({ scenario, value: "frame", format: "arrow" })
+      .artifact({ scenario, value: "frame", artifact: "arrow" })
       .load<ArrowArtifactHandle>();
     const arrowRows = (await frame.rows()) as MarketWindowRow[];
-    const chartPng = await exp.get({ scenario, value: "chart", format: "png" }).bytes();
+    const chartPng = await exp.artifact({ scenario, value: "chart", artifact: "png" }).bytes();
 
     return {
       start,
@@ -188,7 +189,6 @@ export const getMarketWindowPage = async (
 };
 
 const buildMarketWindowSpec = (start: string, end: string) => ({
-  notebook: marimoNotebook(),
   scenarios: [
     {
       id: scenarioId(start, end),
@@ -204,11 +204,11 @@ const buildMarketWindowSpec = (start: string, end: string) => ({
   values: {
     summary: {
       source: { expr: summarySource },
-      formats: [
+      artifacts: [
         {
           json: {
             filename: "summary.json",
-            format: "finance.market_window.summary.json.v1",
+            format_id: "finance.market_window.summary.json.v1",
             metadata: {
               transport: "archive",
               kind: "market-window-summary",
@@ -219,11 +219,11 @@ const buildMarketWindowSpec = (start: string, end: string) => ({
     },
     sample_rows: {
       source: { expr: sampleRowsSource },
-      formats: [
+      artifacts: [
         {
           json: {
             filename: "sample-rows.json",
-            format: "finance.market_window.sample_rows.json.v1",
+            format_id: "finance.market_window.sample_rows.json.v1",
             metadata: {
               transport: "archive",
               kind: "market-window-sample-rows",
@@ -234,11 +234,11 @@ const buildMarketWindowSpec = (start: string, end: string) => ({
     },
     frame: {
       source: { expr: arrowFrameSource },
-      formats: ["arrow"],
+      artifacts: ["arrow"],
     },
     chart: {
       source: { expr: chartSource },
-      formats: [{ png: { scale: 2 } }],
+      artifacts: [{ png: { scale: 2 } }],
     },
   },
 });

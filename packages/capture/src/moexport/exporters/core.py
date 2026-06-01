@@ -14,7 +14,7 @@ from moexport.jsonio import jsonable
 
 class JsonOptions(ExporterOptions):
     filename: str = Field(default="data.json", description="Blob filename hint.")
-    format: str = Field(default="json.v1", description="Artifact format id.")
+    format_id: str = Field(default="json.v1", description="Artifact format id.")
     media_type: str = Field(
         default="application/json", description="Artifact MIME type."
     )
@@ -23,14 +23,14 @@ class JsonOptions(ExporterOptions):
 
 class TextOptions(ExporterOptions):
     filename: str = Field(default="data.txt", description="Blob filename hint.")
-    format: str = Field(default="text.v1", description="Artifact format id.")
+    format_id: str = Field(default="text.v1", description="Artifact format id.")
     media_type: str = Field(default="text/plain", description="Artifact MIME type.")
     metadata: JsonObject | None = Field(default=None, description="Artifact metadata.")
 
 
 class HtmlOptions(ExporterOptions):
     filename: str = Field(default="data.html", description="Blob filename hint.")
-    format: str = Field(default="html.v1", description="Artifact format id.")
+    format_id: str = Field(default="html.v1", description="Artifact format id.")
     media_type: str = Field(default="text/html", description="Artifact MIME type.")
     metadata: JsonObject | None = Field(default=None, description="Artifact metadata.")
 
@@ -50,7 +50,7 @@ def json(value: Any, ctx: ExporterContext, **options: Any) -> Artifact:
         media_type=parsed.media_type,
     )
     return ctx.artifact(
-        format=parsed.format,
+        format_id=parsed.format_id,
         media_type=parsed.media_type,
         files={"data": blob},
         entry="data",
@@ -68,7 +68,7 @@ def text(value: Any, ctx: ExporterContext, **options: Any) -> Artifact:
         media_type=parsed.media_type,
     )
     return ctx.artifact(
-        format=parsed.format,
+        format_id=parsed.format_id,
         media_type=parsed.media_type,
         files={"text": blob},
         entry="text",
@@ -87,7 +87,7 @@ def html(value: Any, ctx: ExporterContext, **options: Any) -> Artifact:
         media_type=parsed.media_type,
     )
     return ctx.artifact(
-        format=parsed.format,
+        format_id=parsed.format_id,
         media_type=parsed.media_type,
         files={"html": blob},
         entry="html",

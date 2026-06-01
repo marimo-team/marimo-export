@@ -46,7 +46,7 @@ class Artifact(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    format: str = Field(
+    format_id: str = Field(
         description="Stable format identifier, for example `dataframe.arrow.v1`.",
     )
     media_type: str | None = Field(

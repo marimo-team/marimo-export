@@ -1,8 +1,8 @@
 {
   "schema": "moexport.bundle.v1",
   "version": 1,
-  "id": "sha256-1aefd9d3fba17ad5",
-  "sha256": "1aefd9d3fba17ad5932a7bb111cac0863343ba9565d71eb41e3d5f58b32a2917",
+  "id": "sha256-bc8fba3bbfb6302c",
+  "sha256": "bc8fba3bbfb6302c44b712b87677bd249896e6afc6afb3c112735fabc2cd9d45",
   "notebook": {
     "name": "agentic_playground.py",
     "source": null,
@@ -22,28 +22,28 @@
         "type": "definition",
         "name": "summary"
       },
-      "formats": ["json"]
+      "artifacts": ["json"]
     },
     "records": {
       "source": {
         "type": "definition",
         "name": "rows"
       },
-      "formats": ["json"]
+      "artifacts": ["json"]
     },
     "sparkline": {
       "source": {
         "type": "definition",
         "name": "sparkline_svg"
       },
-      "formats": ["svg"]
+      "artifacts": ["svg"]
     },
     "note": {
       "source": {
         "type": "definition",
         "name": "market_note"
       },
-      "formats": ["html"]
+      "artifacts": ["html"]
     }
   },
   "scenarios": [
@@ -366,8 +366,8 @@
     }
   ],
   "provenance": {
-    "invocations_index_href": "bundles/sha256-1aefd9d3fba17ad5/traces/index.json",
-    "source_spec_sha256": "0e95a1ce18fc11e20638f9edfe9861d9f21ab1c0859194b08a32b1674f7a5a29",
+    "invocations_index_href": "bundles/sha256-bc8fba3bbfb6302c/traces/index.json",
+    "source_spec_sha256": "0ffd0567b497452c06d516f3b86b7ff1bc59af1294e3d17314a06fde4d0427cf",
     "source_spec": {
       "scenarios": [
         {
@@ -417,11 +417,11 @@
             "type": "definition",
             "name": "summary"
           },
-          "formats": {
+          "artifacts": {
             "json": {
               "export": {
                 "type": "code",
-                "code": "import json\n\n\ndef export(value, ctx, **options):\n    blob = ctx.write_blob(\n        \"summary.json\",\n        json.dumps(value, allow_nan=False, indent=2).encode(\"utf-8\"),\n        media_type=\"application/json\",\n    )\n    return ctx.artifact(\n        format=\"playground.summary.json.v1\",\n        media_type=\"application/json\",\n        files={\"data\": blob},\n        entry=\"data\",\n        metadata={\n            \"kind\": \"scenario-summary\",\n            \"region\": value[\"region\"],\n            \"mode\": value[\"mode\"],\n        },\n    )\n"
+                "code": "import json\n\n\ndef export(value, ctx, **options):\n    blob = ctx.write_blob(\n        \"summary.json\",\n        json.dumps(value, allow_nan=False, indent=2).encode(\"utf-8\"),\n        media_type=\"application/json\",\n    )\n    return ctx.artifact(\n        format_id=\"playground.summary.json.v1\",\n        media_type=\"application/json\",\n        files={\"data\": blob},\n        entry=\"data\",\n        metadata={\n            \"kind\": \"scenario-summary\",\n            \"region\": value[\"region\"],\n            \"mode\": value[\"mode\"],\n        },\n    )\n"
               }
             }
           }
@@ -431,11 +431,11 @@
             "type": "definition",
             "name": "rows"
           },
-          "formats": {
+          "artifacts": {
             "json": {
               "export": {
                 "type": "code",
-                "code": "import json\n\n\ndef export(value, ctx, **options):\n    blob = ctx.write_blob(\n        \"records.json\",\n        json.dumps(value, allow_nan=False, indent=2).encode(\"utf-8\"),\n        media_type=\"application/json\",\n    )\n    return ctx.artifact(\n        format=\"playground.records.json.v1\",\n        media_type=\"application/json\",\n        files={\"data\": blob},\n        entry=\"data\",\n        metadata={\n            \"kind\": \"timeseries-records\",\n            \"rows\": len(value),\n            \"columns\": list(value[0]) if value else [],\n        },\n    )\n"
+                "code": "import json\n\n\ndef export(value, ctx, **options):\n    blob = ctx.write_blob(\n        \"records.json\",\n        json.dumps(value, allow_nan=False, indent=2).encode(\"utf-8\"),\n        media_type=\"application/json\",\n    )\n    return ctx.artifact(\n        format_id=\"playground.records.json.v1\",\n        media_type=\"application/json\",\n        files={\"data\": blob},\n        entry=\"data\",\n        metadata={\n            \"kind\": \"timeseries-records\",\n            \"rows\": len(value),\n            \"columns\": list(value[0]) if value else [],\n        },\n    )\n"
               }
             }
           }
@@ -445,11 +445,11 @@
             "type": "definition",
             "name": "sparkline_svg"
           },
-          "formats": {
+          "artifacts": {
             "svg": {
               "export": {
                 "type": "code",
-                "code": "def export(value, ctx, **options):\n    blob = ctx.write_blob(\n        \"sparkline.svg\",\n        value.encode(\"utf-8\"),\n        media_type=\"image/svg+xml\",\n    )\n    return ctx.artifact(\n        format=\"playground.sparkline.svg.v1\",\n        media_type=\"image/svg+xml\",\n        files={\"image\": blob},\n        entry=\"image\",\n        metadata={\n            \"kind\": \"sparkline\",\n            \"viewbox\": \"0 0 720 240\",\n        },\n    )\n"
+                "code": "def export(value, ctx, **options):\n    blob = ctx.write_blob(\n        \"sparkline.svg\",\n        value.encode(\"utf-8\"),\n        media_type=\"image/svg+xml\",\n    )\n    return ctx.artifact(\n        format_id=\"playground.sparkline.svg.v1\",\n        media_type=\"image/svg+xml\",\n        files={\"image\": blob},\n        entry=\"image\",\n        metadata={\n            \"kind\": \"sparkline\",\n            \"viewbox\": \"0 0 720 240\",\n        },\n    )\n"
               }
             }
           }
@@ -459,11 +459,11 @@
             "type": "definition",
             "name": "market_note"
           },
-          "formats": {
+          "artifacts": {
             "html": {
               "export": {
                 "type": "code",
-                "code": "def export(value, ctx, **options):\n    html = value.text if hasattr(value, \"text\") else str(value)\n    blob = ctx.write_blob(\n        \"note.html\",\n        html.encode(\"utf-8\"),\n        media_type=\"text/html\",\n    )\n    return ctx.artifact(\n        format=\"playground.note.html.v1\",\n        media_type=\"text/html\",\n        files={\"html\": blob},\n        entry=\"html\",\n        metadata={\n            \"kind\": \"marimo-markdown-output\",\n        },\n    )\n"
+                "code": "def export(value, ctx, **options):\n    html = value.text if hasattr(value, \"text\") else str(value)\n    blob = ctx.write_blob(\n        \"note.html\",\n        html.encode(\"utf-8\"),\n        media_type=\"text/html\",\n    )\n    return ctx.artifact(\n        format_id=\"playground.note.html.v1\",\n        media_type=\"text/html\",\n        files={\"html\": blob},\n        entry=\"html\",\n        metadata={\n            \"kind\": \"marimo-markdown-output\",\n        },\n    )\n"
               }
             }
           }

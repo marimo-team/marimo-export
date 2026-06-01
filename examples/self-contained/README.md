@@ -30,6 +30,9 @@ uv run --with-requirements examples/self-contained/requirements.txt \
   --title "Finance notebook static review"
 ```
 
+`finance-state.json` contains separate `state` and `patches` objects. `state`
+overrides notebook definitions, and `patches` applies dotted object paths.
+
 Preview it as HTML:
 
 ```bash

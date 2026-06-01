@@ -6,7 +6,9 @@
         "arrival_rate": 6.0,
         "service_rate": 11.0,
         "server_count": 1,
-        "scenario_name": "steady_single",
+        "scenario_name": "steady_single"
+      },
+      "patches": {
         "arrival_picker.value": 6.0,
         "service_picker.value": 11.0,
         "servers_picker.value": 1
@@ -18,7 +20,9 @@
         "arrival_rate": 8.0,
         "service_rate": 9.0,
         "server_count": 1,
-        "scenario_name": "rush_single",
+        "scenario_name": "rush_single"
+      },
+      "patches": {
         "arrival_picker.value": 8.0,
         "service_picker.value": 9.0,
         "servers_picker.value": 1
@@ -30,7 +34,9 @@
         "arrival_rate": 16.0,
         "service_rate": 11.0,
         "server_count": 2,
-        "scenario_name": "pooled_rush",
+        "scenario_name": "pooled_rush"
+      },
+      "patches": {
         "arrival_picker.value": 16.0,
         "service_picker.value": 11.0,
         "servers_picker.value": 2
@@ -42,7 +48,7 @@
       "source": {
         "def": "queue_summary"
       },
-      "formats": {
+      "artifacts": {
         "json": {
           "export": {
             "type": "ref",
@@ -50,7 +56,7 @@
           },
           "options": {
             "filename": "queue-summary.json",
-            "format": "queue.summary.json.v1",
+            "format_id": "queue.summary.json.v1",
             "metadata": {
               "kind": "queue-summary"
             }
@@ -62,7 +68,7 @@
       "source": {
         "def": "arrival_distribution"
       },
-      "formats": {
+      "artifacts": {
         "arrow": {
           "export": {
             "type": "ref",
@@ -81,7 +87,7 @@
       "source": {
         "def": "queue_curve"
       },
-      "formats": {
+      "artifacts": {
         "arrow": {
           "export": {
             "type": "ref",
@@ -94,7 +100,7 @@
       "source": {
         "def": "wait_chart"
       },
-      "formats": {
+      "artifacts": {
         "vegalite": {
           "export": {
             "type": "ref",
@@ -107,7 +113,7 @@
       "source": {
         "def": "queue_note"
       },
-      "formats": {
+      "artifacts": {
         "html": {
           "export": {
             "type": "ref",
@@ -115,7 +121,7 @@
           },
           "options": {
             "filename": "queue-note.html",
-            "format": "queue.note.html.v1",
+            "format_id": "queue.note.html.v1",
             "metadata": {
               "kind": "marimo-markdown-output"
             }

@@ -13,7 +13,7 @@ from moexport.query._helpers import (
     append_many_unique,
     append_unique,
     bundle_summary,
-    catalog_formats,
+    catalog_artifacts,
     catalog_values,
     dedupe_export_files,
     exactly_one,
@@ -95,7 +95,6 @@ class ExportQuery:
                 "notebooks": len(self.notebooks()),
                 "scenarios": len(scenarios),
                 "values": len({row["name"] for row in self.values()}),
-                "formats": len(self.formats()),
                 "artifacts": len(artifacts),
                 "files": len(files),
                 "bytes": sum(
@@ -107,7 +106,7 @@ class ExportQuery:
             "bundles": [bundle.summary() for bundle in bundles],
             "notebooks": self.notebooks(),
             "values": catalog_values(self.values()),
-            "formats": self.formats(),
+            "artifacts": self.artifacts(),
             "state_keys": sorted(
                 {key for row in scenarios for key in state_keys(row.get("state"))}
             ),
@@ -260,25 +259,25 @@ class ExportQuery:
             for row in bundle_query.values(value=value)
         ]
 
-    def formats(
+    def artifact_catalog(
         self,
         *,
         bundle: str | None = None,
         scenario: str | None = None,
         state: Mapping[str, Any] | None = None,
         value: str | None = None,
-        format: str | None = None,
+        artifact: str | None = None,
     ) -> list[JsonObject]:
-        """List format availability grouped by value and format name."""
+        """List artifact availability grouped by value and artifact name."""
 
         artifacts = self.artifacts(
             bundle=bundle,
             scenario=scenario,
             state=state,
             value=value,
-            format=format,
+            artifact=artifact,
         )
-        return catalog_formats(artifacts)
+        return catalog_artifacts(artifacts)
 
     def artifacts(
         self,
@@ -287,21 +286,22 @@ class ExportQuery:
         scenario: str | None = None,
         state: Mapping[str, Any] | None = None,
         value: str | None = None,
-        format: str | None = None,
+        artifact: str | None = None,
         format_id: str | None = None,
         media_type: str | None = None,
         limit: int | None = None,
     ) -> list[JsonObject]:
         """List artifact descriptors across bundles with structured filters."""
 
+        artifact_filter = artifact
         rows = [
-            artifact
+            artifact_row
             for bundle_query in self._bundle_queries(bundle)
-            for artifact in bundle_query.artifacts(
+            for artifact_row in bundle_query.artifacts(
                 scenario=scenario,
                 state=state,
                 value=value,
-                format=format,
+                artifact=artifact_filter,
                 format_id=format_id,
                 media_type=media_type,
             )
@@ -315,7 +315,7 @@ class ExportQuery:
         scenario: str | None = None,
         state: Mapping[str, Any] | None = None,
         value: str | None = None,
-        format: str | None = None,
+        artifact: str | None = None,
         format_id: str | None = None,
         media_type: str | None = None,
     ) -> JsonObject:
@@ -327,7 +327,7 @@ class ExportQuery:
                 scenario=scenario,
                 state=state,
                 value=value,
-                format=format,
+                artifact=artifact,
                 format_id=format_id,
                 media_type=media_type,
             ),
@@ -341,7 +341,7 @@ class ExportQuery:
         scenario: str | None = None,
         state: Mapping[str, Any] | None = None,
         value: str | None = None,
-        format: str | None = None,
+        artifact: str | None = None,
         format_id: str | None = None,
         media_type: str | None = None,
         dedupe: bool = True,
@@ -350,26 +350,27 @@ class ExportQuery:
         """List raw blob files across bundles with semantic usage metadata."""
 
         rows: list[JsonObject] = []
-        for artifact in self.artifacts(
+        artifact_filter = artifact
+        for artifact_row in self.artifacts(
             bundle=bundle,
             scenario=scenario,
             state=state,
             value=value,
-            format=format,
+            artifact=artifact_filter,
             format_id=format_id,
             media_type=media_type,
         ):
-            for file_key, file_record in artifact["files"].items():
+            for file_key, file_record in artifact_row["files"].items():
                 rows.append(
                     {
-                        "bundle": artifact["bundle"],
-                        "scenario": artifact["scenario"],
-                        "state": copy.deepcopy(artifact["state"]),
-                        "value": artifact["value"],
-                        "source": artifact["source"],
-                        "format": artifact["format"],
-                        "format_id": artifact["format_id"],
-                        "media_type": artifact["media_type"],
+                        "bundle": artifact_row["bundle"],
+                        "scenario": artifact_row["scenario"],
+                        "state": copy.deepcopy(artifact_row["state"]),
+                        "value": artifact_row["value"],
+                        "source": artifact_row["source"],
+                        "artifact": artifact_row["artifact"],
+                        "format_id": artifact_row["format_id"],
+                        "media_type": artifact_row["media_type"],
                         "file": file_key,
                         **copy.deepcopy(file_record),
                     }
@@ -386,7 +387,7 @@ class ExportQuery:
         scenario: str | None = None,
         state: Mapping[str, Any] | None = None,
         value: str | None = None,
-        format: str | None = None,
+        artifact: str | None = None,
         format_id: str | None = None,
         media_type: str | None = None,
         dedupe: bool = True,
@@ -399,7 +400,7 @@ class ExportQuery:
                 scenario=scenario,
                 state=state,
                 value=value,
-                format=format,
+                artifact=artifact,
                 format_id=format_id,
                 media_type=media_type,
                 dedupe=dedupe,
@@ -414,7 +415,7 @@ class ExportQuery:
         scenario: str | None = None,
         state: Mapping[str, Any] | None = None,
         value: str | None = None,
-        format: str | None = None,
+        artifact: str | None = None,
         format_id: str | None = None,
         media_type: str | None = None,
         include_content: bool = False,
@@ -430,7 +431,7 @@ class ExportQuery:
                 scenario=scenario,
                 state=state,
                 value=value,
-                format=format,
+                artifact=artifact,
                 format_id=format_id,
                 media_type=media_type,
                 include_content=include_content,
@@ -446,7 +447,7 @@ class ExportQuery:
         scenario: str | None = None,
         state: Mapping[str, Any] | None = None,
         value: str | None = None,
-        format: str | None = None,
+        artifact: str | None = None,
         format_id: str | None = None,
         media_type: str | None = None,
         include_content: bool = False,
@@ -460,7 +461,7 @@ class ExportQuery:
                 scenario=scenario,
                 state=state,
                 value=value,
-                format=format,
+                artifact=artifact,
                 format_id=format_id,
                 media_type=media_type,
                 include_content=include_content,

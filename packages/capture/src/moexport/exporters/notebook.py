@@ -62,7 +62,7 @@ def linear(value: NotebookSnapshot, ctx: ExporterContext, **options: Any) -> Art
     )
 
     return Artifact(
-        format=NOTEBOOK_LINEAR_FORMAT,
+        format_id=NOTEBOOK_LINEAR_FORMAT,
         media_type=NOTEBOOK_LINEAR_MEDIA_TYPE,
         data=ArtifactData(files={"notebook": blob}, entry="notebook"),
         metadata={

@@ -33,18 +33,16 @@ export interface ParquetArtifactHandle {
   readRows(options?: ParquetReadOptions): Promise<Record<string, unknown>[]>;
 }
 
-export function dataframeLoader(
+export function parquetLoader(
   defaults: ParquetReadOptions = {},
 ): ArtifactLoader<ParquetArtifactHandle> {
   return defineLoader({
-    formats: dataframeParquetFormat,
+    supports: dataframeParquetFormat,
     load(context: ArtifactLoaderContext) {
       return createDataframeHandle(context, defaults);
     },
   });
 }
-
-export const parquetLoader = dataframeLoader;
 
 function createDataframeHandle(
   context: ArtifactLoaderContext,
@@ -52,10 +50,10 @@ function createDataframeHandle(
 ): ParquetArtifactHandle {
   return {
     artifact: context.artifact,
-    blob: context.file(),
+    blob: context.entry().ref,
     metadata: context.artifact.metadata,
     url() {
-      return context.url();
+      return context.entry().url();
     },
     async readMetadata(options) {
       const file = await parquetFile(context, options?.requestInit ?? defaults.requestInit);
@@ -92,8 +90,8 @@ function createDataframeHandle(
 
 async function parquetFile(context: ArtifactLoaderContext, requestInit?: RequestInit) {
   const bytes = requestInit
-    ? new Uint8Array(await (await context.fetch(undefined, requestInit)).arrayBuffer())
-    : await context.bytes();
+    ? new Uint8Array(await (await context.entry().fetch(requestInit)).arrayBuffer())
+    : await context.entry().bytes();
   return asyncBufferFromBytes(bytes);
 }
 

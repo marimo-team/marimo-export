@@ -11,7 +11,7 @@ from moexport.snapshots import OutputSnapshot
 class CapturingExporterContext:
     scenario_id = "default"
     value_name = "output"
-    format_name = "display"
+    artifact_name = "display"
 
     def __init__(self) -> None:
         self.blobs: dict[str, bytes] = {}
@@ -36,14 +36,14 @@ class CapturingExporterContext:
     def artifact(
         self,
         *,
-        format: str,
+        format_id: str,
         files: dict[str, BlobRef],
         entry: str | None = None,
         media_type: str | None = None,
         metadata: JsonObject | None = None,
     ) -> Artifact:
         return Artifact(
-            format=format,
+            format_id=format_id,
             media_type=media_type,
             data=ArtifactData(files=files, entry=entry),
             metadata=metadata,

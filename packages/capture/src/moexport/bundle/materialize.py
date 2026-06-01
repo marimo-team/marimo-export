@@ -16,7 +16,7 @@ from moexport.bundle.records import trace_record
 from moexport.evaluate import EvaluateResult
 from moexport.exporters._core import BundleExporterContext, Exporter
 from moexport.request import ResolvedExportRequest, ResolvedScenario
-from moexport.spec import CodeExport, ExportCallable, FormatSpec, RefExport, ValueSpec
+from moexport.spec import ArtifactSpec, CodeExport, ExportCallable, RefExport, ValueSpec
 
 ResolvedExporter: TypeAlias = Callable[..., Artifact | Awaitable[Artifact]]
 
@@ -95,7 +95,7 @@ async def materialize_values(
         if value_name not in values:
             raise KeyError(f"export target did not produce value {value_name!r}")
 
-        scenario_values[value_name] = await materialize_formats(
+        scenario_values[value_name] = await materialize_artifacts(
             scenario=scenario,
             value=values[value_name],
             value_name=value_name,
@@ -106,7 +106,7 @@ async def materialize_values(
     return scenario_values
 
 
-async def materialize_formats(
+async def materialize_artifacts(
     *,
     scenario: ResolvedScenario,
     value: Any,
@@ -114,39 +114,39 @@ async def materialize_formats(
     value_spec: ValueSpec,
     blob_store: ContentAddressedBlobStore,
 ) -> dict[str, dict[str, Any]]:
-    format_records: dict[str, dict[str, Any]] = {}
+    artifact_records: dict[str, dict[str, Any]] = {}
 
-    for format_name, format_spec in value_spec.formats.items():
-        artifact = await export_format(
+    for artifact_name, artifact_spec in value_spec.artifacts.items():
+        artifact = await export_artifact(
             value=value,
             scenario=scenario,
             value_name=value_name,
-            format_name=format_name,
-            format_spec=format_spec,
+            artifact_name=artifact_name,
+            artifact_spec=artifact_spec,
             blob_store=blob_store,
         )
-        format_records[format_name] = artifact_record(artifact)
+        artifact_records[artifact_name] = artifact_record(artifact)
 
-    return format_records
+    return artifact_records
 
 
-async def export_format(
+async def export_artifact(
     *,
     value: Any,
     scenario: ResolvedScenario,
     value_name: str,
-    format_name: str,
-    format_spec: FormatSpec,
+    artifact_name: str,
+    artifact_spec: ArtifactSpec,
     blob_store: ContentAddressedBlobStore,
 ) -> Artifact:
-    exporter = resolve_exporter(format_spec.export)
+    exporter = resolve_exporter(artifact_spec.export)
     ctx = BundleExporterContext(
         scenario_id=scenario.id,
         value_name=value_name,
-        format_name=format_name,
+        artifact_name=artifact_name,
         blob_store=blob_store,
     )
-    artifact = exporter(value, ctx, **format_spec.options)
+    artifact = exporter(value, ctx, **artifact_spec.options)
     if inspect.isawaitable(artifact):
         artifact = await artifact
 
@@ -207,7 +207,7 @@ def require_blob_artifact(artifact: object) -> Artifact:
 
 def artifact_record(artifact: Artifact) -> dict[str, Any]:
     return {
-        "format_id": artifact.format,
+        "format_id": artifact.format_id,
         "media_type": artifact.media_type,
         "data": artifact.data.model_dump(mode="json"),
         "metadata": artifact.metadata,

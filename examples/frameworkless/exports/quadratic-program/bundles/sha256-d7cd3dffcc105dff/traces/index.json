@@ -1,0 +1,17 @@
+{
+  "schema": "moexport.invocation_index.v1",
+  "version": 1,
+  "bundle": {
+    "id": "sha256-d7cd3dffcc105dff",
+    "sha256": "d7cd3dffcc105dffc685d722a507dfe70f6f59c14bb08b693831dc22d68e9a11",
+    "manifest_href": "bundles/sha256-d7cd3dffcc105dff/manifest.json"
+  },
+  "invocations": [
+    {
+      "id": "sha256-953c222f8e795756",
+      "sha256": "953c222f8e795756fa159c2287d920c08469113fe04da952a7a3e8d6f81af3ed",
+      "created_at": "2026-05-05T16:29:39.049800Z",
+      "href": "bundles/sha256-d7cd3dffcc105dff/traces/sha256-953c222f8e795756.json"
+    }
+  ]
+}

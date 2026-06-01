@@ -8,7 +8,7 @@ The checked-in bundle under `public/export/` was generated with
 ```bash
 uv run marimo-export notebook notebooks/finance.py \
   --spec notebooks/export-specs/json/finance--dashboard.json \
-  --bundle examples/vanilla-vite/public/export
+  --to examples/vanilla-vite/public/export
 ```
 
 The YAML spec is equivalent:
@@ -16,7 +16,7 @@ The YAML spec is equivalent:
 ```bash
 uv run marimo-export notebook notebooks/finance.py \
   --spec notebooks/export-specs/yaml/finance--dashboard.yaml \
-  --bundle examples/vanilla-vite/public/export
+  --to examples/vanilla-vite/public/export
 ```
 
 ## Run
@@ -27,8 +27,8 @@ pnpm --filter @marimo-team/export-example-vanilla dev
 
 ## Bundle Contents
 
-The app calls `readLatestExport({ root: "/export/" })`, reads
-`public/export/index.json`, opens the latest manifest, and loads:
+The app calls `openExport(exportRoot("/export/"))`, reads `public/export/index.json`,
+opens the latest manifest, and loads:
 
 - `summary/json`: custom code-defined JSON exporter.
 - `symbols_selector/json`: custom code-defined JSON exporter for marimo
@@ -45,6 +45,6 @@ The app calls `readLatestExport({ root: "/export/" })`, reads
 - `ohlc_dashboard/bundle`: AnyWidget bundle hydrated by
   `@marimo-team/export-loader-anywidget`.
 
-Bare scenario state keys override notebook definitions. Dotted keys such as
-`symbols_selector.value` patch object attributes before the SPA switches
-between precomputed scenarios.
+Scenario `state` keys override notebook definitions. `patches` entries such as
+`symbols_selector.value` patch object attributes before the SPA switches between
+precomputed scenarios.

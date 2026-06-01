@@ -7,7 +7,7 @@
     <script type="importmap">
       {
         "imports": {
-          "@marimo-team/export-reader": "../../packages/reader/dist/read-export.js",
+          "@marimo-team/export-reader": "../../packages/reader/dist/index.js",
           "@marimo-team/export-loader-anywidget": "../../packages/loader-anywidget/dist/index.js",
           "#anywidget/runtime/buffers": "../../packages/loader-anywidget/dist/runtime/buffers.js",
           "#anywidget/runtime/export-runtime": "../../packages/loader-anywidget/dist/runtime/export-runtime.js",
@@ -552,7 +552,7 @@
     </main>
 
     <script type="module">
-      import { jsonLoader, readLatestExport } from "@marimo-team/export-reader";
+      import { exportRoot, jsonLoader, openExport } from "@marimo-team/export-reader";
       import { anywidgetLoader } from "@marimo-team/export-loader-anywidget";
 
       const SUMMARY_FORMAT = "qp.summary.json.v1";
@@ -592,8 +592,7 @@
       boot().catch(showError);
 
       async function boot() {
-        const exported = await readLatestExport({
-          root: ROOT,
+        const exported = await openExport(exportRoot(ROOT), {
           loaders: [jsonLoader(SUMMARY_FORMAT), anywidgetLoader()],
         });
         state.export = exported;
@@ -601,7 +600,9 @@
           exported.scenarios().map(async (scenario) => ({
             scenario,
             title: PRESET_TITLES.get(scenario) ?? scenario,
-            summary: await exported.get({ scenario, value: "summary", format: "json" }).load(),
+            summary: await exported
+              .artifact({ scenario, value: "summary", artifact: "json" })
+              .load(),
           })),
         );
         state.summaries.sort((a, b) => presetRank(a.scenario) - presetRank(b.scenario));
@@ -660,7 +661,7 @@
         try {
           const scenario = state.summaries[0].scenario;
           state.widgetBundle = await exported
-            .get({ scenario, value: "widget", format: "bundle" })
+            .artifact({ scenario, value: "widget", artifact: "bundle" })
             .load();
         } catch (error) {
           $("#widget-note").classList.add("warning");

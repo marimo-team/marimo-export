@@ -140,7 +140,7 @@ def export_notebook(
     notebook: NotebookReference,
     spec: SpecInput,
     *,
-    bundle: str | Path | None = None,
+    to: str | Path | None = None,
     run: NotebookRunOptions | None = None,
 ) -> ExportResult:
     """Resolve a marimo notebook, run one synthetic cell, and write a bundle.
@@ -149,7 +149,7 @@ def export_notebook(
 
     ```python
     import moexport as mox
-    result = await mox.export(spec, bundle=bundle)
+    result = await mox.export(spec, to=to)
     ```
 
     Only this synthetic cell is scheduled by the outer script runner.
@@ -165,15 +165,15 @@ def export_notebook(
         check_app_correctness(str(resolved.path))
 
     app = _load_required_app(resolved.path)
-    cell_id, result_name, spec_name, bundle_name = _append_export_cell(app)
+    cell_id, result_name, spec_name, output_name = _append_export_cell(app)
     defs = _run_export_cell(
         app=app,
         notebook_path=resolved.path,
         cell_id=cell_id,
         spec_name=spec_name,
         spec=spec,
-        bundle_name=bundle_name,
-        bundle=bundle,
+        output_name=output_name,
+        to=to,
         args=run_options.get("args", ()),
     )
     result = defs[result_name]
@@ -241,17 +241,17 @@ def _load_required_app(notebook: Path) -> App:
 
 
 def _append_export_cell(app: App) -> tuple[CellId_t, str, str, str]:
-    # The hidden cell receives `spec` and `bundle` through the script runner's
+    # The hidden cell receives `spec` and `to` through the script runner's
     # globals. It intentionally skips notebook defs. `mox.evaluate` owns
     # dependency planning and scenario overrides.
     token = uuid.uuid4().hex
     result_name = f"__moexport_result_{token}"
     spec_name = f"__moexport_spec_{token}"
-    bundle_name = f"__moexport_bundle_{token}"
+    output_name = f"__moexport_to_{token}"
     code = _export_cell_code(
         result_name=result_name,
         spec_name=spec_name,
-        bundle_name=bundle_name,
+        output_name=output_name,
     )
     previous_ids = set(app._cell_manager.valid_cell_ids())
     app._cell_manager.register_ir_cell(
@@ -265,7 +265,7 @@ def _append_export_cell(app: App) -> tuple[CellId_t, str, str, str]:
     added_ids = set(app._cell_manager.valid_cell_ids()) - previous_ids
     if len(added_ids) != 1:
         raise RuntimeError("failed to register synthetic export cell")
-    return next(iter(added_ids)), result_name, spec_name, bundle_name
+    return next(iter(added_ids)), result_name, spec_name, output_name
 
 
 def _run_export_cell(
@@ -275,8 +275,8 @@ def _run_export_cell(
     cell_id: CellId_t,
     spec_name: str,
     spec: SpecInput,
-    bundle_name: str,
-    bundle: str | Path | None,
+    output_name: str,
+    to: str | Path | None,
     args: Sequence[str],
 ) -> dict[str, object]:
     app._maybe_initialize()
@@ -285,10 +285,10 @@ def _run_export_cell(
     if app._setup is not None:
         glbls.update(app._setup._glbls)
 
-    reserved = {spec_name, bundle_name}
+    reserved = {spec_name, output_name}
     if reserved & set(glbls):
         raise TypeError("synthetic export globals conflict with setup definitions")
-    glbls.update({spec_name: spec, bundle_name: bundle})
+    glbls.update({spec_name: spec, output_name: to})
 
     with _script_argv(notebook_path, args):
         runner = AppScriptRunner(
@@ -302,7 +302,7 @@ def _run_export_cell(
         #   import moexport as __moexport
         #   __moexport_result_abcd = await __moexport.export(
         #       __moexport_spec_abcd,
-        #       bundle=__moexport_bundle_abcd,
+        #       to=__moexport_to_abcd,
         #   )
         #
         # Inside that cell, `mox.evaluate` performs the actual notebook graph
@@ -321,7 +321,7 @@ def _export_cell_code(
     *,
     result_name: str,
     spec_name: str,
-    bundle_name: str,
+    output_name: str,
 ) -> str:
     """Build the hidden cell inserted at the end of the notebook.
 
@@ -330,7 +330,7 @@ def _export_cell_code(
         import moexport as __moexport
         __moexport_result_abcd = await __moexport.export(
             __moexport_spec_abcd,
-            bundle=__moexport_bundle_abcd,
+            to=__moexport_to_abcd,
         )
     """
 
@@ -338,5 +338,5 @@ def _export_cell_code(
 import moexport as __moexport
 {result_name} = await __moexport.export(
     {spec_name},
-    bundle={bundle_name},
+    to={output_name},
 )"""

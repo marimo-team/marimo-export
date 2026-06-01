@@ -58,7 +58,7 @@ def vegalite(
     )
 
     return Artifact(
-        format=VEGALITE_FORMAT,
+        format_id=VEGALITE_FORMAT,
         media_type=VEGALITE_MEDIA_TYPE,
         data=ArtifactData(files={"spec": blob}, entry="spec"),
         metadata=_metadata(spec),
@@ -91,7 +91,7 @@ def png(
     blob = ctx.write_blob("chart.png", png_bytes, media_type=PNG_MEDIA_TYPE)
 
     return Artifact(
-        format=PNG_FORMAT,
+        format_id=PNG_FORMAT,
         media_type=PNG_MEDIA_TYPE,
         data=ArtifactData(files={"image": blob}, entry="image"),
         metadata={

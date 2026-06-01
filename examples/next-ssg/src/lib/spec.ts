@@ -1,5 +1,4 @@
 import { financePairs, type FinancePair } from "@/lib/pairs";
-import { marimoNotebook } from "@/lib/marimo-env";
 
 const summarySource = `{
     "rows": df.height,
@@ -29,7 +28,6 @@ const sampleRowsSource = `(
 )`;
 
 export const buildFinanceSpec = (pairs: readonly FinancePair[] = financePairs) => ({
-  notebook: marimoNotebook(),
   scenarios: pairs.map((pair) => ({
     id: pair.slug,
     state: {
@@ -43,11 +41,11 @@ export const buildFinanceSpec = (pairs: readonly FinancePair[] = financePairs) =
   values: {
     summary: {
       source: { expr: summarySource },
-      formats: [
+      artifacts: [
         {
           json: {
             filename: "summary.json",
-            format: "finance.summary.json.v1",
+            format_id: "finance.summary.json.v1",
             metadata: {
               kind: "finance-summary",
             },
@@ -57,11 +55,11 @@ export const buildFinanceSpec = (pairs: readonly FinancePair[] = financePairs) =
     },
     sample_rows: {
       source: { expr: sampleRowsSource },
-      formats: [
+      artifacts: [
         {
           json: {
             filename: "sample-rows.json",
-            format: "finance.sample_rows.json.v1",
+            format_id: "finance.sample_rows.json.v1",
             metadata: {
               kind: "finance-sample-rows",
             },
@@ -71,11 +69,11 @@ export const buildFinanceSpec = (pairs: readonly FinancePair[] = financePairs) =
     },
     change_desc: {
       source: { cell: "change_desc" },
-      formats: [
+      artifacts: [
         {
           html: {
             filename: "change-desc.html",
-            format: "marimo.cell_output.html.v1",
+            format_id: "marimo.cell_output.html.v1",
             metadata: {
               kind: "marimo-cell-output",
               cell: "change_desc",
@@ -86,11 +84,11 @@ export const buildFinanceSpec = (pairs: readonly FinancePair[] = financePairs) =
     },
     chart: {
       source: { def: "symbols_chart" },
-      formats: ["vegalite", { png: { scale: 2 } }],
+      artifacts: ["vegalite", { png: { scale: 2 } }],
     },
     ohlc_dashboard: {
       source: { def: "widget" },
-      formats: {
+      artifacts: {
         bundle: {
           export: {
             type: "ref",

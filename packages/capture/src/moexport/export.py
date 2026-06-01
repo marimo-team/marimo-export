@@ -45,7 +45,7 @@ class ExportResult(BaseModel):
 async def export(
     spec: SpecInput,
     *,
-    bundle: str | Path | None = None,
+    to: str | Path | None = None,
 ) -> ExportResult:
     """Evaluate an export spec and write a static export bundle.
 
@@ -56,7 +56,7 @@ async def export(
 
     request = await resolve_export_request(
         parse_export_spec(spec),
-        bundle=bundle,
+        to=to,
         evaluate_fn=evaluate,
     )
     evaluate_kwargs: dict[str, Any] = {

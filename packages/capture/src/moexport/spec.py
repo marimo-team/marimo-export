@@ -22,6 +22,7 @@ import yaml
 from moexport.sources import SourceSpec, normalize_source
 
 SpecKey: TypeAlias = Annotated[str, Field(pattern=r"^[A-Za-z_][A-Za-z0-9_-]*$")]
+DefinitionKey: TypeAlias = Annotated[str, Field(pattern=r"^[A-Za-z_][A-Za-z0-9_]*$")]
 StateKey: TypeAlias = Annotated[
     str,
     Field(pattern=r"^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*$"),
@@ -40,28 +41,6 @@ class SpecModel(BaseModel):
     """
 
     model_config = ConfigDict(extra="forbid")
-
-
-class BundleSpec(SpecModel):
-    """Where the materialized static export bundle should be written."""
-
-    path: str = Field(
-        description="Filesystem path used by the kernel-side bundle writer.",
-    )
-
-    @model_validator(mode="before")
-    @classmethod
-    def _accept_path_shorthand(cls, value: object) -> object:
-        if isinstance(value, str):
-            return {"path": value}
-        return value
-
-    @field_validator("path")
-    @classmethod
-    def _path_must_not_be_empty(cls, value: str) -> str:
-        if not value.strip():
-            raise ValueError("bundle path must not be empty")
-        return value
 
 
 class RefExport(SpecModel):
@@ -159,8 +138,8 @@ def _validate_state_value(value: object) -> object:
 StateValue: TypeAlias = CodeStateValue | JsonConfigValue
 
 
-class FormatSpec(SpecModel):
-    """One portable representation to produce for a value."""
+class ArtifactSpec(SpecModel):
+    """One named artifact to produce for a value."""
 
     export: ExportCallable = Field(
         description="Callable that projects the live Python value into an artifact.",
@@ -178,7 +157,7 @@ class FormatSpec(SpecModel):
 
         validated = _validate_json_value(value)
         if not isinstance(validated, dict):
-            raise ValueError("format options must be a JSON object")
+            raise ValueError("artifact options must be a JSON object")
         return validated
 
 
@@ -191,11 +170,11 @@ class ValueSpec(SpecModel):
             "`{def: df}`, `{expr: df.head(10)}`, or `{cell: intro}`."
         ),
     )
-    formats: Annotated[
-        dict[SpecKey, FormatSpec],
+    artifacts: Annotated[
+        dict[SpecKey, ArtifactSpec],
         Field(
             min_length=1,
-            description="Named output formats to produce for this value.",
+            description="Named artifacts to produce for this value.",
         ),
     ]
 
@@ -208,8 +187,8 @@ class ValueSpec(SpecModel):
         normalized = dict(value)
         if "source" in normalized:
             normalized["source"] = normalize_source(normalized["source"])
-        if "formats" in normalized:
-            normalized["formats"] = _normalize_formats(normalized["formats"])
+        if "artifacts" in normalized:
+            normalized["artifacts"] = _normalize_artifacts(normalized["artifacts"])
         return normalized
 
     @field_validator("source", mode="before")
@@ -221,23 +200,27 @@ class ValueSpec(SpecModel):
 class ScenarioSpec(SpecModel):
     """One named finite notebook state to materialize.
 
-    Bare state keys override notebook definitions. Dotted keys patch
-    materialized objects after their producer cells run.
+    `state` overrides notebook definitions. `patches` applies dotted object
+    paths after producer cells run.
     """
 
     id: SpecKey = Field(
         default="default",
         description="Stable id used in artifact paths and manifest lookup.",
     )
-    state: dict[StateKey, StateValue] = Field(
+    state: dict[DefinitionKey, StateValue] = Field(
+        default_factory=dict,
+        description=("Notebook definition overrides for this scenario."),
+    )
+    patches: dict[StateKey, StateValue] = Field(
         default_factory=dict,
         description=(
-            "Scenario state. Bare keys override notebook definitions. "
-            "Dotted keys patch object attributes, for example `selector.value`."
+            "Object patches applied after producer cells run, for example "
+            "`selector.value`."
         ),
     )
 
-    @field_validator("state", mode="before")
+    @field_validator("state", "patches", mode="before")
     @classmethod
     def _state_must_be_json_or_code(cls, value: object) -> object:
         return _validate_value_mapping(value, "scenario state")
@@ -273,20 +256,20 @@ def _validate_value_mapping(value: object, label: str) -> dict[str, object]:
     return validated
 
 
-def _normalize_formats(value: object) -> object:
+def _normalize_artifacts(value: object) -> object:
     if isinstance(value, list):
-        formats: dict[str, object] = {}
+        artifacts: dict[str, object] = {}
         for index, item in enumerate(value):
-            name, spec = _normalize_format_item(item, f"formats[{index}]")
-            if name in formats:
-                raise ValueError(f"duplicate format {name!r}")
-            formats[name] = spec
-        return formats
+            name, spec = _normalize_artifact_item(item, f"artifacts[{index}]")
+            if name in artifacts:
+                raise ValueError(f"duplicate artifact {name!r}")
+            artifacts[name] = spec
+        return artifacts
 
     if isinstance(value, Mapping):
         return {
-            _required_string(name, "format name"): _normalize_format_mapping(
-                _required_string(name, "format name"),
+            _required_string(name, "artifact name"): _normalize_artifact_mapping(
+                _required_string(name, "artifact name"),
                 item,
             )
             for name, item in value.items()
@@ -295,26 +278,26 @@ def _normalize_formats(value: object) -> object:
     return value
 
 
-def _normalize_format_item(value: object, label: str) -> tuple[str, object]:
+def _normalize_artifact_item(value: object, label: str) -> tuple[str, object]:
     if isinstance(value, str):
         return value, _builtin_format(value, {})
     if not isinstance(value, Mapping):
-        raise ValueError(f"{label} must be a format name or object")
+        raise ValueError(f"{label} must be an artifact name or object")
 
     mapping = cast(Mapping[object, object], value)
-    if "format" in mapping:
-        name = _required_string(mapping["format"], f"{label}.format")
+    if "artifact" in mapping:
+        name = _required_string(mapping["artifact"], f"{label}.artifact")
         options = mapping.get("options", {})
         return name, _builtin_format(name, options)
 
     if len(mapping) != 1:
-        raise ValueError(f"{label} must contain exactly one format name")
+        raise ValueError(f"{label} must contain exactly one artifact name")
     name, item = next(iter(mapping.items()))
-    format_name = _required_string(name, "format name")
-    return format_name, _normalize_format_mapping(format_name, item)
+    artifact_name = _required_string(name, "artifact name")
+    return artifact_name, _normalize_artifact_mapping(artifact_name, item)
 
 
-def _normalize_format_mapping(name: str, value: object) -> object:
+def _normalize_artifact_mapping(name: str, value: object) -> object:
     if isinstance(value, Mapping) and "export" in value:
         return value
     if name in BUILTIN_FORMAT_EXPORTERS:
@@ -327,7 +310,7 @@ def _builtin_format(name: str, options: object) -> dict[str, object]:
         ref = BUILTIN_FORMAT_EXPORTERS[name]
     except KeyError as error:
         raise ValueError(
-            f"unknown built-in format {name!r}. Provide an explicit export config."
+            f"unknown built-in artifact {name!r}. Provide an explicit export config."
         ) from error
     return {
         "export": {
@@ -347,21 +330,6 @@ def _required_string(value: object, label: str) -> str:
 class ExportSpec(SpecModel):
     """Complete declaration of the values and scenarios to export."""
 
-    notebook: str | None = Field(
-        default=None,
-        description=(
-            "Optional producer-facing notebook path. Attached live-session "
-            "exports already have a kernel. Outer producers use this path to "
-            "resolve the notebook."
-        ),
-    )
-    bundle: BundleSpec | None = Field(
-        default=None,
-        description=(
-            "Optional bundle destination. Producers may also provide it outside "
-            "the spec. Standalone specs carry it here."
-        ),
-    )
     scenarios: list[ScenarioSpec] = Field(
         default_factory=lambda: [ScenarioSpec()],
         description="Explicit scenario matrix. Omitted means one default scenario.",
@@ -374,7 +342,7 @@ class ExportSpec(SpecModel):
         dict[SpecKey, ValueSpec],
         Field(
             min_length=1,
-            description="Named values to evaluate and project into artifact formats.",
+            description="Named values to evaluate and project into artifacts.",
         ),
     ]
 

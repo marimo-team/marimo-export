@@ -27,7 +27,7 @@ export function vegaliteLoader(
   defaults: VegaLiteRenderOptions = {},
 ): ArtifactLoader<VegaLiteArtifactHandle> {
   return defineLoader({
-    formats: vegaliteFormat,
+    supports: vegaliteFormat,
     load(context: ArtifactLoaderContext) {
       return createVegaLiteHandle(context, defaults);
     },
@@ -40,16 +40,16 @@ function createVegaLiteHandle(
 ): VegaLiteArtifactHandle {
   return {
     artifact: context.artifact,
-    blob: context.file(),
+    blob: context.entry().ref,
     metadata: context.artifact.metadata,
     url() {
-      return context.url();
+      return context.entry().url();
     },
     spec<T extends VegaLiteSpec = VegaLiteSpec>() {
-      return context.json<T>();
+      return context.entry().json<T>();
     },
     async render(element, options) {
-      const spec = await context.json<VegaLiteSpec>();
+      const spec = await context.entry().json<VegaLiteSpec>();
       const { default: embed } = await import("vega-embed");
       return embed(element, spec, {
         renderer: "canvas",

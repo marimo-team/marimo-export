@@ -7,23 +7,22 @@ with `@uwdata/flechette`.
 
 ```ts
 import { arrowLoader } from "@marimo-team/export-loader-arrow";
-import { readLatestExport } from "@marimo-team/export-reader";
+import { exportRoot, openExport } from "@marimo-team/export-reader";
 
-const exp = await readLatestExport({
-  root: "/export/",
+const exp = await openExport(exportRoot("/export/"), {
   loaders: [arrowLoader()],
 });
 
-const handle = exp.get({
+const handle = exp.artifact({
   scenario: "default",
   value: "prices",
-  format: "arrow",
+  artifact: "arrow",
 });
 
-const table = await handle.load();
+const frame = await handle.load();
 
-const rows = await table.rows();
-const columns = table.columns();
+const rows = await frame.rows();
+const columns = await frame.columns();
 ```
 
 Mechanics:

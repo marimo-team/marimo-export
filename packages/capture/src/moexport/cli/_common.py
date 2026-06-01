@@ -72,8 +72,8 @@ def export_summary(result: ExportResult) -> JsonObject:
                 "id": scenario["id"],
                 "state": scenario["state"],
                 "values": {
-                    value: sorted(formats)
-                    for value, formats in scenario["values"].items()
+                    value: sorted(artifacts)
+                    for value, artifacts in scenario["values"].items()
                 },
             }
             for scenario in manifest["scenarios"]

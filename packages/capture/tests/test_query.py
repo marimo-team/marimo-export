@@ -55,7 +55,7 @@ def _write_export(root: Path) -> None:
             "request_sha256": "export",
         },
         "values": {
-            "prices": {"source": _definition_source("df"), "formats": ["json"]},
+            "prices": {"source": _definition_source("df"), "artifacts": ["json"]},
         },
         "scenarios": [
             {
@@ -172,7 +172,7 @@ def _write_chart_export(root: Path, *, bundle_id: str, chart_width: int) -> None
             "values": {
                 "comparison_chart": {
                     "source": _definition_source("symbols_chart"),
-                    "formats": ["vegalite"],
+                    "artifacts": ["vegalite"],
                 },
             },
             "scenarios": [
@@ -242,8 +242,8 @@ def test_bundle_query_returns_semantic_map_and_raw_file_paths(tmp_path: Path) ->
     _write_export(root)
     bundle = open_export(root).bundle()
 
-    artifact = bundle.artifacts(scenario="base", value="prices", format="json")[0]
-    assert bundle.artifact(scenario="base", value="prices", format="json") == artifact
+    artifact = bundle.artifacts(scenario="base", value="prices", artifact="json")[0]
+    assert bundle.artifact(scenario="base", value="prices", artifact="json") == artifact
     files = bundle.files(dedupe=True)
 
     assert artifact["source"] == _definition_source("df")
@@ -265,7 +265,7 @@ def test_bundle_query_returns_semantic_map_and_raw_file_paths(tmp_path: Path) ->
                     "state": {},
                     "value": "prices",
                     "source": _definition_source("df"),
-                    "format": "json",
+                    "artifact": "json",
                     "format_id": "example.json.v1",
                     "file": "data",
                 }
@@ -280,13 +280,13 @@ def test_bundle_query_returns_semantic_map_and_raw_file_paths(tmp_path: Path) ->
     with pytest.raises(ValueError, match="invalid bundle href"):
         bundle.resolve("/tmp/secret.json")
     assert bundle.map()["files"] == files
-    assert bundle.file(scenario="base", value="prices", format="json")["path"] == str(
+    assert bundle.file(scenario="base", value="prices", artifact="json")["path"] == str(
         root / "blobs" / "sha256" / "aa" / "bb" / "aabb"
     )
     assert bundle.entry(
         scenario="base",
         value="prices",
-        format="json",
+        artifact="json",
         include_content=True,
     ) == {
         "bundle": "sha256-demo",
@@ -294,7 +294,7 @@ def test_bundle_query_returns_semantic_map_and_raw_file_paths(tmp_path: Path) ->
         "state": {},
         "value": "prices",
         "source": _definition_source("df"),
-        "format": "json",
+        "artifact": "json",
         "format_id": "example.json.v1",
         "artifact_media_type": "application/json",
         "metadata": {"rows": 1},
@@ -360,7 +360,7 @@ def test_bundle_query_reports_invalid_json_entry_content(tmp_path: Path) -> None
         .entry(
             scenario="base",
             value="prices",
-            format="json",
+            artifact="json",
             include_content=True,
         )
     )
@@ -416,7 +416,6 @@ def test_export_query_catalog_indexes_the_whole_export_root(tmp_path: Path) -> N
         "notebooks": 2,
         "scenarios": 2,
         "values": 1,
-        "formats": 1,
         "artifacts": 2,
         "files": 2,
         "bytes": 32,
@@ -426,7 +425,7 @@ def test_export_query_catalog_indexes_the_whole_export_root(tmp_path: Path) -> N
         {
             "name": "comparison_chart",
             "sources": [_definition_source("symbols_chart")],
-            "formats": ["vegalite"],
+            "artifacts": ["vegalite"],
             "bundles": ["sha256-1000", "sha256-1200"],
         }
     ]
@@ -457,7 +456,7 @@ def test_export_query_filters_1200_wide_finance_chart(tmp_path: Path) -> None:
     artifacts = export.artifacts(
         state={"chart_width": 1200},
         value="comparison_chart",
-        format="vegalite",
+        artifact="vegalite",
     )
     files = export.files(
         state={"chart_width": 1200},
@@ -487,7 +486,7 @@ def test_export_query_filters_1200_wide_finance_chart(tmp_path: Path) -> None:
         export.artifact(
             state={"chart_width": 1200},
             value="comparison_chart",
-            format="vegalite",
+            artifact="vegalite",
         )
         == artifacts[0]
     )

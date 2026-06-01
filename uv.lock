@@ -828,6 +828,7 @@ version = "0.1.0"
 source = { editable = "packages/capture" }
 dependencies = [
     { name = "click" },
+    { name = "httpx" },
     { name = "marimo" },
     { name = "pydantic" },
     { name = "pyyaml" },
@@ -860,6 +861,7 @@ requires-dist = [
     { name = "anywidget", marker = "extra == 'all'", specifier = ">=0.10" },
     { name = "anywidget", marker = "extra == 'anywidget'", specifier = ">=0.10" },
     { name = "click", specifier = ">=8" },
+    { name = "httpx", specifier = ">=0.28" },
     { name = "marimo" },
     { name = "narwhals", marker = "extra == 'all'", specifier = ">=2" },
     { name = "narwhals", marker = "extra == 'dataframe'", specifier = ">=2" },

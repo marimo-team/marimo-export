@@ -30,7 +30,7 @@ def _install_test_exporters() -> None:
         del options
         blob = ctx.write_blob("value.txt", str(value).encode(), media_type="text/plain")
         return Artifact(
-            format="text.v1",
+            format_id="text.v1",
             media_type="text/plain",
             data=ArtifactData(files={"value": blob}, entry="value"),
             metadata=None,
@@ -81,7 +81,7 @@ def test_archive_bundle_returns_zip_bytes(
                 "values": {
                     "title": {
                         "source": {"def": "title"},
-                        "formats": {
+                        "artifacts": {
                             "text": {
                                 "export": {
                                     "type": "ref",
@@ -120,7 +120,7 @@ def test_archive_bundle_returns_zip_bytes(
                 "values": {
                     "title": {
                         "source": {"def": "title"},
-                        "formats": {
+                        "artifacts": {
                             "text": {
                                 "export": {
                                     "type": "ref",

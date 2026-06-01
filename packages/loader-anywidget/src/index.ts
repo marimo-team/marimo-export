@@ -16,23 +16,11 @@ import type {
   WidgetModuleNamespace,
 } from "#anywidget/runtime/types";
 
-export { createStandaloneWidget } from "#anywidget/runtime/export-runtime";
-export { restoreBufferBytes, restoreBuffers } from "#anywidget/runtime/buffers";
 export { createWidgetStore } from "#anywidget/runtime/widget-store";
-export type {
-  AnyModel,
-  ClientCommand,
-  ClientHost,
-  CreateStandaloneWidgetOptions,
-  StandaloneWidget,
-  WidgetDefinition,
-  WidgetModuleNamespace,
-} from "#anywidget/runtime/types";
 export type {
   CreateWidgetStoreOptions,
   WidgetStore,
   WidgetStoreSelectOptions,
-  WidgetStoreSource,
   WidgetStoreWriteOptions,
 } from "#anywidget/runtime/widget-store";
 export type {
@@ -44,27 +32,33 @@ export type {
 
 export const anywidgetFormat = "anywidget.bundle.v1";
 
+export type AnyWidgetCommand = (
+  msg: unknown,
+  options: { buffers: Uint8Array[]; signal?: AbortSignal },
+) => Promise<[unknown, Uint8Array[]]> | [unknown, Uint8Array[]];
+
+export interface AnyWidgetInput<T extends AnyWidgetState = AnyWidgetState> {
+  state?: Partial<T>;
+  commands?: Record<string, AnyWidgetCommand>;
+}
+
+export interface MountedAnyWidget<T extends AnyWidgetState = AnyWidgetState> {
+  widget: StandaloneWidget<T>;
+  unmount(): Promise<void>;
+}
+
 export interface LoadedAnyWidget<T extends AnyWidgetState = AnyWidgetState> {
   artifact: ArtifactRecord;
   descriptor: AnyWidgetDescriptor;
   initialState: T;
-  sourceModuleUrl: string;
-  moduleUrl: string;
-  styleUrl: string | null;
-  createWidget(input?: CreateStandaloneWidgetOptions<T>["input"]): Promise<StandaloneWidget<T>>;
-  mount(
-    el: HTMLElement,
-    input?: CreateStandaloneWidgetOptions<T>["input"],
-  ): Promise<{
-    widget: StandaloneWidget<T>;
-    unmount(): Promise<void>;
-  }>;
+  createWidget(input?: AnyWidgetInput<T>): Promise<StandaloneWidget<T>>;
+  mount(el: HTMLElement, input?: AnyWidgetInput<T>): Promise<MountedAnyWidget<T>>;
   dispose(): void;
 }
 
 export function anywidgetLoader(): ArtifactLoader<LoadedAnyWidget> {
   return defineLoader({
-    formats: anywidgetFormat,
+    supports: anywidgetFormat,
     async load(context: ArtifactLoaderContext) {
       return loadAnyWidget(context);
     },
@@ -74,19 +68,22 @@ export function anywidgetLoader(): ArtifactLoader<LoadedAnyWidget> {
 async function loadAnyWidget<T extends AnyWidgetState>(
   context: ArtifactLoaderContext,
 ): Promise<LoadedAnyWidget<T>> {
-  const descriptor = await context.json<AnyWidgetDescriptor>("descriptor");
+  const descriptor = await context.file("descriptor").json<AnyWidgetDescriptor>();
   const initialState = await loadInitialState<T>(context, descriptor);
-  const inlineCssText = context.artifact.data.files.style ? await context.text("style") : null;
-  const sourceModuleUrl = context.url("module");
-  const moduleUrl = URL.createObjectURL(
-    new Blob([await context.text("module")], {
-      type: "text/javascript",
-    }),
-  );
-  const styleUrl = context.artifact.data.files.style ? context.url("style") : null;
-  const createWidget = async (
-    input?: CreateStandaloneWidgetOptions<T>["input"],
-  ): Promise<StandaloneWidget<T>> => {
+  const inlineCssText = context.artifact.data.files.style
+    ? await context.file("style").text()
+    : null;
+  const objectUrls = new Set<string>();
+
+  const createWidgetWithCleanup = async (
+    input?: AnyWidgetInput<T>,
+  ): Promise<{ widget: StandaloneWidget<T>; dispose(): void }> => {
+    const moduleUrl = URL.createObjectURL(
+      new Blob([await context.file("module").text()], {
+        type: "text/javascript",
+      }),
+    );
+    objectUrls.add(moduleUrl);
     const widgetModule = await importRuntimeModule<T>(moduleUrl);
     const options: CreateStandaloneWidgetOptions<T> = {
       widgetModule,
@@ -97,30 +94,43 @@ async function loadAnyWidget<T extends AnyWidgetState>(
     if (input !== undefined) {
       options.input = input;
     }
-    return createStandaloneWidget(options);
+    return {
+      widget: await createStandaloneWidget(options),
+      dispose() {
+        URL.revokeObjectURL(moduleUrl);
+        objectUrls.delete(moduleUrl);
+      },
+    };
   };
 
   return {
     artifact: context.artifact,
     descriptor,
     initialState,
-    sourceModuleUrl,
-    moduleUrl,
-    styleUrl,
-    createWidget,
+    async createWidget(input) {
+      return (await createWidgetWithCleanup(input)).widget;
+    },
     async mount(el, input) {
-      const widget = await createWidget(input);
+      const created = await createWidgetWithCleanup(input);
+      const widget = created.widget;
       const mount = await widget.mount(el);
       return {
         widget,
         async unmount() {
-          await mount.unmount();
-          await widget.destroy();
+          try {
+            await mount.unmount();
+            await widget.destroy();
+          } finally {
+            created.dispose();
+          }
         },
       };
     },
     dispose() {
-      URL.revokeObjectURL(moduleUrl);
+      for (const url of objectUrls) {
+        URL.revokeObjectURL(url);
+      }
+      objectUrls.clear();
     },
   };
 }
@@ -144,13 +154,13 @@ async function loadInitialState<T extends AnyWidgetState>(
   for (const [key, value] of Object.entries(descriptor.state)) {
     state[key] =
       isBlobRef(value) && context.artifact.data.files[`state.${key}`]
-        ? await context.json<JsonValue>(`state.${key}`)
+        ? await context.file(`state.${key}`).json<JsonValue>()
         : value;
   }
 
   const bufferPaths = descriptor.buffers.map((buffer) => buffer.path);
   const buffers = await Promise.all(
-    descriptor.buffers.map((_buffer, index) => context.bytes(`buffer_${index}`)),
+    descriptor.buffers.map((_buffer, index) => context.file(`buffer_${index}`).bytes()),
   );
 
   return restoreBufferBytes(state as T, bufferPaths, buffers);

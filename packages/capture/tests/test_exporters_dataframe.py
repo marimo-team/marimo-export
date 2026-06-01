@@ -20,11 +20,11 @@ class CapturingExporterContext:
         *,
         scenario_id: str = "default",
         value_name: str = "prices",
-        format_name: str = "arrow",
+        artifact_name: str = "arrow",
     ) -> None:
         self.scenario_id = scenario_id
         self.value_name = value_name
-        self.format_name = format_name
+        self.artifact_name = artifact_name
         self.blobs: dict[str, bytes] = {}
 
     def write_blob(
@@ -47,14 +47,14 @@ class CapturingExporterContext:
     def artifact(
         self,
         *,
-        format: str,
+        format_id: str,
         files: dict[str, BlobRef],
         entry: str | None = None,
         media_type: str | None = None,
         metadata: JsonObject | None = None,
     ) -> Artifact:
         return Artifact(
-            format=format,
+            format_id=format_id,
             media_type=media_type,
             data=ArtifactData(files=files, entry=entry),
             metadata=metadata,
@@ -63,11 +63,11 @@ class CapturingExporterContext:
 
 def test_parquet_exports_dataframe_family_via_narwhals() -> None:
     table = pyarrow.table({"symbol": ["AAPL", "MSFT"], "close": [10.0, 20.0]})
-    ctx = CapturingExporterContext(format_name="parquet")
+    ctx = CapturingExporterContext(artifact_name="parquet")
 
     artifact = dataframe_exporters.parquet(table, ctx)
 
-    assert artifact.format == "dataframe.parquet.v1"
+    assert artifact.format_id == "dataframe.parquet.v1"
     assert artifact.media_type == "application/vnd.apache.parquet"
     assert artifact.metadata == {
         "rows": 2,
@@ -84,11 +84,11 @@ def test_parquet_exports_dataframe_family_via_narwhals() -> None:
 
 def test_arrow_exports_dataframe_family_as_ipc_stream() -> None:
     table = pyarrow.table({"symbol": ["AAPL", "MSFT"], "close": [10.0, 20.0]})
-    ctx = CapturingExporterContext(format_name="arrow")
+    ctx = CapturingExporterContext(artifact_name="arrow")
 
     artifact = dataframe_exporters.arrow(table, ctx)
 
-    assert artifact.format == "dataframe.arrow.v1"
+    assert artifact.format_id == "dataframe.arrow.v1"
     assert artifact.media_type == "application/vnd.apache.arrow.stream"
     assert artifact.metadata == {
         "rows": 2,

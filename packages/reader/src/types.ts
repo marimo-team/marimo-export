@@ -54,7 +54,7 @@ export interface ArtifactRecord {
 
 export interface ManifestValue {
   source: SourceRecord;
-  formats: string[];
+  artifacts: string[];
 }
 
 export interface ManifestScenario {
@@ -101,30 +101,56 @@ export interface ExportRootIndex {
 export interface ArtifactSelection {
   scenario: string;
   value: string;
-  format: string;
+  artifact: string;
 }
 
-export interface ReadExportOptions {
+export type ExportSourceInput =
+  | {
+      kind: "root";
+      root: string | URL;
+      index?: string;
+      manifest?: string;
+      fetch?: FetchLike;
+    }
+  | {
+      kind: "directory";
+      root: string;
+      index?: string;
+      manifest?: string;
+      readFile: LocalReadFile;
+      url?: LocalUrlResolver;
+    }
+  | {
+      kind: "archive";
+      bytes: ExportArchiveInput;
+      manifest?: string;
+    };
+
+export interface OpenExportOptions {
+  loaders?: ArtifactLoader[];
+}
+
+export interface HostedManifestOptions {
   root: string | URL;
   manifest: string;
   loaders?: ArtifactLoader[];
   fetch?: FetchLike;
 }
 
-export interface ReadExportIndexOptions {
+export interface HostedIndexOptions {
   root: string | URL;
   index?: string;
   fetch?: FetchLike;
 }
 
-export interface ReadLatestExportOptions {
+export interface HostedLatestOptions {
   root: string | URL;
   index?: string;
   loaders?: ArtifactLoader[];
   fetch?: FetchLike;
 }
 
-export interface ReadLocalExportOptions {
+export interface DirectoryManifestOptions {
   root: string;
   manifest: string;
   loaders?: ArtifactLoader[];
@@ -132,7 +158,7 @@ export interface ReadLocalExportOptions {
   url?: LocalUrlResolver;
 }
 
-export interface ReadLatestLocalExportOptions {
+export interface DirectoryLatestOptions {
   root: string;
   index?: string;
   loaders?: ArtifactLoader[];
@@ -142,7 +168,7 @@ export interface ReadLatestLocalExportOptions {
 
 export type ExportArchiveInput = ArrayBuffer | ArrayBufferView | Blob;
 
-export interface ReadExportArchiveOptions {
+export interface ArchiveManifestOptions {
   bytes: ExportArchiveInput;
   manifest?: string;
   loaders?: ArtifactLoader[];
@@ -154,8 +180,8 @@ export interface StaticExport {
   scenario(id: string): ManifestScenario;
   scenarioRecords(): ManifestScenario[];
   values(): string[];
-  formats(value: string): string[];
-  get(selection: ArtifactSelection): ArtifactHandle;
+  artifacts(value: string): string[];
+  artifact(selection: ArtifactSelection): ArtifactHandle;
 }
 
 export interface StaticExportArchive extends StaticExport {
@@ -164,27 +190,33 @@ export interface StaticExportArchive extends StaticExport {
 
 export interface ArtifactHandle {
   artifact: ArtifactRecord;
-  file(key?: string): BlobRef;
-  url(key?: string): string;
-  fetch(key?: string, init?: RequestInit): Promise<Response>;
-  bytes(key?: string): Promise<Uint8Array>;
-  text(key?: string): Promise<string>;
-  json<T = unknown>(key?: string): Promise<T>;
+  entry(): ArtifactFile;
+  file(key: string): ArtifactFile;
+  url(): string;
+  fetch(init?: RequestInit): Promise<Response>;
+  bytes(): Promise<Uint8Array>;
+  text(): Promise<string>;
+  json<T = unknown>(): Promise<T>;
   load<T = unknown>(): Promise<T>;
+}
+
+export interface ArtifactFile {
+  ref: BlobRef;
+  url(): string;
+  fetch(init?: RequestInit): Promise<Response>;
+  bytes(): Promise<Uint8Array>;
+  text(): Promise<string>;
+  json<T = unknown>(): Promise<T>;
 }
 
 export interface ArtifactLoaderContext {
   artifact: ArtifactRecord;
   selection: ArtifactSelection;
-  file(key?: string): BlobRef;
-  url(key?: string): string;
-  fetch(key?: string, init?: RequestInit): Promise<Response>;
-  bytes(key?: string): Promise<Uint8Array>;
-  text(key?: string): Promise<string>;
-  json<T = unknown>(key?: string): Promise<T>;
+  entry(): ArtifactFile;
+  file(key: string): ArtifactFile;
 }
 
 export interface ArtifactLoader<T = unknown> {
-  formats: string | readonly string[];
+  supports: string | readonly string[];
   load(context: ArtifactLoaderContext): T | Promise<T>;
 }

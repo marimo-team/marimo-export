@@ -43,7 +43,7 @@ Write a static bundle:
 ```bash
 uv run marimo-export notebook notebooks/finance.py \
   --spec notebooks/export-specs/yaml/finance--dashboard.yaml \
-  --bundle notebooks/__marimo__/static-export
+  --to notebooks/__marimo__/static-export
 ```
 
 Query the result without a web runtime:
@@ -53,22 +53,23 @@ uv run marimo-export query notebooks/__marimo__/static-export
 uv run marimo-export query notebooks/__marimo__/static-export scenarios
 uv run marimo-export query notebooks/__marimo__/static-export entries \
   --value summary \
-  --format json \
+  --artifact json \
   --content
 ```
 
 ## Read In The Browser
 
 ```ts
-import { readLatestExport } from "@marimo-team/export-reader";
+import { exportRoot, openExport } from "@marimo-team/export-reader";
 import { arrowLoader } from "@marimo-team/export-loader-arrow";
 
-const exp = await readLatestExport({
-  root: "/export/",
+const exp = await openExport(exportRoot("/export/"), {
   loaders: [arrowLoader()],
 });
 
-const table = await exp.get({ scenario: "default", value: "prices", format: "arrow" }).load();
+const table = await exp
+  .artifact({ scenario: "default", value: "prices", artifact: "arrow" })
+  .load();
 ```
 
 `@marimo-team/export-reader` also exposes raw `.url()`, `.bytes()`, `.text()`,
@@ -84,14 +85,14 @@ Use `@marimo-team/export-client` when a build step or browser page can reach a
 running marimo server:
 
 ```ts
-import { captureExport, createCaptureClient } from "@marimo-team/export-client";
+import { createExportClient } from "@marimo-team/export-client";
 
-const client = createCaptureClient({ server: "http://localhost:2718" });
+const client = createExportClient({ server: "http://localhost:2718" });
 
-await captureExport(spec, {
-  client,
+await client.capture(spec, {
   notebook: "notebooks/finance.py",
-  bundle: "examples/vanilla-vite/public/export",
+  to: "examples/vanilla-vite/public/export",
+  runtime: "preinstalled",
 });
 ```
 

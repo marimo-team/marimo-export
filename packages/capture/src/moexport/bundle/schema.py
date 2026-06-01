@@ -42,14 +42,14 @@ class CaptureRecord(BundleSchemaModel):
 
 class ManifestValue(BundleSchemaModel):
     source: JsonObject
-    formats: list[str]
+    artifacts: list[str]
 
 
 class ManifestArtifact(BundleSchemaModel):
     """Manifest form of `Artifact`.
 
-    The writer stores `Artifact.format` as `format_id`. `data` stays the shared
-    writer-side `ArtifactData` model.
+    `format_id` identifies the portable payload format. The authored artifact
+    name lives in the containing value map.
     """
 
     format_id: str
