@@ -25,7 +25,6 @@ export default defineConfig({
         "../../packages/loader-vegalite/src/index",
         import.meta.url,
       ).pathname,
-      "#reader": new URL("../../packages/reader/src", import.meta.url).pathname,
       "#anywidget": new URL("../../packages/loader-anywidget/src", import.meta.url).pathname,
     },
   },

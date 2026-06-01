@@ -1,20 +1,20 @@
 import {
   EXPORT_ARCHIVE_MEDIA_TYPE,
   type CaptureClient,
-  type CaptureExportArchiveResult,
-  type CaptureExportRequest,
-  type CaptureExportResult,
-  type CaptureRuntimeOption,
+  type CaptureArchiveResult,
+  type CaptureOptions,
+  type CaptureResult,
   type ExportSpecInput,
   type RunningNotebook,
+  type RuntimeOption,
   type WorkspaceNotebook,
 } from "./types";
 import { isRecord, sleep } from "./support";
 
-export async function captureExportWithClient(
+export async function captureBundleWithClient(
   spec: ExportSpecInput,
-  options: CaptureExportRequest & { client: CaptureClient },
-): Promise<CaptureExportResult> {
+  options: CaptureOptions & { client: CaptureClient },
+): Promise<CaptureResult> {
   const { client, to, runtime } = options;
   const session = await resolveCaptureSession(client, options);
   await ensureCaptureRuntime(client, session, runtime);
@@ -37,10 +37,10 @@ export async function captureExportWithClient(
   };
 }
 
-export async function captureExportArchiveWithClient(
+export async function captureArchiveWithClient(
   spec: ExportSpecInput,
-  options: CaptureExportRequest & { client: CaptureClient },
-): Promise<CaptureExportArchiveResult> {
+  options: CaptureOptions & { client: CaptureClient },
+): Promise<CaptureArchiveResult> {
   const { client, to, runtime } = options;
   const session = await resolveCaptureSession(client, options);
   await ensureCaptureRuntime(client, session, runtime);
@@ -101,7 +101,7 @@ export async function listWorkspaceNotebooks(client: CaptureClient): Promise<Wor
 
 export async function resolveCaptureSession(
   client: CaptureClient,
-  options: Pick<CaptureExportRequest, "sessionId" | "notebook"> = {},
+  options: Pick<CaptureOptions, "sessionId" | "notebook"> = {},
 ): Promise<RunningNotebook> {
   if (options.sessionId) {
     return {
@@ -158,7 +158,7 @@ export async function resolveCaptureSession(
 export async function ensureCaptureRuntime(
   client: CaptureClient,
   session: Pick<RunningNotebook, "sessionId">,
-  options: CaptureRuntimeOption | undefined = "preinstalled",
+  options: RuntimeOption | undefined = "preinstalled",
 ): Promise<void> {
   if (options === "preinstalled") {
     if (await canImportModule(client, session.sessionId, "moexport")) {
@@ -210,7 +210,7 @@ export async function ensureCaptureRuntime(
   });
 }
 
-export function captureRequest(options: CaptureExportRequest): CaptureExportRequest {
+export function captureRequest(options: CaptureOptions): CaptureOptions {
   return {
     ...(options.to !== undefined ? { to: options.to } : {}),
     ...(options.notebook !== undefined ? { notebook: options.notebook } : {}),
@@ -360,7 +360,7 @@ function objectField(payload: Record<string, unknown>, key: string): Record<stri
 
 function base64ToBytes(value: string): Uint8Array {
   if (typeof globalThis.atob !== "function") {
-    throw new Error("captureExportArchive requires atob to decode the archive payload.");
+    throw new Error("captureArchive requires atob to decode the archive payload.");
   }
 
   const binary = globalThis.atob(value);

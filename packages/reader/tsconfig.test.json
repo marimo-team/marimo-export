@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["node"],
+    "paths": {
+      "@marimo-team/export-reader": ["./src/index.ts"]
+    }
+  },
+  "include": ["test/**/*.ts"]
+}

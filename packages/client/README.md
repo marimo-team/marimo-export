@@ -86,13 +86,6 @@ const archive = await client.captureArchive(spec, {
 });
 ```
 
-## Convenience Functions
-
-`captureExport(spec, options)` and `captureExportArchive(spec, options)` remain
-for short scripts. Production code should create one `ExportClient` and call
-`client.capture(...)` or `client.captureArchive(...)` so session listing,
-runtime checks, and raw marimo access live behind one object.
-
 ## API Surface
 
 ### `createExportClient(options)`

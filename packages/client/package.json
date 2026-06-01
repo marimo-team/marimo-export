@@ -19,9 +19,9 @@
     "./package.json": "./package.json"
   },
   "scripts": {
-    "build": "rm -rf dist && tsc -p tsconfig.build.json && node esbuild.config.mjs",
-    "test": "pnpm build && node --test test/*.mjs",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "build": "rm -rf dist && tsc -p tsconfig.build.json && node --experimental-strip-types esbuild.config.ts",
+    "test": "rm -rf .test-dist && pnpm build && tsc -p tsconfig.test.build.json && node --test .test-dist/test/*.test.js; status=$?; rm -rf .test-dist; exit $status",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit",
     "lint": "oxlint .",
     "format": "oxfmt --write ."
   },

@@ -1,21 +1,21 @@
 import {
-  captureExportArchiveWithClient,
+  captureArchiveWithClient,
+  captureBundleWithClient,
   captureRequest,
-  captureExportWithClient,
   listRunningNotebooks,
   listWorkspaceNotebooks as listWorkspaceNotebooksWithClient,
 } from "./capture-core";
 import { createNotebookOpener, createPost, createScratchpadExecutor } from "./transport";
 import type {
   ArchiveCaptureClient,
+  CaptureArchiveResult,
   CaptureClient,
   CaptureClientOptionsBase,
-  CaptureExportArchiveResult,
-  CaptureExportRequest,
-  CaptureExportResult,
   CaptureFetch,
+  CaptureOptions,
   CapturePostOptions,
   CapturePostResult,
+  CaptureResult,
   ExportSpecInput,
   RunningNotebook,
   WorkspaceNotebook,
@@ -29,34 +29,25 @@ export type BrowserCaptureClient = CaptureClient;
 export type BrowserArchiveCaptureClient = ArchiveCaptureClient;
 export type BrowserExportClientOptions = CaptureClientOptionsBase;
 
-export type CaptureExportOptions =
-  | (CaptureExportRequest & BrowserExportClientOptions & { client?: never })
-  | (CaptureExportRequest & { client: BrowserExportClient });
-
-export type CaptureExportArchiveOptions =
-  | (CaptureExportRequest & BrowserExportClientOptions & { client?: never })
-  | (CaptureExportRequest & { client: BrowserExportClient });
-
 export interface BrowserExportClient {
   readonly marimo: BrowserArchiveCaptureClient;
-  capture(spec: ExportSpecInput, options?: CaptureExportRequest): Promise<CaptureExportResult>;
-  captureArchive(
-    spec: ExportSpecInput,
-    options?: CaptureExportRequest,
-  ): Promise<CaptureExportArchiveResult>;
+  capture(spec: ExportSpecInput, options?: CaptureOptions): Promise<CaptureResult>;
+  captureArchive(spec: ExportSpecInput, options?: CaptureOptions): Promise<CaptureArchiveResult>;
   listSessions(): Promise<RunningNotebook[]>;
   listWorkspaceNotebooks(): Promise<WorkspaceNotebook[]>;
 }
 
 export type {
-  CaptureExportArchiveResult,
-  CaptureExportRequest,
-  CaptureExportResult,
-  CaptureRuntimeInstallOptions,
-  CaptureRuntimeOption,
+  CaptureArchiveResult,
+  CaptureFetch,
+  CaptureOptions,
+  CaptureResult,
   ExecuteScratchpadOptions,
+  ExportSpecInput,
   OpenNotebookOptions,
   RunningNotebook,
+  RuntimeInstallOptions,
+  RuntimeOption,
   ScratchpadExecutionResult,
   ScratchpadOutput,
   WorkspaceNotebook,
@@ -67,13 +58,13 @@ export function createExportClient(options: BrowserExportClientOptions): Browser
   return {
     marimo,
     capture(spec, request = {}) {
-      return captureExportWithClient(spec, {
+      return captureBundleWithClient(spec, {
         client: marimo,
         ...captureRequest(request),
       });
     },
     captureArchive(spec, request = {}) {
-      return captureExportArchiveWithClient(spec, {
+      return captureArchiveWithClient(spec, {
         client: marimo,
         ...captureRequest(request),
       });
@@ -93,30 +84,4 @@ function createBrowserTransport(options: BrowserExportClientOptions): BrowserArc
     executeScratchpad: createScratchpadExecutor(options),
     openNotebook: createNotebookOpener(options),
   };
-}
-
-export async function captureExport(
-  spec: ExportSpecInput,
-  options: CaptureExportOptions,
-): Promise<CaptureExportResult> {
-  const client = exportClient(options);
-  return client.capture(spec, captureRequest(options));
-}
-
-export async function captureExportArchive(
-  spec: ExportSpecInput,
-  options: CaptureExportArchiveOptions,
-): Promise<CaptureExportArchiveResult> {
-  const client = exportClient(options);
-  return client.captureArchive(spec, captureRequest(options));
-}
-
-function exportClient(
-  options: CaptureExportOptions | CaptureExportArchiveOptions,
-): BrowserExportClient {
-  if ("client" in options && options.client !== undefined) {
-    return options.client;
-  }
-
-  return createExportClient(options);
 }

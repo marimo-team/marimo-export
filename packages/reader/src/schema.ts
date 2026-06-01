@@ -14,7 +14,7 @@ import type {
   NotebookRecord,
   ProvenanceRecord,
   SourceRecord,
-} from "#reader/types";
+} from "./types.js";
 
 const ROOT_INDEX_SCHEMA = "moexport.root_index.v1";
 const BUNDLE_SCHEMA = "moexport.bundle.v1";

@@ -24,7 +24,7 @@ import type {
   OpenExportOptions,
   StaticExport,
   StaticExportArchive,
-} from "#reader/types";
+} from "./types.js";
 import { unzipSync } from "fflate";
 import { safeBundlePath, validateExportManifest, validateExportRootIndex } from "./schema.js";
 
