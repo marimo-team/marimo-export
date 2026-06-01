@@ -107,7 +107,7 @@ def _spec() -> dict[str, Any]:
         "values": {
             "title": {
                 "source": {"def": "title"},
-                "artifacts": {
+                "formats": {
                     "text": {
                         "export": {
                             "type": "code",
@@ -152,7 +152,7 @@ scenarios:
 values:
   title:
     source: {def: title}
-    artifacts:
+    formats:
       text:
         export:
           type: code
@@ -196,7 +196,7 @@ def test_cli_help_exposes_core_workflow_commands() -> None:
     assert {"inspect", "notebook", "query"} <= set(cli.commands)
     assert "marimo-export notebook notebooks/finance.py --spec export.yaml" in help_text
     assert (
-        "marimo-export query out entries --value summary --artifact json --content"
+        "marimo-export query out entries --value summary --format json --content"
         in help_text
     )
     assert "marimo-export query out source --scenario wide_chart" in help_text
@@ -246,7 +246,7 @@ def test_cli_exports_notebook_and_reports_query_next_steps(
     assert payload["values"] == {
         "title": {
             "source": {"type": "definition", "name": "title"},
-            "artifacts": ["text"],
+            "formats": ["text"],
         }
     }
     assert payload["scenarios"] == [
@@ -354,10 +354,10 @@ def test_cli_query_progressive_bundle_commands(tmp_path: Path) -> None:
     )
     assert [scenario["id"] for scenario in scenarios] == ["override"]
 
-    artifacts = _output_json(
-        _invoke(["query", str(bundle_root), "artifacts", "--value", "title"])
+    formats = _output_json(
+        _invoke(["query", str(bundle_root), "formats", "--value", "title"])
     )
-    assert {artifact["scenario"] for artifact in artifacts} == {"base", "override"}
+    assert {format["scenario"] for format in formats} == {"base", "override"}
 
     files = _output_json(
         _invoke(
@@ -385,7 +385,7 @@ def test_cli_query_progressive_bundle_commands(tmp_path: Path) -> None:
                 "override",
                 "--value",
                 "title",
-                "--artifact",
+                "--format",
                 "text",
                 "--content",
             ]
@@ -394,24 +394,24 @@ def test_cli_query_progressive_bundle_commands(tmp_path: Path) -> None:
     assert entries[0]["scenario"] == "override"
     assert entries[0]["content"] == {"type": "text", "text": "Selected GOOGL"}
 
-    artifact = _output_json(
+    format = _output_json(
         _invoke(
             [
                 "query",
                 str(bundle_root),
-                "artifacts",
+                "formats",
                 "--one",
                 "--scenario",
                 "override",
                 "--value",
                 "title",
-                "--artifact",
+                "--format",
                 "text",
             ]
         )
     )
-    assert artifact["scenario"] == "override"
-    assert artifact["entry_path"]
+    assert format["scenario"] == "override"
+    assert format["entry_path"]
 
     file = _output_json(
         _invoke(
@@ -424,7 +424,7 @@ def test_cli_query_progressive_bundle_commands(tmp_path: Path) -> None:
                 "override",
                 "--value",
                 "title",
-                "--artifact",
+                "--format",
                 "text",
             ]
         )

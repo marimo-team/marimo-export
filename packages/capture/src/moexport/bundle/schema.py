@@ -42,13 +42,13 @@ class CaptureRecord(BundleSchemaModel):
 
 class ManifestValue(BundleSchemaModel):
     source: JsonObject
-    artifacts: list[str]
+    formats: list[str]
 
 
 class ManifestArtifact(BundleSchemaModel):
     """Manifest form of `Artifact`.
 
-    `format_id` identifies the portable payload format. The authored artifact
+    `format_id` identifies the portable payload format. The authored format
     name lives in the containing value map.
     """
 

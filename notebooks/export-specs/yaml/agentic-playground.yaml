@@ -5,7 +5,6 @@ scenarios:
       window: 6
       demand_bias: 0
       scenario_name: north_balanced
-    patches:
       region_picker.value: North
       mode_picker.value: balanced
   - id: coast_surge
@@ -14,24 +13,22 @@ scenarios:
       window: 5
       demand_bias: 7
       scenario_name: coast_surge
-    patches:
       region_picker.value: Coast
       mode_picker.value: surge
   - id: south_conserve
     state:
       region: South
       window:
-        type: code
-        expression: 3 + 5
+        code: 3 + 5
       demand_bias: -3
       scenario_name: south_conserve
-    patches:
       region_picker.value: South
       mode_picker.value: conserve
 values:
   summary:
-    source: { def: summary }
-    artifacts:
+    source:
+      def: summary
+    formats:
       json:
         export:
           type: code
@@ -57,8 +54,9 @@ values:
                     },
                 )
   records:
-    source: { def: rows }
-    artifacts:
+    source:
+      def: rows
+    formats:
       json:
         export:
           type: code
@@ -84,8 +82,9 @@ values:
                     },
                 )
   sparkline:
-    source: { def: sparkline_svg }
-    artifacts:
+    source:
+      def: sparkline_svg
+    formats:
       svg:
         export:
           type: code
@@ -107,8 +106,9 @@ values:
                     },
                 )
   note:
-    source: { def: market_note }
-    artifacts:
+    source:
+      def: market_note
+    formats:
       html:
         export:
           type: code

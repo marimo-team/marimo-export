@@ -16,7 +16,7 @@ from tempfile import TemporaryDirectory
 from typing import Any, cast
 
 from markdownify import markdownify as md
-from moexport.notebook import NotebookReference, NotebookRunOptions, export_notebook
+from moexport.notebook import NotebookReference, NotebookRunOptions, capture_notebook
 from moexport.query import open_export
 
 NOTEBOOK_MARKDOWN_VALUE = "notebook"
@@ -43,7 +43,6 @@ def notebook_markdown_spec(
     *,
     scenario_id: str = "default",
     state: Mapping[str, Any] | None = None,
-    patches: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Return a spec that captures every notebook cell as a linear snapshot."""
 
@@ -51,15 +50,12 @@ def notebook_markdown_spec(
         "id": scenario_id,
         "state": dict(state or {}),
     }
-    if patches:
-        scenario["patches"] = dict(patches)
-
     return {
         "scenarios": [scenario],
         "values": {
             NOTEBOOK_MARKDOWN_VALUE: {
                 "source": {"snapshot": True},
-                "artifacts": {
+                "formats": {
                     NOTEBOOK_MARKDOWN_FORMAT: {
                         "export": {
                             "type": "ref",
@@ -76,13 +72,12 @@ def notebook_markdown_spec(
     }
 
 
-def export_notebook_markdown(
+def capture_notebook_markdown(
     notebook: NotebookReference,
     output_dir: str | Path,
     *,
     scenario_id: str = "default",
     state: Mapping[str, Any] | None = None,
-    patches: Mapping[str, Any] | None = None,
     to: str | Path | None = None,
     run: NotebookRunOptions | None = None,
     title: str | None = None,
@@ -93,10 +88,9 @@ def export_notebook_markdown(
     spec = notebook_markdown_spec(
         scenario_id=scenario_id,
         state=state,
-        patches=patches,
     )
     if to is not None:
-        result = export_notebook(notebook, spec, to=to, run=run)
+        result = capture_notebook(notebook, spec, to=to, run=run)
         root = Path(result.bundle_path).parent.parent
         return write_markdown_from_bundle(
             root,
@@ -107,7 +101,7 @@ def export_notebook_markdown(
         )
 
     with TemporaryDirectory(prefix="moexport-markdown-") as directory:
-        result = export_notebook(notebook, spec, to=directory, run=run)
+        result = capture_notebook(notebook, spec, to=directory, run=run)
         root = Path(result.bundle_path).parent.parent
         return write_markdown_from_bundle(
             root,
@@ -127,13 +121,13 @@ def write_markdown_from_bundle(
     title: str | None = None,
     inline_html_bytes: int = _DEFAULT_INLINE_HTML_BYTES,
 ) -> MarkdownExportResult:
-    """Read a notebook snapshot artifact from a bundle and write Markdown."""
+    """Read a notebook snapshot format from a bundle and write Markdown."""
 
     bundle = open_export(bundle_root).bundle(bundle_id)
     entry = bundle.entry(
         scenario=scenario_id,
         value=NOTEBOOK_MARKDOWN_VALUE,
-        format_id=NOTEBOOK_MARKDOWN_FORMAT,
+        format=NOTEBOOK_MARKDOWN_FORMAT,
     )
     path = entry.get("path")
     if not isinstance(path, str):

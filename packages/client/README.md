@@ -3,28 +3,28 @@
 TypeScript client for asking a running marimo server to produce a static export.
 
 Use this package when JavaScript can reach a live marimo session. It sends
-capture code through marimo's scratchpad API and returns either a written export
+export code through marimo's scratchpad API and returns either a written export
 result or an in-memory archive. Finished bundle reading belongs to
 `@marimo-team/export-reader`.
 
-## Capture Through The Server Client
+## Export Through The Server Client
 
 ```ts
-import { createExportClient } from "@marimo-team/export-client";
+import { createMarimoExportClient } from "@marimo-team/export-client";
 
-const client = createExportClient({
+const client = createMarimoExportClient({
   server: "http://localhost:2718",
 });
 
-const result = await client.capture(spec, {
+const result = await client.export(spec, {
   notebook: "notebooks/finance.py",
-  to: "examples/vanilla-vite/public/export",
+  outputRoot: "examples/vanilla-vite/public/export",
   runtime: "preinstalled",
 });
 ```
 
 If `notebook` is provided and no matching session is running, the client opens a
-marimo websocket session for that notebook before dispatching capture code. The
+marimo websocket session for that notebook before dispatching export code. The
 promise resolves after `moexport` writes the export root and returns manifest and
 invocation paths.
 
@@ -36,35 +36,35 @@ kernel and fails with a clear error when it is missing.
 Install explicitly when the caller owns the package source:
 
 ```ts
-await client.capture(spec, {
+await client.export(spec, {
   notebook: "notebooks/finance.py",
   runtime: {
-    install: "moexport[all]",
+    package: "moexport[all]",
     force: true,
     manager: "uv",
   },
 });
 ```
 
-`install` is passed to marimo's package installer. `module` defaults to
+`package` is passed to marimo's package installer. `module` defaults to
 `"moexport"` for the post-install import check.
 
-## Archive Capture
+## Archive Export
 
 ```ts
-import { createExportClient } from "@marimo-team/export-client";
-import { exportArchive, openExport } from "@marimo-team/export-reader";
+import { createMarimoExportClient } from "@marimo-team/export-client";
+import { readExportArchive } from "@marimo-team/export-reader";
 
-const client = createExportClient({ server: "http://localhost:2718" });
-const archive = await client.captureArchive(spec, {
+const client = createMarimoExportClient({ server: "http://localhost:2718" });
+const archive = await client.archive(spec, {
   sessionId: "session-id",
-  executionTimeoutMs: 60_000,
+  timeoutMs: 60_000,
 });
 
-const exp = await openExport(exportArchive(archive.bytes));
+const exp = await readExportArchive({ bytes: archive.bytes });
 ```
 
-Archive capture returns zip bytes with media type
+Archive export returns zip bytes with media type
 `application/vnd.marimo.static-export+zip`.
 
 ## Browser Entry
@@ -74,13 +74,13 @@ generated OpenAPI dependency and uses plain `fetch` plus marimo HTTP/WebSocket
 endpoints.
 
 ```ts
-import { createExportClient } from "@marimo-team/export-client/browser";
+import { createMarimoExportClient } from "@marimo-team/export-client/browser";
 
-const client = createExportClient({
+const client = createMarimoExportClient({
   server: "http://localhost:2718",
 });
 
-const archive = await client.captureArchive(spec, {
+const archive = await client.archive(spec, {
   notebook: "notebooks/queueing_lab.py",
   runtime: "preinstalled",
 });
@@ -88,9 +88,9 @@ const archive = await client.captureArchive(spec, {
 
 ## API Surface
 
-### `createExportClient(options)`
+### `createMarimoExportClient(options)`
 
-Creates an `ExportClient`.
+Creates a `MarimoExportClient`.
 
 - `options.server`: marimo server URL.
 - `options.fetch`: Fetch implementation. Defaults to global `fetch`.
@@ -98,36 +98,36 @@ Creates an `ExportClient`.
   authentication inputs passed to marimo endpoints.
 - `options.WebSocket`: WebSocket constructor used when opening a notebook.
 
-### `client.capture(spec, options?)`
+### `client.export(spec, options?)`
 
 Writes a static export root through the target marimo session.
 
-- `spec`: `ExportSpecInput` with `scenarios`, `values`, and optional
+- `spec`: `ExportSpec` with `scenarios`, `values`, and optional
   `provenance`.
 - `options.notebook`: Notebook path or name to open or match.
 - `options.sessionId`: Existing marimo session id. Takes precedence over
   `notebook`.
-- `options.to`: Output root path seen by the Python kernel.
+- `options.outputRoot`: Output root path seen by the Python kernel.
 - `options.runtime`: `"preinstalled"` or an explicit install request.
-- `options.executionTimeoutMs`: Scratchpad execution timeout.
+- `options.timeoutMs`: Scratchpad execution timeout.
 
 Returns bundle path, manifest path, invocation trace paths, manifest JSON,
 invocation JSON, and the resolved session.
 
-### `client.captureArchive(spec, options?)`
+### `client.archive(spec, options?)`
 
-Runs the same capture and returns zipped export bytes instead of relying on a
-public output directory.
+Runs the same export and returns zipped export bytes for API routes that stream
+the bundle to a caller.
 
-### `client.listSessions()`
+### `client.sessions.list()`
 
 Returns running marimo sessions from `/api/home/running_notebooks`.
 
-### `client.listWorkspaceNotebooks()`
+### `client.notebooks.list()`
 
 Returns marimo notebook files from the workspace file API.
 
-### `client.marimo`
+### `client.raw`
 
 Raw marimo transport used by the high-level methods. Use it only for endpoints
 outside the export client contract.

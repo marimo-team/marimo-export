@@ -13,7 +13,7 @@ from moexport.exporters import core
 class CapturingExporterContext:
     scenario_id = "default"
     value_name = "value"
-    artifact_name = "artifact"
+    format_name = "json"
 
     def __init__(self) -> None:
         self.blobs: dict[str, bytes] = {}

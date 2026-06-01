@@ -53,8 +53,7 @@
           "state": {
             "region": "South",
             "window": {
-              "type": "code",
-              "expression": "3 + 5"
+              "code": "3 + 5"
             },
             "demand_bias": -3,
             "scenario_name": "south_conserve",
@@ -73,7 +72,7 @@
             "type": "definition",
             "name": "summary"
           },
-          "artifacts": {
+          "formats": {
             "json": {
               "export": {
                 "type": "code",
@@ -87,7 +86,7 @@
             "type": "definition",
             "name": "rows"
           },
-          "artifacts": {
+          "formats": {
             "json": {
               "export": {
                 "type": "code",
@@ -101,7 +100,7 @@
             "type": "definition",
             "name": "sparkline_svg"
           },
-          "artifacts": {
+          "formats": {
             "svg": {
               "export": {
                 "type": "code",
@@ -115,7 +114,7 @@
             "type": "definition",
             "name": "market_note"
           },
-          "artifacts": {
+          "formats": {
             "html": {
               "export": {
                 "type": "code",
@@ -1198,8 +1197,7 @@
       "declared_state": {
         "region": "South",
         "window": {
-          "type": "code",
-          "expression": "3 + 5"
+          "code": "3 + 5"
         },
         "demand_bias": -3,
         "scenario_name": "south_conserve",

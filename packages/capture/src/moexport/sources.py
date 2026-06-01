@@ -247,9 +247,7 @@ def normalize_source(value: object) -> SourceSpec:
     """Parse public source shorthand into a typed source record."""
 
     if isinstance(value, str):
-        raise ValueError(
-            "value source must be typed, for example {expr: 'df'} or {def: 'df'}"
-        )
+        return ExpressionSource(expression=value)
     if not isinstance(value, Mapping):
         return SOURCE_SPEC_ADAPTER.validate_python(value)
 

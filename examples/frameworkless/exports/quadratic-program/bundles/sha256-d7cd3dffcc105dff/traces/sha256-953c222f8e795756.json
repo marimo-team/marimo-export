@@ -34,8 +34,7 @@
           "id": "round-bowl",
           "state": {
             "P": {
-              "type": "code",
-              "expression": "np.array([[3,0],[0,3]])"
+              "code": "np.array([[3,0],[0,3]])"
             }
           }
         },
@@ -43,8 +42,7 @@
           "id": "wide-valley",
           "state": {
             "P": {
-              "type": "code",
-              "expression": "np.array([[1.4,0],[0,4.8]])"
+              "code": "np.array([[1.4,0],[0,4.8]])"
             }
           }
         },
@@ -52,8 +50,7 @@
           "id": "tilted-ridge",
           "state": {
             "P": {
-              "type": "code",
-              "expression": "np.array([[5,2.2],[2.2,2.6]])"
+              "code": "np.array([[5,2.2],[2.2,2.6]])"
             }
           }
         },
@@ -61,8 +58,7 @@
           "id": "steep-x1",
           "state": {
             "P": {
-              "type": "code",
-              "expression": "np.array([[7,0.8],[0.8,2.2]])"
+              "code": "np.array([[7,0.8],[0.8,2.2]])"
             }
           }
         }
@@ -73,7 +69,7 @@
             "type": "expression",
             "expression": "{\n  \"P\": np.asarray(P, dtype=float).tolist(),\n  \"q\": np.asarray(q, dtype=float).tolist(),\n  \"G\": np.asarray(G, dtype=float).tolist(),\n  \"h\": np.asarray(h, dtype=float).tolist(),\n  \"x\": np.asarray(x.value, dtype=float).tolist(),\n  \"objective\": float(problem.value),\n  \"dual\": np.asarray(problem.constraints[0].dual_value, dtype=float).tolist(),\n  \"slack\": np.asarray(h - G @ x.value, dtype=float).tolist(),\n  \"eigenvalues\": np.linalg.eigvalsh(P).tolist(),\n  \"condition_number\": float(np.linalg.cond(P)),\n}"
           },
-          "artifacts": {
+          "formats": {
             "json": {
               "export": {
                 "type": "ref",
@@ -94,7 +90,7 @@
             "type": "definition",
             "name": "P_widget"
           },
-          "artifacts": {
+          "formats": {
             "bundle": {
               "export": {
                 "type": "ref",
@@ -837,8 +833,7 @@
       },
       "declared_state": {
         "P": {
-          "type": "code",
-          "expression": "np.array([[3,0],[0,3]])"
+          "code": "np.array([[3,0],[0,3]])"
         }
       }
     },
@@ -1214,8 +1209,7 @@
       },
       "declared_state": {
         "P": {
-          "type": "code",
-          "expression": "np.array([[7,0.8],[0.8,2.2]])"
+          "code": "np.array([[7,0.8],[0.8,2.2]])"
         }
       }
     },
@@ -1591,8 +1585,7 @@
       },
       "declared_state": {
         "P": {
-          "type": "code",
-          "expression": "np.array([[5,2.2],[2.2,2.6]])"
+          "code": "np.array([[5,2.2],[2.2,2.6]])"
         }
       }
     },
@@ -1968,8 +1961,7 @@
       },
       "declared_state": {
         "P": {
-          "type": "code",
-          "expression": "np.array([[1.4,0],[0,4.8]])"
+          "code": "np.array([[1.4,0],[0,4.8]])"
         }
       }
     }

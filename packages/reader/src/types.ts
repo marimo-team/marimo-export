@@ -14,13 +14,13 @@ export interface BlobRef {
   sha256: string;
 }
 
-export interface ArtifactDataBundle {
+export interface FormatDataBundle {
   type: "bundle";
   files: Record<string, BlobRef>;
   entry: string | null;
 }
 
-export type ArtifactData = ArtifactDataBundle;
+export type FormatData = FormatDataBundle;
 
 export interface NotebookRecord {
   name: string | null;
@@ -45,23 +45,23 @@ export interface CaptureRecord {
   request_sha256: string;
 }
 
-export interface ArtifactRecord {
+export interface FormatRecord {
   format_id: string;
   media_type: string | null;
-  data: ArtifactData;
+  data: FormatData;
   metadata: JsonObject | null;
 }
 
 export interface ManifestValue {
   source: SourceRecord;
-  artifacts: string[];
+  formats: string[];
 }
 
 export interface ManifestScenario {
   id: string;
   state: JsonObject;
   declared_state?: JsonObject | null;
-  values: Record<string, Record<string, ArtifactRecord>>;
+  values: Record<string, Record<string, FormatRecord>>;
 }
 
 export interface ProvenanceRecord {
@@ -98,42 +98,16 @@ export interface ExportRootIndex {
   bundles: ExportRootBundle[];
 }
 
-export interface ArtifactSelection {
+export interface FormatSelection {
   scenario: string;
   value: string;
-  artifact: string;
-}
-
-export type ExportSourceInput =
-  | {
-      kind: "root";
-      root: string | URL;
-      index?: string;
-      manifest?: string;
-      fetch?: FetchLike;
-    }
-  | {
-      kind: "directory";
-      root: string;
-      index?: string;
-      manifest?: string;
-      readFile: LocalReadFile;
-      url?: LocalUrlResolver;
-    }
-  | {
-      kind: "archive";
-      bytes: ExportArchiveInput;
-      manifest?: string;
-    };
-
-export interface OpenExportOptions {
-  loaders?: ArtifactLoader[];
+  format: string;
 }
 
 export interface HostedManifestOptions {
   root: string | URL;
   manifest: string;
-  loaders?: ArtifactLoader[];
+  loaders?: FormatLoader[];
   fetch?: FetchLike;
 }
 
@@ -146,14 +120,14 @@ export interface HostedIndexOptions {
 export interface HostedLatestOptions {
   root: string | URL;
   index?: string;
-  loaders?: ArtifactLoader[];
+  loaders?: FormatLoader[];
   fetch?: FetchLike;
 }
 
 export interface DirectoryManifestOptions {
   root: string;
   manifest: string;
-  loaders?: ArtifactLoader[];
+  loaders?: FormatLoader[];
   readFile: LocalReadFile;
   url?: LocalUrlResolver;
 }
@@ -161,7 +135,8 @@ export interface DirectoryManifestOptions {
 export interface DirectoryLatestOptions {
   root: string;
   index?: string;
-  loaders?: ArtifactLoader[];
+  manifest?: string;
+  loaders?: FormatLoader[];
   readFile: LocalReadFile;
   url?: LocalUrlResolver;
 }
@@ -171,36 +146,48 @@ export type ExportArchiveInput = ArrayBuffer | ArrayBufferView | Blob;
 export interface ArchiveManifestOptions {
   bytes: ExportArchiveInput;
   manifest?: string;
-  loaders?: ArtifactLoader[];
+  loaders?: FormatLoader[];
 }
 
 export interface StaticExport {
   manifest: ExportManifest;
   scenarios(): string[];
-  scenario(id: string): ManifestScenario;
+  scenario(id: string): ExportScenario;
+  scenarioRecord(id: string): ManifestScenario;
   scenarioRecords(): ManifestScenario[];
   values(): string[];
-  artifacts(value: string): string[];
-  artifact(selection: ArtifactSelection): ArtifactHandle;
+  formats(value: string): string[];
+  get(selection: FormatSelection): FormatHandle;
+}
+
+export interface ExportScenario {
+  id: string;
+  record: ManifestScenario;
+  state: JsonObject;
+  values(): string[];
+  formats(value: string): string[];
+  get(value: string, format: string): FormatHandle;
 }
 
 export interface StaticExportArchive extends StaticExport {
   dispose(): void;
 }
 
-export interface ArtifactHandle {
-  artifact: ArtifactRecord;
-  entry(): ArtifactFile;
-  file(key: string): ArtifactFile;
+export interface FormatHandle {
+  selection: FormatSelection;
+  record: FormatRecord;
+  entry(): FormatFile;
+  file(key: string): FormatFile;
   url(): string;
   fetch(init?: RequestInit): Promise<Response>;
   bytes(): Promise<Uint8Array>;
   text(): Promise<string>;
   json<T = unknown>(): Promise<T>;
-  load<T = unknown>(): Promise<T>;
+  load<T>(loader: FormatLoader<T>): Promise<T>;
+  load(): Promise<unknown>;
 }
 
-export interface ArtifactFile {
+export interface FormatFile {
   ref: BlobRef;
   url(): string;
   fetch(init?: RequestInit): Promise<Response>;
@@ -209,14 +196,23 @@ export interface ArtifactFile {
   json<T = unknown>(): Promise<T>;
 }
 
-export interface ArtifactLoaderContext {
-  artifact: ArtifactRecord;
-  selection: ArtifactSelection;
-  entry(): ArtifactFile;
-  file(key: string): ArtifactFile;
+export interface FormatLoaderContext {
+  record: FormatRecord;
+  selection: FormatSelection;
+  entry(): FormatFile;
+  file(key: string): FormatFile;
 }
 
-export interface ArtifactLoader<T = unknown> {
-  supports: string | readonly string[];
-  load(context: ArtifactLoaderContext): T | Promise<T>;
-}
+export type FormatLoaderSelector =
+  | {
+      formatId: string;
+      formatIds?: never;
+    }
+  | {
+      formatId?: never;
+      formatIds: readonly string[];
+    };
+
+export type FormatLoader<T = unknown> = FormatLoaderSelector & {
+  load(context: FormatLoaderContext): T | Promise<T>;
+};

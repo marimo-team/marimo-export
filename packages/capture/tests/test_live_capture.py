@@ -10,14 +10,13 @@ import pytest
 import moexport as mox
 import moexport.live_capture as live_capture
 from moexport.live_capture import (
-    LiveCapture,
+    CaptureClient,
     ScratchpadResult,
     execute_scratchpad,
     notebook_matches,
     parse_sse,
     post_json,
 )
-from moexport.request import resolve_export_request
 
 
 def _install_mock_transport(monkeypatch: pytest.MonkeyPatch, handler: Any) -> None:
@@ -144,20 +143,22 @@ def test_execute_scratchpad_reads_sse_stream(
     assert headers["marimo-server-token"] == "secret"
 
 
-def test_resolve_export_request_is_top_level_api() -> None:
-    assert mox.resolve_export_request is resolve_export_request
+def test_parse_spec_is_top_level_api() -> None:
+    assert mox.parse_spec(
+        {"values": {"summary": {"source": "summary", "formats": ["json"]}}}
+    )
 
 
 def test_live_capture_accepts_preinstalled_runtime_and_export_spec(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     captured: dict[str, Any] = {}
-    spec = mox.parse_export_spec(
+    spec = mox.parse_spec(
         {
             "values": {
                 "summary": {
                     "source": {"def": "summary"},
-                    "artifacts": ["json"],
+                    "formats": ["json"],
                 }
             }
         }
@@ -194,13 +195,13 @@ def test_live_capture_accepts_preinstalled_runtime_and_export_spec(
 
     monkeypatch.setattr(live_capture, "execute_scratchpad", execute)
 
-    result = LiveCapture("http://localhost:2718", runtime="preinstalled").export(
+    result = CaptureClient("http://localhost:2718", runtime="preinstalled").capture(
         spec,
         to="public/export",
     )
 
     assert result["session"]["sessionId"] == "session-1"
-    assert '\\"artifacts\\"' in captured["code"]
+    assert '\\"formats\\"' in captured["code"]
 
 
 def test_live_capture_rejects_invalid_runtime_before_install(
@@ -212,15 +213,15 @@ def test_live_capture_rejects_invalid_runtime_before_install(
         lambda **_kwargs: {"sessionId": "session-1", "path": "notebook.py"},
     )
 
-    capture = LiveCapture("http://localhost:2718", runtime=cast(Any, "bad"))
+    capture = CaptureClient("http://localhost:2718", runtime=cast(Any, "bad"))
 
     with pytest.raises(TypeError, match="runtime must be 'preinstalled'"):
-        capture.export(
+        capture.capture(
             {
                 "values": {
                     "summary": {
                         "source": {"def": "summary"},
-                        "artifacts": ["json"],
+                        "formats": ["json"],
                     }
                 }
             }

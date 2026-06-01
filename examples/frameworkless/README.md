@@ -24,17 +24,17 @@ http://localhost:3000/examples/frameworkless/
 ## Apps
 
 - `agentic-playground.html`: reads `notebooks/agentic_playground.py` exports.
-  The spec uses inline Python exporters for JSON, SVG, and HTML artifacts, and
+  The spec uses inline Python exporters for JSON, SVG, and HTML formats, and
   the page uses local loaders defined in the HTML file.
 - `queueing-lab.html`: reads `notebooks/queueing_lab.py` exports. It covers a
-  scenario matrix, JSON and HTML artifacts, Arrow and Parquet dataframes, and
+  scenario matrix, JSON and HTML formats, Arrow and Parquet dataframes, and
   Vega-Lite charts.
 - `quadratic-program.html`: reads a live notebook export captured from a
   quadratic-program tutorial. It mounts the exported `wigglystuff.Matrix`
   AnyWidget bundle and recomputes the 2D QP client-side.
 - `live-capture-archive.html`: builds a spec in browser JavaScript, asks a
   running marimo server to capture an archive, and opens the returned zip with
-  `openExport(exportArchive(...))`.
+  `readExportArchive(...)`.
 
 The static reader pages use a CDN import map for third-party dependencies. That
 keeps the examples browser-native while still reusing the local package
@@ -59,7 +59,7 @@ http://localhost:3000/examples/frameworkless/live-capture-archive.html
 ```
 
 The page imports `@marimo-team/export-client/browser`, creates a plain
-JavaScript spec object, calls `client.captureArchive(...)`, and reads the archive
+JavaScript spec object, calls `client.archive(...)`, and reads the archive
 with `@marimo-team/export-reader`.
 
 ## Regenerate Bundles

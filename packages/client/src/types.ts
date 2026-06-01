@@ -1,6 +1,6 @@
 export const EXPORT_ARCHIVE_MEDIA_TYPE = "application/vnd.marimo.static-export+zip";
 
-export type CaptureFetch = (request: Request) => Promise<Response>;
+export type ExportTransportFetch = (request: Request) => Promise<Response>;
 export type JsonPrimitive = string | number | boolean | null;
 export type JsonValue =
   | JsonPrimitive
@@ -8,34 +8,32 @@ export type JsonValue =
   | { readonly [key: string]: JsonValue };
 export type JsonObject = { readonly [key: string]: JsonValue };
 
-export interface CaptureClientOptionsBase {
+export interface ExportTransportOptions {
   server: string | URL;
-  fetch?: CaptureFetch;
+  fetch?: ExportTransportFetch;
   headers?: HeadersInit;
   token?: string;
   serverToken?: string;
   WebSocket?: typeof WebSocket;
 }
 
-export interface CapturePostOptions {
+export interface ExportTransportPostOptions {
   params?: {
     header?: Record<string, string>;
   };
   body?: unknown;
 }
 
-export interface CapturePostResult {
+export interface ExportTransportPostResult {
   response: Response;
   data: unknown;
 }
 
-export interface CaptureClient {
-  POST(path: string, options?: CapturePostOptions): Promise<CapturePostResult>;
+export interface MarimoExportTransport {
+  POST(path: string, options?: ExportTransportPostOptions): Promise<ExportTransportPostResult>;
   executeScratchpad(options: ExecuteScratchpadOptions): Promise<ScratchpadExecutionResult>;
   openNotebook(options: OpenNotebookOptions): Promise<RunningNotebook>;
 }
-
-export type ArchiveCaptureClient = CaptureClient;
 
 export interface RunningNotebook {
   sessionId: string;
@@ -50,15 +48,15 @@ export interface WorkspaceNotebook {
   path: string;
 }
 
-export interface CaptureOptions {
+export interface ExportOptions {
   sessionId?: string;
   notebook?: string;
-  to?: string;
+  outputRoot?: string;
   runtime?: RuntimeOption;
-  executionTimeoutMs?: number;
+  timeoutMs?: number;
 }
 
-export interface CaptureResult {
+export interface ExportResult {
   session: RunningNotebook;
   bundlePath: string;
   manifestPath: string;
@@ -68,7 +66,7 @@ export interface CaptureResult {
   invocation: Record<string, unknown>;
 }
 
-export interface CaptureArchiveResult {
+export interface ExportArchiveResult {
   bytes: Uint8Array;
   mediaType: typeof EXPORT_ARCHIVE_MEDIA_TYPE;
   session: RunningNotebook;
@@ -89,63 +87,13 @@ export interface OpenNotebookOptions {
 export type RuntimeOption = "preinstalled" | RuntimeInstallOptions;
 
 export interface RuntimeInstallOptions {
-  install: string;
+  package: string;
   module?: string;
   manager?: "uv" | "pip" | string;
   source?: "kernel" | "server";
   force?: boolean;
   timeoutMs?: number;
   pollIntervalMs?: number;
-}
-
-export type SourceSpecInput =
-  | { def: string }
-  | { expr: string }
-  | { cell: string | number | JsonObject; on_error?: "raise" | "record" }
-  | { snapshot?: JsonObject; notebook?: JsonObject }
-  | { report: JsonObject }
-  | ({ type: string } & JsonObject);
-
-export interface RefExportInput {
-  type: "ref";
-  ref: string;
-}
-
-export interface CodeExportInput {
-  type: "code";
-  code: string;
-}
-
-export type ExportCallableInput = RefExportInput | CodeExportInput;
-
-export interface ArtifactSpecInput {
-  export: ExportCallableInput;
-  options?: JsonObject;
-}
-
-export type ArtifactInput =
-  | string
-  | { artifact: string; options?: JsonObject }
-  | Record<string, JsonObject | ArtifactSpecInput | null>;
-
-export interface ValueSpecInput {
-  source: SourceSpecInput;
-  artifacts: Record<string, ArtifactSpecInput | JsonObject | null> | ArtifactInput[];
-}
-
-export interface ScenarioSpecInput {
-  id?: string;
-  state?: JsonObject;
-  patches?: JsonObject;
-}
-
-export interface ExportSpecInput {
-  scenarios?: ScenarioSpecInput[];
-  provenance?: {
-    source?: "none" | "hash" | "source";
-    spec?: "none" | "hash" | "embed";
-  };
-  values: Record<string, ValueSpecInput>;
 }
 
 export interface ScratchpadExecutionResult {

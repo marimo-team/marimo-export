@@ -31,36 +31,36 @@ def catalog_values(rows: list[JsonObject]) -> list[JsonObject]:
         name = str(row["name"])
         record = by_name.setdefault(
             name,
-            {"name": name, "sources": [], "artifacts": [], "bundles": []},
+            {"name": name, "sources": [], "formats": [], "bundles": []},
         )
         append_unique(record["sources"], row.get("source"))
-        append_many_unique(record["artifacts"], row.get("artifacts", []))
+        append_many_unique(record["formats"], row.get("formats", []))
         append_unique(record["bundles"], row.get("bundle"))
     return sorted(by_name.values(), key=lambda record: record["name"])
 
 
-def catalog_artifacts(artifacts: list[JsonObject]) -> list[JsonObject]:
+def catalog_formats(formats: list[JsonObject]) -> list[JsonObject]:
     by_key: dict[tuple[str, str], JsonObject] = {}
-    for artifact in artifacts:
-        key = (str(artifact["value"]), str(artifact["artifact"]))
+    for format in formats:
+        key = (str(format["value"]), str(format["format"]))
         record = by_key.setdefault(
             key,
             {
-                "value": artifact["value"],
-                "artifact": artifact["artifact"],
+                "value": format["value"],
+                "format": format["format"],
                 "format_ids": [],
                 "media_types": [],
                 "bundles": [],
                 "scenarios": [],
             },
         )
-        append_unique(record["format_ids"], artifact.get("format_id"))
-        append_unique(record["media_types"], artifact.get("media_type"))
-        append_unique(record["bundles"], artifact.get("bundle"))
-        append_unique(record["scenarios"], artifact.get("scenario"))
+        append_unique(record["format_ids"], format.get("format_id"))
+        append_unique(record["media_types"], format.get("media_type"))
+        append_unique(record["bundles"], format.get("bundle"))
+        append_unique(record["scenarios"], format.get("scenario"))
 
     return sorted(
-        by_key.values(), key=lambda record: (record["value"], record["artifact"])
+        by_key.values(), key=lambda record: (record["value"], record["format"])
     )
 
 
@@ -154,7 +154,7 @@ def dedupe_bundle_files(rows: list[JsonObject]) -> list[JsonObject]:
             "state",
             "value",
             "source",
-            "artifact",
+            "format",
             "format_id",
             "file",
         ),
@@ -170,7 +170,7 @@ def dedupe_export_files(rows: list[JsonObject]) -> list[JsonObject]:
             "state",
             "value",
             "source",
-            "artifact",
+            "format",
             "format_id",
             "file",
         ),

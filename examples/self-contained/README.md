@@ -15,10 +15,10 @@ the core package only for capture/query primitives:
 1. Build a spec whose value source is `{snapshot: true}`.
 2. Export it through `moexport.exporters.notebook:linear`.
 3. Read the finished bundle with `moexport.open_export`.
-4. Materialize the linear notebook artifact as Markdown and static media from
+4. Materialize the linear notebook format as Markdown and static media from
    this example's `notebook_markdown.py`.
 
-Regenerate the finance artifact from the repository root:
+Regenerate the finance export from the repository root:
 
 ```bash
 uv run --with-requirements examples/self-contained/requirements.txt \
@@ -30,8 +30,8 @@ uv run --with-requirements examples/self-contained/requirements.txt \
   --title "Finance notebook static review"
 ```
 
-`finance-state.json` contains separate `state` and `patches` objects. `state`
-overrides notebook definitions, and `patches` applies dotted object paths.
+`finance-state.json` contains one `state` object. Plain keys override notebook
+definitions, and dotted keys patch object attributes.
 
 Preview it as HTML:
 

@@ -1,18 +1,19 @@
 import type {
-  ArtifactHandle,
-  ArtifactFile,
-  ArtifactLoader,
-  ArtifactLoaderContext,
-  ArtifactRecord,
-  ArtifactSelection,
+  FormatHandle,
+  FormatFile,
+  FormatLoader,
+  FormatLoaderContext,
+  FormatLoaderSelector,
+  FormatRecord,
+  FormatSelection,
   ArchiveManifestOptions,
   BlobRef,
   DirectoryLatestOptions,
   DirectoryManifestOptions,
+  ExportScenario,
   ExportArchiveInput,
   ExportManifest,
   ExportRootIndex,
-  ExportSourceInput,
   FetchLike,
   HostedIndexOptions,
   HostedLatestOptions,
@@ -21,7 +22,6 @@ import type {
   LocalReadFileResult,
   LocalUrlResolver,
   ManifestScenario,
-  OpenExportOptions,
   StaticExport,
   StaticExportArchive,
 } from "./types.js";
@@ -29,84 +29,30 @@ import { unzipSync } from "fflate";
 import { safeBundlePath, validateExportManifest, validateExportRootIndex } from "./schema.js";
 
 const DEFAULT_ROOT_INDEX = "index.json";
-type ExportRootInput = Extract<ExportSourceInput, { kind: "root" }>;
-type ExportDirectoryInput = Extract<ExportSourceInput, { kind: "directory" }>;
-type ExportArchiveSourceInput = Extract<ExportSourceInput, { kind: "archive" }>;
 
-export function exportRoot(
-  root: string | URL,
-  options: Omit<ExportRootInput, "kind" | "root"> = {},
-): ExportRootInput {
-  return { kind: "root", root, ...options };
+export function readLatestExport(options: HostedLatestOptions): Promise<StaticExport> {
+  return openLatestHostedExport(options);
 }
 
-export function exportDirectory(
-  root: string,
-  options: Omit<ExportDirectoryInput, "kind" | "root">,
-): ExportDirectoryInput {
-  return { kind: "directory", root, ...options };
+export function readExportManifest(options: HostedManifestOptions): Promise<StaticExport> {
+  return openHostedManifest(options);
 }
 
-export function exportArchive(
-  bytes: ExportArchiveInput,
-  options: Omit<ExportArchiveSourceInput, "kind" | "bytes"> = {},
-): ExportArchiveSourceInput {
-  return { kind: "archive", bytes, ...options };
-}
-
-export async function openExport(
-  source: ExportArchiveSourceInput,
-  options?: OpenExportOptions,
-): Promise<StaticExportArchive>;
-export async function openExport(
-  source: ExportRootInput | ExportDirectoryInput,
-  options?: OpenExportOptions,
-): Promise<StaticExport>;
-export async function openExport(
-  source: ExportSourceInput,
-  options: OpenExportOptions = {},
-): Promise<StaticExport | StaticExportArchive> {
-  if (source.kind === "root") {
-    if (source.manifest) {
-      return openHostedManifest({
-        root: source.root,
-        manifest: source.manifest,
-        ...(options.loaders !== undefined ? { loaders: options.loaders } : {}),
-        ...(source.fetch !== undefined ? { fetch: source.fetch } : {}),
-      });
-    }
-    return openLatestHostedExport({
-      root: source.root,
-      ...(source.index !== undefined ? { index: source.index } : {}),
+export function readExportDirectory(options: DirectoryLatestOptions): Promise<StaticExport> {
+  if (options.manifest) {
+    return openLocalManifest({
+      root: options.root,
+      manifest: options.manifest,
+      readFile: options.readFile,
       ...(options.loaders !== undefined ? { loaders: options.loaders } : {}),
-      ...(source.fetch !== undefined ? { fetch: source.fetch } : {}),
+      ...(options.url !== undefined ? { url: options.url } : {}),
     });
   }
+  return openLatestLocalExport(options);
+}
 
-  if (source.kind === "directory") {
-    if (source.manifest) {
-      return openLocalManifest({
-        root: source.root,
-        manifest: source.manifest,
-        readFile: source.readFile,
-        ...(options.loaders !== undefined ? { loaders: options.loaders } : {}),
-        ...(source.url !== undefined ? { url: source.url } : {}),
-      });
-    }
-    return openLatestLocalExport({
-      root: source.root,
-      readFile: source.readFile,
-      ...(source.index !== undefined ? { index: source.index } : {}),
-      ...(options.loaders !== undefined ? { loaders: options.loaders } : {}),
-      ...(source.url !== undefined ? { url: source.url } : {}),
-    });
-  }
-
-  return openArchiveManifest({
-    bytes: source.bytes,
-    ...(source.manifest !== undefined ? { manifest: source.manifest } : {}),
-    ...(options.loaders !== undefined ? { loaders: options.loaders } : {}),
-  });
+export function readExportArchive(options: ArchiveManifestOptions): Promise<StaticExportArchive> {
+  return openArchiveManifest(options);
 }
 
 async function loadRootIndex(options: HostedIndexOptions): Promise<ExportRootIndex> {
@@ -200,43 +146,43 @@ async function openArchiveManifest(options: ArchiveManifestOptions): Promise<Sta
   });
 }
 
-export function defineLoader<T>(loader: ArtifactLoader<T>): ArtifactLoader<T> {
+export function defineLoader<T>(loader: FormatLoader<T>): FormatLoader<T> {
   return loader;
 }
 
-export function jsonLoader<T = unknown>(formatIds: string | readonly string[]): ArtifactLoader<T> {
+export function jsonLoader<T = unknown>(formatIds: string | readonly string[]): FormatLoader<T> {
   return defineLoader({
-    supports: formatIds,
+    ...loaderFormats(formatIds),
     load(context) {
       return context.entry().json<T>();
     },
   });
 }
 
-export function textLoader(formatIds: string | readonly string[]): ArtifactLoader<string> {
+export function textLoader(formatIds: string | readonly string[]): FormatLoader<string> {
   return defineLoader({
-    supports: formatIds,
+    ...loaderFormats(formatIds),
     load(context) {
       return context.entry().text();
     },
   });
 }
 
-export function htmlLoader(formatIds: string | readonly string[]): ArtifactLoader<string> {
+export function htmlLoader(formatIds: string | readonly string[]): FormatLoader<string> {
   return textLoader(formatIds);
 }
 
 interface ReaderOptions {
   manifest: ExportManifest;
   source: ExportSource;
-  loaders: ArtifactLoader[];
+  loaders: FormatLoader[];
 }
 
 class StaticExportReader implements StaticExport {
   readonly manifest: ExportManifest;
 
   readonly #source: ExportSource;
-  readonly #loaders: ArtifactLoader[];
+  readonly #loaders: FormatLoader[];
 
   constructor(options: ReaderOptions) {
     this.manifest = options.manifest;
@@ -248,12 +194,15 @@ class StaticExportReader implements StaticExport {
     return this.manifest.scenarios.map((scenario) => scenario.id);
   }
 
-  scenario(id: string): ManifestScenario {
-    const scenario = this.manifest.scenarios.find((candidate) => candidate.id === id);
-    if (!scenario) {
-      throw new Error(`Export scenario ${JSON.stringify(id)} does not exist.`);
-    }
-    return cloneJson(scenario);
+  scenario(id: string): ExportScenario {
+    return new StaticExportScenario({
+      scenario: this.scenarioRecord(id),
+      reader: this,
+    });
+  }
+
+  scenarioRecord(id: string): ManifestScenario {
+    return cloneJson(this.scenarioById(id));
   }
 
   scenarioRecords(): ManifestScenario[] {
@@ -264,22 +213,17 @@ class StaticExportReader implements StaticExport {
     return Object.keys(this.manifest.values);
   }
 
-  artifacts(value: string): string[] {
+  formats(value: string): string[] {
     const record = this.manifest.values[value];
     if (!record) {
       throw new Error(`Export value ${JSON.stringify(value)} does not exist.`);
     }
 
-    return [...record.artifacts];
+    return [...record.formats];
   }
 
-  artifact(selection: ArtifactSelection): ArtifactHandle {
-    const scenario = this.manifest.scenarios.find(
-      (candidate) => candidate.id === selection.scenario,
-    );
-    if (!scenario) {
-      throw new Error(`Export scenario ${JSON.stringify(selection.scenario)} does not exist.`);
-    }
+  get(selection: FormatSelection): FormatHandle {
+    const scenario = this.scenarioById(selection.scenario);
 
     const value = scenario.values[selection.value];
     if (!value) {
@@ -290,18 +234,62 @@ class StaticExportReader implements StaticExport {
       );
     }
 
-    const artifact = value[selection.artifact];
-    if (!artifact) {
+    const record = value[selection.format];
+    if (!record) {
       throw new Error(
-        `Export artifact ${JSON.stringify(selection.artifact)} does not exist for value ${JSON.stringify(selection.value)}.`,
+        `Export format ${JSON.stringify(selection.format)} does not exist for value ${JSON.stringify(selection.value)}.`,
       );
     }
 
-    return new BundleArtifactHandle({
-      artifact,
+    return new BundleFormatHandle({
+      record,
       selection,
       source: this.#source,
       loaders: this.#loaders,
+    });
+  }
+
+  private scenarioById(id: string): ManifestScenario {
+    const scenario = this.manifest.scenarios.find((candidate) => candidate.id === id);
+    if (!scenario) {
+      throw new Error(`Export scenario ${JSON.stringify(id)} does not exist.`);
+    }
+    return scenario;
+  }
+}
+
+interface ScenarioOptions {
+  scenario: ManifestScenario;
+  reader: StaticExportReader;
+}
+
+class StaticExportScenario implements ExportScenario {
+  readonly id: string;
+  readonly record: ManifestScenario;
+  readonly state: ManifestScenario["state"];
+
+  readonly #reader: StaticExportReader;
+
+  constructor(options: ScenarioOptions) {
+    this.id = options.scenario.id;
+    this.record = cloneJson(options.scenario);
+    this.state = cloneJson(options.scenario.state);
+    this.#reader = options.reader;
+  }
+
+  values(): string[] {
+    return Object.keys(this.record.values);
+  }
+
+  formats(value: string): string[] {
+    return this.#reader.formats(value);
+  }
+
+  get(value: string, format: string): FormatHandle {
+    return this.#reader.get({
+      scenario: this.id,
+      value,
+      format,
     });
   }
 }
@@ -320,39 +308,39 @@ class StaticExportArchiveReader extends StaticExportReader implements StaticExpo
 }
 
 interface HandleOptions {
-  artifact: ArtifactRecord;
-  selection: ArtifactSelection;
+  record: FormatRecord;
+  selection: FormatSelection;
   source: ExportSource;
-  loaders: ArtifactLoader[];
+  loaders: FormatLoader[];
 }
 
-class BundleArtifactHandle implements ArtifactHandle, ArtifactLoaderContext {
-  readonly artifact: ArtifactRecord;
-  readonly selection: ArtifactSelection;
+class BundleFormatHandle implements FormatHandle, FormatLoaderContext {
+  readonly record: FormatRecord;
+  readonly selection: FormatSelection;
 
   readonly #source: ExportSource;
-  readonly #loaders: ArtifactLoader[];
+  readonly #loaders: FormatLoader[];
 
   constructor(options: HandleOptions) {
-    this.artifact = options.artifact;
+    this.record = options.record;
     this.selection = options.selection;
     this.#source = options.source;
     this.#loaders = options.loaders;
   }
 
-  entry(): ArtifactFile {
-    const selectedKey = this.artifact.data.entry;
+  entry(): FormatFile {
+    const selectedKey = this.record.data.entry;
     if (!selectedKey) {
       throw new Error(
-        `Artifact ${this.artifact.format_id} has no entry file. Pass an explicit file key.`,
+        `Format ${this.record.format_id} has no entry file. Pass an explicit file key.`,
       );
     }
     return this.file(selectedKey);
   }
 
-  file(key: string): ArtifactFile {
+  file(key: string): FormatFile {
     const ref = this.blob(key);
-    return new BundleArtifactFile({
+    return new BundleFormatFile({
       ref,
       selection: this.selection,
       source: this.#source,
@@ -380,49 +368,51 @@ class BundleArtifactHandle implements ArtifactHandle, ArtifactLoaderContext {
   }
 
   private blob(key: string): BlobRef {
-    const selectedKey = key ?? this.artifact.data.entry;
+    const selectedKey = key ?? this.record.data.entry;
     if (!selectedKey) {
       throw new Error(
-        `Artifact ${this.artifact.format_id} has no entry file. Pass an explicit file key.`,
+        `Format ${this.record.format_id} has no entry file. Pass an explicit file key.`,
       );
     }
 
-    const file = this.artifact.data.files[selectedKey];
+    const file = this.record.data.files[selectedKey];
     if (!file) {
       throw new Error(
-        `Artifact ${this.artifact.format_id} has no file named ${JSON.stringify(selectedKey)}.`,
+        `Format ${this.record.format_id} has no file named ${JSON.stringify(selectedKey)}.`,
       );
     }
 
     return file;
   }
 
-  async load<T = unknown>(): Promise<T> {
-    const loader = this.#loaders.find((candidate) =>
-      loaderSupports(candidate, this.artifact.format_id),
-    );
-    if (!loader) {
+  async load<T>(loader: FormatLoader<T>): Promise<T>;
+  async load(): Promise<unknown>;
+  async load<T>(loader?: FormatLoader<T>): Promise<T | unknown> {
+    const selectedLoader =
+      loader ??
+      this.#loaders.find((candidate) => loaderSupports(candidate, this.record.format_id));
+    if (!selectedLoader) {
       throw new Error(
-        `No loader registered for artifact format ${JSON.stringify(
-          this.artifact.format_id,
-        )}. Use .entry().url(), .entry().bytes(), .entry().text(), or .entry().json() directly, or pass a loader to openExport(...).`,
+        `No loader registered for format id ${JSON.stringify(
+          this.record.format_id,
+        )}. Use .entry().url(), .entry().bytes(), .entry().text(), .entry().json(), or pass a loader to .load(...).`,
       );
     }
 
-    return (await loader.load(this)) as T;
+    return selectedLoader.load(this);
   }
 }
 
 interface FileOptions {
   ref: BlobRef;
-  selection: ArtifactSelection;
+  selection: FormatSelection;
   source: ExportSource;
 }
 
-class BundleArtifactFile implements ArtifactFile {
+class BundleFormatFile implements FormatFile {
   readonly ref: BlobRef;
 
-  readonly #selection: ArtifactSelection;
+  readonly #selection: FormatSelection;
   readonly #source: ExportSource;
 
   constructor(options: FileOptions) {
@@ -461,7 +451,7 @@ class BundleArtifactFile implements ArtifactFile {
       return JSON.parse(await this.text()) as T;
     } catch (error) {
       throw new Error(
-        `Failed to parse artifact JSON for ${this.#selection.scenario}/${this.#selection.value}/${this.#selection.artifact}.`,
+        `Failed to parse format JSON for ${this.#selection.scenario}/${this.#selection.value}/${this.#selection.format}.`,
         { cause: error },
       );
     }
@@ -608,7 +598,7 @@ class ArchiveExportSource implements ExportSource {
     }
     if (typeof Blob === "undefined" || typeof URL.createObjectURL !== "function") {
       throw new Error(
-        "Archive-backed artifact URLs require Blob URL support. Use .bytes(), .text(), .json(), or .load() instead.",
+        "Archive-backed format URLs require Blob URL support. Use .bytes(), .text(), .json(), or .load() instead.",
       );
     }
 
@@ -659,10 +649,15 @@ class ArchiveExportSource implements ExportSource {
   }
 }
 
-function loaderSupports(loader: ArtifactLoader, formatId: string): boolean {
-  return Array.isArray(loader.supports)
-    ? loader.supports.includes(formatId)
-    : loader.supports === formatId;
+function loaderSupports(loader: FormatLoader, formatId: string): boolean {
+  if (loader.formatId === formatId) {
+    return true;
+  }
+  return loader.formatIds?.includes(formatId) ?? false;
+}
+
+function loaderFormats(formatIds: string | readonly string[]): FormatLoaderSelector {
+  return typeof formatIds === "string" ? { formatId: formatIds } : { formatIds };
 }
 
 function rootUrl(root: string | URL): URL {
@@ -706,7 +701,7 @@ async function archiveBytes(input: ExportArchiveInput): Promise<Uint8Array> {
     return new Uint8Array(await input.arrayBuffer());
   }
 
-  throw new TypeError("exportArchive requires ArrayBuffer, ArrayBufferView, or Blob bytes.");
+  throw new TypeError("readExportArchive requires ArrayBuffer, ArrayBufferView, or Blob bytes.");
 }
 
 async function localBytes(input: LocalReadFileResult): Promise<Uint8Array> {
@@ -750,7 +745,7 @@ async function verifyBlobRef(ref: BlobRef, bytes: Uint8Array): Promise<void> {
 async function sha256Hex(bytes: Uint8Array): Promise<string> {
   const subtle = globalThis.crypto?.subtle;
   if (!subtle) {
-    throw new Error("Artifact SHA-256 verification requires Web Crypto.");
+    throw new Error("Format file SHA-256 verification requires Web Crypto.");
   }
 
   const digest = await subtle.digest("SHA-256", arrayBuffer(bytes));
@@ -776,7 +771,7 @@ async function fetchJson(fetchImpl: FetchLike, url: string, label: string): Prom
 function globalFetch(): FetchLike {
   if (typeof globalThis.fetch !== "function") {
     throw new Error(
-      "openExport(exportRoot(...)) requires fetch. Pass a fetch implementation through exportRoot(...).",
+      "readLatestExport(...) requires fetch. Pass a fetch implementation in the options.",
     );
   }
 

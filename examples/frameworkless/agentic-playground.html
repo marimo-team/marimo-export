@@ -368,7 +368,7 @@
           <p class="eyebrow">Static marimo export</p>
           <h1>Agentic export playground</h1>
           <p class="lede">
-            A no-build browser app reading a marimo export bundle, resolving scenario artifacts
+            A no-build browser app reading a marimo export bundle, resolving scenario formats
             lazily, and hydrating them through page-local loaders.
           </p>
         </div>
@@ -437,7 +437,7 @@
       <section class="section">
         <div class="section-header">
           <h2>Bundle provenance</h2>
-          <span>Directly from manifest and artifact handles</span>
+          <span>Directly from manifest records and format handles</span>
         </div>
         <div class="provenance">
           <div>
@@ -453,8 +453,8 @@
             <code id="svg-href">--</code>
           </div>
           <div>
-            <span>Artifacts</span>
-            <code id="artifacts">--</code>
+            <span>Formats</span>
+            <code id="formats">--</code>
           </div>
         </div>
       </section>
@@ -465,17 +465,16 @@
     <script type="module">
       import {
         defineLoader,
-        exportRoot,
         htmlLoader,
         jsonLoader,
-        openExport,
+        readLatestExport,
       } from "../../packages/reader/dist/index.js";
 
       const root = "./exports/agentic-playground/";
       const $ = (selector) => document.querySelector(selector);
 
       const svgLoader = defineLoader({
-        supports: "playground.sparkline.svg.v1",
+        formatId: "playground.sparkline.svg.v1",
         async load(ctx) {
           const entry = ctx.entry();
           return {
@@ -486,7 +485,8 @@
         },
       });
 
-      const exportReader = await openExport(exportRoot(root), {
+      const exportReader = await readLatestExport({
+        root,
         loaders: [
           jsonLoader(["playground.summary.json.v1", "playground.records.json.v1"]),
           svgLoader,
@@ -501,9 +501,9 @@
       $("#bundle-id").textContent = exportReader.manifest.id;
       $("#spec-sha").textContent =
         exportReader.manifest.provenance?.source_spec_sha256 ?? "missing";
-      $("#artifacts").textContent = exportReader
+      $("#formats").textContent = exportReader
         .values()
-        .map((value) => `${value}:${exportReader.artifacts(value).join("|")}`)
+        .map((value) => `${value}:${exportReader.formats(value).join("|")}`)
         .join(", ");
       $("#scenario-count").textContent = `${exportReader.scenarios().length} finite states`;
 
@@ -536,22 +536,22 @@
       async function loadScenario(scenario) {
         try {
           $("#status").textContent = `Loading ${scenario}...`;
-          const summaryHandle = exportReader.artifact({
+          const summaryHandle = exportReader.get({
             scenario,
             value: "summary",
-            artifact: "json",
+            format: "json",
           });
-          const recordsHandle = exportReader.artifact({
+          const recordsHandle = exportReader.get({
             scenario,
             value: "records",
-            artifact: "json",
+            format: "json",
           });
-          const sparklineHandle = exportReader.artifact({
+          const sparklineHandle = exportReader.get({
             scenario,
             value: "sparkline",
-            artifact: "svg",
+            format: "svg",
           });
-          const noteHandle = exportReader.artifact({ scenario, value: "note", artifact: "html" });
+          const noteHandle = exportReader.get({ scenario, value: "note", format: "html" });
 
           const [summary, records, sparkline, noteHtml] = await Promise.all([
             summaryHandle.load(),

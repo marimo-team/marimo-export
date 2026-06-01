@@ -1,10 +1,10 @@
-"""Scenario object patching for materialized notebook objects.
+"""Scenario object state updates for materialized notebook objects.
 
 Scenario state may target object attributes such as ``dropdown.value``. These
-object patches are applied after the cell that creates the object has been
-materialized and before downstream cells evaluate. This module validates those
-dotted paths, applies the patches, and keeps marimo UI element HTML in sync so
-static exports show the same value that downstream cells observed.
+updates run after the cell that creates the object has been materialized and
+before downstream cells evaluate. This module validates those dotted paths,
+sets the new values, and keeps marimo UI element HTML in sync so static exports
+show the same value that downstream cells observed.
 """
 
 from __future__ import annotations

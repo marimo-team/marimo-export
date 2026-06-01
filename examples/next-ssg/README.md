@@ -56,10 +56,10 @@ Set `MARIMO_ARCHIVE_CAPTURE=1` to also render
   the public bundle.
 - `src/app/market-window/[start]/[end]/page.tsx` is optional. When
   `MARIMO_ARCHIVE_CAPTURE=1`, it captures an archive with
-  `client.captureArchive`, opens the returned zip bytes with
-  `openExport(exportArchive(...))`, and renders JSON, Arrow, and PNG artifacts
+  `client.archive`, opens the returned zip bytes with `readExportArchive(...)`,
+  and renders JSON, Arrow, and PNG formats
   without writing a public bundle folder.
-- `src/components/ohlc-widget-panel.tsx` hydrates the AnyWidget artifact and
+- `src/components/ohlc-widget-panel.tsx` hydrates the AnyWidget format and
   bridges its model to React state through `createWidgetStore`.
 - `src/components/vega-lite-chart.tsx` loads the static bundle in the browser
-  and renders the Vega-Lite artifact.
+  and renders the Vega-Lite format.

@@ -13,11 +13,11 @@ class FakeExporterContext:
         *,
         scenario_id: str = "default",
         value_name: str = "value",
-        artifact_name: str = "bytes",
+        format_name: str = "bytes",
     ) -> None:
         self.scenario_id = scenario_id
         self.value_name = value_name
-        self.artifact_name = artifact_name
+        self.format_name = format_name
 
     def write_blob(
         self,
@@ -64,7 +64,7 @@ def export_bytes(value: Any, ctx: ExporterContext, **options: Any) -> Artifact:
         metadata={
             "scenario": ctx.scenario_id,
             "value": ctx.value_name,
-            "format_id": ctx.artifact_name,
+            "format": ctx.format_name,
         },
     )
 

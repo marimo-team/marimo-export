@@ -1,8 +1,8 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 
-import { createExportClient } from "@marimo-team/export-client";
-import { exportDirectory, openExport, type StaticExport } from "@marimo-team/export-reader";
+import { createMarimoExportClient } from "@marimo-team/export-client";
+import { readExportDirectory, type StaticExport } from "@marimo-team/export-reader";
 
 import { exportPublicRoot } from "@/lib/export-paths";
 import { marimoNotebook, marimoServerToken, marimoServerUrl } from "@/lib/marimo-env";
@@ -72,15 +72,13 @@ export const getFinanceOverview = async (): Promise<FinanceOverview> => {
 export const getFinancePairPage = async (scenario: string): Promise<FinancePairPage> => {
   const exp = await loadFinanceExport();
   const summary = await exp
-    .artifact({ scenario, value: "summary", artifact: "json" })
+    .get({ scenario, value: "summary", format: "json" })
     .json<SummaryPayload>();
   const sampleRows = await exp
-    .artifact({ scenario, value: "sample_rows", artifact: "json" })
+    .get({ scenario, value: "sample_rows", format: "json" })
     .json<SampleRow[]>();
-  const changeDescHtml = await exp
-    .artifact({ scenario, value: "change_desc", artifact: "html" })
-    .text();
-  const pngFile = exp.artifact({ scenario, value: "chart", artifact: "png" }).entry().ref;
+  const changeDescHtml = await exp.get({ scenario, value: "change_desc", format: "html" }).text();
+  const pngFile = exp.get({ scenario, value: "chart", format: "png" }).entry().ref;
 
   return {
     scenario,
@@ -100,12 +98,11 @@ const ensureFinanceExport = async (): Promise<StaticExport> => {
     await captureFinanceBundle();
   }
 
-  return openExport(
-    exportDirectory(LOCAL_EXPORT_ROOT, {
-      readFile: (file) => fs.readFile(file),
-      url: (href) => `${exportPublicRoot}${href}`,
-    }),
-  );
+  return readExportDirectory({
+    root: LOCAL_EXPORT_ROOT,
+    readFile: (file) => fs.readFile(file),
+    url: (href) => `${exportPublicRoot}${href}`,
+  });
 };
 
 const needsCapture = async (): Promise<boolean> => {
@@ -131,7 +128,7 @@ const captureFinanceBundle = async (): Promise<void> => {
   const notebook = marimoNotebook();
   const sessionId = process.env.MARIMO_SESSION_ID;
   const sessionTarget = sessionId ? { sessionId } : { notebook };
-  const client = createExportClient({
+  const client = createMarimoExportClient({
     server,
     ...(serverToken ? { serverToken } : {}),
   });
@@ -146,9 +143,9 @@ const captureFinanceBundle = async (): Promise<void> => {
     await fs.rm(LOCAL_EXPORT_ROOT, { recursive: true, force: true });
     await fs.mkdir(LOCAL_EXPORT_ROOT, { recursive: true });
 
-    await client.capture(buildFinanceSpec(financePairs), {
+    await client.export(buildFinanceSpec(financePairs), {
       ...sessionTarget,
-      to: LOCAL_EXPORT_ROOT,
+      outputRoot: LOCAL_EXPORT_ROOT,
     });
   } finally {
     await fs.rm(CAPTURE_LOCK, { recursive: true, force: true });

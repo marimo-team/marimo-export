@@ -138,7 +138,7 @@ const MarketWindowPage = async ({ params }: MarketWindowPageProps) => {
             <strong>{page.notebookSha?.slice(0, 12) ?? "no source hash"}</strong>
           </div>
           <div>
-            <span>Artifacts</span>
+            <span>Formats</span>
             <strong>JSON summary · Arrow frame · PNG chart</strong>
           </div>
         </div>

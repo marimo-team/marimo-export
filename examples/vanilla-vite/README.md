@@ -27,7 +27,7 @@ pnpm --filter @marimo-team/export-example-vanilla dev
 
 ## Bundle Contents
 
-The app calls `openExport(exportRoot("/export/"))`, reads `public/export/index.json`,
+The app calls `readLatestExport({ root: "/export/" })`, reads `public/export/index.json`,
 opens the latest manifest, and loads:
 
 - `summary/json`: custom code-defined JSON exporter.
@@ -39,12 +39,12 @@ opens the latest manifest, and loads:
   `@marimo-team/export-loader-parquet`.
 - `change_desc/html`: custom HTML exporter over the typed source
   `{ cell: change_desc }`.
-- `comparison_chart/vegalite`: Vega-Lite artifact loaded by
+- `comparison_chart/vegalite`: Vega-Lite format loaded by
   `@marimo-team/export-loader-vegalite`.
 - `comparison_chart/png_nogrid`: custom code-defined PNG exporter.
 - `ohlc_dashboard/bundle`: AnyWidget bundle hydrated by
   `@marimo-team/export-loader-anywidget`.
 
-Scenario `state` keys override notebook definitions. `patches` entries such as
+Scenario `state` keys override notebook definitions. Dotted state keys such as
 `symbols_selector.value` patch object attributes before the SPA switches between
 precomputed scenarios.

@@ -26,11 +26,11 @@ class CapturingExporterContext:
         *,
         scenario_id: str = "default",
         value_name: str = "widget",
-        artifact_name: str = "bundle",
+        format_name: str = "bundle",
     ) -> None:
         self.scenario_id = scenario_id
         self.value_name = value_name
-        self.artifact_name = artifact_name
+        self.format_name = format_name
         self.blobs: dict[str, bytes] = {}
 
     def write_blob(
@@ -181,13 +181,13 @@ def test_bundle_dedupes_identical_widget_files_across_value_names(
     first_ctx = BundleExporterContext(
         scenario_id="default",
         value_name="left_widget",
-        artifact_name="bundle",
+        format_name="bundle",
         blob_store=store,
     )
     second_ctx = BundleExporterContext(
         scenario_id="default",
         value_name="right_widget",
-        artifact_name="bundle",
+        format_name="bundle",
         blob_store=store,
     )
 

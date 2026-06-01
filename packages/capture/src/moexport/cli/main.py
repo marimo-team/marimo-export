@@ -15,7 +15,7 @@ from moexport.cli._common import (
     state_filters,
 )
 from moexport.notebook import (
-    export_notebook,
+    capture_notebook,
     inspect_notebook_defs,
     read_notebook_source,
 )
@@ -49,7 +49,7 @@ def cli() -> None:
 
     \b
     The spec is JSON or YAML. Each value has a typed `source` record, and each
-    artifact references an exporter callable such as
+    format references an exporter callable such as
     `moexport.exporters.dataframe:arrow`.
 
     \b
@@ -57,8 +57,8 @@ def cli() -> None:
       marimo-export query out                         # catalog
       marimo-export query out scenarios --state chart_width=1200
       marimo-export query out source --scenario wide_chart
-      marimo-export query out entries --value summary --artifact json --content
-      marimo-export query out artifacts --value df --artifact arrow
+      marimo-export query out entries --value summary --format json --content
+      marimo-export query out formats --value df --format arrow
       marimo-export query out files --media-type image/png
       marimo-export query out graph --scenario wide_chart
     """
@@ -100,7 +100,7 @@ def cli() -> None:
 @click.option(
     "--full",
     is_flag=True,
-    help="Print the full ExportResult, including evaluation and invocation traces.",
+    help="Print the full CaptureResult, including evaluation and invocation traces.",
 )
 @click.argument("notebook_args", nargs=-1, type=click.UNPROCESSED)
 def notebook(
@@ -117,14 +117,14 @@ def notebook(
     \b
     Read the notebook source before writing the spec. The spec is JSON or YAML:
       values.<name>.source    Typed source record, e.g. `{def: df}`
-      artifacts.<name>.export Python callable ref or inline code defining `export`
+      formats.<name>.export Python callable ref or inline code defining `export`
 
     \b
     Custom exporters are normal Python callables. They receive the Python value
     and write portable bundle blobs through the exporter context.
     """
 
-    result = export_notebook(
+    result = capture_notebook(
         notebook,
         load_spec(spec),
         to=to,
@@ -181,11 +181,11 @@ def query(ctx: click.Context, path: str) -> None:
 
     \b
     Subcommands:
-      query PATH  overview of bundles, notebooks, scenarios, values, artifacts
+      query PATH  overview of bundles, notebooks, scenarios, values, formats
       scenarios   scenario rows, filterable by id and state values
       source      full notebook source stored in the bundle provenance
-      artifacts   semantic artifact records for scenario x value x artifact
-      entries     canonical artifact entry files, optionally with small content
+      formats   semantic format records for scenario x value x format
+      entries     canonical format entry files, optionally with small content
       files       raw content-addressed blob files with semantic uses
       trace       latest invocation trace, optionally scoped to a scenario
       graph       notebook dependency graph metadata from the invocation trace
@@ -199,7 +199,7 @@ def query(ctx: click.Context, path: str) -> None:
 @query.command("bundles")
 @click.pass_obj
 def query_bundles(obj: dict[str, str]) -> None:
-    """List bundle summaries without expanding every artifact."""
+    """List bundle summaries without expanding every format."""
 
     echo_json(open_export(obj["path"]).bundles())
 
@@ -266,7 +266,7 @@ def query_bundle(
     bundle_id: str | None,
     summary: bool,
 ) -> None:
-    """Show one bundle map: values, scenarios, artifacts, files, and traces."""
+    """Show one bundle map: values, scenarios, formats, files, and traces."""
 
     bundle = open_export(obj["path"]).bundle(bundle_id)
     echo_json(bundle.summary() if summary else bundle.map())
@@ -274,11 +274,11 @@ def query_bundle(
 
 def query_filters(
     *,
-    include_artifact_name: bool,
-    include_artifact_row: bool,
+    include_format_name: bool,
+    include_format_row: bool,
 ) -> Any:
     def decorator(fn: Any) -> Any:
-        if include_artifact_row:
+        if include_format_row:
             fn = click.option(
                 "--one",
                 is_flag=True,
@@ -287,8 +287,8 @@ def query_filters(
             fn = click.option("--limit", type=int, help="Maximum rows to print.")(fn)
             fn = click.option("--media-type", help="MIME/media type.")(fn)
             fn = click.option("--format-id", help="Exporter-produced format id.")(fn)
-        if include_artifact_name:
-            fn = click.option("--artifact", help="Authored artifact name.")(fn)
+        if include_format_name:
+            fn = click.option("--format", help="Authored format name.")(fn)
         fn = click.option("--value", help="Exported value name.")(fn)
         fn = click.option(
             "--state-json",
@@ -308,7 +308,7 @@ def query_filters(
 
 
 @query.command("scenarios")
-@query_filters(include_artifact_name=False, include_artifact_row=False)
+@query_filters(include_format_name=False, include_format_row=False)
 @click.pass_obj
 def query_scenarios(obj: dict[str, str], **filters: Any) -> None:
     """List scenario rows, optionally narrowed by structured filters."""
@@ -328,44 +328,44 @@ def query_scenarios(obj: dict[str, str], **filters: Any) -> None:
 @click.option("--value", help="Exported value name.")
 @click.pass_obj
 def query_values(obj: dict[str, str], bundle: str | None, value: str | None) -> None:
-    """List exported value expressions and authored artifacts."""
+    """List exported value expressions and authored formats."""
 
     echo_json(open_export(obj["path"]).values(bundle=bundle, value=value))
 
 
-@query.command("artifact-catalog")
-@query_filters(include_artifact_name=True, include_artifact_row=False)
+@query.command("format-catalog")
+@query_filters(include_format_name=True, include_format_row=False)
 @click.pass_obj
-def query_artifact_catalog(obj: dict[str, str], **filters: Any) -> None:
-    """List available artifacts grouped by value and artifact name."""
+def query_format_catalog(obj: dict[str, str], **filters: Any) -> None:
+    """List available formats grouped by value and format name."""
 
     echo_json(
-        open_export(obj["path"]).artifact_catalog(
+        open_export(obj["path"]).format_catalog(
             bundle=filters["bundle"],
             scenario=filters["scenario"],
             state=_state(filters),
             value=filters["value"],
-            artifact=filters["artifact"],
+            format=filters["format"],
         )
     )
 
 
-@query.command("artifacts")
-@query_filters(include_artifact_name=True, include_artifact_row=True)
+@query.command("formats")
+@query_filters(include_format_name=True, include_format_row=True)
 @click.pass_obj
-def query_artifacts(obj: dict[str, str], **filters: Any) -> None:
-    """List artifact descriptors with metadata and entry paths."""
+def query_formats(obj: dict[str, str], **filters: Any) -> None:
+    """List format descriptors with metadata and entry paths."""
 
     export = open_export(obj["path"])
     try:
         if filters["one"]:
             echo_json(
-                export.artifact(
+                export.format(
                     bundle=filters["bundle"],
                     scenario=filters["scenario"],
                     state=_state(filters),
                     value=filters["value"],
-                    artifact=filters["artifact"],
+                    format=filters["format"],
                     format_id=filters["format_id"],
                     media_type=filters["media_type"],
                 )
@@ -373,12 +373,12 @@ def query_artifacts(obj: dict[str, str], **filters: Any) -> None:
             return
 
         echo_json(
-            export.artifacts(
+            export.formats(
                 bundle=filters["bundle"],
                 scenario=filters["scenario"],
                 state=_state(filters),
                 value=filters["value"],
-                artifact=filters["artifact"],
+                format=filters["format"],
                 format_id=filters["format_id"],
                 media_type=filters["media_type"],
                 limit=filters["limit"],
@@ -389,7 +389,7 @@ def query_artifacts(obj: dict[str, str], **filters: Any) -> None:
 
 
 @query.command("files")
-@query_filters(include_artifact_name=True, include_artifact_row=True)
+@query_filters(include_format_name=True, include_format_row=True)
 @click.option(
     "--dedupe/--no-dedupe",
     default=True,
@@ -409,7 +409,7 @@ def query_files(obj: dict[str, str], dedupe: bool, **filters: Any) -> None:
                     scenario=filters["scenario"],
                     state=_state(filters),
                     value=filters["value"],
-                    artifact=filters["artifact"],
+                    format=filters["format"],
                     format_id=filters["format_id"],
                     media_type=filters["media_type"],
                     dedupe=dedupe,
@@ -423,7 +423,7 @@ def query_files(obj: dict[str, str], dedupe: bool, **filters: Any) -> None:
                 scenario=filters["scenario"],
                 state=_state(filters),
                 value=filters["value"],
-                artifact=filters["artifact"],
+                format=filters["format"],
                 format_id=filters["format_id"],
                 media_type=filters["media_type"],
                 dedupe=dedupe,
@@ -435,7 +435,7 @@ def query_files(obj: dict[str, str], dedupe: bool, **filters: Any) -> None:
 
 
 @query.command("entries")
-@query_filters(include_artifact_name=True, include_artifact_row=True)
+@query_filters(include_format_name=True, include_format_row=True)
 @click.option(
     "--content",
     is_flag=True,
@@ -455,7 +455,7 @@ def query_entries(
     max_bytes: int,
     **filters: Any,
 ) -> None:
-    """List artifact entry files with scenario/value/artifact metadata."""
+    """List format entry files with scenario/value/format metadata."""
 
     export = open_export(obj["path"])
     try:
@@ -466,7 +466,7 @@ def query_entries(
                     scenario=filters["scenario"],
                     state=_state(filters),
                     value=filters["value"],
-                    artifact=filters["artifact"],
+                    format=filters["format"],
                     format_id=filters["format_id"],
                     media_type=filters["media_type"],
                     include_content=content,
@@ -481,7 +481,7 @@ def query_entries(
                 scenario=filters["scenario"],
                 state=_state(filters),
                 value=filters["value"],
-                artifact=filters["artifact"],
+                format=filters["format"],
                 format_id=filters["format_id"],
                 media_type=filters["media_type"],
                 include_content=content,

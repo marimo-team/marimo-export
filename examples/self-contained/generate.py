@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from notebook_markdown import export_notebook_markdown
+from notebook_markdown import capture_notebook_markdown
 
 
 def main() -> None:
@@ -46,13 +46,12 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    state, patches = _load_scenario(args.state_json)
-    result = export_notebook_markdown(
+    state = _load_scenario(args.state_json)
+    result = capture_notebook_markdown(
         args.notebook,
         args.output_dir,
         scenario_id=args.scenario_id,
         state=state,
-        patches=patches,
         to=args.to,
         title=args.title,
         inline_html_bytes=args.inline_html_bytes,
@@ -73,18 +72,17 @@ def main() -> None:
     )
 
 
-def _load_scenario(path: Path | None) -> tuple[dict[str, Any], dict[str, Any]]:
+def _load_scenario(path: Path | None) -> dict[str, Any]:
     if path is None:
-        return {}, {}
+        return {}
 
     parsed = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(parsed, dict):
         raise TypeError("--state-json must point to a JSON object")
     state = parsed.get("state")
-    patches = parsed.get("patches")
-    if not isinstance(state, dict) or not isinstance(patches, dict):
-        raise TypeError("--state-json must contain 'state' and 'patches' objects")
-    return state, patches
+    if not isinstance(state, dict):
+        raise TypeError("--state-json must contain a 'state' object")
+    return state
 
 
 if __name__ == "__main__":

@@ -8,7 +8,7 @@ import {
   type LoadedAnyWidget,
   type WidgetStore,
 } from "@marimo-team/export-loader-anywidget";
-import { exportRoot, openExport } from "@marimo-team/export-reader";
+import { readLatestExport } from "@marimo-team/export-reader";
 
 import { exportPublicRoot } from "@/lib/export-paths";
 
@@ -60,12 +60,13 @@ export const OhlcWidgetPanel = ({ scenario }: OhlcWidgetPanelProps) => {
       storeRef.current = null;
       host.replaceChildren();
 
-      const exp = await openExport(exportRoot(exportPublicRoot), {
-        loaders: [anywidgetLoader()],
+      const exp = await readLatestExport({
+        root: exportPublicRoot,
+        loaders: [anywidgetLoader<OhlcWidgetState>()],
       });
       loaded = await exp
-        .artifact({ scenario, value: "ohlc_dashboard", artifact: "bundle" })
-        .load<LoadedAnyWidget<OhlcWidgetState>>();
+        .get({ scenario, value: "ohlc_dashboard", format: "bundle" })
+        .load(anywidgetLoader<OhlcWidgetState>());
 
       if (cancelled) {
         return;

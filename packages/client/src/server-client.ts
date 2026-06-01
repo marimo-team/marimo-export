@@ -1,84 +1,44 @@
 import { createMarimoClient } from "@marimo-team/marimo-api";
-import {
-  captureArchiveWithClient,
-  captureBundleWithClient,
-  captureRequest,
-  listRunningNotebooks,
-  listWorkspaceNotebooks as listWorkspaceNotebooksWithClient,
-} from "./capture-core";
+import { createMarimoExportClientFromTransport } from "./export-client";
 import {
   baseUrl,
   createNotebookOpener,
   createScratchpadExecutor,
   requestHeaders,
 } from "./transport";
-import type {
-  CaptureArchiveResult,
-  CaptureClient,
-  CaptureClientOptionsBase,
-  CaptureOptions,
-  CaptureResult,
-  ExportSpecInput,
-  RunningNotebook,
-  WorkspaceNotebook,
-} from "./types";
+import type { MarimoExportTransport } from "./types";
+import type { MarimoExportClient } from "./export-client";
 
-export type MarimoApiClient = ReturnType<typeof createMarimoClient>;
-export type MarimoCaptureClient = MarimoApiClient & CaptureClient;
-export type MarimoArchiveCaptureClient = MarimoCaptureClient;
+type MarimoApiClient = ReturnType<typeof createMarimoClient>;
 
-export type ExportClientOptions = CaptureClientOptionsBase;
+type MarimoTransportClient = MarimoApiClient & MarimoExportTransport;
 
-export interface ExportClient {
-  readonly marimo: MarimoArchiveCaptureClient;
-  capture(spec: ExportSpecInput, options?: CaptureOptions): Promise<CaptureResult>;
-  captureArchive(spec: ExportSpecInput, options?: CaptureOptions): Promise<CaptureArchiveResult>;
-  listSessions(): Promise<RunningNotebook[]>;
-  listWorkspaceNotebooks(): Promise<WorkspaceNotebook[]>;
+export interface MarimoExportClientOptions {
+  server: string | URL;
+  fetch?: (request: Request) => Promise<Response>;
+  headers?: HeadersInit;
+  token?: string;
+  serverToken?: string;
+  WebSocket?: typeof WebSocket;
 }
+
+export type { MarimoExportClient };
 
 export type {
-  CaptureArchiveResult,
-  CaptureFetch,
-  CaptureOptions,
-  CaptureResult,
-  ExecuteScratchpadOptions,
-  ExportSpecInput,
-  OpenNotebookOptions,
+  ExportArchiveResult,
+  ExportOptions,
+  ExportResult,
   RunningNotebook,
-  RuntimeInstallOptions,
-  RuntimeOption,
-  ScratchpadExecutionResult,
-  ScratchpadOutput,
   WorkspaceNotebook,
 } from "./types";
+export type { ExportSpec } from "./spec";
 
-export function createExportClient(options: ExportClientOptions): ExportClient {
+export function createMarimoExportClient(options: MarimoExportClientOptions): MarimoExportClient {
   const marimo = createMarimoTransport(options);
-  return {
-    marimo,
-    capture(spec, request = {}) {
-      return captureBundleWithClient(spec, {
-        client: marimo,
-        ...captureRequest(request),
-      });
-    },
-    captureArchive(spec, request = {}) {
-      return captureArchiveWithClient(spec, {
-        client: marimo,
-        ...captureRequest(request),
-      });
-    },
-    listSessions() {
-      return listRunningNotebooks(marimo);
-    },
-    listWorkspaceNotebooks() {
-      return listWorkspaceNotebooksWithClient(marimo);
-    },
-  };
+  return createMarimoExportClientFromTransport(marimo);
 }
 
-function createMarimoTransport(options: ExportClientOptions): MarimoArchiveCaptureClient {
+function createMarimoTransport(options: MarimoExportClientOptions): MarimoTransportClient {
   const { server, fetch } = options;
   const client = createMarimoClient({
     baseUrl: baseUrl(server),
@@ -89,5 +49,5 @@ function createMarimoTransport(options: ExportClientOptions): MarimoArchiveCaptu
   return Object.assign(client, {
     executeScratchpad: createScratchpadExecutor(options),
     openNotebook: createNotebookOpener(options),
-  }) as MarimoArchiveCaptureClient;
+  }) as MarimoTransportClient;
 }

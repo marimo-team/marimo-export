@@ -1,22 +1,23 @@
 # @marimo-team/export-loader-arrow
 
-Loader for `dataframe.arrow.v1` artifacts.
+Loader for `dataframe.arrow.v1` formats.
 
 This package converts exported Arrow IPC bytes into browser-usable table handles
 with `@uwdata/flechette`.
 
 ```ts
 import { arrowLoader } from "@marimo-team/export-loader-arrow";
-import { exportRoot, openExport } from "@marimo-team/export-reader";
+import { readLatestExport } from "@marimo-team/export-reader";
 
-const exp = await openExport(exportRoot("/export/"), {
+const exp = await readLatestExport({
+  root: "/export/",
   loaders: [arrowLoader()],
 });
 
-const handle = exp.artifact({
+const handle = exp.get({
   scenario: "default",
   value: "prices",
-  artifact: "arrow",
+  format: "arrow",
 });
 
 const frame = await handle.load();
@@ -28,6 +29,6 @@ const columns = await frame.columns();
 Mechanics:
 
 - Supports `dataframe.arrow.v1`.
-- Reads the artifact entry file through the reader context.
+- Reads the format entry file through the reader context.
 - Parses Arrow IPC bytes with `tableFromIPC`.
 - Exposes `.table()`, `.rows()`, and `.columns()`.

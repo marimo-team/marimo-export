@@ -9,7 +9,7 @@ from typing import Any
 
 import click
 
-from moexport.export import ExportResult
+from moexport.export import CaptureResult
 from moexport.jsonio import manifest_value, pretty_json
 from moexport.spec import ExportSpec, parse_export_spec_text
 
@@ -54,7 +54,7 @@ def parse_jsonish(value: str) -> object:
         return value
 
 
-def export_summary(result: ExportResult) -> JsonObject:
+def export_summary(result: CaptureResult) -> JsonObject:
     manifest = result.manifest
     root = str(Path(result.bundle_path).parent.parent)
     return {
@@ -72,8 +72,8 @@ def export_summary(result: ExportResult) -> JsonObject:
                 "id": scenario["id"],
                 "state": scenario["state"],
                 "values": {
-                    value: sorted(artifacts)
-                    for value, artifacts in scenario["values"].items()
+                    value: sorted(formats)
+                    for value, formats in scenario["values"].items()
                 },
             }
             for scenario in manifest["scenarios"]
@@ -82,13 +82,13 @@ def export_summary(result: ExportResult) -> JsonObject:
             "catalog": f"marimo-export query {root}",
             "scenarios": f"marimo-export query {root} scenarios",
             "entries": f"marimo-export query {root} entries --bundle {manifest['id']}",
-            "artifacts": f"marimo-export query {root} artifacts --bundle {manifest['id']}",
+            "formats": f"marimo-export query {root} formats --bundle {manifest['id']}",
             "files": f"marimo-export query {root} files --bundle {manifest['id']}",
         },
     }
 
 
-def export_details(result: ExportResult) -> JsonObject:
+def export_details(result: CaptureResult) -> JsonObject:
     """Return a JSON-safe diagnostic view of the full export result."""
 
     return manifest_value(result.model_dump(mode="python"))

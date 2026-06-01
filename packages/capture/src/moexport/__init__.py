@@ -6,72 +6,52 @@ from moexport.archive import (
     archive_bundle,
     emit_bundle_archive,
 )
-from moexport.blobs import ContentAddressedBlobStore
-from moexport.exporters import BundleExporterContext, ExporterContext
+from moexport.export import CaptureResult, capture as _capture
+from moexport.exporters import ExporterContext
 from moexport.evaluate import evaluate
-from moexport.export import ExportResult, export as _export
-from moexport.notebook import (
-    NotebookDefs,
-    NotebookRunOptions,
-    NotebookSource,
-    export_notebook,
-    inspect_notebook_defs,
-    read_notebook_source,
-)
-from moexport.live_capture import LiveCapture, RuntimeInstall
-from moexport.request import resolve_export_request
-from moexport.runtime import RuntimeCell, NotebookRuntime, RuntimeNotebook
+from moexport.live_capture import CaptureClient, RuntimeInstall
+from moexport.notebook import capture_notebook
+from moexport.query import open_export
+from moexport.runtime import NotebookRuntime
 from moexport.runtime import runtime as _runtime
-from moexport.query import BundleQuery, ExportQuery, open_export
-from moexport.spec import ExportSpec, load_export_spec, parse_export_spec
+from moexport.spec import ExportSpec, load_export_spec as load_spec
+from moexport.spec import parse_export_spec as parse_spec
 
 __all__ = [
-    "BundleQuery",
-    "BundleExporterContext",
-    "RuntimeCell",
-    "ContentAddressedBlobStore",
     "EXPORT_ARCHIVE_MEDIA_TYPE",
-    "ExporterContext",
+    "CaptureClient",
+    "CaptureResult",
     "ExportSpec",
-    "ExportResult",
-    "ExportQuery",
-    "LiveCapture",
+    "ExporterContext",
     "NotebookRuntime",
-    "NotebookRunOptions",
-    "NotebookDefs",
-    "RuntimeNotebook",
-    "NotebookSource",
     "RuntimeInstall",
     "archive_bundle",
+    "capture",
+    "capture_notebook",
     "emit_bundle_archive",
     "evaluate",
-    "export",
-    "export_notebook",
-    "inspect_notebook_defs",
-    "load_export_spec",
+    "load_spec",
     "open_export",
-    "parse_export_spec",
-    "read_notebook_source",
-    "resolve_export_request",
+    "parse_spec",
     "runtime",
 ]
 
 
-async def export(
+async def capture(
     spec: Any,
     *,
     to: str | Path | None = None,
-) -> ExportResult:
+) -> CaptureResult:
     """Capture the active marimo runtime and write a static export bundle.
 
     ``spec`` accepts an ``ExportSpec`` instance or raw spec mapping. ``to``
-    sets the output root. Returns an ``ExportResult`` with
-    the written manifest, bundle identity, source spec, and invocation trace.
+    sets the output root. Returns a ``CaptureResult`` with the written
+    manifest, bundle identity, source spec, and invocation trace.
     Requires a live marimo runtime, usually through ``marimo-export notebook``
     or a notebook cell.
     """
 
-    return await _export(spec, to=to)
+    return await _capture(spec, to=to)
 
 
 def runtime() -> NotebookRuntime:
@@ -85,4 +65,6 @@ def runtime() -> NotebookRuntime:
 
 
 def main() -> None:
-    print("moexport capture")
+    from moexport.cli import main as cli_main
+
+    cli_main()

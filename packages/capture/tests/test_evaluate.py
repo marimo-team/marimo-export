@@ -641,7 +641,7 @@ def test_evaluate_batch_reuses_cells_with_identical_body_dependencies(
     response = run(
         mox.evaluate(
             "chart",
-            [
+            states=[
                 {"symbols": ["TSLA"], "chart_width": 240},
                 {"symbols": ["TSLA"], "chart_width": 480},
             ],
@@ -690,8 +690,7 @@ selector = Selector()
     response = run(
         mox.evaluate(
             "chart",
-            [{}, {}],
-            object_patches=[
+            states=[
                 {"selector.value": ["CRWV", "MSFT"]},
                 {"selector.value": ["AAPL", "GOOGL", "AMZN"]},
             ],
@@ -732,8 +731,7 @@ selector = Selector()
     response = run(
         mox.evaluate(
             "chart",
-            [{}, {}],
-            object_patches=[
+            states=[
                 {"selector.value": ["CRWV", "MSFT"]},
                 {},
             ],
@@ -753,7 +751,7 @@ def test_evaluate_shape_is_stable_for_single_and_batch(monkeypatch) -> None:
     monkeypatch.setattr(target_module, "get_context", lambda: ctx)
 
     single = run(mox.evaluate("x", {"width": 2}))
-    batch = run(mox.evaluate("x", [{"width": 2}]))
+    batch = run(mox.evaluate("x", states=[{"width": 2}]))
 
     assert single.keys() == batch.keys() == {"target", "results", "metadata"}
     assert (

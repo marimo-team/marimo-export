@@ -1,8 +1,8 @@
 import {
   defineLoader,
-  type ArtifactLoader,
-  type ArtifactLoaderContext,
-  type ArtifactRecord,
+  type FormatLoader,
+  type FormatLoaderContext,
+  type FormatRecord,
   type BlobRef,
   type JsonObject,
 } from "@marimo-team/export-reader";
@@ -14,8 +14,8 @@ export type VegaLiteSpec = Record<string, unknown>;
 export type VegaLiteRenderOptions = EmbedOptions;
 export type VegaLiteRenderResult = VegaEmbedResult;
 
-export interface VegaLiteArtifactHandle {
-  artifact: ArtifactRecord;
+export interface VegaLiteFormatHandle {
+  record: FormatRecord;
   blob: BlobRef;
   metadata: JsonObject | null;
   url(): string;
@@ -25,23 +25,23 @@ export interface VegaLiteArtifactHandle {
 
 export function vegaliteLoader(
   defaults: VegaLiteRenderOptions = {},
-): ArtifactLoader<VegaLiteArtifactHandle> {
+): FormatLoader<VegaLiteFormatHandle> {
   return defineLoader({
-    supports: vegaliteFormat,
-    load(context: ArtifactLoaderContext) {
+    formatId: vegaliteFormat,
+    load(context: FormatLoaderContext) {
       return createVegaLiteHandle(context, defaults);
     },
   });
 }
 
 function createVegaLiteHandle(
-  context: ArtifactLoaderContext,
+  context: FormatLoaderContext,
   defaults: VegaLiteRenderOptions,
-): VegaLiteArtifactHandle {
+): VegaLiteFormatHandle {
   return {
-    artifact: context.artifact,
+    record: context.record,
     blob: context.entry().ref,
-    metadata: context.artifact.metadata,
+    metadata: context.record.metadata,
     url() {
       return context.entry().url();
     },

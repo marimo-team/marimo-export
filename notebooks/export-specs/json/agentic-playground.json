@@ -6,9 +6,7 @@
         "region": "North",
         "window": 6,
         "demand_bias": 0,
-        "scenario_name": "north_balanced"
-      },
-      "patches": {
+        "scenario_name": "north_balanced",
         "region_picker.value": "North",
         "mode_picker.value": "balanced"
       }
@@ -19,9 +17,7 @@
         "region": "Coast",
         "window": 5,
         "demand_bias": 7,
-        "scenario_name": "coast_surge"
-      },
-      "patches": {
+        "scenario_name": "coast_surge",
         "region_picker.value": "Coast",
         "mode_picker.value": "surge"
       }
@@ -31,13 +27,10 @@
       "state": {
         "region": "South",
         "window": {
-          "type": "code",
-          "expression": "3 + 5"
+          "code": "3 + 5"
         },
         "demand_bias": -3,
-        "scenario_name": "south_conserve"
-      },
-      "patches": {
+        "scenario_name": "south_conserve",
         "region_picker.value": "South",
         "mode_picker.value": "conserve"
       }
@@ -48,7 +41,7 @@
       "source": {
         "def": "summary"
       },
-      "artifacts": {
+      "formats": {
         "json": {
           "export": {
             "type": "code",
@@ -61,7 +54,7 @@
       "source": {
         "def": "rows"
       },
-      "artifacts": {
+      "formats": {
         "json": {
           "export": {
             "type": "code",
@@ -74,7 +67,7 @@
       "source": {
         "def": "sparkline_svg"
       },
-      "artifacts": {
+      "formats": {
         "svg": {
           "export": {
             "type": "code",
@@ -87,7 +80,7 @@
       "source": {
         "def": "market_note"
       },
-      "artifacts": {
+      "formats": {
         "html": {
           "export": {
             "type": "code",

@@ -41,7 +41,7 @@ export const buildFinanceSpec = (pairs: readonly FinancePair[] = financePairs) =
   values: {
     summary: {
       source: { expr: summarySource },
-      artifacts: [
+      formats: [
         {
           json: {
             filename: "summary.json",
@@ -55,7 +55,7 @@ export const buildFinanceSpec = (pairs: readonly FinancePair[] = financePairs) =
     },
     sample_rows: {
       source: { expr: sampleRowsSource },
-      artifacts: [
+      formats: [
         {
           json: {
             filename: "sample-rows.json",
@@ -69,7 +69,7 @@ export const buildFinanceSpec = (pairs: readonly FinancePair[] = financePairs) =
     },
     change_desc: {
       source: { cell: "change_desc" },
-      artifacts: [
+      formats: [
         {
           html: {
             filename: "change-desc.html",
@@ -84,11 +84,11 @@ export const buildFinanceSpec = (pairs: readonly FinancePair[] = financePairs) =
     },
     chart: {
       source: { def: "symbols_chart" },
-      artifacts: ["vegalite", { png: { scale: 2 } }],
+      formats: ["vegalite", { png: { scale: 2 } }],
     },
     ohlc_dashboard: {
       source: { def: "widget" },
-      artifacts: {
+      formats: {
         bundle: {
           export: {
             type: "ref",

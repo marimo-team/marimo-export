@@ -1,7 +1,6 @@
 import {
-  exportRoot,
-  openExport,
-  type ArtifactHandle,
+  readLatestExport,
+  type FormatHandle,
   type StaticExport,
 } from "@marimo-team/export-reader";
 import {
@@ -9,11 +8,11 @@ import {
   createWidgetStore,
   type LoadedAnyWidget,
 } from "@marimo-team/export-loader-anywidget";
-import { arrowLoader, type ArrowArtifactHandle } from "@marimo-team/export-loader-arrow";
-import { parquetLoader, type ParquetArtifactHandle } from "@marimo-team/export-loader-parquet";
+import { arrowLoader, type ArrowFormatHandle } from "@marimo-team/export-loader-arrow";
+import { parquetLoader, type ParquetFormatHandle } from "@marimo-team/export-loader-parquet";
 import {
   vegaliteLoader,
-  type VegaLiteArtifactHandle,
+  type VegaLiteFormatHandle,
   type VegaLiteRenderResult,
   type VegaLiteSpec,
 } from "@marimo-team/export-loader-vegalite";
@@ -73,15 +72,15 @@ interface DemoState {
 interface LoadedScenarioData {
   summary: SummaryPayload;
   symbolsSelector: SymbolsSelectorPayload;
-  arrow: ArrowArtifactHandle;
+  arrow: ArrowFormatHandle;
   arrowRows: PriceRow[];
-  parquet: ParquetArtifactHandle;
+  parquet: ParquetFormatHandle;
   parquetRows: PriceRow[];
   parquetMeta: { rows: number; columns: string[] };
-  vegalite: VegaLiteArtifactHandle;
+  vegalite: VegaLiteFormatHandle;
   vegaliteSpec: VegaLiteSpec;
-  png: ArtifactHandle;
-  changeDesc: ArtifactHandle;
+  png: FormatHandle;
+  changeDesc: FormatHandle;
   changeDescHtml: string;
   widget: LoadedAnyWidget<OhlcWidgetState>;
 }
@@ -237,18 +236,18 @@ app.innerHTML = `
         <summary>
           <div>
             <p class="eyebrow">Export diagnostics</p>
-            <h2>Artifact contract</h2>
+            <h2>Format contract</h2>
           </div>
           <span id="matrix-status" class="status">loading</span>
         </summary>
-        <dl class="artifact-strip" aria-label="Export artifacts">
+        <dl class="format-strip" aria-label="Export formats">
           <div>
             <dt>Bundle</dt>
             <dd id="manifest-id">loading</dd>
           </div>
           <div>
-            <dt>Artifacts</dt>
-            <dd id="artifact-list">loading</dd>
+            <dt>Formats</dt>
+            <dd id="format-list">loading</dd>
           </div>
         </dl>
         <pre id="trace" class="code-output">loading</pre>
@@ -294,7 +293,8 @@ let activeLoad = 0;
 
 async function main(): Promise<void> {
   try {
-    const exp = await openExport(exportRoot(EXPORT_ROOT), {
+    const exp = await readLatestExport({
+      root: EXPORT_ROOT,
       loaders: [
         anywidgetLoader(),
         arrowLoader({ useDate: true }),
@@ -305,7 +305,7 @@ async function main(): Promise<void> {
 
     renderScenarioTabs(exp);
     setText("manifest-id", exp.manifest.id);
-    setText("artifact-list", artifactSummary(exp));
+    setText("format-list", formatSummary(exp));
 
     await loadScenario(exp, firstScenario(exp));
   } catch (error) {
@@ -367,25 +367,25 @@ async function loadScenario(exp: StaticExport, scenario: string): Promise<void> 
 
 async function loadScenarioData(exp: StaticExport, scenario: string): Promise<LoadedScenarioData> {
   const summaryPromise = exp
-    .artifact({ scenario, value: "summary", artifact: "json" })
+    .get({ scenario, value: "summary", format: "json" })
     .json<SummaryPayload>();
   const symbolsSelectorPromise = exp
-    .artifact({ scenario, value: "symbols_selector", artifact: "json" })
+    .get({ scenario, value: "symbols_selector", format: "json" })
     .json<SymbolsSelectorPayload>();
   const arrowPromise = exp
-    .artifact({ scenario, value: "prices", artifact: "arrow" })
-    .load<ArrowArtifactHandle>();
+    .get({ scenario, value: "prices", format: "arrow" })
+    .load(arrowLoader({ useDate: true }));
   const parquetPromise = exp
-    .artifact({ scenario, value: "prices", artifact: "parquet" })
-    .load<ParquetArtifactHandle>();
+    .get({ scenario, value: "prices", format: "parquet" })
+    .load(parquetLoader());
   const vegalitePromise = exp
-    .artifact({ scenario, value: "comparison_chart", artifact: "vegalite" })
-    .load<VegaLiteArtifactHandle>();
-  const png = exp.artifact({ scenario, value: "comparison_chart", artifact: "png_nogrid" });
-  const changeDesc = exp.artifact({ scenario, value: "change_desc", artifact: "html" });
+    .get({ scenario, value: "comparison_chart", format: "vegalite" })
+    .load(vegaliteLoader({ actions: true }));
+  const png = exp.get({ scenario, value: "comparison_chart", format: "png_nogrid" });
+  const changeDesc = exp.get({ scenario, value: "change_desc", format: "html" });
   const widgetPromise = exp
-    .artifact({ scenario, value: "ohlc_dashboard", artifact: "bundle" })
-    .load<LoadedAnyWidget<OhlcWidgetState>>();
+    .get({ scenario, value: "ohlc_dashboard", format: "bundle" })
+    .load(anywidgetLoader<OhlcWidgetState>());
 
   const [summary, symbolsSelector, arrow, parquet, vegalite, widget] = await Promise.all([
     summaryPromise,
@@ -471,7 +471,7 @@ async function commitScenario(
   chartImage.src = png.url();
   setText(
     "chart-meta",
-    `${png.entry().ref.size.toLocaleString()} bytes · ${summary.symbols.length} symbols · ${png.artifact.media_type}`,
+    `${png.entry().ref.size.toLocaleString()} bytes · ${summary.symbols.length} symbols · ${png.record.media_type}`,
   );
 
   const mount = await widget.mount(byId("widget-root"));
@@ -518,15 +518,15 @@ async function commitScenario(
         symbolUniverse: symbolsSelector.options,
       },
       loaders: {
-        anywidget: widget.artifact.format_id,
-        cellOutput: changeDesc.artifact.format_id,
+        anywidget: widget.record.format_id,
+        cellOutput: changeDesc.record.format_id,
         arrow: "dataframe.arrow.v1",
         parquet: "dataframe.parquet.v1",
-        vegalite: vegalite.artifact.format_id,
+        vegalite: vegalite.record.format_id,
       },
-      rawArtifacts: {
+      rawFormats: {
         summary: "summary.json.v1",
-        customPng: png.artifact.format_id,
+        customPng: png.record.format_id,
       },
     },
     null,
@@ -655,10 +655,10 @@ function setScenarioButtonsDisabled(disabled: boolean): void {
   }
 }
 
-function artifactSummary(exp: StaticExport): string {
+function formatSummary(exp: StaticExport): string {
   return exp
     .values()
-    .map((value) => `${value}: ${exp.artifacts(value).join(", ")}`)
+    .map((value) => `${value}: ${exp.formats(value).join(", ")}`)
     .join(" · ");
 }
 

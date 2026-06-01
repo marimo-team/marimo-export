@@ -22,21 +22,21 @@
         "type": "expression",
         "expression": "{\n    \"rows\": df.height,\n    \"columns\": df.columns,\n    \"symbols\": sorted(df[\"Symbol\"].unique().to_list()),\n    \"date_start\": df[\"Date\"].min().strftime(\"%Y-%m-%d\"),\n    \"date_end\": df[\"Date\"].max().strftime(\"%Y-%m-%d\"),\n}"
       },
-      "artifacts": ["json"]
+      "formats": ["json"]
     },
     "symbols_selector": {
       "source": {
         "type": "expression",
         "expression": "{\n    \"label\": \"Select symbols to compare\",\n    \"options\": symbols,\n    \"value\": symbols_selector.value,\n}"
       },
-      "artifacts": ["json"]
+      "formats": ["json"]
     },
     "prices": {
       "source": {
         "type": "definition",
         "name": "df"
       },
-      "artifacts": ["arrow", "parquet"]
+      "formats": ["arrow", "parquet"]
     },
     "change_desc": {
       "source": {
@@ -46,21 +46,21 @@
         },
         "on_error": "raise"
       },
-      "artifacts": ["html"]
+      "formats": ["html"]
     },
     "comparison_chart": {
       "source": {
         "type": "definition",
         "name": "symbols_chart"
       },
-      "artifacts": ["vegalite", "png_nogrid"]
+      "formats": ["vegalite", "png_nogrid"]
     },
     "ohlc_dashboard": {
       "source": {
         "type": "definition",
         "name": "widget"
       },
-      "artifacts": ["bundle"]
+      "formats": ["bundle"]
     }
   },
   "scenarios": [
@@ -1149,7 +1149,7 @@
             "type": "expression",
             "expression": "{\n    \"rows\": df.height,\n    \"columns\": df.columns,\n    \"symbols\": sorted(df[\"Symbol\"].unique().to_list()),\n    \"date_start\": df[\"Date\"].min().strftime(\"%Y-%m-%d\"),\n    \"date_end\": df[\"Date\"].max().strftime(\"%Y-%m-%d\"),\n}"
           },
-          "artifacts": {
+          "formats": {
             "json": {
               "export": {
                 "type": "code",
@@ -1163,7 +1163,7 @@
             "type": "expression",
             "expression": "{\n    \"label\": \"Select symbols to compare\",\n    \"options\": symbols,\n    \"value\": symbols_selector.value,\n}"
           },
-          "artifacts": {
+          "formats": {
             "json": {
               "export": {
                 "type": "code",
@@ -1177,7 +1177,7 @@
             "type": "definition",
             "name": "df"
           },
-          "artifacts": {
+          "formats": {
             "arrow": {
               "export": {
                 "type": "ref",
@@ -1200,7 +1200,7 @@
             },
             "on_error": "raise"
           },
-          "artifacts": {
+          "formats": {
             "html": {
               "export": {
                 "type": "code",
@@ -1214,7 +1214,7 @@
             "type": "definition",
             "name": "symbols_chart"
           },
-          "artifacts": {
+          "formats": {
             "vegalite": {
               "export": {
                 "type": "ref",
@@ -1237,7 +1237,7 @@
             "type": "definition",
             "name": "widget"
           },
-          "artifacts": {
+          "formats": {
             "bundle": {
               "export": {
                 "type": "ref",
