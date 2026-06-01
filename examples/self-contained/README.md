@@ -11,10 +11,10 @@ This example turns a marimo notebook into a PR-reviewable folder:
 The generator keeps the Markdown-specific policy inside this example. It uses
 the core package only for capture/query primitives:
 
-1. build a spec whose value is `mox.runtime().snapshot()`;
-2. export it through `moexport.exporters.notebook:linear`;
-3. read the finished bundle with `moexport.open_export`;
-4. materialize the linear notebook artifact as Markdown and static media from
+1. Build a spec whose value is `mox.runtime().snapshot()`.
+2. Export it through `moexport.exporters.notebook:linear`.
+3. Read the finished bundle with `moexport.open_export`.
+4. Materialize the linear notebook artifact as Markdown and static media from
    this example's `notebook_markdown.py`.
 
 Regenerate the finance artifact from the repository root:

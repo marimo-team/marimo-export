@@ -42,7 +42,7 @@ def main() -> None:
         "--inline-html-bytes",
         type=int,
         default=16_384,
-        help="Inline small HTML outputs; larger or scripted HTML goes to media/.",
+        help="Inline small HTML outputs. Larger or scripted HTML goes to media/.",
     )
     args = parser.parse_args()
 

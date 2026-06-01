@@ -212,7 +212,7 @@ class BundleArtifactHandle implements ArtifactHandle, ArtifactLoaderContext {
     const selectedKey = key ?? this.artifact.data.entry;
     if (!selectedKey) {
       throw new Error(
-        `Artifact ${this.artifact.format_id} has no entry file; pass an explicit file key.`,
+        `Artifact ${this.artifact.format_id} has no entry file. Pass an explicit file key.`,
       );
     }
 

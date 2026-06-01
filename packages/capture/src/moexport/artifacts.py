@@ -26,7 +26,7 @@ class ArtifactData(BaseModel):
         description="Named files that make up this representation.",
     )
     entry: str | None = Field(
-        description="Primary file key in `files`; null when there is no single entry.",
+        description="Primary file key in `files`, or null when there is no single entry.",
     )
 
 

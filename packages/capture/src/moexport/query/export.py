@@ -69,7 +69,7 @@ class ExportQuery:
             if len(manifests) == 1:
                 return BundleQuery.from_manifest(self.root, manifests[0])
             ids = [path.parent.name for path in manifests]
-            raise ValueError(f"multiple bundles found; choose one of {ids}")
+            raise ValueError(f"multiple bundles found. Choose one of {ids}")
 
         matches = [path for path in manifests if path.parent.name.startswith(id)]
         if not matches:
@@ -220,7 +220,7 @@ class ExportQuery:
                 for source in sources
             ]
             raise ValueError(
-                f"multiple notebook sources matched; narrow query: {labels}"
+                f"multiple notebook sources matched. Narrow query: {labels}"
             )
 
         source = copy.deepcopy(sources[0])

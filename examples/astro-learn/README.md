@@ -39,7 +39,7 @@ MARIMO_LEARN_SERVER_TOKEN=learn \
 pnpm --filter @marimo-team/export-example-astro-learn dev
 ```
 
-Useful environment variables:
+Environment variables:
 
 - `MARIMO_LEARN_SERVER_URL`: marimo server URL. When omitted, the build uses
   the committed catalog fixture.

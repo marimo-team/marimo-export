@@ -60,16 +60,16 @@ async def complete_overrides(
                             )
                         except Exception as exc:
                             raise ValueError(
-                                f"Cannot auto-fill {sibling!r}; it is defined in "
-                                f"the same cell as {name!r}, but no live value or "
+                                f"Cannot auto-fill {sibling!r} because it is defined in "
+                                f"the same cell as {name!r} and no live value or "
                                 "default cell value is available."
                             ) from exc
 
                     if sibling not in default_defs:
                         raise ValueError(
-                            f"Cannot auto-fill {sibling!r}; it is defined in the "
-                            f"same cell as {name!r}, but the default cell body did "
-                            "not produce it."
+                            f"Cannot auto-fill {sibling!r} because it is defined in "
+                            f"the same cell as {name!r} and the default cell body "
+                            "did not produce it."
                         )
                     value = default_defs[sibling]
                     source = "computed_default"
@@ -106,7 +106,7 @@ async def _default_cell_defs(
 
     If a scenario overrides only ``symbols``, marimo's cell-override semantics
     still require ``interval``. A live kernel can provide it from
-    ``ctx.globals``; source-file export computes that default locally here.
+    ``ctx.globals``. Source-file export computes that default locally here.
     """
 
     if cid in cache:

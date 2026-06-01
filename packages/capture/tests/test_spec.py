@@ -283,14 +283,14 @@ def test_export_spec_serializes_code_state_stably() -> None:
     }
 
 
-def test_export_spec_rejects_old_overrides_name() -> None:
-    with pytest.raises(ValidationError, match="overrides"):
+def test_export_spec_rejects_unknown_scenario_fields() -> None:
+    with pytest.raises(ValidationError, match="unexpected"):
         parse_export_spec(
             {
                 "scenarios": [
                     {
                         "id": "wide-chart",
-                        "overrides": {"chart_width": 1200},
+                        "unexpected": {"chart_width": 1200},
                     }
                 ],
                 "values": {

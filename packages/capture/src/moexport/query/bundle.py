@@ -511,7 +511,7 @@ def _entry_content(
     if size > max_bytes:
         return {
             "type": "omitted",
-            "reason": f"entry file is {size} bytes; max is {max_bytes}",
+            "reason": f"entry file is {size} bytes. Max is {max_bytes}",
             "size": size,
         }
 

@@ -68,7 +68,7 @@ def _normalize_object_patch_sets(
     if len(patch_sets) != count:
         raise ValueError(
             f"expected {count} object patch set(s) to match definition "
-            f"override sets; got {len(patch_sets)}"
+            f"override sets. Got {len(patch_sets)}"
         )
     return patch_sets
 

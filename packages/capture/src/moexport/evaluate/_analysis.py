@@ -122,8 +122,8 @@ def _body_code_without_display_expr(cell: CellImpl) -> str:
     body = module.body
 
     # Match marimo's display-output rule: only a final expression without a
-    # trailing semicolon becomes visual output. Ignore it for dependency
-    # planning, so `x = 1; df` does not force recomputing `df`.
+    # trailing statement separator becomes visual output. Ignore that expression
+    # for planning so it does not force recomputing its referenced defs.
     if body and isinstance(body[-1], ast.Expr) and not ends_with_semicolon(cell.code):
         body = body[:-1]
 
@@ -174,5 +174,5 @@ def display_refs(cell: CellImpl) -> set[str]:
 def single_defining_cell(graph: DirectedGraph, name: str) -> CellId_t:
     cells = graph.get_defining_cells(name)
     if len(cells) != 1:
-        raise ValueError(f"Expected one defining cell for {name!r}; got {cells}")
+        raise ValueError(f"Expected one defining cell for {name!r}. Got {cells}")
     return next(iter(cells))

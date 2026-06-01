@@ -48,7 +48,7 @@ class ManifestValue(BundleSchemaModel):
 class ManifestArtifact(BundleSchemaModel):
     """Manifest form of `Artifact`.
 
-    The writer stores `Artifact.format` as `format_id`; `data` stays the shared
+    The writer stores `Artifact.format` as `format_id`. `data` stays the shared
     writer-side `ArtifactData` model.
     """
 
