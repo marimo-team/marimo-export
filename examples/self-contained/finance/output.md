@@ -396,7 +396,7 @@ class OhlcSwitcher(anywidget.AnyWidget):
 
       const number = (value) => Number(value ?? 0);
       const formatValue = (value, mode) => {
-        if (!Number.isFinite(value)) return "—";
+        if (!Number.isFinite(value)) return "n/a";
         if (mode === "change") return `${value >= 0 ? "+" : ""}${(value * 100).toFixed(1)}%`;
         return value.toFixed(2);
       };

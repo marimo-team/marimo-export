@@ -47,8 +47,8 @@ def _name_is_dirty(
         memo[name] = True
         return True
     if name in stack:
-        # Cycles are invalid in marimo proper; this guard only prevents this
-        # sidecar analysis from recursing forever on unexpected graph states.
+        # Cycles are invalid in marimo proper. This guard prevents this sidecar
+        # analysis from recursing forever on unexpected graph states.
         return False
 
     stack.add(name)

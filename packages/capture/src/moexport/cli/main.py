@@ -94,7 +94,7 @@ def cli() -> None:
     "--run-arg",
     multiple=True,
     metavar="ARG",
-    help="Argument exposed through mo.cli_args(); repeat for multiple args.",
+    help="Argument exposed through mo.cli_args(). Repeat for multiple args.",
 )
 @click.option(
     "--full",
@@ -140,7 +140,7 @@ def inspect() -> None:
     """Inspect a notebook before authoring an export spec.
 
     \b
-    Useful when an agent needs to discover real defs and cell names:
+    Use these commands to discover real defs and cell names before writing the spec:
       marimo-export inspect defs notebooks/finance.py
       marimo-export inspect source notebooks/finance.py
     """
@@ -179,7 +179,7 @@ def query(ctx: click.Context, path: str) -> None:
     With no subcommand, prints the catalog.
 
     \b
-    Useful paths:
+    Subcommands:
       query PATH  overview of bundles, notebooks, scenarios, values, formats
       scenarios   scenario rows, filterable by id and state values
       source      full notebook source stored in the bundle provenance
@@ -225,7 +225,7 @@ def query_notebooks(obj: dict[str, str]) -> None:
     "--state",
     multiple=True,
     metavar="KEY=JSON",
-    help="Scenario state filter; repeat for multiple keys.",
+    help="Scenario state filter. Repeat for multiple keys.",
 )
 @click.pass_obj
 def query_source(
@@ -297,7 +297,7 @@ def query_filters(
             "--state",
             multiple=True,
             metavar="KEY=JSON",
-            help="Scenario state filter; repeat for multiple keys.",
+            help="Scenario state filter. Repeat for multiple keys.",
         )(fn)
         fn = click.option("--scenario", help="Scenario id.")(fn)
         fn = click.option("--bundle", help="Bundle id or id prefix.")(fn)

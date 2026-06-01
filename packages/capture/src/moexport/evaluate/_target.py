@@ -120,7 +120,7 @@ async def evaluate_target_once(
             # This is a side computation, not marimo's reactive runner. It
             # executes the planned body into local glbls and leaves notebook
             # state/frontend notifications untouched. The per-call cache
-            # assumes cell bodies are pure with respect to produced defs; dirty
+            # assumes cell bodies are pure with respect to produced defs. Dirty
             # side effects are intentionally not replayed across batch variants.
             with ctx.with_cell_id(cid):
                 await execute_cell_body(cell, glbls)
@@ -150,8 +150,8 @@ async def evaluate_target_once(
         value = glbls[target] if target in glbls else ctx.globals[target]
     else:
         # Expressions run against live globals plus locally computed defs. This
-        # intentionally exposes real live objects; callers must avoid mutating
-        # them in-place if they want a read-only export probe.
+        # intentionally exposes real live objects. Callers must avoid mutating
+        # them in-place when they need a read-only export probe.
         expression_globals = {
             **ctx.globals,
             **glbls,

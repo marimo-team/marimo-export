@@ -95,7 +95,7 @@ def exactly_one(rows: list[JsonObject], label: str) -> JsonObject:
     if not rows:
         raise FileNotFoundError(f"no {label} matched")
     if len(rows) > 1:
-        raise ValueError(f"multiple {_plural(label)} matched; narrow the query")
+        raise ValueError(f"multiple {_plural(label)} matched. Narrow the query")
     return rows[0]
 
 

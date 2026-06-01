@@ -1,9 +1,8 @@
 """AnyWidget exporters.
 
 The exporter stores the widget frontend module, optional stylesheet, synced
-state, and binary buffers as content-addressed files. It intentionally does
-not bake in a browser loader; a static web runtime can read this descriptor and
-choose the hydration strategy.
+state, and binary buffers as content-addressed files. The static web runtime
+reads this descriptor and chooses the hydration strategy.
 """
 
 from __future__ import annotations

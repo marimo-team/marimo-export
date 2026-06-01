@@ -339,9 +339,9 @@ marimo uses three local font families:
 
 The app globally sets `body` and `:host` to `var(--text-font)`, smooths text rendering, and sets `code` to `var(--monospace-font)`. Markdown headings use `var(--heading-font)`.
 
-Controls are intentionally small. Buttons and form controls generally use `text-sm`; compact labels and panel tabs often use `text-xs`, uppercase, semibold/bold, and modest tracking. Code editor size comes from `--marimo-code-editor-font-size`, defaulting to 14px in config and 0.9rem in CSS.
+Controls are intentionally small. Buttons and form controls generally use `text-sm`. Compact labels and panel tabs often use `text-xs`, uppercase, semibold/bold, and modest tracking. Code editor size comes from `--marimo-code-editor-font-size`, defaulting to 14px in config and 0.9rem in CSS.
 
-On shorter screens the root HTML font size is 90%; on screens at least 1000px tall it returns to 100%. Do not add extra viewport-based type scaling beyond the existing app-level rule.
+On shorter screens the root HTML font size is 90%. On screens at least 1000px tall it returns to 100%. Do not add extra viewport-based type scaling beyond the existing app-level rule.
 
 Slides are a separate presentation surface. Their prose plugin approximates Google Slides sizing: 70px h1, 48px h2, 37px h3, 33px h4, and 24px body/code text.
 
@@ -364,7 +364,7 @@ Editor chrome uses resizable side and bottom panels:
 - bottom developer panel with draggable tabs and runtime status items
 - resize handles are 4px and turn slate on hover or active drag
 
-Grid layout is explicit and mechanical: 24 columns, 20px row height, max width 1400px, bordered by default, and backed by `react-grid-layout`. In edit mode, the grid displays a subtle slate cell grid and drag handles; in read mode, transitions are disabled and content gets 20px container padding.
+Grid layout is explicit and mechanical: 24 columns, 20px row height, max width 1400px, bordered by default, and backed by `react-grid-layout`. In edit mode, the grid displays a subtle slate cell grid and drag handles. In read mode, transitions are disabled and content gets 20px container padding.
 
 Slides layout is output-only. In read mode it uses a padded, near-full-height reveal deck. In edit/present workflows it pairs a slide minimap with the deck and caps height so slides fit without page scrolling.
 
@@ -405,7 +405,7 @@ Do not mix sharp and highly rounded shapes in the same local control group. Dens
 
 ## Components
 
-**Buttons.** Buttons use `inline-flex`, centered content, `text-sm`, medium weight, `rounded-md`, focus-visible ring, disabled opacity 50%, and compact heights. The default button is primary blue with white text, border, and `shadow-xs`; active state removes the shadow. The `action` variant is yellow and is reserved for important notebook actions. Ghost/text/link variants are low chrome and rely on opacity, accent hover, or underline.
+**Buttons.** Buttons use `inline-flex`, centered content, `text-sm`, medium weight, `rounded-md`, focus-visible ring, disabled opacity 50%, and compact heights. The default button is primary blue with white text, border, and `shadow-xs`. Active state removes the shadow. The `action` variant is yellow and is reserved for notebook actions that run or change state. Ghost/text/link variants are low chrome and rely on opacity, accent hover, or underline.
 
 **Icon buttons.** Icon buttons are usually 24px square. Prefer existing Lucide/Radix iconography inside buttons and use tooltips for unclear actions. Avoid text-only controls when a standard icon already communicates the action.
 
@@ -419,13 +419,13 @@ Do not mix sharp and highly rounded shapes in the same local control group. Dens
 
 **Notebook cells.** Cells are the central surface. In edit mode they are 100% width, 10px radius, one-pixel gray border, divided internal sections, and background surface. Hover darkens the border. Focus lifts the cell with a solid shadow. Error cells use red outlines/shadows. Needs-run cells use stale/action yellow outlines. Published cells remove border and shadow so reports read as documents.
 
-**Code editor.** CodeMirror uses Fira Mono, a transparent border, 3px padding, 24px right padding, and subtle active-line highlights. Light editor background is white; dark editor background is `#282C34`. Reactive references use a blue underline and become thicker on hover.
+**Code editor.** CodeMirror uses Fira Mono, a transparent border, 3px padding, 24px right padding, and subtle active-line highlights. Light editor background is white. Dark editor background is `#282C34`. Reactive references use a blue underline and become thicker on hover.
 
 **Outputs.** Output areas use 16px padding, flow-root layout, and overflow auto. Standard output and tracebacks use Fira Mono. Error output is bold, red, rounded, lightly tinted, and preserves whitespace. Stale outputs fade and desaturate with a short delayed transition.
 
 **Markdown.** Markdown links use link tokens and visited-link tokens. Markdown headings use Lora. Markdown tabs, critic markup, tables, admonitions, and inline code are styled explicitly so authored notebooks render as polished documents.
 
-**Tables and dataframes.** Tables scroll horizontally when needed. Row stripes use a very light lime surface and card surface; hover uses a yellow surface. Cells are right-aligned by default with compact horizontal padding. Flush tables inside cells remove extra borders and inherit `--marimo-table-edge-padding`.
+**Tables and dataframes.** Tables scroll horizontally when needed. Row stripes use a very light lime surface and card surface. Hover uses a yellow surface. Cells are right-aligned by default with compact horizontal padding. Flush tables inside cells remove extra borders and inherit `--marimo-table-edge-padding`.
 
 **Data grid editor.** The Glide data editor uses a 1.25 line height. Dark mode overrides use zinc-like surfaces (`#18181B`, `#27272A`, `#3F3F46`) with a purple accent (`#7C3AED`) and indigo search result. Keep data-grid styling utilitarian and high-density.
 
@@ -442,7 +442,7 @@ Do not mix sharp and highly rounded shapes in the same local control group. Dens
 ## Do's and Don'ts
 
 - Do use the existing CSS variables and Tailwind semantic utilities before adding local hex colors.
-- Do keep editor and panel controls compact; 24px inputs, 24px icon buttons, and 36px small buttons are normal.
+- Do keep editor and panel controls compact. 24px inputs, 24px icon buttons, and 36px small buttons are normal.
 - Do make notebook outputs readable as documents in run/read mode by removing unnecessary editor chrome.
 - Do use borders, muted surfaces, and subtle solid shadows for hierarchy.
 - Do preserve dark-mode behavior through `.dark`, `light-dark()`, and scoped `.marimo` variables.
@@ -454,9 +454,9 @@ Do not mix sharp and highly rounded shapes in the same local control group. Dens
 - Do re-check WCAG contrast whenever changing primary, action, muted, or badge colors. Some exact source-derived pairs are intentionally subtle or compact and should not be copied into long body text without checking contrast.
 - Don't create marketing-style hero sections, decorative cards, or large illustration-led layouts inside the product UI.
 - Don't introduce one-off palettes for a feature when the semantic tokens or Radix scales already cover the state.
-- Don't overuse primary blue; reserve it for primary actions, selection, progress, and clear focus.
-- Don't use yellow as a generic warning color in notebook chrome; in marimo it often means action, stale, or needs-run.
+- Don't overuse primary blue. Reserve it for primary actions, selection, progress, and clear focus.
+- Don't use yellow as a generic warning color in notebook chrome. In marimo it often means action, stale, or needs-run.
 - Don't make nested cards or card-like page sections. Use cards only for repeated items, modals, or genuinely framed tools.
-- Don't hide important runtime state behind color alone; pair color with labels, icons, borders, or position.
+- Don't hide runtime state behind color alone. Pair color with labels, icons, borders, or position.
 - Don't add slow decorative animation. Motion should clarify state changes or loading.
 - Don't let app chrome dominate published notebooks. In read mode, content should be the first visual priority.

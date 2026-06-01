@@ -45,8 +45,8 @@ def manifest_value(value: Any) -> Any:
     """Return a JSON-safe representation for manifest/debug fields.
 
     Scenario state values are usually JSON literals. Code-backed state values
-    can evaluate to arbitrary Python objects; keep exports possible by recording
-    their type and repr instead of pretending the object itself is portable.
+    can evaluate to arbitrary Python objects. Record their type and repr so the
+    export can keep manifest-safe provenance.
     """
 
     if value is None or isinstance(value, str | int | bool):

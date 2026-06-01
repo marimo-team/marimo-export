@@ -24,7 +24,7 @@ class BlobRef(BaseModel):
         description="MIME type of the bytes for this specific artifact reference.",
     )
     size: int | None = Field(
-        description="Byte length, useful for diagnostics and preload decisions.",
+        description="Byte length for diagnostics and preload decisions.",
     )
     sha256: str | None = Field(
         description="Content hash used for dedupe and provenance.",
@@ -48,7 +48,7 @@ class ContentAddressedBlobStore:
         """Write bytes and return a stable blob reference.
 
         `name` is intentionally not part of the storage path. Exporter-provided
-        filenames are useful for intent, but byte identity is the dedupe key.
+        filenames describe intent. Byte identity is the dedupe key.
         """
 
         payload = bytes(data)

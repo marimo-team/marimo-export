@@ -1,9 +1,8 @@
 """Local execution primitives for planned notebook cells.
 
-The evaluator does not ask marimo's reactive runner to recompute cells. Instead
-it executes selected cell bodies into an isolated globals dictionary, evaluates
-their display output when needed, and builds cache keys for reusing pure cell
-results across batched scenario variants.
+The evaluator executes selected cell bodies into an isolated globals dictionary,
+evaluates their display output when needed, and builds cache keys for reusing
+pure cell results across batched scenario variants.
 """
 
 from __future__ import annotations

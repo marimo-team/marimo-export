@@ -1,9 +1,8 @@
 """Export marimo notebooks by reference.
 
-This module is the bridge from "already inside a marimo kernel" to "export this
-notebook reference". It intentionally stays thin: marimo resolves and loads the
-notebook; moexport injects one final export side effect and lets `evaluate`
-handle scenario-specific notebook execution.
+This module exports a notebook reference through marimo's resolver and script
+runner. marimo resolves and loads the notebook. moexport injects one final export
+side effect and lets `evaluate` handle scenario-specific notebook execution.
 """
 
 from __future__ import annotations
@@ -85,7 +84,7 @@ def read_notebook_source(notebook: NotebookReference) -> NotebookSource:
 
 
 def inspect_notebook_defs(notebook: NotebookReference) -> NotebookDefs:
-    """Resolve and parse a notebook, returning defs useful for export specs."""
+    """Resolve and parse a notebook, returning defs and cells for export specs."""
 
     resolved = _resolve_notebook(notebook)
     app = _load_required_app(resolved.path)
@@ -243,8 +242,8 @@ def _load_required_app(notebook: Path) -> App:
 
 def _append_export_cell(app: App) -> tuple[CellId_t, str, str, str]:
     # The hidden cell receives `spec` and `bundle` through the script runner's
-    # globals. It intentionally does not reference notebook defs; `mox.evaluate`
-    # owns dependency planning and scenario overrides.
+    # globals. It intentionally skips notebook defs. `mox.evaluate` owns
+    # dependency planning and scenario overrides.
     token = uuid.uuid4().hex
     result_name = f"__moexport_result_{token}"
     spec_name = f"__moexport_spec_{token}"

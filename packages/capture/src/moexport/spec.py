@@ -221,7 +221,7 @@ class ScenarioSpec(SpecModel):
     State keys use native Python assignment shapes. A bare name such as
     ``symbols`` overrides a notebook definition. A dotted path such as
     ``symbols_selector.value`` patches an attribute after the object has been
-    materialized. The authored spec has one concept, scenario state; the
+    materialized. The authored spec has one concept, scenario state. The
     evaluator splits it into execution phases later.
     """
 
@@ -233,7 +233,7 @@ class ScenarioSpec(SpecModel):
         default_factory=dict,
         description=(
             "Finite notebook state for this scenario. Bare names override "
-            "notebook definitions; dotted paths patch materialized object "
+            "notebook definitions. Dotted paths patch materialized object "
             "attributes, for example `slider.value`."
         ),
     )
@@ -330,7 +330,7 @@ def _builtin_format(name: str, options: object) -> dict[str, object]:
         ref = BUILTIN_FORMAT_EXPORTERS[name]
     except KeyError as error:
         raise ValueError(
-            f"unknown built-in format {name!r}; provide an explicit export config"
+            f"unknown built-in format {name!r}. Provide an explicit export config."
         ) from error
     return {
         "export": {
@@ -353,17 +353,16 @@ class ExportSpec(SpecModel):
     notebook: str | None = Field(
         default=None,
         description=(
-            "Optional producer-facing notebook path. The kernel runner does "
-            "not need it once attached to a live session, but an outer producer "
-            "usually does."
+            "Optional producer-facing notebook path. Attached live-session "
+            "exports already have a kernel. Outer producers use this path to "
+            "resolve the notebook."
         ),
     )
     bundle: BundleSpec | None = Field(
         default=None,
         description=(
-            "Optional bundle destination. The producer may also provide this "
-            "outside the spec, but keeping it here makes standalone specs "
-            "ergonomic."
+            "Optional bundle destination. Producers may also provide it outside "
+            "the spec. Standalone specs carry it here."
         ),
     )
     scenarios: list[ScenarioSpec] = Field(
