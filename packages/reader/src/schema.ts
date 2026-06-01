@@ -148,9 +148,6 @@ function sourceRecord(value: unknown, label: string): SourceRecord {
       type,
       cell: jsonObject(record.cell, `${label}.cell`),
     };
-    if (record.output !== undefined) {
-      result.output = string(record.output, `${label}.output`);
-    }
     if (record.on_error !== undefined) {
       result.on_error = string(record.on_error, `${label}.on_error`);
     }

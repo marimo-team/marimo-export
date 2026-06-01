@@ -40,7 +40,7 @@ class CapturingExporterContext:
         *,
         media_type: str | None = None,
     ) -> BlobRef:
-        href = f"memory://{name}"
+        href = f"blobs/test/{name}"
         blob = bytes(data)
         self.blobs[href] = blob
         return BlobRef(
@@ -146,13 +146,14 @@ def test_bundle_exports_widget_assets_state_and_buffers() -> None:
     assert _state_value(artifact, ctx, "nested") == [None]
     assert descriptor["assets"]["module"]["media_type"] == "text/javascript"
     assert descriptor["assets"]["style"]["media_type"] == "text/css"
-    assert descriptor["buffers"][0]["path"] == ["nested", 0]
-    assert descriptor["buffers"][1]["path"] == ["payload"]
-
-    first_buffer = artifact.data.files["buffer_0"]
-    second_buffer = artifact.data.files["buffer_1"]
-    assert ctx.blobs[first_buffer.href] == b"de"
-    assert ctx.blobs[second_buffer.href] == b"abc"
+    buffers = {
+        tuple(buffer["path"]): ctx.blobs[artifact.data.files[f"buffer_{index}"].href]
+        for index, buffer in enumerate(descriptor["buffers"])
+    }
+    assert buffers == {
+        ("nested", 0): b"de",
+        ("payload",): b"abc",
+    }
 
 
 def test_bundle_accepts_marimo_anywidget_wrapper() -> None:
@@ -193,17 +194,12 @@ def test_bundle_dedupes_identical_widget_files_across_value_names(
     first = anywidget_exporters.bundle(DemoWidget(count=1), first_ctx)
     second = anywidget_exporters.bundle(DemoWidget(count=1), second_ctx)
 
-    assert first.data.files["descriptor"].href == second.data.files["descriptor"].href
-    assert first.data.files["module"].href == second.data.files["module"].href
-    assert first.data.files["style"].href == second.data.files["style"].href
-    assert first.data.files["state.count"].href == second.data.files["state.count"].href
-    assert (
-        first.data.files["state.nested"].href == second.data.files["state.nested"].href
-    )
-    assert first.data.files["buffer_0"].href == second.data.files["buffer_0"].href
-    assert (
-        len([path for path in (tmp_path / "blobs").rglob("*") if path.is_file()]) == 7
-    )
+    first_hrefs = {key: ref.href for key, ref in first.data.files.items()}
+    second_hrefs = {key: ref.href for key, ref in second.data.files.items()}
+    assert first_hrefs == second_hrefs
+    assert len(
+        [path for path in (tmp_path / "blobs").rglob("*") if path.is_file()]
+    ) == len(set(first_hrefs.values()))
 
 
 def test_bundle_rejects_relative_frontend_references() -> None:

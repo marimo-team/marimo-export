@@ -56,10 +56,10 @@ async def evaluate_target_once(
 ) -> TargetRunResult:
     """Evaluate a notebook definition or Python expression in the live runtime.
 
-    Existing values are reused from the live session unless an explicit
-    override makes them dirty. The returned trace is intentionally rich enough
-    for the TS producer to explain what happened without transporting Python
-    object handles out of the kernel.
+    Existing values are reused from the live session unless an explicit override
+    marks them dirty. The returned trace includes graph and execution metadata
+    for the TS producer to explain the run without transporting Python object
+    handles out of the kernel.
     """
     ctx = get_context()
     graph = ctx.graph

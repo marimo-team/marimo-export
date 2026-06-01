@@ -72,8 +72,7 @@ uv run marimo-export notebook notebooks/agentic_playground.py \
 uv run marimo-export notebook notebooks/queueing_lab.py \
   --spec notebooks/export-specs/yaml/queueing-lab.yaml \
   --bundle examples/frameworkless/exports/queueing-lab
-
-deno run --node-modules-dir=auto --allow-net --allow-read --allow-write --allow-env \
-  --import-map scripts/quadratic-program-import-map.json \
-  scripts/capture-quadratic-program.ts
 ```
+
+`quadratic-program.html` reads the checked-in quadratic export fixture under
+`examples/frameworkless/exports/quadratic-program`.

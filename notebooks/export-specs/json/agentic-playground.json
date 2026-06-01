@@ -2,56 +2,38 @@
   "scenarios": [
     {
       "id": "north_balanced",
-      "inputs": {
+      "state": {
         "region": "North",
         "window": 6,
         "demand_bias": 0,
-        "scenario_name": "north_balanced"
-      },
-      "ui": {
-        "region_picker": {
-          "value": "North"
-        },
-        "mode_picker": {
-          "value": "balanced"
-        }
+        "scenario_name": "north_balanced",
+        "region_picker.value": "North",
+        "mode_picker.value": "balanced"
       }
     },
     {
       "id": "coast_surge",
-      "inputs": {
+      "state": {
         "region": "Coast",
         "window": 5,
         "demand_bias": 7,
-        "scenario_name": "coast_surge"
-      },
-      "ui": {
-        "region_picker": {
-          "value": "Coast"
-        },
-        "mode_picker": {
-          "value": "surge"
-        }
+        "scenario_name": "coast_surge",
+        "region_picker.value": "Coast",
+        "mode_picker.value": "surge"
       }
     },
     {
       "id": "south_conserve",
-      "inputs": {
+      "state": {
         "region": "South",
         "window": {
           "type": "code",
           "expression": "3 + 5"
         },
         "demand_bias": -3,
-        "scenario_name": "south_conserve"
-      },
-      "ui": {
-        "region_picker": {
-          "value": "South"
-        },
-        "mode_picker": {
-          "value": "conserve"
-        }
+        "scenario_name": "south_conserve",
+        "region_picker.value": "South",
+        "mode_picker.value": "conserve"
       }
     }
   ],

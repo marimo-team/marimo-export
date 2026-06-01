@@ -693,7 +693,7 @@
       function queueScenario(id, arrival, service, servers) {
         return {
           id,
-          inputs: {
+          state: {
             arrival_rate: pythonExpression(arrival.toFixed(1)),
             service_rate: pythonExpression(service.toFixed(1)),
             server_count: pythonExpression(String(servers)),

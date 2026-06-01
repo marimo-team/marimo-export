@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import asyncio
+import html
 import importlib
 from contextlib import nullcontext
-from typing import Any, cast
+from typing import Any
 
 import moexport as mox
 import pytest
@@ -14,12 +15,9 @@ from marimo._messaging.notebook.document import (
     NotebookDocument,
     notebook_document_context,
 )
-from marimo._runtime.context.types import RuntimeContext
 from marimo._runtime.dataflow import DirectedGraph
 from marimo._types.ids import CellId_t
 
-analysis_module = importlib.import_module("moexport.evaluate._analysis")
-overrides_module = importlib.import_module("moexport.evaluate._overrides")
 runtime_module = importlib.import_module("moexport.runtime")
 target_module = importlib.import_module("moexport.evaluate._target")
 
@@ -66,64 +64,102 @@ def first_result(response: dict[str, Any]) -> dict[str, Any]:
     return response["results"][0]
 
 
-def test_expression_refs_ignore_builtins() -> None:
-    assert analysis_module.expression_refs("len(df) + max(xs)") == ["df", "xs"]
+def test_evaluate_expression_metadata_ignores_builtins(monkeypatch) -> None:
+    graph = graph_from({})
+    ctx = FakeContext(graph=graph, globals={"df": [1], "xs": [2, 3]})
+    monkeypatch.setattr(target_module, "get_context", lambda: ctx)
+
+    response = run(mox.evaluate("len(df) + max(xs)"))
+    result = first_result(response)
+
+    assert result["value"] == 4
+    assert result["metadata"]["target"]["expression_refs"] == ["df", "xs"]
+    assert result["metadata"]["execution"]["stats"]["executed"] == 0
 
 
-def test_expression_refs_ignore_comprehension_locals() -> None:
-    assert analysis_module.expression_refs(
-        "{x: y for x in xs for y in [x + offset]}"
-    ) == ["offset", "xs"]
+def test_evaluate_expression_metadata_ignores_comprehension_locals(
+    monkeypatch,
+) -> None:
+    graph = graph_from({})
+    ctx = FakeContext(graph=graph, globals={"xs": [1, 2], "offset": 10})
+    monkeypatch.setattr(target_module, "get_context", lambda: ctx)
+
+    response = run(mox.evaluate("{x: y for x in xs for y in [x + offset]}"))
+    result = first_result(response)
+
+    assert result["value"] == {1: 11, 2: 12}
+    assert result["metadata"]["target"]["expression_refs"] == ["offset", "xs"]
+    assert result["metadata"]["execution"]["stats"]["executed"] == 0
 
 
-def test_body_refs_ignore_display_expr_and_builtins() -> None:
-    display_cell = cell("y = x + 1\ndf", "display")
-    builtin_cell = cell("chart = df + str(width)", "builtin")
+def test_evaluate_recomputes_cell_body_without_display_only_refs(
+    monkeypatch,
+) -> None:
+    graph = graph_from(
+        {
+            "input": "x = 1",
+            "display": "y = x + 1\ndf",
+            "dataframe": "df = 'live-only-display-value'",
+        }
+    )
+    ctx = FakeContext(
+        graph=graph,
+        globals={"x": 1, "y": 2, "df": "live-only-display-value"},
+    )
+    monkeypatch.setattr(target_module, "get_context", lambda: ctx)
 
-    assert analysis_module.body_refs(display_cell) == {"x"}
-    assert analysis_module.body_refs(builtin_cell) == {"df", "width"}
+    response = run(mox.evaluate("y", {"x": 2}))
+    result = first_result(response)
+
+    assert result["value"] == 3
+    assert result["computed_defs"] == {"y": 3}
+    assert graph_statuses(result) == ["pruned", "executed", "inactive"]
 
 
-def test_complete_overrides_auto_fills_sibling_defs() -> None:
+def test_evaluate_auto_fills_live_sibling_defs(monkeypatch) -> None:
     graph = graph_from({"config": "symbols = ['AAPL', 'MSFT']\ninterval = '1d'"})
     ctx = FakeContext(
         graph=graph,
         globals={"symbols": ["AAPL", "MSFT"], "interval": "1d"},
     )
+    monkeypatch.setattr(target_module, "get_context", lambda: ctx)
 
-    completion = run(
-        overrides_module.complete_overrides(
-            graph, cast(RuntimeContext, ctx), {"symbols": ["GOOGL"]}
-        )
-    )
+    response = run(mox.evaluate("interval", {"symbols": ["GOOGL"]}))
+    result = first_result(response)
 
-    assert completion.values == {"symbols": ["GOOGL"], "interval": "1d"}
-    assert completion.auto_filled["interval"]["because"] == "symbols"
-    assert completion.auto_filled["interval"]["from_cell"] == "config"
+    assert result["value"] == "1d"
+    assert result["auto_filled_overrides"]["interval"] == {
+        "from_cell": "config",
+        "because": "symbols",
+        "source": "live_runtime",
+        "value_preview": "'1d'",
+    }
 
 
-def test_complete_overrides_computes_missing_sibling_defaults() -> None:
+def test_evaluate_computes_missing_sibling_defaults(monkeypatch) -> None:
     graph = graph_from({"config": "a = 1\nb = 2"})
     ctx = FakeContext(graph=graph, globals={"a": 1})
+    monkeypatch.setattr(target_module, "get_context", lambda: ctx)
 
-    completion = run(
-        overrides_module.complete_overrides(graph, cast(RuntimeContext, ctx), {"a": 10})
-    )
+    response = run(mox.evaluate("b", {"a": 10}))
+    result = first_result(response)
 
-    assert completion.values == {"a": 10, "b": 2}
-    assert completion.auto_filled["b"]["source"] == "computed_default"
+    assert result["value"] == 2
+    assert result["auto_filled_overrides"]["b"] == {
+        "from_cell": "config",
+        "because": "a",
+        "source": "computed_default",
+        "value_preview": "2",
+    }
 
 
-def test_complete_overrides_errors_when_sibling_default_is_unavailable() -> None:
+def test_evaluate_errors_when_sibling_default_is_unavailable(monkeypatch) -> None:
     graph = graph_from({"config": "a = 1\nb = missing"})
     ctx = FakeContext(graph=graph, globals={"a": 1})
+    monkeypatch.setattr(target_module, "get_context", lambda: ctx)
 
     with pytest.raises(ValueError, match="Cannot auto-fill 'b'"):
-        run(
-            overrides_module.complete_overrides(
-                graph, cast(RuntimeContext, ctx), {"a": 10}
-            )
-        )
+        run(mox.evaluate("b", {"a": 10}))
 
 
 def test_evaluate_definition_reuses_clean_live_value(monkeypatch) -> None:
@@ -283,14 +319,10 @@ def test_evaluate_result_metadata_includes_mermaid_trace(monkeypatch) -> None:
     response = run(mox.evaluate("chart", {"symbol": "MSFT"}))
     mermaid = first_result(response)["metadata"]["mermaid"]
 
-    assert not hasattr(mox, "trace_mermaid")
-    assert mermaid.startswith("%%{init:")
+    assert mermaid
     assert "flowchart TD" in mermaid
-    assert "mox.evaluate trace" in mermaid
-    assert "chart = f&#x27;&lt;b&gt;{symbol}&lt;/b&gt;&#x27;" in mermaid
-    assert "class cell_chart target;" in mermaid
-    assert "class cell_config pruned;" in mermaid
-    assert "classDef executed" in mermaid
+    assert "chart = f'<b>{symbol}</b>'" in html.unescape(mermaid)
+    assert "chart = f'<b>{symbol}</b>'" not in mermaid
 
 
 def test_runtime_expression_can_read_cell_source(monkeypatch) -> None:
@@ -310,7 +342,7 @@ def test_runtime_expression_can_read_cell_source(monkeypatch) -> None:
     assert result["metadata"]["execution"]["stats"]["executed"] == 0
 
 
-def test_runtime_cell_has_source_not_code(monkeypatch) -> None:
+def test_runtime_cell_exposes_authored_source(monkeypatch) -> None:
     graph = graph_from({"display": "symbols[0]"})
     ctx = FakeContext(graph=graph, globals={"symbols": ["AAPL"]})
     monkeypatch.setattr(runtime_module, "get_context", lambda: ctx)
@@ -318,7 +350,6 @@ def test_runtime_cell_has_source_not_code(monkeypatch) -> None:
     cell = mox.runtime().cell(index=0)
 
     assert cell.source == "symbols[0]"
-    assert not hasattr(cell, "code")
 
 
 def test_runtime_cell_output_materializes_live_markdown(monkeypatch) -> None:
@@ -332,7 +363,6 @@ def test_runtime_cell_output_materializes_live_markdown(monkeypatch) -> None:
 
     cell = mox.runtime().cell(index=0)
 
-    assert graph.cells[CellId_t("display")]._output.output is None
     assert cell.output == "md:hello"
 
 

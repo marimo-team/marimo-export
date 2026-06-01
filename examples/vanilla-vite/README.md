@@ -38,12 +38,13 @@ The app calls `readLatestExport({ root: "/export/" })`, reads
 - `prices/parquet`: Parquet dataframe loaded by
   `@marimo-team/export-loader-parquet`.
 - `change_desc/html`: custom HTML exporter over the typed source
-  `{ cell: change_desc, output: scenario }`.
+  `{ cell: change_desc }`.
 - `comparison_chart/vegalite`: Vega-Lite artifact loaded by
   `@marimo-team/export-loader-vegalite`.
 - `comparison_chart/png_nogrid`: custom code-defined PNG exporter.
 - `ohlc_dashboard/bundle`: AnyWidget bundle hydrated by
   `@marimo-team/export-loader-anywidget`.
 
-Scenario `state` entries store `inputs`, `ui`, and `widgets` sections. The SPA
-uses DOM buttons to switch between those precomputed states.
+Bare scenario state keys override notebook definitions. Dotted keys such as
+`symbols_selector.value` patch object attributes before the SPA switches
+between precomputed scenarios.

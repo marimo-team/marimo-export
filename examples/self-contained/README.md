@@ -1,12 +1,13 @@
 # Self-contained Markdown exports
 
-This example turns a marimo notebook into a PR-reviewable folder:
+This example writes a linear notebook snapshot to a PR-reviewable folder:
 
-- `output.md` contains every notebook cell in order, with the input source and
-  display output directly below it.
+- `output.md` contains every notebook cell in order, with authored Python source
+  and display outputs below each cell label.
 - Inline HTML display outputs are converted to Markdown with `markdownify` so
   rendered prose and tables remain native Markdown where possible.
-- `media/` contains large or scripted static outputs referenced by the Markdown.
+- `media/` contains large or scripted display outputs referenced by the
+  Markdown.
 
 The generator keeps the Markdown-specific policy inside this example. It uses
 the core package only for capture/query primitives:
@@ -24,7 +25,7 @@ uv run --with-requirements examples/self-contained/requirements.txt \
   python examples/self-contained/generate.py \
   notebooks/finance.py \
   examples/self-contained/finance \
-  --inputs-json examples/self-contained/finance-state.json \
+  --state-json examples/self-contained/finance-state.json \
   --scenario-id finance-review \
   --title "Finance notebook static review"
 ```

@@ -74,8 +74,8 @@ const exp = await readExportArchive({ bytes: archive.bytes });
 ## Browser Entry
 
 Frameworkless pages can import the browser-native subpath. It avoids the
-generated OpenAPI dependency and uses plain `fetch` plus marimo's small
-HTTP/WebSocket capture surface.
+generated OpenAPI dependency and uses plain `fetch` plus the marimo
+HTTP/WebSocket endpoints used for capture.
 
 ```ts
 import {
@@ -105,8 +105,7 @@ const archive = await captureExportArchive(spec, {
 - `{ client }` injection keeps client construction separate from capture
   semantics.
 - `tsc` emits declarations, and `esbuild.config.mjs` emits the ESM JavaScript
-  entrypoints. This gives the package runnable ESM output without rewriting
-  compiled imports after the fact.
+  entrypoints listed in `package.json` exports.
 - `capture-core` contains environment-neutral capture orchestration.
 - `transport` contains marimo HTTP/WebSocket transport details.
 

@@ -32,7 +32,7 @@ export const buildFinanceSpec = (pairs: readonly FinancePair[] = financePairs) =
   notebook: marimoNotebook(),
   scenarios: pairs.map((pair) => ({
     id: pair.slug,
-    inputs: {
+    state: {
       symbols: pair.symbols,
       interval: "1d",
       start: "2025-04-01",
@@ -70,7 +70,7 @@ export const buildFinanceSpec = (pairs: readonly FinancePair[] = financePairs) =
       ],
     },
     change_desc: {
-      source: { cell: "change_desc", output: "scenario" },
+      source: { cell: "change_desc" },
       formats: [
         {
           html: {

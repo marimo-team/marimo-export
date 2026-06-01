@@ -7,11 +7,10 @@ with `@uwdata/flechette`.
 
 ```ts
 import { arrowLoader } from "@marimo-team/export-loader-arrow";
-import { readExport } from "@marimo-team/export-reader";
+import { readLatestExport } from "@marimo-team/export-reader";
 
-const exp = await readExport({
+const exp = await readLatestExport({
   root: "/export/",
-  manifest: "manifest.json",
   loaders: [arrowLoader()],
 });
 

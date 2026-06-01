@@ -2,98 +2,58 @@
   "scenarios": [
     {
       "id": "selector_crwv_msft",
-      "inputs": {
+      "state": {
         "symbols": ["AAPL", "AMZN", "CRWV", "GOOGL", "MSFT"],
         "interval": "1d",
         "start": "2025-04-01",
         "end": "2026-05-01",
-        "chart_width": 980
-      },
-      "ui": {
-        "symbols_selector": {
-          "value": ["CRWV", "MSFT"]
-        }
-      },
-      "widgets": {
-        "widget": {
-          "widget": {
-            "metric": "Close",
-            "mode": "absolute",
-            "selected_symbols": ["CRWV", "MSFT"]
-          }
-        }
+        "chart_width": 980,
+        "symbols_selector.value": ["CRWV", "MSFT"],
+        "widget.widget.metric": "Close",
+        "widget.widget.mode": "absolute",
+        "widget.widget.selected_symbols": ["CRWV", "MSFT"]
       }
     },
     {
       "id": "selector_aapl_googl_amzn",
-      "inputs": {
+      "state": {
         "symbols": ["AAPL", "AMZN", "CRWV", "GOOGL", "MSFT"],
         "interval": "1d",
         "start": "2025-04-01",
         "end": "2026-05-01",
-        "chart_width": 980
-      },
-      "ui": {
-        "symbols_selector": {
-          "value": ["AAPL", "GOOGL", "AMZN"]
-        }
-      },
-      "widgets": {
-        "widget": {
-          "widget": {
-            "metric": "Close",
-            "mode": "change",
-            "selected_symbols": ["AAPL", "GOOGL", "AMZN"]
-          }
-        }
+        "chart_width": 980,
+        "symbols_selector.value": ["AAPL", "GOOGL", "AMZN"],
+        "widget.widget.metric": "Close",
+        "widget.widget.mode": "change",
+        "widget.widget.selected_symbols": ["AAPL", "GOOGL", "AMZN"]
       }
     },
     {
       "id": "selector_ai_semis",
-      "inputs": {
+      "state": {
         "symbols": ["NVDA", "AMD", "AVGO", "TSM", "ASML"],
         "interval": "1d",
         "start": "2025-11-01",
         "end": "2026-05-01",
-        "chart_width": 980
-      },
-      "ui": {
-        "symbols_selector": {
-          "value": ["NVDA", "AMD", "AVGO"]
-        }
-      },
-      "widgets": {
-        "widget": {
-          "widget": {
-            "metric": "High",
-            "mode": "change",
-            "selected_symbols": ["NVDA", "AMD", "AVGO"]
-          }
-        }
+        "chart_width": 980,
+        "symbols_selector.value": ["NVDA", "AMD", "AVGO"],
+        "widget.widget.metric": "High",
+        "widget.widget.mode": "change",
+        "widget.widget.selected_symbols": ["NVDA", "AMD", "AVGO"]
       }
     },
     {
       "id": "selector_tsla_focus",
-      "inputs": {
+      "state": {
         "symbols": ["TSLA"],
         "interval": "1d",
         "start": "2025-01-01",
         "end": "2026-05-01",
-        "chart_width": 760
-      },
-      "ui": {
-        "symbols_selector": {
-          "value": ["TSLA"]
-        }
-      },
-      "widgets": {
-        "widget": {
-          "widget": {
-            "metric": "Close",
-            "mode": "absolute",
-            "selected_symbols": ["TSLA"]
-          }
-        }
+        "chart_width": 760,
+        "symbols_selector.value": ["TSLA"],
+        "widget.widget.metric": "Close",
+        "widget.widget.mode": "absolute",
+        "widget.widget.selected_symbols": ["TSLA"]
       }
     }
   ],
@@ -145,8 +105,7 @@
     },
     "change_desc": {
       "source": {
-        "cell": "change_desc",
-        "output": "scenario"
+        "cell": "change_desc"
       },
       "formats": {
         "html": {

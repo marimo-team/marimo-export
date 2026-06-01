@@ -26,8 +26,8 @@ result = await mox.export(spec, bundle="notebooks/__marimo__/static-export")
 ```
 
 `source.def` names a notebook definition. `source.expr` evaluates a Python
-expression in the active scenario. `source.cell` selects a marimo cell output
-by cell name, id, or index.
+expression in the active scenario. `source.cell` selects a marimo cell by name,
+id, or index and captures the output after scenario state has been applied.
 
 ## Export A Notebook File
 
@@ -58,9 +58,9 @@ __moexport_result_abcd = await __moexport.export(
 )
 ```
 
-Only that synthetic cell is scheduled by the outer script runner. Scenario
-execution is delegated to `mox.evaluate`, which applies overrides before dirty
-downstream notebook cells run.
+Only that synthetic cell is scheduled by the outer script runner.
+`mox.evaluate` applies scenario state before dirty downstream notebook cells
+run.
 
 ## Capture From A Live Server
 
@@ -127,14 +127,12 @@ marimo-export query notebooks/__marimo__/static-export entries \
 scenarios:
   - id: default
   - id: wide_chart
-    inputs:
+    state:
       chart_width: 1200
   - id: selected_names
-    inputs:
+    state:
       symbols: ["AAPL", "AMZN", "MSFT"]
-    ui:
-      symbols_selector:
-        value: ["AAPL", "MSFT"]
+      symbols_selector.value: ["AAPL", "MSFT"]
 
 values:
   prices:
@@ -142,7 +140,7 @@ values:
     formats: [arrow, parquet]
 
   change_desc:
-    source: { cell: change_desc, output: scenario }
+    source: { cell: change_desc }
     formats:
       html:
         export:
@@ -167,15 +165,22 @@ values:
     formats: [display, markdown]
 ```
 
-Scenarios are finite runtime states. `inputs` override notebook definitions.
-`ui` and `widgets` patch materialized objects after their producer cells run.
+Scenarios are finite runtime states. Bare `state` keys override notebook
+definitions. Dotted `state` keys patch materialized objects after their
+producer cells run. For example, `symbols_selector.value` patches the
+`value` attribute on `symbols_selector`.
+
 `source.report` captures selected display cells as an ordered report snapshot.
 `on_error: record` stores display failures as artifact diagnostics, so the
 remaining cells can still be exported.
 
-Manifest `state` stores those sections as JSON for lookup. If a scenario uses a
-code-authored input value, `declared_state` stores the authored expression for
-provenance.
+Manifest `state` stores the resolved JSON state used for lookup. If a scenario
+uses a code-authored state value, `declared_state` stores the authored
+expression for provenance. The evaluated value must be JSON-compatible, so the
+manifest does not use Python `repr(...)` as identity.
+
+Build sweeps by generating a finite scenarios list before capture. `mox.export`
+consumes the resolved list from YAML or JSON.
 
 ## Exporters
 
@@ -252,8 +257,21 @@ result = await mox.export(spec)
 archive = mox.archive_bundle(result)
 ```
 
-The archive contains the same canonical `index.json`, `bundles/...`,
-`traces/...`, and `blobs/sha256/...` tree that `export` writes to disk.
+The archive contains the same canonical `index.json`, `bundles/...`, and
+`blobs/sha256/...` tree that `export` writes to disk. Invocation traces live
+under each bundle at `bundles/<id>/traces/...`.
+
+## Bundle Contract
+
+Every artifact payload is stored as a content-addressed blob. `BlobRef.href`
+is bundle-relative, `BlobRef.size` records the byte length, and
+`BlobRef.sha256` records the digest readers verify before parsing loaded
+artifact bytes.
+
+`ArtifactRecord.format_id` identifies the artifact payload format that readers
+and loaders match, for example `dataframe.arrow.v1`. Exporters can write
+multiple named files for one artifact, but `data.entry` must point at one of
+those files when the format has a canonical entry.
 
 ## Query API
 
@@ -264,11 +282,11 @@ export = mox.open_export("notebooks/__marimo__/static-export")
 
 export.catalog()
 export.notebooks()
-export.scenarios(state={"inputs.chart_width": 1200})
+export.scenarios(state={"chart_width": 1200})
 export.values(value="prices")
 export.formats(value="prices")
 export.artifacts(
-    state={"inputs.chart_width": 1200},
+    state={"chart_width": 1200},
     value="comparison_chart",
     format="vegalite",
 )
@@ -278,7 +296,7 @@ export.notebooks()[0]["source_sha256"]
 ```
 
 `export.notebook_source(...)["text"]` returns notebook text only when the spec
-sets `provenance: {source: source}`.
+sets `provenance: { source: "source" }`.
 
 For one bundle:
 
@@ -292,9 +310,98 @@ bundle.files(value="prices", dedupe=True)
 bundle.graph("default")
 ```
 
-The query API is intentionally loader-free. It exposes the semantic map,
-manifest metadata, source provenance, artifact records, blob paths, and
-invocation graph traces so callers can decide how to inspect the files.
+Query objects do not load artifact payloads. They expose manifest metadata,
+source provenance, artifact records, blob paths, and invocation graph traces so
+callers can inspect the stored files with their own loaders.
+
+Common selectors:
+
+- `bundle`: Bundle id or id prefix. Omit it to query all bundles from an export
+  root.
+- `scenario`: Scenario id.
+- `state`: Resolved-state filter. Dotted keys match object patches such as
+  `symbols_selector.value`.
+- `value`: Exported value name.
+- `format`: Spec format key such as `arrow` or `summary`.
+- `format_id`: Artifact payload format such as `dataframe.arrow.v1`.
+- `media_type`: Artifact media type.
+
+### `open_export(path)`
+
+Opens a static export root, bundle directory, or manifest file.
+
+Returns an `ExportQuery`. Raises when the path cannot resolve to an export
+root.
+
+### `export.catalog()`
+
+Returns a compact root index with counts, bundle summaries, notebook records,
+value records, format records, state keys, media types, and scenario rows.
+
+### `export.bundle(id=None)`
+
+Opens one bundle as a `BundleQuery`.
+
+- `id`: Bundle id or id prefix. Omit it only when the export root contains one
+  bundle.
+
+Raises when no bundle exists, when the prefix matches no bundle, or when the
+prefix is ambiguous.
+
+### `export.scenarios(...)`
+
+Returns scenario rows across bundles.
+
+Rows include the bundle id, bundle path, notebook record, scenario id, resolved
+state, available value and format matrix, and artifact count.
+
+### `export.values(...)` and `export.formats(...)`
+
+`values(...)` returns exported value specs across bundles. `formats(...)`
+returns format availability grouped by value and format name after applying the
+same scenario, state, value, and format selectors used by `artifacts(...)`.
+
+### `export.artifacts(...)` and `export.artifact(...)`
+
+`artifacts(...)` returns flattened artifact rows with scenario, state, value,
+source, format key, `format_id`, media type, files, and metadata.
+
+`artifact(...)` returns exactly one artifact row. It raises when the selectors
+match no artifacts or more than one artifact.
+
+### `export.files(...)` and `export.file(...)`
+
+`files(...)` returns blob file rows with semantic usage metadata. It deduplicates
+rows by href by default across an export root.
+
+`file(...)` returns exactly one file row. It raises when the selectors match no
+files or more than one file.
+
+### `export.entries(...)` and `export.entry(...)`
+
+`entries(...)` returns the canonical entry file for each matching artifact.
+
+- `include_content`: Inline small JSON or text content. Defaults to `False`.
+- `max_bytes`: Maximum byte size to inline when `include_content` is enabled.
+  Defaults to `65536`.
+
+`entry(...)` returns exactly one entry row. It raises when the selectors match
+no entries or more than one entry.
+
+### `export.notebooks()` and `export.notebook_source(...)`
+
+`notebooks()` returns notebook records grouped across bundles.
+
+`notebook_source(...)` returns exactly one stored notebook source and includes
+the source text. It raises when no source was stored or when the selectors match
+more than one source.
+
+### `bundle.summary()`, `bundle.map()`, `bundle.trace()`, and `bundle.graph()`
+
+`summary()` returns bundle-level identity and count metadata. `map()` expands
+the same bundle into values, scenarios, artifacts, files, and traces. `trace()`
+loads the latest invocation trace or one scenario trace. `graph()` returns the
+captured dependency graph metadata for one scenario or all scenarios.
 
 ## Mechanics
 

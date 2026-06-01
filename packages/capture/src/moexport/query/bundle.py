@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from moexport.blobs import BlobRef
+from moexport.blobs import BlobRef, validate_bundle_href
 from moexport.bundle.schema import (
     BundleManifest,
     InvocationIndex,
@@ -56,7 +56,7 @@ class BundleQuery:
         return bundle_summary(self.manifest_path, self.manifest)
 
     def map(self) -> JsonObject:
-        """Return the semantic map agents usually need first."""
+        """Return a compact semantic map for bundle inspection."""
 
         return {
             **self.summary(),
@@ -412,8 +412,7 @@ class BundleQuery:
             href = href_or_ref.href
         else:
             href = href_or_ref["href"] if isinstance(href_or_ref, dict) else href_or_ref
-        path = Path(str(href))
-        return path if path.is_absolute() else self.root / path
+        return self.root / validate_bundle_href(str(href))
 
     def _scenario_records(self, scenario: str | None) -> list[ManifestScenario]:
         if scenario is None:

@@ -55,7 +55,7 @@ def cli() -> None:
     \b
     Query progressively:
       marimo-export query out                         # catalog
-      marimo-export query out scenarios --state inputs.chart_width=1200
+      marimo-export query out scenarios --state chart_width=1200
       marimo-export query out source --scenario wide_chart
       marimo-export query out entries --value summary --format json --content
       marimo-export query out artifacts --value df --format arrow

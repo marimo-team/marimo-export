@@ -513,7 +513,7 @@
         const grid = $("#scenario-grid");
         grid.innerHTML = "";
 
-        for (const scenario of exportReader.manifest.scenarios) {
+        for (const scenario of exportReader.scenarioRecords()) {
           const button = document.createElement("button");
           button.type = "button";
           button.className = "scenario-button";

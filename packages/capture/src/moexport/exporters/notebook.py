@@ -28,7 +28,7 @@ class NotebookLinearOptions(ExporterOptions):
     )
     include_internal_cells: bool = Field(
         default=False,
-        description="Keep moexport's synthetic export cell in the snapshot.",
+        description="Include exporter-generated internal cells in the snapshot.",
     )
 
 

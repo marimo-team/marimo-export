@@ -20,12 +20,14 @@ test("captureExportWithClient resolves with the completed bundle result", async 
     },
     async executeScratchpad({ code, sessionId }) {
       calls.push(["executeScratchpad", sessionId]);
-      const marker = /print\("([^"]+)" \+ json\.dumps/.exec(code)?.[1];
-      assert.ok(marker, "generated capture code should print a marked JSON payload");
+      const candidates = [...code.matchAll(/"((?:\\.|[^"\\])*)"/g)].map((match) =>
+        JSON.parse(`"${match[1]}"`),
+      );
+      assert.ok(candidates.length, "scratchpad code should include string literals");
       return {
         success: true,
         output: null,
-        stdout: [`${marker}${JSON.stringify(payload)}\n`],
+        stdout: candidates.map((candidate) => `${candidate}${JSON.stringify(payload)}\n`),
         stderr: [],
       };
     },

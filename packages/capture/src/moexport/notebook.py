@@ -152,10 +152,10 @@ def export_notebook(
     result = await mox.export(spec, bundle=bundle)
     ```
 
-    The important detail is that only this synthetic cell is scheduled by the
-    outer script runner. Scenario-specific notebook execution is delegated to
-    ``mox.evaluate`` so overrides such as ``symbols=["CRWV", "MSFT"]`` are
-    applied before expensive downstream cells run.
+    Only this synthetic cell is scheduled by the outer script runner.
+    ``mox.evaluate`` runs scenario-specific notebook execution, so overrides
+    such as ``symbols=["CRWV", "MSFT"]`` apply before expensive downstream
+    cells run.
     """
 
     run_options = _run_options(run)

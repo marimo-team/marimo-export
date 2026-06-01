@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import importlib.util
 from pathlib import Path
 
 import pytest
@@ -30,11 +31,11 @@ def test_export_spec_parses_finance_like_shape() -> None:
                 {"id": "default"},
                 {
                     "id": "wide-chart",
-                    "inputs": {"chart_width": 1200},
+                    "state": {"chart_width": 1200},
                 },
                 {
                     "id": "dynamic-window",
-                    "inputs": {
+                    "state": {
                         "symbols": ["AAPL", "MSFT"],
                         "start": {
                             "type": "code",
@@ -83,10 +84,10 @@ def test_export_spec_parses_finance_like_shape() -> None:
     assert spec.notebook == "notebooks/finance.py"
     assert spec.bundle is not None
     assert spec.bundle.path == "examples/finance/export_bundle"
-    assert spec.scenarios[1].inputs["chart_width"] == 1200
-    assert spec.scenarios[2].inputs["symbols"] == ["AAPL", "MSFT"]
+    assert spec.scenarios[1].state["chart_width"] == 1200
+    assert spec.scenarios[2].state["symbols"] == ["AAPL", "MSFT"]
 
-    start = spec.scenarios[2].inputs["start"]
+    start = spec.scenarios[2].state["start"]
     assert isinstance(start, CodeStateValue)
     assert start.expression == "compute_start_date()"
 
@@ -119,9 +120,7 @@ def test_export_spec_defaults_to_one_default_scenario() -> None:
     )
 
     assert [scenario.id for scenario in spec.scenarios] == ["default"]
-    assert spec.scenarios[0].inputs == {}
-    assert spec.scenarios[0].ui == {}
-    assert spec.scenarios[0].widgets == {}
+    assert spec.scenarios[0].state == {}
 
 
 def test_export_spec_accepts_product_shaped_sources_and_formats() -> None:
@@ -133,7 +132,7 @@ def test_export_spec_accepts_product_shaped_sources_and_formats() -> None:
                     "formats": ["arrow", "parquet"],
                 },
                 "change_desc": {
-                    "source": {"cell": "change_desc", "output": "scenario"},
+                    "source": {"cell": "change_desc"},
                     "formats": [{"html": {"filename": "change-desc.html"}}],
                 },
                 "chart": {
@@ -164,7 +163,6 @@ def test_export_spec_accepts_product_shaped_sources_and_formats() -> None:
     ) == {
         "type": "cell_output",
         "cell": {"name": "change_desc"},
-        "output": "scenario",
         "on_error": "raise",
     }
     assert spec.values["change_desc"].formats["html"].export == RefExport(
@@ -197,7 +195,7 @@ def test_export_spec_rejects_unknown_format_shorthand() -> None:
 
 def test_export_spec_loads_json_and_yaml_files(tmp_path: Path) -> None:
     value = {
-        "scenarios": [{"id": "wide", "inputs": {"chart_width": 1200}}],
+        "scenarios": [{"id": "wide", "state": {"chart_width": 1200}}],
         "values": {
             "prices": {
                 "source": {"def": "df"},
@@ -219,7 +217,7 @@ def test_export_spec_loads_json_and_yaml_files(tmp_path: Path) -> None:
         """
 scenarios:
   - id: wide
-    inputs:
+    state:
       chart_width: 1200
 values:
   prices:
@@ -237,6 +235,27 @@ values:
     from_yaml = load_export_spec(yaml_path)
 
     assert from_json.model_dump(mode="json") == from_yaml.model_dump(mode="json")
+
+
+def test_checked_in_json_specs_match_yaml_sources(tmp_path: Path) -> None:
+    repo = Path(__file__).resolve().parents[3]
+    script_path = repo / "scripts" / "sync_specs.py"
+    spec = importlib.util.spec_from_file_location("sync_specs", script_path)
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    module.sync_specs(
+        repo / "notebooks" / "export-specs" / "yaml",
+        tmp_path,
+    )
+
+    json_dir = repo / "notebooks" / "export-specs" / "json"
+    for generated in sorted(tmp_path.glob("*.json")):
+        assert json.loads((json_dir / generated.name).read_text(encoding="utf-8")) == (
+            json.loads(generated.read_text(encoding="utf-8"))
+        )
 
 
 def test_export_spec_parses_yaml_text_without_extension() -> None:
@@ -265,7 +284,7 @@ def test_export_spec_serializes_code_state_stably() -> None:
             "scenarios": [
                 {
                     "id": "computed",
-                    "inputs": {
+                    "state": {
                         "end": {
                             "type": "code",
                             "expression": "latest_market_close()",
@@ -290,7 +309,7 @@ def test_export_spec_serializes_code_state_stably() -> None:
     )
 
     dumped = spec.model_dump(mode="json")
-    assert dumped["scenarios"][0]["inputs"]["end"] == {
+    assert dumped["scenarios"][0]["state"]["end"] == {
         "type": "code",
         "expression": "latest_market_close()",
     }
@@ -372,21 +391,12 @@ def test_export_spec_rejects_bad_export_ref() -> None:
 def test_export_spec_json_schema_preserves_field_descriptions() -> None:
     schema = ExportSpec.model_json_schema()
 
-    for field_schema in schema["properties"].values():
-        assert field_schema.get("description")
+    for field_name, field_schema in schema["properties"].items():
+        assert field_schema.get("description"), field_name
 
-    for definition_name in [
-        "BundleSpec",
-        "CodeExport",
-        "CodeStateValue",
-        "FormatSpec",
-        "RefExport",
-        "ScenarioSpec",
-        "ValueSpec",
-    ]:
-        properties = schema["$defs"][definition_name]["properties"]
-        for field_schema in properties.values():
-            assert field_schema.get("description")
+    for definition_name, definition_schema in schema["$defs"].items():
+        for field_name, field_schema in definition_schema.get("properties", {}).items():
+            assert field_schema.get("description"), f"{definition_name}.{field_name}"
 
     png_schema = PngOptions.model_json_schema()
     assert png_schema["properties"]["scale"]["description"]

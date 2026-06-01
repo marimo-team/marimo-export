@@ -4,8 +4,8 @@ Astro 6.2 SSG example that builds a static gallery from marimo learn notebook
 metadata.
 
 The default build uses a committed catalog fixture, groups notebooks by topic,
-and renders static HTML. It does not execute cells, capture bundles, render
-notebook outputs, or load marimo frontend components.
+and renders static HTML. It does not execute cells, capture bundles,
+materialize display outputs, or load marimo frontend components.
 
 Run the static build:
 
