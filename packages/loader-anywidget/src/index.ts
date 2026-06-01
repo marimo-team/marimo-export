@@ -72,9 +72,7 @@ async function loadAnyWidget<T extends AnyWidgetState>(
 ): Promise<LoadedAnyWidget<T>> {
   const descriptor = await context.file("descriptor").json<AnyWidgetDescriptor>();
   const initialState = await loadInitialState<T>(context, descriptor);
-  const inlineCssText = context.record.data.files.style
-    ? await context.file("style").text()
-    : null;
+  const inlineCssText = context.record.data.files.style ? await context.file("style").text() : null;
   const objectUrls = new Set<string>();
 
   const createWidgetWithCleanup = async (

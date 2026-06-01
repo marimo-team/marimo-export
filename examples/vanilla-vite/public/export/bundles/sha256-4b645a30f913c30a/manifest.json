@@ -1,0 +1,1252 @@
+{
+  "schema": "moexport.bundle.v1",
+  "version": 1,
+  "id": "sha256-4b645a30f913c30a",
+  "sha256": "4b645a30f913c30ae3618f96378bb3e3d5e280c707ba9d01896fa15423d9ee9c",
+  "notebook": {
+    "name": "finance.py",
+    "source": null,
+    "source_sha256": "24459fa3607b98ec1600fcf0e6bedeb21c43c67c277192ad900031790f70a612"
+  },
+  "scenario_set": {
+    "id": "sha256-27d1a7eb74312aa2",
+    "sha256": "27d1a7eb74312aa2775cc099698e712d58987e4e4e4821ab14019b29601c56de"
+  },
+  "capture": {
+    "id": "sha256-4181589a1c02d829",
+    "request_sha256": "4181589a1c02d829392a1fcf1c4ac1918e27f59c5c5a401b697732ce4f0c986a"
+  },
+  "values": {
+    "summary": {
+      "source": {
+        "type": "expression",
+        "expression": "{\n    \"rows\": df.height,\n    \"columns\": df.columns,\n    \"symbols\": sorted(df[\"Symbol\"].unique().to_list()),\n    \"date_start\": df[\"Date\"].min().strftime(\"%Y-%m-%d\"),\n    \"date_end\": df[\"Date\"].max().strftime(\"%Y-%m-%d\"),\n}"
+      },
+      "formats": ["json"]
+    },
+    "symbols_selector": {
+      "source": {
+        "type": "expression",
+        "expression": "{\n    \"label\": \"Select symbols to compare\",\n    \"options\": symbols,\n    \"value\": symbols_selector.value,\n}"
+      },
+      "formats": ["json"]
+    },
+    "prices": {
+      "source": {
+        "type": "definition",
+        "name": "df"
+      },
+      "formats": ["arrow", "parquet"]
+    },
+    "change_desc": {
+      "source": {
+        "type": "cell_output",
+        "cell": {
+          "name": "change_desc"
+        },
+        "on_error": "raise"
+      },
+      "formats": ["html"]
+    },
+    "comparison_chart": {
+      "source": {
+        "type": "definition",
+        "name": "symbols_chart"
+      },
+      "formats": ["vegalite", "png_nogrid"]
+    },
+    "ohlc_dashboard": {
+      "source": {
+        "type": "definition",
+        "name": "widget"
+      },
+      "formats": ["bundle"]
+    }
+  },
+  "scenarios": [
+    {
+      "id": "selector_aapl_googl_amzn",
+      "state": {
+        "symbols": ["AAPL", "AMZN", "CRWV", "GOOGL", "MSFT"],
+        "interval": "1d",
+        "start": "2025-04-01",
+        "end": "2026-05-01",
+        "chart_width": 980,
+        "symbols_selector.value": ["AAPL", "GOOGL", "AMZN"],
+        "widget.widget.metric": "Close",
+        "widget.widget.mode": "change",
+        "widget.widget.selected_symbols": ["AAPL", "GOOGL", "AMZN"]
+      },
+      "values": {
+        "summary": {
+          "json": {
+            "format_id": "summary.json.v1",
+            "media_type": "application/json",
+            "data": {
+              "type": "bundle",
+              "files": {
+                "data": {
+                  "href": "blobs/sha256/22/e9/22e9555aa19cffd53b23a49d235ae2179541bbc0aa3eda8a7723d4570e24590d",
+                  "media_type": "application/json",
+                  "size": 325,
+                  "sha256": "22e9555aa19cffd53b23a49d235ae2179541bbc0aa3eda8a7723d4570e24590d"
+                }
+              },
+              "entry": "data"
+            },
+            "metadata": {
+              "kind": "finance-summary"
+            }
+          }
+        },
+        "symbols_selector": {
+          "json": {
+            "format_id": "marimo.selector-state.json.v1",
+            "media_type": "application/json",
+            "data": {
+              "type": "bundle",
+              "files": {
+                "data": {
+                  "href": "blobs/sha256/47/a6/47a6bbd78455a538bd31230a0618e4640a12410a1cd46e951a435771b6955eeb",
+                  "media_type": "application/json",
+                  "size": 176,
+                  "sha256": "47a6bbd78455a538bd31230a0618e4640a12410a1cd46e951a435771b6955eeb"
+                }
+              },
+              "entry": "data"
+            },
+            "metadata": {
+              "kind": "marimo-selector-state"
+            }
+          }
+        },
+        "prices": {
+          "arrow": {
+            "format_id": "dataframe.arrow.v1",
+            "media_type": "application/vnd.apache.arrow.stream",
+            "data": {
+              "type": "bundle",
+              "files": {
+                "data": {
+                  "href": "blobs/sha256/33/5e/335eefe91358a83598a129693c4c5cd7d97a1f8589883b48b2ffb63bc05d2081",
+                  "media_type": "application/vnd.apache.arrow.stream",
+                  "size": 116400,
+                  "sha256": "335eefe91358a83598a129693c4c5cd7d97a1f8589883b48b2ffb63bc05d2081"
+                }
+              },
+              "entry": "data"
+            },
+            "metadata": {
+              "rows": 1360,
+              "columns": [
+                "Date",
+                "Symbol",
+                "Open",
+                "Open Change",
+                "High",
+                "High Change",
+                "Low",
+                "Low Change",
+                "Close",
+                "Close Change"
+              ]
+            }
+          },
+          "parquet": {
+            "format_id": "dataframe.parquet.v1",
+            "media_type": "application/vnd.apache.parquet",
+            "data": {
+              "type": "bundle",
+              "files": {
+                "data": {
+                  "href": "blobs/sha256/c2/86/c28624eb04d06c6ee9e04395e2491d6323e152f62395d3b9423a6221ce2b0411",
+                  "media_type": "application/vnd.apache.parquet",
+                  "size": 108449,
+                  "sha256": "c28624eb04d06c6ee9e04395e2491d6323e152f62395d3b9423a6221ce2b0411"
+                }
+              },
+              "entry": "data"
+            },
+            "metadata": {
+              "rows": 1360,
+              "columns": [
+                "Date",
+                "Symbol",
+                "Open",
+                "Open Change",
+                "High",
+                "High Change",
+                "Low",
+                "Low Change",
+                "Close",
+                "Close Change"
+              ],
+              "compression": "NONE"
+            }
+          }
+        },
+        "change_desc": {
+          "html": {
+            "format_id": "marimo.cell_output.html.v1",
+            "media_type": "text/html",
+            "data": {
+              "type": "bundle",
+              "files": {
+                "html": {
+                  "href": "blobs/sha256/a9/a2/a9a21d2146947faa13b90b6f2c4cea540c4fd585bd651e8958a52a7f92d20545",
+                  "media_type": "text/html",
+                  "size": 329,
+                  "sha256": "a9a21d2146947faa13b90b6f2c4cea540c4fd585bd651e8958a52a7f92d20545"
+                }
+              },
+              "entry": "html"
+            },
+            "metadata": {
+              "kind": "marimo-cell-output",
+              "cell": "change_desc"
+            }
+          }
+        },
+        "comparison_chart": {
+          "vegalite": {
+            "format_id": "vegalite.v1",
+            "media_type": "application/vnd.vegalite+json",
+            "data": {
+              "type": "bundle",
+              "files": {
+                "spec": {
+                  "href": "blobs/sha256/26/58/2658149090e802161cf08732a0ad2e97c9a41a46d2aecd1c203d0cbda4cab06d",
+                  "media_type": "application/vnd.vegalite+json",
+                  "size": 237028,
+                  "sha256": "2658149090e802161cf08732a0ad2e97c9a41a46d2aecd1c203d0cbda4cab06d"
+                }
+              },
+              "entry": "spec"
+            },
+            "metadata": {
+              "schema": "https://vega.github.io/schema/vega-lite/v6.4.1.json"
+            }
+          },
+          "png_nogrid": {
+            "format_id": "image.png.nogrid.v1",
+            "media_type": "image/png",
+            "data": {
+              "type": "bundle",
+              "files": {
+                "image": {
+                  "href": "blobs/sha256/4b/7c/4b7c571d735d85270c328f511ee0294d6813747f6e117f2ac6a1ac39666a49c9",
+                  "media_type": "image/png",
+                  "size": 479482,
+                  "sha256": "4b7c571d735d85270c328f511ee0294d6813747f6e117f2ac6a1ac39666a49c9"
+                }
+              },
+              "entry": "image"
+            },
+            "metadata": {
+              "source_format": "vegalite.v1",
+              "grid": false,
+              "scale": 2
+            }
+          }
+        },
+        "ohlc_dashboard": {
+          "bundle": {
+            "format_id": "anywidget.bundle.v1",
+            "media_type": "application/vnd.moexport.anywidget+json",
+            "data": {
+              "type": "bundle",
+              "files": {
+                "descriptor": {
+                  "href": "blobs/sha256/04/b3/04b31d90729479aa177ddc81f1dea3b5c32248c55c78d934a676bc5f30bc8fed",
+                  "media_type": "application/vnd.moexport.anywidget+json",
+                  "size": 1999,
+                  "sha256": "04b31d90729479aa177ddc81f1dea3b5c32248c55c78d934a676bc5f30bc8fed"
+                },
+                "module": {
+                  "href": "blobs/sha256/54/20/5420760b331117c5b3e33b544bac8c80b34db93ffa46d1d932f2fa429b4270ed",
+                  "media_type": "text/javascript",
+                  "size": 13685,
+                  "sha256": "5420760b331117c5b3e33b544bac8c80b34db93ffa46d1d932f2fa429b4270ed"
+                },
+                "style": {
+                  "href": "blobs/sha256/89/cb/89cb29753f841415e4b836d7d94e4d57827fdc94dd5e651596f290bd784962f1",
+                  "media_type": "text/css",
+                  "size": 5484,
+                  "sha256": "89cb29753f841415e4b836d7d94e4d57827fdc94dd5e651596f290bd784962f1"
+                },
+                "state.metric": {
+                  "href": "blobs/sha256/5f/86/5f86a55e9d943259f87fb7a4babda70cd65f372977c7ddde8ab1ee8743c7497a",
+                  "media_type": "application/json",
+                  "size": 8,
+                  "sha256": "5f86a55e9d943259f87fb7a4babda70cd65f372977c7ddde8ab1ee8743c7497a"
+                },
+                "state.mode": {
+                  "href": "blobs/sha256/75/13/7513f54f6270ed12691a4b60e3de725dfcc8a8ef8aec1ddc8f7be5c0e0f13a2c",
+                  "media_type": "application/json",
+                  "size": 9,
+                  "sha256": "7513f54f6270ed12691a4b60e3de725dfcc8a8ef8aec1ddc8f7be5c0e0f13a2c"
+                },
+                "state.rows": {
+                  "href": "blobs/sha256/09/ed/09ed583b7bcc554786a016017d8beb0702096be2662ccb1f7a2b00603b4f961d",
+                  "media_type": "application/json",
+                  "size": 486990,
+                  "sha256": "09ed583b7bcc554786a016017d8beb0702096be2662ccb1f7a2b00603b4f961d"
+                },
+                "state.selected_symbols": {
+                  "href": "blobs/sha256/db/07/db071a4646ed82bada29135e29d904a5184af06b9561bb2f832658ae2f15c5e1",
+                  "media_type": "application/json",
+                  "size": 34,
+                  "sha256": "db071a4646ed82bada29135e29d904a5184af06b9561bb2f832658ae2f15c5e1"
+                },
+                "state.title": {
+                  "href": "blobs/sha256/87/e7/87e7d62b2216849026514585507ded3679fa7d565aca016d554f0d22d1bb7457",
+                  "media_type": "application/json",
+                  "size": 30,
+                  "sha256": "87e7d62b2216849026514585507ded3679fa7d565aca016d554f0d22d1bb7457"
+                }
+              },
+              "entry": "descriptor"
+            },
+            "metadata": {
+              "anywidget_id": "builtins.OhlcSwitcher",
+              "buffer_count": 0,
+              "has_style": true,
+              "state_keys": ["metric", "mode", "rows", "selected_symbols", "title"]
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "selector_ai_semis",
+      "state": {
+        "symbols": ["NVDA", "AMD", "AVGO", "TSM", "ASML"],
+        "interval": "1d",
+        "start": "2025-11-01",
+        "end": "2026-05-01",
+        "chart_width": 980,
+        "symbols_selector.value": ["NVDA", "AMD", "AVGO"],
+        "widget.widget.metric": "High",
+        "widget.widget.mode": "change",
+        "widget.widget.selected_symbols": ["NVDA", "AMD", "AVGO"]
+      },
+      "values": {
+        "summary": {
+          "json": {
+            "format_id": "summary.json.v1",
+            "media_type": "application/json",
+            "data": {
+              "type": "bundle",
+              "files": {
+                "data": {
+                  "href": "blobs/sha256/0e/1b/0e1bcbe880958654c8aea88b87af4647ad9bab842e348c736f648420cd77ab15",
+                  "media_type": "application/json",
+                  "size": 321,
+                  "sha256": "0e1bcbe880958654c8aea88b87af4647ad9bab842e348c736f648420cd77ab15"
+                }
+              },
+              "entry": "data"
+            },
+            "metadata": {
+              "kind": "finance-summary"
+            }
+          }
+        },
+        "symbols_selector": {
+          "json": {
+            "format_id": "marimo.selector-state.json.v1",
+            "media_type": "application/json",
+            "data": {
+              "type": "bundle",
+              "files": {
+                "data": {
+                  "href": "blobs/sha256/6b/9b/6b9b71125ffd27ab04a7c12bc4a5d3fff4836957738f4c2c9413c7f595748ffb",
+                  "media_type": "application/json",
+                  "size": 171,
+                  "sha256": "6b9b71125ffd27ab04a7c12bc4a5d3fff4836957738f4c2c9413c7f595748ffb"
+                }
+              },
+              "entry": "data"
+            },
+            "metadata": {
+              "kind": "marimo-selector-state"
+            }
+          }
+        },
+        "prices": {
+          "arrow": {
+            "format_id": "dataframe.arrow.v1",
+            "media_type": "application/vnd.apache.arrow.stream",
+            "data": {
+              "type": "bundle",
+              "files": {
+                "data": {
+                  "href": "blobs/sha256/39/2f/392f4a79d5ca583bb235c629ad8651fd556023b9b93504186e606660ed33e7ad",
+                  "media_type": "application/vnd.apache.arrow.stream",
+                  "size": 52920,
+                  "sha256": "392f4a79d5ca583bb235c629ad8651fd556023b9b93504186e606660ed33e7ad"
+                }
+              },
+              "entry": "data"
+            },
+            "metadata": {
+              "rows": 615,
+              "columns": [
+                "Date",
+                "Symbol",
+                "Open",
+                "Open Change",
+                "High",
+                "High Change",
+                "Low",
+                "Low Change",
+                "Close",
+                "Close Change"
+              ]
+            }
+          },
+          "parquet": {
+            "format_id": "dataframe.parquet.v1",
+            "media_type": "application/vnd.apache.parquet",
+            "data": {
+              "type": "bundle",
+              "files": {
+                "data": {
+                  "href": "blobs/sha256/cf/36/cf368444b93ed940b9fa0ddb1a067a9909f042f73cafbbb037e46b8e04acc9be",
+                  "media_type": "application/vnd.apache.parquet",
+                  "size": 50048,
+                  "sha256": "cf368444b93ed940b9fa0ddb1a067a9909f042f73cafbbb037e46b8e04acc9be"
+                }
+              },
+              "entry": "data"
+            },
+            "metadata": {
+              "rows": 615,
+              "columns": [
+                "Date",
+                "Symbol",
+                "Open",
+                "Open Change",
+                "High",
+                "High Change",
+                "Low",
+                "Low Change",
+                "Close",
+                "Close Change"
+              ],
+              "compression": "NONE"
+            }
+          }
+        },
+        "change_desc": {
+          "html": {
+            "format_id": "marimo.cell_output.html.v1",
+            "media_type": "text/html",
+            "data": {
+              "type": "bundle",
+              "files": {
+                "html": {
+                  "href": "blobs/sha256/a7/f1/a7f1f716d279dd95b32d129a7cbba0d89445309ed1ef4bc1606e7da1fa78c4ed",
+                  "media_type": "text/html",
+                  "size": 329,
+                  "sha256": "a7f1f716d279dd95b32d129a7cbba0d89445309ed1ef4bc1606e7da1fa78c4ed"
+                }
+              },
+              "entry": "html"
+            },
+            "metadata": {
+              "kind": "marimo-cell-output",
+              "cell": "change_desc"
+            }
+          }
+        },
+        "comparison_chart": {
+          "vegalite": {
+            "format_id": "vegalite.v1",
+            "media_type": "application/vnd.vegalite+json",
+            "data": {
+              "type": "bundle",
+              "files": {
+                "spec": {
+                  "href": "blobs/sha256/6f/e3/6fe337b44a8822be7124935117193c36264e466ad1ca64daaa9a85e3fb66920e",
+                  "media_type": "application/vnd.vegalite+json",
+                  "size": 106501,
+                  "sha256": "6fe337b44a8822be7124935117193c36264e466ad1ca64daaa9a85e3fb66920e"
+                }
+              },
+              "entry": "spec"
+            },
+            "metadata": {
+              "schema": "https://vega.github.io/schema/vega-lite/v6.4.1.json"
+            }
+          },
+          "png_nogrid": {
+            "format_id": "image.png.nogrid.v1",
+            "media_type": "image/png",
+            "data": {
+              "type": "bundle",
+              "files": {
+                "image": {
+                  "href": "blobs/sha256/64/22/6422a39b2d775901598cb235239f24bf30f9570013d5ce025942db7ed5451840",
+                  "media_type": "image/png",
+                  "size": 439431,
+                  "sha256": "6422a39b2d775901598cb235239f24bf30f9570013d5ce025942db7ed5451840"
+                }
+              },
+              "entry": "image"
+            },
+            "metadata": {
+              "source_format": "vegalite.v1",
+              "grid": false,
+              "scale": 2
+            }
+          }
+        },
+        "ohlc_dashboard": {
+          "bundle": {
+            "format_id": "anywidget.bundle.v1",
+            "media_type": "application/vnd.moexport.anywidget+json",
+            "data": {
+              "type": "bundle",
+              "files": {
+                "descriptor": {
+                  "href": "blobs/sha256/b7/81/b7817796d9cec68f49fb4711fc5cf1e2019a8e877fa12d07963803db7b86b3ae",
+                  "media_type": "application/vnd.moexport.anywidget+json",
+                  "size": 1999,
+                  "sha256": "b7817796d9cec68f49fb4711fc5cf1e2019a8e877fa12d07963803db7b86b3ae"
+                },
+                "module": {
+                  "href": "blobs/sha256/54/20/5420760b331117c5b3e33b544bac8c80b34db93ffa46d1d932f2fa429b4270ed",
+                  "media_type": "text/javascript",
+                  "size": 13685,
+                  "sha256": "5420760b331117c5b3e33b544bac8c80b34db93ffa46d1d932f2fa429b4270ed"
+                },
+                "style": {
+                  "href": "blobs/sha256/89/cb/89cb29753f841415e4b836d7d94e4d57827fdc94dd5e651596f290bd784962f1",
+                  "media_type": "text/css",
+                  "size": 5484,
+                  "sha256": "89cb29753f841415e4b836d7d94e4d57827fdc94dd5e651596f290bd784962f1"
+                },
+                "state.metric": {
+                  "href": "blobs/sha256/62/b4/62b481f564c93c54ac2c79ee36889dcb28fd510821498348851315a12b026803",
+                  "media_type": "application/json",
+                  "size": 7,
+                  "sha256": "62b481f564c93c54ac2c79ee36889dcb28fd510821498348851315a12b026803"
+                },
+                "state.mode": {
+                  "href": "blobs/sha256/75/13/7513f54f6270ed12691a4b60e3de725dfcc8a8ef8aec1ddc8f7be5c0e0f13a2c",
+                  "media_type": "application/json",
+                  "size": 9,
+                  "sha256": "7513f54f6270ed12691a4b60e3de725dfcc8a8ef8aec1ddc8f7be5c0e0f13a2c"
+                },
+                "state.rows": {
+                  "href": "blobs/sha256/6d/01/6d01bdb13a5a31a991d750e019f8a6c3b1997289c920c1b869f7aed970644243",
+                  "media_type": "application/json",
+                  "size": 219931,
+                  "sha256": "6d01bdb13a5a31a991d750e019f8a6c3b1997289c920c1b869f7aed970644243"
+                },
+                "state.selected_symbols": {
+                  "href": "blobs/sha256/85/a5/85a5737dacfc34b419e2f3f83704788946e873922a6632544d0a6e67c3037601",
+                  "media_type": "application/json",
+                  "size": 32,
+                  "sha256": "85a5737dacfc34b419e2f3f83704788946e873922a6632544d0a6e67c3037601"
+                },
+                "state.title": {
+                  "href": "blobs/sha256/87/e7/87e7d62b2216849026514585507ded3679fa7d565aca016d554f0d22d1bb7457",
+                  "media_type": "application/json",
+                  "size": 30,
+                  "sha256": "87e7d62b2216849026514585507ded3679fa7d565aca016d554f0d22d1bb7457"
+                }
+              },
+              "entry": "descriptor"
+            },
+            "metadata": {
+              "anywidget_id": "builtins.OhlcSwitcher",
+              "buffer_count": 0,
+              "has_style": true,
+              "state_keys": ["metric", "mode", "rows", "selected_symbols", "title"]
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "selector_crwv_msft",
+      "state": {
+        "symbols": ["AAPL", "AMZN", "CRWV", "GOOGL", "MSFT"],
+        "interval": "1d",
+        "start": "2025-04-01",
+        "end": "2026-05-01",
+        "chart_width": 980,
+        "symbols_selector.value": ["CRWV", "MSFT"],
+        "widget.widget.metric": "Close",
+        "widget.widget.mode": "absolute",
+        "widget.widget.selected_symbols": ["CRWV", "MSFT"]
+      },
+      "values": {
+        "summary": {
+          "json": {
+            "format_id": "summary.json.v1",
+            "media_type": "application/json",
+            "data": {
+              "type": "bundle",
+              "files": {
+                "data": {
+                  "href": "blobs/sha256/22/e9/22e9555aa19cffd53b23a49d235ae2179541bbc0aa3eda8a7723d4570e24590d",
+                  "media_type": "application/json",
+                  "size": 325,
+                  "sha256": "22e9555aa19cffd53b23a49d235ae2179541bbc0aa3eda8a7723d4570e24590d"
+                }
+              },
+              "entry": "data"
+            },
+            "metadata": {
+              "kind": "finance-summary"
+            }
+          }
+        },
+        "symbols_selector": {
+          "json": {
+            "format_id": "marimo.selector-state.json.v1",
+            "media_type": "application/json",
+            "data": {
+              "type": "bundle",
+              "files": {
+                "data": {
+                  "href": "blobs/sha256/96/7b/967b27506c5df1ad0af36e45bb0f391555da6d394e8818bf37da9311f5005018",
+                  "media_type": "application/json",
+                  "size": 163,
+                  "sha256": "967b27506c5df1ad0af36e45bb0f391555da6d394e8818bf37da9311f5005018"
+                }
+              },
+              "entry": "data"
+            },
+            "metadata": {
+              "kind": "marimo-selector-state"
+            }
+          }
+        },
+        "prices": {
+          "arrow": {
+            "format_id": "dataframe.arrow.v1",
+            "media_type": "application/vnd.apache.arrow.stream",
+            "data": {
+              "type": "bundle",
+              "files": {
+                "data": {
+                  "href": "blobs/sha256/33/5e/335eefe91358a83598a129693c4c5cd7d97a1f8589883b48b2ffb63bc05d2081",
+                  "media_type": "application/vnd.apache.arrow.stream",
+                  "size": 116400,
+                  "sha256": "335eefe91358a83598a129693c4c5cd7d97a1f8589883b48b2ffb63bc05d2081"
+                }
+              },
+              "entry": "data"
+            },
+            "metadata": {
+              "rows": 1360,
+              "columns": [
+                "Date",
+                "Symbol",
+                "Open",
+                "Open Change",
+                "High",
+                "High Change",
+                "Low",
+                "Low Change",
+                "Close",
+                "Close Change"
+              ]
+            }
+          },
+          "parquet": {
+            "format_id": "dataframe.parquet.v1",
+            "media_type": "application/vnd.apache.parquet",
+            "data": {
+              "type": "bundle",
+              "files": {
+                "data": {
+                  "href": "blobs/sha256/c2/86/c28624eb04d06c6ee9e04395e2491d6323e152f62395d3b9423a6221ce2b0411",
+                  "media_type": "application/vnd.apache.parquet",
+                  "size": 108449,
+                  "sha256": "c28624eb04d06c6ee9e04395e2491d6323e152f62395d3b9423a6221ce2b0411"
+                }
+              },
+              "entry": "data"
+            },
+            "metadata": {
+              "rows": 1360,
+              "columns": [
+                "Date",
+                "Symbol",
+                "Open",
+                "Open Change",
+                "High",
+                "High Change",
+                "Low",
+                "Low Change",
+                "Close",
+                "Close Change"
+              ],
+              "compression": "NONE"
+            }
+          }
+        },
+        "change_desc": {
+          "html": {
+            "format_id": "marimo.cell_output.html.v1",
+            "media_type": "text/html",
+            "data": {
+              "type": "bundle",
+              "files": {
+                "html": {
+                  "href": "blobs/sha256/a9/a2/a9a21d2146947faa13b90b6f2c4cea540c4fd585bd651e8958a52a7f92d20545",
+                  "media_type": "text/html",
+                  "size": 329,
+                  "sha256": "a9a21d2146947faa13b90b6f2c4cea540c4fd585bd651e8958a52a7f92d20545"
+                }
+              },
+              "entry": "html"
+            },
+            "metadata": {
+              "kind": "marimo-cell-output",
+              "cell": "change_desc"
+            }
+          }
+        },
+        "comparison_chart": {
+          "vegalite": {
+            "format_id": "vegalite.v1",
+            "media_type": "application/vnd.vegalite+json",
+            "data": {
+              "type": "bundle",
+              "files": {
+                "spec": {
+                  "href": "blobs/sha256/d1/3f/d13f43717066078644c00581d8e0dde0de8cb59859c375be8106099bc4a8a93b",
+                  "media_type": "application/vnd.vegalite+json",
+                  "size": 155835,
+                  "sha256": "d13f43717066078644c00581d8e0dde0de8cb59859c375be8106099bc4a8a93b"
+                }
+              },
+              "entry": "spec"
+            },
+            "metadata": {
+              "schema": "https://vega.github.io/schema/vega-lite/v6.4.1.json"
+            }
+          },
+          "png_nogrid": {
+            "format_id": "image.png.nogrid.v1",
+            "media_type": "image/png",
+            "data": {
+              "type": "bundle",
+              "files": {
+                "image": {
+                  "href": "blobs/sha256/dd/2e/dd2ee4820406c9d0628af25c10fb213c96631d455caf8f243bcfc42b2d061d06",
+                  "media_type": "image/png",
+                  "size": 393483,
+                  "sha256": "dd2ee4820406c9d0628af25c10fb213c96631d455caf8f243bcfc42b2d061d06"
+                }
+              },
+              "entry": "image"
+            },
+            "metadata": {
+              "source_format": "vegalite.v1",
+              "grid": false,
+              "scale": 2
+            }
+          }
+        },
+        "ohlc_dashboard": {
+          "bundle": {
+            "format_id": "anywidget.bundle.v1",
+            "media_type": "application/vnd.moexport.anywidget+json",
+            "data": {
+              "type": "bundle",
+              "files": {
+                "descriptor": {
+                  "href": "blobs/sha256/21/7c/217c50cd857c4ff96c8a6ec8bdda06b51125b7859121ce4478e5a4b3a42bd321",
+                  "media_type": "application/vnd.moexport.anywidget+json",
+                  "size": 2000,
+                  "sha256": "217c50cd857c4ff96c8a6ec8bdda06b51125b7859121ce4478e5a4b3a42bd321"
+                },
+                "module": {
+                  "href": "blobs/sha256/54/20/5420760b331117c5b3e33b544bac8c80b34db93ffa46d1d932f2fa429b4270ed",
+                  "media_type": "text/javascript",
+                  "size": 13685,
+                  "sha256": "5420760b331117c5b3e33b544bac8c80b34db93ffa46d1d932f2fa429b4270ed"
+                },
+                "style": {
+                  "href": "blobs/sha256/89/cb/89cb29753f841415e4b836d7d94e4d57827fdc94dd5e651596f290bd784962f1",
+                  "media_type": "text/css",
+                  "size": 5484,
+                  "sha256": "89cb29753f841415e4b836d7d94e4d57827fdc94dd5e651596f290bd784962f1"
+                },
+                "state.metric": {
+                  "href": "blobs/sha256/5f/86/5f86a55e9d943259f87fb7a4babda70cd65f372977c7ddde8ab1ee8743c7497a",
+                  "media_type": "application/json",
+                  "size": 8,
+                  "sha256": "5f86a55e9d943259f87fb7a4babda70cd65f372977c7ddde8ab1ee8743c7497a"
+                },
+                "state.mode": {
+                  "href": "blobs/sha256/10/13/10138287ad2b8c7be33031ba364ba917b11925beed1a6daebb527b19abc7fa14",
+                  "media_type": "application/json",
+                  "size": 11,
+                  "sha256": "10138287ad2b8c7be33031ba364ba917b11925beed1a6daebb527b19abc7fa14"
+                },
+                "state.rows": {
+                  "href": "blobs/sha256/09/ed/09ed583b7bcc554786a016017d8beb0702096be2662ccb1f7a2b00603b4f961d",
+                  "media_type": "application/json",
+                  "size": 486990,
+                  "sha256": "09ed583b7bcc554786a016017d8beb0702096be2662ccb1f7a2b00603b4f961d"
+                },
+                "state.selected_symbols": {
+                  "href": "blobs/sha256/40/8a/408adb974552491dca6f51e6d95643510dc65f467d4e1de5b8d3e771c76f22a2",
+                  "media_type": "application/json",
+                  "size": 23,
+                  "sha256": "408adb974552491dca6f51e6d95643510dc65f467d4e1de5b8d3e771c76f22a2"
+                },
+                "state.title": {
+                  "href": "blobs/sha256/87/e7/87e7d62b2216849026514585507ded3679fa7d565aca016d554f0d22d1bb7457",
+                  "media_type": "application/json",
+                  "size": 30,
+                  "sha256": "87e7d62b2216849026514585507ded3679fa7d565aca016d554f0d22d1bb7457"
+                }
+              },
+              "entry": "descriptor"
+            },
+            "metadata": {
+              "anywidget_id": "builtins.OhlcSwitcher",
+              "buffer_count": 0,
+              "has_style": true,
+              "state_keys": ["metric", "mode", "rows", "selected_symbols", "title"]
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "selector_tsla_focus",
+      "state": {
+        "symbols": ["TSLA"],
+        "interval": "1d",
+        "start": "2025-01-01",
+        "end": "2026-05-01",
+        "chart_width": 760,
+        "symbols_selector.value": ["TSLA"],
+        "widget.widget.metric": "Close",
+        "widget.widget.mode": "absolute",
+        "widget.widget.selected_symbols": ["TSLA"]
+      },
+      "values": {
+        "summary": {
+          "json": {
+            "format_id": "summary.json.v1",
+            "media_type": "application/json",
+            "data": {
+              "type": "bundle",
+              "files": {
+                "data": {
+                  "href": "blobs/sha256/a2/74/a274e010b94da32bcc300931f787e8e286677ae7db7bef1379e6eb5902f12e90",
+                  "media_type": "application/json",
+                  "size": 275,
+                  "sha256": "a274e010b94da32bcc300931f787e8e286677ae7db7bef1379e6eb5902f12e90"
+                }
+              },
+              "entry": "data"
+            },
+            "metadata": {
+              "kind": "finance-summary"
+            }
+          }
+        },
+        "symbols_selector": {
+          "json": {
+            "format_id": "marimo.selector-state.json.v1",
+            "media_type": "application/json",
+            "data": {
+              "type": "bundle",
+              "files": {
+                "data": {
+                  "href": "blobs/sha256/e2/ce/e2ceacf1defa9261b7234c3e51e50c43b61bed92f0af397d10ac6b2dcac9fe6a",
+                  "media_type": "application/json",
+                  "size": 102,
+                  "sha256": "e2ceacf1defa9261b7234c3e51e50c43b61bed92f0af397d10ac6b2dcac9fe6a"
+                }
+              },
+              "entry": "data"
+            },
+            "metadata": {
+              "kind": "marimo-selector-state"
+            }
+          }
+        },
+        "prices": {
+          "arrow": {
+            "format_id": "dataframe.arrow.v1",
+            "media_type": "application/vnd.apache.arrow.stream",
+            "data": {
+              "type": "bundle",
+              "files": {
+                "data": {
+                  "href": "blobs/sha256/2b/dd/2bddf3d115623073360343b04e15f2aca3d5f8942808b9ba16277a6a63bfc1bf",
+                  "media_type": "application/vnd.apache.arrow.stream",
+                  "size": 29264,
+                  "sha256": "2bddf3d115623073360343b04e15f2aca3d5f8942808b9ba16277a6a63bfc1bf"
+                }
+              },
+              "entry": "data"
+            },
+            "metadata": {
+              "rows": 332,
+              "columns": [
+                "Date",
+                "Symbol",
+                "Open",
+                "Open Change",
+                "High",
+                "High Change",
+                "Low",
+                "Low Change",
+                "Close",
+                "Close Change"
+              ]
+            }
+          },
+          "parquet": {
+            "format_id": "dataframe.parquet.v1",
+            "media_type": "application/vnd.apache.parquet",
+            "data": {
+              "type": "bundle",
+              "files": {
+                "data": {
+                  "href": "blobs/sha256/9c/2a/9c2a5ef2d3ed2844b02121306b614fff6927187736bb946839b8544b51950440",
+                  "media_type": "application/vnd.apache.parquet",
+                  "size": 30208,
+                  "sha256": "9c2a5ef2d3ed2844b02121306b614fff6927187736bb946839b8544b51950440"
+                }
+              },
+              "entry": "data"
+            },
+            "metadata": {
+              "rows": 332,
+              "columns": [
+                "Date",
+                "Symbol",
+                "Open",
+                "Open Change",
+                "High",
+                "High Change",
+                "Low",
+                "Low Change",
+                "Close",
+                "Close Change"
+              ],
+              "compression": "NONE"
+            }
+          }
+        },
+        "change_desc": {
+          "html": {
+            "format_id": "marimo.cell_output.html.v1",
+            "media_type": "text/html",
+            "data": {
+              "type": "bundle",
+              "files": {
+                "html": {
+                  "href": "blobs/sha256/2e/b6/2eb62e8a35cb0a9a4abcc70049d5b15a8fee1583599877ec6b288f1da2366b60",
+                  "media_type": "text/html",
+                  "size": 306,
+                  "sha256": "2eb62e8a35cb0a9a4abcc70049d5b15a8fee1583599877ec6b288f1da2366b60"
+                }
+              },
+              "entry": "html"
+            },
+            "metadata": {
+              "kind": "marimo-cell-output",
+              "cell": "change_desc"
+            }
+          }
+        },
+        "comparison_chart": {
+          "vegalite": {
+            "format_id": "vegalite.v1",
+            "media_type": "application/vnd.vegalite+json",
+            "data": {
+              "type": "bundle",
+              "files": {
+                "spec": {
+                  "href": "blobs/sha256/a4/e8/a4e8c8b03f940701cc03b20fe5f3043ef2d45e2e65f754b4351229db976e471b",
+                  "media_type": "application/vnd.vegalite+json",
+                  "size": 94767,
+                  "sha256": "a4e8c8b03f940701cc03b20fe5f3043ef2d45e2e65f754b4351229db976e471b"
+                }
+              },
+              "entry": "spec"
+            },
+            "metadata": {
+              "schema": "https://vega.github.io/schema/vega-lite/v6.4.1.json"
+            }
+          },
+          "png_nogrid": {
+            "format_id": "image.png.nogrid.v1",
+            "media_type": "image/png",
+            "data": {
+              "type": "bundle",
+              "files": {
+                "image": {
+                  "href": "blobs/sha256/01/91/01916c7851341e4296f626f8387e260a025bcae702865a90f5e2935acf93ffc9",
+                  "media_type": "image/png",
+                  "size": 339707,
+                  "sha256": "01916c7851341e4296f626f8387e260a025bcae702865a90f5e2935acf93ffc9"
+                }
+              },
+              "entry": "image"
+            },
+            "metadata": {
+              "source_format": "vegalite.v1",
+              "grid": false,
+              "scale": 2
+            }
+          }
+        },
+        "ohlc_dashboard": {
+          "bundle": {
+            "format_id": "anywidget.bundle.v1",
+            "media_type": "application/vnd.moexport.anywidget+json",
+            "data": {
+              "type": "bundle",
+              "files": {
+                "descriptor": {
+                  "href": "blobs/sha256/ac/59/ac59c2f30f99d40c80244d752e2e56ef21804889aea39b388f2fd79d04f696df",
+                  "media_type": "application/vnd.moexport.anywidget+json",
+                  "size": 2000,
+                  "sha256": "ac59c2f30f99d40c80244d752e2e56ef21804889aea39b388f2fd79d04f696df"
+                },
+                "module": {
+                  "href": "blobs/sha256/54/20/5420760b331117c5b3e33b544bac8c80b34db93ffa46d1d932f2fa429b4270ed",
+                  "media_type": "text/javascript",
+                  "size": 13685,
+                  "sha256": "5420760b331117c5b3e33b544bac8c80b34db93ffa46d1d932f2fa429b4270ed"
+                },
+                "style": {
+                  "href": "blobs/sha256/89/cb/89cb29753f841415e4b836d7d94e4d57827fdc94dd5e651596f290bd784962f1",
+                  "media_type": "text/css",
+                  "size": 5484,
+                  "sha256": "89cb29753f841415e4b836d7d94e4d57827fdc94dd5e651596f290bd784962f1"
+                },
+                "state.metric": {
+                  "href": "blobs/sha256/5f/86/5f86a55e9d943259f87fb7a4babda70cd65f372977c7ddde8ab1ee8743c7497a",
+                  "media_type": "application/json",
+                  "size": 8,
+                  "sha256": "5f86a55e9d943259f87fb7a4babda70cd65f372977c7ddde8ab1ee8743c7497a"
+                },
+                "state.mode": {
+                  "href": "blobs/sha256/10/13/10138287ad2b8c7be33031ba364ba917b11925beed1a6daebb527b19abc7fa14",
+                  "media_type": "application/json",
+                  "size": 11,
+                  "sha256": "10138287ad2b8c7be33031ba364ba917b11925beed1a6daebb527b19abc7fa14"
+                },
+                "state.rows": {
+                  "href": "blobs/sha256/bd/86/bd865894221c933dda140bedb3c5df6be0fc1d5b25807add70cc89949c782b9c",
+                  "media_type": "application/json",
+                  "size": 117472,
+                  "sha256": "bd865894221c933dda140bedb3c5df6be0fc1d5b25807add70cc89949c782b9c"
+                },
+                "state.selected_symbols": {
+                  "href": "blobs/sha256/f3/f4/f3f47bf0e12d568c0b150b8615d454d5970877b0f7cba8667ade613363146ad5",
+                  "media_type": "application/json",
+                  "size": 13,
+                  "sha256": "f3f47bf0e12d568c0b150b8615d454d5970877b0f7cba8667ade613363146ad5"
+                },
+                "state.title": {
+                  "href": "blobs/sha256/87/e7/87e7d62b2216849026514585507ded3679fa7d565aca016d554f0d22d1bb7457",
+                  "media_type": "application/json",
+                  "size": 30,
+                  "sha256": "87e7d62b2216849026514585507ded3679fa7d565aca016d554f0d22d1bb7457"
+                }
+              },
+              "entry": "descriptor"
+            },
+            "metadata": {
+              "anywidget_id": "builtins.OhlcSwitcher",
+              "buffer_count": 0,
+              "has_style": true,
+              "state_keys": ["metric", "mode", "rows", "selected_symbols", "title"]
+            }
+          }
+        }
+      }
+    }
+  ],
+  "provenance": {
+    "invocations_index_href": "bundles/sha256-4b645a30f913c30a/traces/index.json",
+    "source_spec_sha256": "90eb22643f6c7402b7a911985e0152bb73eee6044cd4be998583052bbf95d355",
+    "source_spec": {
+      "scenarios": [
+        {
+          "id": "selector_crwv_msft",
+          "state": {
+            "symbols": ["AAPL", "AMZN", "CRWV", "GOOGL", "MSFT"],
+            "interval": "1d",
+            "start": "2025-04-01",
+            "end": "2026-05-01",
+            "chart_width": 980,
+            "symbols_selector.value": ["CRWV", "MSFT"],
+            "widget.widget.metric": "Close",
+            "widget.widget.mode": "absolute",
+            "widget.widget.selected_symbols": ["CRWV", "MSFT"]
+          }
+        },
+        {
+          "id": "selector_aapl_googl_amzn",
+          "state": {
+            "symbols": ["AAPL", "AMZN", "CRWV", "GOOGL", "MSFT"],
+            "interval": "1d",
+            "start": "2025-04-01",
+            "end": "2026-05-01",
+            "chart_width": 980,
+            "symbols_selector.value": ["AAPL", "GOOGL", "AMZN"],
+            "widget.widget.metric": "Close",
+            "widget.widget.mode": "change",
+            "widget.widget.selected_symbols": ["AAPL", "GOOGL", "AMZN"]
+          }
+        },
+        {
+          "id": "selector_ai_semis",
+          "state": {
+            "symbols": ["NVDA", "AMD", "AVGO", "TSM", "ASML"],
+            "interval": "1d",
+            "start": "2025-11-01",
+            "end": "2026-05-01",
+            "chart_width": 980,
+            "symbols_selector.value": ["NVDA", "AMD", "AVGO"],
+            "widget.widget.metric": "High",
+            "widget.widget.mode": "change",
+            "widget.widget.selected_symbols": ["NVDA", "AMD", "AVGO"]
+          }
+        },
+        {
+          "id": "selector_tsla_focus",
+          "state": {
+            "symbols": ["TSLA"],
+            "interval": "1d",
+            "start": "2025-01-01",
+            "end": "2026-05-01",
+            "chart_width": 760,
+            "symbols_selector.value": ["TSLA"],
+            "widget.widget.metric": "Close",
+            "widget.widget.mode": "absolute",
+            "widget.widget.selected_symbols": ["TSLA"]
+          }
+        }
+      ],
+      "provenance": {
+        "source": "hash",
+        "spec": "embed"
+      },
+      "values": {
+        "summary": {
+          "source": {
+            "type": "expression",
+            "expression": "{\n    \"rows\": df.height,\n    \"columns\": df.columns,\n    \"symbols\": sorted(df[\"Symbol\"].unique().to_list()),\n    \"date_start\": df[\"Date\"].min().strftime(\"%Y-%m-%d\"),\n    \"date_end\": df[\"Date\"].max().strftime(\"%Y-%m-%d\"),\n}"
+          },
+          "formats": {
+            "json": {
+              "export": {
+                "type": "code",
+                "code": "import json\n\n\ndef export(value, ctx, **options):\n    blob = ctx.write_blob(\n        \"summary.json\",\n        json.dumps(value, allow_nan=False, indent=2).encode(),\n        media_type=\"application/json\",\n    )\n    return {\n        \"format_id\": \"summary.json.v1\",\n        \"media_type\": \"application/json\",\n        \"data\": {\n            \"type\": \"bundle\",\n            \"files\": {\"data\": blob},\n            \"entry\": \"data\",\n        },\n        \"metadata\": {\"kind\": \"finance-summary\"},\n    }\n"
+              }
+            }
+          }
+        },
+        "symbols_selector": {
+          "source": {
+            "type": "expression",
+            "expression": "{\n    \"label\": \"Select symbols to compare\",\n    \"options\": symbols,\n    \"value\": symbols_selector.value,\n}"
+          },
+          "formats": {
+            "json": {
+              "export": {
+                "type": "code",
+                "code": "import json\n\n\ndef export(value, ctx, **options):\n    blob = ctx.write_blob(\n        \"symbols-selector.json\",\n        json.dumps(value, allow_nan=False, indent=2).encode(),\n        media_type=\"application/json\",\n    )\n    return {\n        \"format_id\": \"marimo.selector-state.json.v1\",\n        \"media_type\": \"application/json\",\n        \"data\": {\n            \"type\": \"bundle\",\n            \"files\": {\"data\": blob},\n            \"entry\": \"data\",\n        },\n        \"metadata\": {\"kind\": \"marimo-selector-state\"},\n    }\n"
+              }
+            }
+          }
+        },
+        "prices": {
+          "source": {
+            "type": "definition",
+            "name": "df"
+          },
+          "formats": {
+            "arrow": {
+              "export": {
+                "type": "ref",
+                "ref": "moexport.exporters.dataframe:arrow"
+              }
+            },
+            "parquet": {
+              "export": {
+                "type": "ref",
+                "ref": "moexport.exporters.dataframe:parquet"
+              }
+            }
+          }
+        },
+        "change_desc": {
+          "source": {
+            "type": "cell_output",
+            "cell": {
+              "name": "change_desc"
+            },
+            "on_error": "raise"
+          },
+          "formats": {
+            "html": {
+              "export": {
+                "type": "code",
+                "code": "def export(value, ctx, **options):\n    html = value.text if hasattr(value, \"text\") else str(value)\n    blob = ctx.write_blob(\n        options.get(\"filename\", \"change-desc.html\"),\n        html.encode(\"utf-8\"),\n        media_type=\"text/html\",\n    )\n    return {\n        \"format_id\": \"marimo.cell_output.html.v1\",\n        \"media_type\": \"text/html\",\n        \"data\": {\n            \"type\": \"bundle\",\n            \"files\": {\"html\": blob},\n            \"entry\": \"html\",\n        },\n        \"metadata\": {\n            \"kind\": \"marimo-cell-output\",\n            \"cell\": \"change_desc\",\n        },\n    }\n"
+              }
+            }
+          }
+        },
+        "comparison_chart": {
+          "source": {
+            "type": "definition",
+            "name": "symbols_chart"
+          },
+          "formats": {
+            "vegalite": {
+              "export": {
+                "type": "ref",
+                "ref": "moexport.exporters.altair:vegalite"
+              }
+            },
+            "png_nogrid": {
+              "export": {
+                "type": "code",
+                "code": "import json\n\n\ndef export(value, ctx, **options):\n    import vl_convert\n\n    spec = value.to_dict()\n    config = dict(spec.get(\"config\") or {})\n    axis = dict(config.get(\"axis\") or {})\n    axis[\"grid\"] = False\n    config[\"axis\"] = axis\n    spec[\"config\"] = config\n\n    scale = options.get(\"scale\", 2)\n    blob = ctx.write_blob(\n        \"chart-nogrid.png\",\n        vl_convert.vegalite_to_png(\n            vl_spec=json.dumps(spec, allow_nan=False),\n            scale=scale,\n        ),\n        media_type=\"image/png\",\n    )\n    return {\n        \"format_id\": \"image.png.nogrid.v1\",\n        \"media_type\": \"image/png\",\n        \"data\": {\n            \"type\": \"bundle\",\n            \"files\": {\"image\": blob},\n            \"entry\": \"image\",\n        },\n        \"metadata\": {\n            \"source_format\": \"vegalite.v1\",\n            \"grid\": False,\n            \"scale\": scale,\n        },\n    }\n"
+              },
+              "options": {
+                "scale": 2
+              }
+            }
+          }
+        },
+        "ohlc_dashboard": {
+          "source": {
+            "type": "definition",
+            "name": "widget"
+          },
+          "formats": {
+            "bundle": {
+              "export": {
+                "type": "ref",
+                "ref": "moexport.exporters.anywidget:bundle"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

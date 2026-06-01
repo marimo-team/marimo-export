@@ -19,12 +19,12 @@ MARKDOWN_MEDIA_TYPE = "text/markdown"
 
 class DisplayJsonOptions(ExporterOptions):
     filename: str = Field(default="display.json", description="Blob filename hint.")
-    metadata: JsonObject | None = Field(default=None, description="Artifact metadata.")
+    metadata: JsonObject | None = Field(default=None, description="Format metadata.")
 
 
 class MarkdownOptions(ExporterOptions):
     filename: str = Field(default="report.md", description="Blob filename hint.")
-    metadata: JsonObject | None = Field(default=None, description="Artifact metadata.")
+    metadata: JsonObject | None = Field(default=None, description="Format metadata.")
 
 
 _DISPLAY_JSON_OPTIONS = TypeAdapter(DisplayJsonOptions)

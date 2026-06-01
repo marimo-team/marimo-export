@@ -9,7 +9,8 @@ from typing import Any, TypeAlias
 from pydantic import BaseModel, ConfigDict, Field
 
 from moexport.bundle import write_bundle
-from moexport.evaluate import EvaluateResult, evaluate_plan
+from moexport.evaluate import EvaluateResult
+from moexport.evaluate._batch import evaluate_plan
 from moexport.request import resolve_export_request
 from moexport.spec import ExportSpec, parse_export_spec
 

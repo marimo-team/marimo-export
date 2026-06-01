@@ -103,7 +103,7 @@ const exp = await readLatestExport({
 
 Custom loaders match `FormatRecord.format_id`, the portable payload type
 written by export. The authored `format` selector chooses the slot. `load()`
-dispatches by `artifact.format_id`.
+dispatches by `record.format_id`.
 
 ```ts
 import { defineLoader } from "@marimo-team/export-reader";
@@ -162,7 +162,7 @@ Opens the latest manifest or an explicit manifest from zip bytes.
 
 ### `defineLoader(loader)`
 
-Returns an `FormatLoader`.
+Returns a `FormatLoader`.
 
 - `loader.formatId`: One `FormatRecord.format_id`. Mutually exclusive with
   `formatIds`.
@@ -172,7 +172,7 @@ Returns an `FormatLoader`.
   selection metadata, `entry()`, and `file(key)`.
 
 `handle.load()` calls the first loader whose format ids match
-`artifact.format_id`. It throws when no loader matches.
+`handle.record.format_id`. It throws when no loader matches.
 
 ### `StaticExport`
 
@@ -184,7 +184,7 @@ Returns an `FormatLoader`.
 - `exp.values()`: Returns exported value names.
 - `exp.formats(value)`: Returns authored format names for one value. Throws
   when `value` does not exist.
-- `exp.get({ scenario, value, format })`: Returns an `FormatHandle`.
+- `exp.get({ scenario, value, format })`: Returns a `FormatHandle`.
   Throws when the scenario, value, or format does not exist.
 
 ### `FormatHandle`
@@ -195,7 +195,7 @@ Returns an `FormatLoader`.
 - `handle.file(key)`: Returns an explicit `FormatFile`.
 - `handle.url()`, `handle.fetch(init?)`, `handle.bytes()`, `handle.text()`, and
   `handle.json()`: Convenience methods for the canonical entry.
-- `handle.load()`: Runs the registered loader matching `artifact.format_id`.
+- `handle.load()`: Runs the registered loader matching `handle.record.format_id`.
 
 ### `FormatFile`
 

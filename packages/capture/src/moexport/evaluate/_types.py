@@ -1,9 +1,9 @@
 """Shared evaluator types and lightweight records.
 
 The evaluator modules pass a few structured records through the pipeline:
-completed definition overrides, target plans, trace payloads, and the active runtime
-binding used by expression helpers. Keeping them here avoids circular imports
-and keeps cross-module contracts explicit.
+completed definition replacements, target plans, trace payloads, and the active
+runtime binding used by expression helpers. Keeping them here avoids circular
+imports and keeps cross-module contracts explicit.
 """
 
 from __future__ import annotations

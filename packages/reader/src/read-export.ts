@@ -389,8 +389,7 @@ class BundleFormatHandle implements FormatHandle, FormatLoaderContext {
   async load(): Promise<unknown>;
   async load<T>(loader?: FormatLoader<T>): Promise<T | unknown> {
     const selectedLoader =
-      loader ??
-      this.#loaders.find((candidate) => loaderSupports(candidate, this.record.format_id));
+      loader ?? this.#loaders.find((candidate) => loaderSupports(candidate, this.record.format_id));
     if (!selectedLoader) {
       throw new Error(
         `No loader registered for format id ${JSON.stringify(

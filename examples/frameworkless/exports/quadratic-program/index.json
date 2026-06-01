@@ -6,7 +6,7 @@
     "sha256": "d7cd3dffcc105dffc685d722a507dfe70f6f59c14bb08b693831dc22d68e9a11",
     "manifest_href": "bundles/sha256-d7cd3dffcc105dff/manifest.json",
     "updated_at": "2026-05-05T16:29:39.049800Z",
-    "latest_invocation_href": "bundles/sha256-d7cd3dffcc105dff/traces/sha256-953c222f8e795756.json"
+    "latest_invocation_href": "bundles/sha256-d7cd3dffcc105dff/traces/sha256-602a2318dfd7130a.json"
   },
   "bundles": [
     {
@@ -14,7 +14,7 @@
       "sha256": "d7cd3dffcc105dffc685d722a507dfe70f6f59c14bb08b693831dc22d68e9a11",
       "manifest_href": "bundles/sha256-d7cd3dffcc105dff/manifest.json",
       "updated_at": "2026-05-05T16:29:39.049800Z",
-      "latest_invocation_href": "bundles/sha256-d7cd3dffcc105dff/traces/sha256-953c222f8e795756.json"
+      "latest_invocation_href": "bundles/sha256-d7cd3dffcc105dff/traces/sha256-602a2318dfd7130a.json"
     }
   ]
 }
