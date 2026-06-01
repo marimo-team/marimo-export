@@ -1,7 +1,6 @@
 import {
-  createExportClient,
-  type ExportClient,
-  type MarimoArchiveCaptureClient,
+  createMarimoExportClient,
+  type MarimoExportClient,
   type WorkspaceNotebook,
 } from "@marimo-team/export-client";
 
@@ -52,11 +51,11 @@ async function loadCatalog(): Promise<LearnCatalog> {
     };
   }
 
-  const client = createExportClient({
+  const client = createMarimoExportClient({
     server: process.env.MARIMO_LEARN_SERVER_URL,
     serverToken: process.env.MARIMO_LEARN_SERVER_TOKEN ?? "learn",
   });
-  const workspace = await client.listWorkspaceNotebooks();
+  const workspace = await client.notebooks.list();
   const notebooks = limitByPath(workspace.filter(isLearnNotebook));
   const records = await Promise.all(notebooks.map((notebook) => notebookRecord(client, notebook)));
 
@@ -66,10 +65,10 @@ async function loadCatalog(): Promise<LearnCatalog> {
 }
 
 async function notebookRecord(
-  client: ExportClient,
+  client: MarimoExportClient,
   notebook: WorkspaceNotebook,
 ): Promise<LearnNotebook> {
-  const source = await readNotebookSource(client.marimo, notebook.path);
+  const source = await readNotebookSource(client.raw, notebook.path);
   const summary = description(source);
   return {
     name: notebook.name,
@@ -83,7 +82,7 @@ async function notebookRecord(
 }
 
 async function readNotebookSource(
-  client: MarimoArchiveCaptureClient,
+  client: MarimoExportClient["raw"],
   path: string,
 ): Promise<string> {
   const { response, data } = await client.POST("/api/files/file_details", {
@@ -92,7 +91,19 @@ async function readNotebookSource(
   if (!response.ok) {
     return "";
   }
-  return typeof data?.contents === "string" ? data.contents : "";
+  return fileContents(data);
+}
+
+function fileContents(value: unknown): string {
+  if (
+    typeof value === "object" &&
+    value !== null &&
+    "contents" in value &&
+    typeof value.contents === "string"
+  ) {
+    return value.contents;
+  }
+  return "";
 }
 
 function limitByPath<T extends { path: string }>(notebooks: T[]): T[] {

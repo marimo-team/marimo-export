@@ -1,23 +1,24 @@
 # @marimo-team/export-loader-anywidget
 
-Loader for `anywidget.bundle.v1` artifacts.
+Loader for `anywidget.bundle.v1` formats.
 
 This package hydrates an exported AnyWidget bundle in a browser page. It
-includes the artifact loader and runtime needed to mount the widget without
+includes the format loader and runtime needed to mount the widget without
 Python, Pyodide, or a marimo server.
 
 ```ts
 import { anywidgetLoader } from "@marimo-team/export-loader-anywidget";
-import { exportRoot, openExport } from "@marimo-team/export-reader";
+import { readLatestExport } from "@marimo-team/export-reader";
 
-const exp = await openExport(exportRoot("/export/"), {
+const exp = await readLatestExport({
+  root: "/export/",
   loaders: [anywidgetLoader()],
 });
 
-const handle = exp.artifact({
+const handle = exp.get({
   scenario: "default",
   value: "dashboard",
-  artifact: "bundle",
+  format: "bundle",
 });
 
 const widget = await handle.load();

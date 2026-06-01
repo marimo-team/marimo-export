@@ -7,7 +7,7 @@ from typing import Any, cast
 
 import pytest
 
-from moexport.notebook import export_notebook
+from moexport.notebook import capture_notebook
 
 
 def _write_notebook(path: Path) -> None:
@@ -134,7 +134,7 @@ def _text_export_spec() -> dict[str, Any]:
         "values": {
             "title": {
                 "source": {"def": "title"},
-                "artifacts": {
+                "formats": {
                     "text": {
                         "export": {
                             "type": "code",
@@ -172,7 +172,7 @@ def _selected_export_spec() -> dict[str, Any]:
     spec["values"] = {
         "selected": {
             "source": {"def": "selected"},
-            "artifacts": spec["values"]["title"]["artifacts"],
+            "formats": spec["values"]["title"]["formats"],
         }
     }
     return spec
@@ -184,7 +184,7 @@ def _notebook_snapshot_spec() -> dict[str, Any]:
         "values": {
             "notebook": {
                 "source": {"snapshot": True},
-                "artifacts": {
+                "formats": {
                     "linear": {
                         "export": {
                             "type": "ref",
@@ -200,11 +200,11 @@ def _notebook_snapshot_spec() -> dict[str, Any]:
     }
 
 
-def test_export_notebook_loads_file_and_writes_bundle(tmp_path: Path) -> None:
+def test_capture_notebook_loads_file_and_writes_bundle(tmp_path: Path) -> None:
     notebook = tmp_path / "finance.py"
     _write_notebook(notebook)
 
-    result = export_notebook(
+    result = capture_notebook(
         notebook,
         {
             "scenarios": [
@@ -214,7 +214,7 @@ def test_export_notebook_loads_file_and_writes_bundle(tmp_path: Path) -> None:
             "values": {
                 "title": {
                     "source": {"def": "title"},
-                    "artifacts": {
+                    "formats": {
                         "text": {
                             "export": {
                                 "type": "code",
@@ -267,17 +267,17 @@ def export(value, ctx, **options):
     assert (output_root / source_blob["href"]).read_text() == notebook.read_text()
     assert manifest["values"]["title"] == {
         "source": {"type": "definition", "name": "title"},
-        "artifacts": ["text"],
+        "formats": ["text"],
     }
     assert (output_root / base_blob["href"]).read_text() == "Selected AAPL"
     assert (output_root / override_blob["href"]).read_text() == "Selected GOOGL"
 
 
-def test_export_notebook_passes_notebook_args(tmp_path: Path) -> None:
+def test_capture_notebook_passes_notebook_args(tmp_path: Path) -> None:
     notebook = tmp_path / "cli_args.py"
     _write_cli_args_notebook(notebook)
 
-    result = export_notebook(
+    result = capture_notebook(
         notebook,
         _text_export_spec(),
         to=tmp_path / "export",
@@ -292,14 +292,14 @@ def test_export_notebook_passes_notebook_args(tmp_path: Path) -> None:
     )
 
 
-def test_export_notebook_does_not_run_default_notebook_before_scenarios(
+def test_capture_notebook_does_not_run_default_notebook_before_scenarios(
     tmp_path: Path,
 ) -> None:
     notebook = tmp_path / "finance.py"
     log_path = tmp_path / "symbols.log"
     _write_side_effect_notebook(notebook, log_path)
 
-    result = export_notebook(
+    result = capture_notebook(
         notebook,
         _selected_export_spec(),
         to=tmp_path / "export",
@@ -314,7 +314,7 @@ def test_export_notebook_does_not_run_default_notebook_before_scenarios(
     )
 
 
-def test_export_notebook_source_can_use_cell_output_source(
+def test_capture_notebook_source_can_use_cell_output_source(
     tmp_path: Path,
 ) -> None:
     notebook = tmp_path / "finance.py"
@@ -345,7 +345,7 @@ if __name__ == "__main__":
     spec["scenarios"] = [{"id": "override", "state": {"symbol": "MSFT"}}]
     spec["values"]["title"]["source"] = {"cell": {"index": 1}}
 
-    result = export_notebook(
+    result = capture_notebook(
         notebook,
         spec,
         to=tmp_path / "export",
@@ -359,19 +359,19 @@ if __name__ == "__main__":
     )
 
 
-def test_export_notebook_object_patch_scenarios_do_not_leak(
+def test_capture_notebook_object_patch_scenarios_do_not_leak(
     tmp_path: Path,
 ) -> None:
     notebook = tmp_path / "patched.py"
     _write_object_patch_notebook(notebook)
     spec = _text_export_spec()
     spec["scenarios"] = [
-        {"id": "a-patched", "patches": {"selector.value": ["CRWV", "MSFT"]}},
+        {"id": "a-patched", "state": {"selector.value": ["CRWV", "MSFT"]}},
         {"id": "z-default"},
     ]
     spec["values"]["title"]["source"] = {"def": "chart"}
 
-    result = export_notebook(
+    result = capture_notebook(
         notebook,
         spec,
         to=tmp_path / "export",
@@ -390,13 +390,13 @@ def test_export_notebook_object_patch_scenarios_do_not_leak(
     ]
 
 
-def test_export_notebook_snapshot_excludes_internal_export_cells(
+def test_capture_notebook_snapshot_excludes_internal_export_cells(
     tmp_path: Path,
 ) -> None:
     notebook = tmp_path / "finance.py"
     _write_notebook(notebook)
 
-    result = export_notebook(
+    result = capture_notebook(
         notebook,
         _notebook_snapshot_spec(),
         to=tmp_path / "export",
@@ -417,7 +417,7 @@ def test_export_notebook_snapshot_excludes_internal_export_cells(
     assert artifact["metadata"]["cell_count"] == 2
 
 
-def test_export_notebook_uses_marimo_name_resolution(
+def test_capture_notebook_uses_marimo_name_resolution(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -435,7 +435,7 @@ def test_export_notebook_uses_marimo_name_resolution(
 
     monkeypatch.setattr("moexport.notebook.validate_name", fake_validate_name)
 
-    result = export_notebook(
+    result = capture_notebook(
         "https://example.com/notebook.py",
         _text_export_spec(),
         to=tmp_path / "export",
@@ -445,12 +445,12 @@ def test_export_notebook_uses_marimo_name_resolution(
     assert result.manifest["notebook"]["name"] == "remote.py"
 
 
-def test_export_notebook_rejects_unknown_run_options(tmp_path: Path) -> None:
+def test_capture_notebook_rejects_unknown_run_options(tmp_path: Path) -> None:
     notebook = tmp_path / "finance.py"
     _write_notebook(notebook)
 
     with pytest.raises(TypeError, match="mode"):
-        export_notebook(
+        capture_notebook(
             notebook,
             _text_export_spec(),
             to=tmp_path / "export",

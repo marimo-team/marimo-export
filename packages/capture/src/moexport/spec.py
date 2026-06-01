@@ -22,7 +22,6 @@ import yaml
 from moexport.sources import SourceSpec, normalize_source
 
 SpecKey: TypeAlias = Annotated[str, Field(pattern=r"^[A-Za-z_][A-Za-z0-9_-]*$")]
-DefinitionKey: TypeAlias = Annotated[str, Field(pattern=r"^[A-Za-z_][A-Za-z0-9_]*$")]
 StateKey: TypeAlias = Annotated[
     str,
     Field(pattern=r"^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*$"),
@@ -107,21 +106,16 @@ BUILTIN_FORMAT_EXPORTERS = {
 class CodeStateValue(SpecModel):
     """Scenario state value computed from a Python expression."""
 
-    type: Literal["code"] = Field(
-        description=(
-            "Discriminator for a scenario state value computed from Python code."
-        ),
-    )
-    expression: str = Field(
+    code: str = Field(
         description=(
             "Python expression evaluated in the live notebook runtime before "
             "calling `mox.evaluate`."
         ),
     )
 
-    @field_validator("expression")
+    @field_validator("code")
     @classmethod
-    def _expression_must_not_be_empty(cls, value: str) -> str:
+    def _code_must_not_be_empty(cls, value: str) -> str:
         if not value.strip():
             raise ValueError("state expression must not be empty")
         return value
@@ -130,7 +124,7 @@ class CodeStateValue(SpecModel):
 def _validate_state_value(value: object) -> object:
     if isinstance(value, Mapping):
         mapping = cast(Mapping[object, object], value)
-        if mapping.get("type") == "code":
+        if "code" in mapping:
             return CodeStateValue.model_validate(dict(mapping))
     return _validate_json_value(value)
 
@@ -138,11 +132,11 @@ def _validate_state_value(value: object) -> object:
 StateValue: TypeAlias = CodeStateValue | JsonConfigValue
 
 
-class ArtifactSpec(SpecModel):
-    """One named artifact to produce for a value."""
+class FormatSpec(SpecModel):
+    """One named format to produce for a value."""
 
     export: ExportCallable = Field(
-        description="Callable that projects the live Python value into an artifact.",
+        description="Callable that projects the live Python value into a format.",
     )
     options: JsonConfigObject = Field(
         default_factory=dict,
@@ -157,7 +151,7 @@ class ArtifactSpec(SpecModel):
 
         validated = _validate_json_value(value)
         if not isinstance(validated, dict):
-            raise ValueError("artifact options must be a JSON object")
+            raise ValueError("format options must be a JSON object")
         return validated
 
 
@@ -166,15 +160,15 @@ class ValueSpec(SpecModel):
 
     source: SourceSpec = Field(
         description=(
-            "Typed source record evaluated by `mox.export`, for example "
-            "`{def: df}`, `{expr: df.head(10)}`, or `{cell: intro}`."
+            "Source evaluated by `mox.capture`, for example `df.head(10)`, "
+            "`{def: df}`, or `{cell: intro}`."
         ),
     )
-    artifacts: Annotated[
-        dict[SpecKey, ArtifactSpec],
+    formats: Annotated[
+        dict[SpecKey, FormatSpec],
         Field(
             min_length=1,
-            description="Named artifacts to produce for this value.",
+            description="Named formats to produce for this value.",
         ),
     ]
 
@@ -187,8 +181,8 @@ class ValueSpec(SpecModel):
         normalized = dict(value)
         if "source" in normalized:
             normalized["source"] = normalize_source(normalized["source"])
-        if "artifacts" in normalized:
-            normalized["artifacts"] = _normalize_artifacts(normalized["artifacts"])
+        if "formats" in normalized:
+            normalized["formats"] = _normalize_formats(normalized["formats"])
         return normalized
 
     @field_validator("source", mode="before")
@@ -200,27 +194,23 @@ class ValueSpec(SpecModel):
 class ScenarioSpec(SpecModel):
     """One named finite notebook state to materialize.
 
-    `state` overrides notebook definitions. `patches` applies dotted object
+    `state` overrides notebook definitions. Dotted state keys patch object
     paths after producer cells run.
     """
 
     id: SpecKey = Field(
         default="default",
-        description="Stable id used in artifact paths and manifest lookup.",
+        description="Stable id used in format paths and manifest lookup.",
     )
-    state: dict[DefinitionKey, StateValue] = Field(
-        default_factory=dict,
-        description=("Notebook definition overrides for this scenario."),
-    )
-    patches: dict[StateKey, StateValue] = Field(
+    state: dict[StateKey, StateValue] = Field(
         default_factory=dict,
         description=(
-            "Object patches applied after producer cells run, for example "
-            "`selector.value`."
+            "Scenario state. Bare keys override definitions, and dotted keys "
+            "patch object attributes such as `selector.value`."
         ),
     )
 
-    @field_validator("state", "patches", mode="before")
+    @field_validator("state", mode="before")
     @classmethod
     def _state_must_be_json_or_code(cls, value: object) -> object:
         return _validate_value_mapping(value, "scenario state")
@@ -256,20 +246,20 @@ def _validate_value_mapping(value: object, label: str) -> dict[str, object]:
     return validated
 
 
-def _normalize_artifacts(value: object) -> object:
+def _normalize_formats(value: object) -> object:
     if isinstance(value, list):
-        artifacts: dict[str, object] = {}
+        formats: dict[str, object] = {}
         for index, item in enumerate(value):
-            name, spec = _normalize_artifact_item(item, f"artifacts[{index}]")
-            if name in artifacts:
-                raise ValueError(f"duplicate artifact {name!r}")
-            artifacts[name] = spec
-        return artifacts
+            name, spec = _normalize_format_item(item, f"formats[{index}]")
+            if name in formats:
+                raise ValueError(f"duplicate format {name!r}")
+            formats[name] = spec
+        return formats
 
     if isinstance(value, Mapping):
         return {
-            _required_string(name, "artifact name"): _normalize_artifact_mapping(
-                _required_string(name, "artifact name"),
+            _required_string(name, "format name"): _normalize_format_mapping(
+                _required_string(name, "format name"),
                 item,
             )
             for name, item in value.items()
@@ -278,26 +268,26 @@ def _normalize_artifacts(value: object) -> object:
     return value
 
 
-def _normalize_artifact_item(value: object, label: str) -> tuple[str, object]:
+def _normalize_format_item(value: object, label: str) -> tuple[str, object]:
     if isinstance(value, str):
         return value, _builtin_format(value, {})
     if not isinstance(value, Mapping):
-        raise ValueError(f"{label} must be an artifact name or object")
+        raise ValueError(f"{label} must be a format name or object")
 
     mapping = cast(Mapping[object, object], value)
-    if "artifact" in mapping:
-        name = _required_string(mapping["artifact"], f"{label}.artifact")
+    if "format" in mapping:
+        name = _required_string(mapping["format"], f"{label}.format")
         options = mapping.get("options", {})
         return name, _builtin_format(name, options)
 
     if len(mapping) != 1:
-        raise ValueError(f"{label} must contain exactly one artifact name")
+        raise ValueError(f"{label} must contain exactly one format name")
     name, item = next(iter(mapping.items()))
-    artifact_name = _required_string(name, "artifact name")
-    return artifact_name, _normalize_artifact_mapping(artifact_name, item)
+    format_name = _required_string(name, "format name")
+    return format_name, _normalize_format_mapping(format_name, item)
 
 
-def _normalize_artifact_mapping(name: str, value: object) -> object:
+def _normalize_format_mapping(name: str, value: object) -> object:
     if isinstance(value, Mapping) and "export" in value:
         return value
     if name in BUILTIN_FORMAT_EXPORTERS:
@@ -310,7 +300,7 @@ def _builtin_format(name: str, options: object) -> dict[str, object]:
         ref = BUILTIN_FORMAT_EXPORTERS[name]
     except KeyError as error:
         raise ValueError(
-            f"unknown built-in artifact {name!r}. Provide an explicit export config."
+            f"unknown built-in format {name!r}. Provide an explicit export config."
         ) from error
     return {
         "export": {
@@ -342,7 +332,7 @@ class ExportSpec(SpecModel):
         dict[SpecKey, ValueSpec],
         Field(
             min_length=1,
-            description="Named values to evaluate and project into artifacts.",
+            description="Named values to evaluate and project into formats.",
         ),
     ]
 

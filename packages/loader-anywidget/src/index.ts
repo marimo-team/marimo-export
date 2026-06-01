@@ -1,8 +1,8 @@
 import {
   defineLoader,
-  type ArtifactLoader,
-  type ArtifactLoaderContext,
-  type ArtifactRecord,
+  type FormatLoader,
+  type FormatLoaderContext,
+  type FormatRecord,
   type BlobRef,
   type JsonValue,
 } from "@marimo-team/export-reader";
@@ -48,7 +48,7 @@ export interface MountedAnyWidget<T extends AnyWidgetState = AnyWidgetState> {
 }
 
 export interface LoadedAnyWidget<T extends AnyWidgetState = AnyWidgetState> {
-  artifact: ArtifactRecord;
+  record: FormatRecord;
   descriptor: AnyWidgetDescriptor;
   initialState: T;
   createWidget(input?: AnyWidgetInput<T>): Promise<StandaloneWidget<T>>;
@@ -56,21 +56,23 @@ export interface LoadedAnyWidget<T extends AnyWidgetState = AnyWidgetState> {
   dispose(): void;
 }
 
-export function anywidgetLoader(): ArtifactLoader<LoadedAnyWidget> {
+export function anywidgetLoader<T extends AnyWidgetState = AnyWidgetState>(): FormatLoader<
+  LoadedAnyWidget<T>
+> {
   return defineLoader({
-    supports: anywidgetFormat,
-    async load(context: ArtifactLoaderContext) {
-      return loadAnyWidget(context);
+    formatId: anywidgetFormat,
+    async load(context: FormatLoaderContext) {
+      return loadAnyWidget<T>(context);
     },
   });
 }
 
 async function loadAnyWidget<T extends AnyWidgetState>(
-  context: ArtifactLoaderContext,
+  context: FormatLoaderContext,
 ): Promise<LoadedAnyWidget<T>> {
   const descriptor = await context.file("descriptor").json<AnyWidgetDescriptor>();
   const initialState = await loadInitialState<T>(context, descriptor);
-  const inlineCssText = context.artifact.data.files.style
+  const inlineCssText = context.record.data.files.style
     ? await context.file("style").text()
     : null;
   const objectUrls = new Set<string>();
@@ -104,7 +106,7 @@ async function loadAnyWidget<T extends AnyWidgetState>(
   };
 
   return {
-    artifact: context.artifact,
+    record: context.record,
     descriptor,
     initialState,
     async createWidget(input) {
@@ -146,14 +148,14 @@ async function importRuntimeModule<T extends AnyWidgetState>(
 }
 
 async function loadInitialState<T extends AnyWidgetState>(
-  context: ArtifactLoaderContext,
+  context: FormatLoaderContext,
   descriptor: AnyWidgetDescriptor,
 ): Promise<T> {
   const state: Record<string, unknown> = {};
 
   for (const [key, value] of Object.entries(descriptor.state)) {
     state[key] =
-      isBlobRef(value) && context.artifact.data.files[`state.${key}`]
+      isBlobRef(value) && context.record.data.files[`state.${key}`]
         ? await context.file(`state.${key}`).json<JsonValue>()
         : value;
   }

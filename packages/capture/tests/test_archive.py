@@ -67,7 +67,7 @@ def test_archive_bundle_returns_zip_bytes(
             "metadata": {"batch": {"result_count": 1}},
         }
 
-    monkeypatch.setattr(export_module, "evaluate", fake_evaluate)
+    monkeypatch.setattr(export_module, "evaluate_plan", fake_evaluate)
     monkeypatch.setattr(
         request_module,
         "get_context",
@@ -75,13 +75,13 @@ def test_archive_bundle_returns_zip_bytes(
     )
 
     result = run(
-        mox.export(
+        mox.capture(
             {
                 "scenarios": [{"id": "default"}],
                 "values": {
                     "title": {
                         "source": {"def": "title"},
-                        "artifacts": {
+                        "formats": {
                             "text": {
                                 "export": {
                                     "type": "ref",
@@ -120,7 +120,7 @@ def test_archive_bundle_returns_zip_bytes(
                 "values": {
                     "title": {
                         "source": {"def": "title"},
-                        "artifacts": {
+                        "formats": {
                             "text": {
                                 "export": {
                                     "type": "ref",

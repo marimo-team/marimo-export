@@ -4,9 +4,7 @@
     "interval": "1d",
     "start": "2025-04-01",
     "end": "2025-05-02",
-    "chart_width": 760
-  },
-  "patches": {
+    "chart_width": 760,
     "symbols_selector.value": ["AAPL", "MSFT"],
     "widget.widget.metric": "Close",
     "widget.widget.mode": "absolute",

@@ -8,7 +8,7 @@ module, but callers should treat this file as the boundary and import from
 
 from __future__ import annotations
 
-from moexport.evaluate._batch import evaluate
+from moexport.evaluate._batch import evaluate, evaluate_plan
 from moexport.evaluate._types import (
     DefinitionOverrides,
     EvaluateResult,
@@ -22,4 +22,5 @@ __all__ = [
     "ObjectPatches",
     "TargetRunResult",
     "evaluate",
+    "evaluate_plan",
 ]

@@ -10,7 +10,7 @@ from typing import Any, Awaitable, Callable, TypeAlias
 from marimo._runtime.context import get_context
 from marimo._utils.paths import notebook_output_dir
 
-from moexport.evaluate import EvaluateResult, evaluate
+from moexport.evaluate import EvaluateResult, evaluate_plan
 from moexport.jsonio import sha256_bytes, sha256_json
 from moexport.spec import CodeStateValue, ExportSpec, ScenarioSpec, ValueSpec
 from moexport.sources import (
@@ -91,7 +91,7 @@ class ExportIdentity:
 
 
 class ResolvedExportRequest:
-    """All decisions needed before evaluating and writing artifacts."""
+    """All decisions needed before evaluating and writing a bundle."""
 
     __slots__ = (
         "blob_base_path",
@@ -139,7 +139,7 @@ async def resolve_export_request(
     spec: ExportSpec,
     *,
     to: str | Path | None = None,
-    evaluate_fn: EvaluateFn = evaluate,
+    evaluate_fn: EvaluateFn = evaluate_plan,
 ) -> ResolvedExportRequest:
     """Resolve source, scenarios, identities, output path, and target expr."""
 
@@ -213,16 +213,13 @@ async def _resolve_scenario(
         scenario.state,
         evaluate_fn=evaluate_fn,
     )
-    object_patches = await _resolve_value_mapping(
-        scenario.patches,
-        evaluate_fn=evaluate_fn,
-    )
-    manifest_state = _manifest_tree({**state, **object_patches})
-    declared_state = _dump_declared_state({**scenario.state, **scenario.patches})
+    definition_overrides, object_patches = _split_state(state)
+    manifest_state = _manifest_tree(state)
+    declared_state = _dump_declared_state(scenario.state)
     return ResolvedScenario(
         id=scenario.id,
-        state={**state, **object_patches},
-        definition_overrides=state,
+        state=state,
+        definition_overrides=definition_overrides,
         object_patches=object_patches,
         manifest_state=manifest_state,
         declared_state=declared_state if declared_state != manifest_state else None,
@@ -246,7 +243,7 @@ async def _resolve_value_mapping(
             continue
 
         result = await evaluate_fn(
-            value.expression,
+            value.code,
             _evaluation_environment(resolved),
         )
         resolved[name] = result["results"][0]["value"]
@@ -258,6 +255,17 @@ def _evaluation_environment(state: Mapping[str, Any]) -> dict[str, Any]:
     environment = {name: value for name, value in state.items() if "." not in name}
     environment["state"] = dict(state)
     return environment
+
+
+def _split_state(state: Mapping[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+    definitions: dict[str, Any] = {}
+    object_patches: dict[str, Any] = {}
+    for name, value in state.items():
+        if "." in name:
+            object_patches[name] = value
+        else:
+            definitions[name] = value
+    return definitions, object_patches
 
 
 def _manifest_tree(value: Any) -> Any:
@@ -301,7 +309,7 @@ def _export_identity(
     scenario_set_identity: ScenarioSetIdentity,
 ) -> ExportIdentity:
     # The export id addresses the request, not one run's produced bytes. The
-    # Same notebook source, scenario set, and value/artifact plan stay idempotent.
+    # same notebook source, scenario set, and value format plan stay idempotent.
     request = {
         "notebook_sha256": notebook_source.sha256,
         "scenario_set_sha256": scenario_set_identity.sha256,

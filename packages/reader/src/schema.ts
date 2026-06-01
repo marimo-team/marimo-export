@@ -1,6 +1,6 @@
 import type {
-  ArtifactData,
-  ArtifactRecord,
+  FormatData,
+  FormatRecord,
   BlobRef,
   CaptureRecord,
   ExportManifest,
@@ -128,8 +128,8 @@ function manifestValue(value: unknown, label: string): ManifestValue {
   const record = object(value, label);
   return {
     source: sourceRecord(record.source, `${label}.source`),
-    artifacts: array(record.artifacts, `${label}.artifacts`).map((artifact, index) =>
-      string(artifact, `${label}.artifacts[${index}]`),
+    formats: array(record.formats, `${label}.formats`).map((format, index) =>
+      string(format, `${label}.formats[${index}]`),
     ),
   };
 }
@@ -174,8 +174,8 @@ function manifestScenario(value: unknown, label: string): ManifestScenario {
   const scenario: ManifestScenario = {
     id: string(record.id, `${label}.id`),
     state: jsonObject(record.state, `${label}.state`),
-    values: stringRecord(record.values, `${label}.values`, (artifacts, artifactsLabel) =>
-      stringRecord(artifacts, artifactsLabel, artifactRecord),
+    values: stringRecord(record.values, `${label}.values`, (formats, formatsLabel) =>
+      stringRecord(formats, formatsLabel, formatRecord),
     ),
   };
 
@@ -189,17 +189,17 @@ function manifestScenario(value: unknown, label: string): ManifestScenario {
   return scenario;
 }
 
-function artifactRecord(value: unknown, label: string): ArtifactRecord {
+function formatRecord(value: unknown, label: string): FormatRecord {
   const record = object(value, label);
   return {
     format_id: string(record.format_id, `${label}.format_id`),
     media_type: nullableString(record.media_type, `${label}.media_type`),
-    data: artifactData(record.data, `${label}.data`),
+    data: formatData(record.data, `${label}.data`),
     metadata: record.metadata === null ? null : jsonObject(record.metadata, `${label}.metadata`),
   };
 }
 
-function artifactData(value: unknown, label: string): ArtifactData {
+function formatData(value: unknown, label: string): FormatData {
   const record = object(value, label);
   const files = stringRecord(record.files, `${label}.files`, blobRef);
   const entry = nullableString(record.entry, `${label}.entry`);
@@ -276,18 +276,18 @@ function validateCatalog(
         );
       }
 
-      for (const artifactName of declaration.artifacts) {
-        if (!scenarioValue[artifactName]) {
+      for (const formatName of declaration.formats) {
+        if (!scenarioValue[formatName]) {
           throw new Error(
-            `${label}.scenarios.${scenario.id}.values.${valueName} must include declared artifact ${JSON.stringify(
-              artifactName,
+            `${label}.scenarios.${scenario.id}.values.${valueName} must include declared format ${JSON.stringify(
+              formatName,
             )}.`,
           );
         }
       }
     }
 
-    for (const [valueName, artifacts] of Object.entries(scenario.values)) {
+    for (const [valueName, formats] of Object.entries(scenario.values)) {
       const declaration = values[valueName];
       if (!declaration) {
         throw new Error(
@@ -297,12 +297,12 @@ function validateCatalog(
         );
       }
 
-      const declaredArtifacts = new Set(declaration.artifacts);
-      for (const artifactName of Object.keys(artifacts)) {
-        if (!declaredArtifacts.has(artifactName)) {
+      const declaredFormats = new Set(declaration.formats);
+      for (const formatName of Object.keys(formats)) {
+        if (!declaredFormats.has(formatName)) {
           throw new Error(
-            `${label}.scenarios.${scenario.id}.values.${valueName} contains undeclared artifact ${JSON.stringify(
-              artifactName,
+            `${label}.scenarios.${scenario.id}.values.${valueName} contains undeclared format ${JSON.stringify(
+              formatName,
             )}.`,
           );
         }

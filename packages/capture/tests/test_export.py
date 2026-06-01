@@ -19,7 +19,7 @@ from moexport.artifacts import Artifact, ArtifactData
 from moexport.bundle.schema import BundleManifest, NotebookRecord
 from moexport.exporters import ExporterContext
 
-package_export = mox.export
+package_capture = mox.capture
 export_module = importlib.import_module("moexport.export")
 request_module = importlib.import_module("moexport.request")
 target_module = importlib.import_module("moexport.evaluate._target")
@@ -40,13 +40,13 @@ def _scenario(manifest: dict[str, Any], scenario_id: str) -> dict[str, Any]:
     )
 
 
-def _artifact(
+def _format_record(
     manifest: dict[str, Any],
     scenario_id: str,
     value_name: str,
-    artifact_name: str,
+    format_name: str,
 ) -> dict[str, Any]:
-    return _scenario(manifest, scenario_id)["values"][value_name][artifact_name]
+    return _scenario(manifest, scenario_id)["values"][value_name][format_name]
 
 
 def _assert_notebook_source(
@@ -97,7 +97,7 @@ def _install_test_exporters() -> None:
             metadata={
                 "scenario": ctx.scenario_id,
                 "value": ctx.value_name,
-                "format_id": ctx.artifact_name,
+                "format": ctx.format_name,
             },
         )
 
@@ -105,7 +105,7 @@ def _install_test_exporters() -> None:
     sys.modules[module.__name__] = module
 
 
-def test_export_materializes_cell_output_for_the_active_scenario(
+def test_capture_materializes_cell_output_for_the_active_scenario(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
@@ -136,13 +136,13 @@ def test_export_materializes_cell_output_for_the_active_scenario(
     monkeypatch.setattr(target_module, "get_context", lambda: ctx)
 
     result = run(
-        export_module.export(
+        export_module.capture(
             {
                 "scenarios": [{"id": "override", "state": {"symbols": ["MSFT"]}}],
                 "values": {
                     "title": {
                         "source": {"cell": {"index": 1}},
-                        "artifacts": ["text"],
+                        "formats": ["text"],
                     }
                 },
             },
@@ -164,14 +164,13 @@ def test_export_materializes_cell_output_for_the_active_scenario(
     assert artifact_text(result) == "MSFT"
 
 
-def test_export_writes_manifest_artifacts_and_deduped_blobs(
+def test_capture_writes_manifest_formats_and_deduped_blobs(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
     _install_test_exporters()
     notebook = tmp_path / "finance.py"
     notebook.write_text("# notebook")
-    calls: list[tuple[str, list[dict[str, Any]], list[dict[str, Any]] | None]] = []
 
     async def fake_evaluate(
         target: str,
@@ -179,9 +178,9 @@ def test_export_writes_manifest_artifacts_and_deduped_blobs(
         *,
         object_patches: list[dict[str, Any]] | None = None,
     ):
-        calls.append((target, definition_overrides, object_patches))
+        del target, definition_overrides, object_patches
         return {
-            "target": target,
+            "target": "target",
             "results": [
                 {
                     "value": {"title": "same"},
@@ -208,7 +207,7 @@ def test_export_writes_manifest_artifacts_and_deduped_blobs(
             },
         }
 
-    monkeypatch.setattr(export_module, "evaluate", fake_evaluate)
+    monkeypatch.setattr(export_module, "evaluate_plan", fake_evaluate)
     monkeypatch.setattr(
         request_module,
         "get_context",
@@ -216,7 +215,7 @@ def test_export_writes_manifest_artifacts_and_deduped_blobs(
     )
 
     result = run(
-        package_export(
+        package_capture(
             {
                 "scenarios": [
                     {"id": "default"},
@@ -225,7 +224,7 @@ def test_export_writes_manifest_artifacts_and_deduped_blobs(
                 "values": {
                     "title": {
                         "source": {"def": "title"},
-                        "artifacts": {
+                        "formats": {
                             "text": {
                                 "export": {
                                     "type": "ref",
@@ -246,16 +245,11 @@ def test_export_writes_manifest_artifacts_and_deduped_blobs(
     manifest = json.loads((bundle_path / "manifest.json").read_text())
     invocation = json.loads(Path(result.invocation_path).read_text())
     invocation_index = json.loads(Path(result.invocation_index_path).read_text())
-    first_artifact = _artifact(manifest, "default", "title", "text")
-    second_artifact = _artifact(manifest, "wide-chart", "title", "text")
-    first_blob = first_artifact["data"]["files"]["value"]
-    second_blob = second_artifact["data"]["files"]["value"]
+    first_format = _format_record(manifest, "default", "title", "text")
+    second_format = _format_record(manifest, "wide-chart", "title", "text")
+    first_blob = first_format["data"]["files"]["value"]
+    second_blob = second_format["data"]["files"]["value"]
 
-    target, definition_overrides, object_patches = calls[0]
-    assert len(calls) == 1
-    assert definition_overrides == [{}, {"chart_width": 1200}]
-    assert object_patches == [{}, {}]
-    assert eval(target, {}, {"title": "same"}) == {"title": "same"}
     assert result.manifest_path == str(bundle_path / "manifest.json")
     assert root_index["schema"] == "moexport.root_index.v1"
     assert root_index["latest"]["id"] == manifest["id"]
@@ -288,7 +282,7 @@ def test_export_writes_manifest_artifacts_and_deduped_blobs(
     assert len(manifest["capture"]["request_sha256"]) == 64
     assert manifest["values"]["title"] == {
         "source": {"type": "definition", "name": "title"},
-        "artifacts": ["text"],
+        "formats": ["text"],
     }
     assert manifest["provenance"]["invocations_index_href"] == (
         f"bundles/{manifest['id']}/traces/index.json"
@@ -334,55 +328,46 @@ def test_export_writes_manifest_artifacts_and_deduped_blobs(
             "href": f"bundles/{manifest['id']}/traces/{invocation['id']}.json",
         }
     ]
-    assert first_artifact["format_id"] == "text.v1"
+    assert first_format["format_id"] == "text.v1"
     assert first_blob["href"] == second_blob["href"]
     assert first_blob["href"].startswith("blobs/sha256/")
     assert (output_root / first_blob["href"]).read_text() == "same"
     assert len(_blob_files(output_root)) == 1
 
 
-def test_export_resolves_code_state_before_batch_evaluate(
+def test_capture_resolves_code_state_before_writing_outputs(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
     notebook = tmp_path / "finance.py"
     notebook.write_text("# notebook")
-
-    async def fake_evaluate(
-        target: str,
-        definition_overrides: Any = None,
-        *,
-        object_patches: Any = None,
-    ):
-        if target == "base_width * 2":
-            assert definition_overrides == {
-                "base_width": 500,
-                "state": {"base_width": 500},
-            }
-            assert object_patches is None
-            return {
-                "target": target,
-                "results": [{"value": 1000}],
-                "metadata": {"batch": {"result_count": 1}},
-            }
-
-        assert definition_overrides == [{"base_width": 500, "chart_width": 1000}]
-        assert object_patches == [{}]
-        return {
-            "target": target,
-            "results": [{"value": {"summary": "ok"}}],
-            "metadata": {"batch": {"result_count": 1}},
-        }
-
-    monkeypatch.setattr(export_module, "evaluate", fake_evaluate)
-    monkeypatch.setattr(
-        request_module,
-        "get_context",
-        lambda: SimpleNamespace(filename=str(notebook)),
+    graph = DirectedGraph()
+    graph.register_cell(
+        CellId_t("summary"),
+        compile_cell(
+            "summary = f'{base_width}x{chart_width}'",
+            cell_id=CellId_t("summary"),
+        ),
     )
 
+    class FakeContext:
+        filename = str(notebook)
+        cell_id = CellId_t("__current__")
+
+        def __init__(self) -> None:
+            self.graph = graph
+            self.globals = {}
+
+        def with_cell_id(self, cid: CellId_t):
+            del cid
+            return nullcontext()
+
+    ctx = FakeContext()
+    monkeypatch.setattr(request_module, "get_context", lambda: ctx)
+    monkeypatch.setattr(target_module, "get_context", lambda: ctx)
+
     result = run(
-        export_module.export(
+        export_module.capture(
             {
                 "scenarios": [
                     {
@@ -390,8 +375,7 @@ def test_export_resolves_code_state_before_batch_evaluate(
                         "state": {
                             "base_width": 500,
                             "chart_width": {
-                                "type": "code",
-                                "expression": "base_width * 2",
+                                "code": "base_width * 2",
                             },
                         },
                     }
@@ -399,7 +383,7 @@ def test_export_resolves_code_state_before_batch_evaluate(
                 "values": {
                     "summary": {
                         "source": {"def": "summary"},
-                        "artifacts": {
+                        "formats": {
                             "json": {
                                 "export": {
                                     "type": "code",
@@ -434,57 +418,71 @@ def export(value, ctx, **options):
     )
 
     manifest = result.manifest
-    artifact = _artifact(manifest, "computed", "summary", "json")
+    artifact = _format_record(manifest, "computed", "summary", "json")
     blob = artifact["data"]["files"]["data"]
     output_root = Path(result.bundle_path).parent.parent
     blob_value = json.loads((output_root / blob["href"]).read_text())
-    assert blob_value == "ok"
+    assert blob_value == "500x1000"
     scenario = _scenario(manifest, "computed")
     assert scenario["state"]["chart_width"] == 1000
     assert scenario["declared_state"]["chart_width"] == {
-        "type": "code",
-        "expression": "base_width * 2",
+        "code": "base_width * 2",
     }
 
 
-def test_export_applies_dotted_state_keys_to_object_attributes(
+def test_capture_applies_dotted_state_keys_to_object_attributes(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
     _install_test_exporters()
     notebook = tmp_path / "finance.py"
     notebook.write_text("# notebook")
+    graph = DirectedGraph()
+    graph.register_cell(
+        CellId_t("selector"),
+        compile_cell(
+            """
+class Selector:
+    def __init__(self):
+        self.config = {"label": "Default"}
 
-    async def fake_evaluate(
-        target: str,
-        definition_overrides: list[dict[str, Any]],
-        *,
-        object_patches: list[dict[str, Any]] | None = None,
-    ):
-        del target
-        assert definition_overrides == [{"symbol": "AAPL"}]
-        assert object_patches == [{"selector.config": {"label": "Symbols"}}]
-        return {
-            "target": "target",
-            "results": [{"value": {"title": "same"}}],
-            "metadata": {"batch": {"result_count": 1}, "execution": {}},
-        }
-
-    monkeypatch.setattr(export_module, "evaluate", fake_evaluate)
-    monkeypatch.setattr(
-        request_module,
-        "get_context",
-        lambda: SimpleNamespace(filename=str(notebook)),
+selector = Selector()
+""",
+            cell_id=CellId_t("selector"),
+        ),
+    )
+    graph.register_cell(
+        CellId_t("title"),
+        compile_cell(
+            "title = f'{selector.config[\"label\"]}: {symbol}'",
+            cell_id=CellId_t("title"),
+        ),
     )
 
+    class FakeContext:
+        filename = str(notebook)
+        cell_id = CellId_t("__current__")
+
+        def __init__(self) -> None:
+            self.graph = graph
+            self.globals = {}
+
+        def with_cell_id(self, cid: CellId_t):
+            del cid
+            return nullcontext()
+
+    ctx = FakeContext()
+    monkeypatch.setattr(request_module, "get_context", lambda: ctx)
+    monkeypatch.setattr(target_module, "get_context", lambda: ctx)
+
     result = run(
-        export_module.export(
+        export_module.capture(
             {
                 "scenarios": [
                     {
                         "id": "patched",
-                        "state": {"symbol": "AAPL"},
-                        "patches": {
+                        "state": {
+                            "symbol": "AAPL",
                             "selector.config": {"label": "Symbols"},
                         },
                     }
@@ -492,7 +490,7 @@ def test_export_applies_dotted_state_keys_to_object_attributes(
                 "values": {
                     "title": {
                         "source": {"def": "title"},
-                        "artifacts": ["text"],
+                        "formats": ["text"],
                     }
                 },
             },
@@ -504,9 +502,22 @@ def test_export_applies_dotted_state_keys_to_object_attributes(
         "symbol": "AAPL",
         "selector.config": {"label": "Symbols"},
     }
+    artifact = _format_record(result.manifest, "patched", "title", "text")
+    blob = artifact["data"]["files"][artifact["data"]["entry"]]
+    output_root = Path(result.bundle_path).parent.parent
+    assert (output_root / blob["href"]).read_text() == "Symbols: AAPL"
+    assert _invocation_scenario(result.invocation, "patched")["trace"]["state"][
+        "applied_object_patches"
+    ] == [
+        {
+            "target": "selector.config",
+            "root": "selector",
+            "value_preview": "{'label': 'Symbols'}",
+        }
+    ]
 
 
-def test_export_rejects_non_json_scenario_state_identity(
+def test_capture_rejects_non_json_scenario_state_identity(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
@@ -532,7 +543,7 @@ def test_export_rejects_non_json_scenario_state_identity(
             "metadata": {"batch": {"result_count": 1}},
         }
 
-    monkeypatch.setattr(export_module, "evaluate", fake_evaluate)
+    monkeypatch.setattr(export_module, "evaluate_plan", fake_evaluate)
     monkeypatch.setattr(
         request_module,
         "get_context",
@@ -541,15 +552,14 @@ def test_export_rejects_non_json_scenario_state_identity(
 
     with pytest.raises(ValueError, match="scenario state values must be JSON"):
         run(
-            export_module.export(
+            export_module.capture(
                 {
                     "scenarios": [
                         {
                             "id": "computed",
                             "state": {
                                 "opaque": {
-                                    "type": "code",
-                                    "expression": "object()",
+                                    "code": "object()",
                                 },
                             },
                         }
@@ -557,7 +567,7 @@ def test_export_rejects_non_json_scenario_state_identity(
                     "values": {
                         "summary": {
                             "source": {"def": "summary"},
-                            "artifacts": ["json"],
+                            "formats": ["json"],
                         }
                     },
                 },
@@ -566,7 +576,7 @@ def test_export_rejects_non_json_scenario_state_identity(
         )
 
 
-def test_export_rejects_embedded_artifacts(
+def test_capture_rejects_embedded_format_payloads(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
@@ -586,7 +596,7 @@ def test_export_rejects_embedded_artifacts(
             "metadata": {"batch": {"result_count": 1}, "execution": {}},
         }
 
-    monkeypatch.setattr(export_module, "evaluate", fake_evaluate)
+    monkeypatch.setattr(export_module, "evaluate_plan", fake_evaluate)
     monkeypatch.setattr(
         request_module,
         "get_context",
@@ -595,12 +605,12 @@ def test_export_rejects_embedded_artifacts(
 
     with pytest.raises(TypeError, match="type='bundle'"):
         run(
-            export_module.export(
+            export_module.capture(
                 {
                     "values": {
                         "summary": {
                             "source": {"def": "summary"},
-                            "artifacts": {
+                            "formats": {
                                 "json": {
                                     "export": {
                                         "type": "code",
@@ -626,7 +636,7 @@ def export(value, ctx, **options):
     assert not (tmp_path / "bundle" / "index.json").exists()
 
 
-def test_export_default_bundle_path_uses_marimo_output_dir(
+def test_capture_default_bundle_path_uses_marimo_output_dir(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
@@ -650,7 +660,7 @@ def test_export_default_bundle_path_uses_marimo_output_dir(
             },
         }
 
-    monkeypatch.setattr(export_module, "evaluate", fake_evaluate)
+    monkeypatch.setattr(export_module, "evaluate_plan", fake_evaluate)
     monkeypatch.setattr(
         request_module,
         "get_context",
@@ -658,12 +668,12 @@ def test_export_default_bundle_path_uses_marimo_output_dir(
     )
 
     result = run(
-        export_module.export(
+        export_module.capture(
             {
                 "values": {
                     "title": {
                         "source": {"def": "title"},
-                        "artifacts": {
+                        "formats": {
                             "text": {
                                 "export": {
                                     "type": "ref",
@@ -686,7 +696,7 @@ def test_export_default_bundle_path_uses_marimo_output_dir(
     assert Path(result.invocation_path).exists()
 
 
-def test_export_uses_live_notebook_path_over_spec_notebook(
+def test_capture_uses_live_notebook_path_over_spec_notebook(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
@@ -710,7 +720,7 @@ def test_export_uses_live_notebook_path_over_spec_notebook(
             },
         }
 
-    monkeypatch.setattr(export_module, "evaluate", fake_evaluate)
+    monkeypatch.setattr(export_module, "evaluate_plan", fake_evaluate)
     monkeypatch.setattr(
         request_module,
         "get_context",
@@ -718,12 +728,12 @@ def test_export_uses_live_notebook_path_over_spec_notebook(
     )
 
     result = run(
-        export_module.export(
+        export_module.capture(
             {
                 "values": {
                     "title": {
                         "source": {"def": "title"},
-                        "artifacts": {
+                        "formats": {
                             "text": {
                                 "export": {
                                     "type": "ref",
@@ -745,7 +755,7 @@ def test_export_uses_live_notebook_path_over_spec_notebook(
     )
 
 
-def test_export_default_bundle_path_groups_same_scenario_set(
+def test_capture_default_bundle_path_groups_same_scenario_set(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
@@ -775,7 +785,7 @@ def test_export_default_bundle_path_groups_same_scenario_set(
             },
         }
 
-    monkeypatch.setattr(export_module, "evaluate", fake_evaluate)
+    monkeypatch.setattr(export_module, "evaluate_plan", fake_evaluate)
     monkeypatch.setattr(
         request_module,
         "get_context",
@@ -786,7 +796,7 @@ def test_export_default_bundle_path_groups_same_scenario_set(
         "values": {
             "title": {
                 "source": {"def": "title"},
-                "artifacts": {
+                "formats": {
                     "text": {
                         "export": {
                             "type": "ref",
@@ -802,7 +812,7 @@ def test_export_default_bundle_path_groups_same_scenario_set(
             **title_spec["values"],
             "summary": {
                 "source": {"def": "summary"},
-                "artifacts": {
+                "formats": {
                     "text": {
                         "export": {
                             "type": "ref",
@@ -814,8 +824,8 @@ def test_export_default_bundle_path_groups_same_scenario_set(
         },
     }
 
-    first = run(export_module.export(title_spec))
-    second = run(export_module.export(title_and_summary_spec))
+    first = run(export_module.capture(title_spec))
+    second = run(export_module.capture(title_and_summary_spec))
 
     first_path = Path(first.bundle_path)
     second_path = Path(second.bundle_path)
@@ -831,7 +841,7 @@ def test_export_default_bundle_path_groups_same_scenario_set(
     assert len(_blob_files(output_root)) == 1
 
 
-def test_export_default_bundle_path_shares_blobs_across_renamed_values(
+def test_capture_default_bundle_path_shares_blobs_across_renamed_values(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
@@ -856,7 +866,7 @@ def test_export_default_bundle_path_shares_blobs_across_renamed_values(
             },
         }
 
-    monkeypatch.setattr(export_module, "evaluate", fake_evaluate)
+    monkeypatch.setattr(export_module, "evaluate_plan", fake_evaluate)
     monkeypatch.setattr(
         request_module,
         "get_context",
@@ -868,7 +878,7 @@ def test_export_default_bundle_path_shares_blobs_across_renamed_values(
             "values": {
                 value_name: {
                     "source": {"def": "title"},
-                    "artifacts": {
+                    "formats": {
                         "text": {
                             "export": {
                                 "type": "ref",
@@ -880,8 +890,8 @@ def test_export_default_bundle_path_shares_blobs_across_renamed_values(
             },
         }
 
-    first = run(export_module.export(spec("title")))
-    second = run(export_module.export(spec("renamed_title")))
+    first = run(export_module.capture(spec("title")))
+    second = run(export_module.capture(spec("renamed_title")))
 
     first_path = Path(first.bundle_path)
     second_path = Path(second.bundle_path)
@@ -892,18 +902,18 @@ def test_export_default_bundle_path_shares_blobs_across_renamed_values(
     assert first.manifest["id"] != second.manifest["id"]
     assert len(_blob_files(output_root)) == 1
 
-    first_artifact = _artifact(first.manifest, "default", "title", "text")
-    second_artifact = _artifact(second.manifest, "default", "renamed_title", "text")
+    first_format = _format_record(first.manifest, "default", "title", "text")
+    second_format = _format_record(second.manifest, "default", "renamed_title", "text")
     assert (
-        first_artifact["data"]["files"]["value"]["href"]
-        == second_artifact["data"]["files"]["value"]["href"]
+        first_format["data"]["files"]["value"]["href"]
+        == second_format["data"]["files"]["value"]["href"]
     )
-    href = first_artifact["data"]["files"]["value"]["href"]
+    href = first_format["data"]["files"]["value"]["href"]
     assert (output_root / href).read_text() == "same"
-    assert first_artifact["data"]["files"]["value"]["href"].startswith("blobs/sha256/")
+    assert first_format["data"]["files"]["value"]["href"].startswith("blobs/sha256/")
 
 
-def test_export_records_trace_without_changing_bundle_identity(
+def test_capture_records_trace_without_changing_bundle_identity(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
@@ -942,7 +952,7 @@ def test_export_records_trace_without_changing_bundle_identity(
             "metadata": {"batch": {"result_count": 1}, "execution": {}},
         }
 
-    monkeypatch.setattr(export_module, "evaluate", fake_evaluate)
+    monkeypatch.setattr(export_module, "evaluate_plan", fake_evaluate)
     monkeypatch.setattr(
         request_module,
         "get_context",
@@ -953,7 +963,7 @@ def test_export_records_trace_without_changing_bundle_identity(
         "values": {
             "title": {
                 "source": {"def": "title"},
-                "artifacts": {
+                "formats": {
                     "text": {
                         "export": {
                             "type": "ref",
@@ -965,8 +975,8 @@ def test_export_records_trace_without_changing_bundle_identity(
         },
     }
 
-    first = run(export_module.export(spec, to=tmp_path / "bundle"))
-    second = run(export_module.export(spec, to=tmp_path / "bundle"))
+    first = run(export_module.capture(spec, to=tmp_path / "bundle"))
+    second = run(export_module.capture(spec, to=tmp_path / "bundle"))
 
     assert first.bundle_path == second.bundle_path
     assert first.manifest["id"] == second.manifest["id"]
@@ -982,7 +992,7 @@ def test_export_records_trace_without_changing_bundle_identity(
     ]
 
 
-def test_export_default_bundle_path_separates_different_scenario_sets(
+def test_capture_default_bundle_path_separates_different_scenario_sets(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
@@ -1009,7 +1019,7 @@ def test_export_default_bundle_path_separates_different_scenario_sets(
             },
         }
 
-    monkeypatch.setattr(export_module, "evaluate", fake_evaluate)
+    monkeypatch.setattr(export_module, "evaluate_plan", fake_evaluate)
     monkeypatch.setattr(
         request_module,
         "get_context",
@@ -1020,7 +1030,7 @@ def test_export_default_bundle_path_separates_different_scenario_sets(
         "values": {
             "title": {
                 "source": {"def": "title"},
-                "artifacts": {
+                "formats": {
                     "text": {
                         "export": {
                             "type": "ref",
@@ -1039,8 +1049,8 @@ def test_export_default_bundle_path_separates_different_scenario_sets(
         ],
     }
 
-    first = run(export_module.export(base_spec))
-    second = run(export_module.export(wide_spec))
+    first = run(export_module.capture(base_spec))
+    second = run(export_module.capture(wide_spec))
 
     first_path = Path(first.bundle_path)
     second_path = Path(second.bundle_path)
@@ -1051,7 +1061,7 @@ def test_export_default_bundle_path_separates_different_scenario_sets(
     assert first.manifest["notebook"] == second.manifest["notebook"]
 
 
-def test_export_scenario_set_grouping_is_order_insensitive(
+def test_capture_scenario_set_grouping_is_order_insensitive(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
@@ -1081,7 +1091,7 @@ def test_export_scenario_set_grouping_is_order_insensitive(
             },
         }
 
-    monkeypatch.setattr(export_module, "evaluate", fake_evaluate)
+    monkeypatch.setattr(export_module, "evaluate_plan", fake_evaluate)
     monkeypatch.setattr(
         request_module,
         "get_context",
@@ -1091,7 +1101,7 @@ def test_export_scenario_set_grouping_is_order_insensitive(
     values = {
         "title": {
             "source": {"def": "title"},
-            "artifacts": {
+            "formats": {
                 "text": {
                     "export": {
                         "type": "ref",
@@ -1102,7 +1112,7 @@ def test_export_scenario_set_grouping_is_order_insensitive(
         }
     }
     first = run(
-        export_module.export(
+        export_module.capture(
             {
                 "scenarios": [
                     {"id": "wide", "state": {"chart_width": 1200}},
@@ -1113,7 +1123,7 @@ def test_export_scenario_set_grouping_is_order_insensitive(
         )
     )
     second = run(
-        export_module.export(
+        export_module.capture(
             {
                 "scenarios": [
                     {"id": "default"},

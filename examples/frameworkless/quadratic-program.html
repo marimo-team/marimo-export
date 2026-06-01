@@ -552,7 +552,7 @@
     </main>
 
     <script type="module">
-      import { exportRoot, jsonLoader, openExport } from "@marimo-team/export-reader";
+      import { jsonLoader, readLatestExport } from "@marimo-team/export-reader";
       import { anywidgetLoader } from "@marimo-team/export-loader-anywidget";
 
       const SUMMARY_FORMAT = "qp.summary.json.v1";
@@ -592,7 +592,8 @@
       boot().catch(showError);
 
       async function boot() {
-        const exported = await openExport(exportRoot(ROOT), {
+        const exported = await readLatestExport({
+          root: ROOT,
           loaders: [jsonLoader(SUMMARY_FORMAT), anywidgetLoader()],
         });
         state.export = exported;
@@ -600,9 +601,7 @@
           exported.scenarios().map(async (scenario) => ({
             scenario,
             title: PRESET_TITLES.get(scenario) ?? scenario,
-            summary: await exported
-              .artifact({ scenario, value: "summary", artifact: "json" })
-              .load(),
+            summary: await exported.get({ scenario, value: "summary", format: "json" }).load(),
           })),
         );
         state.summaries.sort((a, b) => presetRank(a.scenario) - presetRank(b.scenario));
@@ -661,7 +660,7 @@
         try {
           const scenario = state.summaries[0].scenario;
           state.widgetBundle = await exported
-            .artifact({ scenario, value: "widget", artifact: "bundle" })
+            .get({ scenario, value: "widget", format: "bundle" })
             .load();
         } catch (error) {
           $("#widget-note").classList.add("warning");

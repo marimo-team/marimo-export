@@ -8,9 +8,9 @@ The core flow is:
 1. A marimo notebook runs in Python.
 2. An export spec selects typed notebook sources and finite scenario states.
 3. `moexport` evaluates those selections, turns Python objects into portable
-   artifacts, and writes a static bundle.
+   formats, and writes a static bundle.
 4. Web code opens the bundle with `@marimo-team/export-reader` and loads only
-   the artifacts it needs.
+   the formats it needs.
 
 The finished site does not need a Python server, Pyodide, or a marimo runtime.
 
@@ -21,13 +21,13 @@ The finished site does not need a Python server, Pyodide, or a marimo runtime.
 - `packages/client`: TypeScript client for asking a running marimo server to
   produce a bundle from JavaScript.
 - `packages/reader`: TypeScript reader for finished static bundles.
-- `packages/loader-*`: optional web loaders for artifact families such as
+- `packages/loader-*`: optional web loaders for format families such as
   AnyWidget, Arrow, Parquet, and Vega-Lite.
 - `notebooks`: source notebooks plus YAML and JSON export specs used by the
   examples.
 - `examples`: framework and frameworkless apps that consume the exported
   bundles.
-- `examples/self-contained`: a Markdown artifact example that turns one
+- `examples/self-contained`: a Markdown export example that turns one
   notebook into `output.md` plus a static `media/` directory for PR review.
 
 ## Capture A Notebook
@@ -53,27 +53,26 @@ uv run marimo-export query notebooks/__marimo__/static-export
 uv run marimo-export query notebooks/__marimo__/static-export scenarios
 uv run marimo-export query notebooks/__marimo__/static-export entries \
   --value summary \
-  --artifact json \
+  --format json \
   --content
 ```
 
 ## Read In The Browser
 
 ```ts
-import { exportRoot, openExport } from "@marimo-team/export-reader";
+import { readLatestExport } from "@marimo-team/export-reader";
 import { arrowLoader } from "@marimo-team/export-loader-arrow";
 
-const exp = await openExport(exportRoot("/export/"), {
+const exp = await readLatestExport({
+  root: "/export/",
   loaders: [arrowLoader()],
 });
 
-const table = await exp
-  .artifact({ scenario: "default", value: "prices", artifact: "arrow" })
-  .load();
+const table = await exp.get({ scenario: "default", value: "prices", format: "arrow" }).load();
 ```
 
 `@marimo-team/export-reader` also exposes raw `.url()`, `.bytes()`, `.text()`,
-and `.json()` access for artifacts that do not need a loader. `.bytes()`,
+and `.json()` access for formats that do not need a loader. `.bytes()`,
 `.text()`, `.json()`, `.fetch()`, and loader-backed `.load()` verify the
 recorded size and SHA-256 digest before returning payload data. `.url()` returns
 the bundle URL without reading the blob, so callers that fetch it directly own
@@ -85,13 +84,13 @@ Use `@marimo-team/export-client` when a build step or browser page can reach a
 running marimo server:
 
 ```ts
-import { createExportClient } from "@marimo-team/export-client";
+import { createMarimoExportClient } from "@marimo-team/export-client";
 
-const client = createExportClient({ server: "http://localhost:2718" });
+const client = createMarimoExportClient({ server: "http://localhost:2718" });
 
-await client.capture(spec, {
+await client.export(spec, {
   notebook: "notebooks/finance.py",
-  to: "examples/vanilla-vite/public/export",
+  outputRoot: "examples/vanilla-vite/public/export",
   runtime: "preinstalled",
 });
 ```

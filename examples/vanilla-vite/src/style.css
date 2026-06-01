@@ -181,7 +181,7 @@ h2 {
 }
 
 .market-strip div,
-.artifact-strip div {
+.format-strip div {
   min-width: 0;
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -468,7 +468,7 @@ dd {
 }
 
 .data-details .output-grid,
-.diagnostics-cell .artifact-strip,
+.diagnostics-cell .format-strip,
 .diagnostics-cell .code-output {
   margin-right: 16px;
   margin-left: 16px;
@@ -508,7 +508,7 @@ h3 {
   display: none;
 }
 
-.artifact-strip {
+.format-strip {
   display: grid;
   grid-template-columns: minmax(200px, 0.7fr) minmax(0, 1.3fr);
   gap: 8px;

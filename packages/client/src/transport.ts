@@ -1,7 +1,7 @@
 import type {
-  CaptureClient,
-  CaptureClientOptionsBase,
-  CaptureFetch,
+  ExportTransportFetch,
+  ExportTransportOptions,
+  MarimoExportTransport,
   ScratchpadExecutionResult,
   ScratchpadOutput,
 } from "./types";
@@ -26,7 +26,7 @@ interface ScratchpadEvent {
   data: unknown;
 }
 
-export function createPost(options: CaptureClientOptionsBase): CaptureClient["POST"] {
+export function createPost(options: ExportTransportOptions): MarimoExportTransport["POST"] {
   const fetchImpl = options.fetch ?? globalFetch("export-client requires fetch.");
   const root = baseUrl(options.server);
 
@@ -54,8 +54,8 @@ export function createPost(options: CaptureClientOptionsBase): CaptureClient["PO
 }
 
 export function createScratchpadExecutor(
-  options: CaptureClientOptionsBase,
-): CaptureClient["executeScratchpad"] {
+  options: ExportTransportOptions,
+): MarimoExportTransport["executeScratchpad"] {
   const fetchImpl = options.fetch ?? globalFetch("export-client requires fetch.");
   const root = baseUrl(options.server);
 
@@ -97,8 +97,8 @@ export function createScratchpadExecutor(
 }
 
 export function createNotebookOpener(
-  options: CaptureClientOptionsBase,
-): CaptureClient["openNotebook"] {
+  options: ExportTransportOptions,
+): MarimoExportTransport["openNotebook"] {
   const { server, WebSocket: WebSocketCtor = globalThis.WebSocket } = options;
   const fetchImpl = options.fetch ?? globalFetch("openNotebook requires fetch.");
   const root = baseUrl(server);
@@ -168,8 +168,8 @@ async function instantiateNotebook({
   root,
   sessionId,
 }: {
-  fetchImpl: CaptureFetch;
-  options: CaptureClientOptionsBase;
+  fetchImpl: ExportTransportFetch;
+  options: ExportTransportOptions;
   root: string;
   sessionId: string;
 }): Promise<void> {
@@ -195,7 +195,7 @@ export function requestHeaders({
   headers: inputHeaders,
   serverToken,
   token,
-}: CaptureClientOptionsBase): Headers {
+}: ExportTransportOptions): Headers {
   const headers = new Headers(inputHeaders);
 
   if (token) {
@@ -344,7 +344,7 @@ function doneData(data: unknown): ScratchpadDoneData {
   throw new Error("Invalid marimo done event payload.");
 }
 
-function globalFetch(message: string): CaptureFetch {
+function globalFetch(message: string): ExportTransportFetch {
   if (typeof globalThis.fetch !== "function") {
     throw new Error(`${message} Pass a fetch implementation.`);
   }
@@ -356,7 +356,7 @@ function notebookWebSocketUrl(
   server: string | URL,
   notebook: string,
   sessionId: string,
-  options: CaptureClientOptionsBase,
+  options: ExportTransportOptions,
 ): string {
   const url = new URL("ws", baseUrl(server));
   url.protocol = url.protocol === "https:" ? "wss:" : "ws:";

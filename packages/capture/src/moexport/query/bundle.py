@@ -62,7 +62,7 @@ class BundleQuery:
             **self.summary(),
             "values": self.values(),
             "scenarios": self.scenarios(),
-            "artifacts": self.artifacts(),
+            "formats": self.formats(),
             "files": self.files(dedupe=True),
             "traces": self.traces(),
         }
@@ -107,13 +107,13 @@ class BundleQuery:
         scenario: str | None = None,
         value: str | None = None,
     ) -> list[JsonObject]:
-        """List scenarios and the value/artifact matrix available in each."""
+        """List scenarios and the value/format matrix available in each."""
 
         rows = []
         for scenario_record in self._scenario_records(scenario):
             values = {
-                value_name: sorted(artifacts)
-                for value_name, artifacts in scenario_record.values.items()
+                value_name: sorted(formats)
+                for value_name, formats in scenario_record.values.items()
                 if matches_scalar(value_name, value)
             }
             if value is not None and not values:
@@ -125,74 +125,74 @@ class BundleQuery:
                 "id": scenario_record.id,
                 "state": copy.deepcopy(scenario_record.state),
                 "values": values,
-                "artifact_count": sum(len(artifacts) for artifacts in values.values()),
+                "format_count": sum(len(formats) for formats in values.values()),
             }
             if scenario_record.declared_state is not None:
                 row["declared_state"] = copy.deepcopy(scenario_record.declared_state)
             rows.append(row)
         return rows
 
-    def artifacts(
+    def formats(
         self,
         *,
         scenario: str | None = None,
         state: Mapping[str, Any] | None = None,
         value: str | None = None,
-        artifact: str | None = None,
+        format: str | None = None,
         format_id: str | None = None,
         media_type: str | None = None,
     ) -> list[JsonObject]:
-        """Flatten artifact descriptors with scenario/value/artifact metadata."""
+        """Flatten format descriptors with scenario/value/format metadata."""
 
         rows: list[JsonObject] = []
         for scenario_record in self._scenario_records(scenario):
             if not matches_state(scenario_record.state, state):
                 continue
-            for value_name, artifact_map in scenario_record.values.items():
+            for value_name, format_map in scenario_record.values.items():
                 if not matches_scalar(value_name, value):
                     continue
                 value_spec = self.manifest.values.get(value_name)
                 source = value_spec.source if value_spec is not None else None
-                for artifact_name, artifact_record in artifact_map.items():
+                for format_name, format_record in format_map.items():
                     if (
-                        not matches_scalar(artifact_name, artifact)
-                        or not matches_scalar(artifact_record.format_id, format_id)
-                        or not matches_scalar(artifact_record.media_type, media_type)
+                        not matches_scalar(format_name, format)
+                        or not matches_scalar(format_record.format_id, format_id)
+                        or not matches_scalar(format_record.media_type, media_type)
                     ):
                         continue
                     rows.append(
-                        self._artifact_record(
+                        self._format_record(
                             scenario_record=scenario_record,
                             value_name=value_name,
                             source=source,
-                            artifact_name=artifact_name,
-                            artifact=artifact_record,
+                            format_name=format_name,
+                            format_record=format_record,
                         )
                     )
         return rows
 
-    def artifact(
+    def format(
         self,
         *,
         scenario: str | None = None,
         state: Mapping[str, Any] | None = None,
         value: str | None = None,
-        artifact: str | None = None,
+        format: str | None = None,
         format_id: str | None = None,
         media_type: str | None = None,
     ) -> JsonObject:
-        """Return exactly one artifact, failing on empty or ambiguous selectors."""
+        """Return exactly one format, failing on empty or ambiguous selectors."""
 
         return exactly_one(
-            self.artifacts(
+            self.formats(
                 scenario=scenario,
                 state=state,
                 value=value,
-                artifact=artifact,
+                format=format,
                 format_id=format_id,
                 media_type=media_type,
             ),
-            "artifact",
+            "format",
         )
 
     def files(
@@ -201,7 +201,7 @@ class BundleQuery:
         scenario: str | None = None,
         state: Mapping[str, Any] | None = None,
         value: str | None = None,
-        artifact: str | None = None,
+        format: str | None = None,
         format_id: str | None = None,
         media_type: str | None = None,
         dedupe: bool = False,
@@ -209,25 +209,25 @@ class BundleQuery:
         """Flatten blob files, optionally deduped by href with usage records."""
 
         rows: list[JsonObject] = []
-        artifact_filter = artifact
-        for artifact_row in self.artifacts(
+        format_filter = format
+        for format_row in self.formats(
             scenario=scenario,
             state=state,
             value=value,
-            artifact=artifact_filter,
+            format=format_filter,
             format_id=format_id,
             media_type=media_type,
         ):
-            for file_key, file_record in artifact_row["files"].items():
+            for file_key, file_record in format_row["files"].items():
                 rows.append(
                     {
-                        "scenario": artifact_row["scenario"],
-                        "state": copy.deepcopy(artifact_row["state"]),
-                        "value": artifact_row["value"],
-                        "source": artifact_row["source"],
-                        "artifact": artifact_row["artifact"],
-                        "format_id": artifact_row["format_id"],
-                        "media_type": artifact_row["media_type"],
+                        "scenario": format_row["scenario"],
+                        "state": copy.deepcopy(format_row["state"]),
+                        "value": format_row["value"],
+                        "source": format_row["source"],
+                        "format": format_row["format"],
+                        "format_id": format_row["format_id"],
+                        "media_type": format_row["media_type"],
                         "file": file_key,
                         **copy.deepcopy(file_record),
                     }
@@ -241,7 +241,7 @@ class BundleQuery:
         scenario: str | None = None,
         state: Mapping[str, Any] | None = None,
         value: str | None = None,
-        artifact: str | None = None,
+        format: str | None = None,
         format_id: str | None = None,
         media_type: str | None = None,
         dedupe: bool = False,
@@ -253,7 +253,7 @@ class BundleQuery:
                 scenario=scenario,
                 state=state,
                 value=value,
-                artifact=artifact,
+                format=format,
                 format_id=format_id,
                 media_type=media_type,
                 dedupe=dedupe,
@@ -267,32 +267,32 @@ class BundleQuery:
         scenario: str | None = None,
         state: Mapping[str, Any] | None = None,
         value: str | None = None,
-        artifact: str | None = None,
+        format: str | None = None,
         format_id: str | None = None,
         media_type: str | None = None,
         include_content: bool = False,
         max_bytes: int = 65_536,
     ) -> list[JsonObject]:
-        """List each artifact's canonical entry file.
+        """List each format's canonical entry file.
 
-        This is still loader-free: it resolves the artifact entry file and can
+        This is still loader-free: it resolves the format entry file and can
         optionally inline small JSON/text content for agent-facing inspection.
         """
 
         rows: list[JsonObject] = []
-        artifact_filter = artifact
-        for artifact_row in self.artifacts(
+        format_filter = format
+        for format_row in self.formats(
             scenario=scenario,
             state=state,
             value=value,
-            artifact=artifact_filter,
+            format=format_filter,
             format_id=format_id,
             media_type=media_type,
         ):
-            entry = artifact_row.get("entry")
+            entry = format_row.get("entry")
             if not isinstance(entry, str):
                 continue
-            files = artifact_row.get("files")
+            files = format_row.get("files")
             if not isinstance(files, Mapping):
                 continue
             file_record = files.get(entry)
@@ -300,15 +300,15 @@ class BundleQuery:
                 continue
 
             row: JsonObject = {
-                "bundle": artifact_row["bundle"],
-                "scenario": artifact_row["scenario"],
-                "state": copy.deepcopy(artifact_row["state"]),
-                "value": artifact_row["value"],
-                "source": artifact_row["source"],
-                "artifact": artifact_row["artifact"],
-                "format_id": artifact_row["format_id"],
-                "artifact_media_type": artifact_row["media_type"],
-                "metadata": copy.deepcopy(artifact_row["metadata"]),
+                "bundle": format_row["bundle"],
+                "scenario": format_row["scenario"],
+                "state": copy.deepcopy(format_row["state"]),
+                "value": format_row["value"],
+                "source": format_row["source"],
+                "format": format_row["format"],
+                "format_id": format_row["format_id"],
+                "format_media_type": format_row["media_type"],
+                "metadata": copy.deepcopy(format_row["metadata"]),
                 "entry": entry,
                 **copy.deepcopy(file_record),
             }
@@ -327,20 +327,20 @@ class BundleQuery:
         scenario: str | None = None,
         state: Mapping[str, Any] | None = None,
         value: str | None = None,
-        artifact: str | None = None,
+        format: str | None = None,
         format_id: str | None = None,
         media_type: str | None = None,
         include_content: bool = False,
         max_bytes: int = 65_536,
     ) -> JsonObject:
-        """Return exactly one artifact entry file."""
+        """Return exactly one format entry file."""
 
         return exactly_one(
             self.entries(
                 scenario=scenario,
                 state=state,
                 value=value,
-                artifact=artifact,
+                format=format,
                 format_id=format_id,
                 media_type=media_type,
                 include_content=include_content,
@@ -425,14 +425,14 @@ class BundleQuery:
             raise KeyError(f"scenario {scenario!r} not found in bundle {self.id}")
         return matches
 
-    def _artifact_record(
+    def _format_record(
         self,
         *,
         scenario_record: ManifestScenario,
         value_name: str,
         source: object,
-        artifact_name: str,
-        artifact: ManifestArtifact,
+        format_name: str,
+        format_record: ManifestArtifact,
     ) -> JsonObject:
         files = {
             file_key: {
@@ -440,9 +440,9 @@ class BundleQuery:
                 "path": str(self.resolve(file_ref)),
                 "exists": self.resolve(file_ref).exists(),
             }
-            for file_key, file_ref in artifact.data.files.items()
+            for file_key, file_ref in format_record.data.files.items()
         }
-        entry = artifact.data.entry
+        entry = format_record.data.entry
         entry_path = (
             files.get(entry, {}).get("path") if isinstance(entry, str) else None
         )
@@ -455,11 +455,11 @@ class BundleQuery:
             "state": copy.deepcopy(scenario_record.state),
             "value": value_name,
             "source": source,
-            "artifact": artifact_name,
-            "format_id": artifact.format_id,
-            "media_type": artifact.media_type,
-            "metadata": copy.deepcopy(artifact.metadata),
-            "data": artifact.data.model_dump(mode="json"),
+            "format": format_name,
+            "format_id": format_record.format_id,
+            "media_type": format_record.media_type,
+            "metadata": copy.deepcopy(format_record.metadata),
+            "data": format_record.data.model_dump(mode="json"),
             "files": files,
             "entry": entry,
             "entry_path": entry_path,

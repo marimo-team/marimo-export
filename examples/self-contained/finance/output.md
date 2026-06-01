@@ -173,13 +173,13 @@ symbols_chart = (
 mo.md(rf"""
 ## Change in Close Prices Over Time
 
-Select from `{", ".join(symbols)}` to compate how the close prices changed between *{df["Date"].min().strftime("%Y, %B %d")}* and *{df["Date"].max().strftime("%Y, %B %d")}*.
+Select from `{", ".join(symbols)}` to compare how the close prices changed between *{df["Date"].min().strftime("%Y, %B %d")}* and *{df["Date"].max().strftime("%Y, %B %d")}*.
 """)
 ```
 
 ## Change in Close Prices Over Time
 
-Select from `AAPL, MSFT, GOOGL` to compate how the close prices changed between _2025, April 01_ and _2025, May 01_.
+Select from `AAPL, MSFT, GOOGL` to compare how the close prices changed between _2025, April 01_ and _2025, May 01_.
 
 ---
 

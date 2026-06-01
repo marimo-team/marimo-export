@@ -11,6 +11,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from notebook_markdown import (  # noqa: E402
     NOTEBOOK_LINEAR_SCHEMA,
     notebook_markdown_spec,
+    write_markdown_from_bundle,
     write_markdown_snapshot,
 )
 
@@ -31,25 +32,23 @@ def test_notebook_markdown_spec_captures_whole_notebook() -> None:
 
     assert spec["scenarios"] == [{"id": "review", "state": {"symbol": "MSFT"}}]
     assert spec["values"]["notebook"]["source"] == {"snapshot": True}
-    assert spec["values"]["notebook"]["artifacts"]["linear"]["export"] == {
+    assert spec["values"]["notebook"]["formats"]["linear"]["export"] == {
         "type": "ref",
         "ref": "moexport.exporters.notebook:linear",
     }
-    assert spec["values"]["notebook"]["artifacts"]["linear"]["options"] == {
+    assert spec["values"]["notebook"]["formats"]["linear"]["options"] == {
         "include_source": True,
         "include_empty_outputs": True,
     }
 
     patched = notebook_markdown_spec(
         scenario_id="review",
-        state={"symbol": "MSFT"},
-        patches={"selector.value": ["MSFT"]},
+        state={"symbol": "MSFT", "selector.value": ["MSFT"]},
     )
     assert patched["scenarios"] == [
         {
             "id": "review",
-            "state": {"symbol": "MSFT"},
-            "patches": {"selector.value": ["MSFT"]},
+            "state": {"symbol": "MSFT", "selector.value": ["MSFT"]},
         }
     ]
 
@@ -121,6 +120,85 @@ def test_write_markdown_snapshot_preserves_source_outputs_state_and_media(
     assert html.read_text(encoding="utf-8") == (
         "<script>window.ok = true;</script><div>chart</div>"
     )
+
+
+def test_write_markdown_from_bundle_selects_authored_linear_format(tmp_path: Path) -> None:
+    export_root = tmp_path / "export"
+    bundle = export_root / "bundles" / "sha256-demo"
+    blob = export_root / "blobs" / "sha256" / "no" / "te" / "snapshot"
+    snapshot = {
+        "schema": NOTEBOOK_LINEAR_SCHEMA,
+        "version": 1,
+        "notebook": {"name": "demo.py"},
+        "cells": [
+            {
+                "index": 0,
+                "id": "intro",
+                "source": "x = 1",
+                "outputs": [
+                    {
+                        "channel": "output",
+                        "mimetype": "text/markdown",
+                        "data": "bundle output",
+                    }
+                ],
+            }
+        ],
+    }
+    payload = json.dumps(snapshot).encode("utf-8")
+    blob.parent.mkdir(parents=True)
+    blob.write_bytes(payload)
+    manifest = {
+        "schema": "moexport.bundle.v1",
+        "version": 1,
+        "id": "sha256-demo",
+        "sha256": "demo",
+        "notebook": {"name": "demo.py", "source": None},
+        "scenario_set": {"id": "sha256-scenarios", "sha256": "scenarios"},
+        "capture": {"id": "sha256-capture", "request_sha256": "request"},
+        "values": {
+            "notebook": {
+                "source": {"type": "snapshot"},
+                "formats": ["linear"],
+            }
+        },
+        "scenarios": [
+            {
+                "id": "default",
+                "state": {},
+                "values": {
+                    "notebook": {
+                        "linear": {
+                            "format_id": NOTEBOOK_LINEAR_SCHEMA,
+                            "media_type": "application/json",
+                            "data": {
+                                "type": "bundle",
+                                "files": {
+                                    "notebook": {
+                                        "href": "blobs/sha256/no/te/snapshot",
+                                        "media_type": "application/json",
+                                        "size": len(payload),
+                                        "sha256": "snapshot",
+                                    }
+                                },
+                                "entry": "notebook",
+                            },
+                            "metadata": {},
+                        }
+                    }
+                },
+            }
+        ],
+        "provenance": {},
+    }
+    (bundle / "manifest.json").parent.mkdir(parents=True)
+    (bundle / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+
+    result = write_markdown_from_bundle(export_root, tmp_path / "markdown")
+
+    markdown = result.output_path.read_text(encoding="utf-8")
+    assert "```python\nx = 1\n```" in markdown
+    assert "bundle output" in markdown
 
 
 def test_write_markdown_snapshot_extracts_marimo_mime_preview(

@@ -1,9 +1,10 @@
-"""Batch execution for the public ``evaluate(...)`` call.
+"""Batch execution for public state-based evaluation.
 
-The public API accepts one definition override/object patch set, or a batch of
-sets. This module normalizes those shapes, runs each variant through the
-single-target evaluator, and aggregates metadata while sharing one per-call
-cell cache across variants.
+The public ``evaluate(...)`` call accepts one state mapping or ``states=[...]``.
+Bare state keys override definitions, and dotted keys patch object attributes.
+``evaluate_plan(...)`` is the internal path for callers that already resolved
+states into definition values and object attribute updates. Both paths share
+one per-call cell cache across variants.
 """
 
 from __future__ import annotations
@@ -21,6 +22,8 @@ from moexport.evaluate._types import (
     ObjectPatches,
     TargetRunResult,
 )
+
+State = Mapping[str, Any]
 
 
 def _normalize_definition_override_sets(
@@ -99,6 +102,40 @@ def _aggregate_execution_metadata(
 
 async def evaluate(
     target: str,
+    state: State | None = None,
+    *,
+    states: Sequence[State] | None = None,
+    output_cell_ids: set[Any] | None = None,
+    output_error_policy: str = "raise",
+) -> EvaluateResult:
+    """Evaluate one target for one state or a sequence of states.
+
+    Bare state keys override definitions. Dotted state keys patch object
+    attributes after producer cells run. Every call shares a per-call cell cache,
+    so repeated variants reuse produced defs when body dependencies match.
+    """
+    if state is not None and states is not None:
+        raise ValueError("pass either state or states, not both")
+    state_sets = (
+        list(states) if states is not None else ([state] if state is not None else [{}])
+    )
+    if any(not isinstance(state_set, Mapping) for state_set in state_sets):
+        raise TypeError("state and states entries must be mappings")
+    definition_sets, patch_sets = zip(
+        *(_split_state(state_set) for state_set in state_sets),
+        strict=True,
+    )
+    return await evaluate_plan(
+        target,
+        list(definition_sets),
+        object_patches=list(patch_sets),
+        output_cell_ids=output_cell_ids,
+        output_error_policy=output_error_policy,
+    )
+
+
+async def evaluate_plan(
+    target: str,
     definition_overrides: DefinitionOverrides
     | Sequence[DefinitionOverrides]
     | None = None,
@@ -107,14 +144,8 @@ async def evaluate(
     output_cell_ids: set[Any] | None = None,
     output_error_policy: str = "raise",
 ) -> EvaluateResult:
-    """Evaluate one target for one definition override/object patch set or a
-    sequence of aligned sets.
+    """Evaluate a target with pre-split definition values and attribute updates."""
 
-    The output shape is stable: a target envelope with a ``results`` list. A
-    single definition override/object patch pair is represented as one result.
-    Every call shares a per-call cell cache, so repeated variants reuse produced
-    defs when body dependencies match.
-    """
     cell_cache: CellCache = {}
     override_sets = _normalize_definition_override_sets(definition_overrides)
     patch_sets = _normalize_object_patch_sets(
@@ -146,3 +177,14 @@ async def evaluate(
             "execution": _aggregate_execution_metadata(results, elapsed_ms),
         },
     }
+
+
+def _split_state(state: State) -> tuple[DefinitionOverrides, ObjectPatches]:
+    definitions: DefinitionOverrides = {}
+    object_patches: ObjectPatches = {}
+    for name, value in state.items():
+        if "." in name:
+            object_patches[str(name)] = value
+        else:
+            definitions[str(name)] = value
+    return definitions, object_patches

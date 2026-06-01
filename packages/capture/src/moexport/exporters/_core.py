@@ -1,4 +1,4 @@
-"""Core exporter interfaces and artifact-writing context."""
+"""Core exporter interfaces and bundle-writing context."""
 
 from __future__ import annotations
 
@@ -11,11 +11,11 @@ from moexport.blobs import BlobContent, BlobRef, ContentAddressedBlobStore
 
 
 class ExporterContext(Protocol):
-    """Minimal artifact-writing API available to exporter callables."""
+    """Minimal bundle-writing API available to exporter callables."""
 
     scenario_id: str
     value_name: str
-    artifact_name: str
+    format_name: str
 
     def write_blob(
         self,
@@ -48,12 +48,12 @@ class BundleExporterContext:
         *,
         scenario_id: str,
         value_name: str,
-        artifact_name: str,
+        format_name: str,
         blob_store: ContentAddressedBlobStore,
     ) -> None:
         self.scenario_id = scenario_id
         self.value_name = value_name
-        self.artifact_name = artifact_name
+        self.format_name = format_name
         self.blob_store = blob_store
 
     def write_blob(

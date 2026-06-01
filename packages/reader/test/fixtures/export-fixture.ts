@@ -1,7 +1,7 @@
 import { zipSync } from "fflate";
 import assert from "node:assert/strict";
 import type {
-  ArtifactRecord,
+  FormatRecord,
   BlobRef,
   ExportManifest,
   ExportRootIndex,
@@ -36,7 +36,7 @@ const baseManifest = {
   values: {
     value: {
       source: { type: "definition", name: "value" },
-      artifacts: ["json"],
+      formats: ["json"],
     },
   },
   scenarios: [
@@ -177,16 +177,16 @@ export function defaultValue(manifest: ExportManifest): ManifestValue {
   return value;
 }
 
-export function defaultJsonArtifact(manifest: ExportManifest): ArtifactRecord {
-  const artifacts = defaultScenario(manifest).values.value;
-  assert.ok(artifacts);
-  const artifact = artifacts.json;
-  assert.ok(artifact);
-  return artifact;
+export function defaultJsonFormat(manifest: ExportManifest): FormatRecord {
+  const formats = defaultScenario(manifest).values.value;
+  assert.ok(formats);
+  const format = formats.json;
+  assert.ok(format);
+  return format;
 }
 
-export function dataFile(artifact: ArtifactRecord): BlobRef {
-  const file = artifact.data.files.data;
+export function dataFile(format: FormatRecord): BlobRef {
+  const file = format.data.files.data;
   assert.ok(file);
   return file;
 }

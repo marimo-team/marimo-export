@@ -16,12 +16,12 @@ spec = {
     "values": {
         "prices": {
             "source": {"def": "df"},
-            "artifacts": ["arrow"],
+            "formats": ["arrow"],
         }
     },
 }
 
-result = await mox.export(spec, to="notebooks/__marimo__/static-export")
+result = await mox.capture(spec, to="notebooks/__marimo__/static-export")
 ```
 
 `source.def` names a notebook definition. `source.expr` evaluates a Python
@@ -30,12 +30,12 @@ id, or index and captures its output after scenario state has been applied.
 
 ## Export A Notebook File
 
-Use `export_notebook` when capture starts outside the notebook kernel:
+Use `capture_notebook` when capture starts outside the notebook kernel:
 
 ```python
 import moexport as mox
 
-result = mox.export_notebook(
+result = mox.capture_notebook(
     "notebooks/finance.py",
     spec,
     to="notebooks/__marimo__/static-export",
@@ -43,13 +43,13 @@ result = mox.export_notebook(
 )
 ```
 
-`export_notebook` resolves local paths and remote references through the same
+`capture_notebook` resolves local paths and remote references through the same
 path marimo uses for `marimo run <notebook>`. It injects one hidden export cell:
 
 ```python
 import moexport as __moexport
 
-__moexport_result_abcd = await __moexport.export(
+__moexport_result_abcd = await __moexport.capture(
     __moexport_spec_abcd,
     to=__moexport_output_abcd,
 )
@@ -60,18 +60,18 @@ Only that synthetic cell is scheduled by the outer script runner.
 
 ## Capture From A Live Server
 
-`LiveCapture` is a small Python client for a running marimo server:
+`CaptureClient` is a small Python client for a running marimo server:
 
 ```python
-from moexport import LiveCapture, RuntimeInstall
+from moexport import CaptureClient, RuntimeInstall
 
-capture = LiveCapture(
+capture = CaptureClient(
     "http://localhost:8787",
     notebook="finance.py",
     runtime=RuntimeInstall("moexport[all]"),
 )
 
-result = capture.export(spec, to="examples/vanilla-vite/public/export")
+result = capture.capture(spec, to="examples/vanilla-vite/public/export")
 archive = capture.archive(spec)
 ```
 
@@ -103,7 +103,7 @@ marimo-export query notebooks/__marimo__/static-export
 marimo-export query notebooks/__marimo__/static-export scenarios
 marimo-export query notebooks/__marimo__/static-export entries \
   --value summary \
-  --artifact json \
+  --format json \
   --content
 ```
 
@@ -118,17 +118,16 @@ scenarios:
   - id: selected_names
     state:
       symbols: ["AAPL", "AMZN", "MSFT"]
-    patches:
       symbols_selector.value: ["AAPL", "MSFT"]
 
 values:
   prices:
     source: { def: df }
-    artifacts: [arrow, parquet]
+    formats: [arrow, parquet]
 
   change_desc:
     source: { cell: change_desc }
-    artifacts:
+    formats:
       html:
         export:
           type: ref
@@ -149,26 +148,27 @@ values:
             order: 1
         include_source: false
         on_error: record
-    artifacts: [display, markdown]
+    formats: [display, markdown]
 ```
 
 Scenarios are finite runtime states. `state` overrides notebook definitions.
-`patches` applies dotted object paths after producer cells run. For example,
-`symbols_selector.value` patches the `value` attribute on `symbols_selector`.
+Dotted `state` keys update object attributes after producer cells run. For
+example, `symbols_selector.value` sets the `value` attribute on
+`symbols_selector`.
 
 `source.report` captures selected display cells as an ordered report snapshot.
-`on_error: record` stores display failures as artifact diagnostics so the
+`on_error: record` stores display failures as format diagnostics so the
 remaining cells can still be exported.
 
 Manifest `state` stores the resolved JSON state used for lookup. If a scenario
 uses a code-authored state value, `declared_state` stores the authored expression
 for provenance. The evaluated value must be JSON-compatible.
 
-## Artifacts And Exporters
+## Formats And Exporters
 
-Built-in artifact names compile to exporter callables:
+Built-in format names compile to exporter callables:
 
-| Artifact       | Exporter                                  |
+| Format         | Exporter                                  |
 | -------------- | ----------------------------------------- |
 | `json`         | `moexport.exporters.core:json`            |
 | `text`         | `moexport.exporters.core:text`            |
@@ -215,32 +215,33 @@ export:
 ```
 
 An exporter receives the live Python value, an `ExporterContext`, and optional
-artifact options. `ctx.write_blob(...)` writes a content-addressed file.
-`ctx.artifact(...)` returns the manifest record.
+format options. The context exposes `scenario_id`, `value_name`, and
+`format_name`. `ctx.write_blob(...)` writes a content-addressed file.
+`ctx.artifact(...)` returns the manifest record for the format.
 
 ## Archive Transport
 
-`archive_bundle` turns an existing export result into zip bytes:
+`archive_bundle` turns an existing `CaptureResult` into zip bytes:
 
 ```python
-result = await mox.export(spec)
+result = await mox.capture(spec)
 archive = mox.archive_bundle(result)
 ```
 
 The archive contains the same `index.json`, `bundles/...`, and
-`blobs/sha256/...` tree that `export` writes to disk. Invocation traces live
+`blobs/sha256/...` tree that `capture` writes to disk. Invocation traces live
 under each bundle at `bundles/<id>/traces/...`.
 
 ## Bundle Contract
 
-Every artifact payload is stored as a content-addressed blob. `BlobRef.href` is
-bundle-relative, `BlobRef.size` records the byte length, and `BlobRef.sha256`
-records the digest readers verify before parsing bytes.
+Every exported format payload is stored as a content-addressed blob.
+`BlobRef.href` is bundle-relative, `BlobRef.size` records the byte length, and
+`BlobRef.sha256` records the digest readers verify before parsing bytes.
 
 `ArtifactRecord.format_id` identifies the portable payload format that readers
 and loaders match, for example `dataframe.arrow.v1`. Exporters can write
-multiple named files for one artifact. `data.entry` points at the canonical file
-when the artifact has one.
+multiple named files for one format. `data.entry` points at the canonical file
+when the format has one.
 
 ## Query API
 
@@ -253,14 +254,14 @@ export.catalog()
 export.notebooks()
 export.scenarios(state={"chart_width": 1200})
 export.values(value="prices")
-export.artifact_catalog(value="prices")
-export.artifacts(
+export.format_catalog(value="prices")
+export.formats(
     state={"chart_width": 1200},
     value="comparison_chart",
-    artifact="vegalite",
+    format="vegalite",
 )
-export.entries(value="summary", artifact="json", include_content=True)
-export.files(value="prices", artifact="arrow")
+export.entries(value="summary", format="json", include_content=True)
+export.files(value="prices", format="arrow")
 export.notebooks()[0]["source_sha256"]
 ```
 
@@ -274,13 +275,13 @@ bundle = export.bundle("sha256-970")
 
 bundle.summary()
 bundle.map()
-bundle.artifacts(value="prices")
+bundle.formats(value="prices")
 bundle.files(value="prices", dedupe=True)
 bundle.graph("default")
 ```
 
-Query objects do not load artifact payloads. They expose manifest metadata,
-source provenance, artifact records, blob paths, and invocation graph traces so
+Query objects do not load format payloads. They expose manifest metadata,
+source provenance, format records, blob paths, and invocation graph traces so
 callers can inspect the stored files with their own loaders.
 
 Common selectors:
@@ -288,12 +289,12 @@ Common selectors:
 - `bundle`: Bundle id or id prefix. Omit it to query all bundles from an export
   root.
 - `scenario`: Scenario id.
-- `state`: Resolved-state filter. Dotted keys match object patches such as
-  `symbols_selector.value`.
+- `state`: Resolved-state filter. Dotted keys match patched object attributes
+  such as `symbols_selector.value`.
 - `value`: Exported value name.
-- `artifact`: Authored artifact name such as `arrow` or `summary`.
+- `format`: Authored format name such as `arrow` or `summary`.
 - `format_id`: Portable payload format such as `dataframe.arrow.v1`.
-- `media_type`: Artifact media type.
+- `media_type`: Format media type.
 
 ### `open_export(path)`
 
@@ -304,7 +305,7 @@ Returns an `ExportQuery`. Raises when the path cannot resolve to an export root.
 ### `export.catalog()`
 
 Returns a compact root index with counts, bundle summaries, notebook records,
-value records, artifact records, state keys, media types, and scenario rows.
+value records, format records, state keys, media types, and scenario rows.
 
 ### `export.bundle(id=None)`
 
@@ -321,22 +322,22 @@ prefix is ambiguous.
 Returns scenario rows across bundles.
 
 Rows include the bundle id, bundle path, notebook record, scenario id, resolved
-state, available value and artifact matrix, and artifact count.
+state, available value and format matrix, and format count.
 
-### `export.values(...)` and `export.artifact_catalog(...)`
+### `export.values(...)` and `export.format_catalog(...)`
 
 `values(...)` returns exported value specs across bundles.
-`artifact_catalog(...)` returns artifact availability grouped by value and
-authored artifact name after applying the same scenario, state, value, and
-artifact selectors used by `artifacts(...)`.
+`format_catalog(...)` returns format availability grouped by value and authored
+format name after applying the same scenario, state, value, and format selectors
+used by `formats(...)`.
 
-### `export.artifacts(...)` and `export.artifact(...)`
+### `export.formats(...)` and `export.format(...)`
 
-`artifacts(...)` returns flattened artifact rows with scenario, state, value,
-source, authored artifact name, `format_id`, media type, files, and metadata.
+`formats(...)` returns flattened format rows with scenario, state, value,
+source, authored format name, `format_id`, media type, files, and metadata.
 
-`artifact(...)` returns exactly one artifact row. It raises when the selectors
-match no artifacts or more than one artifact.
+`format(...)` returns exactly one format row. It raises when the selectors match
+no formats or more than one format.
 
 ### `export.files(...)` and `export.file(...)`
 
@@ -348,7 +349,7 @@ files or more than one file.
 
 ### `export.entries(...)` and `export.entry(...)`
 
-`entries(...)` returns the canonical entry file for each matching artifact.
+`entries(...)` returns the canonical entry file for each matching format.
 
 - `include_content`: Inline small JSON or text content. Defaults to `False`.
 - `max_bytes`: Maximum byte size to inline when `include_content` is enabled.
@@ -368,6 +369,6 @@ more than one source.
 ### `bundle.summary()`, `bundle.map()`, `bundle.trace()`, and `bundle.graph()`
 
 `summary()` returns bundle-level identity and count metadata. `map()` expands the
-same bundle into values, scenarios, artifacts, files, and traces. `trace()` loads
+same bundle into values, scenarios, formats, files, and traces. `trace()` loads
 the latest invocation trace or one scenario trace. `graph()` returns captured
 dependency graph metadata for one scenario or all scenarios.

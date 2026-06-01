@@ -36,7 +36,7 @@ class RuntimeInstall:
 
 
 @dataclass(frozen=True)
-class LiveCapture:
+class CaptureClient:
     """Capture exports from one live marimo server."""
 
     server: str
@@ -55,7 +55,7 @@ class LiveCapture:
             token=self.token,
         )
 
-    def export(
+    def capture(
         self,
         spec: SpecInput,
         *,
@@ -381,7 +381,7 @@ def _capture_code(
             "import json",
             "import moexport as mox",
             f"__moexport_spec = json.loads({json.dumps(spec_json)})",
-            f"__moexport_result = await mox.export(__moexport_spec, to={to_expression})",
+            f"__moexport_result = await mox.capture(__moexport_spec, to={to_expression})",
             "__moexport_payload = {",
             '    "bundle_path": __moexport_result.bundle_path,',
             '    "manifest_path": __moexport_result.manifest_path,',
@@ -432,7 +432,7 @@ def _spec_json(spec: SpecInput) -> str:
 
 
 __all__ = [
-    "LiveCapture",
+    "CaptureClient",
     "RuntimeInstall",
     "ScratchpadResult",
     "can_import",

@@ -49,7 +49,7 @@ _ACTIVE_RUNTIME: ContextVar[RuntimeBinding | None] = ContextVar(
 
 @contextmanager
 def bind_runtime(binding: RuntimeBinding) -> Generator[None]:
-    """Make scenario-local evaluation artifacts visible to ``mox.runtime()``."""
+    """Make scenario-local evaluation values visible to ``mox.runtime()``."""
 
     token = _ACTIVE_RUNTIME.set(binding)
     try:

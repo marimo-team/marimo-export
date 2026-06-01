@@ -1,8 +1,8 @@
 import {
   defineLoader,
-  type ArtifactLoader,
-  type ArtifactLoaderContext,
-  type ArtifactRecord,
+  type FormatLoader,
+  type FormatLoaderContext,
+  type FormatRecord,
   type BlobRef,
   type JsonObject,
 } from "@marimo-team/export-reader";
@@ -24,8 +24,8 @@ export interface ParquetMetadata {
   raw: unknown;
 }
 
-export interface ParquetArtifactHandle {
-  artifact: ArtifactRecord;
+export interface ParquetFormatHandle {
+  record: FormatRecord;
   blob: BlobRef;
   metadata: JsonObject | null;
   url(): string;
@@ -35,23 +35,23 @@ export interface ParquetArtifactHandle {
 
 export function parquetLoader(
   defaults: ParquetReadOptions = {},
-): ArtifactLoader<ParquetArtifactHandle> {
+): FormatLoader<ParquetFormatHandle> {
   return defineLoader({
-    supports: dataframeParquetFormat,
-    load(context: ArtifactLoaderContext) {
+    formatId: dataframeParquetFormat,
+    load(context: FormatLoaderContext) {
       return createDataframeHandle(context, defaults);
     },
   });
 }
 
 function createDataframeHandle(
-  context: ArtifactLoaderContext,
+  context: FormatLoaderContext,
   defaults: ParquetReadOptions,
-): ParquetArtifactHandle {
+): ParquetFormatHandle {
   return {
-    artifact: context.artifact,
+    record: context.record,
     blob: context.entry().ref,
-    metadata: context.artifact.metadata,
+    metadata: context.record.metadata,
     url() {
       return context.entry().url();
     },
@@ -88,7 +88,7 @@ function createDataframeHandle(
   };
 }
 
-async function parquetFile(context: ArtifactLoaderContext, requestInit?: RequestInit) {
+async function parquetFile(context: FormatLoaderContext, requestInit?: RequestInit) {
   const bytes = requestInit
     ? new Uint8Array(await (await context.entry().fetch(requestInit)).arrayBuffer())
     : await context.entry().bytes();

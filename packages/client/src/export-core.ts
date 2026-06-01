@@ -1,31 +1,31 @@
 import {
   EXPORT_ARCHIVE_MEDIA_TYPE,
-  type CaptureClient,
-  type CaptureArchiveResult,
-  type CaptureOptions,
-  type CaptureResult,
-  type ExportSpecInput,
+  type ExportArchiveResult,
+  type ExportOptions,
+  type ExportResult,
+  type MarimoExportTransport,
   type RunningNotebook,
   type RuntimeOption,
   type WorkspaceNotebook,
 } from "./types";
+import type { ExportSpec } from "./spec";
 import { isRecord, sleep } from "./support";
 
-export async function captureBundleWithClient(
-  spec: ExportSpecInput,
-  options: CaptureOptions & { client: CaptureClient },
-): Promise<CaptureResult> {
-  const { client, to, runtime } = options;
-  const session = await resolveCaptureSession(client, options);
-  await ensureCaptureRuntime(client, session, runtime);
-  const marker = captureMarker();
-  const code = captureCode(spec, to, marker);
+export async function exportWithClient(
+  spec: ExportSpec,
+  options: ExportOptions & { client: MarimoExportTransport },
+): Promise<ExportResult> {
+  const { client, outputRoot, runtime } = options;
+  const session = await resolveExportSession(client, options);
+  await ensureExportRuntime(client, session, runtime);
+  const marker = exportMarker();
+  const code = exportCode(spec, outputRoot, marker);
   const { stdout } = await client.executeScratchpad({
     code,
     sessionId: session.sessionId,
-    ...(options.executionTimeoutMs !== undefined ? { timeoutMs: options.executionTimeoutMs } : {}),
+    ...(options.timeoutMs !== undefined ? { timeoutMs: options.timeoutMs } : {}),
   });
-  const payload = capturePayload(stdout, marker);
+  const payload = exportPayload(stdout, marker);
   return {
     session,
     bundlePath: stringField(payload, "bundle_path"),
@@ -37,19 +37,19 @@ export async function captureBundleWithClient(
   };
 }
 
-export async function captureArchiveWithClient(
-  spec: ExportSpecInput,
-  options: CaptureOptions & { client: CaptureClient },
-): Promise<CaptureArchiveResult> {
-  const { client, to, runtime } = options;
-  const session = await resolveCaptureSession(client, options);
-  await ensureCaptureRuntime(client, session, runtime);
+export async function archiveWithClient(
+  spec: ExportSpec,
+  options: ExportOptions & { client: MarimoExportTransport },
+): Promise<ExportArchiveResult> {
+  const { client, outputRoot, runtime } = options;
+  const session = await resolveExportSession(client, options);
+  await ensureExportRuntime(client, session, runtime);
   const marker = archiveMarker();
-  const code = captureArchiveCode(spec, to, marker);
+  const code = archiveCode(spec, outputRoot, marker);
   const { stdout } = await client.executeScratchpad({
     code,
     sessionId: session.sessionId,
-    ...(options.executionTimeoutMs !== undefined ? { timeoutMs: options.executionTimeoutMs } : {}),
+    ...(options.timeoutMs !== undefined ? { timeoutMs: options.timeoutMs } : {}),
   });
   const payload = archivePayload(stdout, marker);
 
@@ -60,7 +60,9 @@ export async function captureArchiveWithClient(
   };
 }
 
-export async function listRunningNotebooks(client: CaptureClient): Promise<RunningNotebook[]> {
+export async function listRunningNotebooks(
+  client: MarimoExportTransport,
+): Promise<RunningNotebook[]> {
   const { response: httpResponse, data } = await client.POST("/api/home/running_notebooks");
   const { ok, status, statusText } = httpResponse;
 
@@ -77,7 +79,9 @@ export async function listRunningNotebooks(client: CaptureClient): Promise<Runni
   }));
 }
 
-export async function listWorkspaceNotebooks(client: CaptureClient): Promise<WorkspaceNotebook[]> {
+export async function listWorkspaceNotebookFiles(
+  client: MarimoExportTransport,
+): Promise<WorkspaceNotebook[]> {
   const { response: httpResponse, data } = await client.POST("/api/home/workspace_files", {
     body: {
       includeMarkdown: false,
@@ -99,9 +103,9 @@ export async function listWorkspaceNotebooks(client: CaptureClient): Promise<Wor
     }));
 }
 
-export async function resolveCaptureSession(
-  client: CaptureClient,
-  options: Pick<CaptureOptions, "sessionId" | "notebook"> = {},
+export async function resolveExportSession(
+  client: MarimoExportTransport,
+  options: Pick<ExportOptions, "sessionId" | "notebook"> = {},
 ): Promise<RunningNotebook> {
   if (options.sessionId) {
     return {
@@ -155,8 +159,8 @@ export async function resolveCaptureSession(
   );
 }
 
-export async function ensureCaptureRuntime(
-  client: CaptureClient,
+export async function ensureExportRuntime(
+  client: MarimoExportTransport,
   session: Pick<RunningNotebook, "sessionId">,
   options: RuntimeOption | undefined = "preinstalled",
 ): Promise<void> {
@@ -165,7 +169,7 @@ export async function ensureCaptureRuntime(
       return;
     }
     throw new Error(
-      'moexport is not importable in the marimo kernel. Pass runtime: { install: "moexport @ ..." } to install it before capture.',
+      'moexport is not importable in the marimo kernel. Pass runtime: { package: "moexport @ ..." } to install it before export.',
     );
   }
 
@@ -173,7 +177,7 @@ export async function ensureCaptureRuntime(
     return;
   }
 
-  const packageSpec = options.install;
+  const packageSpec = options.package;
   const moduleName = options.module ?? "moexport";
   const manager = options.manager ?? "uv";
   const source = options.source ?? "kernel";
@@ -210,15 +214,13 @@ export async function ensureCaptureRuntime(
   });
 }
 
-export function captureRequest(options: CaptureOptions): CaptureOptions {
+export function exportRequest(options: ExportOptions): ExportOptions {
   return {
-    ...(options.to !== undefined ? { to: options.to } : {}),
+    ...(options.outputRoot !== undefined ? { outputRoot: options.outputRoot } : {}),
     ...(options.notebook !== undefined ? { notebook: options.notebook } : {}),
     ...(options.sessionId !== undefined ? { sessionId: options.sessionId } : {}),
     ...(options.runtime !== undefined ? { runtime: options.runtime } : {}),
-    ...(options.executionTimeoutMs !== undefined
-      ? { executionTimeoutMs: options.executionTimeoutMs }
-      : {}),
+    ...(options.timeoutMs !== undefined ? { timeoutMs: options.timeoutMs } : {}),
   };
 }
 
@@ -273,15 +275,15 @@ function isMarimoWorkspaceFile(file: WorkspaceFileNode): boolean {
   return file.isMarimoFile === true;
 }
 
-function captureCode(spec: ExportSpecInput, to: string | undefined, marker: string): string {
+function exportCode(spec: ExportSpec, outputRoot: string | undefined, marker: string): string {
   const specJson = JSON.stringify(spec);
-  const toExpression = to === undefined ? "None" : JSON.stringify(to);
+  const toExpression = outputRoot === undefined ? "None" : JSON.stringify(outputRoot);
 
   return [
     "import json",
     "import moexport as mox",
     `__moexport_spec = json.loads(${JSON.stringify(specJson)})`,
-    `__moexport_result = await mox.export(__moexport_spec, to=${toExpression})`,
+    `__moexport_result = await mox.capture(__moexport_spec, to=${toExpression})`,
     "__moexport_payload = {",
     '    "bundle_path": __moexport_result.bundle_path,',
     '    "manifest_path": __moexport_result.manifest_path,',
@@ -294,9 +296,9 @@ function captureCode(spec: ExportSpecInput, to: string | undefined, marker: stri
   ].join("\n");
 }
 
-function captureArchiveCode(spec: ExportSpecInput, to: string | undefined, marker: string): string {
+function archiveCode(spec: ExportSpec, outputRoot: string | undefined, marker: string): string {
   const specJson = JSON.stringify(spec);
-  const toExpression = to === undefined ? "None" : JSON.stringify(to);
+  const toExpression = outputRoot === undefined ? "None" : JSON.stringify(outputRoot);
 
   return [
     "import json",
@@ -312,19 +314,19 @@ function archiveMarker(): string {
   return `__MOEXPORT_ARCHIVE_${Date.now()}_${Math.random().toString(36).slice(2)}__`;
 }
 
-function captureMarker(): string {
-  return `__MOEXPORT_CAPTURE_${Date.now()}_${Math.random().toString(36).slice(2)}__`;
+function exportMarker(): string {
+  return `__MOEXPORT_RESULT_${Date.now()}_${Math.random().toString(36).slice(2)}__`;
 }
 
 function archivePayload(stdout: string[], marker: string): string {
   return markedPayload(stdout, marker, "archive");
 }
 
-function capturePayload(stdout: string[], marker: string): Record<string, unknown> {
-  const payload = markedPayload(stdout, marker, "capture result");
+function exportPayload(stdout: string[], marker: string): Record<string, unknown> {
+  const payload = markedPayload(stdout, marker, "export result");
   const parsed = JSON.parse(payload) as unknown;
   if (!isRecord(parsed)) {
-    throw new Error("marimo capture completed with a non-object result payload.");
+    throw new Error("marimo export completed with a non-object result payload.");
   }
   return parsed;
 }
@@ -334,7 +336,7 @@ function markedPayload(stdout: string[], marker: string, label: string): string 
   const start = text.indexOf(marker);
 
   if (start < 0) {
-    throw new Error(`marimo capture completed without a ${label} payload.`);
+    throw new Error(`marimo export completed without a ${label} payload.`);
   }
 
   const payload = text.slice(start + marker.length);
@@ -345,7 +347,7 @@ function markedPayload(stdout: string[], marker: string, label: string): string 
 function stringField(payload: Record<string, unknown>, key: string): string {
   const value = payload[key];
   if (typeof value !== "string") {
-    throw new Error(`marimo capture result field ${key} must be a string.`);
+    throw new Error(`marimo export result field ${key} must be a string.`);
   }
   return value;
 }
@@ -353,14 +355,14 @@ function stringField(payload: Record<string, unknown>, key: string): string {
 function objectField(payload: Record<string, unknown>, key: string): Record<string, unknown> {
   const value = payload[key];
   if (!isRecord(value)) {
-    throw new Error(`marimo capture result field ${key} must be an object.`);
+    throw new Error(`marimo export result field ${key} must be an object.`);
   }
   return value;
 }
 
 function base64ToBytes(value: string): Uint8Array {
   if (typeof globalThis.atob !== "function") {
-    throw new Error("captureArchive requires atob to decode the archive payload.");
+    throw new Error("archive requires atob to decode the archive payload.");
   }
 
   const binary = globalThis.atob(value);
@@ -374,7 +376,7 @@ function base64ToBytes(value: string): Uint8Array {
 }
 
 async function canImportModule(
-  client: CaptureClient,
+  client: MarimoExportTransport,
   sessionId: string,
   moduleName: string,
 ): Promise<boolean> {
@@ -392,7 +394,7 @@ async function canImportModule(
 }
 
 async function waitForImport(
-  client: CaptureClient,
+  client: MarimoExportTransport,
   {
     moduleName,
     pollIntervalMs,

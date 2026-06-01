@@ -1,9 +1,9 @@
 import { tableFromIPC } from "@uwdata/flechette";
 import {
   defineLoader,
-  type ArtifactLoader,
-  type ArtifactLoaderContext,
-  type ArtifactRecord,
+  type FormatLoader,
+  type FormatLoaderContext,
+  type FormatRecord,
   type BlobRef,
   type JsonObject,
 } from "@marimo-team/export-reader";
@@ -19,8 +19,8 @@ export interface ArrowLoadOptions {
   useProxy?: boolean;
 }
 
-export interface ArrowArtifactHandle {
-  artifact: ArtifactRecord;
+export interface ArrowFormatHandle {
+  record: FormatRecord;
   blob: BlobRef;
   metadata: JsonObject | null;
   url(): string;
@@ -30,19 +30,19 @@ export interface ArrowArtifactHandle {
   columns(options?: ArrowLoadOptions): Promise<Record<string, unknown>>;
 }
 
-export function arrowLoader(defaults: ArrowLoadOptions = {}): ArtifactLoader<ArrowArtifactHandle> {
+export function arrowLoader(defaults: ArrowLoadOptions = {}): FormatLoader<ArrowFormatHandle> {
   return defineLoader({
-    supports: dataframeArrowFormat,
-    load(context: ArtifactLoaderContext) {
+    formatId: dataframeArrowFormat,
+    load(context: FormatLoaderContext) {
       return createArrowHandle(context, defaults);
     },
   });
 }
 
 function createArrowHandle(
-  context: ArtifactLoaderContext,
+  context: FormatLoaderContext,
   defaults: ArrowLoadOptions,
-): ArrowArtifactHandle {
+): ArrowFormatHandle {
   const loadTable = async (options?: ArrowLoadOptions): Promise<unknown> => {
     const bytes = await context.entry().bytes();
     const buffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
@@ -50,9 +50,9 @@ function createArrowHandle(
   };
 
   return {
-    artifact: context.artifact,
+    record: context.record,
     blob: context.entry().ref,
-    metadata: context.artifact.metadata,
+    metadata: context.record.metadata,
     url() {
       return context.entry().url();
     },

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { validateExportManifest } from "@marimo-team/export-reader";
 import {
-  defaultJsonArtifact,
+  defaultJsonFormat,
   defaultScenario,
   defaultValue,
   manifestWith,
@@ -18,11 +18,11 @@ test("validateExportManifest rejects the wrong schema", () => {
   }, /export manifest\.schema must be "moexport\.bundle\.v1"/);
 });
 
-test("validateExportManifest rejects an entry outside the artifact files", () => {
+test("validateExportManifest rejects an entry outside the format files", () => {
   assert.throws(() => {
     validateExportManifest(
       manifestWith((manifest) => {
-        defaultJsonArtifact(manifest).data.entry = "missing";
+        defaultJsonFormat(manifest).data.entry = "missing";
       }),
     );
   }, /entry must name a file/);
@@ -52,12 +52,12 @@ test("validateExportManifest rejects undeclared scenario values", () => {
   }, /contains undeclared value "extra"/);
 });
 
-test("validateExportManifest rejects missing declared artifacts", () => {
+test("validateExportManifest rejects missing declared formats", () => {
   assert.throws(() => {
     validateExportManifest(
       manifestWith((manifest) => {
-        defaultValue(manifest).artifacts = ["json", "text"];
+        defaultValue(manifest).formats = ["json", "text"];
       }),
     );
-  }, /must include declared artifact "text"/);
+  }, /must include declared format "text"/);
 });

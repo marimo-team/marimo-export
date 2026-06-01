@@ -20,11 +20,11 @@ class CapturingExporterContext:
         *,
         scenario_id: str = "default",
         value_name: str = "prices",
-        artifact_name: str = "arrow",
+        format_name: str = "arrow",
     ) -> None:
         self.scenario_id = scenario_id
         self.value_name = value_name
-        self.artifact_name = artifact_name
+        self.format_name = format_name
         self.blobs: dict[str, bytes] = {}
 
     def write_blob(
@@ -63,7 +63,7 @@ class CapturingExporterContext:
 
 def test_parquet_exports_dataframe_family_via_narwhals() -> None:
     table = pyarrow.table({"symbol": ["AAPL", "MSFT"], "close": [10.0, 20.0]})
-    ctx = CapturingExporterContext(artifact_name="parquet")
+    ctx = CapturingExporterContext(format_name="parquet")
 
     artifact = dataframe_exporters.parquet(table, ctx)
 
@@ -84,7 +84,7 @@ def test_parquet_exports_dataframe_family_via_narwhals() -> None:
 
 def test_arrow_exports_dataframe_family_as_ipc_stream() -> None:
     table = pyarrow.table({"symbol": ["AAPL", "MSFT"], "close": [10.0, 20.0]})
-    ctx = CapturingExporterContext(artifact_name="arrow")
+    ctx = CapturingExporterContext(format_name="arrow")
 
     artifact = dataframe_exporters.arrow(table, ctx)
 

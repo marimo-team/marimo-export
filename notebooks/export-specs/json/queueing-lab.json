@@ -6,9 +6,7 @@
         "arrival_rate": 6.0,
         "service_rate": 11.0,
         "server_count": 1,
-        "scenario_name": "steady_single"
-      },
-      "patches": {
+        "scenario_name": "steady_single",
         "arrival_picker.value": 6.0,
         "service_picker.value": 11.0,
         "servers_picker.value": 1
@@ -20,9 +18,7 @@
         "arrival_rate": 8.0,
         "service_rate": 9.0,
         "server_count": 1,
-        "scenario_name": "rush_single"
-      },
-      "patches": {
+        "scenario_name": "rush_single",
         "arrival_picker.value": 8.0,
         "service_picker.value": 9.0,
         "servers_picker.value": 1
@@ -34,9 +30,7 @@
         "arrival_rate": 16.0,
         "service_rate": 11.0,
         "server_count": 2,
-        "scenario_name": "pooled_rush"
-      },
-      "patches": {
+        "scenario_name": "pooled_rush",
         "arrival_picker.value": 16.0,
         "service_picker.value": 11.0,
         "servers_picker.value": 2
@@ -48,7 +42,7 @@
       "source": {
         "def": "queue_summary"
       },
-      "artifacts": {
+      "formats": {
         "json": {
           "export": {
             "type": "ref",
@@ -68,7 +62,7 @@
       "source": {
         "def": "arrival_distribution"
       },
-      "artifacts": {
+      "formats": {
         "arrow": {
           "export": {
             "type": "ref",
@@ -87,7 +81,7 @@
       "source": {
         "def": "queue_curve"
       },
-      "artifacts": {
+      "formats": {
         "arrow": {
           "export": {
             "type": "ref",
@@ -100,7 +94,7 @@
       "source": {
         "def": "wait_chart"
       },
-      "artifacts": {
+      "formats": {
         "vegalite": {
           "export": {
             "type": "ref",
@@ -113,7 +107,7 @@
       "source": {
         "def": "queue_note"
       },
-      "artifacts": {
+      "formats": {
         "html": {
           "export": {
             "type": "ref",

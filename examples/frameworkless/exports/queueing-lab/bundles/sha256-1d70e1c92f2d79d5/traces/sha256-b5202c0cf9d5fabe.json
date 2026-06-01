@@ -73,7 +73,7 @@
             "type": "definition",
             "name": "queue_summary"
           },
-          "artifacts": {
+          "formats": {
             "json": {
               "export": {
                 "type": "ref",
@@ -94,7 +94,7 @@
             "type": "definition",
             "name": "arrival_distribution"
           },
-          "artifacts": {
+          "formats": {
             "arrow": {
               "export": {
                 "type": "ref",
@@ -114,7 +114,7 @@
             "type": "definition",
             "name": "queue_curve"
           },
-          "artifacts": {
+          "formats": {
             "arrow": {
               "export": {
                 "type": "ref",
@@ -128,7 +128,7 @@
             "type": "definition",
             "name": "wait_chart"
           },
-          "artifacts": {
+          "formats": {
             "vegalite": {
               "export": {
                 "type": "ref",
@@ -142,7 +142,7 @@
             "type": "definition",
             "name": "queue_note"
           },
-          "artifacts": {
+          "formats": {
             "html": {
               "export": {
                 "type": "ref",

@@ -23,11 +23,11 @@ class CapturingExporterContext:
         *,
         scenario_id: str = "default",
         value_name: str = "chart",
-        artifact_name: str = "png",
+        format_name: str = "png",
     ) -> None:
         self.scenario_id = scenario_id
         self.value_name = value_name
-        self.artifact_name = artifact_name
+        self.format_name = format_name
         self.blobs: dict[str, bytes] = {}
 
     def write_blob(
@@ -98,13 +98,13 @@ def test_vegalite_dedupes_same_spec_across_value_names(tmp_path: Path) -> None:
     first_ctx = BundleExporterContext(
         scenario_id="default",
         value_name="left_chart",
-        artifact_name="vegalite",
+        format_name="vegalite",
         blob_store=store,
     )
     second_ctx = BundleExporterContext(
         scenario_id="default",
         value_name="right_chart",
-        artifact_name="vegalite",
+        format_name="vegalite",
         blob_store=store,
     )
 

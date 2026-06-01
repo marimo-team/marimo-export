@@ -31,7 +31,7 @@ class FakeContext:
 class CapturingExporterContext:
     scenario_id = "default"
     value_name = "notebook"
-    artifact_name = "linear"
+    format_name = "linear"
 
     def __init__(self) -> None:
         self.blobs: dict[str, bytes] = {}

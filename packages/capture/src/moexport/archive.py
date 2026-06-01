@@ -9,14 +9,14 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from zipfile import ZIP_DEFLATED, ZipFile, ZipInfo
 
-from moexport.export import ExportResult, SpecInput, export
+from moexport.export import CaptureResult, SpecInput, capture
 
 EXPORT_ARCHIVE_MEDIA_TYPE = "application/vnd.marimo.static-export+zip"
 _ZIP_TIMESTAMP = (1980, 1, 1, 0, 0, 0)
 
 
-def archive_bundle(result: ExportResult) -> bytes:
-    """Return zip bytes for the export root that contains an `ExportResult`."""
+def archive_bundle(result: CaptureResult) -> bytes:
+    """Return zip bytes for the export root that contains a `CaptureResult`."""
 
     return _archive_export_root(_export_root(result))
 
@@ -66,7 +66,7 @@ def _zip_info(name: str) -> ZipInfo:
     return info
 
 
-def _export_root(result: ExportResult) -> Path:
+def _export_root(result: CaptureResult) -> Path:
     return Path(result.bundle_path).parent.parent
 
 
@@ -76,7 +76,7 @@ async def _capture_bundle_archive(
     to: str | Path | None,
 ) -> bytes:
     if to is not None:
-        return archive_bundle(await export(spec, to=to))
+        return archive_bundle(await capture(spec, to=to))
 
     with TemporaryDirectory(prefix="moexport-archive-") as directory:
-        return archive_bundle(await export(spec, to=directory))
+        return archive_bundle(await capture(spec, to=directory))

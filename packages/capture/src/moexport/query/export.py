@@ -13,7 +13,7 @@ from moexport.query._helpers import (
     append_many_unique,
     append_unique,
     bundle_summary,
-    catalog_artifacts,
+    catalog_formats,
     catalog_values,
     dedupe_export_files,
     exactly_one,
@@ -38,7 +38,7 @@ class ExportQuery:
     root: Path
 
     def bundles(self) -> list[JsonObject]:
-        """List bundle summaries without expanding every artifact."""
+        """List bundle summaries without expanding every format."""
 
         return [
             bundle_summary(manifest_path, read_model(manifest_path, BundleManifest))
@@ -85,7 +85,7 @@ class ExportQuery:
 
         bundles = self._bundle_queries()
         scenarios = self.scenarios()
-        artifacts = self.artifacts()
+        formats = self.formats()
         files = self.files(dedupe=True)
 
         return {
@@ -95,7 +95,7 @@ class ExportQuery:
                 "notebooks": len(self.notebooks()),
                 "scenarios": len(scenarios),
                 "values": len({row["name"] for row in self.values()}),
-                "artifacts": len(artifacts),
+                "formats": len(formats),
                 "files": len(files),
                 "bytes": sum(
                     int(file["size"])
@@ -106,14 +106,14 @@ class ExportQuery:
             "bundles": [bundle.summary() for bundle in bundles],
             "notebooks": self.notebooks(),
             "values": catalog_values(self.values()),
-            "artifacts": self.artifacts(),
+            "formats": self.formats(),
             "state_keys": sorted(
                 {key for row in scenarios for key in state_keys(row.get("state"))}
             ),
             "media_types": sorted(
                 {
                     str(row["media_type"])
-                    for row in artifacts
+                    for row in formats
                     if row.get("media_type") is not None
                 }
             ),
@@ -259,79 +259,79 @@ class ExportQuery:
             for row in bundle_query.values(value=value)
         ]
 
-    def artifact_catalog(
+    def format_catalog(
         self,
         *,
         bundle: str | None = None,
         scenario: str | None = None,
         state: Mapping[str, Any] | None = None,
         value: str | None = None,
-        artifact: str | None = None,
+        format: str | None = None,
     ) -> list[JsonObject]:
-        """List artifact availability grouped by value and artifact name."""
+        """List format availability grouped by value and format name."""
 
-        artifacts = self.artifacts(
+        formats = self.formats(
             bundle=bundle,
             scenario=scenario,
             state=state,
             value=value,
-            artifact=artifact,
+            format=format,
         )
-        return catalog_artifacts(artifacts)
+        return catalog_formats(formats)
 
-    def artifacts(
+    def formats(
         self,
         *,
         bundle: str | None = None,
         scenario: str | None = None,
         state: Mapping[str, Any] | None = None,
         value: str | None = None,
-        artifact: str | None = None,
+        format: str | None = None,
         format_id: str | None = None,
         media_type: str | None = None,
         limit: int | None = None,
     ) -> list[JsonObject]:
-        """List artifact descriptors across bundles with structured filters."""
+        """List format descriptors across bundles with structured filters."""
 
-        artifact_filter = artifact
+        format_filter = format
         rows = [
-            artifact_row
+            format_row
             for bundle_query in self._bundle_queries(bundle)
-            for artifact_row in bundle_query.artifacts(
+            for format_row in bundle_query.formats(
                 scenario=scenario,
                 state=state,
                 value=value,
-                artifact=artifact_filter,
+                format=format_filter,
                 format_id=format_id,
                 media_type=media_type,
             )
         ]
         return rows if limit is None else rows[:limit]
 
-    def artifact(
+    def format(
         self,
         *,
         bundle: str | None = None,
         scenario: str | None = None,
         state: Mapping[str, Any] | None = None,
         value: str | None = None,
-        artifact: str | None = None,
+        format: str | None = None,
         format_id: str | None = None,
         media_type: str | None = None,
     ) -> JsonObject:
-        """Return exactly one artifact across the export root."""
+        """Return exactly one format across the export root."""
 
         return exactly_one(
-            self.artifacts(
+            self.formats(
                 bundle=bundle,
                 scenario=scenario,
                 state=state,
                 value=value,
-                artifact=artifact,
+                format=format,
                 format_id=format_id,
                 media_type=media_type,
             ),
-            "artifact",
+            "format",
         )
 
     def files(
@@ -341,7 +341,7 @@ class ExportQuery:
         scenario: str | None = None,
         state: Mapping[str, Any] | None = None,
         value: str | None = None,
-        artifact: str | None = None,
+        format: str | None = None,
         format_id: str | None = None,
         media_type: str | None = None,
         dedupe: bool = True,
@@ -350,27 +350,27 @@ class ExportQuery:
         """List raw blob files across bundles with semantic usage metadata."""
 
         rows: list[JsonObject] = []
-        artifact_filter = artifact
-        for artifact_row in self.artifacts(
+        format_filter = format
+        for format_row in self.formats(
             bundle=bundle,
             scenario=scenario,
             state=state,
             value=value,
-            artifact=artifact_filter,
+            format=format_filter,
             format_id=format_id,
             media_type=media_type,
         ):
-            for file_key, file_record in artifact_row["files"].items():
+            for file_key, file_record in format_row["files"].items():
                 rows.append(
                     {
-                        "bundle": artifact_row["bundle"],
-                        "scenario": artifact_row["scenario"],
-                        "state": copy.deepcopy(artifact_row["state"]),
-                        "value": artifact_row["value"],
-                        "source": artifact_row["source"],
-                        "artifact": artifact_row["artifact"],
-                        "format_id": artifact_row["format_id"],
-                        "media_type": artifact_row["media_type"],
+                        "bundle": format_row["bundle"],
+                        "scenario": format_row["scenario"],
+                        "state": copy.deepcopy(format_row["state"]),
+                        "value": format_row["value"],
+                        "source": format_row["source"],
+                        "format": format_row["format"],
+                        "format_id": format_row["format_id"],
+                        "media_type": format_row["media_type"],
                         "file": file_key,
                         **copy.deepcopy(file_record),
                     }
@@ -387,7 +387,7 @@ class ExportQuery:
         scenario: str | None = None,
         state: Mapping[str, Any] | None = None,
         value: str | None = None,
-        artifact: str | None = None,
+        format: str | None = None,
         format_id: str | None = None,
         media_type: str | None = None,
         dedupe: bool = True,
@@ -400,7 +400,7 @@ class ExportQuery:
                 scenario=scenario,
                 state=state,
                 value=value,
-                artifact=artifact,
+                format=format,
                 format_id=format_id,
                 media_type=media_type,
                 dedupe=dedupe,
@@ -415,14 +415,14 @@ class ExportQuery:
         scenario: str | None = None,
         state: Mapping[str, Any] | None = None,
         value: str | None = None,
-        artifact: str | None = None,
+        format: str | None = None,
         format_id: str | None = None,
         media_type: str | None = None,
         include_content: bool = False,
         max_bytes: int = 65_536,
         limit: int | None = None,
     ) -> list[JsonObject]:
-        """List artifact entry files across bundles."""
+        """List format entry files across bundles."""
 
         rows = [
             entry
@@ -431,7 +431,7 @@ class ExportQuery:
                 scenario=scenario,
                 state=state,
                 value=value,
-                artifact=artifact,
+                format=format,
                 format_id=format_id,
                 media_type=media_type,
                 include_content=include_content,
@@ -447,13 +447,13 @@ class ExportQuery:
         scenario: str | None = None,
         state: Mapping[str, Any] | None = None,
         value: str | None = None,
-        artifact: str | None = None,
+        format: str | None = None,
         format_id: str | None = None,
         media_type: str | None = None,
         include_content: bool = False,
         max_bytes: int = 65_536,
     ) -> JsonObject:
-        """Return exactly one artifact entry file across the export root."""
+        """Return exactly one format entry file across the export root."""
 
         return exactly_one(
             self.entries(
@@ -461,7 +461,7 @@ class ExportQuery:
                 scenario=scenario,
                 state=state,
                 value=value,
-                artifact=artifact,
+                format=format,
                 format_id=format_id,
                 media_type=media_type,
                 include_content=include_content,

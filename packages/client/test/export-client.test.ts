@@ -1,16 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  createExportClient as createServerExportClient,
-  type CaptureResult,
-  type ExportClient,
-  type ExportClientOptions,
-  type ExportSpecInput,
+  createMarimoExportClient as createServerMarimoExportClient,
+  type ExportResult,
+  type MarimoExportClient,
+  type MarimoExportClientOptions,
+  type ExportSpec,
 } from "@marimo-team/export-client";
-import {
-  createExportClient as createBrowserExportClient,
-  type BrowserExportClient,
-} from "@marimo-team/export-client/browser";
+import { createMarimoExportClient as createBrowserMarimoExportClient } from "@marimo-team/export-client/browser";
 
 interface ScratchpadRequest {
   code: string;
@@ -18,42 +15,42 @@ interface ScratchpadRequest {
   url: string;
 }
 
-type ExportClientFactory = (options: ExportClientOptions) => ExportClient | BrowserExportClient;
-type CaptureFetch = NonNullable<ExportClientOptions["fetch"]>;
+type ExportClientFactory = (options: MarimoExportClientOptions) => MarimoExportClient;
+type ExportFetch = NonNullable<MarimoExportClientOptions["fetch"]>;
 
 const spec = {
   scenarios: [{ id: "default" }],
   values: {
     title: {
       source: { def: "title" },
-      artifacts: ["text"],
+      formats: ["text"],
     },
   },
-} satisfies ExportSpecInput;
+} satisfies ExportSpec;
 
-const capturePayload = {
+const exportPayload = {
   bundlePath: "/tmp/export/bundles/sha256-demo",
   manifestPath: "/tmp/export/bundles/sha256-demo/manifest.json",
   invocationPath: "/tmp/export/bundles/sha256-demo/traces/invocation.json",
   invocationIndexPath: "/tmp/export/bundles/sha256-demo/traces/index.json",
   manifest: { id: "sha256-demo" },
   invocation: { id: "invocation-demo" },
-} satisfies Omit<CaptureResult, "session">;
+} satisfies Omit<ExportResult, "session">;
 
 const clientFactories: Array<{ name: string; create: ExportClientFactory }> = [
-  { name: "server entry", create: createServerExportClient },
-  { name: "browser entry", create: createBrowserExportClient },
+  { name: "server entry", create: createServerMarimoExportClient },
+  { name: "browser entry", create: createBrowserMarimoExportClient },
 ];
 
-test("ExportClient captures bundles and archives through one public interface", async (t) => {
+test("MarimoExportClient exports bundles and archives through one public interface", async (t) => {
   for (const factory of clientFactories) {
     await t.test(factory.name, async () => {
-      await assertCapture(factory.create);
+      await assertExport(factory.create);
     });
   }
 });
 
-test("ExportClient lists sessions and workspace notebooks through one public interface", async (t) => {
+test("MarimoExportClient lists sessions and workspace notebooks through one public interface", async (t) => {
   for (const factory of clientFactories) {
     await t.test(factory.name, async () => {
       await assertLists(factory.create);
@@ -68,7 +65,7 @@ async function assertLists(createExportClient: ExportClientFactory): Promise<voi
     fetch: listFetch(requests),
   });
 
-  assert.deepEqual(await client.listSessions(), [
+  assert.deepEqual(await client.sessions.list(), [
     {
       sessionId: "session-1",
       name: "finance.py",
@@ -76,7 +73,7 @@ async function assertLists(createExportClient: ExportClientFactory): Promise<voi
       initializationId: "init-1",
     },
   ]);
-  assert.deepEqual(await client.listWorkspaceNotebooks(), [
+  assert.deepEqual(await client.notebooks.list(), [
     {
       id: "finance",
       name: "finance.py",
@@ -86,19 +83,19 @@ async function assertLists(createExportClient: ExportClientFactory): Promise<voi
   assert.deepEqual(requests, ["/api/home/running_notebooks", "/api/home/workspace_files"]);
 }
 
-async function assertCapture(createExportClient: ExportClientFactory): Promise<void> {
+async function assertExport(createExportClient: ExportClientFactory): Promise<void> {
   const requests: ScratchpadRequest[] = [];
   const client = createExportClient({
     server: "https://marimo.example.test",
     fetch: scratchpadFetch(requests),
   });
 
-  const result = await client.capture(spec, {
+  const result = await client.export(spec, {
     sessionId: "session-1",
-    to: "/tmp/export",
+    outputRoot: "/tmp/export",
     runtime: "preinstalled",
   });
-  const archive = await client.captureArchive(spec, {
+  const archive = await client.archive(spec, {
     sessionId: "session-1",
     runtime: "preinstalled",
   });
@@ -112,10 +109,10 @@ async function assertCapture(createExportClient: ExportClientFactory): Promise<v
     requests.map((request) => new URL(request.url).pathname),
     ["/api/kernel/execute", "/api/kernel/execute", "/api/kernel/execute", "/api/kernel/execute"],
   );
-  assert.equal(result.bundlePath, capturePayload.bundlePath);
-  assert.equal(result.manifestPath, capturePayload.manifestPath);
-  assert.deepEqual(result.manifest, capturePayload.manifest);
-  assert.deepEqual(result.invocation, capturePayload.invocation);
+  assert.equal(result.bundlePath, exportPayload.bundlePath);
+  assert.equal(result.manifestPath, exportPayload.manifestPath);
+  assert.deepEqual(result.manifest, exportPayload.manifest);
+  assert.deepEqual(result.invocation, exportPayload.invocation);
   assert.deepEqual(result.session, {
     sessionId: "session-1",
     name: null,
@@ -127,7 +124,7 @@ async function assertCapture(createExportClient: ExportClientFactory): Promise<v
   assert.equal(archive.session.sessionId, "session-1");
 }
 
-function scratchpadFetch(requests: ScratchpadRequest[]): CaptureFetch {
+function scratchpadFetch(requests: ScratchpadRequest[]): ExportFetch {
   return async (request) => {
     const code = requestCode(await request.json());
 
@@ -144,11 +141,11 @@ function scratchpadFetch(requests: ScratchpadRequest[]): CaptureFetch {
       return scratchpadResponse(archiveStdout(code));
     }
 
-    return scratchpadResponse(captureStdout(code, capturePayload));
+    return scratchpadResponse(exportStdout(code, exportPayload));
   };
 }
 
-function listFetch(requests: string[]): CaptureFetch {
+function listFetch(requests: string[]): ExportFetch {
   return async (request) => {
     const path = new URL(request.url).pathname;
     requests.push(path);
@@ -198,8 +195,8 @@ function requestCode(body: unknown): string {
   return code;
 }
 
-function captureStdout(code: string, payload: Omit<CaptureResult, "session">): string {
-  const markerMatch = /print\(("__MOEXPORT_CAPTURE_[^"]+__") \+ json\.dumps/.exec(code);
+function exportStdout(code: string, payload: Omit<ExportResult, "session">): string {
+  const markerMatch = /print\(("__MOEXPORT_RESULT_[^"]+__") \+ json\.dumps/.exec(code);
   assert.ok(markerMatch?.[1]);
   const marker = JSON.parse(markerMatch[1]) as string;
   return `${marker}${JSON.stringify({

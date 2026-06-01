@@ -7,9 +7,7 @@
         "interval": "1d",
         "start": "2025-04-01",
         "end": "2026-05-01",
-        "chart_width": 980
-      },
-      "patches": {
+        "chart_width": 980,
         "symbols_selector.value": ["CRWV", "MSFT"],
         "widget.widget.metric": "Close",
         "widget.widget.mode": "absolute",
@@ -23,9 +21,7 @@
         "interval": "1d",
         "start": "2025-04-01",
         "end": "2026-05-01",
-        "chart_width": 980
-      },
-      "patches": {
+        "chart_width": 980,
         "symbols_selector.value": ["AAPL", "GOOGL", "AMZN"],
         "widget.widget.metric": "Close",
         "widget.widget.mode": "change",
@@ -39,9 +35,7 @@
         "interval": "1d",
         "start": "2025-11-01",
         "end": "2026-05-01",
-        "chart_width": 980
-      },
-      "patches": {
+        "chart_width": 980,
         "symbols_selector.value": ["NVDA", "AMD", "AVGO"],
         "widget.widget.metric": "High",
         "widget.widget.mode": "change",
@@ -55,9 +49,7 @@
         "interval": "1d",
         "start": "2025-01-01",
         "end": "2026-05-01",
-        "chart_width": 760
-      },
-      "patches": {
+        "chart_width": 760,
         "symbols_selector.value": ["TSLA"],
         "widget.widget.metric": "Close",
         "widget.widget.mode": "absolute",
@@ -70,7 +62,7 @@
       "source": {
         "expr": "{\n    \"rows\": df.height,\n    \"columns\": df.columns,\n    \"symbols\": sorted(df[\"Symbol\"].unique().to_list()),\n    \"date_start\": df[\"Date\"].min().strftime(\"%Y-%m-%d\"),\n    \"date_end\": df[\"Date\"].max().strftime(\"%Y-%m-%d\"),\n}"
       },
-      "artifacts": {
+      "formats": {
         "json": {
           "export": {
             "type": "code",
@@ -83,7 +75,7 @@
       "source": {
         "expr": "{\n    \"label\": \"Select symbols to compare\",\n    \"options\": symbols,\n    \"value\": symbols_selector.value,\n}"
       },
-      "artifacts": {
+      "formats": {
         "json": {
           "export": {
             "type": "code",
@@ -96,7 +88,7 @@
       "source": {
         "def": "df"
       },
-      "artifacts": {
+      "formats": {
         "arrow": {
           "export": {
             "type": "ref",
@@ -115,7 +107,7 @@
       "source": {
         "cell": "change_desc"
       },
-      "artifacts": {
+      "formats": {
         "html": {
           "export": {
             "type": "code",
@@ -128,7 +120,7 @@
       "source": {
         "def": "symbols_chart"
       },
-      "artifacts": {
+      "formats": {
         "vegalite": {
           "export": {
             "type": "ref",
@@ -150,7 +142,7 @@
       "source": {
         "def": "widget"
       },
-      "artifacts": {
+      "formats": {
         "bundle": {
           "export": {
             "type": "ref",

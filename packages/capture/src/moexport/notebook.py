@@ -26,14 +26,14 @@ from marimo._runtime.app.script_runner import AppScriptRunner
 from marimo._schemas.serialization import CellDef
 from marimo._types.ids import CellId_t
 
-from moexport.export import ExportResult, SpecInput
+from moexport.export import CaptureResult, SpecInput
 
 NotebookReference: TypeAlias = str | Path
 _RUN_OPTION_KEYS = frozenset({"args", "check"})
 
 
 class NotebookRunOptions(TypedDict, total=False):
-    """Options for the in-process notebook execution used by export_notebook."""
+    """Options for the in-process notebook execution used by capture_notebook."""
 
     args: Sequence[str]
     check: bool
@@ -136,20 +136,20 @@ def inspect_notebook_defs(notebook: NotebookReference) -> NotebookDefs:
     }
 
 
-def export_notebook(
+def capture_notebook(
     notebook: NotebookReference,
     spec: SpecInput,
     *,
     to: str | Path | None = None,
     run: NotebookRunOptions | None = None,
-) -> ExportResult:
+) -> CaptureResult:
     """Resolve a marimo notebook, run one synthetic cell, and write a bundle.
 
     The implementation appends a hidden cell equivalent to:
 
     ```python
     import moexport as mox
-    result = await mox.export(spec, to=to)
+    result = await mox.capture(spec, to=to)
     ```
 
     Only this synthetic cell is scheduled by the outer script runner.
@@ -177,9 +177,9 @@ def export_notebook(
         args=run_options.get("args", ()),
     )
     result = defs[result_name]
-    if not isinstance(result, ExportResult):
+    if not isinstance(result, CaptureResult):
         raise TypeError(
-            f"expected synthetic export cell to return ExportResult, got {type(result)!r}"
+            f"expected synthetic capture cell to return CaptureResult, got {type(result)!r}"
         )
     return result
 
@@ -300,7 +300,7 @@ def _run_export_cell(
         # we only need marimo's script runtime around the synthetic cell:
         #
         #   import moexport as __moexport
-        #   __moexport_result_abcd = await __moexport.export(
+        #   __moexport_result_abcd = await __moexport.capture(
         #       __moexport_spec_abcd,
         #       to=__moexport_to_abcd,
         #   )
@@ -328,7 +328,7 @@ def _export_cell_code(
     A generated cell roughly looks like:
 
         import moexport as __moexport
-        __moexport_result_abcd = await __moexport.export(
+        __moexport_result_abcd = await __moexport.capture(
             __moexport_spec_abcd,
             to=__moexport_to_abcd,
         )
@@ -336,7 +336,7 @@ def _export_cell_code(
 
     return f"""\
 import moexport as __moexport
-{result_name} = await __moexport.export(
+{result_name} = await __moexport.capture(
     {spec_name},
     to={output_name},
 )"""
