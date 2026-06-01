@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["node"],
+    "paths": {
+      "@marimo-team/export-client": ["./src/index.ts"],
+      "@marimo-team/export-client/browser": ["./src/browser.ts"]
+    }
+  },
+  "include": ["test/**/*.ts"]
+}

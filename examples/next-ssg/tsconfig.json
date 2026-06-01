@@ -12,6 +12,13 @@
       }
     ],
     "paths": {
+      "@marimo-team/export-client": ["../../packages/client/src/index"],
+      "@marimo-team/export-client/browser": ["../../packages/client/src/browser"],
+      "@marimo-team/export-loader-anywidget": ["../../packages/loader-anywidget/src/index"],
+      "@marimo-team/export-loader-arrow": ["../../packages/loader-arrow/src/index"],
+      "@marimo-team/export-loader-vegalite": ["../../packages/loader-vegalite/src/index"],
+      "@marimo-team/export-reader": ["../../packages/reader/src/index"],
+      "#anywidget/*": ["../../packages/loader-anywidget/src/*"],
       "@/*": ["./src/*"]
     }
   },

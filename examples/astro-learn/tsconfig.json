@@ -2,8 +2,9 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "paths": {
+      "@marimo-team/export-client": ["../../packages/client/src/index"],
       "@/*": ["./src/*"]
     }
   },
-  "include": ["src", "astro.config.mjs"]
+  "include": ["src", "astro.config.ts"]
 }

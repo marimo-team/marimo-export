@@ -50,15 +50,15 @@ export interface WorkspaceNotebook {
   path: string;
 }
 
-export interface CaptureExportRequest {
+export interface CaptureOptions {
   sessionId?: string;
   notebook?: string;
   to?: string;
-  runtime?: CaptureRuntimeOption;
+  runtime?: RuntimeOption;
   executionTimeoutMs?: number;
 }
 
-export interface CaptureExportResult {
+export interface CaptureResult {
   session: RunningNotebook;
   bundlePath: string;
   manifestPath: string;
@@ -68,7 +68,7 @@ export interface CaptureExportResult {
   invocation: Record<string, unknown>;
 }
 
-export interface CaptureExportArchiveResult {
+export interface CaptureArchiveResult {
   bytes: Uint8Array;
   mediaType: typeof EXPORT_ARCHIVE_MEDIA_TYPE;
   session: RunningNotebook;
@@ -86,9 +86,9 @@ export interface OpenNotebookOptions {
   timeoutMs?: number;
 }
 
-export type CaptureRuntimeOption = "preinstalled" | CaptureRuntimeInstallOptions;
+export type RuntimeOption = "preinstalled" | RuntimeInstallOptions;
 
-export interface CaptureRuntimeInstallOptions {
+export interface RuntimeInstallOptions {
   install: string;
   module?: string;
   manager?: "uv" | "pip" | string;

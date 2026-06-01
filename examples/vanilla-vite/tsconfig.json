@@ -18,7 +18,6 @@
       "@marimo-team/export-loader-parquet": ["../../packages/loader-parquet/src/index"],
       "@marimo-team/export-loader-vegalite": ["../../packages/loader-vegalite/src/index"],
       "@/*": ["./src/*"],
-      "#reader/*": ["../../packages/reader/src/*"],
       "#anywidget/*": ["../../packages/loader-anywidget/src/*"]
     }
   },

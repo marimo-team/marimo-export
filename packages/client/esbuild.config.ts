@@ -1,4 +1,4 @@
-import { build } from "esbuild";
+import { build, type BuildOptions } from "esbuild";
 
 const shared = {
   bundle: true,
@@ -6,7 +6,7 @@ const shared = {
   logLevel: "info",
   sourcemap: true,
   target: "es2022",
-};
+} satisfies BuildOptions;
 
 await Promise.all([
   build({

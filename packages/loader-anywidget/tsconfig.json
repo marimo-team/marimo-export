@@ -3,7 +3,6 @@
   "compilerOptions": {
     "paths": {
       "@marimo-team/export-reader": ["../reader/src/index"],
-      "#reader/*": ["../reader/src/*"],
       "#anywidget/*": ["./src/*"]
     }
   },
