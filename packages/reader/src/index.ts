@@ -3,7 +3,9 @@ export {
   readExport,
   readExportArchive,
   readExportIndex,
+  readLatestLocalExport,
   readLatestExport,
+  readLocalExport,
 } from "./read-export.js";
 export { validateExportManifest, validateExportRootIndex } from "./schema.js";
 export type {
@@ -16,7 +18,7 @@ export type {
   ArtifactSelection,
   BlobRef,
   ExportArchiveInput,
-  ExportRecord,
+  CaptureRecord,
   ExportManifest,
   ExportRootBundle,
   ExportRootIndex,
@@ -25,13 +27,18 @@ export type {
   JsonObject,
   JsonPrimitive,
   JsonValue,
+  LocalReadFile,
+  LocalReadFileResult,
+  LocalUrlResolver,
   ManifestScenario,
   ManifestValue,
   NotebookRecord,
   ReadExportArchiveOptions,
   ReadExportIndexOptions,
   ReadExportOptions,
+  ReadLatestLocalExportOptions,
   ReadLatestExportOptions,
+  ReadLocalExportOptions,
   StaticExport,
   StaticExportArchive,
 } from "./types.js";

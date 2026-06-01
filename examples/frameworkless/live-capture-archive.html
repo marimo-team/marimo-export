@@ -653,7 +653,7 @@
           ],
           values: {
             summary: {
-              source: "queue_summary",
+              source: { def: "queue_summary" },
               formats: {
                 json: {
                   export: { type: "ref", ref: "moexport.exporters.core:json" },
@@ -666,7 +666,7 @@
               },
             },
             chart: {
-              source: "wait_chart",
+              source: { def: "wait_chart" },
               formats: {
                 vegalite: {
                   export: { type: "ref", ref: "moexport.exporters.altair:vegalite" },
@@ -674,7 +674,7 @@
               },
             },
             note: {
-              source: "queue_note",
+              source: { def: "queue_note" },
               formats: {
                 html: {
                   export: { type: "ref", ref: "moexport.exporters.core:html" },
@@ -693,7 +693,7 @@
       function queueScenario(id, arrival, service, servers) {
         return {
           id,
-          state: {
+          inputs: {
             arrival_rate: pythonExpression(arrival.toFixed(1)),
             service_rate: pythonExpression(service.toFixed(1)),
             server_count: pythonExpression(String(servers)),

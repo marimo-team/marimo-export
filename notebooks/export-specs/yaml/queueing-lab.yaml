@@ -1,34 +1,46 @@
 scenarios:
   - id: steady_single
-    state:
+    inputs:
       arrival_rate: 6.0
       service_rate: 11.0
       server_count: 1
       scenario_name: steady_single
-      arrival_picker.value: 6.0
-      service_picker.value: 11.0
-      servers_picker.value: 1
+    ui:
+      arrival_picker:
+        value: 6.0
+      service_picker:
+        value: 11.0
+      servers_picker:
+        value: 1
   - id: rush_single
-    state:
+    inputs:
       arrival_rate: 8.0
       service_rate: 9.0
       server_count: 1
       scenario_name: rush_single
-      arrival_picker.value: 8.0
-      service_picker.value: 9.0
-      servers_picker.value: 1
+    ui:
+      arrival_picker:
+        value: 8.0
+      service_picker:
+        value: 9.0
+      servers_picker:
+        value: 1
   - id: pooled_rush
-    state:
+    inputs:
       arrival_rate: 16.0
       service_rate: 11.0
       server_count: 2
       scenario_name: pooled_rush
-      arrival_picker.value: 16.0
-      service_picker.value: 11.0
-      servers_picker.value: 2
+    ui:
+      arrival_picker:
+        value: 16.0
+      service_picker:
+        value: 11.0
+      servers_picker:
+        value: 2
 values:
   summary:
-    source: queue_summary
+    source: { def: queue_summary }
     formats:
       json:
         export:
@@ -40,7 +52,7 @@ values:
           metadata:
             kind: queue-summary
   arrivals:
-    source: arrival_distribution
+    source: { def: arrival_distribution }
     formats:
       arrow:
         export:
@@ -51,21 +63,21 @@ values:
           type: ref
           ref: moexport.exporters.dataframe:parquet
   response_curve:
-    source: queue_curve
+    source: { def: queue_curve }
     formats:
       arrow:
         export:
           type: ref
           ref: moexport.exporters.dataframe:arrow
   chart:
-    source: wait_chart
+    source: { def: wait_chart }
     formats:
       vegalite:
         export:
           type: ref
           ref: moexport.exporters.altair:vegalite
   note:
-    source: queue_note
+    source: { def: queue_note }
     formats:
       html:
         export:

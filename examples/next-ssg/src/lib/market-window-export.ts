@@ -176,7 +176,7 @@ export const getMarketWindowPage = async (
       manifestId: exp.manifest.id,
       archiveBytes: archive.bytes.byteLength,
       notebookName: exp.manifest.notebook.name,
-      notebookSha: exp.manifest.notebook.source?.sha256 ?? null,
+      notebookSha: exp.manifest.notebook.source_sha256 ?? null,
       summary,
       sampleRows,
       arrowRows: arrowRows.slice(-12),
@@ -192,7 +192,7 @@ const buildMarketWindowSpec = (start: string, end: string) => ({
   scenarios: [
     {
       id: scenarioId(start, end),
-      state: {
+      inputs: {
         symbols: ["AAPL", "MSFT", "GOOGL"],
         interval: "1d",
         start,

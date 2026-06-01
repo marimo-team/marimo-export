@@ -6,7 +6,7 @@ loaders, notebooks, and examples for marimo static export bundles.
 The core flow is:
 
 1. A marimo notebook runs in Python.
-2. An export spec selects notebook expressions and finite scenario states.
+2. An export spec selects typed notebook sources and finite scenario states.
 3. `moexport` evaluates those selections, turns Python objects into portable
    artifacts, and writes a static bundle.
 4. Web code opens the bundle with `@marimo-team/export-reader` and loads only
@@ -92,7 +92,8 @@ await captureExport(spec, {
 ```
 
 Use `@marimo-team/export-client/browser` for frameworkless pages that need a
-plain `fetch` implementation instead of the generated marimo OpenAPI client.
+plain `fetch` implementation and do not import the generated marimo OpenAPI
+client.
 
 ## Development
 

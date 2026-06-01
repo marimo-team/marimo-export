@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import time
 from collections.abc import Mapping, Sequence
-from typing import cast
+from typing import Any, cast
 
 from moexport.evaluate._target import evaluate_target_once
 from moexport.evaluate._types import (
@@ -104,6 +104,8 @@ async def evaluate(
     | None = None,
     *,
     object_patches: ObjectPatches | Sequence[ObjectPatches] | None = None,
+    output_cell_ids: set[Any] | None = None,
+    output_error_policy: str = "raise",
 ) -> EvaluateResult:
     """Evaluate a target once or over a batch of finite scenario states.
 
@@ -126,6 +128,8 @@ async def evaluate(
             override_set,
             object_patches=patch_set,
             cell_cache=cell_cache,
+            output_cell_ids=output_cell_ids,
+            output_error_policy=output_error_policy,
         )
         for override_set, patch_set in zip(override_sets, patch_sets, strict=True)
     ]

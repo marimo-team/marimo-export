@@ -12,6 +12,7 @@ from moexport.query import open_export
 def _notebook_record(sha256: str, *, name: str = "finance.py") -> dict[str, object]:
     return {
         "name": name,
+        "source_sha256": sha256,
         "source": {
             "href": f"blobs/sha256/no/te/{sha256}",
             "media_type": "text/x-python",
@@ -19,6 +20,10 @@ def _notebook_record(sha256: str, *, name: str = "finance.py") -> dict[str, obje
             "sha256": sha256,
         },
     }
+
+
+def _definition_source(name: str) -> dict[str, str]:
+    return {"type": "definition", "name": name}
 
 
 def _write_notebook_source(root: Path, sha256: str, text: str) -> None:
@@ -44,13 +49,12 @@ def _write_export(root: Path) -> None:
         "sha256": "demo",
         "notebook": _notebook_record("notebook-sha"),
         "scenario_set": {"id": "sha256-scenarios", "sha256": "scenarios"},
-        "export": {
+        "capture": {
             "id": "sha256-export",
             "request_sha256": "export",
-            "target": "{'prices': (df)}",
         },
         "values": {
-            "prices": {"source": "df", "formats": ["json"]},
+            "prices": {"source": _definition_source("df"), "formats": ["json"]},
         },
         "scenarios": [
             {
@@ -98,10 +102,9 @@ def _write_export(root: Path) -> None:
         },
         "notebook": _notebook_record("notebook-sha"),
         "scenario_set": {"id": "sha256-scenarios", "sha256": "scenarios"},
-        "export": {
+        "capture": {
             "id": "sha256-export",
             "request_sha256": "export",
-            "target": "{'prices': (df)}",
         },
         "source_spec": {"sha256": "spec-sha", "spec": {}},
         "scenarios": [
@@ -161,21 +164,20 @@ def _write_chart_export(root: Path, *, bundle_id: str, chart_width: int) -> None
             "sha256": bundle_id,
             "notebook": _notebook_record(f"notebook-{bundle_id}"),
             "scenario_set": {"id": f"{bundle_id}-scenarios", "sha256": "scenarios"},
-            "export": {
+            "capture": {
                 "id": f"{bundle_id}-export",
                 "request_sha256": "export",
-                "target": "{'comparison_chart': (symbols_chart)}",
             },
             "values": {
                 "comparison_chart": {
-                    "source": "symbols_chart",
+                    "source": _definition_source("symbols_chart"),
                     "formats": ["vegalite"],
                 },
             },
             "scenarios": [
                 {
                     "id": "wide_chart",
-                    "state": {"chart_width": chart_width},
+                    "state": {"inputs": {"chart_width": chart_width}},
                     "values": {
                         "comparison_chart": {
                             "vegalite": {
@@ -217,10 +219,9 @@ def test_open_export_lists_and_opens_bundles(tmp_path: Path) -> None:
             "path": str(root / "bundles" / "sha256-demo"),
             "manifest_path": str(root / "bundles" / "sha256-demo" / "manifest.json"),
             "notebook": _notebook_record("notebook-sha"),
-            "export": {
+            "capture": {
                 "id": "sha256-export",
                 "request_sha256": "export",
-                "target": "{'prices': (df)}",
             },
             "value_count": 1,
             "scenario_count": 1,
@@ -244,7 +245,7 @@ def test_bundle_query_returns_semantic_map_and_raw_file_paths(tmp_path: Path) ->
     assert bundle.artifact(scenario="base", value="prices", format="json") == artifact
     files = bundle.files(dedupe=True)
 
-    assert artifact["source"] == "df"
+    assert artifact["source"] == _definition_source("df")
     assert artifact["format_id"] == "example.json.v1"
     assert artifact["entry_path"] == str(
         root / "blobs" / "sha256" / "aa" / "bb" / "aabb"
@@ -262,7 +263,7 @@ def test_bundle_query_returns_semantic_map_and_raw_file_paths(tmp_path: Path) ->
                     "scenario": "base",
                     "state": {},
                     "value": "prices",
-                    "source": "df",
+                    "source": _definition_source("df"),
                     "format": "json",
                     "format_id": "example.json.v1",
                     "file": "data",
@@ -287,7 +288,7 @@ def test_bundle_query_returns_semantic_map_and_raw_file_paths(tmp_path: Path) ->
         "scenario": "base",
         "state": {},
         "value": "prices",
-        "source": "df",
+        "source": _definition_source("df"),
         "format": "json",
         "format_id": "example.json.v1",
         "artifact_media_type": "application/json",
@@ -353,7 +354,7 @@ def test_export_query_returns_notebook_source_for_matching_scenario(
     _write_chart_export(root, bundle_id="sha256-1200", chart_width=1200)
 
     export = open_export(root)
-    source = export.notebook_source(state={"chart_width": 1200})
+    source = export.notebook_source(state={"inputs.chart_width": 1200})
 
     assert source["name"] == "finance.py"
     assert source["text"] == "# sha256-1200\n"
@@ -397,11 +398,11 @@ def test_export_query_catalog_indexes_the_whole_export_root(tmp_path: Path) -> N
         "files": 2,
         "bytes": 32,
     }
-    assert catalog["state_keys"] == ["chart_width"]
+    assert catalog["state_keys"] == ["inputs", "inputs.chart_width"]
     assert catalog["values"] == [
         {
             "name": "comparison_chart",
-            "sources": ["symbols_chart"],
+            "sources": [_definition_source("symbols_chart")],
             "formats": ["vegalite"],
             "bundles": ["sha256-1000", "sha256-1200"],
         }
@@ -410,14 +411,14 @@ def test_export_query_catalog_indexes_the_whole_export_root(tmp_path: Path) -> N
         {
             **_notebook_record("notebook-sha256-1000"),
             "bundles": ["sha256-1000"],
-            "exports": ["sha256-1000-export"],
+            "captures": ["sha256-1000-export"],
             "values": ["comparison_chart"],
             "scenario_count": 1,
         },
         {
             **_notebook_record("notebook-sha256-1200"),
             "bundles": ["sha256-1200"],
-            "exports": ["sha256-1200-export"],
+            "captures": ["sha256-1200-export"],
             "values": ["comparison_chart"],
             "scenario_count": 1,
         },
@@ -431,22 +432,22 @@ def test_export_query_filters_1200_wide_finance_chart(tmp_path: Path) -> None:
 
     export = open_export(root)
     artifacts = export.artifacts(
-        state={"chart_width": 1200},
+        state={"inputs.chart_width": 1200},
         value="comparison_chart",
         format="vegalite",
     )
     files = export.files(
-        state={"chart_width": 1200},
+        state={"inputs.chart_width": 1200},
         value="comparison_chart",
         media_type="application/vnd.vegalite+json",
     )
     entries = export.entries(
-        state={"chart_width": 1200},
+        state={"inputs.chart_width": 1200},
         value="comparison_chart",
         media_type="application/vnd.vegalite+json",
         include_content=True,
     )
-    scenarios = export.scenarios(state={"chart_width": 1200})
+    scenarios = export.scenarios(state={"inputs.chart_width": 1200})
 
     assert scenarios == [
         {
@@ -454,14 +455,14 @@ def test_export_query_filters_1200_wide_finance_chart(tmp_path: Path) -> None:
             "bundle_path": str(root / "bundles" / "sha256-1200"),
             "notebook": _notebook_record("notebook-sha256-1200"),
             "id": "wide_chart",
-            "state": {"chart_width": 1200},
+            "state": {"inputs": {"chart_width": 1200}},
             "values": {"comparison_chart": ["vegalite"]},
             "artifact_count": 1,
         }
     ]
     assert (
         export.artifact(
-            state={"chart_width": 1200},
+            state={"inputs.chart_width": 1200},
             value="comparison_chart",
             format="vegalite",
         )
@@ -469,7 +470,7 @@ def test_export_query_filters_1200_wide_finance_chart(tmp_path: Path) -> None:
     )
     assert (
         export.file(
-            state={"chart_width": 1200},
+            state={"inputs.chart_width": 1200},
             value="comparison_chart",
             media_type="application/vnd.vegalite+json",
         )
@@ -477,7 +478,7 @@ def test_export_query_filters_1200_wide_finance_chart(tmp_path: Path) -> None:
     )
     assert (
         export.entry(
-            state={"chart_width": 1200},
+            state={"inputs.chart_width": 1200},
             value="comparison_chart",
             media_type="application/vnd.vegalite+json",
             include_content=True,
@@ -486,7 +487,7 @@ def test_export_query_filters_1200_wide_finance_chart(tmp_path: Path) -> None:
     )
     assert artifacts[0]["bundle"] == "sha256-1200"
     assert artifacts[0]["scenario"] == "wide_chart"
-    assert artifacts[0]["state"] == {"chart_width": 1200}
+    assert artifacts[0]["state"] == {"inputs": {"chart_width": 1200}}
     assert artifacts[0]["entry_path"] == str(
         root / "blobs" / "sha256" / "1200" / "spec"
     )

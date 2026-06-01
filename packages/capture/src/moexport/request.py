@@ -12,6 +12,12 @@ from marimo._utils.paths import notebook_output_dir
 from moexport.evaluate import EvaluateResult, evaluate
 from moexport.jsonio import manifest_value, sha256_bytes, sha256_json
 from moexport.spec import CodeStateValue, ExportSpec, ScenarioSpec, ValueSpec
+from moexport.sources import (
+    output_error_policy as source_output_error_policy,
+    selected_output_cell_ids,
+    source_expression,
+    source_record,
+)
 
 EvaluateFn: TypeAlias = Callable[[str, Any], Awaitable[EvaluateResult]]
 
@@ -91,7 +97,9 @@ class ResolvedExportRequest:
         "blob_href_prefix",
         "export_identity",
         "notebook_source",
+        "output_error_policy",
         "output_root",
+        "output_cell_ids",
         "scenario_set_identity",
         "scenarios",
         "spec",
@@ -110,6 +118,8 @@ class ResolvedExportRequest:
         blob_base_path: Path,
         blob_href_prefix: str,
         target: str,
+        output_cell_ids: set[Any],
+        output_error_policy: str,
     ) -> None:
         self.spec = spec
         self.notebook_source = notebook_source
@@ -120,6 +130,8 @@ class ResolvedExportRequest:
         self.blob_base_path = blob_base_path
         self.blob_href_prefix = blob_href_prefix
         self.target = target
+        self.output_cell_ids = output_cell_ids
+        self.output_error_policy = output_error_policy
 
 
 async def resolve_export_request(
@@ -150,6 +162,13 @@ async def resolve_export_request(
         blob_base_path=output_root,
         blob_href_prefix="blobs",
         target=_target_expression(spec.values),
+        output_cell_ids=selected_output_cell_ids(
+            {name: value.source for name, value in spec.values.items()},
+            get_context(),
+        ),
+        output_error_policy=source_output_error_policy(
+            {name: value.source for name, value in spec.values.items()}
+        ),
     )
 
 
@@ -190,13 +209,38 @@ async def _resolve_scenario(
     *,
     evaluate_fn: EvaluateFn,
 ) -> ResolvedScenario:
-    state = await _resolve_value_mapping(
-        scenario.state,
+    inputs = await _resolve_value_mapping(
+        scenario.inputs,
         evaluate_fn=evaluate_fn,
     )
-    definition_overrides, object_patches = _split_state(state)
-    manifest_state = {name: manifest_value(value) for name, value in state.items()}
-    declared_state = _dump_declared_state(scenario.state)
+    ui = await _resolve_state_tree(
+        scenario.ui,
+        evaluate_fn=evaluate_fn,
+        environment=inputs,
+    )
+    widgets = await _resolve_state_tree(
+        scenario.widgets,
+        evaluate_fn=evaluate_fn,
+        environment={**inputs, **({"ui": ui} if isinstance(ui, dict) else {})},
+    )
+    definition_overrides = inputs
+    object_patches = {
+        **_flatten_patch_tree(ui, prefix=""),
+        **_flatten_patch_tree(widgets, prefix=""),
+    }
+    state = _compact_state_sections(
+        inputs=inputs,
+        ui=ui,
+        widgets=widgets,
+    )
+    manifest_state = _manifest_tree(state)
+    declared_state = _dump_declared_state(
+        _compact_state_sections(
+            inputs=scenario.inputs,
+            ui=scenario.ui,
+            widgets=scenario.widgets,
+        )
+    )
     return ResolvedScenario(
         id=scenario.id,
         state=state,
@@ -227,6 +271,75 @@ async def _resolve_value_mapping(
         resolved[name] = result["results"][0]["value"]
 
     return resolved
+
+
+async def _resolve_state_tree(
+    value: Any,
+    *,
+    evaluate_fn: EvaluateFn,
+    environment: Mapping[str, Any],
+) -> Any:
+    if isinstance(value, CodeStateValue):
+        result = await evaluate_fn(value.expression, environment)
+        return result["results"][0]["value"]
+    if isinstance(value, Mapping):
+        resolved: dict[str, Any] = {}
+        env = dict(environment)
+        for name, item in value.items():
+            resolved_value = await _resolve_state_tree(
+                item,
+                evaluate_fn=evaluate_fn,
+                environment={**env, **resolved},
+            )
+            resolved[str(name)] = resolved_value
+        return resolved
+    if isinstance(value, list):
+        return [
+            await _resolve_state_tree(
+                item,
+                evaluate_fn=evaluate_fn,
+                environment=environment,
+            )
+            for item in value
+        ]
+    return value
+
+
+def _compact_state_sections(
+    *,
+    inputs: Mapping[str, Any],
+    ui: Any,
+    widgets: Any,
+) -> dict[str, Any]:
+    state: dict[str, Any] = {}
+    if inputs:
+        state["inputs"] = dict(inputs)
+    if isinstance(ui, Mapping) and ui:
+        state["ui"] = dict(ui)
+    if isinstance(widgets, Mapping) and widgets:
+        state["widgets"] = dict(widgets)
+    return state
+
+
+def _manifest_tree(value: Any) -> Any:
+    if isinstance(value, Mapping):
+        return {str(name): _manifest_tree(item) for name, item in value.items()}
+    if isinstance(value, list):
+        return [_manifest_tree(item) for item in value]
+    return manifest_value(value)
+
+
+def _flatten_patch_tree(value: Any, *, prefix: str) -> dict[str, Any]:
+    if not isinstance(value, Mapping):
+        return {}
+    patches: dict[str, Any] = {}
+    for name, item in value.items():
+        path = f"{prefix}.{name}" if prefix else str(name)
+        if isinstance(item, Mapping):
+            patches.update(_flatten_patch_tree(item, prefix=path))
+        else:
+            patches[path] = item
+    return patches
 
 
 def _scenario_set_identity(
@@ -285,25 +398,26 @@ def _resolve_output_root(
 
 
 def _target_expression(values: Mapping[str, ValueSpec]) -> str:
-    items = [f"{name!r}: ({value.source})" for name, value in values.items()]
+    items = [
+        f"{name!r}: ({source_expression(value.source)})"
+        for name, value in values.items()
+    ]
     return "{\n" + ",\n".join(f"  {item}" for item in items) + "\n}"
 
 
-def _split_state(state: Mapping[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
-    definition_overrides: dict[str, Any] = {}
-    object_patches: dict[str, Any] = {}
-    for target, value in state.items():
-        if "." in target:
-            object_patches[target] = value
-        else:
-            definition_overrides[target] = value
-    return definition_overrides, object_patches
-
-
 def _dump_declared_state(state: Mapping[str, Any]) -> dict[str, Any]:
-    return {
-        name: value.model_dump(mode="json")
-        if isinstance(value, CodeStateValue)
-        else manifest_value(value)
-        for name, value in state.items()
-    }
+    return {name: _dump_declared_value(value) for name, value in state.items()}
+
+
+def _dump_declared_value(value: Any) -> Any:
+    if isinstance(value, CodeStateValue):
+        return value.model_dump(mode="json")
+    if isinstance(value, Mapping):
+        return {str(name): _dump_declared_value(item) for name, item in value.items()}
+    if isinstance(value, list):
+        return [_dump_declared_value(item) for item in value]
+    return manifest_value(value)
+
+
+def value_sources(spec: ExportSpec) -> dict[str, dict[str, Any]]:
+    return {name: source_record(value.source) for name, value in spec.values.items()}

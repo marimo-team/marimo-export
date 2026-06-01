@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import json
-from typing import Any, cast
+from typing import Any
 
 from pydantic import Field, TypeAdapter
 
-from moexport.artifacts import Artifact, ArtifactData, JsonObject, JsonValue
+from moexport.artifacts import Artifact, ArtifactData, JsonObject
 from moexport.exporters._core import ExporterContext, ExporterOptions
-from moexport.runtime import NotebookRuntime
+from moexport.snapshots import NotebookSnapshot
 
 NOTEBOOK_LINEAR_FORMAT = "marimo.notebook.linear.v1"
 NOTEBOOK_LINEAR_MEDIA_TYPE = "application/vnd.marimo.notebook.linear+json"
@@ -35,26 +35,25 @@ class NotebookLinearOptions(ExporterOptions):
 _OPTIONS = TypeAdapter(NotebookLinearOptions)
 
 
-def linear(value: NotebookRuntime, ctx: ExporterContext, **options: Any) -> Artifact:
+def linear(value: NotebookSnapshot, ctx: ExporterContext, **options: Any) -> Artifact:
     """Export `mox.runtime().snapshot()` as ordered cells plus MIME outputs."""
 
     parsed = _OPTIONS.validate_python(options)
-    if not isinstance(value, NotebookRuntime):
+    if not isinstance(value, NotebookSnapshot):
         raise TypeError("notebook.linear exporter expects `mox.runtime().snapshot()`")
 
-    cells = [
-        _cell_record(cell, include_source=parsed.include_source)
-        for cell in value.cells()
-        if parsed.include_internal_cells or not _is_internal_cell(cell)
-    ]
+    cells = value.cells
+    if not parsed.include_internal_cells:
+        cells = [cell for cell in cells if not _is_internal_cell(cell.to_json())]
     if not parsed.include_empty_outputs:
-        cells = [cell for cell in cells if _outputs(cell)]
+        cells = [cell for cell in cells if cell.outputs]
 
     snapshot: JsonObject = {
         "schema": NOTEBOOK_LINEAR_FORMAT,
         "version": 1,
-        "notebook": _json_object(value.notebook.metadata()),
-        "cells": cast(JsonValue, cells),
+        "kind": value.kind,
+        "notebook": value.notebook,
+        "cells": [cell.to_json() for cell in cells],
     }
     blob = ctx.write_blob(
         "notebook.json",
@@ -67,62 +66,14 @@ def linear(value: NotebookRuntime, ctx: ExporterContext, **options: Any) -> Arti
         media_type=NOTEBOOK_LINEAR_MEDIA_TYPE,
         data=ArtifactData(files={"notebook": blob}, entry="notebook"),
         metadata={
-            "name": value.notebook.name,
+            "name": value.notebook.get("name"),
             "cell_count": len(cells),
-            "output_count": sum(len(_outputs(cell)) for cell in cells),
+            "output_count": sum(len(cell.outputs) for cell in cells),
         },
     )
 
 
-def _cell_record(
-    cell: Any,
-    *,
-    include_source: bool,
-) -> JsonObject:
-    output = _format_output(cell.output)
-    outputs: list[JsonValue] = [] if output is None else [output]
-    record: JsonObject = {
-        **_json_object(cell.metadata),
-        "outputs": outputs,
-    }
-    if include_source:
-        record["source"] = cell.source
-    return record
-
-
-def _outputs(cell: JsonObject) -> list[JsonValue]:
-    outputs = cell.get("outputs")
-    return outputs if isinstance(outputs, list) else []
-
-
 def _is_internal_cell(cell: Any) -> bool:
-    return str(getattr(cell, "name", "") or "").startswith("_moexport_")
-
-
-def _format_output(value: Any) -> JsonObject | None:
-    if value is None:
-        return None
-
-    from marimo._output.formatting import try_format
-
-    formatted = try_format(value)
-    data: JsonValue = _json_value(formatted.data)
-    output: JsonObject = {
-        "channel": "output",
-        "mimetype": formatted.mimetype,
-        "data": data,
-    }
-    if formatted.traceback is not None:
-        output["traceback"] = formatted.traceback
-    return output
-
-
-def _json_value(value: Any) -> JsonValue:
-    return json.loads(json.dumps(value, ensure_ascii=False, allow_nan=False))
-
-
-def _json_object(value: Any) -> JsonObject:
-    serialized = _json_value(value)
-    if not isinstance(serialized, dict):
-        raise TypeError("expected a JSON object")
-    return serialized
+    if isinstance(cell, dict):
+        return str(cell.get("name") or "").startswith("_moexport_")
+    return False

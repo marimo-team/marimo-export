@@ -20,6 +20,7 @@ from moexport.query._helpers import (
     matches_state,
     notebook_source_hash,
     resolve_export_root,
+    state_keys,
 )
 from moexport.query.bundle import BundleQuery
 
@@ -108,12 +109,7 @@ class ExportQuery:
             "values": catalog_values(self.values()),
             "formats": self.formats(),
             "state_keys": sorted(
-                {
-                    key
-                    for row in scenarios
-                    for key in row.get("state", {})
-                    if isinstance(row.get("state"), dict)
-                }
+                {key for row in scenarios for key in state_keys(row.get("state"))}
             ),
             "media_types": sorted(
                 {
@@ -137,13 +133,13 @@ class ExportQuery:
                 {
                     **copy.deepcopy(notebook),
                     "bundles": [],
-                    "exports": [],
+                    "captures": [],
                     "values": [],
                     "scenario_count": 0,
                 },
             )
             append_unique(row["bundles"], bundle.id)
-            append_unique(row["exports"], bundle.manifest.export.id)
+            append_unique(row["captures"], bundle.manifest.capture.id)
             append_many_unique(row["values"], sorted(bundle.manifest.values))
             row["scenario_count"] += len(bundle.manifest.scenarios)
 

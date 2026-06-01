@@ -18,6 +18,7 @@ from moexport.evaluate._analysis import body_refs
 from moexport.evaluate._types import ObjectPatches
 from moexport.evaluate._values import value_fingerprint
 from moexport.runtime import materialize_cell_output
+from moexport.snapshots import OutputSnapshot
 
 
 def _is_coroutine_code(code: Any) -> bool:
@@ -39,10 +40,36 @@ async def evaluate_cell_output(
     cell: CellImpl,
     glbls: dict[str, Any],
     ctx: RuntimeContext,
+    *,
+    on_error: str = "raise",
 ) -> Any:
-    output = materialize_cell_output(ctx, cell.cell_id, values=glbls)
+    try:
+        output = materialize_cell_output(ctx, cell.cell_id, values=glbls)
+    except Exception as exc:
+        if on_error != "record":
+            raise
+        return OutputSnapshot(
+            channel="error",
+            mimetype="application/vnd.marimo.export.error+json",
+            data={
+                "type": type(exc).__name__,
+                "message": str(exc),
+            },
+        )
     if inspect.isawaitable(output):
-        output = await output
+        try:
+            output = await output
+        except Exception as exc:
+            if on_error != "record":
+                raise
+            return OutputSnapshot(
+                channel="error",
+                mimetype="application/vnd.marimo.export.error+json",
+                data={
+                    "type": type(exc).__name__,
+                    "message": str(exc),
+                },
+            )
 
     return output
 

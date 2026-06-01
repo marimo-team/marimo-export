@@ -49,16 +49,20 @@ def _assert_notebook_source(
     *,
     name: str = "finance.py",
     content: bytes = b"# notebook",
+    stored: bool = False,
 ) -> None:
     source = manifest["notebook"]["source"]
 
     assert manifest["notebook"]["name"] == name
-    assert source["href"].startswith("blobs/sha256/")
-    assert source["media_type"] == "text/x-python"
-    assert source["size"] == len(content)
-    assert source["sha256"] == hashlib.sha256(content).hexdigest()
-    assert (root / source["href"]).read_bytes() == content
-    assert "source_sha256" not in manifest["notebook"]
+    assert manifest["notebook"]["source_sha256"] == hashlib.sha256(content).hexdigest()
+    if stored:
+        assert source["href"].startswith("blobs/sha256/")
+        assert source["media_type"] == "text/x-python"
+        assert source["size"] == len(content)
+        assert source["sha256"] == hashlib.sha256(content).hexdigest()
+        assert (root / source["href"]).read_bytes() == content
+    else:
+        assert source is None
     assert "source_size" not in manifest["notebook"]
     assert "path" not in manifest["notebook"]
 
@@ -152,11 +156,11 @@ def test_export_writes_manifest_artifacts_and_deduped_blobs(
                 "bundle": str(tmp_path / "bundle"),
                 "scenarios": [
                     {"id": "default"},
-                    {"id": "wide-chart", "state": {"chart_width": 1200}},
+                    {"id": "wide-chart", "inputs": {"chart_width": 1200}},
                 ],
                 "values": {
                     "title": {
-                        "source": "title",
+                        "source": {"def": "title"},
                         "formats": {
                             "text": {
                                 "export": {
@@ -203,7 +207,7 @@ def test_export_writes_manifest_artifacts_and_deduped_blobs(
         "sha256",
         "notebook",
         "scenario_set",
-        "export",
+        "capture",
         "values",
         "scenarios",
         "provenance",
@@ -217,10 +221,12 @@ def test_export_writes_manifest_artifacts_and_deduped_blobs(
     assert not (bundle_path / "notebook.py").exists()
     assert manifest["scenario_set"]["id"].startswith("sha256-")
     assert len(manifest["scenario_set"]["sha256"]) == 64
-    assert manifest["export"]["id"].startswith("sha256-")
-    assert len(manifest["export"]["request_sha256"]) == 64
-    assert manifest["export"]["target"] == "{\n  'title': (title)\n}"
-    assert manifest["values"]["title"] == {"source": "title", "formats": ["text"]}
+    assert manifest["capture"]["id"].startswith("sha256-")
+    assert len(manifest["capture"]["request_sha256"]) == 64
+    assert manifest["values"]["title"] == {
+        "source": {"type": "definition", "name": "title"},
+        "formats": ["text"],
+    }
     assert "trace" not in _scenario(manifest, "default")
     assert manifest["provenance"]["invocations_index_href"] == (
         f"bundles/{manifest['id']}/traces/index.json"
@@ -231,9 +237,12 @@ def test_export_writes_manifest_artifacts_and_deduped_blobs(
     assert source_spec["bundle"] == {"path": str(tmp_path / "bundle")}
     assert source_spec["scenarios"] == [
         {"id": "default"},
-        {"id": "wide-chart", "state": {"chart_width": 1200}},
+        {"id": "wide-chart", "inputs": {"chart_width": 1200}},
     ]
-    assert source_spec["values"]["title"]["source"] == "title"
+    assert source_spec["values"]["title"]["source"] == {
+        "type": "definition",
+        "name": "title",
+    }
     assert "options" not in source_spec["values"]["title"]["formats"]["text"]
     assert result.invocation_index_path == str(
         output_root / manifest["provenance"]["invocations_index_href"]
@@ -245,7 +254,7 @@ def test_export_writes_manifest_artifacts_and_deduped_blobs(
         invocation["bundle"]["manifest_href"]
         == f"bundles/{manifest['id']}/manifest.json"
     )
-    assert invocation["export"]["target"] == "{\n  'title': (title)\n}"
+    assert invocation["capture"] == manifest["capture"]
     assert invocation["source_spec"] == {
         "sha256": manifest["provenance"]["source_spec_sha256"],
         "spec": manifest["provenance"]["source_spec"],
@@ -269,7 +278,7 @@ def test_export_writes_manifest_artifacts_and_deduped_blobs(
     assert first_blob["href"] == second_blob["href"]
     assert first_blob["href"].startswith("blobs/sha256/")
     assert (output_root / first_blob["href"]).read_text() == "same"
-    assert len(_blob_files(output_root)) == 2
+    assert len(_blob_files(output_root)) == 1
     assert not (bundle_path / "artifacts").exists()
 
 
@@ -317,7 +326,7 @@ def test_export_resolves_code_state_before_batch_evaluate(
                 "scenarios": [
                     {
                         "id": "computed",
-                        "state": {
+                        "inputs": {
                             "base_width": 500,
                             "chart_width": {
                                 "type": "code",
@@ -328,7 +337,7 @@ def test_export_resolves_code_state_before_batch_evaluate(
                 ],
                 "values": {
                     "summary": {
-                        "source": "summary",
+                        "source": {"def": "summary"},
                         "formats": {
                             "json": {
                                 "export": {
@@ -369,8 +378,8 @@ def export(value, ctx, **options):
     blob_value = json.loads((output_root / blob["href"]).read_text())
     assert blob_value == "ok"
     scenario = _scenario(manifest, "computed")
-    assert scenario["state"]["chart_width"] == 1000
-    assert scenario["declared_state"]["chart_width"] == {
+    assert scenario["state"]["inputs"]["chart_width"] == 1000
+    assert scenario["declared_state"]["inputs"]["chart_width"] == {
         "type": "code",
         "expression": "base_width * 2",
     }
@@ -410,7 +419,7 @@ def test_export_rejects_embedded_artifacts(
                     "bundle": str(tmp_path / "bundle"),
                     "values": {
                         "summary": {
-                            "source": "summary",
+                            "source": {"def": "summary"},
                             "formats": {
                                 "json": {
                                     "export": {
@@ -471,7 +480,7 @@ def test_export_default_bundle_path_uses_marimo_output_dir(
             {
                 "values": {
                     "title": {
-                        "source": "title",
+                        "source": {"def": "title"},
                         "formats": {
                             "text": {
                                 "export": {
@@ -533,7 +542,7 @@ def test_export_uses_live_notebook_path_over_spec_notebook(
                 "bundle": str(tmp_path / "bundle"),
                 "values": {
                     "title": {
-                        "source": "title",
+                        "source": {"def": "title"},
                         "formats": {
                             "text": {
                                 "export": {
@@ -595,7 +604,7 @@ def test_export_default_bundle_path_groups_same_scenario_set(
     title_spec = {
         "values": {
             "title": {
-                "source": "title",
+                "source": {"def": "title"},
                 "formats": {
                     "text": {
                         "export": {
@@ -611,7 +620,7 @@ def test_export_default_bundle_path_groups_same_scenario_set(
         "values": {
             **title_spec["values"],
             "summary": {
-                "source": "summary",
+                "source": {"def": "summary"},
                 "formats": {
                     "text": {
                         "export": {
@@ -637,10 +646,10 @@ def test_export_default_bundle_path_groups_same_scenario_set(
     assert not (first_path / "notebook.py").exists()
     assert not (second_path / "notebook.py").exists()
     assert (
-        first.manifest["export"]["request_sha256"]
-        != second.manifest["export"]["request_sha256"]
+        first.manifest["capture"]["request_sha256"]
+        != second.manifest["capture"]["request_sha256"]
     )
-    assert len(_blob_files(output_root)) == 2
+    assert len(_blob_files(output_root)) == 1
 
 
 def test_export_default_bundle_path_shares_blobs_across_renamed_values(
@@ -679,7 +688,7 @@ def test_export_default_bundle_path_shares_blobs_across_renamed_values(
         return {
             "values": {
                 value_name: {
-                    "source": "title",
+                    "source": {"def": "title"},
                     "formats": {
                         "text": {
                             "export": {
@@ -702,7 +711,7 @@ def test_export_default_bundle_path_shares_blobs_across_renamed_values(
     assert output_root == second_path.parent.parent
     assert first_path != second_path
     assert first.manifest["id"] != second.manifest["id"]
-    assert len(_blob_files(output_root)) == 2
+    assert len(_blob_files(output_root)) == 1
 
     first_artifact = _artifact(first.manifest, "default", "title", "text")
     second_artifact = _artifact(second.manifest, "default", "renamed_title", "text")
@@ -765,7 +774,7 @@ def test_export_records_trace_without_changing_bundle_identity(
         "bundle": str(tmp_path / "bundle"),
         "values": {
             "title": {
-                "source": "title",
+                "source": {"def": "title"},
                 "formats": {
                     "text": {
                         "export": {
@@ -832,7 +841,7 @@ def test_export_default_bundle_path_separates_different_scenario_sets(
     base_spec = {
         "values": {
             "title": {
-                "source": "title",
+                "source": {"def": "title"},
                 "formats": {
                     "text": {
                         "export": {
@@ -848,7 +857,7 @@ def test_export_default_bundle_path_separates_different_scenario_sets(
         **base_spec,
         "scenarios": [
             {"id": "default"},
-            {"id": "wide", "state": {"chart_width": 1200}},
+            {"id": "wide", "inputs": {"chart_width": 1200}},
         ],
     }
 
@@ -859,7 +868,7 @@ def test_export_default_bundle_path_separates_different_scenario_sets(
     second_path = Path(second.bundle_path)
     assert first_path.parent.parent == second_path.parent.parent
     assert first_path != second_path
-    assert len(_blob_files(first_path.parent.parent)) == 2
+    assert len(_blob_files(first_path.parent.parent)) == 1
     assert first.manifest["scenario_set"] != second.manifest["scenario_set"]
     assert first.manifest["notebook"] == second.manifest["notebook"]
 
@@ -903,7 +912,7 @@ def test_export_scenario_set_grouping_is_order_insensitive(
 
     values = {
         "title": {
-            "source": "title",
+            "source": {"def": "title"},
             "formats": {
                 "text": {
                     "export": {
@@ -918,7 +927,7 @@ def test_export_scenario_set_grouping_is_order_insensitive(
         export_module.export(
             {
                 "scenarios": [
-                    {"id": "wide", "state": {"chart_width": 1200}},
+                    {"id": "wide", "inputs": {"chart_width": 1200}},
                     {"id": "default"},
                 ],
                 "values": values,
@@ -930,7 +939,7 @@ def test_export_scenario_set_grouping_is_order_insensitive(
             {
                 "scenarios": [
                     {"id": "default"},
-                    {"id": "wide", "state": {"chart_width": 1200}},
+                    {"id": "wide", "inputs": {"chart_width": 1200}},
                 ],
                 "values": values,
             }

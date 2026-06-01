@@ -32,7 +32,7 @@ export const buildFinanceSpec = (pairs: readonly FinancePair[] = financePairs) =
   notebook: marimoNotebook(),
   scenarios: pairs.map((pair) => ({
     id: pair.slug,
-    state: {
+    inputs: {
       symbols: pair.symbols,
       interval: "1d",
       start: "2025-04-01",
@@ -70,7 +70,7 @@ export const buildFinanceSpec = (pairs: readonly FinancePair[] = financePairs) =
       ],
     },
     change_desc: {
-      source: { cell: "change_desc", output: "html" },
+      source: { cell: "change_desc", output: "scenario" },
       formats: [
         {
           html: {
@@ -85,11 +85,11 @@ export const buildFinanceSpec = (pairs: readonly FinancePair[] = financePairs) =
       ],
     },
     chart: {
-      source: { expr: "symbols_chart" },
+      source: { def: "symbols_chart" },
       formats: ["vegalite", { png: { scale: 2 } }],
     },
     ohlc_dashboard: {
-      source: { expr: "widget" },
+      source: { def: "widget" },
       formats: {
         bundle: {
           export: {

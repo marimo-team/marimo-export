@@ -88,7 +88,7 @@ const ComparePage = async ({ params }: ComparePageProps) => {
             <p className="eyebrow">marimo.cell_output.html.v1</p>
             <h2>Notebook-authored runtime</h2>
           </div>
-          <span>mox.runtime().cell(&quot;change_desc&quot;).output</span>
+          <span>{'{ cell: "change_desc", output: "scenario" }'}</span>
         </div>
         <div
           className="markdown-output"

@@ -77,7 +77,11 @@ async def write_bundle(
             request.blob_base_path,
             href_prefix=request.blob_href_prefix,
         )
-        notebook = notebook_record(request.notebook_source, blob_store)
+        notebook = notebook_record(
+            request.notebook_source,
+            blob_store,
+            source_policy=request.spec.provenance.source,
+        )
         materialized = await materialize_scenarios(
             request=request,
             blob_store=blob_store,

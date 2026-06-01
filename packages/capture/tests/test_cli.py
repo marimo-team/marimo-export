@@ -102,11 +102,11 @@ def _spec() -> dict[str, Any]:
     return {
         "scenarios": [
             {"id": "base"},
-            {"id": "override", "state": {"symbol": "GOOGL"}},
+            {"id": "override", "inputs": {"symbol": "GOOGL"}},
         ],
         "values": {
             "title": {
-                "source": "title",
+                "source": {"def": "title"},
                 "formats": {
                     "text": {
                         "export": {
@@ -134,6 +134,7 @@ def export(value, ctx, **options):
                 },
             }
         },
+        "provenance": {"source": "source"},
     }
 
 
@@ -146,11 +147,11 @@ def _yaml_spec_text() -> str:
 scenarios:
   - id: base
   - id: override
-    state:
+    inputs:
       symbol: GOOGL
 values:
   title:
-    source: title
+    source: {def: title}
     formats:
       text:
         export:
@@ -243,7 +244,12 @@ def test_cli_exports_notebook_and_reports_query_next_steps(
 
     assert payload["status"] == "ok"
     assert payload["notebook"]["name"] == "finance.py"
-    assert payload["values"] == {"title": {"source": "title", "formats": ["text"]}}
+    assert payload["values"] == {
+        "title": {
+            "source": {"type": "definition", "name": "title"},
+            "formats": ["text"],
+        }
+    }
     assert payload["scenarios"] == [
         {
             "id": "base",
@@ -252,7 +258,7 @@ def test_cli_exports_notebook_and_reports_query_next_steps(
         },
         {
             "id": "override",
-            "state": {"symbol": "GOOGL"},
+            "state": {"inputs": {"symbol": "GOOGL"}},
             "values": {"title": ["text"]},
         },
     ]
@@ -337,7 +343,15 @@ def test_cli_query_progressive_bundle_commands(tmp_path: Path) -> None:
     assert catalog["counts"]["scenarios"] == 2
 
     scenarios = _output_json(
-        _invoke(["query", str(bundle_root), "scenarios", "--state", "symbol=GOOGL"])
+        _invoke(
+            [
+                "query",
+                str(bundle_root),
+                "scenarios",
+                "--state",
+                "inputs.symbol=GOOGL",
+            ]
+        )
     )
     assert [scenario["id"] for scenario in scenarios] == ["override"]
 
@@ -444,7 +458,7 @@ def test_cli_query_progressive_bundle_commands(tmp_path: Path) -> None:
                 "source",
                 "--json",
                 "--state",
-                "symbol=GOOGL",
+                "inputs.symbol=GOOGL",
             ]
         )
     )

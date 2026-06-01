@@ -9,10 +9,15 @@ import type {
   ExportManifest,
   ExportRootIndex,
   FetchLike,
+  LocalReadFile,
+  LocalReadFileResult,
+  LocalUrlResolver,
   ReadExportArchiveOptions,
   ReadExportOptions,
   ReadExportIndexOptions,
+  ReadLatestLocalExportOptions,
   ReadLatestExportOptions,
+  ReadLocalExportOptions,
   StaticExport,
   StaticExportArchive,
 } from "#reader/types";
@@ -57,6 +62,44 @@ export async function readExport(options: ReadExportOptions): Promise<StaticExpo
   const root = rootUrl(options.root);
   const fetchImpl = options.fetch ?? globalFetch();
   const source = new UrlExportSource(root, fetchImpl);
+  const manifest = validateExportManifest(await source.json(options.manifest, "export manifest"));
+  return new StaticExportReader({
+    manifest,
+    source,
+    loaders: options.loaders ?? [],
+  });
+}
+
+export async function readLatestLocalExport(
+  options: ReadLatestLocalExportOptions,
+): Promise<StaticExport> {
+  const source = new LocalExportSource(options.root, options.readFile, options.url);
+  const index = validateExportRootIndex(
+    await source.json(
+      safeBundlePath(options.index ?? DEFAULT_ROOT_INDEX, "index href"),
+      "export root index",
+    ),
+  );
+  if (!index.latest) {
+    throw new Error("Export root index does not contain a latest bundle.");
+  }
+
+  const readOptions: ReadLocalExportOptions = {
+    root: options.root,
+    manifest: index.latest.manifest_href,
+    readFile: options.readFile,
+  };
+  if (options.loaders !== undefined) {
+    readOptions.loaders = options.loaders;
+  }
+  if (options.url !== undefined) {
+    readOptions.url = options.url;
+  }
+  return readLocalExport(readOptions);
+}
+
+export async function readLocalExport(options: ReadLocalExportOptions): Promise<StaticExport> {
+  const source = new LocalExportSource(options.root, options.readFile, options.url);
   const manifest = validateExportManifest(await source.json(options.manifest, "export manifest"));
   return new StaticExportReader({
     manifest,
@@ -321,6 +364,55 @@ class UrlExportSource implements ExportSource {
   }
 }
 
+class LocalExportSource implements ExportSource {
+  readonly #root: string;
+  readonly #readFile: LocalReadFile;
+  readonly #url: LocalUrlResolver | undefined;
+
+  constructor(root: string, readFile: LocalReadFile, url?: LocalUrlResolver) {
+    this.#root = root.replace(/[/\\]+$/, "");
+    this.#readFile = readFile;
+    this.#url = url;
+  }
+
+  url(href: string, mediaType?: string | null): string {
+    const safeHref = safeBundlePath(href, "bundle href");
+    const path = this.path(safeHref);
+    if (this.#url) {
+      return this.#url(safeHref, path, mediaType ?? null);
+    }
+    return `file://${path}`;
+  }
+
+  async fetch(href: string, mediaType?: string | null): Promise<Response> {
+    const bytes = await this.bytes(href);
+    const init: ResponseInit = mediaType ? { headers: { "Content-Type": mediaType } } : {};
+    return new Response(arrayBuffer(bytes), init);
+  }
+
+  async bytes(href: string): Promise<Uint8Array> {
+    return localBytes(await this.#readFile(this.path(safeBundlePath(href, "bundle href"))));
+  }
+
+  async text(href: string): Promise<string> {
+    return new TextDecoder().decode(await this.bytes(href));
+  }
+
+  async json<T>(href: string, label = "bundle JSON"): Promise<T> {
+    try {
+      return JSON.parse(await this.text(href)) as T;
+    } catch (error) {
+      throw new Error(`Failed to parse ${label} from local path ${JSON.stringify(href)}.`, {
+        cause: error,
+      });
+    }
+  }
+
+  private path(href: string): string {
+    return `${this.#root}/${href}`;
+  }
+}
+
 class ArchiveExportSource implements ExportSource {
   readonly #files: ReadonlyMap<string, Uint8Array>;
   readonly #objectUrls = new Map<string, string>();
@@ -454,6 +546,13 @@ async function archiveBytes(input: ExportArchiveInput): Promise<Uint8Array> {
   }
 
   throw new TypeError("readExportArchive requires ArrayBuffer, ArrayBufferView, or Blob bytes.");
+}
+
+async function localBytes(input: LocalReadFileResult): Promise<Uint8Array> {
+  if (typeof input === "string") {
+    return new TextEncoder().encode(input);
+  }
+  return archiveBytes(input);
 }
 
 function archivePath(name: string): string | null {

@@ -13,10 +13,10 @@ that web packages can read without Python.
 import moexport as mox
 
 spec = {
-    "scenarios": [{"id": "default", "state": {}}],
+    "scenarios": [{"id": "default"}],
     "values": {
         "prices": {
-            "source": {"expr": "df"},
+            "source": {"def": "df"},
             "formats": ["arrow"],
         }
     },
@@ -25,10 +25,9 @@ spec = {
 result = await mox.export(spec, bundle="notebooks/__marimo__/static-export")
 ```
 
-`source.expr` is a Python expression evaluated in the notebook runtime. It can
-name a def such as `df` or a derived expression such as `df.head()`.
-`source.cell` selects a named marimo cell output without exposing the runtime
-selector in the authored spec.
+`source.def` names a notebook definition. `source.expr` evaluates a Python
+expression in the active scenario. `source.cell` selects a marimo cell output
+by cell name, id, or index.
 
 ## Export A Notebook File
 
@@ -62,6 +61,37 @@ __moexport_result_abcd = await __moexport.export(
 Only that synthetic cell is scheduled by the outer script runner. Scenario
 execution is delegated to `mox.evaluate`, which applies overrides before dirty
 downstream notebook cells run.
+
+## Capture From A Live Server
+
+`moexport.live_capture` provides the Python HTTP helpers used by local capture
+scripts. It resolves a running marimo session, installs `moexport` into that
+kernel when needed, and executes scratchpad code that calls `mox.export(...)`.
+
+```python
+from moexport.live_capture import ensure_runtime, execute_scratchpad, resolve_session
+
+session = resolve_session(
+    server="http://localhost:8787",
+    notebook="finance.py",
+    session_id=None,
+    token=None,
+)
+ensure_runtime(
+    server="http://localhost:8787",
+    session_id=session["sessionId"],
+    package="moexport[all]",
+    force=False,
+    token=None,
+)
+result = execute_scratchpad(
+    "http://localhost:8787",
+    session["sessionId"],
+    "import moexport as mox\nprint(mox.runtime().notebook.name)",
+    token=None,
+    timeout=30,
+)
+```
 
 ## CLI
 
@@ -97,47 +127,73 @@ marimo-export query notebooks/__marimo__/static-export entries \
 scenarios:
   - id: default
   - id: wide_chart
-    state:
+    inputs:
       chart_width: 1200
   - id: selected_names
-    state:
-      symbols_selector.value: ["AAPL", "MSFT"]
+    inputs:
+      symbols: ["AAPL", "AMZN", "MSFT"]
+    ui:
+      symbols_selector:
+        value: ["AAPL", "MSFT"]
 
 values:
   prices:
-    source: { expr: df }
+    source: { def: df }
     formats: [arrow, parquet]
 
   change_desc:
-    source: { cell: change_desc, output: html }
+    source: { cell: change_desc, output: scenario }
     formats:
-      - html:
+      html:
+        export:
+          type: ref
+          ref: moexport.exporters.core:html
+        options:
           filename: change-desc.html
           format: marimo.cell_output.html.v1
+
+  metrics_report:
+    source:
+      report:
+        cells:
+          - name: summary
+            label: Summary
+            order: 0
+          - name: chart
+            label: Chart
+            order: 1
+        include_source: false
+        on_error: record
+    formats: [display, markdown]
 ```
 
-Scenarios are finite runtime states. A state key can override a notebook def
-such as `chart_width`, or patch an object path such as
-`symbols_selector.value`.
+Scenarios are finite runtime states. `inputs` override notebook definitions.
+`ui` and `widgets` patch materialized objects after their producer cells run.
+`source.report` captures selected display cells as an ordered report snapshot.
+`on_error: record` stores display failures as artifact diagnostics, so the
+remaining cells can still be exported.
 
-`state` in the manifest is the resolved JSON state used for lookup. If a spec
-uses code-authored state, `declared_state` stores the authored expression for
+Manifest `state` stores those sections as JSON for lookup. If a scenario uses a
+code-authored input value, `declared_state` stores the authored expression for
 provenance.
 
 ## Exporters
 
 Built-in formats compile to exporter callables:
 
-| Format      | Exporter                               |
-| ----------- | -------------------------------------- |
-| `json`      | `moexport.exporters.core:json`         |
-| `text`      | `moexport.exporters.core:text`         |
-| `html`      | `moexport.exporters.core:html`         |
-| `arrow`     | `moexport.exporters.dataframe:arrow`   |
-| `parquet`   | `moexport.exporters.dataframe:parquet` |
-| `vegalite`  | `moexport.exporters.altair:vegalite`   |
-| `png`       | `moexport.exporters.altair:png`        |
-| `anywidget` | `moexport.exporters.anywidget:bundle`  |
+| Format         | Exporter                                  |
+| -------------- | ----------------------------------------- |
+| `json`         | `moexport.exporters.core:json`            |
+| `text`         | `moexport.exporters.core:text`            |
+| `html`         | `moexport.exporters.core:html`            |
+| `arrow`        | `moexport.exporters.dataframe:arrow`      |
+| `parquet`      | `moexport.exporters.dataframe:parquet`    |
+| `vegalite`     | `moexport.exporters.altair:vegalite`      |
+| `png`          | `moexport.exporters.altair:png`           |
+| `anywidget`    | `moexport.exporters.anywidget:bundle`     |
+| `display`      | `moexport.exporters.display:display_json` |
+| `display_json` | `moexport.exporters.display:display_json` |
+| `markdown`     | `moexport.exporters.display:markdown`     |
 
 Use an explicit exporter config when a value needs custom projection code. A
 referenced exporter uses `module:function` import syntax:
@@ -184,6 +240,8 @@ the manifest. Built-in exporters live under `moexport.exporters`:
 - `altair:vegalite`
 - `altair:png`
 - `anywidget:bundle`
+- `display:display_json`
+- `display:markdown`
 
 ## Archive Transport
 
@@ -206,18 +264,21 @@ export = mox.open_export("notebooks/__marimo__/static-export")
 
 export.catalog()
 export.notebooks()
-export.scenarios(state={"chart_width": 1200})
+export.scenarios(state={"inputs.chart_width": 1200})
 export.values(value="prices")
 export.formats(value="prices")
 export.artifacts(
-    state={"chart_width": 1200},
+    state={"inputs.chart_width": 1200},
     value="comparison_chart",
     format="vegalite",
 )
 export.entries(value="summary", format="json", include_content=True)
 export.files(value="prices", format="arrow")
-export.notebook_source(state={"chart_width": 1200})["text"]
+export.notebooks()[0]["source_sha256"]
 ```
+
+`export.notebook_source(...)["text"]` returns notebook text only when the spec
+sets `provenance: {source: source}`.
 
 For one bundle:
 
@@ -242,8 +303,8 @@ invocation graph traces so callers can decide how to inspect the files.
 - `evaluate.py` reuses live globals and reruns only notebook cells made dirty by
   scenario state.
 - `exporters/` turns Python values into portable artifact records.
-- `bundle.py` writes `manifest.json`, shared `blobs/sha256/...` files, notebook
-  source blobs, invocation traces, and root `index.json`.
+- `bundle.py` writes `manifest.json`, shared `blobs/sha256/...` files,
+  notebook source provenance, invocation traces, and root `index.json`.
 - `archive.py` zips a canonical export root for in-memory or network transport.
 - `notebook.py` resolves notebook references through marimo, injects one hidden
   export cell, and runs it through marimo's script context.

@@ -19,11 +19,10 @@ from pydantic import (
 )
 import yaml
 
+from moexport.sources import SourceSpec, normalize_source
+
 SpecKey: TypeAlias = Annotated[str, Field(pattern=r"^[A-Za-z_][A-Za-z0-9_-]*$")]
-StateTarget: TypeAlias = Annotated[
-    str,
-    Field(pattern=r"^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*$"),
-]
+StateName: TypeAlias = Annotated[str, Field(pattern=r"^[A-Za-z_][A-Za-z0-9_]*$")]
 JsonConfigValue: TypeAlias = (
     str | int | float | bool | None | list[Any] | dict[str, Any]
 )
@@ -117,6 +116,9 @@ BUILTIN_FORMAT_EXPORTERS = {
     "vegalite": "moexport.exporters.altair:vegalite",
     "png": "moexport.exporters.altair:png",
     "anywidget": "moexport.exporters.anywidget:bundle",
+    "display": "moexport.exporters.display:display_json",
+    "display_json": "moexport.exporters.display:display_json",
+    "markdown": "moexport.exporters.display:markdown",
 }
 
 
@@ -178,12 +180,12 @@ class FormatSpec(SpecModel):
 
 
 class ValueSpec(SpecModel):
-    """Named Python expression whose result should be exported."""
+    """Named source whose result should be exported."""
 
-    source: str = Field(
+    source: SourceSpec = Field(
         description=(
-            "Python expression evaluated by `mox.evaluate`, "
-            "for example `df` or `df.head(10)`."
+            "Typed source record evaluated by `mox.export`, for example "
+            "`{def: df}`, `{expr: df.head(10)}`, or `{cell: intro}`."
         ),
     )
     formats: Annotated[
@@ -202,46 +204,71 @@ class ValueSpec(SpecModel):
 
         normalized = dict(value)
         if "source" in normalized:
-            normalized["source"] = _normalize_source(normalized["source"])
+            normalized["source"] = normalize_source(normalized["source"])
         if "formats" in normalized:
             normalized["formats"] = _normalize_formats(normalized["formats"])
         return normalized
 
-    @field_validator("source")
+    @field_validator("source", mode="before")
     @classmethod
-    def _source_must_not_be_empty(cls, value: str) -> str:
-        if not value.strip():
-            raise ValueError("value source must not be empty")
-        return value
+    def _source_must_be_typed(cls, value: object) -> object:
+        return normalize_source(value)
 
 
 class ScenarioSpec(SpecModel):
     """One named finite notebook state to materialize.
 
-    State keys use native Python assignment shapes. A bare name such as
-    ``symbols`` overrides a notebook definition. A dotted path such as
-    ``symbols_selector.value`` patches an attribute after the object has been
-    materialized. The authored spec has one concept, scenario state. The
-    evaluator splits it into execution phases later.
+    Inputs override notebook definitions. UI and widget sections patch
+    materialized objects after their producer cells run.
     """
 
     id: SpecKey = Field(
         default="default",
         description="Stable id used in artifact paths and manifest lookup.",
     )
-    state: dict[StateTarget, StateValue] = Field(
+    inputs: dict[StateName, StateValue] = Field(
         default_factory=dict,
-        description=(
-            "Finite notebook state for this scenario. Bare names override "
-            "notebook definitions. Dotted paths patch materialized object "
-            "attributes, for example `slider.value`."
-        ),
+        description="Definition overrides applied before scenario evaluation.",
+    )
+    ui: dict[StateName, Any] = Field(
+        default_factory=dict,
+        description="UI element state keyed by UI definition name.",
+    )
+    widgets: dict[StateName, Any] = Field(
+        default_factory=dict,
+        description="Widget or object state keyed by notebook definition name.",
     )
 
-    @field_validator("state", mode="before")
+    @field_validator("inputs", mode="before")
     @classmethod
-    def _state_must_be_json_or_code(cls, value: object) -> object:
-        return _validate_value_mapping(value, "scenario state")
+    def _inputs_must_be_json_or_code(cls, value: object) -> object:
+        return _validate_value_mapping(value, "scenario inputs")
+
+    @field_validator("ui", "widgets", mode="before")
+    @classmethod
+    def _patches_must_be_json_objects(cls, value: object) -> object:
+        if value is None:
+            return {}
+        validated = _validate_state_tree(value, "scenario patches")
+        if not isinstance(validated, dict):
+            raise ValueError("scenario patches must be an object")
+        return validated
+
+
+class ProvenanceSpec(SpecModel):
+    """Producer-controlled provenance policy for bundle records."""
+
+    source: Literal["none", "hash", "source"] = Field(
+        default="hash",
+        description=(
+            "Notebook source policy. `hash` records only the source hash, "
+            "`source` stores source as a bundle blob, and `none` omits both."
+        ),
+    )
+    spec: Literal["none", "hash", "embed"] = Field(
+        default="embed",
+        description="Source spec policy for manifest provenance.",
+    )
 
 
 def _validate_value_mapping(value: object, label: str) -> dict[str, object]:
@@ -258,22 +285,22 @@ def _validate_value_mapping(value: object, label: str) -> dict[str, object]:
     return validated
 
 
-def _normalize_source(value: object) -> object:
-    if isinstance(value, str):
-        return value
-    if not isinstance(value, Mapping):
-        return value
+def _validate_state_tree(value: object, label: str) -> object:
+    if isinstance(value, Mapping):
+        mapping = cast(Mapping[object, object], value)
+        if mapping.get("type") == "code":
+            return CodeStateValue.model_validate(dict(mapping))
+        result: dict[str, object] = {}
+        for key, item in mapping.items():
+            if not isinstance(key, str):
+                raise ValueError(f"{label} keys must be strings")
+            result[key] = _validate_state_tree(item, label)
+        return result
 
-    mapping = cast(Mapping[object, object], value)
-    if "expr" in mapping:
-        return _required_string(mapping["expr"], "source.expr")
-    if "cell" in mapping:
-        cell = _required_string(mapping["cell"], "source.cell")
-        output = mapping.get("output", "output")
-        if output not in {"output", "html"}:
-            raise ValueError("source.output must be 'output' or 'html'")
-        return f"mox.runtime().cell({json.dumps(cell)}).output"
-    return value
+    if isinstance(value, list):
+        return [_validate_state_tree(item, label) for item in value]
+
+    return _validate_json_value(value)
 
 
 def _normalize_formats(value: object) -> object:
@@ -368,6 +395,10 @@ class ExportSpec(SpecModel):
     scenarios: list[ScenarioSpec] = Field(
         default_factory=lambda: [ScenarioSpec()],
         description="Explicit scenario matrix. Omitted means one default scenario.",
+    )
+    provenance: ProvenanceSpec = Field(
+        default_factory=ProvenanceSpec,
+        description="Notebook source and source-spec provenance policy.",
     )
     values: Annotated[
         dict[SpecKey, ValueSpec],

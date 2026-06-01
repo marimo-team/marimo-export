@@ -1,0 +1,1840 @@
+{
+  "schema": "moexport.invocation.v1",
+  "version": 1,
+  "id": "sha256-2352a51be7a1eded",
+  "sha256": "2352a51be7a1ededa090a4bcba21d2c3de9413c39709b5025fb1a0e887be4c0c",
+  "created_at": "2026-06-01T11:50:22.598902Z",
+  "bundle": {
+    "id": "sha256-80a1b2497daf65f0",
+    "sha256": "80a1b2497daf65f0cb05391c8b12dc02fc288f44e5b6f059316fcdabb34ba9a5",
+    "manifest_href": "bundles/sha256-80a1b2497daf65f0/manifest.json"
+  },
+  "notebook": {
+    "name": "finance.py",
+    "source": null,
+    "source_sha256": "e9bb8b3bf655217cdaca0d0575606d38676c09bf20dc950c3d2319c76a5160bd"
+  },
+  "scenario_set": {
+    "id": "sha256-ff2a09c42e2e898b",
+    "sha256": "ff2a09c42e2e898bcaedd0ab7a98abd25b7036c41b3352b4f6afb9178353bf4a"
+  },
+  "capture": {
+    "id": "sha256-722344b1bf67cbd1",
+    "request_sha256": "722344b1bf67cbd1fbe40e4008171c696b86f5633633534196244869f0506e78"
+  },
+  "source_spec": {
+    "sha256": "357d480e9c394bc3d87cfdf6bfaa9431cfc42133f72f0299fd1b655d2482da6d",
+    "spec": {
+      "scenarios": [
+        {
+          "id": "selector_crwv_msft",
+          "inputs": {
+            "symbols": ["AAPL", "AMZN", "CRWV", "GOOGL", "MSFT"],
+            "interval": "1d",
+            "start": "2025-04-01",
+            "end": "2026-05-01",
+            "chart_width": 980
+          },
+          "ui": {
+            "symbols_selector": {
+              "value": ["CRWV", "MSFT"]
+            }
+          },
+          "widgets": {
+            "widget": {
+              "widget": {
+                "metric": "Close",
+                "mode": "absolute",
+                "selected_symbols": ["CRWV", "MSFT"]
+              }
+            }
+          }
+        },
+        {
+          "id": "selector_aapl_googl_amzn",
+          "inputs": {
+            "symbols": ["AAPL", "AMZN", "CRWV", "GOOGL", "MSFT"],
+            "interval": "1d",
+            "start": "2025-04-01",
+            "end": "2026-05-01",
+            "chart_width": 980
+          },
+          "ui": {
+            "symbols_selector": {
+              "value": ["AAPL", "GOOGL", "AMZN"]
+            }
+          },
+          "widgets": {
+            "widget": {
+              "widget": {
+                "metric": "Close",
+                "mode": "change",
+                "selected_symbols": ["AAPL", "GOOGL", "AMZN"]
+              }
+            }
+          }
+        },
+        {
+          "id": "selector_ai_semis",
+          "inputs": {
+            "symbols": ["NVDA", "AMD", "AVGO", "TSM", "ASML"],
+            "interval": "1d",
+            "start": "2025-11-01",
+            "end": "2026-05-01",
+            "chart_width": 980
+          },
+          "ui": {
+            "symbols_selector": {
+              "value": ["NVDA", "AMD", "AVGO"]
+            }
+          },
+          "widgets": {
+            "widget": {
+              "widget": {
+                "metric": "High",
+                "mode": "change",
+                "selected_symbols": ["NVDA", "AMD", "AVGO"]
+              }
+            }
+          }
+        },
+        {
+          "id": "selector_tsla_focus",
+          "inputs": {
+            "symbols": ["TSLA"],
+            "interval": "1d",
+            "start": "2025-01-01",
+            "end": "2026-05-01",
+            "chart_width": 760
+          },
+          "ui": {
+            "symbols_selector": {
+              "value": ["TSLA"]
+            }
+          },
+          "widgets": {
+            "widget": {
+              "widget": {
+                "metric": "Close",
+                "mode": "absolute",
+                "selected_symbols": ["TSLA"]
+              }
+            }
+          }
+        }
+      ],
+      "provenance": {
+        "source": "hash",
+        "spec": "embed"
+      },
+      "values": {
+        "summary": {
+          "source": {
+            "type": "expression",
+            "expression": "{\n    \"rows\": df.height,\n    \"columns\": df.columns,\n    \"symbols\": sorted(df[\"Symbol\"].unique().to_list()),\n    \"date_start\": df[\"Date\"].min().strftime(\"%Y-%m-%d\"),\n    \"date_end\": df[\"Date\"].max().strftime(\"%Y-%m-%d\"),\n}"
+          },
+          "formats": {
+            "json": {
+              "export": {
+                "type": "code",
+                "code": "import json\n\n\ndef export(value, ctx, **options):\n    blob = ctx.write_blob(\n        \"summary.json\",\n        json.dumps(value, allow_nan=False, indent=2).encode(),\n        media_type=\"application/json\",\n    )\n    return {\n        \"format\": \"summary.json.v1\",\n        \"media_type\": \"application/json\",\n        \"data\": {\n            \"type\": \"bundle\",\n            \"files\": {\"data\": blob},\n            \"entry\": \"data\",\n        },\n        \"metadata\": {\"kind\": \"finance-summary\"},\n    }\n"
+              }
+            }
+          }
+        },
+        "symbols_selector": {
+          "source": {
+            "type": "expression",
+            "expression": "{\n    \"label\": \"Select symbols to compare\",\n    \"options\": symbols,\n    \"value\": symbols_selector.value,\n}"
+          },
+          "formats": {
+            "json": {
+              "export": {
+                "type": "code",
+                "code": "import json\n\n\ndef export(value, ctx, **options):\n    blob = ctx.write_blob(\n        \"symbols-selector.json\",\n        json.dumps(value, allow_nan=False, indent=2).encode(),\n        media_type=\"application/json\",\n    )\n    return {\n        \"format\": \"marimo.selector-state.json.v1\",\n        \"media_type\": \"application/json\",\n        \"data\": {\n            \"type\": \"bundle\",\n            \"files\": {\"data\": blob},\n            \"entry\": \"data\",\n        },\n        \"metadata\": {\"kind\": \"marimo-selector-state\"},\n    }\n"
+              }
+            }
+          }
+        },
+        "prices": {
+          "source": {
+            "type": "definition",
+            "name": "df"
+          },
+          "formats": {
+            "arrow": {
+              "export": {
+                "type": "ref",
+                "ref": "moexport.exporters.dataframe:arrow"
+              }
+            },
+            "parquet": {
+              "export": {
+                "type": "ref",
+                "ref": "moexport.exporters.dataframe:parquet"
+              }
+            }
+          }
+        },
+        "change_desc": {
+          "source": {
+            "type": "cell_output",
+            "cell": {
+              "name": "change_desc"
+            },
+            "output": "scenario",
+            "on_error": "raise"
+          },
+          "formats": {
+            "html": {
+              "export": {
+                "type": "code",
+                "code": "def export(value, ctx, **options):\n    html = value.text if hasattr(value, \"text\") else str(value)\n    blob = ctx.write_blob(\n        options.get(\"filename\", \"change-desc.html\"),\n        html.encode(\"utf-8\"),\n        media_type=\"text/html\",\n    )\n    return {\n        \"format\": \"marimo.cell_output.html.v1\",\n        \"media_type\": \"text/html\",\n        \"data\": {\n            \"type\": \"bundle\",\n            \"files\": {\"html\": blob},\n            \"entry\": \"html\",\n        },\n        \"metadata\": {\n            \"kind\": \"marimo-cell-output\",\n            \"cell\": \"change_desc\",\n        },\n    }\n"
+              }
+            }
+          }
+        },
+        "comparison_chart": {
+          "source": {
+            "type": "definition",
+            "name": "symbols_chart"
+          },
+          "formats": {
+            "vegalite": {
+              "export": {
+                "type": "ref",
+                "ref": "moexport.exporters.altair:vegalite"
+              }
+            },
+            "png_nogrid": {
+              "export": {
+                "type": "code",
+                "code": "import json\n\n\ndef export(value, ctx, **options):\n    import vl_convert\n\n    spec = value.to_dict()\n    config = dict(spec.get(\"config\") or {})\n    axis = dict(config.get(\"axis\") or {})\n    axis[\"grid\"] = False\n    config[\"axis\"] = axis\n    spec[\"config\"] = config\n\n    scale = options.get(\"scale\", 2)\n    blob = ctx.write_blob(\n        \"chart-nogrid.png\",\n        vl_convert.vegalite_to_png(\n            vl_spec=json.dumps(spec, allow_nan=False),\n            scale=scale,\n        ),\n        media_type=\"image/png\",\n    )\n    return {\n        \"format\": \"image.png.nogrid.v1\",\n        \"media_type\": \"image/png\",\n        \"data\": {\n            \"type\": \"bundle\",\n            \"files\": {\"image\": blob},\n            \"entry\": \"image\",\n        },\n        \"metadata\": {\n            \"source_format\": \"vegalite.v1\",\n            \"grid\": False,\n            \"scale\": scale,\n        },\n    }\n"
+              },
+              "options": {
+                "scale": 2
+              }
+            }
+          }
+        },
+        "ohlc_dashboard": {
+          "source": {
+            "type": "definition",
+            "name": "widget"
+          },
+          "formats": {
+            "bundle": {
+              "export": {
+                "type": "ref",
+                "ref": "moexport.exporters.anywidget:bundle"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "scenarios": [
+    {
+      "id": "selector_aapl_googl_amzn",
+      "state": {
+        "inputs": {
+          "symbols": ["AAPL", "AMZN", "CRWV", "GOOGL", "MSFT"],
+          "interval": "1d",
+          "start": "2025-04-01",
+          "end": "2026-05-01",
+          "chart_width": 980
+        },
+        "ui": {
+          "symbols_selector": {
+            "value": ["AAPL", "GOOGL", "AMZN"]
+          }
+        },
+        "widgets": {
+          "widget": {
+            "widget": {
+              "metric": "Close",
+              "mode": "change",
+              "selected_symbols": ["AAPL", "GOOGL", "AMZN"]
+            }
+          }
+        }
+      },
+      "trace": {
+        "value_preview": "{'summary': {'rows': 1360, 'columns': ['Date', 'Symbol', 'Open', 'Open Change', 'High', 'High Change', 'Low', 'Low Ch...",
+        "target": {
+          "root_names": ["df", "mox", "symbols", "symbols_chart", "symbols_selector", "widget"],
+          "expression_refs": [
+            "df",
+            "mox",
+            "symbols",
+            "symbols_chart",
+            "symbols_selector",
+            "widget"
+          ],
+          "override_refs": ["chart_width", "end", "interval", "start", "symbols"],
+          "object_patch_refs": [
+            "symbols_selector.value",
+            "widget.widget.metric",
+            "widget.widget.mode",
+            "widget.widget.selected_symbols"
+          ]
+        },
+        "state": {
+          "applied_object_patches": [
+            {
+              "target": "symbols_selector.value",
+              "root": "symbols_selector",
+              "value_preview": "['AAPL', 'GOOGL', 'AMZN']"
+            },
+            {
+              "target": "widget.widget.metric",
+              "root": "widget",
+              "value_preview": "'Close'"
+            },
+            {
+              "target": "widget.widget.mode",
+              "root": "widget",
+              "value_preview": "'change'"
+            },
+            {
+              "target": "widget.widget.selected_symbols",
+              "root": "widget",
+              "value_preview": "['AAPL', 'GOOGL', 'AMZN']"
+            }
+          ]
+        },
+        "graph": {
+          "nodes": [
+            {
+              "cell_id": "Hbol",
+              "short_id": "Hbol",
+              "status": "pruned",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": ["chart_width", "end", "interval", "start", "symbols"],
+              "refs": [],
+              "body_refs": [],
+              "overridden_defs": ["chart_width", "end", "interval", "start", "symbols"],
+              "preview": [
+                "symbols = [\"AAPL\", \"CRWV\", \"MSFT\", \"GOOGL\", \"AMZN\"]",
+                "interval = \"1d\"",
+                "start = \"2025-04-01\""
+              ]
+            },
+            {
+              "cell_id": "MJUe",
+              "short_id": "MJUe",
+              "status": "executed",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": ["df"],
+              "refs": ["end", "interval", "pl", "start", "symbols", "yf"],
+              "body_refs": ["end", "interval", "pl", "start", "symbols", "yf"],
+              "overridden_defs": [],
+              "preview": ["_df = pl.from_pandas(", "    yf.Tickers(symbols)", "    .history("]
+            },
+            {
+              "cell_id": "vblA",
+              "short_id": "vblA",
+              "status": "executed",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": ["symbols_selector"],
+              "refs": ["mo", "symbols"],
+              "body_refs": ["mo", "symbols"],
+              "overridden_defs": [],
+              "preview": [
+                "symbols_selector = mo.ui.multiselect(",
+                "    options=symbols,",
+                "    label=\"Select symbols to compare\","
+              ]
+            },
+            {
+              "cell_id": "bkHC",
+              "short_id": "bkHC",
+              "status": "executed",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": ["symbols_chart"],
+              "refs": ["alt", "chart_width", "df", "pl", "symbols_selector"],
+              "body_refs": ["alt", "chart_width", "df", "pl", "symbols_selector"],
+              "overridden_defs": [],
+              "preview": [
+                "symbols_chart = (",
+                "    alt.Chart(df.filter(pl.col(\"Symbol\").is_in(symbols_selector.value)))",
+                "    .mark_line()"
+              ]
+            },
+            {
+              "cell_id": "lEQa",
+              "short_id": "lEQa",
+              "status": "executed",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": [],
+              "refs": ["df", "mo", "symbols"],
+              "body_refs": [],
+              "overridden_defs": [],
+              "preview": [
+                "mo.md(rf\"\"\"",
+                "## Change in Close Prices Over Time",
+                "Select from `{\", \".join(symbols)}` to compate how the close prices changed between *{df[\"Date\"].min("
+              ]
+            },
+            {
+              "cell_id": "PKri",
+              "short_id": "PKri",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": [],
+              "refs": ["mo", "symbols_chart", "symbols_selector"],
+              "body_refs": [],
+              "overridden_defs": [],
+              "preview": ["mo.vstack(", "    [", "        symbols_selector,"]
+            },
+            {
+              "cell_id": "Xref",
+              "short_id": "Xref",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": [],
+              "refs": ["mo"],
+              "body_refs": [],
+              "overridden_defs": [],
+              "preview": [
+                "mo.md(\"\"\"",
+                "## Comparative dashboard",
+                "The dashboard below is for a closer read. Switch between **Open**, **High**, **Low**, and **Close**,"
+              ]
+            },
+            {
+              "cell_id": "SFPL",
+              "short_id": "SFPL",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": [],
+              "refs": ["widget"],
+              "body_refs": [],
+              "overridden_defs": [],
+              "preview": ["widget"]
+            },
+            {
+              "cell_id": "BYtC",
+              "short_id": "BYtC",
+              "status": "executed",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": ["rows", "widget"],
+              "refs": ["OhlcSwitcher", "df", "mo", "pl", "symbols"],
+              "body_refs": ["OhlcSwitcher", "df", "mo", "pl", "symbols"],
+              "overridden_defs": [],
+              "preview": ["rows = (", "    df.select(", "        ["]
+            },
+            {
+              "cell_id": "RGSE",
+              "short_id": "RGSE",
+              "status": "executed",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": ["OhlcSwitcher", "anywidget", "traitlets"],
+              "refs": [],
+              "body_refs": [],
+              "overridden_defs": [],
+              "preview": [
+                "import anywidget",
+                "import traitlets",
+                "class OhlcSwitcher(anywidget.AnyWidget):"
+              ]
+            },
+            {
+              "cell_id": "Kclp",
+              "short_id": "Kclp",
+              "status": "executed",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": ["alt", "mo", "pl", "yf"],
+              "refs": [],
+              "body_refs": [],
+              "overridden_defs": [],
+              "preview": ["import marimo as mo", "import yfinance as yf", "import polars as pl"]
+            }
+          ],
+          "edges": [
+            {
+              "from": "BYtC",
+              "to": "SFPL"
+            },
+            {
+              "from": "Hbol",
+              "to": "BYtC"
+            },
+            {
+              "from": "Hbol",
+              "to": "MJUe"
+            },
+            {
+              "from": "Hbol",
+              "to": "bkHC"
+            },
+            {
+              "from": "Hbol",
+              "to": "lEQa"
+            },
+            {
+              "from": "Hbol",
+              "to": "vblA"
+            },
+            {
+              "from": "Kclp",
+              "to": "BYtC"
+            },
+            {
+              "from": "Kclp",
+              "to": "MJUe"
+            },
+            {
+              "from": "Kclp",
+              "to": "PKri"
+            },
+            {
+              "from": "Kclp",
+              "to": "Xref"
+            },
+            {
+              "from": "Kclp",
+              "to": "bkHC"
+            },
+            {
+              "from": "Kclp",
+              "to": "lEQa"
+            },
+            {
+              "from": "Kclp",
+              "to": "vblA"
+            },
+            {
+              "from": "MJUe",
+              "to": "BYtC"
+            },
+            {
+              "from": "MJUe",
+              "to": "bkHC"
+            },
+            {
+              "from": "MJUe",
+              "to": "lEQa"
+            },
+            {
+              "from": "RGSE",
+              "to": "BYtC"
+            },
+            {
+              "from": "bkHC",
+              "to": "PKri"
+            },
+            {
+              "from": "vblA",
+              "to": "PKri"
+            },
+            {
+              "from": "vblA",
+              "to": "bkHC"
+            }
+          ],
+          "stats": {
+            "nodes": 11,
+            "edges": 20,
+            "required": 8,
+            "status_counts": {
+              "executed": 7,
+              "cached": 0,
+              "pruned": 1,
+              "skipped": 0,
+              "needed": 0,
+              "inactive": 3
+            }
+          }
+        },
+        "execution": {
+          "elapsed_ms": 3286.24,
+          "required_order": ["Hbol", "RGSE", "Kclp", "MJUe", "vblA", "bkHC", "lEQa", "BYtC"],
+          "scheduled_order": ["RGSE", "Kclp", "MJUe", "vblA", "bkHC", "lEQa", "BYtC"],
+          "executed_cell_ids": ["RGSE", "Kclp", "MJUe", "vblA", "bkHC", "lEQa", "BYtC"],
+          "cached_cell_ids": [],
+          "pruned_cell_ids": ["Hbol"],
+          "skipped_cell_ids": [],
+          "skip_reasons": {},
+          "steps": [
+            {
+              "cell_id": "RGSE",
+              "status": "executed",
+              "defs": ["OhlcSwitcher", "anywidget", "traitlets"],
+              "output_preview": "None",
+              "elapsed_ms": 122.88
+            },
+            {
+              "cell_id": "Kclp",
+              "status": "executed",
+              "defs": ["alt", "mo", "pl", "yf"],
+              "output_preview": "None",
+              "elapsed_ms": 1897.61
+            },
+            {
+              "cell_id": "MJUe",
+              "status": "executed",
+              "defs": ["df"],
+              "output_preview": "shape: (1_360, 10)\n\u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500...",
+              "elapsed_ms": 1217.42
+            },
+            {
+              "cell_id": "vblA",
+              "status": "executed",
+              "defs": ["symbols_selector"],
+              "output_preview": "None",
+              "elapsed_ms": 26.99
+            },
+            {
+              "cell_id": "bkHC",
+              "status": "executed",
+              "defs": ["symbols_chart"],
+              "output_preview": "None",
+              "elapsed_ms": 6.35
+            },
+            {
+              "cell_id": "lEQa",
+              "status": "executed",
+              "defs": [],
+              "output_preview": "_md()",
+              "elapsed_ms": 3.31
+            },
+            {
+              "cell_id": "BYtC",
+              "status": "executed",
+              "defs": ["rows", "widget"],
+              "output_preview": "None",
+              "elapsed_ms": 8.91
+            }
+          ],
+          "stats": {
+            "required": 8,
+            "scheduled": 7,
+            "executed": 7,
+            "cached": 0,
+            "pruned": 1,
+            "skipped": 0
+          }
+        },
+        "mermaid": "%%{init: {'flowchart': {'htmlLabels': true, 'curve': 'basis'}, 'theme': 'base', 'themeVariables': {'fontFamily': 'Inter, ui-sans-serif, system-ui', 'primaryColor': '#f8fafc', 'lineColor': '#94a3b8'}} }%%\nflowchart TD\n  trace_summary[\"<b>mox.evaluate trace</b><br/><span>df, mox, symbols, symbols_chart, symbols_selector, widget</span><br/><small>required 8 | executed 7 | cached 0 | pruned 1</small><br/><small>3286.24 ms</small>\"]\n  cell_Hbol[\"<b>cell Hbol</b><br/><span>override supplied</span><br/><code>symbols = [&quot;AAPL&quot;, &quot;CRWV&quot;, &quot;MSFT&quot;, &quot;GOOGL&quot;, &quot;AMZN&quot;]</code><br/><code>interval = &quot;1d&quot;</code><br/><code>start = &quot;2025-04-01&quot;</code><br/><small>defs: chart_width, end, interval, start, symbols</small><br/><small>refs: -</small><br/><small>target: symbols</small><br/><small>overrides: chart_width, end, interval, start, symbols</small>\"]\n  cell_MJUe[\"<b>cell MJUe</b><br/><span>recomputed</span><br/><code>_df = pl.from_pandas(</code><br/><code>    yf.Tickers(symbols)</code><br/><code>    .history(</code><br/><small>defs: df</small><br/><small>refs: end, interval, pl, start, symbols, yf</small><br/><small>target: df</small><br/><small>1217.42 ms</small><br/><small>output: shape: (1_360, 10)\n\u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500...</small>\"]\n  cell_vblA[\"<b>cell vblA</b><br/><span>recomputed</span><br/><code>symbols_selector = mo.ui.multiselect(</code><br/><code>    options=symbols,</code><br/><code>    label=&quot;Select symbols to compare&quot;,</code><br/><small>defs: symbols_selector</small><br/><small>refs: mo, symbols</small><br/><small>target: symbols_selector</small><br/><small>26.99 ms</small><br/><small>output: None</small>\"]\n  cell_bkHC[\"<b>cell bkHC</b><br/><span>recomputed</span><br/><code>symbols_chart = (</code><br/><code>    alt.Chart(df.filter(pl.col(&quot;Symbol&quot;).is_in(symbols_selector.value)))</code><br/><code>    .mark_line()</code><br/><small>defs: symbols_chart</small><br/><small>refs: alt, chart_width, df, pl, symbols_selector</small><br/><small>target: symbols_chart</small><br/><small>6.35 ms</small><br/><small>output: None</small>\"]\n  cell_lEQa[\"<b>cell lEQa</b><br/><span>recomputed</span><br/><code>mo.md(rf&quot;&quot;&quot;</code><br/><code>## Change in Close Prices Over Time</code><br/><code>Select from `{&quot;, &quot;.join(symbols)}` to compate how the close prices changed between *{df[&quot;Date&quot;].min(</code><br/><small>defs: -</small><br/><small>refs: df, mo, symbols</small><br/><small>3.31 ms</small><br/><small>output: _md()</small>\"]\n  cell_PKri[\"<b>cell PKri</b><br/><span>not touched</span><br/><code>mo.vstack(</code><br/><code>    [</code><br/><code>        symbols_selector,</code><br/><small>defs: -</small><br/><small>refs: mo, symbols_chart, symbols_selector</small>\"]\n  cell_Xref[\"<b>cell Xref</b><br/><span>not touched</span><br/><code>mo.md(&quot;&quot;&quot;</code><br/><code>## Comparative dashboard</code><br/><code>The dashboard below is for a closer read. Switch between **Open**, **High**, **Low**, and **Close**,</code><br/><small>defs: -</small><br/><small>refs: mo</small>\"]\n  cell_SFPL[\"<b>cell SFPL</b><br/><span>not touched</span><br/><code>widget</code><br/><small>defs: -</small><br/><small>refs: widget</small>\"]\n  cell_BYtC[\"<b>cell BYtC</b><br/><span>recomputed</span><br/><code>rows = (</code><br/><code>    df.select(</code><br/><code>        [</code><br/><small>defs: rows, widget</small><br/><small>refs: OhlcSwitcher, df, mo, pl, symbols</small><br/><small>target: widget</small><br/><small>8.91 ms</small><br/><small>output: None</small>\"]\n  cell_RGSE[\"<b>cell RGSE</b><br/><span>recomputed</span><br/><code>import anywidget</code><br/><code>import traitlets</code><br/><code>class OhlcSwitcher(anywidget.AnyWidget):</code><br/><small>defs: OhlcSwitcher, anywidget, traitlets</small><br/><small>refs: -</small><br/><small>122.88 ms</small><br/><small>output: None</small>\"]\n  cell_Kclp[\"<b>cell Kclp</b><br/><span>recomputed</span><br/><code>import marimo as mo</code><br/><code>import yfinance as yf</code><br/><code>import polars as pl</code><br/><small>defs: alt, mo, pl, yf</small><br/><small>refs: -</small><br/><small>1897.61 ms</small><br/><small>output: None</small>\"]\n  cell_BYtC -.-> cell_SFPL\n  cell_Hbol -.-> cell_BYtC\n  cell_Hbol -.-> cell_MJUe\n  cell_Hbol -.-> cell_bkHC\n  cell_Hbol -.-> cell_lEQa\n  cell_Hbol -.-> cell_vblA\n  cell_Kclp -.-> cell_BYtC\n  cell_Kclp -.-> cell_MJUe\n  cell_Kclp -.-> cell_PKri\n  cell_Kclp -.-> cell_Xref\n  cell_Kclp -.-> cell_bkHC\n  cell_Kclp -.-> cell_lEQa\n  cell_Kclp -.-> cell_vblA\n  cell_MJUe -.-> cell_BYtC\n  cell_MJUe -.-> cell_bkHC\n  cell_MJUe -.-> cell_lEQa\n  cell_RGSE -.-> cell_BYtC\n  cell_bkHC -.-> cell_PKri\n  cell_vblA -.-> cell_PKri\n  cell_vblA -.-> cell_bkHC\nclassDef summary fill:#ffffff,stroke:#334155,stroke-width:2px,color:#0f172a;\nclassDef target fill:#dbeafe,stroke:#2563eb,stroke-width:3px,color:#172554;\nclassDef executed fill:#dcfce7,stroke:#16a34a,stroke-width:2px,color:#052e16;\nclassDef cached fill:#ccfbf1,stroke:#0d9488,stroke-width:2px,color:#042f2e;\nclassDef pruned fill:#fef3c7,stroke:#d97706,stroke-width:2px,color:#451a03;\nclassDef skipped fill:#ffe4e6,stroke:#e11d48,stroke-width:2px,color:#4c0519;\nclassDef needed fill:#f8fafc,stroke:#64748b,stroke-width:2px,color:#0f172a;\nclassDef inactive fill:#f8fafc,stroke:#e2e8f0,color:#64748b;\nclass trace_summary summary;\nclass cell_Hbol target;\nclass cell_MJUe target;\nclass cell_vblA target;\nclass cell_bkHC target;\nclass cell_lEQa executed;\nclass cell_PKri inactive;\nclass cell_Xref inactive;\nclass cell_SFPL inactive;\nclass cell_BYtC target;\nclass cell_RGSE executed;\nclass cell_Kclp executed;"
+      }
+    },
+    {
+      "id": "selector_ai_semis",
+      "state": {
+        "inputs": {
+          "symbols": ["NVDA", "AMD", "AVGO", "TSM", "ASML"],
+          "interval": "1d",
+          "start": "2025-11-01",
+          "end": "2026-05-01",
+          "chart_width": 980
+        },
+        "ui": {
+          "symbols_selector": {
+            "value": ["NVDA", "AMD", "AVGO"]
+          }
+        },
+        "widgets": {
+          "widget": {
+            "widget": {
+              "metric": "High",
+              "mode": "change",
+              "selected_symbols": ["NVDA", "AMD", "AVGO"]
+            }
+          }
+        }
+      },
+      "trace": {
+        "value_preview": "{'summary': {'rows': 615, 'columns': ['Date', 'Symbol', 'Open', 'Open Change', 'High', 'High Change', 'Low', 'Low Cha...",
+        "target": {
+          "root_names": ["df", "mox", "symbols", "symbols_chart", "symbols_selector", "widget"],
+          "expression_refs": [
+            "df",
+            "mox",
+            "symbols",
+            "symbols_chart",
+            "symbols_selector",
+            "widget"
+          ],
+          "override_refs": ["chart_width", "end", "interval", "start", "symbols"],
+          "object_patch_refs": [
+            "symbols_selector.value",
+            "widget.widget.metric",
+            "widget.widget.mode",
+            "widget.widget.selected_symbols"
+          ]
+        },
+        "state": {
+          "applied_object_patches": [
+            {
+              "target": "symbols_selector.value",
+              "root": "symbols_selector",
+              "value_preview": "['NVDA', 'AMD', 'AVGO']"
+            },
+            {
+              "target": "widget.widget.metric",
+              "root": "widget",
+              "value_preview": "'High'"
+            },
+            {
+              "target": "widget.widget.mode",
+              "root": "widget",
+              "value_preview": "'change'"
+            },
+            {
+              "target": "widget.widget.selected_symbols",
+              "root": "widget",
+              "value_preview": "['NVDA', 'AMD', 'AVGO']"
+            }
+          ]
+        },
+        "graph": {
+          "nodes": [
+            {
+              "cell_id": "Hbol",
+              "short_id": "Hbol",
+              "status": "pruned",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": ["chart_width", "end", "interval", "start", "symbols"],
+              "refs": [],
+              "body_refs": [],
+              "overridden_defs": ["chart_width", "end", "interval", "start", "symbols"],
+              "preview": [
+                "symbols = [\"AAPL\", \"CRWV\", \"MSFT\", \"GOOGL\", \"AMZN\"]",
+                "interval = \"1d\"",
+                "start = \"2025-04-01\""
+              ]
+            },
+            {
+              "cell_id": "MJUe",
+              "short_id": "MJUe",
+              "status": "executed",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": ["df"],
+              "refs": ["end", "interval", "pl", "start", "symbols", "yf"],
+              "body_refs": ["end", "interval", "pl", "start", "symbols", "yf"],
+              "overridden_defs": [],
+              "preview": ["_df = pl.from_pandas(", "    yf.Tickers(symbols)", "    .history("]
+            },
+            {
+              "cell_id": "vblA",
+              "short_id": "vblA",
+              "status": "executed",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": ["symbols_selector"],
+              "refs": ["mo", "symbols"],
+              "body_refs": ["mo", "symbols"],
+              "overridden_defs": [],
+              "preview": [
+                "symbols_selector = mo.ui.multiselect(",
+                "    options=symbols,",
+                "    label=\"Select symbols to compare\","
+              ]
+            },
+            {
+              "cell_id": "bkHC",
+              "short_id": "bkHC",
+              "status": "executed",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": ["symbols_chart"],
+              "refs": ["alt", "chart_width", "df", "pl", "symbols_selector"],
+              "body_refs": ["alt", "chart_width", "df", "pl", "symbols_selector"],
+              "overridden_defs": [],
+              "preview": [
+                "symbols_chart = (",
+                "    alt.Chart(df.filter(pl.col(\"Symbol\").is_in(symbols_selector.value)))",
+                "    .mark_line()"
+              ]
+            },
+            {
+              "cell_id": "lEQa",
+              "short_id": "lEQa",
+              "status": "cached",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": [],
+              "refs": ["df", "mo", "symbols"],
+              "body_refs": [],
+              "overridden_defs": [],
+              "preview": [
+                "mo.md(rf\"\"\"",
+                "## Change in Close Prices Over Time",
+                "Select from `{\", \".join(symbols)}` to compate how the close prices changed between *{df[\"Date\"].min("
+              ]
+            },
+            {
+              "cell_id": "PKri",
+              "short_id": "PKri",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": [],
+              "refs": ["mo", "symbols_chart", "symbols_selector"],
+              "body_refs": [],
+              "overridden_defs": [],
+              "preview": ["mo.vstack(", "    [", "        symbols_selector,"]
+            },
+            {
+              "cell_id": "Xref",
+              "short_id": "Xref",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": [],
+              "refs": ["mo"],
+              "body_refs": [],
+              "overridden_defs": [],
+              "preview": [
+                "mo.md(\"\"\"",
+                "## Comparative dashboard",
+                "The dashboard below is for a closer read. Switch between **Open**, **High**, **Low**, and **Close**,"
+              ]
+            },
+            {
+              "cell_id": "SFPL",
+              "short_id": "SFPL",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": [],
+              "refs": ["widget"],
+              "body_refs": [],
+              "overridden_defs": [],
+              "preview": ["widget"]
+            },
+            {
+              "cell_id": "BYtC",
+              "short_id": "BYtC",
+              "status": "executed",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": ["rows", "widget"],
+              "refs": ["OhlcSwitcher", "df", "mo", "pl", "symbols"],
+              "body_refs": ["OhlcSwitcher", "df", "mo", "pl", "symbols"],
+              "overridden_defs": [],
+              "preview": ["rows = (", "    df.select(", "        ["]
+            },
+            {
+              "cell_id": "RGSE",
+              "short_id": "RGSE",
+              "status": "cached",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": ["OhlcSwitcher", "anywidget", "traitlets"],
+              "refs": [],
+              "body_refs": [],
+              "overridden_defs": [],
+              "preview": [
+                "import anywidget",
+                "import traitlets",
+                "class OhlcSwitcher(anywidget.AnyWidget):"
+              ]
+            },
+            {
+              "cell_id": "Kclp",
+              "short_id": "Kclp",
+              "status": "cached",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": ["alt", "mo", "pl", "yf"],
+              "refs": [],
+              "body_refs": [],
+              "overridden_defs": [],
+              "preview": ["import marimo as mo", "import yfinance as yf", "import polars as pl"]
+            }
+          ],
+          "edges": [
+            {
+              "from": "BYtC",
+              "to": "SFPL"
+            },
+            {
+              "from": "Hbol",
+              "to": "BYtC"
+            },
+            {
+              "from": "Hbol",
+              "to": "MJUe"
+            },
+            {
+              "from": "Hbol",
+              "to": "bkHC"
+            },
+            {
+              "from": "Hbol",
+              "to": "lEQa"
+            },
+            {
+              "from": "Hbol",
+              "to": "vblA"
+            },
+            {
+              "from": "Kclp",
+              "to": "BYtC"
+            },
+            {
+              "from": "Kclp",
+              "to": "MJUe"
+            },
+            {
+              "from": "Kclp",
+              "to": "PKri"
+            },
+            {
+              "from": "Kclp",
+              "to": "Xref"
+            },
+            {
+              "from": "Kclp",
+              "to": "bkHC"
+            },
+            {
+              "from": "Kclp",
+              "to": "lEQa"
+            },
+            {
+              "from": "Kclp",
+              "to": "vblA"
+            },
+            {
+              "from": "MJUe",
+              "to": "BYtC"
+            },
+            {
+              "from": "MJUe",
+              "to": "bkHC"
+            },
+            {
+              "from": "MJUe",
+              "to": "lEQa"
+            },
+            {
+              "from": "RGSE",
+              "to": "BYtC"
+            },
+            {
+              "from": "bkHC",
+              "to": "PKri"
+            },
+            {
+              "from": "vblA",
+              "to": "PKri"
+            },
+            {
+              "from": "vblA",
+              "to": "bkHC"
+            }
+          ],
+          "stats": {
+            "nodes": 11,
+            "edges": 20,
+            "required": 8,
+            "status_counts": {
+              "executed": 4,
+              "cached": 3,
+              "pruned": 1,
+              "skipped": 0,
+              "needed": 0,
+              "inactive": 3
+            }
+          }
+        },
+        "execution": {
+          "elapsed_ms": 1339.03,
+          "required_order": ["Hbol", "RGSE", "Kclp", "MJUe", "vblA", "bkHC", "lEQa", "BYtC"],
+          "scheduled_order": ["RGSE", "Kclp", "MJUe", "vblA", "bkHC", "lEQa", "BYtC"],
+          "executed_cell_ids": ["MJUe", "vblA", "bkHC", "BYtC"],
+          "cached_cell_ids": ["RGSE", "Kclp", "lEQa"],
+          "pruned_cell_ids": ["Hbol"],
+          "skipped_cell_ids": [],
+          "skip_reasons": {},
+          "steps": [
+            {
+              "cell_id": "RGSE",
+              "status": "cached",
+              "defs": ["OhlcSwitcher", "anywidget", "traitlets"],
+              "output_preview": "None",
+              "elapsed_ms": 0.01
+            },
+            {
+              "cell_id": "Kclp",
+              "status": "cached",
+              "defs": ["alt", "mo", "pl", "yf"],
+              "output_preview": "None",
+              "elapsed_ms": 0.01
+            },
+            {
+              "cell_id": "MJUe",
+              "status": "executed",
+              "defs": ["df"],
+              "output_preview": "shape: (615, 10)\n\u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510...",
+              "elapsed_ms": 1306.23
+            },
+            {
+              "cell_id": "vblA",
+              "status": "executed",
+              "defs": ["symbols_selector"],
+              "output_preview": "None",
+              "elapsed_ms": 11.28
+            },
+            {
+              "cell_id": "bkHC",
+              "status": "executed",
+              "defs": ["symbols_chart"],
+              "output_preview": "None",
+              "elapsed_ms": 9.07
+            },
+            {
+              "cell_id": "lEQa",
+              "status": "cached",
+              "defs": [],
+              "output_preview": "_md()",
+              "elapsed_ms": 4.73
+            },
+            {
+              "cell_id": "BYtC",
+              "status": "executed",
+              "defs": ["rows", "widget"],
+              "output_preview": "None",
+              "elapsed_ms": 4.08
+            }
+          ],
+          "stats": {
+            "required": 8,
+            "scheduled": 7,
+            "executed": 4,
+            "cached": 3,
+            "pruned": 1,
+            "skipped": 0
+          }
+        },
+        "mermaid": "%%{init: {'flowchart': {'htmlLabels': true, 'curve': 'basis'}, 'theme': 'base', 'themeVariables': {'fontFamily': 'Inter, ui-sans-serif, system-ui', 'primaryColor': '#f8fafc', 'lineColor': '#94a3b8'}} }%%\nflowchart TD\n  trace_summary[\"<b>mox.evaluate trace</b><br/><span>df, mox, symbols, symbols_chart, symbols_selector, widget</span><br/><small>required 8 | executed 4 | cached 3 | pruned 1</small><br/><small>1339.03 ms</small>\"]\n  cell_Hbol[\"<b>cell Hbol</b><br/><span>override supplied</span><br/><code>symbols = [&quot;AAPL&quot;, &quot;CRWV&quot;, &quot;MSFT&quot;, &quot;GOOGL&quot;, &quot;AMZN&quot;]</code><br/><code>interval = &quot;1d&quot;</code><br/><code>start = &quot;2025-04-01&quot;</code><br/><small>defs: chart_width, end, interval, start, symbols</small><br/><small>refs: -</small><br/><small>target: symbols</small><br/><small>overrides: chart_width, end, interval, start, symbols</small>\"]\n  cell_MJUe[\"<b>cell MJUe</b><br/><span>recomputed</span><br/><code>_df = pl.from_pandas(</code><br/><code>    yf.Tickers(symbols)</code><br/><code>    .history(</code><br/><small>defs: df</small><br/><small>refs: end, interval, pl, start, symbols, yf</small><br/><small>target: df</small><br/><small>1306.23 ms</small><br/><small>output: shape: (615, 10)\n\u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510...</small>\"]\n  cell_vblA[\"<b>cell vblA</b><br/><span>recomputed</span><br/><code>symbols_selector = mo.ui.multiselect(</code><br/><code>    options=symbols,</code><br/><code>    label=&quot;Select symbols to compare&quot;,</code><br/><small>defs: symbols_selector</small><br/><small>refs: mo, symbols</small><br/><small>target: symbols_selector</small><br/><small>11.28 ms</small><br/><small>output: None</small>\"]\n  cell_bkHC[\"<b>cell bkHC</b><br/><span>recomputed</span><br/><code>symbols_chart = (</code><br/><code>    alt.Chart(df.filter(pl.col(&quot;Symbol&quot;).is_in(symbols_selector.value)))</code><br/><code>    .mark_line()</code><br/><small>defs: symbols_chart</small><br/><small>refs: alt, chart_width, df, pl, symbols_selector</small><br/><small>target: symbols_chart</small><br/><small>9.07 ms</small><br/><small>output: None</small>\"]\n  cell_lEQa[\"<b>cell lEQa</b><br/><span>cache hit</span><br/><code>mo.md(rf&quot;&quot;&quot;</code><br/><code>## Change in Close Prices Over Time</code><br/><code>Select from `{&quot;, &quot;.join(symbols)}` to compate how the close prices changed between *{df[&quot;Date&quot;].min(</code><br/><small>defs: -</small><br/><small>refs: df, mo, symbols</small><br/><small>4.73 ms</small><br/><small>output: _md()</small>\"]\n  cell_PKri[\"<b>cell PKri</b><br/><span>not touched</span><br/><code>mo.vstack(</code><br/><code>    [</code><br/><code>        symbols_selector,</code><br/><small>defs: -</small><br/><small>refs: mo, symbols_chart, symbols_selector</small>\"]\n  cell_Xref[\"<b>cell Xref</b><br/><span>not touched</span><br/><code>mo.md(&quot;&quot;&quot;</code><br/><code>## Comparative dashboard</code><br/><code>The dashboard below is for a closer read. Switch between **Open**, **High**, **Low**, and **Close**,</code><br/><small>defs: -</small><br/><small>refs: mo</small>\"]\n  cell_SFPL[\"<b>cell SFPL</b><br/><span>not touched</span><br/><code>widget</code><br/><small>defs: -</small><br/><small>refs: widget</small>\"]\n  cell_BYtC[\"<b>cell BYtC</b><br/><span>recomputed</span><br/><code>rows = (</code><br/><code>    df.select(</code><br/><code>        [</code><br/><small>defs: rows, widget</small><br/><small>refs: OhlcSwitcher, df, mo, pl, symbols</small><br/><small>target: widget</small><br/><small>4.08 ms</small><br/><small>output: None</small>\"]\n  cell_RGSE[\"<b>cell RGSE</b><br/><span>cache hit</span><br/><code>import anywidget</code><br/><code>import traitlets</code><br/><code>class OhlcSwitcher(anywidget.AnyWidget):</code><br/><small>defs: OhlcSwitcher, anywidget, traitlets</small><br/><small>refs: -</small><br/><small>0.01 ms</small><br/><small>output: None</small>\"]\n  cell_Kclp[\"<b>cell Kclp</b><br/><span>cache hit</span><br/><code>import marimo as mo</code><br/><code>import yfinance as yf</code><br/><code>import polars as pl</code><br/><small>defs: alt, mo, pl, yf</small><br/><small>refs: -</small><br/><small>0.01 ms</small><br/><small>output: None</small>\"]\n  cell_BYtC -.-> cell_SFPL\n  cell_Hbol -.-> cell_BYtC\n  cell_Hbol -.-> cell_MJUe\n  cell_Hbol -.-> cell_bkHC\n  cell_Hbol -.-> cell_lEQa\n  cell_Hbol -.-> cell_vblA\n  cell_Kclp -.-> cell_BYtC\n  cell_Kclp -.-> cell_MJUe\n  cell_Kclp -.-> cell_PKri\n  cell_Kclp -.-> cell_Xref\n  cell_Kclp -.-> cell_bkHC\n  cell_Kclp -.-> cell_lEQa\n  cell_Kclp -.-> cell_vblA\n  cell_MJUe -.-> cell_BYtC\n  cell_MJUe -.-> cell_bkHC\n  cell_MJUe -.-> cell_lEQa\n  cell_RGSE -.-> cell_BYtC\n  cell_bkHC -.-> cell_PKri\n  cell_vblA -.-> cell_PKri\n  cell_vblA -.-> cell_bkHC\nclassDef summary fill:#ffffff,stroke:#334155,stroke-width:2px,color:#0f172a;\nclassDef target fill:#dbeafe,stroke:#2563eb,stroke-width:3px,color:#172554;\nclassDef executed fill:#dcfce7,stroke:#16a34a,stroke-width:2px,color:#052e16;\nclassDef cached fill:#ccfbf1,stroke:#0d9488,stroke-width:2px,color:#042f2e;\nclassDef pruned fill:#fef3c7,stroke:#d97706,stroke-width:2px,color:#451a03;\nclassDef skipped fill:#ffe4e6,stroke:#e11d48,stroke-width:2px,color:#4c0519;\nclassDef needed fill:#f8fafc,stroke:#64748b,stroke-width:2px,color:#0f172a;\nclassDef inactive fill:#f8fafc,stroke:#e2e8f0,color:#64748b;\nclass trace_summary summary;\nclass cell_Hbol target;\nclass cell_MJUe target;\nclass cell_vblA target;\nclass cell_bkHC target;\nclass cell_lEQa cached;\nclass cell_PKri inactive;\nclass cell_Xref inactive;\nclass cell_SFPL inactive;\nclass cell_BYtC target;\nclass cell_RGSE cached;\nclass cell_Kclp cached;"
+      }
+    },
+    {
+      "id": "selector_crwv_msft",
+      "state": {
+        "inputs": {
+          "symbols": ["AAPL", "AMZN", "CRWV", "GOOGL", "MSFT"],
+          "interval": "1d",
+          "start": "2025-04-01",
+          "end": "2026-05-01",
+          "chart_width": 980
+        },
+        "ui": {
+          "symbols_selector": {
+            "value": ["CRWV", "MSFT"]
+          }
+        },
+        "widgets": {
+          "widget": {
+            "widget": {
+              "metric": "Close",
+              "mode": "absolute",
+              "selected_symbols": ["CRWV", "MSFT"]
+            }
+          }
+        }
+      },
+      "trace": {
+        "value_preview": "{'summary': {'rows': 1360, 'columns': ['Date', 'Symbol', 'Open', 'Open Change', 'High', 'High Change', 'Low', 'Low Ch...",
+        "target": {
+          "root_names": ["df", "mox", "symbols", "symbols_chart", "symbols_selector", "widget"],
+          "expression_refs": [
+            "df",
+            "mox",
+            "symbols",
+            "symbols_chart",
+            "symbols_selector",
+            "widget"
+          ],
+          "override_refs": ["chart_width", "end", "interval", "start", "symbols"],
+          "object_patch_refs": [
+            "symbols_selector.value",
+            "widget.widget.metric",
+            "widget.widget.mode",
+            "widget.widget.selected_symbols"
+          ]
+        },
+        "state": {
+          "applied_object_patches": [
+            {
+              "target": "symbols_selector.value",
+              "root": "symbols_selector",
+              "value_preview": "['CRWV', 'MSFT']"
+            },
+            {
+              "target": "widget.widget.metric",
+              "root": "widget",
+              "value_preview": "'Close'"
+            },
+            {
+              "target": "widget.widget.mode",
+              "root": "widget",
+              "value_preview": "'absolute'"
+            },
+            {
+              "target": "widget.widget.selected_symbols",
+              "root": "widget",
+              "value_preview": "['CRWV', 'MSFT']"
+            }
+          ]
+        },
+        "graph": {
+          "nodes": [
+            {
+              "cell_id": "Hbol",
+              "short_id": "Hbol",
+              "status": "pruned",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": ["chart_width", "end", "interval", "start", "symbols"],
+              "refs": [],
+              "body_refs": [],
+              "overridden_defs": ["chart_width", "end", "interval", "start", "symbols"],
+              "preview": [
+                "symbols = [\"AAPL\", \"CRWV\", \"MSFT\", \"GOOGL\", \"AMZN\"]",
+                "interval = \"1d\"",
+                "start = \"2025-04-01\""
+              ]
+            },
+            {
+              "cell_id": "MJUe",
+              "short_id": "MJUe",
+              "status": "cached",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": ["df"],
+              "refs": ["end", "interval", "pl", "start", "symbols", "yf"],
+              "body_refs": ["end", "interval", "pl", "start", "symbols", "yf"],
+              "overridden_defs": [],
+              "preview": ["_df = pl.from_pandas(", "    yf.Tickers(symbols)", "    .history("]
+            },
+            {
+              "cell_id": "vblA",
+              "short_id": "vblA",
+              "status": "executed",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": ["symbols_selector"],
+              "refs": ["mo", "symbols"],
+              "body_refs": ["mo", "symbols"],
+              "overridden_defs": [],
+              "preview": [
+                "symbols_selector = mo.ui.multiselect(",
+                "    options=symbols,",
+                "    label=\"Select symbols to compare\","
+              ]
+            },
+            {
+              "cell_id": "bkHC",
+              "short_id": "bkHC",
+              "status": "executed",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": ["symbols_chart"],
+              "refs": ["alt", "chart_width", "df", "pl", "symbols_selector"],
+              "body_refs": ["alt", "chart_width", "df", "pl", "symbols_selector"],
+              "overridden_defs": [],
+              "preview": [
+                "symbols_chart = (",
+                "    alt.Chart(df.filter(pl.col(\"Symbol\").is_in(symbols_selector.value)))",
+                "    .mark_line()"
+              ]
+            },
+            {
+              "cell_id": "lEQa",
+              "short_id": "lEQa",
+              "status": "cached",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": [],
+              "refs": ["df", "mo", "symbols"],
+              "body_refs": [],
+              "overridden_defs": [],
+              "preview": [
+                "mo.md(rf\"\"\"",
+                "## Change in Close Prices Over Time",
+                "Select from `{\", \".join(symbols)}` to compate how the close prices changed between *{df[\"Date\"].min("
+              ]
+            },
+            {
+              "cell_id": "PKri",
+              "short_id": "PKri",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": [],
+              "refs": ["mo", "symbols_chart", "symbols_selector"],
+              "body_refs": [],
+              "overridden_defs": [],
+              "preview": ["mo.vstack(", "    [", "        symbols_selector,"]
+            },
+            {
+              "cell_id": "Xref",
+              "short_id": "Xref",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": [],
+              "refs": ["mo"],
+              "body_refs": [],
+              "overridden_defs": [],
+              "preview": [
+                "mo.md(\"\"\"",
+                "## Comparative dashboard",
+                "The dashboard below is for a closer read. Switch between **Open**, **High**, **Low**, and **Close**,"
+              ]
+            },
+            {
+              "cell_id": "SFPL",
+              "short_id": "SFPL",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": [],
+              "refs": ["widget"],
+              "body_refs": [],
+              "overridden_defs": [],
+              "preview": ["widget"]
+            },
+            {
+              "cell_id": "BYtC",
+              "short_id": "BYtC",
+              "status": "executed",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": ["rows", "widget"],
+              "refs": ["OhlcSwitcher", "df", "mo", "pl", "symbols"],
+              "body_refs": ["OhlcSwitcher", "df", "mo", "pl", "symbols"],
+              "overridden_defs": [],
+              "preview": ["rows = (", "    df.select(", "        ["]
+            },
+            {
+              "cell_id": "RGSE",
+              "short_id": "RGSE",
+              "status": "cached",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": ["OhlcSwitcher", "anywidget", "traitlets"],
+              "refs": [],
+              "body_refs": [],
+              "overridden_defs": [],
+              "preview": [
+                "import anywidget",
+                "import traitlets",
+                "class OhlcSwitcher(anywidget.AnyWidget):"
+              ]
+            },
+            {
+              "cell_id": "Kclp",
+              "short_id": "Kclp",
+              "status": "cached",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": ["alt", "mo", "pl", "yf"],
+              "refs": [],
+              "body_refs": [],
+              "overridden_defs": [],
+              "preview": ["import marimo as mo", "import yfinance as yf", "import polars as pl"]
+            }
+          ],
+          "edges": [
+            {
+              "from": "BYtC",
+              "to": "SFPL"
+            },
+            {
+              "from": "Hbol",
+              "to": "BYtC"
+            },
+            {
+              "from": "Hbol",
+              "to": "MJUe"
+            },
+            {
+              "from": "Hbol",
+              "to": "bkHC"
+            },
+            {
+              "from": "Hbol",
+              "to": "lEQa"
+            },
+            {
+              "from": "Hbol",
+              "to": "vblA"
+            },
+            {
+              "from": "Kclp",
+              "to": "BYtC"
+            },
+            {
+              "from": "Kclp",
+              "to": "MJUe"
+            },
+            {
+              "from": "Kclp",
+              "to": "PKri"
+            },
+            {
+              "from": "Kclp",
+              "to": "Xref"
+            },
+            {
+              "from": "Kclp",
+              "to": "bkHC"
+            },
+            {
+              "from": "Kclp",
+              "to": "lEQa"
+            },
+            {
+              "from": "Kclp",
+              "to": "vblA"
+            },
+            {
+              "from": "MJUe",
+              "to": "BYtC"
+            },
+            {
+              "from": "MJUe",
+              "to": "bkHC"
+            },
+            {
+              "from": "MJUe",
+              "to": "lEQa"
+            },
+            {
+              "from": "RGSE",
+              "to": "BYtC"
+            },
+            {
+              "from": "bkHC",
+              "to": "PKri"
+            },
+            {
+              "from": "vblA",
+              "to": "PKri"
+            },
+            {
+              "from": "vblA",
+              "to": "bkHC"
+            }
+          ],
+          "stats": {
+            "nodes": 11,
+            "edges": 20,
+            "required": 8,
+            "status_counts": {
+              "executed": 3,
+              "cached": 4,
+              "pruned": 1,
+              "skipped": 0,
+              "needed": 0,
+              "inactive": 3
+            }
+          }
+        },
+        "execution": {
+          "elapsed_ms": 24.45,
+          "required_order": ["Hbol", "RGSE", "Kclp", "MJUe", "vblA", "bkHC", "lEQa", "BYtC"],
+          "scheduled_order": ["RGSE", "Kclp", "MJUe", "vblA", "bkHC", "lEQa", "BYtC"],
+          "executed_cell_ids": ["vblA", "bkHC", "BYtC"],
+          "cached_cell_ids": ["RGSE", "Kclp", "MJUe", "lEQa"],
+          "pruned_cell_ids": ["Hbol"],
+          "skipped_cell_ids": [],
+          "skip_reasons": {},
+          "steps": [
+            {
+              "cell_id": "RGSE",
+              "status": "cached",
+              "defs": ["OhlcSwitcher", "anywidget", "traitlets"],
+              "output_preview": "None",
+              "elapsed_ms": 0.02
+            },
+            {
+              "cell_id": "Kclp",
+              "status": "cached",
+              "defs": ["alt", "mo", "pl", "yf"],
+              "output_preview": "None",
+              "elapsed_ms": 0.01
+            },
+            {
+              "cell_id": "MJUe",
+              "status": "cached",
+              "defs": ["df"],
+              "output_preview": "shape: (1_360, 10)\n\u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500...",
+              "elapsed_ms": 0.03
+            },
+            {
+              "cell_id": "vblA",
+              "status": "executed",
+              "defs": ["symbols_selector"],
+              "output_preview": "None",
+              "elapsed_ms": 6.52
+            },
+            {
+              "cell_id": "bkHC",
+              "status": "executed",
+              "defs": ["symbols_chart"],
+              "output_preview": "None",
+              "elapsed_ms": 6.67
+            },
+            {
+              "cell_id": "lEQa",
+              "status": "cached",
+              "defs": [],
+              "output_preview": "_md()",
+              "elapsed_ms": 3.33
+            },
+            {
+              "cell_id": "BYtC",
+              "status": "executed",
+              "defs": ["rows", "widget"],
+              "output_preview": "None",
+              "elapsed_ms": 5.08
+            }
+          ],
+          "stats": {
+            "required": 8,
+            "scheduled": 7,
+            "executed": 3,
+            "cached": 4,
+            "pruned": 1,
+            "skipped": 0
+          }
+        },
+        "mermaid": "%%{init: {'flowchart': {'htmlLabels': true, 'curve': 'basis'}, 'theme': 'base', 'themeVariables': {'fontFamily': 'Inter, ui-sans-serif, system-ui', 'primaryColor': '#f8fafc', 'lineColor': '#94a3b8'}} }%%\nflowchart TD\n  trace_summary[\"<b>mox.evaluate trace</b><br/><span>df, mox, symbols, symbols_chart, symbols_selector, widget</span><br/><small>required 8 | executed 3 | cached 4 | pruned 1</small><br/><small>24.45 ms</small>\"]\n  cell_Hbol[\"<b>cell Hbol</b><br/><span>override supplied</span><br/><code>symbols = [&quot;AAPL&quot;, &quot;CRWV&quot;, &quot;MSFT&quot;, &quot;GOOGL&quot;, &quot;AMZN&quot;]</code><br/><code>interval = &quot;1d&quot;</code><br/><code>start = &quot;2025-04-01&quot;</code><br/><small>defs: chart_width, end, interval, start, symbols</small><br/><small>refs: -</small><br/><small>target: symbols</small><br/><small>overrides: chart_width, end, interval, start, symbols</small>\"]\n  cell_MJUe[\"<b>cell MJUe</b><br/><span>cache hit</span><br/><code>_df = pl.from_pandas(</code><br/><code>    yf.Tickers(symbols)</code><br/><code>    .history(</code><br/><small>defs: df</small><br/><small>refs: end, interval, pl, start, symbols, yf</small><br/><small>target: df</small><br/><small>0.03 ms</small><br/><small>output: shape: (1_360, 10)\n\u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500...</small>\"]\n  cell_vblA[\"<b>cell vblA</b><br/><span>recomputed</span><br/><code>symbols_selector = mo.ui.multiselect(</code><br/><code>    options=symbols,</code><br/><code>    label=&quot;Select symbols to compare&quot;,</code><br/><small>defs: symbols_selector</small><br/><small>refs: mo, symbols</small><br/><small>target: symbols_selector</small><br/><small>6.52 ms</small><br/><small>output: None</small>\"]\n  cell_bkHC[\"<b>cell bkHC</b><br/><span>recomputed</span><br/><code>symbols_chart = (</code><br/><code>    alt.Chart(df.filter(pl.col(&quot;Symbol&quot;).is_in(symbols_selector.value)))</code><br/><code>    .mark_line()</code><br/><small>defs: symbols_chart</small><br/><small>refs: alt, chart_width, df, pl, symbols_selector</small><br/><small>target: symbols_chart</small><br/><small>6.67 ms</small><br/><small>output: None</small>\"]\n  cell_lEQa[\"<b>cell lEQa</b><br/><span>cache hit</span><br/><code>mo.md(rf&quot;&quot;&quot;</code><br/><code>## Change in Close Prices Over Time</code><br/><code>Select from `{&quot;, &quot;.join(symbols)}` to compate how the close prices changed between *{df[&quot;Date&quot;].min(</code><br/><small>defs: -</small><br/><small>refs: df, mo, symbols</small><br/><small>3.33 ms</small><br/><small>output: _md()</small>\"]\n  cell_PKri[\"<b>cell PKri</b><br/><span>not touched</span><br/><code>mo.vstack(</code><br/><code>    [</code><br/><code>        symbols_selector,</code><br/><small>defs: -</small><br/><small>refs: mo, symbols_chart, symbols_selector</small>\"]\n  cell_Xref[\"<b>cell Xref</b><br/><span>not touched</span><br/><code>mo.md(&quot;&quot;&quot;</code><br/><code>## Comparative dashboard</code><br/><code>The dashboard below is for a closer read. Switch between **Open**, **High**, **Low**, and **Close**,</code><br/><small>defs: -</small><br/><small>refs: mo</small>\"]\n  cell_SFPL[\"<b>cell SFPL</b><br/><span>not touched</span><br/><code>widget</code><br/><small>defs: -</small><br/><small>refs: widget</small>\"]\n  cell_BYtC[\"<b>cell BYtC</b><br/><span>recomputed</span><br/><code>rows = (</code><br/><code>    df.select(</code><br/><code>        [</code><br/><small>defs: rows, widget</small><br/><small>refs: OhlcSwitcher, df, mo, pl, symbols</small><br/><small>target: widget</small><br/><small>5.08 ms</small><br/><small>output: None</small>\"]\n  cell_RGSE[\"<b>cell RGSE</b><br/><span>cache hit</span><br/><code>import anywidget</code><br/><code>import traitlets</code><br/><code>class OhlcSwitcher(anywidget.AnyWidget):</code><br/><small>defs: OhlcSwitcher, anywidget, traitlets</small><br/><small>refs: -</small><br/><small>0.02 ms</small><br/><small>output: None</small>\"]\n  cell_Kclp[\"<b>cell Kclp</b><br/><span>cache hit</span><br/><code>import marimo as mo</code><br/><code>import yfinance as yf</code><br/><code>import polars as pl</code><br/><small>defs: alt, mo, pl, yf</small><br/><small>refs: -</small><br/><small>0.01 ms</small><br/><small>output: None</small>\"]\n  cell_BYtC -.-> cell_SFPL\n  cell_Hbol -.-> cell_BYtC\n  cell_Hbol -.-> cell_MJUe\n  cell_Hbol -.-> cell_bkHC\n  cell_Hbol -.-> cell_lEQa\n  cell_Hbol -.-> cell_vblA\n  cell_Kclp -.-> cell_BYtC\n  cell_Kclp -.-> cell_MJUe\n  cell_Kclp -.-> cell_PKri\n  cell_Kclp -.-> cell_Xref\n  cell_Kclp -.-> cell_bkHC\n  cell_Kclp -.-> cell_lEQa\n  cell_Kclp -.-> cell_vblA\n  cell_MJUe -.-> cell_BYtC\n  cell_MJUe -.-> cell_bkHC\n  cell_MJUe -.-> cell_lEQa\n  cell_RGSE -.-> cell_BYtC\n  cell_bkHC -.-> cell_PKri\n  cell_vblA -.-> cell_PKri\n  cell_vblA -.-> cell_bkHC\nclassDef summary fill:#ffffff,stroke:#334155,stroke-width:2px,color:#0f172a;\nclassDef target fill:#dbeafe,stroke:#2563eb,stroke-width:3px,color:#172554;\nclassDef executed fill:#dcfce7,stroke:#16a34a,stroke-width:2px,color:#052e16;\nclassDef cached fill:#ccfbf1,stroke:#0d9488,stroke-width:2px,color:#042f2e;\nclassDef pruned fill:#fef3c7,stroke:#d97706,stroke-width:2px,color:#451a03;\nclassDef skipped fill:#ffe4e6,stroke:#e11d48,stroke-width:2px,color:#4c0519;\nclassDef needed fill:#f8fafc,stroke:#64748b,stroke-width:2px,color:#0f172a;\nclassDef inactive fill:#f8fafc,stroke:#e2e8f0,color:#64748b;\nclass trace_summary summary;\nclass cell_Hbol target;\nclass cell_MJUe target;\nclass cell_vblA target;\nclass cell_bkHC target;\nclass cell_lEQa cached;\nclass cell_PKri inactive;\nclass cell_Xref inactive;\nclass cell_SFPL inactive;\nclass cell_BYtC target;\nclass cell_RGSE cached;\nclass cell_Kclp cached;"
+      }
+    },
+    {
+      "id": "selector_tsla_focus",
+      "state": {
+        "inputs": {
+          "symbols": ["TSLA"],
+          "interval": "1d",
+          "start": "2025-01-01",
+          "end": "2026-05-01",
+          "chart_width": 760
+        },
+        "ui": {
+          "symbols_selector": {
+            "value": ["TSLA"]
+          }
+        },
+        "widgets": {
+          "widget": {
+            "widget": {
+              "metric": "Close",
+              "mode": "absolute",
+              "selected_symbols": ["TSLA"]
+            }
+          }
+        }
+      },
+      "trace": {
+        "value_preview": "{'summary': {'rows': 332, 'columns': ['Date', 'Symbol', 'Open', 'Open Change', 'High', 'High Change', 'Low', 'Low Cha...",
+        "target": {
+          "root_names": ["df", "mox", "symbols", "symbols_chart", "symbols_selector", "widget"],
+          "expression_refs": [
+            "df",
+            "mox",
+            "symbols",
+            "symbols_chart",
+            "symbols_selector",
+            "widget"
+          ],
+          "override_refs": ["chart_width", "end", "interval", "start", "symbols"],
+          "object_patch_refs": [
+            "symbols_selector.value",
+            "widget.widget.metric",
+            "widget.widget.mode",
+            "widget.widget.selected_symbols"
+          ]
+        },
+        "state": {
+          "applied_object_patches": [
+            {
+              "target": "symbols_selector.value",
+              "root": "symbols_selector",
+              "value_preview": "['TSLA']"
+            },
+            {
+              "target": "widget.widget.metric",
+              "root": "widget",
+              "value_preview": "'Close'"
+            },
+            {
+              "target": "widget.widget.mode",
+              "root": "widget",
+              "value_preview": "'absolute'"
+            },
+            {
+              "target": "widget.widget.selected_symbols",
+              "root": "widget",
+              "value_preview": "['TSLA']"
+            }
+          ]
+        },
+        "graph": {
+          "nodes": [
+            {
+              "cell_id": "Hbol",
+              "short_id": "Hbol",
+              "status": "pruned",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": ["chart_width", "end", "interval", "start", "symbols"],
+              "refs": [],
+              "body_refs": [],
+              "overridden_defs": ["chart_width", "end", "interval", "start", "symbols"],
+              "preview": [
+                "symbols = [\"AAPL\", \"CRWV\", \"MSFT\", \"GOOGL\", \"AMZN\"]",
+                "interval = \"1d\"",
+                "start = \"2025-04-01\""
+              ]
+            },
+            {
+              "cell_id": "MJUe",
+              "short_id": "MJUe",
+              "status": "executed",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": ["df"],
+              "refs": ["end", "interval", "pl", "start", "symbols", "yf"],
+              "body_refs": ["end", "interval", "pl", "start", "symbols", "yf"],
+              "overridden_defs": [],
+              "preview": ["_df = pl.from_pandas(", "    yf.Tickers(symbols)", "    .history("]
+            },
+            {
+              "cell_id": "vblA",
+              "short_id": "vblA",
+              "status": "executed",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": ["symbols_selector"],
+              "refs": ["mo", "symbols"],
+              "body_refs": ["mo", "symbols"],
+              "overridden_defs": [],
+              "preview": [
+                "symbols_selector = mo.ui.multiselect(",
+                "    options=symbols,",
+                "    label=\"Select symbols to compare\","
+              ]
+            },
+            {
+              "cell_id": "bkHC",
+              "short_id": "bkHC",
+              "status": "executed",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": ["symbols_chart"],
+              "refs": ["alt", "chart_width", "df", "pl", "symbols_selector"],
+              "body_refs": ["alt", "chart_width", "df", "pl", "symbols_selector"],
+              "overridden_defs": [],
+              "preview": [
+                "symbols_chart = (",
+                "    alt.Chart(df.filter(pl.col(\"Symbol\").is_in(symbols_selector.value)))",
+                "    .mark_line()"
+              ]
+            },
+            {
+              "cell_id": "lEQa",
+              "short_id": "lEQa",
+              "status": "cached",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": [],
+              "refs": ["df", "mo", "symbols"],
+              "body_refs": [],
+              "overridden_defs": [],
+              "preview": [
+                "mo.md(rf\"\"\"",
+                "## Change in Close Prices Over Time",
+                "Select from `{\", \".join(symbols)}` to compate how the close prices changed between *{df[\"Date\"].min("
+              ]
+            },
+            {
+              "cell_id": "PKri",
+              "short_id": "PKri",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": [],
+              "refs": ["mo", "symbols_chart", "symbols_selector"],
+              "body_refs": [],
+              "overridden_defs": [],
+              "preview": ["mo.vstack(", "    [", "        symbols_selector,"]
+            },
+            {
+              "cell_id": "Xref",
+              "short_id": "Xref",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": [],
+              "refs": ["mo"],
+              "body_refs": [],
+              "overridden_defs": [],
+              "preview": [
+                "mo.md(\"\"\"",
+                "## Comparative dashboard",
+                "The dashboard below is for a closer read. Switch between **Open**, **High**, **Low**, and **Close**,"
+              ]
+            },
+            {
+              "cell_id": "SFPL",
+              "short_id": "SFPL",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": [],
+              "refs": ["widget"],
+              "body_refs": [],
+              "overridden_defs": [],
+              "preview": ["widget"]
+            },
+            {
+              "cell_id": "BYtC",
+              "short_id": "BYtC",
+              "status": "executed",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": ["rows", "widget"],
+              "refs": ["OhlcSwitcher", "df", "mo", "pl", "symbols"],
+              "body_refs": ["OhlcSwitcher", "df", "mo", "pl", "symbols"],
+              "overridden_defs": [],
+              "preview": ["rows = (", "    df.select(", "        ["]
+            },
+            {
+              "cell_id": "RGSE",
+              "short_id": "RGSE",
+              "status": "cached",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": ["OhlcSwitcher", "anywidget", "traitlets"],
+              "refs": [],
+              "body_refs": [],
+              "overridden_defs": [],
+              "preview": [
+                "import anywidget",
+                "import traitlets",
+                "class OhlcSwitcher(anywidget.AnyWidget):"
+              ]
+            },
+            {
+              "cell_id": "Kclp",
+              "short_id": "Kclp",
+              "status": "cached",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": ["alt", "mo", "pl", "yf"],
+              "refs": [],
+              "body_refs": [],
+              "overridden_defs": [],
+              "preview": ["import marimo as mo", "import yfinance as yf", "import polars as pl"]
+            }
+          ],
+          "edges": [
+            {
+              "from": "BYtC",
+              "to": "SFPL"
+            },
+            {
+              "from": "Hbol",
+              "to": "BYtC"
+            },
+            {
+              "from": "Hbol",
+              "to": "MJUe"
+            },
+            {
+              "from": "Hbol",
+              "to": "bkHC"
+            },
+            {
+              "from": "Hbol",
+              "to": "lEQa"
+            },
+            {
+              "from": "Hbol",
+              "to": "vblA"
+            },
+            {
+              "from": "Kclp",
+              "to": "BYtC"
+            },
+            {
+              "from": "Kclp",
+              "to": "MJUe"
+            },
+            {
+              "from": "Kclp",
+              "to": "PKri"
+            },
+            {
+              "from": "Kclp",
+              "to": "Xref"
+            },
+            {
+              "from": "Kclp",
+              "to": "bkHC"
+            },
+            {
+              "from": "Kclp",
+              "to": "lEQa"
+            },
+            {
+              "from": "Kclp",
+              "to": "vblA"
+            },
+            {
+              "from": "MJUe",
+              "to": "BYtC"
+            },
+            {
+              "from": "MJUe",
+              "to": "bkHC"
+            },
+            {
+              "from": "MJUe",
+              "to": "lEQa"
+            },
+            {
+              "from": "RGSE",
+              "to": "BYtC"
+            },
+            {
+              "from": "bkHC",
+              "to": "PKri"
+            },
+            {
+              "from": "vblA",
+              "to": "PKri"
+            },
+            {
+              "from": "vblA",
+              "to": "bkHC"
+            }
+          ],
+          "stats": {
+            "nodes": 11,
+            "edges": 20,
+            "required": 8,
+            "status_counts": {
+              "executed": 4,
+              "cached": 3,
+              "pruned": 1,
+              "skipped": 0,
+              "needed": 0,
+              "inactive": 3
+            }
+          }
+        },
+        "execution": {
+          "elapsed_ms": 325.3,
+          "required_order": ["Hbol", "RGSE", "Kclp", "MJUe", "vblA", "bkHC", "lEQa", "BYtC"],
+          "scheduled_order": ["RGSE", "Kclp", "MJUe", "vblA", "bkHC", "lEQa", "BYtC"],
+          "executed_cell_ids": ["MJUe", "vblA", "bkHC", "BYtC"],
+          "cached_cell_ids": ["RGSE", "Kclp", "lEQa"],
+          "pruned_cell_ids": ["Hbol"],
+          "skipped_cell_ids": [],
+          "skip_reasons": {},
+          "steps": [
+            {
+              "cell_id": "RGSE",
+              "status": "cached",
+              "defs": ["OhlcSwitcher", "anywidget", "traitlets"],
+              "output_preview": "None",
+              "elapsed_ms": 0.01
+            },
+            {
+              "cell_id": "Kclp",
+              "status": "cached",
+              "defs": ["alt", "mo", "pl", "yf"],
+              "output_preview": "None",
+              "elapsed_ms": 0.01
+            },
+            {
+              "cell_id": "MJUe",
+              "status": "executed",
+              "defs": ["df"],
+              "output_preview": "shape: (332, 10)\n\u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510...",
+              "elapsed_ms": 300.79
+            },
+            {
+              "cell_id": "vblA",
+              "status": "executed",
+              "defs": ["symbols_selector"],
+              "output_preview": "None",
+              "elapsed_ms": 9.22
+            },
+            {
+              "cell_id": "bkHC",
+              "status": "executed",
+              "defs": ["symbols_chart"],
+              "output_preview": "None",
+              "elapsed_ms": 6.14
+            },
+            {
+              "cell_id": "lEQa",
+              "status": "cached",
+              "defs": [],
+              "output_preview": "_md()",
+              "elapsed_ms": 3.08
+            },
+            {
+              "cell_id": "BYtC",
+              "status": "executed",
+              "defs": ["rows", "widget"],
+              "output_preview": "None",
+              "elapsed_ms": 2.86
+            }
+          ],
+          "stats": {
+            "required": 8,
+            "scheduled": 7,
+            "executed": 4,
+            "cached": 3,
+            "pruned": 1,
+            "skipped": 0
+          }
+        },
+        "mermaid": "%%{init: {'flowchart': {'htmlLabels': true, 'curve': 'basis'}, 'theme': 'base', 'themeVariables': {'fontFamily': 'Inter, ui-sans-serif, system-ui', 'primaryColor': '#f8fafc', 'lineColor': '#94a3b8'}} }%%\nflowchart TD\n  trace_summary[\"<b>mox.evaluate trace</b><br/><span>df, mox, symbols, symbols_chart, symbols_selector, widget</span><br/><small>required 8 | executed 4 | cached 3 | pruned 1</small><br/><small>325.3 ms</small>\"]\n  cell_Hbol[\"<b>cell Hbol</b><br/><span>override supplied</span><br/><code>symbols = [&quot;AAPL&quot;, &quot;CRWV&quot;, &quot;MSFT&quot;, &quot;GOOGL&quot;, &quot;AMZN&quot;]</code><br/><code>interval = &quot;1d&quot;</code><br/><code>start = &quot;2025-04-01&quot;</code><br/><small>defs: chart_width, end, interval, start, symbols</small><br/><small>refs: -</small><br/><small>target: symbols</small><br/><small>overrides: chart_width, end, interval, start, symbols</small>\"]\n  cell_MJUe[\"<b>cell MJUe</b><br/><span>recomputed</span><br/><code>_df = pl.from_pandas(</code><br/><code>    yf.Tickers(symbols)</code><br/><code>    .history(</code><br/><small>defs: df</small><br/><small>refs: end, interval, pl, start, symbols, yf</small><br/><small>target: df</small><br/><small>300.79 ms</small><br/><small>output: shape: (332, 10)\n\u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510...</small>\"]\n  cell_vblA[\"<b>cell vblA</b><br/><span>recomputed</span><br/><code>symbols_selector = mo.ui.multiselect(</code><br/><code>    options=symbols,</code><br/><code>    label=&quot;Select symbols to compare&quot;,</code><br/><small>defs: symbols_selector</small><br/><small>refs: mo, symbols</small><br/><small>target: symbols_selector</small><br/><small>9.22 ms</small><br/><small>output: None</small>\"]\n  cell_bkHC[\"<b>cell bkHC</b><br/><span>recomputed</span><br/><code>symbols_chart = (</code><br/><code>    alt.Chart(df.filter(pl.col(&quot;Symbol&quot;).is_in(symbols_selector.value)))</code><br/><code>    .mark_line()</code><br/><small>defs: symbols_chart</small><br/><small>refs: alt, chart_width, df, pl, symbols_selector</small><br/><small>target: symbols_chart</small><br/><small>6.14 ms</small><br/><small>output: None</small>\"]\n  cell_lEQa[\"<b>cell lEQa</b><br/><span>cache hit</span><br/><code>mo.md(rf&quot;&quot;&quot;</code><br/><code>## Change in Close Prices Over Time</code><br/><code>Select from `{&quot;, &quot;.join(symbols)}` to compate how the close prices changed between *{df[&quot;Date&quot;].min(</code><br/><small>defs: -</small><br/><small>refs: df, mo, symbols</small><br/><small>3.08 ms</small><br/><small>output: _md()</small>\"]\n  cell_PKri[\"<b>cell PKri</b><br/><span>not touched</span><br/><code>mo.vstack(</code><br/><code>    [</code><br/><code>        symbols_selector,</code><br/><small>defs: -</small><br/><small>refs: mo, symbols_chart, symbols_selector</small>\"]\n  cell_Xref[\"<b>cell Xref</b><br/><span>not touched</span><br/><code>mo.md(&quot;&quot;&quot;</code><br/><code>## Comparative dashboard</code><br/><code>The dashboard below is for a closer read. Switch between **Open**, **High**, **Low**, and **Close**,</code><br/><small>defs: -</small><br/><small>refs: mo</small>\"]\n  cell_SFPL[\"<b>cell SFPL</b><br/><span>not touched</span><br/><code>widget</code><br/><small>defs: -</small><br/><small>refs: widget</small>\"]\n  cell_BYtC[\"<b>cell BYtC</b><br/><span>recomputed</span><br/><code>rows = (</code><br/><code>    df.select(</code><br/><code>        [</code><br/><small>defs: rows, widget</small><br/><small>refs: OhlcSwitcher, df, mo, pl, symbols</small><br/><small>target: widget</small><br/><small>2.86 ms</small><br/><small>output: None</small>\"]\n  cell_RGSE[\"<b>cell RGSE</b><br/><span>cache hit</span><br/><code>import anywidget</code><br/><code>import traitlets</code><br/><code>class OhlcSwitcher(anywidget.AnyWidget):</code><br/><small>defs: OhlcSwitcher, anywidget, traitlets</small><br/><small>refs: -</small><br/><small>0.01 ms</small><br/><small>output: None</small>\"]\n  cell_Kclp[\"<b>cell Kclp</b><br/><span>cache hit</span><br/><code>import marimo as mo</code><br/><code>import yfinance as yf</code><br/><code>import polars as pl</code><br/><small>defs: alt, mo, pl, yf</small><br/><small>refs: -</small><br/><small>0.01 ms</small><br/><small>output: None</small>\"]\n  cell_BYtC -.-> cell_SFPL\n  cell_Hbol -.-> cell_BYtC\n  cell_Hbol -.-> cell_MJUe\n  cell_Hbol -.-> cell_bkHC\n  cell_Hbol -.-> cell_lEQa\n  cell_Hbol -.-> cell_vblA\n  cell_Kclp -.-> cell_BYtC\n  cell_Kclp -.-> cell_MJUe\n  cell_Kclp -.-> cell_PKri\n  cell_Kclp -.-> cell_Xref\n  cell_Kclp -.-> cell_bkHC\n  cell_Kclp -.-> cell_lEQa\n  cell_Kclp -.-> cell_vblA\n  cell_MJUe -.-> cell_BYtC\n  cell_MJUe -.-> cell_bkHC\n  cell_MJUe -.-> cell_lEQa\n  cell_RGSE -.-> cell_BYtC\n  cell_bkHC -.-> cell_PKri\n  cell_vblA -.-> cell_PKri\n  cell_vblA -.-> cell_bkHC\nclassDef summary fill:#ffffff,stroke:#334155,stroke-width:2px,color:#0f172a;\nclassDef target fill:#dbeafe,stroke:#2563eb,stroke-width:3px,color:#172554;\nclassDef executed fill:#dcfce7,stroke:#16a34a,stroke-width:2px,color:#052e16;\nclassDef cached fill:#ccfbf1,stroke:#0d9488,stroke-width:2px,color:#042f2e;\nclassDef pruned fill:#fef3c7,stroke:#d97706,stroke-width:2px,color:#451a03;\nclassDef skipped fill:#ffe4e6,stroke:#e11d48,stroke-width:2px,color:#4c0519;\nclassDef needed fill:#f8fafc,stroke:#64748b,stroke-width:2px,color:#0f172a;\nclassDef inactive fill:#f8fafc,stroke:#e2e8f0,color:#64748b;\nclass trace_summary summary;\nclass cell_Hbol target;\nclass cell_MJUe target;\nclass cell_vblA target;\nclass cell_bkHC target;\nclass cell_lEQa cached;\nclass cell_PKri inactive;\nclass cell_Xref inactive;\nclass cell_SFPL inactive;\nclass cell_BYtC target;\nclass cell_RGSE cached;\nclass cell_Kclp cached;"
+      }
+    }
+  ],
+  "evaluation": {
+    "batch": {
+      "result_count": 4,
+      "cache_scope": "call"
+    },
+    "execution": {
+      "elapsed_ms": 4984.46,
+      "stats": {
+        "required": 32,
+        "scheduled": 28,
+        "executed": 18,
+        "cached": 10,
+        "pruned": 4,
+        "skipped": 0
+      }
+    }
+  }
+}

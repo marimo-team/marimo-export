@@ -15,6 +15,7 @@ from moexport.bundle.schema import (
 from moexport.evaluate import EvaluateResult
 from moexport.jsonio import sha256_json
 from moexport.request import NotebookSource, ResolvedExportRequest
+from moexport.sources import source_record
 
 NOTEBOOK_SOURCE_MEDIA_TYPE = "text/x-python"
 
@@ -41,14 +42,13 @@ def core_manifest(
             "id": request.scenario_set_identity.id,
             "sha256": request.scenario_set_identity.sha256,
         },
-        "export": {
+        "capture": {
             "id": request.export_identity.id,
             "request_sha256": request.export_identity.sha256,
-            "target": request.target,
         },
         "values": {
             name: {
-                "source": value.source,
+                "source": source_record(value.source),
                 "formats": list(value.formats),
             }
             for name, value in request.spec.values.items()
@@ -96,10 +96,9 @@ def invocation_record(
             "id": request.scenario_set_identity.id,
             "sha256": request.scenario_set_identity.sha256,
         },
-        "export": {
+        "capture": {
             "id": request.export_identity.id,
             "request_sha256": request.export_identity.sha256,
-            "target": request.target,
         },
         "source_spec": source_spec,
         "scenarios": traces,
@@ -123,6 +122,16 @@ def invocation_record(
 
 def source_spec_record(request: ResolvedExportRequest) -> dict[str, Any]:
     spec = _compact_source_spec(request.spec.model_dump(mode="json", exclude_none=True))
+    if request.spec.provenance.spec == "none":
+        return {
+            "sha256": None,
+            "spec": None,
+        }
+    if request.spec.provenance.spec == "hash":
+        return {
+            "sha256": sha256_json(spec),
+            "spec": None,
+        }
     return {
         "sha256": sha256_json(spec),
         "spec": spec,
@@ -139,7 +148,7 @@ def _compact_source_spec(value: Any, *, key: str | None = None) -> Any:
             for item_key, item in value.items()
             if item is not None
         }
-        if key in {"options", "state"} and not result:
+        if key in {"inputs", "options", "ui", "widgets"} and not result:
             return None
         return {item_key: item for item_key, item in result.items() if item is not None}
 
@@ -149,9 +158,12 @@ def _compact_source_spec(value: Any, *, key: str | None = None) -> Any:
 def notebook_record(
     notebook_source: NotebookSource,
     blob_store: ContentAddressedBlobStore,
+    *,
+    source_policy: str = "hash",
 ) -> dict[str, Any]:
     source = None
-    if notebook_source.content is not None:
+    source_sha256 = None if source_policy == "none" else notebook_source.sha256
+    if source_policy == "source" and notebook_source.content is not None:
         source_ref = blob_store.write(
             notebook_source.name or "notebook.py",
             notebook_source.content,
@@ -167,6 +179,7 @@ def notebook_record(
     return {
         "name": notebook_source.name,
         "source": source,
+        "source_sha256": source_sha256,
     }
 
 

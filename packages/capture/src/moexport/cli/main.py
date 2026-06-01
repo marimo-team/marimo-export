@@ -48,14 +48,14 @@ def cli() -> None:
       marimo-export query out
 
     \b
-    The spec is JSON or YAML. Each value has a Python `source` expression
-    evaluated in the notebook runtime, and each format references an exporter
-    callable such as `moexport.exporters.dataframe:arrow`.
+    The spec is JSON or YAML. Each value has a typed `source` record, and each
+    format references an exporter callable such as
+    `moexport.exporters.dataframe:arrow`.
 
     \b
     Query progressively:
       marimo-export query out                         # catalog
-      marimo-export query out scenarios --state chart_width=1200
+      marimo-export query out scenarios --state inputs.chart_width=1200
       marimo-export query out source --scenario wide_chart
       marimo-export query out entries --value summary --format json --content
       marimo-export query out artifacts --value df --format arrow
@@ -115,7 +115,7 @@ def notebook(
 
     \b
     Read the notebook source before writing the spec. The spec is JSON or YAML:
-      values.<name>.source    Python expression, e.g. `df` or `df.head()`
+      values.<name>.source    Typed source record, e.g. `{def: df}`
       formats.<name>.export   Python callable ref or inline code defining `export`
 
     \b

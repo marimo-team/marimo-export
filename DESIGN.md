@@ -325,7 +325,7 @@ The color model is CSS-variable first. Tailwind utilities map to variables such 
 - **Error/destructive red (`#EA5D5D`, `#FF6666`):** cell errors, destructive buttons, error banners, and deleted generated cells.
 - **Success green (`#66FF7F`):** success badges, pass states, and accepted statuses.
 - **Links:** use blue links and purple visited links, with hover underline. Markdown links inherit these tokens.
-- **Radix scales:** component details use Radix CSS variables such as `--slate-*`, `--blue-*`, `--sky-*`, `--yellow-*`, `--amber-*`, `--red-*`, and `--grass-*`. Use those scale variables for local semantic variants instead of hard-coding one-off hex values.
+- **Radix scales:** component details use Radix CSS variables such as `--slate-*`, `--blue-*`, `--sky-*`, `--yellow-*`, `--amber-*`, `--red-*`, and `--grass-*`. Prefer those scale variables for local semantic variants.
 
 Keep the palette functional. Most screens should be dominated by background, foreground, border, muted, and one interactive color. Bright semantic colors should appear only where they carry state.
 

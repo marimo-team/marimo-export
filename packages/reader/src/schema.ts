@@ -2,8 +2,8 @@ import type {
   ArtifactData,
   ArtifactRecord,
   BlobRef,
+  CaptureRecord,
   ExportManifest,
-  ExportRecord,
   ExportRootBundle,
   ExportRootIndex,
   IdentityRecord,
@@ -13,6 +13,7 @@ import type {
   ManifestValue,
   NotebookRecord,
   ProvenanceRecord,
+  SourceRecord,
 } from "#reader/types";
 
 const ROOT_INDEX_SCHEMA = "moexport.root_index.v1";
@@ -53,7 +54,7 @@ export function validateExportManifest(value: unknown, label = "export manifest"
     sha256: string(record.sha256, `${label}.sha256`),
     notebook: notebook(record.notebook, `${label}.notebook`),
     scenario_set: identity(record.scenario_set, `${label}.scenario_set`),
-    export: exportRecord(record.export, `${label}.export`),
+    capture: captureRecord(record.capture, `${label}.capture`),
     values,
     scenarios,
   };
@@ -100,6 +101,10 @@ function notebook(value: unknown, label: string): NotebookRecord {
   return {
     name: nullableString(record.name, `${label}.name`),
     source: record.source === null ? null : blobRef(record.source, `${label}.source`),
+    source_sha256:
+      record.source_sha256 === undefined
+        ? null
+        : nullableString(record.source_sha256, `${label}.source_sha256`),
   };
 }
 
@@ -111,23 +116,60 @@ function identity(value: unknown, label: string): IdentityRecord {
   };
 }
 
-function exportRecord(value: unknown, label: string): ExportRecord {
+function captureRecord(value: unknown, label: string): CaptureRecord {
   const record = object(value, label);
   return {
     id: string(record.id, `${label}.id`),
     request_sha256: string(record.request_sha256, `${label}.request_sha256`),
-    target: string(record.target, `${label}.target`),
   };
 }
 
 function manifestValue(value: unknown, label: string): ManifestValue {
   const record = object(value, label);
   return {
-    source: string(record.source, `${label}.source`),
+    source: sourceRecord(record.source, `${label}.source`),
     formats: array(record.formats, `${label}.formats`).map((format, index) =>
       string(format, `${label}.formats[${index}]`),
     ),
   };
+}
+
+function sourceRecord(value: unknown, label: string): SourceRecord {
+  const record = object(value, label);
+  const type = string(record.type, `${label}.type`);
+  if (type === "definition") {
+    return { type, name: string(record.name, `${label}.name`) };
+  }
+  if (type === "expression") {
+    return { type, expression: string(record.expression, `${label}.expression`) };
+  }
+  if (type === "cell_output") {
+    const result: SourceRecord = {
+      type,
+      cell: jsonObject(record.cell, `${label}.cell`),
+    };
+    if (record.output !== undefined) {
+      result.output = string(record.output, `${label}.output`);
+    }
+    if (record.on_error !== undefined) {
+      result.on_error = string(record.on_error, `${label}.on_error`);
+    }
+    return result;
+  }
+  if (type === "notebook_snapshot") {
+    return jsonObject(record, label) as SourceRecord;
+  }
+  if (type === "report") {
+    return {
+      ...(jsonObject(record, label) as SourceRecord),
+      type,
+      cells: array(record.cells, `${label}.cells`).map((item, index) =>
+        jsonValue(item, `${label}.cells[${index}]`),
+      ),
+    };
+  }
+
+  throw new Error(`${label}.type has unknown source type ${JSON.stringify(type)}.`);
 }
 
 function manifestScenario(value: unknown, label: string): ManifestScenario {
