@@ -143,8 +143,8 @@ def body_refs(cell: CellImpl) -> set[str]:
         _BODY_REFS_CACHE[cache_key] = set()
         return _BODY_REFS_CACHE[cache_key]
 
-    # Use marimo's compiler for refs instead of a hand-rolled AST walker so
-    # dependency analysis stays aligned with notebook semantics.
+    # Use marimo's compiler for refs so dependency analysis stays aligned with
+    # notebook semantics.
     refs = compile_cell(code, cell_id=_ANALYSIS_CELL_ID).refs
     _BODY_REFS_CACHE[cache_key] = {
         ref for ref in refs if ref not in _BUILTINS and ref not in _assigned_names(code)

@@ -8,6 +8,10 @@ import {
   validateExportManifest,
 } from "../dist/index.js";
 
+const jsonPayload = '{"ok":true}';
+const jsonPayloadSha = "4062edaf750fb8074e7e83e0c9028c94e32468a8b6f1614774328ef045150f93";
+const jsonPayloadHref = `blobs/sha256/40/62/${jsonPayloadSha}`;
+
 const manifest = {
   schema: "moexport.bundle.v1",
   version: 1,
@@ -45,10 +49,10 @@ const manifest = {
               type: "bundle",
               files: {
                 data: {
-                  href: "blobs/sha256/aa/bb/aabb",
+                  href: jsonPayloadHref,
                   media_type: "application/json",
-                  size: 2,
-                  sha256: "aabb",
+                  size: jsonPayload.length,
+                  sha256: jsonPayloadSha,
                 },
               },
               entry: "data",
@@ -217,7 +221,7 @@ test("readLatestLocalExport opens a bundle through a file reader", async () => {
       bundles: [],
     },
     "export/bundles/sha256-test/manifest.json": manifest,
-    "export/blobs/sha256/aa/bb/aabb": { ok: true },
+    [`export/${jsonPayloadHref}`]: jsonPayload,
   };
 
   const exp = await readLatestLocalExport({
@@ -226,6 +230,9 @@ test("readLatestLocalExport opens a bundle through a file reader", async () => {
       if (!(file in files)) {
         throw new Error(`missing ${file}`);
       }
+      if (typeof files[file] === "string") {
+        return files[file];
+      }
       return JSON.stringify(files[file]);
     },
     url: (href) => `/export/${href}`,
@@ -233,8 +240,44 @@ test("readLatestLocalExport opens a bundle through a file reader", async () => {
 
   const handle = exp.get({ scenario: "default", value: "value", format: "json" });
 
-  assert.equal(handle.url(), "/export/blobs/sha256/aa/bb/aabb");
+  assert.equal(handle.url(), `/export/${jsonPayloadHref}`);
   assert.deepEqual(await handle.json(), { ok: true });
+  assert.equal(exp.scenario("default").id, "default");
+  assert.deepEqual(
+    exp.scenarioRecords().map((scenario) => scenario.id),
+    ["default"],
+  );
+});
+
+test("artifact reads reject bytes that do not match the manifest digest", async () => {
+  const exp = await readLatestLocalExport({
+    root: "export",
+    readFile: async (file) => {
+      if (file.endsWith("index.json")) {
+        return JSON.stringify({
+          schema: "moexport.root_index.v1",
+          version: 1,
+          latest: {
+            id: "sha256-test",
+            sha256: "test",
+            manifest_href: "bundles/sha256-test/manifest.json",
+            updated_at: "2026-06-01T00:00:00Z",
+            latest_invocation_href: "bundles/sha256-test/traces/sha256-trace.json",
+          },
+          bundles: [],
+        });
+      }
+      if (file.endsWith("manifest.json")) {
+        const badManifest = structuredClone(manifest);
+        badManifest.scenarios[0].values.value.json.data.files.data.sha256 = "0".repeat(64);
+        return JSON.stringify(badManifest);
+      }
+      return jsonPayload;
+    },
+  });
+
+  const handle = exp.get({ scenario: "default", value: "value", format: "json" });
+  await assert.rejects(handle.bytes(), /SHA-256/);
 });
 
 function jsonFetch(files) {

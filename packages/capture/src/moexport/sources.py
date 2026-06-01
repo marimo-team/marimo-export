@@ -20,7 +20,6 @@ from pydantic import (
 from moexport.runtime import NotebookRuntime
 
 SourceKey: TypeAlias = Annotated[str, Field(pattern=r"^[A-Za-z_][A-Za-z0-9_]*$")]
-OutputPolicy: TypeAlias = Literal["scenario", "stored"]
 SourceRecord: TypeAlias = dict[str, Any]
 
 
@@ -31,9 +30,18 @@ class SourceModel(BaseModel):
 class CellSelector(SourceModel):
     """Select one notebook cell by stable id, public name, or order index."""
 
-    id: str | None = None
-    name: str | None = None
-    index: int | None = None
+    id: str | None = Field(
+        default=None,
+        description="Runtime cell id to select.",
+    )
+    name: str | None = Field(
+        default=None,
+        description="Public cell function name to select.",
+    )
+    index: int | None = Field(
+        default=None,
+        description="Zero-based notebook cell position to select.",
+    )
 
     @field_validator("id", "name")
     @classmethod
@@ -86,15 +94,25 @@ class CellSelector(SourceModel):
 class DefinitionSource(SourceModel):
     """A notebook definition exported by name."""
 
-    type: Literal["definition"] = "definition"
-    name: SourceKey
+    type: Literal["definition"] = Field(
+        default="definition",
+        description="Discriminator for a notebook definition source.",
+    )
+    name: SourceKey = Field(
+        description="Definition name to read from the notebook graph.",
+    )
 
 
 class ExpressionSource(SourceModel):
     """A Python expression evaluated against the active scenario."""
 
-    type: Literal["expression"] = "expression"
-    expression: str
+    type: Literal["expression"] = Field(
+        default="expression",
+        description="Discriminator for a Python expression source.",
+    )
+    expression: str = Field(
+        description="Python expression evaluated against the active scenario.",
+    )
 
     @field_validator("expression")
     @classmethod
@@ -107,10 +125,17 @@ class ExpressionSource(SourceModel):
 class CellOutputSource(SourceModel):
     """A selected cell output materialized for the active scenario."""
 
-    type: Literal["cell_output"] = "cell_output"
-    cell: CellSelector
-    output: OutputPolicy = "scenario"
-    on_error: Literal["raise", "record"] = "raise"
+    type: Literal["cell_output"] = Field(
+        default="cell_output",
+        description="Discriminator for a selected cell output source.",
+    )
+    cell: CellSelector = Field(
+        description="Cell whose visible output should be materialized.",
+    )
+    on_error: Literal["raise", "record"] = Field(
+        default="raise",
+        description="Whether output materialization errors should raise or be recorded.",
+    )
 
     @field_validator("cell", mode="before")
     @classmethod
@@ -121,19 +146,42 @@ class CellOutputSource(SourceModel):
 class NotebookSnapshotSource(SourceModel):
     """All selected notebook cells as ordered display-output records."""
 
-    type: Literal["notebook_snapshot"] = "notebook_snapshot"
-    include_source: bool = True
-    include_empty_outputs: bool = True
-    include_internal_cells: bool = False
-    on_error: Literal["raise", "record"] = "raise"
+    type: Literal["notebook_snapshot"] = Field(
+        default="notebook_snapshot",
+        description="Discriminator for a whole-notebook snapshot source.",
+    )
+    include_source: bool = Field(
+        default=True,
+        description="Include authored Python source in each cell record.",
+    )
+    include_empty_outputs: bool = Field(
+        default=True,
+        description="Include cells that have no display output.",
+    )
+    include_internal_cells: bool = Field(
+        default=False,
+        description="Include exporter-generated internal cells.",
+    )
+    on_error: Literal["raise", "record"] = Field(
+        default="raise",
+        description="Whether output materialization errors should raise or be recorded.",
+    )
 
 
 class ReportCell(SourceModel):
     """One cell included in a report source."""
 
-    cell: CellSelector
-    label: str | None = None
-    order: int | None = None
+    cell: CellSelector = Field(
+        description="Cell to include in the report.",
+    )
+    label: str | None = Field(
+        default=None,
+        description="Optional report label for this cell.",
+    )
+    order: int | None = Field(
+        default=None,
+        description="Optional sort key for report ordering.",
+    )
 
     @model_validator(mode="before")
     @classmethod
@@ -165,10 +213,22 @@ class ReportCell(SourceModel):
 class ReportSource(SourceModel):
     """A finite report built from selected cell outputs."""
 
-    type: Literal["report"] = "report"
-    cells: list[ReportCell] = Field(min_length=1)
-    include_source: bool = True
-    on_error: Literal["raise", "record"] = "record"
+    type: Literal["report"] = Field(
+        default="report",
+        description="Discriminator for a selected-cell report source.",
+    )
+    cells: list[ReportCell] = Field(
+        min_length=1,
+        description="Ordered cell outputs to include in the report.",
+    )
+    include_source: bool = Field(
+        default=True,
+        description="Include authored Python source in each report cell.",
+    )
+    on_error: Literal["raise", "record"] = Field(
+        default="record",
+        description="Whether output materialization errors should raise or be recorded.",
+    )
 
 
 SourceSpec: TypeAlias = Annotated[
@@ -205,7 +265,6 @@ def normalize_source(value: object) -> SourceSpec:
     if "cell" in mapping:
         return CellOutputSource(
             cell=CellSelector.from_value(mapping["cell"]),
-            output=_output_policy(mapping.get("output", "scenario")),
             on_error=_on_error(mapping.get("on_error", "raise")),
         )
     if "snapshot" in mapping or "notebook" in mapping:
@@ -235,11 +294,6 @@ def source_expression(source: SourceSpec) -> str:
     if isinstance(source, ExpressionSource):
         return source.expression
     if isinstance(source, CellOutputSource):
-        if source.output == "stored":
-            return (
-                f"mox.runtime().cell({source.cell.expression_args()})"
-                f".stored_output(on_error={source.on_error!r})"
-            )
         return (
             f"mox.runtime().cell({source.cell.expression_args()})"
             f".scenario_output(on_error={source.on_error!r})"
@@ -285,7 +339,7 @@ def selected_output_cell_ids(
     notebook = NotebookRuntime(runtime)
     cell_ids: set[CellId_t] = set()
     for source in sources.values():
-        if isinstance(source, CellOutputSource) and source.output == "scenario":
+        if isinstance(source, CellOutputSource):
             cell_ids.add(source.cell.select(notebook)._cell_id)
         elif isinstance(source, NotebookSnapshotSource):
             cell_ids.update(cell._cell_id for cell in notebook.cells())
@@ -303,7 +357,7 @@ def output_error_policy(
 
     for source in sources.values():
         if isinstance(source, CellOutputSource):
-            if source.output == "scenario" and source.on_error == "record":
+            if source.on_error == "record":
                 return "record"
         elif (
             isinstance(
@@ -322,12 +376,6 @@ def _required_string(value: object, label: str) -> str:
     return value
 
 
-def _output_policy(value: object) -> OutputPolicy:
-    if value not in {"scenario", "stored"}:
-        raise ValueError("source.output must be 'scenario' or 'stored'")
-    return cast(OutputPolicy, value)
-
-
 def _on_error(value: object) -> Literal["raise", "record"]:
     if value not in {"raise", "record"}:
         raise ValueError("source.on_error must be 'raise' or 'record'")
@@ -340,7 +388,6 @@ __all__ = [
     "DefinitionSource",
     "ExpressionSource",
     "NotebookSnapshotSource",
-    "OutputPolicy",
     "ReportCell",
     "ReportSource",
     "SOURCE_SPEC_ADAPTER",

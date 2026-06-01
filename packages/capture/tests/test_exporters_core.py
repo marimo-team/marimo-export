@@ -25,7 +25,7 @@ class CapturingExporterContext:
         *,
         media_type: str | None = None,
     ) -> BlobRef:
-        href = f"memory://{name}"
+        href = f"blobs/test/{name}"
         blob = bytes(data)
         self.blobs[href] = blob
         return BlobRef(

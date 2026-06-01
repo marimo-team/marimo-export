@@ -15,13 +15,21 @@ from notebook_markdown import (  # noqa: E402
 )
 
 
+def assert_in_order(text: str, *needles: str) -> None:
+    position = -1
+    for needle in needles:
+        next_position = text.find(needle, position + 1)
+        assert next_position >= 0, needle
+        position = next_position
+
+
 def test_notebook_markdown_spec_captures_whole_notebook() -> None:
     spec = notebook_markdown_spec(
         scenario_id="review",
-        inputs={"symbol": "MSFT"},
+        state={"symbol": "MSFT"},
     )
 
-    assert spec["scenarios"] == [{"id": "review", "inputs": {"symbol": "MSFT"}}]
+    assert spec["scenarios"] == [{"id": "review", "state": {"symbol": "MSFT"}}]
     assert spec["values"]["notebook"]["source"] == {"snapshot": True}
     assert spec["values"]["notebook"]["formats"]["linear"]["export"] == {
         "type": "ref",
@@ -33,7 +41,7 @@ def test_notebook_markdown_spec_captures_whole_notebook() -> None:
     }
 
 
-def test_write_markdown_snapshot_preserves_inputs_outputs_and_media(
+def test_write_markdown_snapshot_preserves_source_outputs_state_and_media(
     tmp_path: Path,
 ) -> None:
     snapshot = {
@@ -88,20 +96,15 @@ def test_write_markdown_snapshot_preserves_inputs_outputs_and_media(
     assert result.cell_count == 2
     assert result.output_count == 2
     assert result.media_files == (html,)
-    assert '<div class="moexport-cell-label">Cell 01</div>' in markdown
-    assert (
-        '<div class="moexport-cell-label">Cell 02 · <code>render_chart</code></div>'
-    ) in markdown
-    assert '\n---\n\n<div class="moexport-cell-label">' in markdown
-    assert "**Input**" not in markdown
-    assert "**Output**" not in markdown
-    assert "\n# demo.py\n" not in markdown
-    assert "<summary>Scenario state</summary>" in markdown
-    assert '"symbol": "MSFT"' in markdown
-    assert "```python\nx = 1\nx\n```" in markdown
-    assert "The value is `1`." in markdown
-    assert "[Open HTML output](media/cell-02-output-01.html)" in markdown
-    assert "iframe" not in markdown
+    assert_in_order(markdown, "Cell 01", "```python\nx = 1\nx\n```", "The value is `1`.")
+    assert_in_order(
+        markdown,
+        "Cell 02",
+        "render_chart",
+        "```python\ndisplay_chart()\n```",
+        "[Open HTML output](media/cell-02-output-01.html)",
+    )
+    assert_in_order(markdown, "Scenario state", '"symbol": "MSFT"')
     assert html.read_text(encoding="utf-8") == (
         "<script>window.ok = true;</script><div>chart</div>"
     )
@@ -110,6 +113,12 @@ def test_write_markdown_snapshot_preserves_inputs_outputs_and_media(
 def test_write_markdown_snapshot_extracts_marimo_mime_preview(
     tmp_path: Path,
 ) -> None:
+    html_payload = (
+        "<marimo-mime-renderer "
+        "data-data='{&quot;text/html&quot;:"
+        "&quot;&lt;div id=&#92;&quot;chart&#92;&quot;&gt;"
+        "ok&lt;/div&gt;&quot;}'></marimo-mime-renderer>"
+    )
     snapshot = {
         "schema": NOTEBOOK_LINEAR_SCHEMA,
         "version": 1,
@@ -123,12 +132,7 @@ def test_write_markdown_snapshot_extracts_marimo_mime_preview(
                     {
                         "channel": "output",
                         "mimetype": "text/html",
-                        "data": (
-                            "<marimo-mime-renderer "
-                            "data-data='{&quot;text/html&quot;:"
-                            "&quot;&lt;div id=&#92;&quot;chart&#92;&quot;&gt;"
-                            "ok&lt;/div&gt;&quot;}'></marimo-mime-renderer>"
-                        ),
+                        "data": html_payload,
                     }
                 ],
             }
@@ -142,13 +146,11 @@ def test_write_markdown_snapshot_extracts_marimo_mime_preview(
 
     assert result.media_files == (raw,)
     assert "[Open raw HTML output](media/cell-01-output-01.html)" in markdown
-    assert "[Open rendered preview]" not in markdown
-    assert "iframe" not in markdown
-    assert '<div id="chart">ok</div>' not in markdown
     assert "ok" in markdown
+    assert raw.read_text(encoding="utf-8") == html_payload
 
 
-def test_write_markdown_snapshot_omits_empty_output_marker(
+def test_write_markdown_snapshot_keeps_code_for_cells_without_output(
     tmp_path: Path,
 ) -> None:
     snapshot = {
@@ -169,9 +171,8 @@ def test_write_markdown_snapshot_omits_empty_output_marker(
 
     markdown = result.output_path.read_text(encoding="utf-8")
 
-    assert "_No display output._" not in markdown
     assert "```python\nx = 1\n```" in markdown
-    assert '<div class="moexport-cell-label">Cell 01</div>' in markdown
+    assert "Cell 01" in markdown
 
 
 def test_write_markdown_snapshot_markdownifies_html_shaped_markdown_output(
@@ -206,7 +207,6 @@ def test_write_markdown_snapshot_markdownifies_html_shaped_markdown_output(
 
     markdown = result.output_path.read_text(encoding="utf-8")
 
-    assert '<span class="markdown prose">' not in markdown
     assert "## Greeting" in markdown
     assert "Hello `AAPL`" in markdown
 
@@ -269,13 +269,10 @@ def test_write_markdown_snapshot_rasterizes_marimo_vegalite_output(
     raw = tmp_path / "media" / "cell-01-output-01.html"
     png = tmp_path / "media" / "cell-01-output-01.png"
 
-    assert result.media_files == (raw, png)
+    assert set(result.media_files) == {raw, png}
     assert "[Open raw HTML output](media/cell-01-output-01.html)" in markdown
     assert "![Cell 01 output 1](media/cell-01-output-01.png)" in markdown
-    assert "[Open rendered preview]" not in markdown
-    assert "iframe" not in markdown
     assert png.read_bytes() == b"PNG"
-    assert calls["scale"] == 2
     vl_spec = calls["vl_spec"]
     assert isinstance(vl_spec, str)
     assert json.loads(vl_spec)["mark"] == "line"

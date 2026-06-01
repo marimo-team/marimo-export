@@ -8,7 +8,7 @@ from typing import Any, Literal, TypeVar
 from pydantic import BaseModel, ConfigDict, Field
 
 from moexport.artifacts import ArtifactData
-from moexport.blobs import BlobRef
+from moexport.blobs import BlobRef, BundleHref
 
 BUNDLE_SCHEMA = "moexport.bundle.v1"
 INVOCATION_SCHEMA = "moexport.invocation.v1"
@@ -66,7 +66,7 @@ class ManifestScenario(BundleSchemaModel):
 
 
 class ProvenanceRecord(BundleSchemaModel):
-    invocations_index_href: str | None = None
+    invocations_index_href: BundleHref | None = None
     source_spec_sha256: str | None = None
     source_spec: JsonObject | None = None
 
@@ -87,14 +87,14 @@ class BundleManifest(BundleSchemaModel):
 class BundleReference(BundleSchemaModel):
     id: str
     sha256: str
-    manifest_href: str
+    manifest_href: BundleHref
 
 
 class InvocationSummary(BundleSchemaModel):
     id: str
     sha256: str
     created_at: str
-    href: str
+    href: BundleHref
 
 
 class InvocationIndex(BundleSchemaModel):
@@ -129,9 +129,9 @@ class InvocationRecord(BundleSchemaModel):
 class RootBundleSummary(BundleSchemaModel):
     id: str
     sha256: str
-    manifest_href: str
+    manifest_href: BundleHref
     updated_at: str
-    latest_invocation_href: str
+    latest_invocation_href: BundleHref
 
 
 class RootIndex(BundleSchemaModel):

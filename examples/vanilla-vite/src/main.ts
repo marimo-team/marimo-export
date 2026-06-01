@@ -667,8 +667,7 @@ function labelScenario(value: string): string {
 }
 
 function labelScenarioFromManifest(exp: StaticExport, scenario: string): string {
-  const record = exp.manifest.scenarios.find((candidate) => candidate.id === scenario);
-  const value = record ? selectorValue(record.state) : [];
+  const value = selectorValue(exp.scenario(scenario).state);
   return value.length ? value.join(" + ") : labelScenario(scenario);
 }
 

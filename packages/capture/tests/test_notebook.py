@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 from pathlib import Path
 from typing import Any, cast
 
@@ -166,7 +167,7 @@ def export(value, ctx, **options):
 def _selected_export_spec() -> dict[str, Any]:
     spec = _text_export_spec()
     spec["scenarios"] = [
-        {"id": "subset", "inputs": {"symbols": ["CRWV", "MSFT"]}},
+        {"id": "subset", "state": {"symbols": ["CRWV", "MSFT"]}},
     ]
     spec["values"] = {
         "selected": {
@@ -208,7 +209,7 @@ def test_export_notebook_loads_file_and_writes_bundle(tmp_path: Path) -> None:
         {
             "scenarios": [
                 {"id": "base"},
-                {"id": "override", "inputs": {"symbol": "GOOGL"}},
+                {"id": "override", "state": {"symbol": "GOOGL"}},
             ],
             "values": {
                 "title": {
@@ -341,8 +342,8 @@ if __name__ == "__main__":
 """.lstrip()
     )
     spec = _text_export_spec()
-    spec["scenarios"] = [{"id": "override", "inputs": {"symbol": "MSFT"}}]
-    spec["values"]["title"]["source"] = {"cell": {"index": 1}, "output": "scenario"}
+    spec["scenarios"] = [{"id": "override", "state": {"symbol": "MSFT"}}]
+    spec["values"]["title"]["source"] = {"cell": {"index": 1}}
 
     result = export_notebook(
         notebook,
@@ -365,7 +366,7 @@ def test_export_notebook_object_patch_scenarios_do_not_leak(
     _write_object_patch_notebook(notebook)
     spec = _text_export_spec()
     spec["scenarios"] = [
-        {"id": "a-patched", "ui": {"selector": {"value": ["CRWV", "MSFT"]}}},
+        {"id": "a-patched", "state": {"selector.value": ["CRWV", "MSFT"]}},
         {"id": "z-default"},
     ]
     spec["values"]["title"]["source"] = {"def": "chart"}
@@ -389,7 +390,7 @@ def test_export_notebook_object_patch_scenarios_do_not_leak(
     ]
 
 
-def test_export_notebook_snapshot_omits_synthetic_export_cell(
+def test_export_notebook_snapshot_excludes_internal_export_cells(
     tmp_path: Path,
 ) -> None:
     notebook = tmp_path / "finance.py"
@@ -403,13 +404,16 @@ def test_export_notebook_snapshot_omits_synthetic_export_cell(
 
     artifact = result.manifest["scenarios"][0]["values"]["notebook"]["linear"]
     blob = artifact["data"]["files"]["notebook"]
-    snapshot = (
+    snapshot = json.loads(
         Path(result.bundle_path)
         .parent.parent.joinpath(blob["href"])
         .read_text(encoding="utf-8")
     )
 
-    assert "_moexport_notebook_export" not in snapshot
+    assert [cell["source"] for cell in snapshot["cells"]] == [
+        'symbol = "AAPL"',
+        'title = f"Selected {symbol}"',
+    ]
     assert artifact["metadata"]["cell_count"] == 2
 
 

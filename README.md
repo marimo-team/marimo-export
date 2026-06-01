@@ -72,7 +72,11 @@ const table = await exp.get({ scenario: "default", value: "prices", format: "arr
 ```
 
 `@marimo-team/export-reader` also exposes raw `.url()`, `.bytes()`, `.text()`,
-and `.json()` access for artifacts that do not need a loader.
+and `.json()` access for artifacts that do not need a loader. `.bytes()`,
+`.text()`, `.json()`, `.fetch()`, and loader-backed `.load()` verify the
+recorded size and SHA-256 digest before returning payload data. `.url()` returns
+the bundle URL without reading the blob, so callers that fetch it directly own
+integrity checks.
 
 ## Capture From JavaScript
 

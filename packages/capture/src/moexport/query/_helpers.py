@@ -125,6 +125,9 @@ def notebook_source_hash(notebook: Mapping[str, Any]) -> object:
 
 
 def _state_path(state: Mapping[str, Any], path: str) -> object:
+    if path in state:
+        return state[path]
+
     value: object = state
     for part in path.split("."):
         if not isinstance(value, Mapping) or part not in value:
@@ -138,7 +141,7 @@ def _state_paths(state: Mapping[str, Any], *, prefix: str = "") -> set[str]:
     for key, value in state.items():
         path = f"{prefix}.{key}" if prefix else str(key)
         paths.add(path)
-        if isinstance(value, Mapping):
+        if "." not in str(key) and isinstance(value, Mapping):
             paths.update(_state_paths(value, prefix=path))
     return paths
 

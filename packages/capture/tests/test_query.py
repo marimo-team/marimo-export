@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import cast
 
@@ -177,7 +178,7 @@ def _write_chart_export(root: Path, *, bundle_id: str, chart_width: int) -> None
             "scenarios": [
                 {
                     "id": "wide_chart",
-                    "state": {"inputs": {"chart_width": chart_width}},
+                    "state": {"chart_width": chart_width},
                     "values": {
                         "comparison_chart": {
                             "vegalite": {
@@ -274,6 +275,10 @@ def test_bundle_query_returns_semantic_map_and_raw_file_paths(tmp_path: Path) ->
     assert bundle.resolve("blobs/sha256/aa/bb/aabb") == (
         root / "blobs" / "sha256" / "aa" / "bb" / "aabb"
     )
+    with pytest.raises(ValueError, match="invalid bundle href"):
+        bundle.resolve("../secret.json")
+    with pytest.raises(ValueError, match="invalid bundle href"):
+        bundle.resolve("/tmp/secret.json")
     assert bundle.map()["files"] == files
     assert bundle.file(scenario="base", value="prices", format="json")["path"] == str(
         root / "blobs" / "sha256" / "aa" / "bb" / "aabb"
@@ -312,15 +317,33 @@ def test_bundle_query_exposes_traces_and_graphs(tmp_path: Path) -> None:
     assert bundle.traces()[0]["path"] == str(
         root / "bundles" / "sha256-demo" / "traces" / "sha256-trace.json"
     )
-    assert bundle.trace("base")["trace"]["value_preview"] == "{'prices': ...}"
-    assert "declared_state" not in bundle.trace("base")
-    assert "declared_state" not in bundle.trace()["scenarios"][0]
+    scenario_trace = bundle.trace("base")
+    assert scenario_trace["id"] == "base"
+    assert scenario_trace["state"] == {}
+    assert scenario_trace["trace"]["value_preview"] == "{'prices': ...}"
+    assert bundle.trace()["scenarios"][0]["id"] == "base"
     assert bundle.graph("base") == {
         "nodes": [{"cell_id": "abc", "defs": ["df"]}],
         "edges": [],
         "counts": {"nodes": 1, "edges": 0},
     }
     assert bundle.graph()["base"]["counts"] == {"nodes": 1, "edges": 0}
+
+
+def test_bundle_query_rejects_manifest_hrefs_outside_export_root(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "__marimo__" / "static-export"
+    _write_export(root)
+    manifest_path = root / "bundles" / "sha256-demo" / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["scenarios"][0]["values"]["prices"]["json"]["data"]["files"]["data"][
+        "href"
+    ] = "../secret.json"
+    write_json(manifest_path, manifest)
+
+    with pytest.raises(ValueError, match="invalid bundle href"):
+        open_export(root).bundle()
 
 
 def test_bundle_query_reports_invalid_json_entry_content(tmp_path: Path) -> None:
@@ -354,7 +377,7 @@ def test_export_query_returns_notebook_source_for_matching_scenario(
     _write_chart_export(root, bundle_id="sha256-1200", chart_width=1200)
 
     export = open_export(root)
-    source = export.notebook_source(state={"inputs.chart_width": 1200})
+    source = export.notebook_source(state={"chart_width": 1200})
 
     assert source["name"] == "finance.py"
     assert source["text"] == "# sha256-1200\n"
@@ -398,7 +421,7 @@ def test_export_query_catalog_indexes_the_whole_export_root(tmp_path: Path) -> N
         "files": 2,
         "bytes": 32,
     }
-    assert catalog["state_keys"] == ["inputs", "inputs.chart_width"]
+    assert catalog["state_keys"] == ["chart_width"]
     assert catalog["values"] == [
         {
             "name": "comparison_chart",
@@ -432,22 +455,22 @@ def test_export_query_filters_1200_wide_finance_chart(tmp_path: Path) -> None:
 
     export = open_export(root)
     artifacts = export.artifacts(
-        state={"inputs.chart_width": 1200},
+        state={"chart_width": 1200},
         value="comparison_chart",
         format="vegalite",
     )
     files = export.files(
-        state={"inputs.chart_width": 1200},
+        state={"chart_width": 1200},
         value="comparison_chart",
         media_type="application/vnd.vegalite+json",
     )
     entries = export.entries(
-        state={"inputs.chart_width": 1200},
+        state={"chart_width": 1200},
         value="comparison_chart",
         media_type="application/vnd.vegalite+json",
         include_content=True,
     )
-    scenarios = export.scenarios(state={"inputs.chart_width": 1200})
+    scenarios = export.scenarios(state={"chart_width": 1200})
 
     assert scenarios == [
         {
@@ -455,14 +478,14 @@ def test_export_query_filters_1200_wide_finance_chart(tmp_path: Path) -> None:
             "bundle_path": str(root / "bundles" / "sha256-1200"),
             "notebook": _notebook_record("notebook-sha256-1200"),
             "id": "wide_chart",
-            "state": {"inputs": {"chart_width": 1200}},
+            "state": {"chart_width": 1200},
             "values": {"comparison_chart": ["vegalite"]},
             "artifact_count": 1,
         }
     ]
     assert (
         export.artifact(
-            state={"inputs.chart_width": 1200},
+            state={"chart_width": 1200},
             value="comparison_chart",
             format="vegalite",
         )
@@ -470,7 +493,7 @@ def test_export_query_filters_1200_wide_finance_chart(tmp_path: Path) -> None:
     )
     assert (
         export.file(
-            state={"inputs.chart_width": 1200},
+            state={"chart_width": 1200},
             value="comparison_chart",
             media_type="application/vnd.vegalite+json",
         )
@@ -478,7 +501,7 @@ def test_export_query_filters_1200_wide_finance_chart(tmp_path: Path) -> None:
     )
     assert (
         export.entry(
-            state={"inputs.chart_width": 1200},
+            state={"chart_width": 1200},
             value="comparison_chart",
             media_type="application/vnd.vegalite+json",
             include_content=True,
@@ -487,7 +510,7 @@ def test_export_query_filters_1200_wide_finance_chart(tmp_path: Path) -> None:
     )
     assert artifacts[0]["bundle"] == "sha256-1200"
     assert artifacts[0]["scenario"] == "wide_chart"
-    assert artifacts[0]["state"] == {"inputs": {"chart_width": 1200}}
+    assert artifacts[0]["state"] == {"chart_width": 1200}
     assert artifacts[0]["entry_path"] == str(
         root / "blobs" / "sha256" / "1200" / "spec"
     )

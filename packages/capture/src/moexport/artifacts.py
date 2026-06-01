@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from moexport.blobs import BlobRef
 
@@ -16,18 +16,25 @@ type JsonObject = dict[str, JsonValue]
 class ArtifactData(BaseModel):
     """Artifact payload stored as one or more content-addressed blob files."""
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     type: Literal["bundle"] = Field(
         default="bundle",
         description="Discriminator for artifact data backed by external blob files.",
     )
     files: dict[str, BlobRef] = Field(
+        min_length=1,
         description="Named files that make up this representation.",
     )
     entry: str | None = Field(
         description="Primary file key in `files`, or null when there is no single entry.",
     )
+
+    @model_validator(mode="after")
+    def _entry_must_name_file(self) -> ArtifactData:
+        if self.entry is not None and self.entry not in self.files:
+            raise ValueError("artifact data entry must name a file in files")
+        return self
 
 
 class Artifact(BaseModel):
@@ -37,7 +44,7 @@ class Artifact(BaseModel):
     only describe the portable representation they produced.
     """
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     format: str = Field(
         description="Stable format identifier, for example `dataframe.arrow.v1`.",

@@ -67,13 +67,12 @@ def apply_object_patches(
 
 
 def _frontend_update_value(element: Any, value: Any) -> Any:
-    """Translate Python-facing scenario values to UIElement frontend payloads.
+    """Translate scenario values into UIElement frontend payloads.
 
     Scenario specs are authored against `element.value`, which is the Python
     value users see. marimo's private `_update()` method accepts frontend
-    payloads instead. Selection widgets are the meaningful mismatch: dropdown
-    and multiselect frontend payloads are option keys, while Python values may
-    be the mapped option objects.
+    payloads. For dropdown and multiselect widgets, frontend payloads are option
+    keys while Python values may be mapped option objects.
     """
 
     options = getattr(element, "options", None)
@@ -107,8 +106,8 @@ def _sync_ui_element_initial_html(element: Any, value: Any) -> None:
 
     `UIElement._update()` changes the Python-side value, but the element's HTML
     was created when its defining cell ran. Static notebook snapshots need that
-    HTML to carry the finite-state value too, otherwise downstream outputs and
-    visible UI chips disagree.
+    HTML to carry the scenario value so downstream outputs and visible UI chips
+    agree.
     """
 
     args = getattr(element, "_args", None)

@@ -20,9 +20,9 @@ def main() -> None:
         help="Directory that will receive output.md and media/.",
     )
     parser.add_argument(
-        "--inputs-json",
+        "--state-json",
         type=Path,
-        help="JSON object with scenario input overrides.",
+        help="JSON object with scenario state.",
     )
     parser.add_argument(
         "--scenario-id",
@@ -46,12 +46,12 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    inputs = _load_inputs(args.inputs_json)
+    state = _load_state(args.state_json)
     result = export_notebook_markdown(
         args.notebook,
         args.output_dir,
         scenario_id=args.scenario_id,
-        inputs=inputs,
+        state=state,
         bundle=args.bundle,
         title=args.title,
         inline_html_bytes=args.inline_html_bytes,
@@ -72,13 +72,13 @@ def main() -> None:
     )
 
 
-def _load_inputs(path: Path | None) -> dict[str, Any]:
+def _load_state(path: Path | None) -> dict[str, Any]:
     if path is None:
         return {}
 
     parsed = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(parsed, dict):
-        raise TypeError("--inputs-json must point to a JSON object")
+        raise TypeError("--state-json must point to a JSON object")
     return parsed
 
 

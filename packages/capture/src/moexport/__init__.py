@@ -57,10 +57,25 @@ async def export(
     *,
     bundle: str | Path | None = None,
 ) -> ExportResult:
+    """Capture the active marimo runtime and write a static export bundle.
+
+    ``spec`` accepts an ``ExportSpec`` instance or raw spec mapping. ``bundle``
+    overrides the output root from the spec. Returns an ``ExportResult`` with
+    the written manifest, bundle identity, source spec, and invocation trace.
+    Requires a live marimo runtime, usually through ``marimo-export notebook``
+    or a notebook cell.
+    """
+
     return await _export(spec, bundle=bundle)
 
 
 def runtime() -> NotebookRuntime:
+    """Return the active export scenario runtime.
+
+    The runtime exposes read-only access to notebook definitions, UI elements,
+    and cell outputs for the scenario currently being captured.
+    """
+
     return _runtime()
 
 

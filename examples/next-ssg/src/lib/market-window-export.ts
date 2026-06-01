@@ -192,7 +192,7 @@ const buildMarketWindowSpec = (start: string, end: string) => ({
   scenarios: [
     {
       id: scenarioId(start, end),
-      inputs: {
+      state: {
         symbols: ["AAPL", "MSFT", "GOOGL"],
         interval: "1d",
         start,

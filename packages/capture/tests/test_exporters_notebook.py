@@ -13,7 +13,6 @@ from moexport.artifacts import Artifact, ArtifactData, JsonObject
 from moexport.blobs import BlobContent, BlobRef
 from moexport.exporters import notebook
 from moexport.runtime import NotebookRuntime
-from moexport.sources import CellOutputSource, CellSelector, selected_output_cell_ids
 
 
 class FakeContext:
@@ -44,7 +43,7 @@ class CapturingExporterContext:
         *,
         media_type: str | None = None,
     ) -> BlobRef:
-        href = f"memory://{name}"
+        href = f"blobs/test/{name}"
         blob = bytes(data)
         self.blobs[href] = blob
         return BlobRef(
@@ -71,7 +70,7 @@ class CapturingExporterContext:
         )
 
 
-def test_notebook_linear_records_cell_source_not_code() -> None:
+def test_notebook_linear_records_cell_source() -> None:
     graph = DirectedGraph()
     graph.register_cell(
         CellId_t("display"),
@@ -88,7 +87,6 @@ def test_notebook_linear_records_cell_source_not_code() -> None:
     cell = snapshot["cells"][0]
 
     assert cell["source"] == '"hello"'
-    assert "code" not in cell
 
 
 def test_notebook_snapshot_records_output_materialization_errors() -> None:
@@ -108,21 +106,4 @@ def test_notebook_snapshot_records_output_materialization_errors() -> None:
     assert output.data == {
         "type": "ZeroDivisionError",
         "message": "division by zero",
-    }
-
-
-def test_stored_cell_output_source_does_not_schedule_scenario_output() -> None:
-    graph = DirectedGraph()
-    graph.register_cell(
-        CellId_t("display"),
-        compile_cell('"hello"', cell_id=CellId_t("display")),
-    )
-    runtime = cast(RuntimeContext, FakeContext(graph, globals={}))
-
-    stored = CellOutputSource(cell=CellSelector(index=0), output="stored")
-    scenario = CellOutputSource(cell=CellSelector(index=0), output="scenario")
-
-    assert selected_output_cell_ids({"value": stored}, runtime) == set()
-    assert selected_output_cell_ids({"value": scenario}, runtime) == {
-        CellId_t("display")
     }

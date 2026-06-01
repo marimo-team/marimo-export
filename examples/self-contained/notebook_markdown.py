@@ -42,7 +42,7 @@ class MarkdownExportResult:
 def notebook_markdown_spec(
     *,
     scenario_id: str = "default",
-    inputs: Mapping[str, Any] | None = None,
+    state: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Return a spec that captures every notebook cell as a linear snapshot."""
 
@@ -50,7 +50,7 @@ def notebook_markdown_spec(
         "scenarios": [
             {
                 "id": scenario_id,
-                "inputs": dict(inputs or {}),
+                "state": dict(state or {}),
             }
         ],
         "values": {
@@ -78,7 +78,7 @@ def export_notebook_markdown(
     output_dir: str | Path,
     *,
     scenario_id: str = "default",
-    inputs: Mapping[str, Any] | None = None,
+    state: Mapping[str, Any] | None = None,
     bundle: str | Path | None = None,
     run: NotebookRunOptions | None = None,
     title: str | None = None,
@@ -86,7 +86,7 @@ def export_notebook_markdown(
 ) -> MarkdownExportResult:
     """Capture a notebook and write `output.md` plus static media files."""
 
-    spec = notebook_markdown_spec(scenario_id=scenario_id, inputs=inputs)
+    spec = notebook_markdown_spec(scenario_id=scenario_id, state=state)
     if bundle is not None:
         result = export_notebook(notebook, spec, bundle=bundle, run=run)
         root = Path(result.bundle_path).parent.parent

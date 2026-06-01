@@ -7,11 +7,10 @@ the raw spec or render an interactive chart with `vega-embed`.
 
 ```ts
 import { vegaliteLoader } from "@marimo-team/export-loader-vegalite";
-import { readExport } from "@marimo-team/export-reader";
+import { readLatestExport } from "@marimo-team/export-reader";
 
-const exp = await readExport({
+const exp = await readLatestExport({
   root: "/export/",
-  manifest: "manifest.json",
   loaders: [vegaliteLoader()],
 });
 

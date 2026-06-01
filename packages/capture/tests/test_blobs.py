@@ -4,6 +4,8 @@ import hashlib
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 from moexport.artifacts import Artifact, ArtifactData
 from moexport.blobs import ContentAddressedBlobStore
 from moexport.exporters import BundleExporterContext, ExporterContext
@@ -29,16 +31,11 @@ def test_blob_store_addresses_bytes_by_sha256(tmp_path) -> None:
     assert (tmp_path / ref.href).read_bytes() == b"hello"
 
 
-def test_blob_store_can_return_result_relative_hrefs(tmp_path) -> None:
+def test_blob_store_rejects_parent_relative_href_prefix(tmp_path) -> None:
     store = ContentAddressedBlobStore(tmp_path, href_prefix="../../blobs")
 
-    ref = store.write("ignored-name.bin", b"hello", media_type="text/plain")
-
-    digest = hashlib.sha256(b"hello").hexdigest()
-    assert ref.href == f"../../blobs/sha256/{digest[:2]}/{digest[2:4]}/{digest}"
-    assert (
-        tmp_path / "blobs" / "sha256" / digest[:2] / digest[2:4] / digest
-    ).read_bytes() == b"hello"
+    with pytest.raises(ValueError, match="invalid bundle href"):
+        store.write("ignored-name.bin", b"hello", media_type="text/plain")
 
 
 def test_blob_store_dedupes_identical_bytes(tmp_path) -> None:

@@ -1,4 +1,4 @@
-"""Public export orchestration for live marimo notebook sessions."""
+"""Public export entry point for live marimo notebook sessions."""
 
 from __future__ import annotations
 

@@ -6,12 +6,8 @@ import {
   type BlobRef,
   type JsonObject,
 } from "@marimo-team/export-reader";
-import {
-  asyncBufferFromUrl,
-  parquetMetadataAsync,
-  parquetReadObjects,
-  parquetSchema,
-} from "hyparquet";
+import { parquetMetadataAsync, parquetReadObjects, parquetSchema } from "hyparquet";
+import type { AsyncBuffer } from "hyparquet";
 
 export const dataframeParquetFormat = "dataframe.parquet.v1";
 
@@ -95,12 +91,21 @@ function createDataframeHandle(
 }
 
 async function parquetFile(context: ArtifactLoaderContext, requestInit?: RequestInit) {
-  const blob = context.file();
-  const options = {
-    url: context.url(),
-    byteLength: blob.size,
+  const bytes = requestInit
+    ? new Uint8Array(await (await context.fetch(undefined, requestInit)).arrayBuffer())
+    : await context.bytes();
+  return asyncBufferFromBytes(bytes);
+}
+
+function asyncBufferFromBytes(bytes: Uint8Array): AsyncBuffer {
+  return {
+    byteLength: bytes.byteLength,
+    slice(start, end) {
+      return arrayBuffer(bytes.slice(start, end));
+    },
   };
-  return requestInit
-    ? asyncBufferFromUrl({ ...options, requestInit })
-    : asyncBufferFromUrl(options);
+}
+
+function arrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
 }

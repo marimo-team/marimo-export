@@ -36,7 +36,7 @@ export interface IdentityRecord {
 export type SourceRecord =
   | { type: "definition"; name: string }
   | { type: "expression"; expression: string }
-  | { type: "cell_output"; cell: JsonObject; output?: string; on_error?: string }
+  | { type: "cell_output"; cell: JsonObject; on_error?: string }
   | { type: "notebook_snapshot"; [key: string]: JsonValue }
   | { type: "report"; cells: JsonValue[]; [key: string]: JsonValue };
 
@@ -151,6 +151,8 @@ export interface ReadExportArchiveOptions {
 export interface StaticExport {
   manifest: ExportManifest;
   scenarios(): string[];
+  scenario(id: string): ManifestScenario;
+  scenarioRecords(): ManifestScenario[];
   values(): string[];
   formats(value: string): string[];
   get(selection: ArtifactSelection): ArtifactHandle;

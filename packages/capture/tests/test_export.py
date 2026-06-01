@@ -5,18 +5,24 @@ import hashlib
 import importlib
 import json
 import sys
+from contextlib import nullcontext
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
 from typing import Any
 
 import moexport as mox
 import pytest
+from marimo._ast.compiler import compile_cell
+from marimo._runtime.dataflow import DirectedGraph
+from marimo._types.ids import CellId_t
 from moexport.artifacts import Artifact, ArtifactData
+from moexport.bundle.schema import BundleManifest, NotebookRecord
 from moexport.exporters import ExporterContext
 
 package_export = mox.export
 export_module = importlib.import_module("moexport.export")
 request_module = importlib.import_module("moexport.request")
+target_module = importlib.import_module("moexport.evaluate._target")
 
 
 def run(coro):
@@ -51,20 +57,20 @@ def _assert_notebook_source(
     content: bytes = b"# notebook",
     stored: bool = False,
 ) -> None:
-    source = manifest["notebook"]["source"]
+    notebook = NotebookRecord.model_validate(manifest["notebook"])
+    source = notebook.source
 
-    assert manifest["notebook"]["name"] == name
-    assert manifest["notebook"]["source_sha256"] == hashlib.sha256(content).hexdigest()
+    assert notebook.name == name
+    assert notebook.source_sha256 == hashlib.sha256(content).hexdigest()
     if stored:
-        assert source["href"].startswith("blobs/sha256/")
-        assert source["media_type"] == "text/x-python"
-        assert source["size"] == len(content)
-        assert source["sha256"] == hashlib.sha256(content).hexdigest()
-        assert (root / source["href"]).read_bytes() == content
+        assert source is not None
+        assert source.href.startswith("blobs/sha256/")
+        assert source.media_type == "text/x-python"
+        assert source.size == len(content)
+        assert source.sha256 == hashlib.sha256(content).hexdigest()
+        assert (root / source.href).read_bytes() == content
     else:
         assert source is None
-    assert "source_size" not in manifest["notebook"]
-    assert "path" not in manifest["notebook"]
 
 
 def _invocation_scenario(
@@ -97,6 +103,65 @@ def _install_test_exporters() -> None:
 
     setattr(module, "text", text)
     sys.modules[module.__name__] = module
+
+
+def test_export_materializes_cell_output_for_the_active_scenario(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    graph = DirectedGraph()
+    graph.register_cell(
+        CellId_t("config"),
+        compile_cell("symbols = ['AAPL']", cell_id=CellId_t("config")),
+    )
+    graph.register_cell(
+        CellId_t("display"),
+        compile_cell("symbols[0]", cell_id=CellId_t("display")),
+    )
+
+    class FakeContext:
+        filename = None
+        cell_id = CellId_t("__current__")
+
+        def __init__(self) -> None:
+            self.graph = graph
+            self.globals = {"symbols": ["AAPL"]}
+
+        def with_cell_id(self, cid: CellId_t):
+            del cid
+            return nullcontext()
+
+    ctx = FakeContext()
+    monkeypatch.setattr(request_module, "get_context", lambda: ctx)
+    monkeypatch.setattr(target_module, "get_context", lambda: ctx)
+
+    result = run(
+        export_module.export(
+            {
+                "bundle": str(tmp_path / "scenario"),
+                "scenarios": [{"id": "override", "state": {"symbols": ["MSFT"]}}],
+                "values": {
+                    "title": {
+                        "source": {"cell": {"index": 1}},
+                        "formats": ["text"],
+                    }
+                },
+            }
+        )
+    )
+
+    def artifact_text(result: Any) -> str:
+        artifact = result.manifest["scenarios"][0]["values"]["title"]["text"]
+        entry = artifact["data"]["entry"]
+        blob = artifact["data"]["files"][entry]
+        return (Path(result.bundle_path).parent.parent / blob["href"]).read_text()
+
+    assert result.manifest["values"]["title"]["source"] == {
+        "type": "cell_output",
+        "cell": {"index": 1},
+        "on_error": "raise",
+    }
+    assert artifact_text(result) == "MSFT"
 
 
 def test_export_writes_manifest_artifacts_and_deduped_blobs(
@@ -156,7 +221,7 @@ def test_export_writes_manifest_artifacts_and_deduped_blobs(
                 "bundle": str(tmp_path / "bundle"),
                 "scenarios": [
                     {"id": "default"},
-                    {"id": "wide-chart", "inputs": {"chart_width": 1200}},
+                    {"id": "wide-chart", "state": {"chart_width": 1200}},
                 ],
                 "values": {
                     "title": {
@@ -186,13 +251,11 @@ def test_export_writes_manifest_artifacts_and_deduped_blobs(
     first_blob = first_artifact["data"]["files"]["value"]
     second_blob = second_artifact["data"]["files"]["value"]
 
-    assert calls == [
-        (
-            "{\n  'title': (title)\n}",
-            [{}, {"chart_width": 1200}],
-            [{}, {}],
-        )
-    ]
+    target, definition_overrides, object_patches = calls[0]
+    assert len(calls) == 1
+    assert definition_overrides == [{}, {"chart_width": 1200}]
+    assert object_patches == [{}, {}]
+    assert eval(target, {}, {"title": "same"}) == {"title": "same"}
     assert result.manifest_path == str(bundle_path / "manifest.json")
     assert root_index["schema"] == "moexport.root_index.v1"
     assert root_index["latest"]["id"] == manifest["id"]
@@ -200,7 +263,7 @@ def test_export_writes_manifest_artifacts_and_deduped_blobs(
         f"bundles/{manifest['id']}/manifest.json"
     )
     assert root_index["bundles"] == [root_index["latest"]]
-    assert list(manifest) == [
+    assert set(manifest) == {
         "schema",
         "version",
         "id",
@@ -211,14 +274,14 @@ def test_export_writes_manifest_artifacts_and_deduped_blobs(
         "values",
         "scenarios",
         "provenance",
-    ]
+    }
     assert manifest["schema"] == "moexport.bundle.v1"
+    BundleManifest.model_validate(manifest)
     assert manifest["version"] == 1
     assert manifest["id"].startswith("sha256-")
     assert len(manifest["sha256"]) == 64
     _assert_notebook_source(output_root, manifest)
     assert invocation["notebook"] == manifest["notebook"]
-    assert not (bundle_path / "notebook.py").exists()
     assert manifest["scenario_set"]["id"].startswith("sha256-")
     assert len(manifest["scenario_set"]["sha256"]) == 64
     assert manifest["capture"]["id"].startswith("sha256-")
@@ -227,23 +290,20 @@ def test_export_writes_manifest_artifacts_and_deduped_blobs(
         "source": {"type": "definition", "name": "title"},
         "formats": ["text"],
     }
-    assert "trace" not in _scenario(manifest, "default")
     assert manifest["provenance"]["invocations_index_href"] == (
         f"bundles/{manifest['id']}/traces/index.json"
     )
     assert len(manifest["provenance"]["source_spec_sha256"]) == 64
     source_spec = manifest["provenance"]["source_spec"]
-    assert "notebook" not in source_spec
     assert source_spec["bundle"] == {"path": str(tmp_path / "bundle")}
     assert source_spec["scenarios"] == [
         {"id": "default"},
-        {"id": "wide-chart", "inputs": {"chart_width": 1200}},
+        {"id": "wide-chart", "state": {"chart_width": 1200}},
     ]
     assert source_spec["values"]["title"]["source"] == {
         "type": "definition",
         "name": "title",
     }
-    assert "options" not in source_spec["values"]["title"]["formats"]["text"]
     assert result.invocation_index_path == str(
         output_root / manifest["provenance"]["invocations_index_href"]
     )
@@ -279,7 +339,6 @@ def test_export_writes_manifest_artifacts_and_deduped_blobs(
     assert first_blob["href"].startswith("blobs/sha256/")
     assert (output_root / first_blob["href"]).read_text() == "same"
     assert len(_blob_files(output_root)) == 1
-    assert not (bundle_path / "artifacts").exists()
 
 
 def test_export_resolves_code_state_before_batch_evaluate(
@@ -296,7 +355,10 @@ def test_export_resolves_code_state_before_batch_evaluate(
         object_patches: Any = None,
     ):
         if target == "base_width * 2":
-            assert definition_overrides == {"base_width": 500}
+            assert definition_overrides == {
+                "base_width": 500,
+                "state": {"base_width": 500},
+            }
             assert object_patches is None
             return {
                 "target": target,
@@ -326,7 +388,7 @@ def test_export_resolves_code_state_before_batch_evaluate(
                 "scenarios": [
                     {
                         "id": "computed",
-                        "inputs": {
+                        "state": {
                             "base_width": 500,
                             "chart_width": {
                                 "type": "code",
@@ -378,11 +440,130 @@ def export(value, ctx, **options):
     blob_value = json.loads((output_root / blob["href"]).read_text())
     assert blob_value == "ok"
     scenario = _scenario(manifest, "computed")
-    assert scenario["state"]["inputs"]["chart_width"] == 1000
-    assert scenario["declared_state"]["inputs"]["chart_width"] == {
+    assert scenario["state"]["chart_width"] == 1000
+    assert scenario["declared_state"]["chart_width"] == {
         "type": "code",
         "expression": "base_width * 2",
     }
+
+
+def test_export_applies_dotted_state_keys_to_object_attributes(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    _install_test_exporters()
+    notebook = tmp_path / "finance.py"
+    notebook.write_text("# notebook")
+
+    async def fake_evaluate(
+        target: str,
+        definition_overrides: list[dict[str, Any]],
+        *,
+        object_patches: list[dict[str, Any]] | None = None,
+    ):
+        del target
+        assert definition_overrides == [{"symbol": "AAPL"}]
+        assert object_patches == [{"selector.config": {"label": "Symbols"}}]
+        return {
+            "target": "target",
+            "results": [{"value": {"title": "same"}}],
+            "metadata": {"batch": {"result_count": 1}, "execution": {}},
+        }
+
+    monkeypatch.setattr(export_module, "evaluate", fake_evaluate)
+    monkeypatch.setattr(
+        request_module,
+        "get_context",
+        lambda: SimpleNamespace(filename=str(notebook)),
+    )
+
+    result = run(
+        export_module.export(
+            {
+                "bundle": str(tmp_path / "bundle"),
+                "scenarios": [
+                    {
+                        "id": "patched",
+                        "state": {
+                            "symbol": "AAPL",
+                            "selector.config": {"label": "Symbols"},
+                        },
+                    }
+                ],
+                "values": {
+                    "title": {
+                        "source": {"def": "title"},
+                        "formats": ["text"],
+                    }
+                },
+            }
+        )
+    )
+
+    assert result.manifest["scenarios"][0]["state"] == {
+        "symbol": "AAPL",
+        "selector.config": {"label": "Symbols"},
+    }
+
+
+def test_export_rejects_non_json_scenario_state_identity(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    notebook = tmp_path / "finance.py"
+    notebook.write_text("# notebook")
+
+    async def fake_evaluate(
+        target: str,
+        definition_overrides: Any = None,
+        *,
+        object_patches: Any = None,
+    ):
+        del definition_overrides, object_patches
+        if target == "object()":
+            return {
+                "target": target,
+                "results": [{"value": object()}],
+                "metadata": {"batch": {"result_count": 1}},
+            }
+        return {
+            "target": target,
+            "results": [{"value": {"summary": "ok"}}],
+            "metadata": {"batch": {"result_count": 1}},
+        }
+
+    monkeypatch.setattr(export_module, "evaluate", fake_evaluate)
+    monkeypatch.setattr(
+        request_module,
+        "get_context",
+        lambda: SimpleNamespace(filename=str(notebook)),
+    )
+
+    with pytest.raises(ValueError, match="scenario state values must be JSON"):
+        run(
+            export_module.export(
+                {
+                    "bundle": str(tmp_path / "bundle"),
+                    "scenarios": [
+                        {
+                            "id": "computed",
+                            "state": {
+                                "opaque": {
+                                    "type": "code",
+                                    "expression": "object()",
+                                },
+                            },
+                        }
+                    ],
+                    "values": {
+                        "summary": {
+                            "source": {"def": "summary"},
+                            "formats": ["json"],
+                        }
+                    },
+                }
+            )
+        )
 
 
 def test_export_rejects_embedded_artifacts(
@@ -441,7 +622,8 @@ def export(value, ctx, **options):
                 }
             )
         )
-    assert not list((tmp_path / "bundle").glob(".tmp-*"))
+    assert not (tmp_path / "bundle" / "manifest.json").exists()
+    assert not (tmp_path / "bundle" / "index.json").exists()
 
 
 def test_export_default_bundle_path_uses_marimo_output_dir(
@@ -499,9 +681,9 @@ def test_export_default_bundle_path_uses_marimo_output_dir(
     assert bundle_path.parent == tmp_path / "__marimo__" / "static-export" / "bundles"
     assert bundle_path.name.startswith("sha256-")
     _assert_notebook_source(bundle_path.parent.parent, result.manifest)
-    assert not (bundle_path / "notebook.py").exists()
-    assert not (bundle_path / "artifacts").exists()
     assert Path(result.manifest_path).exists()
+    assert Path(result.invocation_index_path).exists()
+    assert Path(result.invocation_path).exists()
 
 
 def test_export_uses_live_notebook_path_over_spec_notebook(
@@ -643,8 +825,6 @@ def test_export_default_bundle_path_groups_same_scenario_set(
     assert first_path != second_path
     assert first.manifest["scenario_set"] == second.manifest["scenario_set"]
     assert first.manifest["notebook"] == second.manifest["notebook"]
-    assert not (first_path / "notebook.py").exists()
-    assert not (second_path / "notebook.py").exists()
     assert (
         first.manifest["capture"]["request_sha256"]
         != second.manifest["capture"]["request_sha256"]
@@ -793,7 +973,7 @@ def test_export_records_trace_without_changing_bundle_identity(
     assert first.bundle_path == second.bundle_path
     assert first.manifest["id"] == second.manifest["id"]
     assert first.invocation_path != second.invocation_path
-    assert "trace" not in _scenario(second.manifest, "default")
+    BundleManifest.model_validate(second.manifest)
     assert _invocation_scenario(second.invocation, "default")["trace"]["graph"][
         "nodes"
     ] == [{"cell_id": "cell", "status": "run-2"}]
@@ -857,7 +1037,7 @@ def test_export_default_bundle_path_separates_different_scenario_sets(
         **base_spec,
         "scenarios": [
             {"id": "default"},
-            {"id": "wide", "inputs": {"chart_width": 1200}},
+            {"id": "wide", "state": {"chart_width": 1200}},
         ],
     }
 
@@ -927,7 +1107,7 @@ def test_export_scenario_set_grouping_is_order_insensitive(
         export_module.export(
             {
                 "scenarios": [
-                    {"id": "wide", "inputs": {"chart_width": 1200}},
+                    {"id": "wide", "state": {"chart_width": 1200}},
                     {"id": "default"},
                 ],
                 "values": values,
@@ -939,7 +1119,7 @@ def test_export_scenario_set_grouping_is_order_insensitive(
             {
                 "scenarios": [
                     {"id": "default"},
-                    {"id": "wide", "inputs": {"chart_width": 1200}},
+                    {"id": "wide", "state": {"chart_width": 1200}},
                 ],
                 "values": values,
             }

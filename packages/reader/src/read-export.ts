@@ -12,6 +12,7 @@ import type {
   LocalReadFile,
   LocalReadFileResult,
   LocalUrlResolver,
+  ManifestScenario,
   ReadExportArchiveOptions,
   ReadExportOptions,
   ReadExportIndexOptions,
@@ -169,6 +170,18 @@ class StaticExportReader implements StaticExport {
     return this.manifest.scenarios.map((scenario) => scenario.id);
   }
 
+  scenario(id: string): ManifestScenario {
+    const scenario = this.manifest.scenarios.find((candidate) => candidate.id === id);
+    if (!scenario) {
+      throw new Error(`Export scenario ${JSON.stringify(id)} does not exist.`);
+    }
+    return cloneJson(scenario);
+  }
+
+  scenarioRecords(): ManifestScenario[] {
+    return cloneJson(this.manifest.scenarios);
+  }
+
   values(): string[] {
     return Object.keys(this.manifest.values);
   }
@@ -276,19 +289,36 @@ class BundleArtifactHandle implements ArtifactHandle, ArtifactLoaderContext {
 
   async fetch(key?: string, init?: RequestInit): Promise<Response> {
     const file = this.file(key);
-    return this.#source.fetch(file.href, file.media_type, init);
+    const response = await this.#source.fetch(file.href, file.media_type, init);
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    await verifyBlobRef(file, bytes);
+    return new Response(arrayBuffer(bytes), {
+      status: response.status,
+      statusText: response.statusText,
+      headers: response.headers,
+    });
   }
 
   async bytes(key?: string): Promise<Uint8Array> {
-    return this.#source.bytes(this.file(key).href);
+    const file = this.file(key);
+    const bytes = await this.#source.bytes(file.href);
+    await verifyBlobRef(file, bytes);
+    return bytes;
   }
 
   async text(key?: string): Promise<string> {
-    return this.#source.text(this.file(key).href);
+    return new TextDecoder().decode(await this.bytes(key));
   }
 
   async json<T = unknown>(key?: string): Promise<T> {
-    return this.#source.json<T>(this.file(key).href);
+    try {
+      return JSON.parse(await this.text(key)) as T;
+    } catch (error) {
+      throw new Error(
+        `Failed to parse artifact JSON for ${this.selection.scenario}/${this.selection.value}/${this.selection.format}.`,
+        { cause: error },
+      );
+    }
   }
 
   async load<T = unknown>(): Promise<T> {
@@ -569,6 +599,35 @@ function bundleHref(href: string): string {
 
 function arrayBuffer(bytes: Uint8Array): ArrayBuffer {
   return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+}
+
+async function verifyBlobRef(ref: BlobRef, bytes: Uint8Array): Promise<void> {
+  if (bytes.byteLength !== ref.size) {
+    throw new Error(
+      `Bundle file ${JSON.stringify(ref.href)} has ${bytes.byteLength} bytes, expected ${ref.size}.`,
+    );
+  }
+
+  const actual = await sha256Hex(bytes);
+  if (actual !== ref.sha256.toLowerCase()) {
+    throw new Error(
+      `Bundle file ${JSON.stringify(ref.href)} has SHA-256 ${actual}, expected ${ref.sha256}.`,
+    );
+  }
+}
+
+async function sha256Hex(bytes: Uint8Array): Promise<string> {
+  const subtle = globalThis.crypto?.subtle;
+  if (!subtle) {
+    throw new Error("Artifact SHA-256 verification requires Web Crypto.");
+  }
+
+  const digest = await subtle.digest("SHA-256", arrayBuffer(bytes));
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function cloneJson<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T;
 }
 
 async function fetchJson(fetchImpl: FetchLike, url: string, label: string): Promise<unknown> {

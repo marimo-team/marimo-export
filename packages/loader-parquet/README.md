@@ -7,11 +7,10 @@ metadata handles with `hyparquet`.
 
 ```ts
 import { parquetLoader } from "@marimo-team/export-loader-parquet";
-import { readExport } from "@marimo-team/export-reader";
+import { readLatestExport } from "@marimo-team/export-reader";
 
-const exp = await readExport({
+const exp = await readLatestExport({
   root: "/export/",
-  manifest: "manifest.json",
   loaders: [parquetLoader()],
 });
 
@@ -30,6 +29,7 @@ const rows = await parquet.readRows({ columns: ["Date", "Close"] });
 Mechanics:
 
 - Supports `dataframe.parquet.v1`.
-- Reads bytes from the artifact URL through `hyparquet`.
+- Reads verified artifact bytes through the reader context before passing them
+  to `hyparquet`.
 - Exposes `.readMetadata()` and `.readRows()`.
 - Supports column and row-range reads.

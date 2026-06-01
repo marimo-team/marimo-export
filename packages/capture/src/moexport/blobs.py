@@ -4,29 +4,47 @@ from __future__ import annotations
 
 import hashlib
 from pathlib import Path
-from typing import TypeAlias
+from typing import Annotated, TypeAlias
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field
 
 BlobContent: TypeAlias = bytes | bytearray | memoryview
+BundleHref: TypeAlias = Annotated[
+    str,
+    AfterValidator(lambda value: validate_bundle_href(value)),
+]
 
 BLOB_DIR = "blobs"
 HASH_ALGORITHM = "sha256"
 
 
+def validate_bundle_href(value: str) -> str:
+    """Return a canonical bundle-relative href or raise `ValueError`."""
+
+    if not value or value.startswith("/") or "\\" in value:
+        raise ValueError(f"invalid bundle href {value!r}")
+
+    parts = value.split("/")
+    if any(part in {"", ".", ".."} for part in parts):
+        raise ValueError(f"invalid bundle href {value!r}")
+
+    return "/".join(parts)
+
+
 class BlobRef(BaseModel):
     """Reference to bytes stored in the export bundle."""
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
-    href: str = Field(description="Bundle-relative path to the stored bytes.")
+    href: BundleHref = Field(description="Bundle-relative path to the stored bytes.")
     media_type: str | None = Field(
         description="MIME type of the bytes for this specific artifact reference.",
     )
-    size: int | None = Field(
+    size: int = Field(
+        ge=0,
         description="Byte length for diagnostics and preload decisions.",
     )
-    sha256: str | None = Field(
+    sha256: str = Field(
         description="Content hash used for dedupe and provenance.",
     )
 

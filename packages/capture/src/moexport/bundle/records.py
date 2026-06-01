@@ -148,7 +148,7 @@ def _compact_source_spec(value: Any, *, key: str | None = None) -> Any:
             for item_key, item in value.items()
             if item is not None
         }
-        if key in {"inputs", "options", "ui", "widgets"} and not result:
+        if key in {"options", "state"} and not result:
             return None
         return {item_key: item for item_key, item in result.items() if item is not None}
 

@@ -382,7 +382,7 @@
       function renderScenarioButtons() {
         const grid = $("#scenario-grid");
         grid.innerHTML = "";
-        for (const scenario of exp.manifest.scenarios) {
+        for (const scenario of exp.scenarioRecords()) {
           const button = document.createElement("button");
           button.type = "button";
           button.className = "scenario-button";

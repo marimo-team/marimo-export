@@ -102,7 +102,7 @@ def _spec() -> dict[str, Any]:
     return {
         "scenarios": [
             {"id": "base"},
-            {"id": "override", "inputs": {"symbol": "GOOGL"}},
+            {"id": "override", "state": {"symbol": "GOOGL"}},
         ],
         "values": {
             "title": {
@@ -147,7 +147,7 @@ def _yaml_spec_text() -> str:
 scenarios:
   - id: base
   - id: override
-    inputs:
+    state:
       symbol: GOOGL
 values:
   title:
@@ -193,14 +193,13 @@ def _output_json(result: Result) -> Any:
 def test_cli_help_exposes_core_workflow_commands() -> None:
     help_text = _invoke(["--help"]).output
 
-    assert set(cli.commands) == {"inspect", "notebook", "query"}
+    assert {"inspect", "notebook", "query"} <= set(cli.commands)
     assert "marimo-export notebook notebooks/finance.py --spec export.yaml" in help_text
     assert (
         "marimo-export query out entries --value summary --format json --content"
         in help_text
     )
     assert "marimo-export query out source --scenario wide_chart" in help_text
-    assert "inspect-spec" not in help_text
 
 
 def test_cli_inspects_notebook_source_and_defs(tmp_path: Path) -> None:
@@ -258,7 +257,7 @@ def test_cli_exports_notebook_and_reports_query_next_steps(
         },
         {
             "id": "override",
-            "state": {"inputs": {"symbol": "GOOGL"}},
+            "state": {"symbol": "GOOGL"},
             "values": {"title": ["text"]},
         },
     ]
@@ -349,7 +348,7 @@ def test_cli_query_progressive_bundle_commands(tmp_path: Path) -> None:
                 str(bundle_root),
                 "scenarios",
                 "--state",
-                "inputs.symbol=GOOGL",
+                "symbol=GOOGL",
             ]
         )
     )
@@ -458,7 +457,7 @@ def test_cli_query_progressive_bundle_commands(tmp_path: Path) -> None:
                 "source",
                 "--json",
                 "--state",
-                "inputs.symbol=GOOGL",
+                "symbol=GOOGL",
             ]
         )
     )

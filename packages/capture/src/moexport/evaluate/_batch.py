@@ -1,4 +1,4 @@
-"""Batch orchestration for the public ``evaluate(...)`` call.
+"""Batch execution for the public ``evaluate(...)`` call.
 
 The public API accepts one definition override/object patch set, or a batch of
 sets. This module normalizes those shapes, runs each variant through the
@@ -107,13 +107,13 @@ async def evaluate(
     output_cell_ids: set[Any] | None = None,
     output_error_policy: str = "raise",
 ) -> EvaluateResult:
-    """Evaluate a target once or over a batch of finite scenario states.
+    """Evaluate one target for one definition override/object patch set or a
+    sequence of aligned sets.
 
-    The output shape is always the same: a target envelope with a ``results``
-    list. A single definition override/object patch pair is represented as one
-    result. Every call shares a per-call cell cache, so repeated variants can
-    reuse produced defs instead of re-executing cells with identical body
-    dependencies.
+    The output shape is stable: a target envelope with a ``results`` list. A
+    single definition override/object patch pair is represented as one result.
+    Every call shares a per-call cell cache, so repeated variants reuse produced
+    defs when body dependencies match.
     """
     cell_cache: CellCache = {}
     override_sets = _normalize_definition_override_sets(definition_overrides)

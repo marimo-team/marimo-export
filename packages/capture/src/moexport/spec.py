@@ -22,7 +22,10 @@ import yaml
 from moexport.sources import SourceSpec, normalize_source
 
 SpecKey: TypeAlias = Annotated[str, Field(pattern=r"^[A-Za-z_][A-Za-z0-9_-]*$")]
-StateName: TypeAlias = Annotated[str, Field(pattern=r"^[A-Za-z_][A-Za-z0-9_]*$")]
+StateKey: TypeAlias = Annotated[
+    str,
+    Field(pattern=r"^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*$"),
+]
 JsonConfigValue: TypeAlias = (
     str | int | float | bool | None | list[Any] | dict[str, Any]
 )
@@ -32,8 +35,8 @@ JsonConfigObject: TypeAlias = dict[str, Any]
 class SpecModel(BaseModel):
     """Base model for user-authored export specs.
 
-    Specs are public API. Unknown keys fail loudly instead of being silently
-    ignored after a typo.
+    Specs are public API. Unknown keys raise validation errors so typos do not
+    change the authored export silently.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -218,7 +221,7 @@ class ValueSpec(SpecModel):
 class ScenarioSpec(SpecModel):
     """One named finite notebook state to materialize.
 
-    Inputs override notebook definitions. UI and widget sections patch
+    Bare state keys override notebook definitions. Dotted keys patch
     materialized objects after their producer cells run.
     """
 
@@ -226,33 +229,18 @@ class ScenarioSpec(SpecModel):
         default="default",
         description="Stable id used in artifact paths and manifest lookup.",
     )
-    inputs: dict[StateName, StateValue] = Field(
+    state: dict[StateKey, StateValue] = Field(
         default_factory=dict,
-        description="Definition overrides applied before scenario evaluation.",
-    )
-    ui: dict[StateName, Any] = Field(
-        default_factory=dict,
-        description="UI element state keyed by UI definition name.",
-    )
-    widgets: dict[StateName, Any] = Field(
-        default_factory=dict,
-        description="Widget or object state keyed by notebook definition name.",
+        description=(
+            "Scenario state. Bare keys override notebook definitions. "
+            "Dotted keys patch object attributes, for example `selector.value`."
+        ),
     )
 
-    @field_validator("inputs", mode="before")
+    @field_validator("state", mode="before")
     @classmethod
-    def _inputs_must_be_json_or_code(cls, value: object) -> object:
-        return _validate_value_mapping(value, "scenario inputs")
-
-    @field_validator("ui", "widgets", mode="before")
-    @classmethod
-    def _patches_must_be_json_objects(cls, value: object) -> object:
-        if value is None:
-            return {}
-        validated = _validate_state_tree(value, "scenario patches")
-        if not isinstance(validated, dict):
-            raise ValueError("scenario patches must be an object")
-        return validated
+    def _state_must_be_json_or_code(cls, value: object) -> object:
+        return _validate_value_mapping(value, "scenario state")
 
 
 class ProvenanceSpec(SpecModel):
@@ -283,24 +271,6 @@ def _validate_value_mapping(value: object, label: str) -> dict[str, object]:
             raise ValueError(f"{label} keys must be strings")
         validated[key] = _validate_state_value(state_value)
     return validated
-
-
-def _validate_state_tree(value: object, label: str) -> object:
-    if isinstance(value, Mapping):
-        mapping = cast(Mapping[object, object], value)
-        if mapping.get("type") == "code":
-            return CodeStateValue.model_validate(dict(mapping))
-        result: dict[str, object] = {}
-        for key, item in mapping.items():
-            if not isinstance(key, str):
-                raise ValueError(f"{label} keys must be strings")
-            result[key] = _validate_state_tree(item, label)
-        return result
-
-    if isinstance(value, list):
-        return [_validate_state_tree(item, label) for item in value]
-
-    return _validate_json_value(value)
 
 
 def _normalize_formats(value: object) -> object:

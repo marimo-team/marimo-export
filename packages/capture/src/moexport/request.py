@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, Awaitable, Callable, TypeAlias
@@ -10,7 +11,7 @@ from marimo._runtime.context import get_context
 from marimo._utils.paths import notebook_output_dir
 
 from moexport.evaluate import EvaluateResult, evaluate
-from moexport.jsonio import manifest_value, sha256_bytes, sha256_json
+from moexport.jsonio import sha256_bytes, sha256_json
 from moexport.spec import CodeStateValue, ExportSpec, ScenarioSpec, ValueSpec
 from moexport.sources import (
     output_error_policy as source_output_error_policy,
@@ -209,38 +210,16 @@ async def _resolve_scenario(
     *,
     evaluate_fn: EvaluateFn,
 ) -> ResolvedScenario:
-    inputs = await _resolve_value_mapping(
-        scenario.inputs,
+    state = await _resolve_value_mapping(
+        scenario.state,
         evaluate_fn=evaluate_fn,
     )
-    ui = await _resolve_state_tree(
-        scenario.ui,
-        evaluate_fn=evaluate_fn,
-        environment=inputs,
-    )
-    widgets = await _resolve_state_tree(
-        scenario.widgets,
-        evaluate_fn=evaluate_fn,
-        environment={**inputs, **({"ui": ui} if isinstance(ui, dict) else {})},
-    )
-    definition_overrides = inputs
-    object_patches = {
-        **_flatten_patch_tree(ui, prefix=""),
-        **_flatten_patch_tree(widgets, prefix=""),
+    definition_overrides = {
+        key: value for key, value in state.items() if "." not in key
     }
-    state = _compact_state_sections(
-        inputs=inputs,
-        ui=ui,
-        widgets=widgets,
-    )
+    object_patches = {key: value for key, value in state.items() if "." in key}
     manifest_state = _manifest_tree(state)
-    declared_state = _dump_declared_state(
-        _compact_state_sections(
-            inputs=scenario.inputs,
-            ui=scenario.ui,
-            widgets=scenario.widgets,
-        )
-    )
+    declared_state = _dump_declared_state(scenario.state)
     return ResolvedScenario(
         id=scenario.id,
         state=state,
@@ -267,58 +246,19 @@ async def _resolve_value_mapping(
         if not isinstance(value, CodeStateValue):
             continue
 
-        result = await evaluate_fn(value.expression, resolved)
+        result = await evaluate_fn(
+            value.expression,
+            _evaluation_environment(resolved),
+        )
         resolved[name] = result["results"][0]["value"]
 
     return resolved
 
 
-async def _resolve_state_tree(
-    value: Any,
-    *,
-    evaluate_fn: EvaluateFn,
-    environment: Mapping[str, Any],
-) -> Any:
-    if isinstance(value, CodeStateValue):
-        result = await evaluate_fn(value.expression, environment)
-        return result["results"][0]["value"]
-    if isinstance(value, Mapping):
-        resolved: dict[str, Any] = {}
-        env = dict(environment)
-        for name, item in value.items():
-            resolved_value = await _resolve_state_tree(
-                item,
-                evaluate_fn=evaluate_fn,
-                environment={**env, **resolved},
-            )
-            resolved[str(name)] = resolved_value
-        return resolved
-    if isinstance(value, list):
-        return [
-            await _resolve_state_tree(
-                item,
-                evaluate_fn=evaluate_fn,
-                environment=environment,
-            )
-            for item in value
-        ]
-    return value
-
-
-def _compact_state_sections(
-    *,
-    inputs: Mapping[str, Any],
-    ui: Any,
-    widgets: Any,
-) -> dict[str, Any]:
-    state: dict[str, Any] = {}
-    if inputs:
-        state["inputs"] = dict(inputs)
-    if isinstance(ui, Mapping) and ui:
-        state["ui"] = dict(ui)
-    if isinstance(widgets, Mapping) and widgets:
-        state["widgets"] = dict(widgets)
-    return state
+def _evaluation_environment(state: Mapping[str, Any]) -> dict[str, Any]:
+    environment = {name: value for name, value in state.items() if "." not in name}
+    environment["state"] = dict(state)
+    return environment
 
 
 def _manifest_tree(value: Any) -> Any:
@@ -326,20 +266,13 @@ def _manifest_tree(value: Any) -> Any:
         return {str(name): _manifest_tree(item) for name, item in value.items()}
     if isinstance(value, list):
         return [_manifest_tree(item) for item in value]
-    return manifest_value(value)
-
-
-def _flatten_patch_tree(value: Any, *, prefix: str) -> dict[str, Any]:
-    if not isinstance(value, Mapping):
-        return {}
-    patches: dict[str, Any] = {}
-    for name, item in value.items():
-        path = f"{prefix}.{name}" if prefix else str(name)
-        if isinstance(item, Mapping):
-            patches.update(_flatten_patch_tree(item, prefix=path))
-        else:
-            patches[path] = item
-    return patches
+    if value is None or isinstance(value, str | int | bool):
+        return value
+    if isinstance(value, float) and math.isfinite(value):
+        return value
+    raise ValueError(
+        f"scenario state values must be JSON-compatible, got {type(value).__name__}"
+    )
 
 
 def _scenario_set_identity(
@@ -416,7 +349,7 @@ def _dump_declared_value(value: Any) -> Any:
         return {str(name): _dump_declared_value(item) for name, item in value.items()}
     if isinstance(value, list):
         return [_dump_declared_value(item) for item in value]
-    return manifest_value(value)
+    return _manifest_tree(value)
 
 
 def value_sources(spec: ExportSpec) -> dict[str, dict[str, Any]]:
