@@ -45,8 +45,8 @@ class ManifestValue(BundleSchemaModel):
     formats: list[str]
 
 
-class ManifestArtifact(BundleSchemaModel):
-    """Manifest form of `Artifact`.
+class ManifestFormat(BundleSchemaModel):
+    """Manifest record for one materialized format.
 
     `format_id` identifies the portable payload format. The authored format
     name lives in the containing value map.
@@ -62,7 +62,7 @@ class ManifestScenario(BundleSchemaModel):
     id: str
     state: JsonObject = Field(default_factory=dict)
     declared_state: JsonObject | None = None
-    values: dict[str, dict[str, ManifestArtifact]]
+    values: dict[str, dict[str, ManifestFormat]]
 
 
 class ProvenanceRecord(BundleSchemaModel):
@@ -161,7 +161,7 @@ __all__ = [
     "InvocationScenario",
     "InvocationSummary",
     "JsonObject",
-    "ManifestArtifact",
+    "ManifestFormat",
     "ManifestScenario",
     "ManifestValue",
     "NotebookRecord",

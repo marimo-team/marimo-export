@@ -1,0 +1,51 @@
+{
+  "anywidget_id": "builtins.OhlcSwitcher",
+  "assets": {
+    "module": {
+      "href": "blobs/sha256/54/20/5420760b331117c5b3e33b544bac8c80b34db93ffa46d1d932f2fa429b4270ed",
+      "media_type": "text/javascript",
+      "sha256": "5420760b331117c5b3e33b544bac8c80b34db93ffa46d1d932f2fa429b4270ed",
+      "size": 13685
+    },
+    "style": {
+      "href": "blobs/sha256/89/cb/89cb29753f841415e4b836d7d94e4d57827fdc94dd5e651596f290bd784962f1",
+      "media_type": "text/css",
+      "sha256": "89cb29753f841415e4b836d7d94e4d57827fdc94dd5e651596f290bd784962f1",
+      "size": 5484
+    }
+  },
+  "buffers": [],
+  "schema": "moexport.anywidget.bundle.v1",
+  "state": {
+    "metric": {
+      "href": "blobs/sha256/5f/86/5f86a55e9d943259f87fb7a4babda70cd65f372977c7ddde8ab1ee8743c7497a",
+      "media_type": "application/json",
+      "sha256": "5f86a55e9d943259f87fb7a4babda70cd65f372977c7ddde8ab1ee8743c7497a",
+      "size": 8
+    },
+    "mode": {
+      "href": "blobs/sha256/75/13/7513f54f6270ed12691a4b60e3de725dfcc8a8ef8aec1ddc8f7be5c0e0f13a2c",
+      "media_type": "application/json",
+      "sha256": "7513f54f6270ed12691a4b60e3de725dfcc8a8ef8aec1ddc8f7be5c0e0f13a2c",
+      "size": 9
+    },
+    "rows": {
+      "href": "blobs/sha256/09/ed/09ed583b7bcc554786a016017d8beb0702096be2662ccb1f7a2b00603b4f961d",
+      "media_type": "application/json",
+      "sha256": "09ed583b7bcc554786a016017d8beb0702096be2662ccb1f7a2b00603b4f961d",
+      "size": 486990
+    },
+    "selected_symbols": {
+      "href": "blobs/sha256/db/07/db071a4646ed82bada29135e29d904a5184af06b9561bb2f832658ae2f15c5e1",
+      "media_type": "application/json",
+      "sha256": "db071a4646ed82bada29135e29d904a5184af06b9561bb2f832658ae2f15c5e1",
+      "size": 34
+    },
+    "title": {
+      "href": "blobs/sha256/87/e7/87e7d62b2216849026514585507ded3679fa7d565aca016d554f0d22d1bb7457",
+      "media_type": "application/json",
+      "sha256": "87e7d62b2216849026514585507ded3679fa7d565aca016d554f0d22d1bb7457",
+      "size": 30
+    }
+  }
+}

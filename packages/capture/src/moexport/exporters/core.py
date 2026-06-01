@@ -14,25 +14,23 @@ from moexport.jsonio import jsonable
 
 class JsonOptions(ExporterOptions):
     filename: str = Field(default="data.json", description="Blob filename hint.")
-    format_id: str = Field(default="json.v1", description="Artifact format id.")
-    media_type: str = Field(
-        default="application/json", description="Artifact MIME type."
-    )
-    metadata: JsonObject | None = Field(default=None, description="Artifact metadata.")
+    format_id: str = Field(default="json.v1", description="Format id.")
+    media_type: str = Field(default="application/json", description="Format MIME type.")
+    metadata: JsonObject | None = Field(default=None, description="Format metadata.")
 
 
 class TextOptions(ExporterOptions):
     filename: str = Field(default="data.txt", description="Blob filename hint.")
-    format_id: str = Field(default="text.v1", description="Artifact format id.")
-    media_type: str = Field(default="text/plain", description="Artifact MIME type.")
-    metadata: JsonObject | None = Field(default=None, description="Artifact metadata.")
+    format_id: str = Field(default="text.v1", description="Format id.")
+    media_type: str = Field(default="text/plain", description="Format MIME type.")
+    metadata: JsonObject | None = Field(default=None, description="Format metadata.")
 
 
 class HtmlOptions(ExporterOptions):
     filename: str = Field(default="data.html", description="Blob filename hint.")
-    format_id: str = Field(default="html.v1", description="Artifact format id.")
-    media_type: str = Field(default="text/html", description="Artifact MIME type.")
-    metadata: JsonObject | None = Field(default=None, description="Artifact metadata.")
+    format_id: str = Field(default="html.v1", description="Format id.")
+    media_type: str = Field(default="text/html", description="Format MIME type.")
+    metadata: JsonObject | None = Field(default=None, description="Format metadata.")
 
 
 _JSON_OPTIONS = TypeAdapter(JsonOptions)

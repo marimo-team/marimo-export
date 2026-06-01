@@ -257,7 +257,7 @@ def _append_export_cell(app: App) -> tuple[CellId_t, str, str, str]:
     app._cell_manager.register_ir_cell(
         CellDef(
             code=code,
-            name="_moexport_notebook_export",
+            name="_moexport_notebook_capture",
             options=CellConfig(hide_code=True).asdict_without_defaults(),
         ),
         InternalApp(app),

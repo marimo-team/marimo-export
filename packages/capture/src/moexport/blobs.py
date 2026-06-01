@@ -1,4 +1,4 @@
-"""Content-addressed blob storage for exported artifact bytes."""
+"""Content-addressed blob storage for exported format bytes."""
 
 from __future__ import annotations
 
@@ -38,7 +38,7 @@ class BlobRef(BaseModel):
 
     href: BundleHref = Field(description="Bundle-relative path to the stored bytes.")
     media_type: str | None = Field(
-        description="MIME type of the bytes for this specific artifact reference.",
+        description="MIME type of the bytes for this specific file reference.",
     )
     size: int = Field(
         ge=0,

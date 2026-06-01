@@ -8,10 +8,10 @@
   },
   "invocations": [
     {
-      "id": "sha256-953c222f8e795756",
-      "sha256": "953c222f8e795756fa159c2287d920c08469113fe04da952a7a3e8d6f81af3ed",
+      "id": "sha256-602a2318dfd7130a",
+      "sha256": "602a2318dfd7130a991096fd0b89c0a0ebaf692b460a15ff1c42b7dbc9304cb7",
       "created_at": "2026-05-05T16:29:39.049800Z",
-      "href": "bundles/sha256-d7cd3dffcc105dff/traces/sha256-953c222f8e795756.json"
+      "href": "bundles/sha256-d7cd3dffcc105dff/traces/sha256-602a2318dfd7130a.json"
     }
   ]
 }

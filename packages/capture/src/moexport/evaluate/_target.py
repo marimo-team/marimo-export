@@ -99,7 +99,7 @@ async def evaluate_target_once(
     computed_defs: dict[str, Any] = {}
     per_cell_defs: dict[str, dict[str, Any]] = {}
     timings: dict[str, float] = {}
-    applied_object_patches: list[JsonDict] = []
+    applied_state_updates: list[JsonDict] = []
     glbls: dict[str, Any] = {**plan.live_values, **override_completion.values}
     started = time.perf_counter()
 
@@ -137,7 +137,7 @@ async def evaluate_target_once(
             executed.append(cid)
 
         if patched_roots:
-            applied_object_patches.extend(
+            applied_state_updates.extend(
                 apply_object_patches(
                     glbls,
                     object_patches,
@@ -199,9 +199,9 @@ async def evaluate_target_once(
             "root_names": plan.root_names,
             "expression_refs": plan.expression_refs,
             "override_refs": sorted(plan.override_refs),
-            "object_patch_refs": sorted(object_patches),
+            "state_update_refs": sorted(object_patches),
         },
-        "state": {"applied_object_patches": applied_object_patches},
+        "state": {"applied_state_updates": applied_state_updates},
         "graph": trace.graph,
         "execution": trace.execution,
     }

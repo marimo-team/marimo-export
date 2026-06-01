@@ -15,7 +15,7 @@ from moexport.bundle.schema import (
     InvocationIndex,
     InvocationRecord,
     JsonObject,
-    ManifestArtifact,
+    ManifestFormat,
     ManifestScenario,
     read_model,
 )
@@ -432,7 +432,7 @@ class BundleQuery:
         value_name: str,
         source: object,
         format_name: str,
-        format_record: ManifestArtifact,
+        format_record: ManifestFormat,
     ) -> JsonObject:
         files = {
             file_key: {

@@ -671,7 +671,7 @@ def test_evaluate_batch_reuses_cells_with_identical_body_dependencies(
     }
 
 
-def test_evaluate_object_patches_materialized_objects(monkeypatch) -> None:
+def test_evaluate_dotted_state_updates_materialized_objects(monkeypatch) -> None:
     graph = graph_from(
         {
             "selector": """
@@ -702,7 +702,7 @@ selector = Selector()
         "CRWV,MSFT",
         "AAPL,GOOGL,AMZN",
     ]
-    assert results[0]["metadata"]["state"]["applied_object_patches"] == [
+    assert results[0]["metadata"]["state"]["applied_state_updates"] == [
         {
             "target": "selector.value",
             "root": "selector",
@@ -712,7 +712,7 @@ selector = Selector()
     assert results[1]["metadata"]["execution"]["stats"]["cached"] == 0
 
 
-def test_evaluate_object_patches_do_not_leak_through_cache(monkeypatch) -> None:
+def test_evaluate_dotted_state_updates_do_not_leak_through_cache(monkeypatch) -> None:
     graph = graph_from(
         {
             "selector": """

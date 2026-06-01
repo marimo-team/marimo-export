@@ -507,7 +507,7 @@ selector = Selector()
     output_root = Path(result.bundle_path).parent.parent
     assert (output_root / blob["href"]).read_text() == "Symbols: AAPL"
     assert _invocation_scenario(result.invocation, "patched")["trace"]["state"][
-        "applied_object_patches"
+        "applied_state_updates"
     ] == [
         {
             "target": "selector.config",

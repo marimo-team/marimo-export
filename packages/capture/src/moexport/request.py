@@ -10,7 +10,8 @@ from typing import Any, Awaitable, Callable, TypeAlias
 from marimo._runtime.context import get_context
 from marimo._utils.paths import notebook_output_dir
 
-from moexport.evaluate import EvaluateResult, evaluate_plan
+from moexport.evaluate import EvaluateResult
+from moexport.evaluate._batch import evaluate_plan
 from moexport.jsonio import sha256_bytes, sha256_json
 from moexport.spec import CodeStateValue, ExportSpec, ScenarioSpec, ValueSpec
 from moexport.sources import (

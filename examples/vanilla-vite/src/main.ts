@@ -1,8 +1,4 @@
-import {
-  readLatestExport,
-  type FormatHandle,
-  type StaticExport,
-} from "@marimo-team/export-reader";
+import { readLatestExport, type FormatHandle, type StaticExport } from "@marimo-team/export-reader";
 import {
   anywidgetLoader,
   createWidgetStore,

@@ -238,8 +238,8 @@ Every exported format payload is stored as a content-addressed blob.
 `BlobRef.href` is bundle-relative, `BlobRef.size` records the byte length, and
 `BlobRef.sha256` records the digest readers verify before parsing bytes.
 
-`ArtifactRecord.format_id` identifies the portable payload format that readers
-and loaders match, for example `dataframe.arrow.v1`. Exporters can write
+`FormatRecord.format_id` identifies the portable payload format that readers and
+loaders match, for example `dataframe.arrow.v1`. Exporters can write
 multiple named files for one format. `data.entry` points at the canonical file
 when the format has one.
 
