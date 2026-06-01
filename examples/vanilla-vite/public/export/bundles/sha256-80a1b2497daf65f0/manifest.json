@@ -1,0 +1,1342 @@
+{
+  "schema": "moexport.bundle.v1",
+  "version": 1,
+  "id": "sha256-80a1b2497daf65f0",
+  "sha256": "80a1b2497daf65f0cb05391c8b12dc02fc288f44e5b6f059316fcdabb34ba9a5",
+  "notebook": {
+    "name": "finance.py",
+    "source": null,
+    "source_sha256": "e9bb8b3bf655217cdaca0d0575606d38676c09bf20dc950c3d2319c76a5160bd"
+  },
+  "scenario_set": {
+    "id": "sha256-ff2a09c42e2e898b",
+    "sha256": "ff2a09c42e2e898bcaedd0ab7a98abd25b7036c41b3352b4f6afb9178353bf4a"
+  },
+  "capture": {
+    "id": "sha256-722344b1bf67cbd1",
+    "request_sha256": "722344b1bf67cbd1fbe40e4008171c696b86f5633633534196244869f0506e78"
+  },
+  "values": {
+    "summary": {
+      "source": {
+        "type": "expression",
+        "expression": "{\n    \"rows\": df.height,\n    \"columns\": df.columns,\n    \"symbols\": sorted(df[\"Symbol\"].unique().to_list()),\n    \"date_start\": df[\"Date\"].min().strftime(\"%Y-%m-%d\"),\n    \"date_end\": df[\"Date\"].max().strftime(\"%Y-%m-%d\"),\n}"
+      },
+      "formats": ["json"]
+    },
+    "symbols_selector": {
+      "source": {
+        "type": "expression",
+        "expression": "{\n    \"label\": \"Select symbols to compare\",\n    \"options\": symbols,\n    \"value\": symbols_selector.value,\n}"
+      },
+      "formats": ["json"]
+    },
+    "prices": {
+      "source": {
+        "type": "definition",
+        "name": "df"
+      },
+      "formats": ["arrow", "parquet"]
+    },
+    "change_desc": {
+      "source": {
+        "type": "cell_output",
+        "cell": {
+          "name": "change_desc"
+        },
+        "output": "scenario",
+        "on_error": "raise"
+      },
+      "formats": ["html"]
+    },
+    "comparison_chart": {
+      "source": {
+        "type": "definition",
+        "name": "symbols_chart"
+      },
+      "formats": ["vegalite", "png_nogrid"]
+    },
+    "ohlc_dashboard": {
+      "source": {
+        "type": "definition",
+        "name": "widget"
+      },
+      "formats": ["bundle"]
+    }
+  },
+  "scenarios": [
+    {
+      "id": "selector_aapl_googl_amzn",
+      "state": {
+        "inputs": {
+          "symbols": ["AAPL", "AMZN", "CRWV", "GOOGL", "MSFT"],
+          "interval": "1d",
+          "start": "2025-04-01",
+          "end": "2026-05-01",
+          "chart_width": 980
+        },
+        "ui": {
+          "symbols_selector": {
+            "value": ["AAPL", "GOOGL", "AMZN"]
+          }
+        },
+        "widgets": {
+          "widget": {
+            "widget": {
+              "metric": "Close",
+              "mode": "change",
+              "selected_symbols": ["AAPL", "GOOGL", "AMZN"]
+            }
+          }
+        }
+      },
+      "values": {
+        "summary": {
+          "json": {
+            "format_id": "summary.json.v1",
+            "media_type": "application/json",
+            "data": {
+              "type": "bundle",
+              "files": {
+                "data": {
+                  "href": "blobs/sha256/22/e9/22e9555aa19cffd53b23a49d235ae2179541bbc0aa3eda8a7723d4570e24590d",
+                  "media_type": "application/json",
+                  "size": 325,
+                  "sha256": "22e9555aa19cffd53b23a49d235ae2179541bbc0aa3eda8a7723d4570e24590d"
+                }
+              },
+              "entry": "data"
+            },
+            "metadata": {
+              "kind": "finance-summary"
+            }
+          }
+        },
+        "symbols_selector": {
+          "json": {
+            "format_id": "marimo.selector-state.json.v1",
+            "media_type": "application/json",
+            "data": {
+              "type": "bundle",
+              "files": {
+                "data": {
+                  "href": "blobs/sha256/47/a6/47a6bbd78455a538bd31230a0618e4640a12410a1cd46e951a435771b6955eeb",
+                  "media_type": "application/json",
+                  "size": 176,
+                  "sha256": "47a6bbd78455a538bd31230a0618e4640a12410a1cd46e951a435771b6955eeb"
+                }
+              },
+              "entry": "data"
+            },
+            "metadata": {
+              "kind": "marimo-selector-state"
+            }
+          }
+        },
+        "prices": {
+          "arrow": {
+            "format_id": "dataframe.arrow.v1",
+            "media_type": "application/vnd.apache.arrow.stream",
+            "data": {
+              "type": "bundle",
+              "files": {
+                "data": {
+                  "href": "blobs/sha256/c2/8e/c28e89289e3dc79d0ef8f86673367c7ac247ef6e39a2836991981e5b44d03ea8",
+                  "media_type": "application/vnd.apache.arrow.stream",
+                  "size": 116400,
+                  "sha256": "c28e89289e3dc79d0ef8f86673367c7ac247ef6e39a2836991981e5b44d03ea8"
+                }
+              },
+              "entry": "data"
+            },
+            "metadata": {
+              "rows": 1360,
+              "columns": [
+                "Date",
+                "Symbol",
+                "Open",
+                "Open Change",
+                "High",
+                "High Change",
+                "Low",
+                "Low Change",
+                "Close",
+                "Close Change"
+              ]
+            }
+          },
+          "parquet": {
+            "format_id": "dataframe.parquet.v1",
+            "media_type": "application/vnd.apache.parquet",
+            "data": {
+              "type": "bundle",
+              "files": {
+                "data": {
+                  "href": "blobs/sha256/56/78/567877c9fb609d7ac205f3b4c44be13bfbee35abfc946ef47c63d7aceb2609ed",
+                  "media_type": "application/vnd.apache.parquet",
+                  "size": 108449,
+                  "sha256": "567877c9fb609d7ac205f3b4c44be13bfbee35abfc946ef47c63d7aceb2609ed"
+                }
+              },
+              "entry": "data"
+            },
+            "metadata": {
+              "rows": 1360,
+              "columns": [
+                "Date",
+                "Symbol",
+                "Open",
+                "Open Change",
+                "High",
+                "High Change",
+                "Low",
+                "Low Change",
+                "Close",
+                "Close Change"
+              ],
+              "compression": "NONE"
+            }
+          }
+        },
+        "change_desc": {
+          "html": {
+            "format_id": "marimo.cell_output.html.v1",
+            "media_type": "text/html",
+            "data": {
+              "type": "bundle",
+              "files": {
+                "html": {
+                  "href": "blobs/sha256/08/c6/08c636f96fa9cf9af09ca7eb8ac97565e182b41f3b03cf87b3d75b5e97124af0",
+                  "media_type": "text/html",
+                  "size": 329,
+                  "sha256": "08c636f96fa9cf9af09ca7eb8ac97565e182b41f3b03cf87b3d75b5e97124af0"
+                }
+              },
+              "entry": "html"
+            },
+            "metadata": {
+              "kind": "marimo-cell-output",
+              "cell": "change_desc"
+            }
+          }
+        },
+        "comparison_chart": {
+          "vegalite": {
+            "format_id": "vegalite.v1",
+            "media_type": "application/vnd.vegalite+json",
+            "data": {
+              "type": "bundle",
+              "files": {
+                "spec": {
+                  "href": "blobs/sha256/0f/f9/0ff927dd150c66a9c90fd060940be0b4c25acd61f2508aa7ecd16c03f6df431c",
+                  "media_type": "application/vnd.vegalite+json",
+                  "size": 237055,
+                  "sha256": "0ff927dd150c66a9c90fd060940be0b4c25acd61f2508aa7ecd16c03f6df431c"
+                }
+              },
+              "entry": "spec"
+            },
+            "metadata": {
+              "schema": "https://vega.github.io/schema/vega-lite/v6.4.1.json"
+            }
+          },
+          "png_nogrid": {
+            "format_id": "image.png.nogrid.v1",
+            "media_type": "image/png",
+            "data": {
+              "type": "bundle",
+              "files": {
+                "image": {
+                  "href": "blobs/sha256/06/c9/06c9f2e0adb84dccc0c60845f9c4a487aa512b034ac79d9215701fcbf3b5250f",
+                  "media_type": "image/png",
+                  "size": 479483,
+                  "sha256": "06c9f2e0adb84dccc0c60845f9c4a487aa512b034ac79d9215701fcbf3b5250f"
+                }
+              },
+              "entry": "image"
+            },
+            "metadata": {
+              "source_format": "vegalite.v1",
+              "grid": false,
+              "scale": 2
+            }
+          }
+        },
+        "ohlc_dashboard": {
+          "bundle": {
+            "format_id": "anywidget.bundle.v1",
+            "media_type": "application/vnd.moexport.anywidget+json",
+            "data": {
+              "type": "bundle",
+              "files": {
+                "descriptor": {
+                  "href": "blobs/sha256/60/8d/608d467288f6cd21841211155dc123e14652074de48d65463a663384f7285712",
+                  "media_type": "application/vnd.moexport.anywidget+json",
+                  "size": 1999,
+                  "sha256": "608d467288f6cd21841211155dc123e14652074de48d65463a663384f7285712"
+                },
+                "module": {
+                  "href": "blobs/sha256/54/20/5420760b331117c5b3e33b544bac8c80b34db93ffa46d1d932f2fa429b4270ed",
+                  "media_type": "text/javascript",
+                  "size": 13685,
+                  "sha256": "5420760b331117c5b3e33b544bac8c80b34db93ffa46d1d932f2fa429b4270ed"
+                },
+                "style": {
+                  "href": "blobs/sha256/89/cb/89cb29753f841415e4b836d7d94e4d57827fdc94dd5e651596f290bd784962f1",
+                  "media_type": "text/css",
+                  "size": 5484,
+                  "sha256": "89cb29753f841415e4b836d7d94e4d57827fdc94dd5e651596f290bd784962f1"
+                },
+                "state.metric": {
+                  "href": "blobs/sha256/5f/86/5f86a55e9d943259f87fb7a4babda70cd65f372977c7ddde8ab1ee8743c7497a",
+                  "media_type": "application/json",
+                  "size": 8,
+                  "sha256": "5f86a55e9d943259f87fb7a4babda70cd65f372977c7ddde8ab1ee8743c7497a"
+                },
+                "state.mode": {
+                  "href": "blobs/sha256/75/13/7513f54f6270ed12691a4b60e3de725dfcc8a8ef8aec1ddc8f7be5c0e0f13a2c",
+                  "media_type": "application/json",
+                  "size": 9,
+                  "sha256": "7513f54f6270ed12691a4b60e3de725dfcc8a8ef8aec1ddc8f7be5c0e0f13a2c"
+                },
+                "state.rows": {
+                  "href": "blobs/sha256/fb/1b/fb1b0a803260cc0c793ca1d60220413df682b689d5f3c64325fa30496e05464d",
+                  "media_type": "application/json",
+                  "size": 487025,
+                  "sha256": "fb1b0a803260cc0c793ca1d60220413df682b689d5f3c64325fa30496e05464d"
+                },
+                "state.selected_symbols": {
+                  "href": "blobs/sha256/db/07/db071a4646ed82bada29135e29d904a5184af06b9561bb2f832658ae2f15c5e1",
+                  "media_type": "application/json",
+                  "size": 34,
+                  "sha256": "db071a4646ed82bada29135e29d904a5184af06b9561bb2f832658ae2f15c5e1"
+                },
+                "state.title": {
+                  "href": "blobs/sha256/87/e7/87e7d62b2216849026514585507ded3679fa7d565aca016d554f0d22d1bb7457",
+                  "media_type": "application/json",
+                  "size": 30,
+                  "sha256": "87e7d62b2216849026514585507ded3679fa7d565aca016d554f0d22d1bb7457"
+                }
+              },
+              "entry": "descriptor"
+            },
+            "metadata": {
+              "anywidget_id": "builtins.OhlcSwitcher",
+              "buffer_count": 0,
+              "has_style": true,
+              "state_keys": ["metric", "mode", "rows", "selected_symbols", "title"]
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "selector_ai_semis",
+      "state": {
+        "inputs": {
+          "symbols": ["NVDA", "AMD", "AVGO", "TSM", "ASML"],
+          "interval": "1d",
+          "start": "2025-11-01",
+          "end": "2026-05-01",
+          "chart_width": 980
+        },
+        "ui": {
+          "symbols_selector": {
+            "value": ["NVDA", "AMD", "AVGO"]
+          }
+        },
+        "widgets": {
+          "widget": {
+            "widget": {
+              "metric": "High",
+              "mode": "change",
+              "selected_symbols": ["NVDA", "AMD", "AVGO"]
+            }
+          }
+        }
+      },
+      "values": {
+        "summary": {
+          "json": {
+            "format_id": "summary.json.v1",
+            "media_type": "application/json",
+            "data": {
+              "type": "bundle",
+              "files": {
+                "data": {
+                  "href": "blobs/sha256/0e/1b/0e1bcbe880958654c8aea88b87af4647ad9bab842e348c736f648420cd77ab15",
+                  "media_type": "application/json",
+                  "size": 321,
+                  "sha256": "0e1bcbe880958654c8aea88b87af4647ad9bab842e348c736f648420cd77ab15"
+                }
+              },
+              "entry": "data"
+            },
+            "metadata": {
+              "kind": "finance-summary"
+            }
+          }
+        },
+        "symbols_selector": {
+          "json": {
+            "format_id": "marimo.selector-state.json.v1",
+            "media_type": "application/json",
+            "data": {
+              "type": "bundle",
+              "files": {
+                "data": {
+                  "href": "blobs/sha256/6b/9b/6b9b71125ffd27ab04a7c12bc4a5d3fff4836957738f4c2c9413c7f595748ffb",
+                  "media_type": "application/json",
+                  "size": 171,
+                  "sha256": "6b9b71125ffd27ab04a7c12bc4a5d3fff4836957738f4c2c9413c7f595748ffb"
+                }
+              },
+              "entry": "data"
+            },
+            "metadata": {
+              "kind": "marimo-selector-state"
+            }
+          }
+        },
+        "prices": {
+          "arrow": {
+            "format_id": "dataframe.arrow.v1",
+            "media_type": "application/vnd.apache.arrow.stream",
+            "data": {
+              "type": "bundle",
+              "files": {
+                "data": {
+                  "href": "blobs/sha256/1e/da/1eda9101657a8af776e916fa8ab62023256b3f7aa622281e92532fd15c61fc5a",
+                  "media_type": "application/vnd.apache.arrow.stream",
+                  "size": 52920,
+                  "sha256": "1eda9101657a8af776e916fa8ab62023256b3f7aa622281e92532fd15c61fc5a"
+                }
+              },
+              "entry": "data"
+            },
+            "metadata": {
+              "rows": 615,
+              "columns": [
+                "Date",
+                "Symbol",
+                "Open",
+                "Open Change",
+                "High",
+                "High Change",
+                "Low",
+                "Low Change",
+                "Close",
+                "Close Change"
+              ]
+            }
+          },
+          "parquet": {
+            "format_id": "dataframe.parquet.v1",
+            "media_type": "application/vnd.apache.parquet",
+            "data": {
+              "type": "bundle",
+              "files": {
+                "data": {
+                  "href": "blobs/sha256/a1/7a/a17ac3c0356f8674df845c0755747f5041180d2585d20d437c556edc0dc21a2d",
+                  "media_type": "application/vnd.apache.parquet",
+                  "size": 50048,
+                  "sha256": "a17ac3c0356f8674df845c0755747f5041180d2585d20d437c556edc0dc21a2d"
+                }
+              },
+              "entry": "data"
+            },
+            "metadata": {
+              "rows": 615,
+              "columns": [
+                "Date",
+                "Symbol",
+                "Open",
+                "Open Change",
+                "High",
+                "High Change",
+                "Low",
+                "Low Change",
+                "Close",
+                "Close Change"
+              ],
+              "compression": "NONE"
+            }
+          }
+        },
+        "change_desc": {
+          "html": {
+            "format_id": "marimo.cell_output.html.v1",
+            "media_type": "text/html",
+            "data": {
+              "type": "bundle",
+              "files": {
+                "html": {
+                  "href": "blobs/sha256/74/e3/74e3ede583376c19aea4173c08b40fc8182b51fb2d952dd663d047b8ced21e62",
+                  "media_type": "text/html",
+                  "size": 329,
+                  "sha256": "74e3ede583376c19aea4173c08b40fc8182b51fb2d952dd663d047b8ced21e62"
+                }
+              },
+              "entry": "html"
+            },
+            "metadata": {
+              "kind": "marimo-cell-output",
+              "cell": "change_desc"
+            }
+          }
+        },
+        "comparison_chart": {
+          "vegalite": {
+            "format_id": "vegalite.v1",
+            "media_type": "application/vnd.vegalite+json",
+            "data": {
+              "type": "bundle",
+              "files": {
+                "spec": {
+                  "href": "blobs/sha256/d0/b4/d0b488530bd8f588aec0f7fbe0d4b2aef291fc73302a135832ccf3ac0c875719",
+                  "media_type": "application/vnd.vegalite+json",
+                  "size": 106508,
+                  "sha256": "d0b488530bd8f588aec0f7fbe0d4b2aef291fc73302a135832ccf3ac0c875719"
+                }
+              },
+              "entry": "spec"
+            },
+            "metadata": {
+              "schema": "https://vega.github.io/schema/vega-lite/v6.4.1.json"
+            }
+          },
+          "png_nogrid": {
+            "format_id": "image.png.nogrid.v1",
+            "media_type": "image/png",
+            "data": {
+              "type": "bundle",
+              "files": {
+                "image": {
+                  "href": "blobs/sha256/64/22/6422a39b2d775901598cb235239f24bf30f9570013d5ce025942db7ed5451840",
+                  "media_type": "image/png",
+                  "size": 439431,
+                  "sha256": "6422a39b2d775901598cb235239f24bf30f9570013d5ce025942db7ed5451840"
+                }
+              },
+              "entry": "image"
+            },
+            "metadata": {
+              "source_format": "vegalite.v1",
+              "grid": false,
+              "scale": 2
+            }
+          }
+        },
+        "ohlc_dashboard": {
+          "bundle": {
+            "format_id": "anywidget.bundle.v1",
+            "media_type": "application/vnd.moexport.anywidget+json",
+            "data": {
+              "type": "bundle",
+              "files": {
+                "descriptor": {
+                  "href": "blobs/sha256/e1/08/e108ee22ce4723c3a10d6a45b3ab42a7ba9bf6ea20e88c32984dd4b5c5944cf7",
+                  "media_type": "application/vnd.moexport.anywidget+json",
+                  "size": 1999,
+                  "sha256": "e108ee22ce4723c3a10d6a45b3ab42a7ba9bf6ea20e88c32984dd4b5c5944cf7"
+                },
+                "module": {
+                  "href": "blobs/sha256/54/20/5420760b331117c5b3e33b544bac8c80b34db93ffa46d1d932f2fa429b4270ed",
+                  "media_type": "text/javascript",
+                  "size": 13685,
+                  "sha256": "5420760b331117c5b3e33b544bac8c80b34db93ffa46d1d932f2fa429b4270ed"
+                },
+                "style": {
+                  "href": "blobs/sha256/89/cb/89cb29753f841415e4b836d7d94e4d57827fdc94dd5e651596f290bd784962f1",
+                  "media_type": "text/css",
+                  "size": 5484,
+                  "sha256": "89cb29753f841415e4b836d7d94e4d57827fdc94dd5e651596f290bd784962f1"
+                },
+                "state.metric": {
+                  "href": "blobs/sha256/62/b4/62b481f564c93c54ac2c79ee36889dcb28fd510821498348851315a12b026803",
+                  "media_type": "application/json",
+                  "size": 7,
+                  "sha256": "62b481f564c93c54ac2c79ee36889dcb28fd510821498348851315a12b026803"
+                },
+                "state.mode": {
+                  "href": "blobs/sha256/75/13/7513f54f6270ed12691a4b60e3de725dfcc8a8ef8aec1ddc8f7be5c0e0f13a2c",
+                  "media_type": "application/json",
+                  "size": 9,
+                  "sha256": "7513f54f6270ed12691a4b60e3de725dfcc8a8ef8aec1ddc8f7be5c0e0f13a2c"
+                },
+                "state.rows": {
+                  "href": "blobs/sha256/18/d7/18d73971dc1d129d188cc73fd61a99c5a82cb46b7d41689c661347b1778a1d52",
+                  "media_type": "application/json",
+                  "size": 219938,
+                  "sha256": "18d73971dc1d129d188cc73fd61a99c5a82cb46b7d41689c661347b1778a1d52"
+                },
+                "state.selected_symbols": {
+                  "href": "blobs/sha256/85/a5/85a5737dacfc34b419e2f3f83704788946e873922a6632544d0a6e67c3037601",
+                  "media_type": "application/json",
+                  "size": 32,
+                  "sha256": "85a5737dacfc34b419e2f3f83704788946e873922a6632544d0a6e67c3037601"
+                },
+                "state.title": {
+                  "href": "blobs/sha256/87/e7/87e7d62b2216849026514585507ded3679fa7d565aca016d554f0d22d1bb7457",
+                  "media_type": "application/json",
+                  "size": 30,
+                  "sha256": "87e7d62b2216849026514585507ded3679fa7d565aca016d554f0d22d1bb7457"
+                }
+              },
+              "entry": "descriptor"
+            },
+            "metadata": {
+              "anywidget_id": "builtins.OhlcSwitcher",
+              "buffer_count": 0,
+              "has_style": true,
+              "state_keys": ["metric", "mode", "rows", "selected_symbols", "title"]
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "selector_crwv_msft",
+      "state": {
+        "inputs": {
+          "symbols": ["AAPL", "AMZN", "CRWV", "GOOGL", "MSFT"],
+          "interval": "1d",
+          "start": "2025-04-01",
+          "end": "2026-05-01",
+          "chart_width": 980
+        },
+        "ui": {
+          "symbols_selector": {
+            "value": ["CRWV", "MSFT"]
+          }
+        },
+        "widgets": {
+          "widget": {
+            "widget": {
+              "metric": "Close",
+              "mode": "absolute",
+              "selected_symbols": ["CRWV", "MSFT"]
+            }
+          }
+        }
+      },
+      "values": {
+        "summary": {
+          "json": {
+            "format_id": "summary.json.v1",
+            "media_type": "application/json",
+            "data": {
+              "type": "bundle",
+              "files": {
+                "data": {
+                  "href": "blobs/sha256/22/e9/22e9555aa19cffd53b23a49d235ae2179541bbc0aa3eda8a7723d4570e24590d",
+                  "media_type": "application/json",
+                  "size": 325,
+                  "sha256": "22e9555aa19cffd53b23a49d235ae2179541bbc0aa3eda8a7723d4570e24590d"
+                }
+              },
+              "entry": "data"
+            },
+            "metadata": {
+              "kind": "finance-summary"
+            }
+          }
+        },
+        "symbols_selector": {
+          "json": {
+            "format_id": "marimo.selector-state.json.v1",
+            "media_type": "application/json",
+            "data": {
+              "type": "bundle",
+              "files": {
+                "data": {
+                  "href": "blobs/sha256/96/7b/967b27506c5df1ad0af36e45bb0f391555da6d394e8818bf37da9311f5005018",
+                  "media_type": "application/json",
+                  "size": 163,
+                  "sha256": "967b27506c5df1ad0af36e45bb0f391555da6d394e8818bf37da9311f5005018"
+                }
+              },
+              "entry": "data"
+            },
+            "metadata": {
+              "kind": "marimo-selector-state"
+            }
+          }
+        },
+        "prices": {
+          "arrow": {
+            "format_id": "dataframe.arrow.v1",
+            "media_type": "application/vnd.apache.arrow.stream",
+            "data": {
+              "type": "bundle",
+              "files": {
+                "data": {
+                  "href": "blobs/sha256/c2/8e/c28e89289e3dc79d0ef8f86673367c7ac247ef6e39a2836991981e5b44d03ea8",
+                  "media_type": "application/vnd.apache.arrow.stream",
+                  "size": 116400,
+                  "sha256": "c28e89289e3dc79d0ef8f86673367c7ac247ef6e39a2836991981e5b44d03ea8"
+                }
+              },
+              "entry": "data"
+            },
+            "metadata": {
+              "rows": 1360,
+              "columns": [
+                "Date",
+                "Symbol",
+                "Open",
+                "Open Change",
+                "High",
+                "High Change",
+                "Low",
+                "Low Change",
+                "Close",
+                "Close Change"
+              ]
+            }
+          },
+          "parquet": {
+            "format_id": "dataframe.parquet.v1",
+            "media_type": "application/vnd.apache.parquet",
+            "data": {
+              "type": "bundle",
+              "files": {
+                "data": {
+                  "href": "blobs/sha256/56/78/567877c9fb609d7ac205f3b4c44be13bfbee35abfc946ef47c63d7aceb2609ed",
+                  "media_type": "application/vnd.apache.parquet",
+                  "size": 108449,
+                  "sha256": "567877c9fb609d7ac205f3b4c44be13bfbee35abfc946ef47c63d7aceb2609ed"
+                }
+              },
+              "entry": "data"
+            },
+            "metadata": {
+              "rows": 1360,
+              "columns": [
+                "Date",
+                "Symbol",
+                "Open",
+                "Open Change",
+                "High",
+                "High Change",
+                "Low",
+                "Low Change",
+                "Close",
+                "Close Change"
+              ],
+              "compression": "NONE"
+            }
+          }
+        },
+        "change_desc": {
+          "html": {
+            "format_id": "marimo.cell_output.html.v1",
+            "media_type": "text/html",
+            "data": {
+              "type": "bundle",
+              "files": {
+                "html": {
+                  "href": "blobs/sha256/08/c6/08c636f96fa9cf9af09ca7eb8ac97565e182b41f3b03cf87b3d75b5e97124af0",
+                  "media_type": "text/html",
+                  "size": 329,
+                  "sha256": "08c636f96fa9cf9af09ca7eb8ac97565e182b41f3b03cf87b3d75b5e97124af0"
+                }
+              },
+              "entry": "html"
+            },
+            "metadata": {
+              "kind": "marimo-cell-output",
+              "cell": "change_desc"
+            }
+          }
+        },
+        "comparison_chart": {
+          "vegalite": {
+            "format_id": "vegalite.v1",
+            "media_type": "application/vnd.vegalite+json",
+            "data": {
+              "type": "bundle",
+              "files": {
+                "spec": {
+                  "href": "blobs/sha256/a1/6f/a16fa1c9c3505af2fce93d1e0513875b80e1ce3eccd77e5fb18384a6b3f31568",
+                  "media_type": "application/vnd.vegalite+json",
+                  "size": 155843,
+                  "sha256": "a16fa1c9c3505af2fce93d1e0513875b80e1ce3eccd77e5fb18384a6b3f31568"
+                }
+              },
+              "entry": "spec"
+            },
+            "metadata": {
+              "schema": "https://vega.github.io/schema/vega-lite/v6.4.1.json"
+            }
+          },
+          "png_nogrid": {
+            "format_id": "image.png.nogrid.v1",
+            "media_type": "image/png",
+            "data": {
+              "type": "bundle",
+              "files": {
+                "image": {
+                  "href": "blobs/sha256/f5/f6/f5f63e417c7068a8ae20c4fd76d9f8f6c252129d2714561afb83ae9d101663e2",
+                  "media_type": "image/png",
+                  "size": 393483,
+                  "sha256": "f5f63e417c7068a8ae20c4fd76d9f8f6c252129d2714561afb83ae9d101663e2"
+                }
+              },
+              "entry": "image"
+            },
+            "metadata": {
+              "source_format": "vegalite.v1",
+              "grid": false,
+              "scale": 2
+            }
+          }
+        },
+        "ohlc_dashboard": {
+          "bundle": {
+            "format_id": "anywidget.bundle.v1",
+            "media_type": "application/vnd.moexport.anywidget+json",
+            "data": {
+              "type": "bundle",
+              "files": {
+                "descriptor": {
+                  "href": "blobs/sha256/25/06/250635e1ecc3f6223e4e54303f53f3765ee5689162d63aa4bfe4e4b29cccd92e",
+                  "media_type": "application/vnd.moexport.anywidget+json",
+                  "size": 2000,
+                  "sha256": "250635e1ecc3f6223e4e54303f53f3765ee5689162d63aa4bfe4e4b29cccd92e"
+                },
+                "module": {
+                  "href": "blobs/sha256/54/20/5420760b331117c5b3e33b544bac8c80b34db93ffa46d1d932f2fa429b4270ed",
+                  "media_type": "text/javascript",
+                  "size": 13685,
+                  "sha256": "5420760b331117c5b3e33b544bac8c80b34db93ffa46d1d932f2fa429b4270ed"
+                },
+                "style": {
+                  "href": "blobs/sha256/89/cb/89cb29753f841415e4b836d7d94e4d57827fdc94dd5e651596f290bd784962f1",
+                  "media_type": "text/css",
+                  "size": 5484,
+                  "sha256": "89cb29753f841415e4b836d7d94e4d57827fdc94dd5e651596f290bd784962f1"
+                },
+                "state.metric": {
+                  "href": "blobs/sha256/5f/86/5f86a55e9d943259f87fb7a4babda70cd65f372977c7ddde8ab1ee8743c7497a",
+                  "media_type": "application/json",
+                  "size": 8,
+                  "sha256": "5f86a55e9d943259f87fb7a4babda70cd65f372977c7ddde8ab1ee8743c7497a"
+                },
+                "state.mode": {
+                  "href": "blobs/sha256/10/13/10138287ad2b8c7be33031ba364ba917b11925beed1a6daebb527b19abc7fa14",
+                  "media_type": "application/json",
+                  "size": 11,
+                  "sha256": "10138287ad2b8c7be33031ba364ba917b11925beed1a6daebb527b19abc7fa14"
+                },
+                "state.rows": {
+                  "href": "blobs/sha256/fb/1b/fb1b0a803260cc0c793ca1d60220413df682b689d5f3c64325fa30496e05464d",
+                  "media_type": "application/json",
+                  "size": 487025,
+                  "sha256": "fb1b0a803260cc0c793ca1d60220413df682b689d5f3c64325fa30496e05464d"
+                },
+                "state.selected_symbols": {
+                  "href": "blobs/sha256/40/8a/408adb974552491dca6f51e6d95643510dc65f467d4e1de5b8d3e771c76f22a2",
+                  "media_type": "application/json",
+                  "size": 23,
+                  "sha256": "408adb974552491dca6f51e6d95643510dc65f467d4e1de5b8d3e771c76f22a2"
+                },
+                "state.title": {
+                  "href": "blobs/sha256/87/e7/87e7d62b2216849026514585507ded3679fa7d565aca016d554f0d22d1bb7457",
+                  "media_type": "application/json",
+                  "size": 30,
+                  "sha256": "87e7d62b2216849026514585507ded3679fa7d565aca016d554f0d22d1bb7457"
+                }
+              },
+              "entry": "descriptor"
+            },
+            "metadata": {
+              "anywidget_id": "builtins.OhlcSwitcher",
+              "buffer_count": 0,
+              "has_style": true,
+              "state_keys": ["metric", "mode", "rows", "selected_symbols", "title"]
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "selector_tsla_focus",
+      "state": {
+        "inputs": {
+          "symbols": ["TSLA"],
+          "interval": "1d",
+          "start": "2025-01-01",
+          "end": "2026-05-01",
+          "chart_width": 760
+        },
+        "ui": {
+          "symbols_selector": {
+            "value": ["TSLA"]
+          }
+        },
+        "widgets": {
+          "widget": {
+            "widget": {
+              "metric": "Close",
+              "mode": "absolute",
+              "selected_symbols": ["TSLA"]
+            }
+          }
+        }
+      },
+      "values": {
+        "summary": {
+          "json": {
+            "format_id": "summary.json.v1",
+            "media_type": "application/json",
+            "data": {
+              "type": "bundle",
+              "files": {
+                "data": {
+                  "href": "blobs/sha256/a2/74/a274e010b94da32bcc300931f787e8e286677ae7db7bef1379e6eb5902f12e90",
+                  "media_type": "application/json",
+                  "size": 275,
+                  "sha256": "a274e010b94da32bcc300931f787e8e286677ae7db7bef1379e6eb5902f12e90"
+                }
+              },
+              "entry": "data"
+            },
+            "metadata": {
+              "kind": "finance-summary"
+            }
+          }
+        },
+        "symbols_selector": {
+          "json": {
+            "format_id": "marimo.selector-state.json.v1",
+            "media_type": "application/json",
+            "data": {
+              "type": "bundle",
+              "files": {
+                "data": {
+                  "href": "blobs/sha256/e2/ce/e2ceacf1defa9261b7234c3e51e50c43b61bed92f0af397d10ac6b2dcac9fe6a",
+                  "media_type": "application/json",
+                  "size": 102,
+                  "sha256": "e2ceacf1defa9261b7234c3e51e50c43b61bed92f0af397d10ac6b2dcac9fe6a"
+                }
+              },
+              "entry": "data"
+            },
+            "metadata": {
+              "kind": "marimo-selector-state"
+            }
+          }
+        },
+        "prices": {
+          "arrow": {
+            "format_id": "dataframe.arrow.v1",
+            "media_type": "application/vnd.apache.arrow.stream",
+            "data": {
+              "type": "bundle",
+              "files": {
+                "data": {
+                  "href": "blobs/sha256/2b/dd/2bddf3d115623073360343b04e15f2aca3d5f8942808b9ba16277a6a63bfc1bf",
+                  "media_type": "application/vnd.apache.arrow.stream",
+                  "size": 29264,
+                  "sha256": "2bddf3d115623073360343b04e15f2aca3d5f8942808b9ba16277a6a63bfc1bf"
+                }
+              },
+              "entry": "data"
+            },
+            "metadata": {
+              "rows": 332,
+              "columns": [
+                "Date",
+                "Symbol",
+                "Open",
+                "Open Change",
+                "High",
+                "High Change",
+                "Low",
+                "Low Change",
+                "Close",
+                "Close Change"
+              ]
+            }
+          },
+          "parquet": {
+            "format_id": "dataframe.parquet.v1",
+            "media_type": "application/vnd.apache.parquet",
+            "data": {
+              "type": "bundle",
+              "files": {
+                "data": {
+                  "href": "blobs/sha256/9c/2a/9c2a5ef2d3ed2844b02121306b614fff6927187736bb946839b8544b51950440",
+                  "media_type": "application/vnd.apache.parquet",
+                  "size": 30208,
+                  "sha256": "9c2a5ef2d3ed2844b02121306b614fff6927187736bb946839b8544b51950440"
+                }
+              },
+              "entry": "data"
+            },
+            "metadata": {
+              "rows": 332,
+              "columns": [
+                "Date",
+                "Symbol",
+                "Open",
+                "Open Change",
+                "High",
+                "High Change",
+                "Low",
+                "Low Change",
+                "Close",
+                "Close Change"
+              ],
+              "compression": "NONE"
+            }
+          }
+        },
+        "change_desc": {
+          "html": {
+            "format_id": "marimo.cell_output.html.v1",
+            "media_type": "text/html",
+            "data": {
+              "type": "bundle",
+              "files": {
+                "html": {
+                  "href": "blobs/sha256/2f/f0/2ff02295a20028091705c63c0b5ead89dbf30277b942625483dfa5f9f00a39e6",
+                  "media_type": "text/html",
+                  "size": 306,
+                  "sha256": "2ff02295a20028091705c63c0b5ead89dbf30277b942625483dfa5f9f00a39e6"
+                }
+              },
+              "entry": "html"
+            },
+            "metadata": {
+              "kind": "marimo-cell-output",
+              "cell": "change_desc"
+            }
+          }
+        },
+        "comparison_chart": {
+          "vegalite": {
+            "format_id": "vegalite.v1",
+            "media_type": "application/vnd.vegalite+json",
+            "data": {
+              "type": "bundle",
+              "files": {
+                "spec": {
+                  "href": "blobs/sha256/a4/e8/a4e8c8b03f940701cc03b20fe5f3043ef2d45e2e65f754b4351229db976e471b",
+                  "media_type": "application/vnd.vegalite+json",
+                  "size": 94767,
+                  "sha256": "a4e8c8b03f940701cc03b20fe5f3043ef2d45e2e65f754b4351229db976e471b"
+                }
+              },
+              "entry": "spec"
+            },
+            "metadata": {
+              "schema": "https://vega.github.io/schema/vega-lite/v6.4.1.json"
+            }
+          },
+          "png_nogrid": {
+            "format_id": "image.png.nogrid.v1",
+            "media_type": "image/png",
+            "data": {
+              "type": "bundle",
+              "files": {
+                "image": {
+                  "href": "blobs/sha256/01/91/01916c7851341e4296f626f8387e260a025bcae702865a90f5e2935acf93ffc9",
+                  "media_type": "image/png",
+                  "size": 339707,
+                  "sha256": "01916c7851341e4296f626f8387e260a025bcae702865a90f5e2935acf93ffc9"
+                }
+              },
+              "entry": "image"
+            },
+            "metadata": {
+              "source_format": "vegalite.v1",
+              "grid": false,
+              "scale": 2
+            }
+          }
+        },
+        "ohlc_dashboard": {
+          "bundle": {
+            "format_id": "anywidget.bundle.v1",
+            "media_type": "application/vnd.moexport.anywidget+json",
+            "data": {
+              "type": "bundle",
+              "files": {
+                "descriptor": {
+                  "href": "blobs/sha256/ac/59/ac59c2f30f99d40c80244d752e2e56ef21804889aea39b388f2fd79d04f696df",
+                  "media_type": "application/vnd.moexport.anywidget+json",
+                  "size": 2000,
+                  "sha256": "ac59c2f30f99d40c80244d752e2e56ef21804889aea39b388f2fd79d04f696df"
+                },
+                "module": {
+                  "href": "blobs/sha256/54/20/5420760b331117c5b3e33b544bac8c80b34db93ffa46d1d932f2fa429b4270ed",
+                  "media_type": "text/javascript",
+                  "size": 13685,
+                  "sha256": "5420760b331117c5b3e33b544bac8c80b34db93ffa46d1d932f2fa429b4270ed"
+                },
+                "style": {
+                  "href": "blobs/sha256/89/cb/89cb29753f841415e4b836d7d94e4d57827fdc94dd5e651596f290bd784962f1",
+                  "media_type": "text/css",
+                  "size": 5484,
+                  "sha256": "89cb29753f841415e4b836d7d94e4d57827fdc94dd5e651596f290bd784962f1"
+                },
+                "state.metric": {
+                  "href": "blobs/sha256/5f/86/5f86a55e9d943259f87fb7a4babda70cd65f372977c7ddde8ab1ee8743c7497a",
+                  "media_type": "application/json",
+                  "size": 8,
+                  "sha256": "5f86a55e9d943259f87fb7a4babda70cd65f372977c7ddde8ab1ee8743c7497a"
+                },
+                "state.mode": {
+                  "href": "blobs/sha256/10/13/10138287ad2b8c7be33031ba364ba917b11925beed1a6daebb527b19abc7fa14",
+                  "media_type": "application/json",
+                  "size": 11,
+                  "sha256": "10138287ad2b8c7be33031ba364ba917b11925beed1a6daebb527b19abc7fa14"
+                },
+                "state.rows": {
+                  "href": "blobs/sha256/bd/86/bd865894221c933dda140bedb3c5df6be0fc1d5b25807add70cc89949c782b9c",
+                  "media_type": "application/json",
+                  "size": 117472,
+                  "sha256": "bd865894221c933dda140bedb3c5df6be0fc1d5b25807add70cc89949c782b9c"
+                },
+                "state.selected_symbols": {
+                  "href": "blobs/sha256/f3/f4/f3f47bf0e12d568c0b150b8615d454d5970877b0f7cba8667ade613363146ad5",
+                  "media_type": "application/json",
+                  "size": 13,
+                  "sha256": "f3f47bf0e12d568c0b150b8615d454d5970877b0f7cba8667ade613363146ad5"
+                },
+                "state.title": {
+                  "href": "blobs/sha256/87/e7/87e7d62b2216849026514585507ded3679fa7d565aca016d554f0d22d1bb7457",
+                  "media_type": "application/json",
+                  "size": 30,
+                  "sha256": "87e7d62b2216849026514585507ded3679fa7d565aca016d554f0d22d1bb7457"
+                }
+              },
+              "entry": "descriptor"
+            },
+            "metadata": {
+              "anywidget_id": "builtins.OhlcSwitcher",
+              "buffer_count": 0,
+              "has_style": true,
+              "state_keys": ["metric", "mode", "rows", "selected_symbols", "title"]
+            }
+          }
+        }
+      }
+    }
+  ],
+  "provenance": {
+    "invocations_index_href": "bundles/sha256-80a1b2497daf65f0/traces/index.json",
+    "source_spec_sha256": "357d480e9c394bc3d87cfdf6bfaa9431cfc42133f72f0299fd1b655d2482da6d",
+    "source_spec": {
+      "scenarios": [
+        {
+          "id": "selector_crwv_msft",
+          "inputs": {
+            "symbols": ["AAPL", "AMZN", "CRWV", "GOOGL", "MSFT"],
+            "interval": "1d",
+            "start": "2025-04-01",
+            "end": "2026-05-01",
+            "chart_width": 980
+          },
+          "ui": {
+            "symbols_selector": {
+              "value": ["CRWV", "MSFT"]
+            }
+          },
+          "widgets": {
+            "widget": {
+              "widget": {
+                "metric": "Close",
+                "mode": "absolute",
+                "selected_symbols": ["CRWV", "MSFT"]
+              }
+            }
+          }
+        },
+        {
+          "id": "selector_aapl_googl_amzn",
+          "inputs": {
+            "symbols": ["AAPL", "AMZN", "CRWV", "GOOGL", "MSFT"],
+            "interval": "1d",
+            "start": "2025-04-01",
+            "end": "2026-05-01",
+            "chart_width": 980
+          },
+          "ui": {
+            "symbols_selector": {
+              "value": ["AAPL", "GOOGL", "AMZN"]
+            }
+          },
+          "widgets": {
+            "widget": {
+              "widget": {
+                "metric": "Close",
+                "mode": "change",
+                "selected_symbols": ["AAPL", "GOOGL", "AMZN"]
+              }
+            }
+          }
+        },
+        {
+          "id": "selector_ai_semis",
+          "inputs": {
+            "symbols": ["NVDA", "AMD", "AVGO", "TSM", "ASML"],
+            "interval": "1d",
+            "start": "2025-11-01",
+            "end": "2026-05-01",
+            "chart_width": 980
+          },
+          "ui": {
+            "symbols_selector": {
+              "value": ["NVDA", "AMD", "AVGO"]
+            }
+          },
+          "widgets": {
+            "widget": {
+              "widget": {
+                "metric": "High",
+                "mode": "change",
+                "selected_symbols": ["NVDA", "AMD", "AVGO"]
+              }
+            }
+          }
+        },
+        {
+          "id": "selector_tsla_focus",
+          "inputs": {
+            "symbols": ["TSLA"],
+            "interval": "1d",
+            "start": "2025-01-01",
+            "end": "2026-05-01",
+            "chart_width": 760
+          },
+          "ui": {
+            "symbols_selector": {
+              "value": ["TSLA"]
+            }
+          },
+          "widgets": {
+            "widget": {
+              "widget": {
+                "metric": "Close",
+                "mode": "absolute",
+                "selected_symbols": ["TSLA"]
+              }
+            }
+          }
+        }
+      ],
+      "provenance": {
+        "source": "hash",
+        "spec": "embed"
+      },
+      "values": {
+        "summary": {
+          "source": {
+            "type": "expression",
+            "expression": "{\n    \"rows\": df.height,\n    \"columns\": df.columns,\n    \"symbols\": sorted(df[\"Symbol\"].unique().to_list()),\n    \"date_start\": df[\"Date\"].min().strftime(\"%Y-%m-%d\"),\n    \"date_end\": df[\"Date\"].max().strftime(\"%Y-%m-%d\"),\n}"
+          },
+          "formats": {
+            "json": {
+              "export": {
+                "type": "code",
+                "code": "import json\n\n\ndef export(value, ctx, **options):\n    blob = ctx.write_blob(\n        \"summary.json\",\n        json.dumps(value, allow_nan=False, indent=2).encode(),\n        media_type=\"application/json\",\n    )\n    return {\n        \"format\": \"summary.json.v1\",\n        \"media_type\": \"application/json\",\n        \"data\": {\n            \"type\": \"bundle\",\n            \"files\": {\"data\": blob},\n            \"entry\": \"data\",\n        },\n        \"metadata\": {\"kind\": \"finance-summary\"},\n    }\n"
+              }
+            }
+          }
+        },
+        "symbols_selector": {
+          "source": {
+            "type": "expression",
+            "expression": "{\n    \"label\": \"Select symbols to compare\",\n    \"options\": symbols,\n    \"value\": symbols_selector.value,\n}"
+          },
+          "formats": {
+            "json": {
+              "export": {
+                "type": "code",
+                "code": "import json\n\n\ndef export(value, ctx, **options):\n    blob = ctx.write_blob(\n        \"symbols-selector.json\",\n        json.dumps(value, allow_nan=False, indent=2).encode(),\n        media_type=\"application/json\",\n    )\n    return {\n        \"format\": \"marimo.selector-state.json.v1\",\n        \"media_type\": \"application/json\",\n        \"data\": {\n            \"type\": \"bundle\",\n            \"files\": {\"data\": blob},\n            \"entry\": \"data\",\n        },\n        \"metadata\": {\"kind\": \"marimo-selector-state\"},\n    }\n"
+              }
+            }
+          }
+        },
+        "prices": {
+          "source": {
+            "type": "definition",
+            "name": "df"
+          },
+          "formats": {
+            "arrow": {
+              "export": {
+                "type": "ref",
+                "ref": "moexport.exporters.dataframe:arrow"
+              }
+            },
+            "parquet": {
+              "export": {
+                "type": "ref",
+                "ref": "moexport.exporters.dataframe:parquet"
+              }
+            }
+          }
+        },
+        "change_desc": {
+          "source": {
+            "type": "cell_output",
+            "cell": {
+              "name": "change_desc"
+            },
+            "output": "scenario",
+            "on_error": "raise"
+          },
+          "formats": {
+            "html": {
+              "export": {
+                "type": "code",
+                "code": "def export(value, ctx, **options):\n    html = value.text if hasattr(value, \"text\") else str(value)\n    blob = ctx.write_blob(\n        options.get(\"filename\", \"change-desc.html\"),\n        html.encode(\"utf-8\"),\n        media_type=\"text/html\",\n    )\n    return {\n        \"format\": \"marimo.cell_output.html.v1\",\n        \"media_type\": \"text/html\",\n        \"data\": {\n            \"type\": \"bundle\",\n            \"files\": {\"html\": blob},\n            \"entry\": \"html\",\n        },\n        \"metadata\": {\n            \"kind\": \"marimo-cell-output\",\n            \"cell\": \"change_desc\",\n        },\n    }\n"
+              }
+            }
+          }
+        },
+        "comparison_chart": {
+          "source": {
+            "type": "definition",
+            "name": "symbols_chart"
+          },
+          "formats": {
+            "vegalite": {
+              "export": {
+                "type": "ref",
+                "ref": "moexport.exporters.altair:vegalite"
+              }
+            },
+            "png_nogrid": {
+              "export": {
+                "type": "code",
+                "code": "import json\n\n\ndef export(value, ctx, **options):\n    import vl_convert\n\n    spec = value.to_dict()\n    config = dict(spec.get(\"config\") or {})\n    axis = dict(config.get(\"axis\") or {})\n    axis[\"grid\"] = False\n    config[\"axis\"] = axis\n    spec[\"config\"] = config\n\n    scale = options.get(\"scale\", 2)\n    blob = ctx.write_blob(\n        \"chart-nogrid.png\",\n        vl_convert.vegalite_to_png(\n            vl_spec=json.dumps(spec, allow_nan=False),\n            scale=scale,\n        ),\n        media_type=\"image/png\",\n    )\n    return {\n        \"format\": \"image.png.nogrid.v1\",\n        \"media_type\": \"image/png\",\n        \"data\": {\n            \"type\": \"bundle\",\n            \"files\": {\"image\": blob},\n            \"entry\": \"image\",\n        },\n        \"metadata\": {\n            \"source_format\": \"vegalite.v1\",\n            \"grid\": False,\n            \"scale\": scale,\n        },\n    }\n"
+              },
+              "options": {
+                "scale": 2
+              }
+            }
+          }
+        },
+        "ohlc_dashboard": {
+          "source": {
+            "type": "definition",
+            "name": "widget"
+          },
+          "formats": {
+            "bundle": {
+              "export": {
+                "type": "ref",
+                "ref": "moexport.exporters.anywidget:bundle"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

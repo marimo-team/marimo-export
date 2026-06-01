@@ -30,11 +30,11 @@ def test_export_spec_parses_finance_like_shape() -> None:
                 {"id": "default"},
                 {
                     "id": "wide-chart",
-                    "state": {"chart_width": 1200},
+                    "inputs": {"chart_width": 1200},
                 },
                 {
                     "id": "dynamic-window",
-                    "state": {
+                    "inputs": {
                         "symbols": ["AAPL", "MSFT"],
                         "start": {
                             "type": "code",
@@ -45,7 +45,7 @@ def test_export_spec_parses_finance_like_shape() -> None:
             ],
             "values": {
                 "prices": {
-                    "source": "df",
+                    "source": {"def": "df"},
                     "formats": {
                         "arrow": {
                             "export": {
@@ -62,7 +62,7 @@ def test_export_spec_parses_finance_like_shape() -> None:
                     },
                 },
                 "prices_preview": {
-                    "source": "df.head(10)",
+                    "source": {"expr": "df.head(10)"},
                     "formats": {
                         "custom": {
                             "export": {
@@ -83,10 +83,10 @@ def test_export_spec_parses_finance_like_shape() -> None:
     assert spec.notebook == "notebooks/finance.py"
     assert spec.bundle is not None
     assert spec.bundle.path == "examples/finance/export_bundle"
-    assert spec.scenarios[1].state["chart_width"] == 1200
-    assert spec.scenarios[2].state["symbols"] == ["AAPL", "MSFT"]
+    assert spec.scenarios[1].inputs["chart_width"] == 1200
+    assert spec.scenarios[2].inputs["symbols"] == ["AAPL", "MSFT"]
 
-    start = spec.scenarios[2].state["start"]
+    start = spec.scenarios[2].inputs["start"]
     assert isinstance(start, CodeStateValue)
     assert start.expression == "compute_start_date()"
 
@@ -104,7 +104,7 @@ def test_export_spec_defaults_to_one_default_scenario() -> None:
         {
             "values": {
                 "prices": {
-                    "source": "df",
+                    "source": {"def": "df"},
                     "formats": {
                         "arrow": {
                             "export": {
@@ -119,7 +119,9 @@ def test_export_spec_defaults_to_one_default_scenario() -> None:
     )
 
     assert [scenario.id for scenario in spec.scenarios] == ["default"]
-    assert spec.scenarios[0].state == {}
+    assert spec.scenarios[0].inputs == {}
+    assert spec.scenarios[0].ui == {}
+    assert spec.scenarios[0].widgets == {}
 
 
 def test_export_spec_accepts_product_shaped_sources_and_formats() -> None:
@@ -131,7 +133,7 @@ def test_export_spec_accepts_product_shaped_sources_and_formats() -> None:
                     "formats": ["arrow", "parquet"],
                 },
                 "change_desc": {
-                    "source": {"cell": "change_desc", "output": "html"},
+                    "source": {"cell": "change_desc", "output": "scenario"},
                     "formats": [{"html": {"filename": "change-desc.html"}}],
                 },
                 "chart": {
@@ -145,7 +147,10 @@ def test_export_spec_accepts_product_shaped_sources_and_formats() -> None:
         }
     )
 
-    assert spec.values["prices"].source == "df"
+    assert spec.values["prices"].source.model_dump(mode="json") == {
+        "type": "expression",
+        "expression": "df",
+    }
     assert spec.values["prices"].formats["arrow"].export == RefExport(
         type="ref",
         ref="moexport.exporters.dataframe:arrow",
@@ -154,9 +159,14 @@ def test_export_spec_accepts_product_shaped_sources_and_formats() -> None:
         type="ref",
         ref="moexport.exporters.dataframe:parquet",
     )
-    assert (
-        spec.values["change_desc"].source == 'mox.runtime().cell("change_desc").output'
-    )
+    assert spec.values["change_desc"].source.model_dump(
+        mode="json", exclude_none=True
+    ) == {
+        "type": "cell_output",
+        "cell": {"name": "change_desc"},
+        "output": "scenario",
+        "on_error": "raise",
+    }
     assert spec.values["change_desc"].formats["html"].export == RefExport(
         type="ref",
         ref="moexport.exporters.core:html",
@@ -187,10 +197,10 @@ def test_export_spec_rejects_unknown_format_shorthand() -> None:
 
 def test_export_spec_loads_json_and_yaml_files(tmp_path: Path) -> None:
     value = {
-        "scenarios": [{"id": "wide", "state": {"chart_width": 1200}}],
+        "scenarios": [{"id": "wide", "inputs": {"chart_width": 1200}}],
         "values": {
             "prices": {
-                "source": "df",
+                "source": {"def": "df"},
                 "formats": {
                     "arrow": {
                         "export": {
@@ -209,11 +219,11 @@ def test_export_spec_loads_json_and_yaml_files(tmp_path: Path) -> None:
         """
 scenarios:
   - id: wide
-    state:
+    inputs:
       chart_width: 1200
 values:
   prices:
-    source: df
+    source: {def: df}
     formats:
       arrow:
         export:
@@ -234,7 +244,7 @@ def test_export_spec_parses_yaml_text_without_extension() -> None:
         """
 values:
   prices:
-    source: df.head(10)
+    source: {expr: df.head(10)}
     formats:
       arrow:
         export:
@@ -243,7 +253,10 @@ values:
 """.lstrip()
     )
 
-    assert spec.values["prices"].source == "df.head(10)"
+    assert spec.values["prices"].source.model_dump(mode="json") == {
+        "type": "expression",
+        "expression": "df.head(10)",
+    }
 
 
 def test_export_spec_serializes_code_state_stably() -> None:
@@ -252,7 +265,7 @@ def test_export_spec_serializes_code_state_stably() -> None:
             "scenarios": [
                 {
                     "id": "computed",
-                    "state": {
+                    "inputs": {
                         "end": {
                             "type": "code",
                             "expression": "latest_market_close()",
@@ -262,7 +275,7 @@ def test_export_spec_serializes_code_state_stably() -> None:
             ],
             "values": {
                 "prices": {
-                    "source": "df",
+                    "source": {"def": "df"},
                     "formats": {
                         "arrow": {
                             "export": {
@@ -277,7 +290,7 @@ def test_export_spec_serializes_code_state_stably() -> None:
     )
 
     dumped = spec.model_dump(mode="json")
-    assert dumped["scenarios"][0]["state"]["end"] == {
+    assert dumped["scenarios"][0]["inputs"]["end"] == {
         "type": "code",
         "expression": "latest_market_close()",
     }
@@ -295,7 +308,7 @@ def test_export_spec_rejects_unknown_scenario_fields() -> None:
                 ],
                 "values": {
                     "prices": {
-                        "source": "df",
+                        "source": {"def": "df"},
                         "formats": {
                             "arrow": {
                                 "export": {
@@ -320,7 +333,7 @@ def test_export_spec_rejects_duplicate_scenario_ids() -> None:
                 ],
                 "values": {
                     "prices": {
-                        "source": "df",
+                        "source": {"def": "df"},
                         "formats": {
                             "arrow": {
                                 "export": {
@@ -341,7 +354,7 @@ def test_export_spec_rejects_bad_export_ref() -> None:
             {
                 "values": {
                     "prices": {
-                        "source": "df",
+                        "source": {"def": "df"},
                         "formats": {
                             "arrow": {
                                 "export": {

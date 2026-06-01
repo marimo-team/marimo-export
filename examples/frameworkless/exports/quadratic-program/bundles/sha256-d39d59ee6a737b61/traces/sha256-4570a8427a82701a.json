@@ -1,0 +1,2010 @@
+{
+  "schema": "moexport.invocation.v1",
+  "version": 1,
+  "id": "sha256-4570a8427a82701a",
+  "sha256": "4570a8427a82701acb8e3b618e48e49b7ba892c9d7c4d78c273a9e3427379461",
+  "created_at": "2026-05-05T16:29:39.049800Z",
+  "bundle": {
+    "id": "sha256-d39d59ee6a737b61",
+    "sha256": "d39d59ee6a737b615722557d4f9d8547127246fb229164f7327890bbd624ca2d",
+    "manifest_href": "bundles/sha256-d39d59ee6a737b61/manifest.json"
+  },
+  "notebook": {
+    "name": "notebook.py",
+    "source": {
+      "href": "blobs/sha256/59/32/5932a996f69a8d8905b3da4335db04753daba4a73d42ae93a181b492f85b89c8",
+      "media_type": "text/x-python",
+      "size": 7553,
+      "sha256": "5932a996f69a8d8905b3da4335db04753daba4a73d42ae93a181b492f85b89c8"
+    },
+    "source_sha256": "5932a996f69a8d8905b3da4335db04753daba4a73d42ae93a181b492f85b89c8"
+  },
+  "scenario_set": {
+    "id": "sha256-0187493045851e49",
+    "sha256": "0187493045851e49b1eba685011628cd5fc210c371a359e7e3a4cb0a12d7c299"
+  },
+  "source_spec": {
+    "sha256": "45dcc85021531da31f36a09f83dce42759babdf488ce48ae92b1407e8b893279",
+    "spec": {
+      "scenarios": [
+        {
+          "id": "default-coupled"
+        },
+        {
+          "id": "round-bowl",
+          "inputs": {
+            "P": {
+              "type": "code",
+              "expression": "np.array([[3,0],[0,3]])"
+            }
+          }
+        },
+        {
+          "id": "wide-valley",
+          "inputs": {
+            "P": {
+              "type": "code",
+              "expression": "np.array([[1.4,0],[0,4.8]])"
+            }
+          }
+        },
+        {
+          "id": "tilted-ridge",
+          "inputs": {
+            "P": {
+              "type": "code",
+              "expression": "np.array([[5,2.2],[2.2,2.6]])"
+            }
+          }
+        },
+        {
+          "id": "steep-x1",
+          "inputs": {
+            "P": {
+              "type": "code",
+              "expression": "np.array([[7,0.8],[0.8,2.2]])"
+            }
+          }
+        }
+      ],
+      "values": {
+        "summary": {
+          "source": {
+            "type": "expression",
+            "expression": "{\n  \"P\": np.asarray(P, dtype=float).tolist(),\n  \"q\": np.asarray(q, dtype=float).tolist(),\n  \"G\": np.asarray(G, dtype=float).tolist(),\n  \"h\": np.asarray(h, dtype=float).tolist(),\n  \"x\": np.asarray(x.value, dtype=float).tolist(),\n  \"objective\": float(problem.value),\n  \"dual\": np.asarray(problem.constraints[0].dual_value, dtype=float).tolist(),\n  \"slack\": np.asarray(h - G @ x.value, dtype=float).tolist(),\n  \"eigenvalues\": np.linalg.eigvalsh(P).tolist(),\n  \"condition_number\": float(np.linalg.cond(P)),\n}"
+          },
+          "formats": {
+            "json": {
+              "export": {
+                "type": "ref",
+                "ref": "moexport.exporters.core:json"
+              },
+              "options": {
+                "filename": "summary.json",
+                "format": "qp.summary.json.v1",
+                "metadata": {
+                  "kind": "quadratic-program-summary"
+                }
+              }
+            }
+          }
+        },
+        "widget": {
+          "source": {
+            "type": "definition",
+            "name": "P_widget"
+          },
+          "formats": {
+            "bundle": {
+              "export": {
+                "type": "ref",
+                "ref": "moexport.exporters.anywidget:bundle"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "scenarios": [
+    {
+      "id": "default-coupled",
+      "state": {},
+      "trace": {
+        "value_preview": "{'summary': {'P': [[4.0, -1.4], [-1.4, 4.0]], 'q': [1.6243453636632417, -0.6117564136500754], 'G': [[-0.5281717522634...",
+        "target": {
+          "root_names": ["G", "P", "P_widget", "h", "np", "problem", "q", "x"],
+          "expression_refs": ["G", "P", "P_widget", "h", "np", "problem", "q", "x"],
+          "override_refs": [],
+          "object_patch_refs": []
+        },
+        "state": {
+          "applied_object_patches": []
+        },
+        "graph": {
+          "nodes": [
+            {
+              "cell_id": "Hbol",
+              "short_id": "Hbol",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": ["mo"],
+              "refs": [],
+              "body_refs": [],
+              "overridden_defs": [],
+              "preview": ["import marimo as mo"]
+            },
+            {
+              "cell_id": "MJUe",
+              "short_id": "MJUe",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": [],
+              "refs": ["mo"],
+              "body_refs": [],
+              "overridden_defs": [],
+              "preview": [
+                "mo.md(r\"\"\"",
+                "# Quadratic Program",
+                "A quadratic program is an optimization problem with a quadratic objective and"
+              ]
+            },
+            {
+              "cell_id": "vblA",
+              "short_id": "vblA",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": [],
+              "refs": ["mo"],
+              "body_refs": [],
+              "overridden_defs": [],
+              "preview": [
+                "mo.md(r\"\"\"",
+                "## Example",
+                "In this example, we use CVXPY to construct and solve a quadratic program."
+              ]
+            },
+            {
+              "cell_id": "bkHC",
+              "short_id": "bkHC",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": ["cp", "np"],
+              "refs": [],
+              "body_refs": [],
+              "overridden_defs": [],
+              "preview": ["import cvxpy as cp", "import numpy as np"]
+            },
+            {
+              "cell_id": "lEQa",
+              "short_id": "lEQa",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": [],
+              "refs": ["mo"],
+              "body_refs": [],
+              "overridden_defs": [],
+              "preview": [
+                "mo.md(\"\"\"",
+                "First we generate synthetic data. In this problem, we don't include equality constraints, only inequ",
+                "\"\"\")"
+              ]
+            },
+            {
+              "cell_id": "PKri",
+              "short_id": "PKri",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": ["G", "h", "m", "n", "q"],
+              "refs": ["np"],
+              "body_refs": ["np"],
+              "overridden_defs": [],
+              "preview": ["m = 4", "n = 2", "np.random.seed(1)"]
+            },
+            {
+              "cell_id": "Xref",
+              "short_id": "Xref",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": ["P_widget", "wigglystuff"],
+              "refs": ["mo", "np"],
+              "body_refs": ["mo", "np"],
+              "overridden_defs": [],
+              "preview": [
+                "import wigglystuff",
+                "P_widget = mo.ui.anywidget(",
+                "    wigglystuff.Matrix(np.array([[4.0, -1.4], [-1.4, 4]]), step=0.1)"
+              ]
+            },
+            {
+              "cell_id": "SFPL",
+              "short_id": "SFPL",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": ["P"],
+              "refs": ["P_widget", "np"],
+              "body_refs": ["P_widget", "np"],
+              "overridden_defs": [],
+              "preview": ["P = 0.5 * (np.array(P_widget.matrix) + np.array(P_widget.matrix).T)"]
+            },
+            {
+              "cell_id": "BYtC",
+              "short_id": "BYtC",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": [],
+              "refs": ["mo"],
+              "body_refs": [],
+              "overridden_defs": [],
+              "preview": [
+                "mo.md(r\"\"\"",
+                "Next, we specify the problem. Notice that we use the `quad_form` function from CVXPY to create the q",
+                "\"\"\")"
+              ]
+            },
+            {
+              "cell_id": "RGSE",
+              "short_id": "RGSE",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": ["problem", "x"],
+              "refs": ["G", "P", "cp", "h", "n", "q"],
+              "body_refs": ["G", "P", "cp", "h", "n", "q"],
+              "overridden_defs": [],
+              "preview": [
+                "x = cp.Variable(n)",
+                "problem = cp.Problem(",
+                "    cp.Minimize((1 / 2) * cp.quad_form(x, P) + q.T @ x),"
+              ]
+            },
+            {
+              "cell_id": "Kclp",
+              "short_id": "Kclp",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": [],
+              "refs": ["list", "mo", "problem", "x"],
+              "body_refs": [],
+              "overridden_defs": [],
+              "preview": [
+                "mo.md(f\"\"\"",
+                "The optimal value is {problem.value:.04f}.",
+                "A solution $x$ is {mo.as_html(list(x.value))}"
+              ]
+            },
+            {
+              "cell_id": "emfo",
+              "short_id": "emfo",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": [],
+              "refs": ["G", "P", "h", "plot_contours", "q", "x"],
+              "body_refs": [],
+              "overridden_defs": [],
+              "preview": ["plot_contours(P, G, h, q, x.value)"]
+            },
+            {
+              "cell_id": "Hstk",
+              "short_id": "Hstk",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": [],
+              "refs": ["mo"],
+              "body_refs": [],
+              "overridden_defs": [],
+              "preview": [
+                "mo.md(r\"\"\"",
+                "In this plot, the gray shaded region is the feasible region (points satisfying the inequality), and ",
+                "**\ud83c\udf0a Try it!** Try changing the entries of $P$ above with your mouse. How do the"
+              ]
+            },
+            {
+              "cell_id": "nWHF",
+              "short_id": "nWHF",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": [],
+              "refs": ["P", "mo"],
+              "body_refs": [],
+              "overridden_defs": [],
+              "preview": ["mo.md(rf\"\"\"", "The above contour lines were generated with", "\\["]
+            },
+            {
+              "cell_id": "iLit",
+              "short_id": "iLit",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": ["plot_contours"],
+              "refs": ["bool", "np", "range"],
+              "body_refs": ["np"],
+              "overridden_defs": [],
+              "preview": [
+                "def plot_contours(P, G, h, q, x_star):",
+                "    import matplotlib.pyplot as plt",
+                "    # Create a grid of x and y values."
+              ]
+            }
+          ],
+          "edges": [
+            {
+              "from": "Hbol",
+              "to": "BYtC"
+            },
+            {
+              "from": "Hbol",
+              "to": "Hstk"
+            },
+            {
+              "from": "Hbol",
+              "to": "Kclp"
+            },
+            {
+              "from": "Hbol",
+              "to": "MJUe"
+            },
+            {
+              "from": "Hbol",
+              "to": "Xref"
+            },
+            {
+              "from": "Hbol",
+              "to": "lEQa"
+            },
+            {
+              "from": "Hbol",
+              "to": "nWHF"
+            },
+            {
+              "from": "Hbol",
+              "to": "vblA"
+            },
+            {
+              "from": "PKri",
+              "to": "RGSE"
+            },
+            {
+              "from": "PKri",
+              "to": "emfo"
+            },
+            {
+              "from": "RGSE",
+              "to": "Kclp"
+            },
+            {
+              "from": "RGSE",
+              "to": "emfo"
+            },
+            {
+              "from": "SFPL",
+              "to": "RGSE"
+            },
+            {
+              "from": "SFPL",
+              "to": "emfo"
+            },
+            {
+              "from": "SFPL",
+              "to": "nWHF"
+            },
+            {
+              "from": "Xref",
+              "to": "SFPL"
+            },
+            {
+              "from": "bkHC",
+              "to": "PKri"
+            },
+            {
+              "from": "bkHC",
+              "to": "RGSE"
+            },
+            {
+              "from": "bkHC",
+              "to": "SFPL"
+            },
+            {
+              "from": "bkHC",
+              "to": "Xref"
+            },
+            {
+              "from": "bkHC",
+              "to": "iLit"
+            },
+            {
+              "from": "iLit",
+              "to": "emfo"
+            }
+          ],
+          "stats": {
+            "nodes": 15,
+            "edges": 22,
+            "required": 0,
+            "status_counts": {
+              "executed": 0,
+              "cached": 0,
+              "pruned": 0,
+              "skipped": 0,
+              "needed": 0,
+              "inactive": 15
+            }
+          }
+        },
+        "execution": {
+          "elapsed_ms": 46.83,
+          "required_order": [],
+          "scheduled_order": [],
+          "executed_cell_ids": [],
+          "cached_cell_ids": [],
+          "pruned_cell_ids": [],
+          "skipped_cell_ids": [],
+          "skip_reasons": {},
+          "steps": [],
+          "stats": {
+            "required": 0,
+            "scheduled": 0,
+            "executed": 0,
+            "cached": 0,
+            "pruned": 0,
+            "skipped": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "round-bowl",
+      "state": {
+        "inputs": {
+          "P": {
+            "type": "python-object",
+            "python_type": "numpy.ndarray",
+            "repr": "array([[3, 0],\n       [0, 3]])"
+          }
+        }
+      },
+      "trace": {
+        "value_preview": "{'summary': {'P': [[3.0, 0.0], [0.0, 3.0]], 'q': [1.6243453636632417, -0.6117564136500754], 'G': [[-0.528171752263455...",
+        "target": {
+          "root_names": ["G", "P", "P_widget", "h", "np", "problem", "q", "x"],
+          "expression_refs": ["G", "P", "P_widget", "h", "np", "problem", "q", "x"],
+          "override_refs": ["P"],
+          "object_patch_refs": []
+        },
+        "state": {
+          "applied_object_patches": []
+        },
+        "graph": {
+          "nodes": [
+            {
+              "cell_id": "Hbol",
+              "short_id": "Hbol",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": ["mo"],
+              "refs": [],
+              "body_refs": [],
+              "overridden_defs": [],
+              "preview": ["import marimo as mo"]
+            },
+            {
+              "cell_id": "MJUe",
+              "short_id": "MJUe",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": [],
+              "refs": ["mo"],
+              "body_refs": [],
+              "overridden_defs": [],
+              "preview": [
+                "mo.md(r\"\"\"",
+                "# Quadratic Program",
+                "A quadratic program is an optimization problem with a quadratic objective and"
+              ]
+            },
+            {
+              "cell_id": "vblA",
+              "short_id": "vblA",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": [],
+              "refs": ["mo"],
+              "body_refs": [],
+              "overridden_defs": [],
+              "preview": [
+                "mo.md(r\"\"\"",
+                "## Example",
+                "In this example, we use CVXPY to construct and solve a quadratic program."
+              ]
+            },
+            {
+              "cell_id": "bkHC",
+              "short_id": "bkHC",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": ["cp", "np"],
+              "refs": [],
+              "body_refs": [],
+              "overridden_defs": [],
+              "preview": ["import cvxpy as cp", "import numpy as np"]
+            },
+            {
+              "cell_id": "lEQa",
+              "short_id": "lEQa",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": [],
+              "refs": ["mo"],
+              "body_refs": [],
+              "overridden_defs": [],
+              "preview": [
+                "mo.md(\"\"\"",
+                "First we generate synthetic data. In this problem, we don't include equality constraints, only inequ",
+                "\"\"\")"
+              ]
+            },
+            {
+              "cell_id": "PKri",
+              "short_id": "PKri",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": ["G", "h", "m", "n", "q"],
+              "refs": ["np"],
+              "body_refs": ["np"],
+              "overridden_defs": [],
+              "preview": ["m = 4", "n = 2", "np.random.seed(1)"]
+            },
+            {
+              "cell_id": "Xref",
+              "short_id": "Xref",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": ["P_widget", "wigglystuff"],
+              "refs": ["mo", "np"],
+              "body_refs": ["mo", "np"],
+              "overridden_defs": [],
+              "preview": [
+                "import wigglystuff",
+                "P_widget = mo.ui.anywidget(",
+                "    wigglystuff.Matrix(np.array([[4.0, -1.4], [-1.4, 4]]), step=0.1)"
+              ]
+            },
+            {
+              "cell_id": "SFPL",
+              "short_id": "SFPL",
+              "status": "pruned",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": ["P"],
+              "refs": ["P_widget", "np"],
+              "body_refs": ["P_widget", "np"],
+              "overridden_defs": ["P"],
+              "preview": ["P = 0.5 * (np.array(P_widget.matrix) + np.array(P_widget.matrix).T)"]
+            },
+            {
+              "cell_id": "BYtC",
+              "short_id": "BYtC",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": [],
+              "refs": ["mo"],
+              "body_refs": [],
+              "overridden_defs": [],
+              "preview": [
+                "mo.md(r\"\"\"",
+                "Next, we specify the problem. Notice that we use the `quad_form` function from CVXPY to create the q",
+                "\"\"\")"
+              ]
+            },
+            {
+              "cell_id": "RGSE",
+              "short_id": "RGSE",
+              "status": "executed",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": ["problem", "x"],
+              "refs": ["G", "P", "cp", "h", "n", "q"],
+              "body_refs": ["G", "P", "cp", "h", "n", "q"],
+              "overridden_defs": [],
+              "preview": [
+                "x = cp.Variable(n)",
+                "problem = cp.Problem(",
+                "    cp.Minimize((1 / 2) * cp.quad_form(x, P) + q.T @ x),"
+              ]
+            },
+            {
+              "cell_id": "Kclp",
+              "short_id": "Kclp",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": [],
+              "refs": ["list", "mo", "problem", "x"],
+              "body_refs": [],
+              "overridden_defs": [],
+              "preview": [
+                "mo.md(f\"\"\"",
+                "The optimal value is {problem.value:.04f}.",
+                "A solution $x$ is {mo.as_html(list(x.value))}"
+              ]
+            },
+            {
+              "cell_id": "emfo",
+              "short_id": "emfo",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": [],
+              "refs": ["G", "P", "h", "plot_contours", "q", "x"],
+              "body_refs": [],
+              "overridden_defs": [],
+              "preview": ["plot_contours(P, G, h, q, x.value)"]
+            },
+            {
+              "cell_id": "Hstk",
+              "short_id": "Hstk",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": [],
+              "refs": ["mo"],
+              "body_refs": [],
+              "overridden_defs": [],
+              "preview": [
+                "mo.md(r\"\"\"",
+                "In this plot, the gray shaded region is the feasible region (points satisfying the inequality), and ",
+                "**\ud83c\udf0a Try it!** Try changing the entries of $P$ above with your mouse. How do the"
+              ]
+            },
+            {
+              "cell_id": "nWHF",
+              "short_id": "nWHF",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": [],
+              "refs": ["P", "mo"],
+              "body_refs": [],
+              "overridden_defs": [],
+              "preview": ["mo.md(rf\"\"\"", "The above contour lines were generated with", "\\["]
+            },
+            {
+              "cell_id": "iLit",
+              "short_id": "iLit",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": ["plot_contours"],
+              "refs": ["bool", "np", "range"],
+              "body_refs": ["np"],
+              "overridden_defs": [],
+              "preview": [
+                "def plot_contours(P, G, h, q, x_star):",
+                "    import matplotlib.pyplot as plt",
+                "    # Create a grid of x and y values."
+              ]
+            }
+          ],
+          "edges": [
+            {
+              "from": "Hbol",
+              "to": "BYtC"
+            },
+            {
+              "from": "Hbol",
+              "to": "Hstk"
+            },
+            {
+              "from": "Hbol",
+              "to": "Kclp"
+            },
+            {
+              "from": "Hbol",
+              "to": "MJUe"
+            },
+            {
+              "from": "Hbol",
+              "to": "Xref"
+            },
+            {
+              "from": "Hbol",
+              "to": "lEQa"
+            },
+            {
+              "from": "Hbol",
+              "to": "nWHF"
+            },
+            {
+              "from": "Hbol",
+              "to": "vblA"
+            },
+            {
+              "from": "PKri",
+              "to": "RGSE"
+            },
+            {
+              "from": "PKri",
+              "to": "emfo"
+            },
+            {
+              "from": "RGSE",
+              "to": "Kclp"
+            },
+            {
+              "from": "RGSE",
+              "to": "emfo"
+            },
+            {
+              "from": "SFPL",
+              "to": "RGSE"
+            },
+            {
+              "from": "SFPL",
+              "to": "emfo"
+            },
+            {
+              "from": "SFPL",
+              "to": "nWHF"
+            },
+            {
+              "from": "Xref",
+              "to": "SFPL"
+            },
+            {
+              "from": "bkHC",
+              "to": "PKri"
+            },
+            {
+              "from": "bkHC",
+              "to": "RGSE"
+            },
+            {
+              "from": "bkHC",
+              "to": "SFPL"
+            },
+            {
+              "from": "bkHC",
+              "to": "Xref"
+            },
+            {
+              "from": "bkHC",
+              "to": "iLit"
+            },
+            {
+              "from": "iLit",
+              "to": "emfo"
+            }
+          ],
+          "stats": {
+            "nodes": 15,
+            "edges": 22,
+            "required": 2,
+            "status_counts": {
+              "executed": 1,
+              "cached": 0,
+              "pruned": 1,
+              "skipped": 0,
+              "needed": 0,
+              "inactive": 13
+            }
+          }
+        },
+        "execution": {
+          "elapsed_ms": 8.26,
+          "required_order": ["SFPL", "RGSE"],
+          "scheduled_order": ["RGSE"],
+          "executed_cell_ids": ["RGSE"],
+          "cached_cell_ids": [],
+          "pruned_cell_ids": ["SFPL"],
+          "skipped_cell_ids": [],
+          "skip_reasons": {},
+          "steps": [
+            {
+              "cell_id": "RGSE",
+              "status": "executed",
+              "defs": ["problem", "x"],
+              "output_preview": "None",
+              "elapsed_ms": 7.51
+            }
+          ],
+          "stats": {
+            "required": 2,
+            "scheduled": 1,
+            "executed": 1,
+            "cached": 0,
+            "pruned": 1,
+            "skipped": 0
+          }
+        }
+      },
+      "declared_state": {
+        "P": {
+          "type": "code",
+          "expression": "np.array([[3,0],[0,3]])"
+        }
+      }
+    },
+    {
+      "id": "steep-x1",
+      "state": {
+        "inputs": {
+          "P": {
+            "type": "python-object",
+            "python_type": "numpy.ndarray",
+            "repr": "array([[7. , 0.8],\n       [0.8, 2.2]])"
+          }
+        }
+      },
+      "trace": {
+        "value_preview": "{'summary': {'P': [[7.0, 0.8], [0.8, 2.2]], 'q': [1.6243453636632417, -0.6117564136500754], 'G': [[-0.528171752263455...",
+        "target": {
+          "root_names": ["G", "P", "P_widget", "h", "np", "problem", "q", "x"],
+          "expression_refs": ["G", "P", "P_widget", "h", "np", "problem", "q", "x"],
+          "override_refs": ["P"],
+          "object_patch_refs": []
+        },
+        "state": {
+          "applied_object_patches": []
+        },
+        "graph": {
+          "nodes": [
+            {
+              "cell_id": "Hbol",
+              "short_id": "Hbol",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": ["mo"],
+              "refs": [],
+              "body_refs": [],
+              "overridden_defs": [],
+              "preview": ["import marimo as mo"]
+            },
+            {
+              "cell_id": "MJUe",
+              "short_id": "MJUe",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": [],
+              "refs": ["mo"],
+              "body_refs": [],
+              "overridden_defs": [],
+              "preview": [
+                "mo.md(r\"\"\"",
+                "# Quadratic Program",
+                "A quadratic program is an optimization problem with a quadratic objective and"
+              ]
+            },
+            {
+              "cell_id": "vblA",
+              "short_id": "vblA",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": [],
+              "refs": ["mo"],
+              "body_refs": [],
+              "overridden_defs": [],
+              "preview": [
+                "mo.md(r\"\"\"",
+                "## Example",
+                "In this example, we use CVXPY to construct and solve a quadratic program."
+              ]
+            },
+            {
+              "cell_id": "bkHC",
+              "short_id": "bkHC",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": ["cp", "np"],
+              "refs": [],
+              "body_refs": [],
+              "overridden_defs": [],
+              "preview": ["import cvxpy as cp", "import numpy as np"]
+            },
+            {
+              "cell_id": "lEQa",
+              "short_id": "lEQa",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": [],
+              "refs": ["mo"],
+              "body_refs": [],
+              "overridden_defs": [],
+              "preview": [
+                "mo.md(\"\"\"",
+                "First we generate synthetic data. In this problem, we don't include equality constraints, only inequ",
+                "\"\"\")"
+              ]
+            },
+            {
+              "cell_id": "PKri",
+              "short_id": "PKri",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": ["G", "h", "m", "n", "q"],
+              "refs": ["np"],
+              "body_refs": ["np"],
+              "overridden_defs": [],
+              "preview": ["m = 4", "n = 2", "np.random.seed(1)"]
+            },
+            {
+              "cell_id": "Xref",
+              "short_id": "Xref",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": ["P_widget", "wigglystuff"],
+              "refs": ["mo", "np"],
+              "body_refs": ["mo", "np"],
+              "overridden_defs": [],
+              "preview": [
+                "import wigglystuff",
+                "P_widget = mo.ui.anywidget(",
+                "    wigglystuff.Matrix(np.array([[4.0, -1.4], [-1.4, 4]]), step=0.1)"
+              ]
+            },
+            {
+              "cell_id": "SFPL",
+              "short_id": "SFPL",
+              "status": "pruned",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": ["P"],
+              "refs": ["P_widget", "np"],
+              "body_refs": ["P_widget", "np"],
+              "overridden_defs": ["P"],
+              "preview": ["P = 0.5 * (np.array(P_widget.matrix) + np.array(P_widget.matrix).T)"]
+            },
+            {
+              "cell_id": "BYtC",
+              "short_id": "BYtC",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": [],
+              "refs": ["mo"],
+              "body_refs": [],
+              "overridden_defs": [],
+              "preview": [
+                "mo.md(r\"\"\"",
+                "Next, we specify the problem. Notice that we use the `quad_form` function from CVXPY to create the q",
+                "\"\"\")"
+              ]
+            },
+            {
+              "cell_id": "RGSE",
+              "short_id": "RGSE",
+              "status": "executed",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": ["problem", "x"],
+              "refs": ["G", "P", "cp", "h", "n", "q"],
+              "body_refs": ["G", "P", "cp", "h", "n", "q"],
+              "overridden_defs": [],
+              "preview": [
+                "x = cp.Variable(n)",
+                "problem = cp.Problem(",
+                "    cp.Minimize((1 / 2) * cp.quad_form(x, P) + q.T @ x),"
+              ]
+            },
+            {
+              "cell_id": "Kclp",
+              "short_id": "Kclp",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": [],
+              "refs": ["list", "mo", "problem", "x"],
+              "body_refs": [],
+              "overridden_defs": [],
+              "preview": [
+                "mo.md(f\"\"\"",
+                "The optimal value is {problem.value:.04f}.",
+                "A solution $x$ is {mo.as_html(list(x.value))}"
+              ]
+            },
+            {
+              "cell_id": "emfo",
+              "short_id": "emfo",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": [],
+              "refs": ["G", "P", "h", "plot_contours", "q", "x"],
+              "body_refs": [],
+              "overridden_defs": [],
+              "preview": ["plot_contours(P, G, h, q, x.value)"]
+            },
+            {
+              "cell_id": "Hstk",
+              "short_id": "Hstk",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": [],
+              "refs": ["mo"],
+              "body_refs": [],
+              "overridden_defs": [],
+              "preview": [
+                "mo.md(r\"\"\"",
+                "In this plot, the gray shaded region is the feasible region (points satisfying the inequality), and ",
+                "**\ud83c\udf0a Try it!** Try changing the entries of $P$ above with your mouse. How do the"
+              ]
+            },
+            {
+              "cell_id": "nWHF",
+              "short_id": "nWHF",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": [],
+              "refs": ["P", "mo"],
+              "body_refs": [],
+              "overridden_defs": [],
+              "preview": ["mo.md(rf\"\"\"", "The above contour lines were generated with", "\\["]
+            },
+            {
+              "cell_id": "iLit",
+              "short_id": "iLit",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": ["plot_contours"],
+              "refs": ["bool", "np", "range"],
+              "body_refs": ["np"],
+              "overridden_defs": [],
+              "preview": [
+                "def plot_contours(P, G, h, q, x_star):",
+                "    import matplotlib.pyplot as plt",
+                "    # Create a grid of x and y values."
+              ]
+            }
+          ],
+          "edges": [
+            {
+              "from": "Hbol",
+              "to": "BYtC"
+            },
+            {
+              "from": "Hbol",
+              "to": "Hstk"
+            },
+            {
+              "from": "Hbol",
+              "to": "Kclp"
+            },
+            {
+              "from": "Hbol",
+              "to": "MJUe"
+            },
+            {
+              "from": "Hbol",
+              "to": "Xref"
+            },
+            {
+              "from": "Hbol",
+              "to": "lEQa"
+            },
+            {
+              "from": "Hbol",
+              "to": "nWHF"
+            },
+            {
+              "from": "Hbol",
+              "to": "vblA"
+            },
+            {
+              "from": "PKri",
+              "to": "RGSE"
+            },
+            {
+              "from": "PKri",
+              "to": "emfo"
+            },
+            {
+              "from": "RGSE",
+              "to": "Kclp"
+            },
+            {
+              "from": "RGSE",
+              "to": "emfo"
+            },
+            {
+              "from": "SFPL",
+              "to": "RGSE"
+            },
+            {
+              "from": "SFPL",
+              "to": "emfo"
+            },
+            {
+              "from": "SFPL",
+              "to": "nWHF"
+            },
+            {
+              "from": "Xref",
+              "to": "SFPL"
+            },
+            {
+              "from": "bkHC",
+              "to": "PKri"
+            },
+            {
+              "from": "bkHC",
+              "to": "RGSE"
+            },
+            {
+              "from": "bkHC",
+              "to": "SFPL"
+            },
+            {
+              "from": "bkHC",
+              "to": "Xref"
+            },
+            {
+              "from": "bkHC",
+              "to": "iLit"
+            },
+            {
+              "from": "iLit",
+              "to": "emfo"
+            }
+          ],
+          "stats": {
+            "nodes": 15,
+            "edges": 22,
+            "required": 2,
+            "status_counts": {
+              "executed": 1,
+              "cached": 0,
+              "pruned": 1,
+              "skipped": 0,
+              "needed": 0,
+              "inactive": 13
+            }
+          }
+        },
+        "execution": {
+          "elapsed_ms": 9.52,
+          "required_order": ["SFPL", "RGSE"],
+          "scheduled_order": ["RGSE"],
+          "executed_cell_ids": ["RGSE"],
+          "cached_cell_ids": [],
+          "pruned_cell_ids": ["SFPL"],
+          "skipped_cell_ids": [],
+          "skip_reasons": {},
+          "steps": [
+            {
+              "cell_id": "RGSE",
+              "status": "executed",
+              "defs": ["problem", "x"],
+              "output_preview": "None",
+              "elapsed_ms": 8.49
+            }
+          ],
+          "stats": {
+            "required": 2,
+            "scheduled": 1,
+            "executed": 1,
+            "cached": 0,
+            "pruned": 1,
+            "skipped": 0
+          }
+        }
+      },
+      "declared_state": {
+        "P": {
+          "type": "code",
+          "expression": "np.array([[7,0.8],[0.8,2.2]])"
+        }
+      }
+    },
+    {
+      "id": "tilted-ridge",
+      "state": {
+        "inputs": {
+          "P": {
+            "type": "python-object",
+            "python_type": "numpy.ndarray",
+            "repr": "array([[5. , 2.2],\n       [2.2, 2.6]])"
+          }
+        }
+      },
+      "trace": {
+        "value_preview": "{'summary': {'P': [[5.0, 2.2], [2.2, 2.6]], 'q': [1.6243453636632417, -0.6117564136500754], 'G': [[-0.528171752263455...",
+        "target": {
+          "root_names": ["G", "P", "P_widget", "h", "np", "problem", "q", "x"],
+          "expression_refs": ["G", "P", "P_widget", "h", "np", "problem", "q", "x"],
+          "override_refs": ["P"],
+          "object_patch_refs": []
+        },
+        "state": {
+          "applied_object_patches": []
+        },
+        "graph": {
+          "nodes": [
+            {
+              "cell_id": "Hbol",
+              "short_id": "Hbol",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": ["mo"],
+              "refs": [],
+              "body_refs": [],
+              "overridden_defs": [],
+              "preview": ["import marimo as mo"]
+            },
+            {
+              "cell_id": "MJUe",
+              "short_id": "MJUe",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": [],
+              "refs": ["mo"],
+              "body_refs": [],
+              "overridden_defs": [],
+              "preview": [
+                "mo.md(r\"\"\"",
+                "# Quadratic Program",
+                "A quadratic program is an optimization problem with a quadratic objective and"
+              ]
+            },
+            {
+              "cell_id": "vblA",
+              "short_id": "vblA",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": [],
+              "refs": ["mo"],
+              "body_refs": [],
+              "overridden_defs": [],
+              "preview": [
+                "mo.md(r\"\"\"",
+                "## Example",
+                "In this example, we use CVXPY to construct and solve a quadratic program."
+              ]
+            },
+            {
+              "cell_id": "bkHC",
+              "short_id": "bkHC",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": ["cp", "np"],
+              "refs": [],
+              "body_refs": [],
+              "overridden_defs": [],
+              "preview": ["import cvxpy as cp", "import numpy as np"]
+            },
+            {
+              "cell_id": "lEQa",
+              "short_id": "lEQa",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": [],
+              "refs": ["mo"],
+              "body_refs": [],
+              "overridden_defs": [],
+              "preview": [
+                "mo.md(\"\"\"",
+                "First we generate synthetic data. In this problem, we don't include equality constraints, only inequ",
+                "\"\"\")"
+              ]
+            },
+            {
+              "cell_id": "PKri",
+              "short_id": "PKri",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": ["G", "h", "m", "n", "q"],
+              "refs": ["np"],
+              "body_refs": ["np"],
+              "overridden_defs": [],
+              "preview": ["m = 4", "n = 2", "np.random.seed(1)"]
+            },
+            {
+              "cell_id": "Xref",
+              "short_id": "Xref",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": ["P_widget", "wigglystuff"],
+              "refs": ["mo", "np"],
+              "body_refs": ["mo", "np"],
+              "overridden_defs": [],
+              "preview": [
+                "import wigglystuff",
+                "P_widget = mo.ui.anywidget(",
+                "    wigglystuff.Matrix(np.array([[4.0, -1.4], [-1.4, 4]]), step=0.1)"
+              ]
+            },
+            {
+              "cell_id": "SFPL",
+              "short_id": "SFPL",
+              "status": "pruned",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": ["P"],
+              "refs": ["P_widget", "np"],
+              "body_refs": ["P_widget", "np"],
+              "overridden_defs": ["P"],
+              "preview": ["P = 0.5 * (np.array(P_widget.matrix) + np.array(P_widget.matrix).T)"]
+            },
+            {
+              "cell_id": "BYtC",
+              "short_id": "BYtC",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": [],
+              "refs": ["mo"],
+              "body_refs": [],
+              "overridden_defs": [],
+              "preview": [
+                "mo.md(r\"\"\"",
+                "Next, we specify the problem. Notice that we use the `quad_form` function from CVXPY to create the q",
+                "\"\"\")"
+              ]
+            },
+            {
+              "cell_id": "RGSE",
+              "short_id": "RGSE",
+              "status": "executed",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": ["problem", "x"],
+              "refs": ["G", "P", "cp", "h", "n", "q"],
+              "body_refs": ["G", "P", "cp", "h", "n", "q"],
+              "overridden_defs": [],
+              "preview": [
+                "x = cp.Variable(n)",
+                "problem = cp.Problem(",
+                "    cp.Minimize((1 / 2) * cp.quad_form(x, P) + q.T @ x),"
+              ]
+            },
+            {
+              "cell_id": "Kclp",
+              "short_id": "Kclp",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": [],
+              "refs": ["list", "mo", "problem", "x"],
+              "body_refs": [],
+              "overridden_defs": [],
+              "preview": [
+                "mo.md(f\"\"\"",
+                "The optimal value is {problem.value:.04f}.",
+                "A solution $x$ is {mo.as_html(list(x.value))}"
+              ]
+            },
+            {
+              "cell_id": "emfo",
+              "short_id": "emfo",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": [],
+              "refs": ["G", "P", "h", "plot_contours", "q", "x"],
+              "body_refs": [],
+              "overridden_defs": [],
+              "preview": ["plot_contours(P, G, h, q, x.value)"]
+            },
+            {
+              "cell_id": "Hstk",
+              "short_id": "Hstk",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": [],
+              "refs": ["mo"],
+              "body_refs": [],
+              "overridden_defs": [],
+              "preview": [
+                "mo.md(r\"\"\"",
+                "In this plot, the gray shaded region is the feasible region (points satisfying the inequality), and ",
+                "**\ud83c\udf0a Try it!** Try changing the entries of $P$ above with your mouse. How do the"
+              ]
+            },
+            {
+              "cell_id": "nWHF",
+              "short_id": "nWHF",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": [],
+              "refs": ["P", "mo"],
+              "body_refs": [],
+              "overridden_defs": [],
+              "preview": ["mo.md(rf\"\"\"", "The above contour lines were generated with", "\\["]
+            },
+            {
+              "cell_id": "iLit",
+              "short_id": "iLit",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": ["plot_contours"],
+              "refs": ["bool", "np", "range"],
+              "body_refs": ["np"],
+              "overridden_defs": [],
+              "preview": [
+                "def plot_contours(P, G, h, q, x_star):",
+                "    import matplotlib.pyplot as plt",
+                "    # Create a grid of x and y values."
+              ]
+            }
+          ],
+          "edges": [
+            {
+              "from": "Hbol",
+              "to": "BYtC"
+            },
+            {
+              "from": "Hbol",
+              "to": "Hstk"
+            },
+            {
+              "from": "Hbol",
+              "to": "Kclp"
+            },
+            {
+              "from": "Hbol",
+              "to": "MJUe"
+            },
+            {
+              "from": "Hbol",
+              "to": "Xref"
+            },
+            {
+              "from": "Hbol",
+              "to": "lEQa"
+            },
+            {
+              "from": "Hbol",
+              "to": "nWHF"
+            },
+            {
+              "from": "Hbol",
+              "to": "vblA"
+            },
+            {
+              "from": "PKri",
+              "to": "RGSE"
+            },
+            {
+              "from": "PKri",
+              "to": "emfo"
+            },
+            {
+              "from": "RGSE",
+              "to": "Kclp"
+            },
+            {
+              "from": "RGSE",
+              "to": "emfo"
+            },
+            {
+              "from": "SFPL",
+              "to": "RGSE"
+            },
+            {
+              "from": "SFPL",
+              "to": "emfo"
+            },
+            {
+              "from": "SFPL",
+              "to": "nWHF"
+            },
+            {
+              "from": "Xref",
+              "to": "SFPL"
+            },
+            {
+              "from": "bkHC",
+              "to": "PKri"
+            },
+            {
+              "from": "bkHC",
+              "to": "RGSE"
+            },
+            {
+              "from": "bkHC",
+              "to": "SFPL"
+            },
+            {
+              "from": "bkHC",
+              "to": "Xref"
+            },
+            {
+              "from": "bkHC",
+              "to": "iLit"
+            },
+            {
+              "from": "iLit",
+              "to": "emfo"
+            }
+          ],
+          "stats": {
+            "nodes": 15,
+            "edges": 22,
+            "required": 2,
+            "status_counts": {
+              "executed": 1,
+              "cached": 0,
+              "pruned": 1,
+              "skipped": 0,
+              "needed": 0,
+              "inactive": 13
+            }
+          }
+        },
+        "execution": {
+          "elapsed_ms": 8.77,
+          "required_order": ["SFPL", "RGSE"],
+          "scheduled_order": ["RGSE"],
+          "executed_cell_ids": ["RGSE"],
+          "cached_cell_ids": [],
+          "pruned_cell_ids": ["SFPL"],
+          "skipped_cell_ids": [],
+          "skip_reasons": {},
+          "steps": [
+            {
+              "cell_id": "RGSE",
+              "status": "executed",
+              "defs": ["problem", "x"],
+              "output_preview": "None",
+              "elapsed_ms": 7.75
+            }
+          ],
+          "stats": {
+            "required": 2,
+            "scheduled": 1,
+            "executed": 1,
+            "cached": 0,
+            "pruned": 1,
+            "skipped": 0
+          }
+        }
+      },
+      "declared_state": {
+        "P": {
+          "type": "code",
+          "expression": "np.array([[5,2.2],[2.2,2.6]])"
+        }
+      }
+    },
+    {
+      "id": "wide-valley",
+      "state": {
+        "inputs": {
+          "P": {
+            "type": "python-object",
+            "python_type": "numpy.ndarray",
+            "repr": "array([[1.4, 0. ],\n       [0. , 4.8]])"
+          }
+        }
+      },
+      "trace": {
+        "value_preview": "{'summary': {'P': [[1.4, 0.0], [0.0, 4.8]], 'q': [1.6243453636632417, -0.6117564136500754], 'G': [[-0.528171752263455...",
+        "target": {
+          "root_names": ["G", "P", "P_widget", "h", "np", "problem", "q", "x"],
+          "expression_refs": ["G", "P", "P_widget", "h", "np", "problem", "q", "x"],
+          "override_refs": ["P"],
+          "object_patch_refs": []
+        },
+        "state": {
+          "applied_object_patches": []
+        },
+        "graph": {
+          "nodes": [
+            {
+              "cell_id": "Hbol",
+              "short_id": "Hbol",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": ["mo"],
+              "refs": [],
+              "body_refs": [],
+              "overridden_defs": [],
+              "preview": ["import marimo as mo"]
+            },
+            {
+              "cell_id": "MJUe",
+              "short_id": "MJUe",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": [],
+              "refs": ["mo"],
+              "body_refs": [],
+              "overridden_defs": [],
+              "preview": [
+                "mo.md(r\"\"\"",
+                "# Quadratic Program",
+                "A quadratic program is an optimization problem with a quadratic objective and"
+              ]
+            },
+            {
+              "cell_id": "vblA",
+              "short_id": "vblA",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": [],
+              "refs": ["mo"],
+              "body_refs": [],
+              "overridden_defs": [],
+              "preview": [
+                "mo.md(r\"\"\"",
+                "## Example",
+                "In this example, we use CVXPY to construct and solve a quadratic program."
+              ]
+            },
+            {
+              "cell_id": "bkHC",
+              "short_id": "bkHC",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": ["cp", "np"],
+              "refs": [],
+              "body_refs": [],
+              "overridden_defs": [],
+              "preview": ["import cvxpy as cp", "import numpy as np"]
+            },
+            {
+              "cell_id": "lEQa",
+              "short_id": "lEQa",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": [],
+              "refs": ["mo"],
+              "body_refs": [],
+              "overridden_defs": [],
+              "preview": [
+                "mo.md(\"\"\"",
+                "First we generate synthetic data. In this problem, we don't include equality constraints, only inequ",
+                "\"\"\")"
+              ]
+            },
+            {
+              "cell_id": "PKri",
+              "short_id": "PKri",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": ["G", "h", "m", "n", "q"],
+              "refs": ["np"],
+              "body_refs": ["np"],
+              "overridden_defs": [],
+              "preview": ["m = 4", "n = 2", "np.random.seed(1)"]
+            },
+            {
+              "cell_id": "Xref",
+              "short_id": "Xref",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": ["P_widget", "wigglystuff"],
+              "refs": ["mo", "np"],
+              "body_refs": ["mo", "np"],
+              "overridden_defs": [],
+              "preview": [
+                "import wigglystuff",
+                "P_widget = mo.ui.anywidget(",
+                "    wigglystuff.Matrix(np.array([[4.0, -1.4], [-1.4, 4]]), step=0.1)"
+              ]
+            },
+            {
+              "cell_id": "SFPL",
+              "short_id": "SFPL",
+              "status": "pruned",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": ["P"],
+              "refs": ["P_widget", "np"],
+              "body_refs": ["P_widget", "np"],
+              "overridden_defs": ["P"],
+              "preview": ["P = 0.5 * (np.array(P_widget.matrix) + np.array(P_widget.matrix).T)"]
+            },
+            {
+              "cell_id": "BYtC",
+              "short_id": "BYtC",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": [],
+              "refs": ["mo"],
+              "body_refs": [],
+              "overridden_defs": [],
+              "preview": [
+                "mo.md(r\"\"\"",
+                "Next, we specify the problem. Notice that we use the `quad_form` function from CVXPY to create the q",
+                "\"\"\")"
+              ]
+            },
+            {
+              "cell_id": "RGSE",
+              "short_id": "RGSE",
+              "status": "executed",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": ["problem", "x"],
+              "refs": ["G", "P", "cp", "h", "n", "q"],
+              "body_refs": ["G", "P", "cp", "h", "n", "q"],
+              "overridden_defs": [],
+              "preview": [
+                "x = cp.Variable(n)",
+                "problem = cp.Problem(",
+                "    cp.Minimize((1 / 2) * cp.quad_form(x, P) + q.T @ x),"
+              ]
+            },
+            {
+              "cell_id": "Kclp",
+              "short_id": "Kclp",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": [],
+              "refs": ["list", "mo", "problem", "x"],
+              "body_refs": [],
+              "overridden_defs": [],
+              "preview": [
+                "mo.md(f\"\"\"",
+                "The optimal value is {problem.value:.04f}.",
+                "A solution $x$ is {mo.as_html(list(x.value))}"
+              ]
+            },
+            {
+              "cell_id": "emfo",
+              "short_id": "emfo",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": [],
+              "refs": ["G", "P", "h", "plot_contours", "q", "x"],
+              "body_refs": [],
+              "overridden_defs": [],
+              "preview": ["plot_contours(P, G, h, q, x.value)"]
+            },
+            {
+              "cell_id": "Hstk",
+              "short_id": "Hstk",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": [],
+              "refs": ["mo"],
+              "body_refs": [],
+              "overridden_defs": [],
+              "preview": [
+                "mo.md(r\"\"\"",
+                "In this plot, the gray shaded region is the feasible region (points satisfying the inequality), and ",
+                "**\ud83c\udf0a Try it!** Try changing the entries of $P$ above with your mouse. How do the"
+              ]
+            },
+            {
+              "cell_id": "nWHF",
+              "short_id": "nWHF",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": [],
+              "refs": ["P", "mo"],
+              "body_refs": [],
+              "overridden_defs": [],
+              "preview": ["mo.md(rf\"\"\"", "The above contour lines were generated with", "\\["]
+            },
+            {
+              "cell_id": "iLit",
+              "short_id": "iLit",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false,
+              "defs": ["plot_contours"],
+              "refs": ["bool", "np", "range"],
+              "body_refs": ["np"],
+              "overridden_defs": [],
+              "preview": [
+                "def plot_contours(P, G, h, q, x_star):",
+                "    import matplotlib.pyplot as plt",
+                "    # Create a grid of x and y values."
+              ]
+            }
+          ],
+          "edges": [
+            {
+              "from": "Hbol",
+              "to": "BYtC"
+            },
+            {
+              "from": "Hbol",
+              "to": "Hstk"
+            },
+            {
+              "from": "Hbol",
+              "to": "Kclp"
+            },
+            {
+              "from": "Hbol",
+              "to": "MJUe"
+            },
+            {
+              "from": "Hbol",
+              "to": "Xref"
+            },
+            {
+              "from": "Hbol",
+              "to": "lEQa"
+            },
+            {
+              "from": "Hbol",
+              "to": "nWHF"
+            },
+            {
+              "from": "Hbol",
+              "to": "vblA"
+            },
+            {
+              "from": "PKri",
+              "to": "RGSE"
+            },
+            {
+              "from": "PKri",
+              "to": "emfo"
+            },
+            {
+              "from": "RGSE",
+              "to": "Kclp"
+            },
+            {
+              "from": "RGSE",
+              "to": "emfo"
+            },
+            {
+              "from": "SFPL",
+              "to": "RGSE"
+            },
+            {
+              "from": "SFPL",
+              "to": "emfo"
+            },
+            {
+              "from": "SFPL",
+              "to": "nWHF"
+            },
+            {
+              "from": "Xref",
+              "to": "SFPL"
+            },
+            {
+              "from": "bkHC",
+              "to": "PKri"
+            },
+            {
+              "from": "bkHC",
+              "to": "RGSE"
+            },
+            {
+              "from": "bkHC",
+              "to": "SFPL"
+            },
+            {
+              "from": "bkHC",
+              "to": "Xref"
+            },
+            {
+              "from": "bkHC",
+              "to": "iLit"
+            },
+            {
+              "from": "iLit",
+              "to": "emfo"
+            }
+          ],
+          "stats": {
+            "nodes": 15,
+            "edges": 22,
+            "required": 2,
+            "status_counts": {
+              "executed": 1,
+              "cached": 0,
+              "pruned": 1,
+              "skipped": 0,
+              "needed": 0,
+              "inactive": 13
+            }
+          }
+        },
+        "execution": {
+          "elapsed_ms": 6.06,
+          "required_order": ["SFPL", "RGSE"],
+          "scheduled_order": ["RGSE"],
+          "executed_cell_ids": ["RGSE"],
+          "cached_cell_ids": [],
+          "pruned_cell_ids": ["SFPL"],
+          "skipped_cell_ids": [],
+          "skip_reasons": {},
+          "steps": [
+            {
+              "cell_id": "RGSE",
+              "status": "executed",
+              "defs": ["problem", "x"],
+              "output_preview": "None",
+              "elapsed_ms": 5.61
+            }
+          ],
+          "stats": {
+            "required": 2,
+            "scheduled": 1,
+            "executed": 1,
+            "cached": 0,
+            "pruned": 1,
+            "skipped": 0
+          }
+        }
+      },
+      "declared_state": {
+        "P": {
+          "type": "code",
+          "expression": "np.array([[1.4,0],[0,4.8]])"
+        }
+      }
+    }
+  ],
+  "evaluation": {
+    "batch": {
+      "result_count": 5,
+      "cache_scope": "call"
+    },
+    "execution": {
+      "elapsed_ms": 88.32,
+      "stats": {
+        "required": 8,
+        "scheduled": 4,
+        "executed": 4,
+        "cached": 0,
+        "pruned": 4,
+        "skipped": 0
+      }
+    }
+  },
+  "capture": {
+    "id": "sha256-bebd1d77e743ff82",
+    "request_sha256": "bebd1d77e743ff82fd34193f99dcc9ead96378fd83901e9d3e88d74f1788c28f"
+  }
+}

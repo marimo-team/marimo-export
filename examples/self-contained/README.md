@@ -11,7 +11,7 @@ This example turns a marimo notebook into a PR-reviewable folder:
 The generator keeps the Markdown-specific policy inside this example. It uses
 the core package only for capture/query primitives:
 
-1. Build a spec whose value is `mox.runtime().snapshot()`.
+1. Build a spec whose value source is `{snapshot: true}`.
 2. Export it through `moexport.exporters.notebook:linear`.
 3. Read the finished bundle with `moexport.open_export`.
 4. Materialize the linear notebook artifact as Markdown and static media from
@@ -24,7 +24,7 @@ uv run --with-requirements examples/self-contained/requirements.txt \
   python examples/self-contained/generate.py \
   notebooks/finance.py \
   examples/self-contained/finance \
-  --state-json examples/self-contained/finance-state.json \
+  --inputs-json examples/self-contained/finance-state.json \
   --scenario-id finance-review \
   --title "Finance notebook static review"
 ```

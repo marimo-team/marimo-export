@@ -27,6 +27,7 @@ class BundleSchemaModel(BaseModel):
 class NotebookRecord(BundleSchemaModel):
     name: str | None
     source: BlobRef | None
+    source_sha256: str | None = None
 
 
 class IdentityRecord(BundleSchemaModel):
@@ -34,14 +35,13 @@ class IdentityRecord(BundleSchemaModel):
     sha256: str
 
 
-class ExportRecord(BundleSchemaModel):
+class CaptureRecord(BundleSchemaModel):
     id: str
     request_sha256: str
-    target: str
 
 
 class ManifestValue(BundleSchemaModel):
-    source: str
+    source: JsonObject
     formats: list[str]
 
 
@@ -78,7 +78,7 @@ class BundleManifest(BundleSchemaModel):
     sha256: str
     notebook: NotebookRecord
     scenario_set: IdentityRecord
-    export: ExportRecord
+    capture: CaptureRecord
     values: dict[str, ManifestValue]
     scenarios: list[ManifestScenario]
     provenance: ProvenanceRecord = Field(default_factory=ProvenanceRecord)
@@ -120,7 +120,7 @@ class InvocationRecord(BundleSchemaModel):
     bundle: BundleReference
     notebook: NotebookRecord
     scenario_set: IdentityRecord
-    export: ExportRecord
+    capture: CaptureRecord
     source_spec: JsonObject
     scenarios: list[InvocationScenario]
     evaluation: JsonObject
@@ -154,7 +154,7 @@ __all__ = [
     "BundleManifest",
     "BundleReference",
     "BundleSchemaModel",
-    "ExportRecord",
+    "CaptureRecord",
     "IdentityRecord",
     "InvocationIndex",
     "InvocationRecord",

@@ -80,7 +80,7 @@ def test_archive_bundle_returns_zip_bytes(
                 "scenarios": [{"id": "default"}],
                 "values": {
                     "title": {
-                        "source": "title",
+                        "source": {"def": "title"},
                         "formats": {
                             "text": {
                                 "export": {
@@ -119,7 +119,7 @@ def test_archive_bundle_returns_zip_bytes(
                 "scenarios": [{"id": "default"}],
                 "values": {
                     "title": {
-                        "source": "title",
+                        "source": {"def": "title"},
                         "formats": {
                             "text": {
                                 "export": {

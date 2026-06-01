@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { readExport, readExportIndex, validateExportManifest } from "../dist/index.js";
+import {
+  readExport,
+  readExportIndex,
+  readLatestLocalExport,
+  validateExportManifest,
+} from "../dist/index.js";
 
 const manifest = {
   schema: "moexport.bundle.v1",
@@ -11,19 +16,19 @@ const manifest = {
   notebook: {
     name: "demo.py",
     source: null,
+    source_sha256: "notebook-sha",
   },
   scenario_set: {
     id: "sha256-scenarios",
     sha256: "scenarios",
   },
-  export: {
+  capture: {
     id: "sha256-export",
     request_sha256: "export",
-    target: "{'value': value}",
   },
   values: {
     value: {
-      source: "value",
+      source: { type: "definition", name: "value" },
       formats: ["json"],
     },
   },
@@ -195,6 +200,41 @@ test("validateExportManifest rejects missing declared formats", () => {
       }),
     /must include declared format "text"/,
   );
+});
+
+test("readLatestLocalExport opens a bundle through a file reader", async () => {
+  const files = {
+    "export/index.json": {
+      schema: "moexport.root_index.v1",
+      version: 1,
+      latest: {
+        id: "sha256-test",
+        sha256: "test",
+        manifest_href: "bundles/sha256-test/manifest.json",
+        updated_at: "2026-06-01T00:00:00Z",
+        latest_invocation_href: "bundles/sha256-test/traces/sha256-trace.json",
+      },
+      bundles: [],
+    },
+    "export/bundles/sha256-test/manifest.json": manifest,
+    "export/blobs/sha256/aa/bb/aabb": { ok: true },
+  };
+
+  const exp = await readLatestLocalExport({
+    root: "export",
+    readFile: async (file) => {
+      if (!(file in files)) {
+        throw new Error(`missing ${file}`);
+      }
+      return JSON.stringify(files[file]);
+    },
+    url: (href) => `/export/${href}`,
+  });
+
+  const handle = exp.get({ scenario: "default", value: "value", format: "json" });
+
+  assert.equal(handle.url(), "/export/blobs/sha256/aa/bb/aabb");
+  assert.deepEqual(await handle.json(), { ok: true });
 });
 
 function jsonFetch(files) {

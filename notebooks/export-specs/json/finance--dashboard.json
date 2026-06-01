@@ -2,64 +2,106 @@
   "scenarios": [
     {
       "id": "selector_crwv_msft",
-      "state": {
+      "inputs": {
         "symbols": ["AAPL", "AMZN", "CRWV", "GOOGL", "MSFT"],
         "interval": "1d",
         "start": "2025-04-01",
         "end": "2026-05-01",
-        "chart_width": 980,
-        "symbols_selector.value": ["CRWV", "MSFT"],
-        "widget.widget.metric": "Close",
-        "widget.widget.mode": "absolute",
-        "widget.widget.selected_symbols": ["CRWV", "MSFT"]
+        "chart_width": 980
+      },
+      "ui": {
+        "symbols_selector": {
+          "value": ["CRWV", "MSFT"]
+        }
+      },
+      "widgets": {
+        "widget": {
+          "widget": {
+            "metric": "Close",
+            "mode": "absolute",
+            "selected_symbols": ["CRWV", "MSFT"]
+          }
+        }
       }
     },
     {
       "id": "selector_aapl_googl_amzn",
-      "state": {
+      "inputs": {
         "symbols": ["AAPL", "AMZN", "CRWV", "GOOGL", "MSFT"],
         "interval": "1d",
         "start": "2025-04-01",
         "end": "2026-05-01",
-        "chart_width": 980,
-        "symbols_selector.value": ["AAPL", "GOOGL", "AMZN"],
-        "widget.widget.metric": "Close",
-        "widget.widget.mode": "change",
-        "widget.widget.selected_symbols": ["AAPL", "GOOGL", "AMZN"]
+        "chart_width": 980
+      },
+      "ui": {
+        "symbols_selector": {
+          "value": ["AAPL", "GOOGL", "AMZN"]
+        }
+      },
+      "widgets": {
+        "widget": {
+          "widget": {
+            "metric": "Close",
+            "mode": "change",
+            "selected_symbols": ["AAPL", "GOOGL", "AMZN"]
+          }
+        }
       }
     },
     {
       "id": "selector_ai_semis",
-      "state": {
+      "inputs": {
         "symbols": ["NVDA", "AMD", "AVGO", "TSM", "ASML"],
         "interval": "1d",
         "start": "2025-11-01",
         "end": "2026-05-01",
-        "chart_width": 980,
-        "symbols_selector.value": ["NVDA", "AMD", "AVGO"],
-        "widget.widget.metric": "High",
-        "widget.widget.mode": "change",
-        "widget.widget.selected_symbols": ["NVDA", "AMD", "AVGO"]
+        "chart_width": 980
+      },
+      "ui": {
+        "symbols_selector": {
+          "value": ["NVDA", "AMD", "AVGO"]
+        }
+      },
+      "widgets": {
+        "widget": {
+          "widget": {
+            "metric": "High",
+            "mode": "change",
+            "selected_symbols": ["NVDA", "AMD", "AVGO"]
+          }
+        }
       }
     },
     {
       "id": "selector_tsla_focus",
-      "state": {
+      "inputs": {
         "symbols": ["TSLA"],
         "interval": "1d",
         "start": "2025-01-01",
         "end": "2026-05-01",
-        "chart_width": 760,
-        "symbols_selector.value": ["TSLA"],
-        "widget.widget.metric": "Close",
-        "widget.widget.mode": "absolute",
-        "widget.widget.selected_symbols": ["TSLA"]
+        "chart_width": 760
+      },
+      "ui": {
+        "symbols_selector": {
+          "value": ["TSLA"]
+        }
+      },
+      "widgets": {
+        "widget": {
+          "widget": {
+            "metric": "Close",
+            "mode": "absolute",
+            "selected_symbols": ["TSLA"]
+          }
+        }
       }
     }
   ],
   "values": {
     "summary": {
-      "source": "{\n    \"rows\": df.height,\n    \"columns\": df.columns,\n    \"symbols\": sorted(df[\"Symbol\"].unique().to_list()),\n    \"date_start\": df[\"Date\"].min().strftime(\"%Y-%m-%d\"),\n    \"date_end\": df[\"Date\"].max().strftime(\"%Y-%m-%d\"),\n}",
+      "source": {
+        "expr": "{\n    \"rows\": df.height,\n    \"columns\": df.columns,\n    \"symbols\": sorted(df[\"Symbol\"].unique().to_list()),\n    \"date_start\": df[\"Date\"].min().strftime(\"%Y-%m-%d\"),\n    \"date_end\": df[\"Date\"].max().strftime(\"%Y-%m-%d\"),\n}"
+      },
       "formats": {
         "json": {
           "export": {
@@ -70,7 +112,9 @@
       }
     },
     "symbols_selector": {
-      "source": "{\n    \"label\": \"Select symbols to compare\",\n    \"options\": symbols,\n    \"value\": symbols_selector.value,\n}",
+      "source": {
+        "expr": "{\n    \"label\": \"Select symbols to compare\",\n    \"options\": symbols,\n    \"value\": symbols_selector.value,\n}"
+      },
       "formats": {
         "json": {
           "export": {
@@ -81,7 +125,9 @@
       }
     },
     "prices": {
-      "source": "df",
+      "source": {
+        "def": "df"
+      },
       "formats": {
         "arrow": {
           "export": {
@@ -98,7 +144,10 @@
       }
     },
     "change_desc": {
-      "source": "mox.runtime().cell(\"change_desc\").output",
+      "source": {
+        "cell": "change_desc",
+        "output": "scenario"
+      },
       "formats": {
         "html": {
           "export": {
@@ -109,7 +158,9 @@
       }
     },
     "comparison_chart": {
-      "source": "symbols_chart",
+      "source": {
+        "def": "symbols_chart"
+      },
       "formats": {
         "vegalite": {
           "export": {
@@ -129,7 +180,9 @@
       }
     },
     "ohlc_dashboard": {
-      "source": "widget",
+      "source": {
+        "def": "widget"
+      },
       "formats": {
         "bundle": {
           "export": {

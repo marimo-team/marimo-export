@@ -132,7 +132,7 @@ def _text_export_spec() -> dict[str, Any]:
         "scenarios": [{"id": "base"}],
         "values": {
             "title": {
-                "source": "title",
+                "source": {"def": "title"},
                 "formats": {
                     "text": {
                         "export": {
@@ -166,11 +166,11 @@ def export(value, ctx, **options):
 def _selected_export_spec() -> dict[str, Any]:
     spec = _text_export_spec()
     spec["scenarios"] = [
-        {"id": "subset", "state": {"symbols": ["CRWV", "MSFT"]}},
+        {"id": "subset", "inputs": {"symbols": ["CRWV", "MSFT"]}},
     ]
     spec["values"] = {
         "selected": {
-            "source": "selected",
+            "source": {"def": "selected"},
             "formats": spec["values"]["title"]["formats"],
         }
     }
@@ -182,7 +182,7 @@ def _notebook_snapshot_spec() -> dict[str, Any]:
         "scenarios": [{"id": "base"}],
         "values": {
             "notebook": {
-                "source": "mox.runtime().snapshot()",
+                "source": {"snapshot": True},
                 "formats": {
                     "linear": {
                         "export": {
@@ -208,11 +208,11 @@ def test_export_notebook_loads_file_and_writes_bundle(tmp_path: Path) -> None:
         {
             "scenarios": [
                 {"id": "base"},
-                {"id": "override", "state": {"symbol": "GOOGL"}},
+                {"id": "override", "inputs": {"symbol": "GOOGL"}},
             ],
             "values": {
                 "title": {
-                    "source": "title",
+                    "source": {"def": "title"},
                     "formats": {
                         "text": {
                             "export": {
@@ -240,6 +240,7 @@ def export(value, ctx, **options):
                     },
                 }
             },
+            "provenance": {"source": "source"},
         },
         bundle=tmp_path / "export",
     )
@@ -263,7 +264,10 @@ def export(value, ctx, **options):
     )
     assert source_blob["media_type"] == "text/x-python"
     assert (output_root / source_blob["href"]).read_text() == notebook.read_text()
-    assert manifest["values"]["title"] == {"source": "title", "formats": ["text"]}
+    assert manifest["values"]["title"] == {
+        "source": {"type": "definition", "name": "title"},
+        "formats": ["text"],
+    }
     assert (output_root / base_blob["href"]).read_text() == "Selected AAPL"
     assert (output_root / override_blob["href"]).read_text() == "Selected GOOGL"
 
@@ -309,7 +313,7 @@ def test_export_notebook_does_not_run_default_notebook_before_scenarios(
     )
 
 
-def test_export_notebook_source_can_use_mox_runtime_cell_output(
+def test_export_notebook_source_can_use_cell_output_source(
     tmp_path: Path,
 ) -> None:
     notebook = tmp_path / "finance.py"
@@ -337,8 +341,8 @@ if __name__ == "__main__":
 """.lstrip()
     )
     spec = _text_export_spec()
-    spec["scenarios"] = [{"id": "override", "state": {"symbol": "MSFT"}}]
-    spec["values"]["title"]["source"] = "mox.runtime().cell(index=1).output"
+    spec["scenarios"] = [{"id": "override", "inputs": {"symbol": "MSFT"}}]
+    spec["values"]["title"]["source"] = {"cell": {"index": 1}, "output": "scenario"}
 
     result = export_notebook(
         notebook,
@@ -361,10 +365,10 @@ def test_export_notebook_object_patch_scenarios_do_not_leak(
     _write_object_patch_notebook(notebook)
     spec = _text_export_spec()
     spec["scenarios"] = [
-        {"id": "a-patched", "state": {"selector.value": ["CRWV", "MSFT"]}},
+        {"id": "a-patched", "ui": {"selector": {"value": ["CRWV", "MSFT"]}}},
         {"id": "z-default"},
     ]
-    spec["values"]["title"]["source"] = "chart"
+    spec["values"]["title"]["source"] = {"def": "chart"}
 
     result = export_notebook(
         notebook,

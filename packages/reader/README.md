@@ -38,6 +38,19 @@ const exp = await readExport({
 });
 ```
 
+Use `readLatestLocalExport` in Node build steps that read a bundle from disk:
+
+```ts
+import fs from "node:fs/promises";
+import { readLatestLocalExport } from "@marimo-team/export-reader";
+
+const exp = await readLatestLocalExport({
+  root: "public/export",
+  readFile: (file) => fs.readFile(file),
+  url: (href) => `/export/${href}`,
+});
+```
+
 ## Open An Archive
 
 ```ts
@@ -109,6 +122,10 @@ const svgLoader = defineLoader({
 - `readExportIndex({ root })`: fetch the root `index.json`.
 - `readLatestExport({ root, loaders })`: open `index.latest.manifest_href`.
 - `readExport({ root, manifest, loaders })`: open a specific manifest.
+- `readLatestLocalExport({ root, readFile, loaders })`: open a local
+  `index.json` through a caller-provided file reader.
+- `readLocalExport({ root, manifest, readFile, loaders })`: open a specific
+  local manifest through a caller-provided file reader.
 - `readExportArchive({ bytes, loaders })`: open a zipped export root.
 - `defineLoader(loader)`: create an artifact loader.
 - `jsonLoader`, `textLoader`, `htmlLoader`: generic loaders for small

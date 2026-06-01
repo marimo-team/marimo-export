@@ -3,6 +3,9 @@ export type JsonValue = JsonPrimitive | JsonValue[] | JsonObject;
 export type JsonObject = { [key: string]: JsonValue };
 
 export type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+export type LocalReadFileResult = ArrayBuffer | ArrayBufferView | Blob | string;
+export type LocalReadFile = (path: string) => Promise<LocalReadFileResult>;
+export type LocalUrlResolver = (href: string, path: string, mediaType: string | null) => string;
 
 export interface BlobRef {
   href: string;
@@ -22,6 +25,7 @@ export type ArtifactData = ArtifactDataBundle;
 export interface NotebookRecord {
   name: string | null;
   source: BlobRef | null;
+  source_sha256?: string | null;
 }
 
 export interface IdentityRecord {
@@ -29,10 +33,16 @@ export interface IdentityRecord {
   sha256: string;
 }
 
-export interface ExportRecord {
+export type SourceRecord =
+  | { type: "definition"; name: string }
+  | { type: "expression"; expression: string }
+  | { type: "cell_output"; cell: JsonObject; output?: string; on_error?: string }
+  | { type: "notebook_snapshot"; [key: string]: JsonValue }
+  | { type: "report"; cells: JsonValue[]; [key: string]: JsonValue };
+
+export interface CaptureRecord {
   id: string;
   request_sha256: string;
-  target: string;
 }
 
 export interface ArtifactRecord {
@@ -43,7 +53,7 @@ export interface ArtifactRecord {
 }
 
 export interface ManifestValue {
-  source: string;
+  source: SourceRecord;
   formats: string[];
 }
 
@@ -67,7 +77,7 @@ export interface ExportManifest {
   sha256: string;
   notebook: NotebookRecord;
   scenario_set: IdentityRecord;
-  export: ExportRecord;
+  capture: CaptureRecord;
   values: Record<string, ManifestValue>;
   scenarios: ManifestScenario[];
   provenance?: ProvenanceRecord;
@@ -112,6 +122,22 @@ export interface ReadLatestExportOptions {
   index?: string;
   loaders?: ArtifactLoader[];
   fetch?: FetchLike;
+}
+
+export interface ReadLocalExportOptions {
+  root: string;
+  manifest: string;
+  loaders?: ArtifactLoader[];
+  readFile: LocalReadFile;
+  url?: LocalUrlResolver;
+}
+
+export interface ReadLatestLocalExportOptions {
+  root: string;
+  index?: string;
+  loaders?: ArtifactLoader[];
+  readFile: LocalReadFile;
+  url?: LocalUrlResolver;
 }
 
 export type ExportArchiveInput = ArrayBuffer | ArrayBufferView | Blob;

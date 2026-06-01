@@ -19,6 +19,14 @@ from marimo._runtime.context import get_context
 from marimo._runtime.context.types import RuntimeContext
 from marimo._types.ids import CellId_t
 
+from moexport.snapshots import (
+    CellSnapshot,
+    NotebookSnapshot,
+    OutputSnapshot,
+    format_output,
+    json_object,
+)
+
 
 class RuntimeBinding(Protocol):
     """Scenario-local values made available while ``mox.evaluate`` runs."""
@@ -92,15 +100,70 @@ class NotebookRuntime:
             for index, cell_id in enumerate(self._ordered_cell_ids())
         ]
 
-    def snapshot(self) -> NotebookRuntime:
-        """Mark this runtime view as a whole-notebook export target.
+    def snapshot(
+        self,
+        *,
+        include_source: bool = True,
+        include_empty_outputs: bool = False,
+        include_internal_cells: bool = False,
+        on_error: str = "raise",
+    ) -> NotebookSnapshot:
+        """Return ordered display outputs for the active scenario."""
 
-        `mox.runtime().snapshot()` returns the same read-only runtime object,
-        but the evaluator recognizes the call and materializes every cell
-        output for the active scenario before exporter code sees the value.
-        """
+        cells = [
+            self._snapshot_cell(
+                cell,
+                include_source=include_source,
+                on_error=on_error,
+            )
+            for cell in self.cells()
+            if include_internal_cells or not _is_internal_cell(cell)
+        ]
+        if not include_empty_outputs:
+            cells = [cell for cell in cells if cell.outputs]
 
-        return self
+        return NotebookSnapshot(
+            schema="marimo.notebook.linear.v1",
+            version=1,
+            kind="notebook",
+            notebook=json_object(self.notebook.metadata()),
+            cells=cells,
+        )
+
+    def report(
+        self,
+        cells: list[Mapping[str, Any]],
+        *,
+        include_source: bool = True,
+        on_error: str = "record",
+    ) -> NotebookSnapshot:
+        """Return selected display outputs as an ordered report snapshot."""
+
+        selected: list[CellSnapshot] = []
+        for position, item in enumerate(cells):
+            cell = self._select_report_cell(item)
+            label = item.get("label")
+            order = item.get("order", position)
+            selected.append(
+                self._snapshot_cell(
+                    cell,
+                    include_source=include_source,
+                    on_error=on_error,
+                    label=str(label) if label is not None else None,
+                    order=int(order) if order is not None else None,
+                )
+            )
+
+        selected.sort(
+            key=lambda cell: cell.order if cell.order is not None else cell.index
+        )
+        return NotebookSnapshot(
+            schema="marimo.report.v1",
+            version=1,
+            kind="report",
+            notebook=json_object(self.notebook.metadata()),
+            cells=selected,
+        )
 
     def cell(
         self,
@@ -138,6 +201,43 @@ class NotebookRuntime:
         """The underlying marimo runtime."""
 
         return self._runtime
+
+    def _snapshot_cell(
+        self,
+        cell: RuntimeCell,
+        *,
+        include_source: bool,
+        on_error: str,
+        label: str | None = None,
+        order: int | None = None,
+    ) -> CellSnapshot:
+        output = _format_cell_output(cell, on_error=on_error)
+        return CellSnapshot(
+            index=cell.index,
+            id=cell.id,
+            name=cell.name,
+            defs=cell.defs,
+            refs=cell.refs,
+            config=json_object(cell.config),
+            source=cell.source if include_source else None,
+            outputs=[] if output is None else [output],
+            label=label,
+            order=order,
+        )
+
+    def _select_report_cell(self, item: Mapping[str, Any]) -> RuntimeCell:
+        selectors = {
+            key: item[key]
+            for key in ("id", "name", "index")
+            if key in item and item[key] is not None
+        }
+        if len(selectors) != 1:
+            raise ValueError("report cells must set exactly one of id, name, or index")
+        if "id" in selectors:
+            return self.cell(id=str(selectors["id"]))
+        if "name" in selectors:
+            return self.cell(name=str(selectors["name"]))
+        return self.cell(index=int(selectors["index"]))
 
     def _cell_by_index(self, index: int) -> RuntimeCell:
         cells = self.cells()
@@ -330,6 +430,23 @@ class RuntimeCell:
             return active.cell_output(self._cell_id)
         return materialize_cell_output(self._notebook.runtime, self._cell_id)
 
+    def scenario_output(self, *, on_error: str = "raise") -> Any:
+        """Return the scenario-local output with an explicit error policy."""
+
+        value = self.output
+        _raise_output_snapshot_if_needed(value, on_error=on_error)
+        return value
+
+    def stored_output(self, *, on_error: str = "raise") -> Any:
+        """Return the live runtime output without scenario-local values."""
+
+        try:
+            return materialize_cell_output(self._notebook.runtime, self._cell_id)
+        except Exception as exc:
+            if on_error != "record":
+                raise
+            return _output_error_snapshot(exc)
+
     @property
     def defs(self) -> list[str]:
         return sorted(self._cell.defs)
@@ -387,6 +504,48 @@ def materialize_cell_output(
 
     with runtime.with_cell_id(cell_id):
         return eval(cell.last_expr, output_globals)
+
+
+def _format_cell_output(
+    cell: RuntimeCell,
+    *,
+    on_error: str,
+) -> OutputSnapshot | None:
+    try:
+        value = cell.output
+    except Exception as exc:
+        if on_error != "record":
+            raise
+        return _output_error_snapshot(exc)
+    if isinstance(value, OutputSnapshot):
+        _raise_output_snapshot_if_needed(value, on_error=on_error)
+        return value
+    return format_output(value, on_error=on_error)
+
+
+def _raise_output_snapshot_if_needed(value: Any, *, on_error: str) -> None:
+    if not isinstance(value, OutputSnapshot):
+        return
+    if value.channel != "error" or on_error == "record":
+        return
+    data = value.data
+    message = data.get("message") if isinstance(data, Mapping) else data
+    raise RuntimeError(f"cell output materialization failed: {message}")
+
+
+def _output_error_snapshot(exc: Exception) -> OutputSnapshot:
+    return OutputSnapshot(
+        channel="error",
+        mimetype="application/vnd.marimo.export.error+json",
+        data={
+            "type": type(exc).__name__,
+            "message": str(exc),
+        },
+    )
+
+
+def _is_internal_cell(cell: RuntimeCell) -> bool:
+    return str(cell.name or "").startswith("_moexport_")
 
 
 def _public_cell_name(name: str | None) -> str | None:

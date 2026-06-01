@@ -37,14 +37,13 @@ The app calls `readLatestExport({ root: "/export/" })`, reads
   `@marimo-team/export-loader-arrow`.
 - `prices/parquet`: Parquet dataframe loaded by
   `@marimo-team/export-loader-parquet`.
-- `change_desc/html`: custom HTML exporter over
-  `mox.runtime().cell("change_desc").output`.
+- `change_desc/html`: custom HTML exporter over the typed source
+  `{ cell: change_desc, output: scenario }`.
 - `comparison_chart/vegalite`: Vega-Lite artifact loaded by
   `@marimo-team/export-loader-vegalite`.
 - `comparison_chart/png_nogrid`: custom code-defined PNG exporter.
 - `ohlc_dashboard/bundle`: AnyWidget bundle hydrated by
   `@marimo-team/export-loader-anywidget`.
 
-Scenario `state` entries include notebook definition overrides such as
-`symbols` and object patches such as `symbols_selector.value`. The SPA uses DOM
-buttons to switch between those precomputed states.
+Scenario `state` entries store `inputs`, `ui`, and `widgets` sections. The SPA
+uses DOM buttons to switch between those precomputed states.

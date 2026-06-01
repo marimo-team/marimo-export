@@ -59,10 +59,17 @@ async def export(
         bundle=bundle,
         evaluate_fn=evaluate,
     )
+    evaluate_kwargs: dict[str, Any] = {
+        "object_patches": [scenario.object_patches for scenario in request.scenarios],
+    }
+    if request.output_cell_ids:
+        evaluate_kwargs["output_cell_ids"] = request.output_cell_ids
+    if request.output_error_policy != "raise":
+        evaluate_kwargs["output_error_policy"] = request.output_error_policy
     evaluation = await evaluate(
         request.target,
         [scenario.definition_overrides for scenario in request.scenarios],
-        object_patches=[scenario.object_patches for scenario in request.scenarios],
+        **evaluate_kwargs,
     )
     written = await write_bundle(request, evaluation)
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 import copy
 from collections.abc import Mapping
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from moexport.bundle.schema import BundleManifest, JsonObject
 
@@ -17,7 +17,7 @@ def bundle_summary(manifest_path: Path, manifest: BundleManifest) -> JsonObject:
         "path": str(manifest_path.parent),
         "manifest_path": str(manifest_path),
         "notebook": manifest.notebook.model_dump(mode="json"),
-        "export": manifest.export.model_dump(mode="json"),
+        "capture": manifest.capture.model_dump(mode="json"),
         "value_count": len(manifest.values),
         "scenario_count": len(manifest.scenarios),
         "values": sorted(manifest.values),
@@ -87,8 +87,18 @@ def matches_state(
         return True
     if not isinstance(state, Mapping):
         return False
-    actual = dict(state)
-    return all(actual.get(key) == value for key, value in expected.items())
+    state_mapping = cast(Mapping[str, Any], state)
+    return all(
+        _state_path(state_mapping, key) == value for key, value in expected.items()
+    )
+
+
+def state_keys(state: object) -> list[str]:
+    """Return dotted scenario state paths for query catalogs."""
+
+    if not isinstance(state, Mapping):
+        return []
+    return sorted(_state_paths(cast(Mapping[str, Any], state)))
 
 
 def exactly_one(rows: list[JsonObject], label: str) -> JsonObject:
@@ -108,8 +118,29 @@ def _plural(label: str) -> str:
 
 
 def notebook_source_hash(notebook: Mapping[str, Any]) -> object:
+    if notebook.get("source_sha256") is not None:
+        return notebook.get("source_sha256")
     source = notebook.get("source")
     return source.get("sha256") if isinstance(source, Mapping) else None
+
+
+def _state_path(state: Mapping[str, Any], path: str) -> object:
+    value: object = state
+    for part in path.split("."):
+        if not isinstance(value, Mapping) or part not in value:
+            return None
+        value = value[part]
+    return value
+
+
+def _state_paths(state: Mapping[str, Any], *, prefix: str = "") -> set[str]:
+    paths: set[str] = set()
+    for key, value in state.items():
+        path = f"{prefix}.{key}" if prefix else str(key)
+        paths.add(path)
+        if isinstance(value, Mapping):
+            paths.update(_state_paths(value, prefix=path))
+    return paths
 
 
 def dedupe_bundle_files(rows: list[JsonObject]) -> list[JsonObject]:

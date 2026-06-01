@@ -1,33 +1,42 @@
 scenarios:
   - id: north_balanced
-    state:
+    inputs:
       region: North
       window: 6
       demand_bias: 0
       scenario_name: north_balanced
-      region_picker.value: North
-      mode_picker.value: balanced
+    ui:
+      region_picker:
+        value: North
+      mode_picker:
+        value: balanced
   - id: coast_surge
-    state:
+    inputs:
       region: Coast
       window: 5
       demand_bias: 7
       scenario_name: coast_surge
-      region_picker.value: Coast
-      mode_picker.value: surge
+    ui:
+      region_picker:
+        value: Coast
+      mode_picker:
+        value: surge
   - id: south_conserve
-    state:
+    inputs:
       region: South
       window:
         type: code
         expression: 3 + 5
       demand_bias: -3
       scenario_name: south_conserve
-      region_picker.value: South
-      mode_picker.value: conserve
+    ui:
+      region_picker:
+        value: South
+      mode_picker:
+        value: conserve
 values:
   summary:
-    source: summary
+    source: { def: summary }
     formats:
       json:
         export:
@@ -54,7 +63,7 @@ values:
                     },
                 )
   records:
-    source: rows
+    source: { def: rows }
     formats:
       json:
         export:
@@ -81,7 +90,7 @@ values:
                     },
                 )
   sparkline:
-    source: sparkline_svg
+    source: { def: sparkline_svg }
     formats:
       svg:
         export:
@@ -104,7 +113,7 @@ values:
                     },
                 )
   note:
-    source: market_note
+    source: { def: market_note }
     formats:
       html:
         export:

@@ -487,6 +487,106 @@ def test_runtime_expression_materializes_cell_output_with_overrides(
     assert graph_statuses(result) == ["pruned", "executed"]
 
 
+def test_runtime_stored_output_bypasses_scenario_output(monkeypatch) -> None:
+    graph = graph_from(
+        {
+            "config": "symbols = ['AAPL']",
+            "display": "symbols[0]",
+        }
+    )
+    ctx = FakeContext(graph=graph, globals={"symbols": ["AAPL"]})
+    monkeypatch.setattr(target_module, "get_context", lambda: ctx)
+
+    response = run(
+        mox.evaluate(
+            "{"
+            "'stored': mox.runtime().cell(index=1).stored_output(), "
+            "'scenario': mox.runtime().cell(index=1).output"
+            "}",
+            {"symbols": ["MSFT"]},
+            output_cell_ids={CellId_t("display")},
+        )
+    )
+    result = first_result(response)
+
+    assert result["value"] == {"stored": "AAPL", "scenario": "MSFT"}
+
+
+def test_runtime_stored_output_records_materialization_errors(monkeypatch) -> None:
+    graph = graph_from(
+        {
+            "config": "symbols = []",
+            "display": "symbols[0]",
+        }
+    )
+    ctx = FakeContext(graph=graph, globals={"symbols": []})
+    monkeypatch.setattr(target_module, "get_context", lambda: ctx)
+
+    response = run(
+        mox.evaluate(
+            "mox.runtime().cell(index=1).stored_output(on_error='record')",
+        )
+    )
+    output = first_result(response)["value"]
+
+    assert output.channel == "error"
+    assert output.data == {
+        "type": "IndexError",
+        "message": "list index out of range",
+    }
+
+
+def test_runtime_snapshot_records_scheduled_output_errors(monkeypatch) -> None:
+    graph = graph_from(
+        {
+            "config": "symbols = ['AAPL']",
+            "display": "symbols[0]",
+        }
+    )
+    ctx = FakeContext(graph=graph, globals={"symbols": ["AAPL"]})
+    monkeypatch.setattr(target_module, "get_context", lambda: ctx)
+
+    response = run(
+        mox.evaluate(
+            "mox.runtime().snapshot(include_empty_outputs=True, on_error='record')",
+            {"symbols": []},
+            output_cell_ids={CellId_t("display")},
+            output_error_policy="record",
+        )
+    )
+    snapshot = first_result(response)["value"]
+    output = snapshot.cells[1].outputs[0]
+
+    assert output.channel == "error"
+    assert output.data == {
+        "type": "IndexError",
+        "message": "list index out of range",
+    }
+
+
+def test_runtime_scenario_output_raises_recorded_materialization_errors(
+    monkeypatch,
+) -> None:
+    graph = graph_from(
+        {
+            "config": "symbols = ['AAPL']",
+            "display": "symbols[0]",
+        }
+    )
+    ctx = FakeContext(graph=graph, globals={"symbols": ["AAPL"]})
+    monkeypatch.setattr(target_module, "get_context", lambda: ctx)
+
+    with pytest.raises(RuntimeError, match="list index out of range"):
+        run(
+            mox.evaluate(
+                "mox.runtime().cell(index=1).scenario_output(on_error='raise')",
+                {"symbols": []},
+                output_cell_ids={CellId_t("display")},
+                output_error_policy="record",
+            )
+        )
+
+
 def test_evaluate_batch_reuses_cells_with_identical_body_dependencies(
     monkeypatch,
 ) -> None:

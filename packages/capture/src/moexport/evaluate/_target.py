@@ -51,6 +51,8 @@ async def evaluate_target_once(
     *,
     object_patches: ObjectPatches,
     cell_cache: CellCache,
+    output_cell_ids: set[Any] | None = None,
+    output_error_policy: str = "raise",
 ) -> TargetRunResult:
     """Evaluate a notebook definition or Python expression in the live runtime.
 
@@ -63,7 +65,11 @@ async def evaluate_target_once(
     graph = ctx.graph
     override_completion = await complete_overrides(graph, ctx, definition_overrides)
     patch_roots = object_patch_roots(object_patches)
-    output_cell_ids = selected_output_cell_ids(target, ctx)
+    selected_cell_ids = (
+        selected_output_cell_ids(target, ctx)
+        if output_cell_ids is None
+        else output_cell_ids
+    )
     plan = plan_target(
         graph,
         ctx,
@@ -71,7 +77,7 @@ async def evaluate_target_once(
         override_completion.values,
         override_completion.explicit_names,
         patch_roots,
-        output_cell_ids,
+        selected_cell_ids,
     )
 
     pruned = {
@@ -140,7 +146,12 @@ async def evaluate_target_once(
             )
 
         with ctx.with_cell_id(cid):
-            output = await evaluate_cell_output(cell, glbls, ctx)
+            output = await evaluate_cell_output(
+                cell,
+                glbls,
+                ctx,
+                on_error=output_error_policy,
+            )
         outputs[str(cid)] = output
         per_cell_defs[str(cid)] = produced_defs
         computed_defs.update(produced_defs)

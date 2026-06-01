@@ -18,11 +18,11 @@ from notebook_markdown import (  # noqa: E402
 def test_notebook_markdown_spec_captures_whole_notebook() -> None:
     spec = notebook_markdown_spec(
         scenario_id="review",
-        state={"symbol": "MSFT"},
+        inputs={"symbol": "MSFT"},
     )
 
-    assert spec["scenarios"] == [{"id": "review", "state": {"symbol": "MSFT"}}]
-    assert spec["values"]["notebook"]["source"] == "mox.runtime().snapshot()"
+    assert spec["scenarios"] == [{"id": "review", "inputs": {"symbol": "MSFT"}}]
+    assert spec["values"]["notebook"]["source"] == {"snapshot": True}
     assert spec["values"]["notebook"]["formats"]["linear"]["export"] == {
         "type": "ref",
         "ref": "moexport.exporters.notebook:linear",

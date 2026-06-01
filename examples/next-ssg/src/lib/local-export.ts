@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 import { captureExport } from "@marimo-team/export-client";
-import { readLatestExport, type FetchLike, type StaticExport } from "@marimo-team/export-reader";
+import { readLatestLocalExport, type StaticExport } from "@marimo-team/export-reader";
 
 import { exportPublicRoot } from "@/lib/export-paths";
 import { marimoNotebook, marimoServerToken, marimoServerUrl } from "@/lib/marimo-env";
@@ -64,7 +64,7 @@ export const getFinanceOverview = async (): Promise<FinanceOverview> => {
   return {
     manifestId: exp.manifest.id,
     notebookName: exp.manifest.notebook.name,
-    notebookSha: exp.manifest.notebook.source?.sha256 ?? null,
+    notebookSha: exp.manifest.notebook.source_sha256 ?? null,
     scenarios: exp.scenarios(),
   };
 };
@@ -88,7 +88,7 @@ export const getFinancePairPage = async (scenario: string): Promise<FinancePairP
     pngUrl: `${exportPublicRoot}${pngFile.href}`,
     manifestId: exp.manifest.id,
     notebookName: exp.manifest.notebook.name,
-    notebookSha: exp.manifest.notebook.source?.sha256 ?? null,
+    notebookSha: exp.manifest.notebook.source_sha256 ?? null,
   };
 };
 
@@ -98,9 +98,10 @@ const ensureFinanceExport = async (): Promise<StaticExport> => {
     await captureFinanceBundle();
   }
 
-  return readLatestExport({
-    root: exportPublicRoot,
-    fetch: createFileFetch(LOCAL_EXPORT_ROOT),
+  return readLatestLocalExport({
+    root: LOCAL_EXPORT_ROOT,
+    readFile: (file) => fs.readFile(file),
+    url: (href) => `${exportPublicRoot}${href}`,
   });
 };
 
@@ -177,48 +178,6 @@ const waitForFile = async (file: string, timeoutMs = 120_000): Promise<void> => 
   }
 
   throw new Error(`Timed out waiting for marimo export bundle file: ${file}`);
-};
-
-const createFileFetch =
-  (root: string): FetchLike =>
-  async (input) => {
-    const file = resolveExportFile(root, input);
-    const body = await fs.readFile(file);
-    return new Response(body, {
-      headers: {
-        "content-type": contentType(file),
-      },
-    });
-  };
-
-const resolveExportFile = (root: string, input: RequestInfo | URL): string => {
-  const href = input instanceof Request ? input.url : input.toString();
-  const url = new URL(href);
-  const prefix = exportPublicRoot;
-
-  if (!url.pathname.startsWith(prefix)) {
-    throw new Error(`Export reader requested a URL outside ${prefix}: ${url.href}`);
-  }
-
-  const relative = decodeURIComponent(url.pathname.slice(prefix.length));
-  const resolved = path.resolve(root, relative);
-  const rootResolved = path.resolve(root);
-
-  if (!resolved.startsWith(`${rootResolved}${path.sep}`) && resolved !== rootResolved) {
-    throw new Error(`Export reader requested a path outside the bundle: ${url.href}`);
-  }
-
-  return resolved;
-};
-
-const contentType = (file: string): string => {
-  if (file.endsWith(".json")) {
-    return "application/json";
-  }
-  if (file.endsWith(".png")) {
-    return "image/png";
-  }
-  return "application/octet-stream";
 };
 
 const isAlreadyExists = (error: unknown): boolean =>
