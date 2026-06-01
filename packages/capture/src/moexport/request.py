@@ -138,19 +138,18 @@ class ResolvedExportRequest:
 async def resolve_export_request(
     spec: ExportSpec,
     *,
-    bundle: str | Path | None = None,
+    to: str | Path | None = None,
     evaluate_fn: EvaluateFn = evaluate,
 ) -> ResolvedExportRequest:
     """Resolve source, scenarios, identities, output path, and target expr."""
 
-    notebook_path = _resolve_notebook_path(spec)
+    notebook_path = _resolve_notebook_path()
     notebook_source = _read_notebook_source(notebook_path)
     scenarios = await _resolve_scenarios(spec.scenarios, evaluate_fn=evaluate_fn)
     scenario_set_identity = _scenario_set_identity(scenarios)
     export_identity = _export_identity(spec, notebook_source, scenario_set_identity)
     output_root = _resolve_output_root(
-        spec=spec,
-        override=bundle,
+        override=to,
         notebook_path=notebook_path,
     )
     return ResolvedExportRequest(
@@ -173,9 +172,9 @@ async def resolve_export_request(
     )
 
 
-def _resolve_notebook_path(spec: ExportSpec) -> str | None:
+def _resolve_notebook_path() -> str | None:
     ctx = get_context()
-    return ctx.filename or spec.notebook
+    return ctx.filename
 
 
 def _read_notebook_source(notebook_path: str | None) -> NotebookSource:
@@ -214,16 +213,16 @@ async def _resolve_scenario(
         scenario.state,
         evaluate_fn=evaluate_fn,
     )
-    definition_overrides = {
-        key: value for key, value in state.items() if "." not in key
-    }
-    object_patches = {key: value for key, value in state.items() if "." in key}
-    manifest_state = _manifest_tree(state)
-    declared_state = _dump_declared_state(scenario.state)
+    object_patches = await _resolve_value_mapping(
+        scenario.patches,
+        evaluate_fn=evaluate_fn,
+    )
+    manifest_state = _manifest_tree({**state, **object_patches})
+    declared_state = _dump_declared_state({**scenario.state, **scenario.patches})
     return ResolvedScenario(
         id=scenario.id,
-        state=state,
-        definition_overrides=definition_overrides,
+        state={**state, **object_patches},
+        definition_overrides=state,
         object_patches=object_patches,
         manifest_state=manifest_state,
         declared_state=declared_state if declared_state != manifest_state else None,
@@ -302,13 +301,13 @@ def _export_identity(
     scenario_set_identity: ScenarioSetIdentity,
 ) -> ExportIdentity:
     # The export id addresses the request, not one run's produced bytes. The
-    # same notebook source, scenario set, and value/format plan stay idempotent.
+    # Same notebook source, scenario set, and value/artifact plan stay idempotent.
     request = {
         "notebook_sha256": notebook_source.sha256,
         "scenario_set_sha256": scenario_set_identity.sha256,
         "values": spec.model_dump(
             mode="json",
-            exclude={"bundle", "notebook", "scenarios"},
+            exclude={"scenarios"},
         )["values"],
     }
     digest = sha256_json(request)
@@ -317,15 +316,11 @@ def _export_identity(
 
 def _resolve_output_root(
     *,
-    spec: ExportSpec,
     override: str | Path | None,
     notebook_path: str | None,
 ) -> Path:
     if override is not None:
         return Path(override)
-
-    if spec.bundle is not None:
-        return Path(spec.bundle.path)
 
     return notebook_output_dir(notebook_path) / "static-export"
 

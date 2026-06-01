@@ -44,9 +44,9 @@ def _artifact(
     manifest: dict[str, Any],
     scenario_id: str,
     value_name: str,
-    format_name: str,
+    artifact_name: str,
 ) -> dict[str, Any]:
-    return _scenario(manifest, scenario_id)["values"][value_name][format_name]
+    return _scenario(manifest, scenario_id)["values"][value_name][artifact_name]
 
 
 def _assert_notebook_source(
@@ -91,13 +91,13 @@ def _install_test_exporters() -> None:
         del options
         blob = ctx.write_blob("value.txt", str(value).encode(), media_type="text/plain")
         return Artifact(
-            format="text.v1",
+            format_id="text.v1",
             media_type="text/plain",
             data=ArtifactData(files={"value": blob}, entry="value"),
             metadata={
                 "scenario": ctx.scenario_id,
                 "value": ctx.value_name,
-                "format": ctx.format_name,
+                "format_id": ctx.artifact_name,
             },
         )
 
@@ -138,15 +138,15 @@ def test_export_materializes_cell_output_for_the_active_scenario(
     result = run(
         export_module.export(
             {
-                "bundle": str(tmp_path / "scenario"),
                 "scenarios": [{"id": "override", "state": {"symbols": ["MSFT"]}}],
                 "values": {
                     "title": {
                         "source": {"cell": {"index": 1}},
-                        "formats": ["text"],
+                        "artifacts": ["text"],
                     }
                 },
-            }
+            },
+            to=tmp_path / "scenario",
         )
     )
 
@@ -218,7 +218,6 @@ def test_export_writes_manifest_artifacts_and_deduped_blobs(
     result = run(
         package_export(
             {
-                "bundle": str(tmp_path / "bundle"),
                 "scenarios": [
                     {"id": "default"},
                     {"id": "wide-chart", "state": {"chart_width": 1200}},
@@ -226,7 +225,7 @@ def test_export_writes_manifest_artifacts_and_deduped_blobs(
                 "values": {
                     "title": {
                         "source": {"def": "title"},
-                        "formats": {
+                        "artifacts": {
                             "text": {
                                 "export": {
                                     "type": "ref",
@@ -236,7 +235,8 @@ def test_export_writes_manifest_artifacts_and_deduped_blobs(
                         },
                     }
                 },
-            }
+            },
+            to=tmp_path / "bundle",
         )
     )
 
@@ -288,14 +288,14 @@ def test_export_writes_manifest_artifacts_and_deduped_blobs(
     assert len(manifest["capture"]["request_sha256"]) == 64
     assert manifest["values"]["title"] == {
         "source": {"type": "definition", "name": "title"},
-        "formats": ["text"],
+        "artifacts": ["text"],
     }
     assert manifest["provenance"]["invocations_index_href"] == (
         f"bundles/{manifest['id']}/traces/index.json"
     )
     assert len(manifest["provenance"]["source_spec_sha256"]) == 64
     source_spec = manifest["provenance"]["source_spec"]
-    assert source_spec["bundle"] == {"path": str(tmp_path / "bundle")}
+    assert "bundle" not in source_spec
     assert source_spec["scenarios"] == [
         {"id": "default"},
         {"id": "wide-chart", "state": {"chart_width": 1200}},
@@ -384,7 +384,6 @@ def test_export_resolves_code_state_before_batch_evaluate(
     result = run(
         export_module.export(
             {
-                "bundle": str(tmp_path / "bundle"),
                 "scenarios": [
                     {
                         "id": "computed",
@@ -400,7 +399,7 @@ def test_export_resolves_code_state_before_batch_evaluate(
                 "values": {
                     "summary": {
                         "source": {"def": "summary"},
-                        "formats": {
+                        "artifacts": {
                             "json": {
                                 "export": {
                                     "type": "code",
@@ -414,7 +413,7 @@ def export(value, ctx, **options):
         media_type="application/json",
     )
     return {
-        "format": "summary.v1",
+        "format_id": "summary.v1",
         "media_type": "application/json",
         "data": {
             "type": "bundle",
@@ -429,7 +428,8 @@ def export(value, ctx, **options):
                         },
                     }
                 },
-            }
+            },
+            to=tmp_path / "bundle",
         )
     )
 
@@ -480,12 +480,11 @@ def test_export_applies_dotted_state_keys_to_object_attributes(
     result = run(
         export_module.export(
             {
-                "bundle": str(tmp_path / "bundle"),
                 "scenarios": [
                     {
                         "id": "patched",
-                        "state": {
-                            "symbol": "AAPL",
+                        "state": {"symbol": "AAPL"},
+                        "patches": {
                             "selector.config": {"label": "Symbols"},
                         },
                     }
@@ -493,10 +492,11 @@ def test_export_applies_dotted_state_keys_to_object_attributes(
                 "values": {
                     "title": {
                         "source": {"def": "title"},
-                        "formats": ["text"],
+                        "artifacts": ["text"],
                     }
                 },
-            }
+            },
+            to=tmp_path / "bundle",
         )
     )
 
@@ -543,7 +543,6 @@ def test_export_rejects_non_json_scenario_state_identity(
         run(
             export_module.export(
                 {
-                    "bundle": str(tmp_path / "bundle"),
                     "scenarios": [
                         {
                             "id": "computed",
@@ -558,10 +557,11 @@ def test_export_rejects_non_json_scenario_state_identity(
                     "values": {
                         "summary": {
                             "source": {"def": "summary"},
-                            "formats": ["json"],
+                            "artifacts": ["json"],
                         }
                     },
-                }
+                },
+                to=tmp_path / "bundle",
             )
         )
 
@@ -597,18 +597,17 @@ def test_export_rejects_embedded_artifacts(
         run(
             export_module.export(
                 {
-                    "bundle": str(tmp_path / "bundle"),
                     "values": {
                         "summary": {
                             "source": {"def": "summary"},
-                            "formats": {
+                            "artifacts": {
                                 "json": {
                                     "export": {
                                         "type": "code",
                                         "code": """
 def export(value, ctx, **options):
     return {
-        "format": "summary.v1",
+        "format_id": "summary.v1",
         "media_type": "application/json",
         "data": {"type": "embedded", "value": value},
         "metadata": None,
@@ -619,7 +618,8 @@ def export(value, ctx, **options):
                             },
                         }
                     },
-                }
+                },
+                to=tmp_path / "bundle",
             )
         )
     assert not (tmp_path / "bundle" / "manifest.json").exists()
@@ -663,7 +663,7 @@ def test_export_default_bundle_path_uses_marimo_output_dir(
                 "values": {
                     "title": {
                         "source": {"def": "title"},
-                        "formats": {
+                        "artifacts": {
                             "text": {
                                 "export": {
                                     "type": "ref",
@@ -720,12 +720,10 @@ def test_export_uses_live_notebook_path_over_spec_notebook(
     result = run(
         export_module.export(
             {
-                "notebook": "stale.py",
-                "bundle": str(tmp_path / "bundle"),
                 "values": {
                     "title": {
                         "source": {"def": "title"},
-                        "formats": {
+                        "artifacts": {
                             "text": {
                                 "export": {
                                     "type": "ref",
@@ -735,7 +733,8 @@ def test_export_uses_live_notebook_path_over_spec_notebook(
                         },
                     }
                 },
-            }
+            },
+            to=tmp_path / "bundle",
         )
     )
 
@@ -787,7 +786,7 @@ def test_export_default_bundle_path_groups_same_scenario_set(
         "values": {
             "title": {
                 "source": {"def": "title"},
-                "formats": {
+                "artifacts": {
                     "text": {
                         "export": {
                             "type": "ref",
@@ -803,7 +802,7 @@ def test_export_default_bundle_path_groups_same_scenario_set(
             **title_spec["values"],
             "summary": {
                 "source": {"def": "summary"},
-                "formats": {
+                "artifacts": {
                     "text": {
                         "export": {
                             "type": "ref",
@@ -869,7 +868,7 @@ def test_export_default_bundle_path_shares_blobs_across_renamed_values(
             "values": {
                 value_name: {
                     "source": {"def": "title"},
-                    "formats": {
+                    "artifacts": {
                         "text": {
                             "export": {
                                 "type": "ref",
@@ -951,11 +950,10 @@ def test_export_records_trace_without_changing_bundle_identity(
     )
 
     spec = {
-        "bundle": str(tmp_path / "bundle"),
         "values": {
             "title": {
                 "source": {"def": "title"},
-                "formats": {
+                "artifacts": {
                     "text": {
                         "export": {
                             "type": "ref",
@@ -967,8 +965,8 @@ def test_export_records_trace_without_changing_bundle_identity(
         },
     }
 
-    first = run(export_module.export(spec))
-    second = run(export_module.export(spec))
+    first = run(export_module.export(spec, to=tmp_path / "bundle"))
+    second = run(export_module.export(spec, to=tmp_path / "bundle"))
 
     assert first.bundle_path == second.bundle_path
     assert first.manifest["id"] == second.manifest["id"]
@@ -1022,7 +1020,7 @@ def test_export_default_bundle_path_separates_different_scenario_sets(
         "values": {
             "title": {
                 "source": {"def": "title"},
-                "formats": {
+                "artifacts": {
                     "text": {
                         "export": {
                             "type": "ref",
@@ -1093,7 +1091,7 @@ def test_export_scenario_set_grouping_is_order_insensitive(
     values = {
         "title": {
             "source": {"def": "title"},
-            "formats": {
+            "artifacts": {
                 "text": {
                     "export": {
                         "type": "ref",

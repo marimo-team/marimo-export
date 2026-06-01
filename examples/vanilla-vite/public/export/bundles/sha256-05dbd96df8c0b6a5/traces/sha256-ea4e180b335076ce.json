@@ -1,13 +1,13 @@
 {
   "schema": "moexport.invocation.v1",
   "version": 1,
-  "id": "sha256-9ee53a7b8209850e",
-  "sha256": "9ee53a7b8209850e241ca24057a342bd097d3c08430a14f88046e8586006f7f2",
+  "id": "sha256-ea4e180b335076ce",
+  "sha256": "ea4e180b335076ceafa430c1fd52e701042beacac57ad884ed3e2e7703251ff9",
   "created_at": "2026-06-01T13:27:25.128039Z",
   "bundle": {
-    "id": "sha256-ead9595830052a85",
-    "sha256": "ead9595830052a851686315fe72d3deed4f9fc8eb6fad1538ebd28216c233090",
-    "manifest_href": "bundles/sha256-ead9595830052a85/manifest.json"
+    "id": "sha256-05dbd96df8c0b6a5",
+    "sha256": "05dbd96df8c0b6a5a3128c4956310239e311142bdfe2c1d21b87bfabfedb07bf",
+    "manifest_href": "bundles/sha256-05dbd96df8c0b6a5/manifest.json"
   },
   "notebook": {
     "name": "finance.py",
@@ -23,7 +23,7 @@
     "request_sha256": "374eea12b6294a6fbd641b9113c162681204565b64d945a62551e080e89eec22"
   },
   "source_spec": {
-    "sha256": "dd8843f497fc7ad7b5c19b74b3e1b2b97a30b7b4bef1dbafa72859e826689827",
+    "sha256": "ec6dad0b8413804b8de819646373168bf248284ff2963d8bc07089708652d062",
     "spec": {
       "scenarios": [
         {
@@ -93,11 +93,11 @@
             "type": "expression",
             "expression": "{\n    \"rows\": df.height,\n    \"columns\": df.columns,\n    \"symbols\": sorted(df[\"Symbol\"].unique().to_list()),\n    \"date_start\": df[\"Date\"].min().strftime(\"%Y-%m-%d\"),\n    \"date_end\": df[\"Date\"].max().strftime(\"%Y-%m-%d\"),\n}"
           },
-          "formats": {
+          "artifacts": {
             "json": {
               "export": {
                 "type": "code",
-                "code": "import json\n\n\ndef export(value, ctx, **options):\n    blob = ctx.write_blob(\n        \"summary.json\",\n        json.dumps(value, allow_nan=False, indent=2).encode(),\n        media_type=\"application/json\",\n    )\n    return {\n        \"format\": \"summary.json.v1\",\n        \"media_type\": \"application/json\",\n        \"data\": {\n            \"type\": \"bundle\",\n            \"files\": {\"data\": blob},\n            \"entry\": \"data\",\n        },\n        \"metadata\": {\"kind\": \"finance-summary\"},\n    }\n"
+                "code": "import json\n\n\ndef export(value, ctx, **options):\n    blob = ctx.write_blob(\n        \"summary.json\",\n        json.dumps(value, allow_nan=False, indent=2).encode(),\n        media_type=\"application/json\",\n    )\n    return {\n        \"format_id\": \"summary.json.v1\",\n        \"media_type\": \"application/json\",\n        \"data\": {\n            \"type\": \"bundle\",\n            \"files\": {\"data\": blob},\n            \"entry\": \"data\",\n        },\n        \"metadata\": {\"kind\": \"finance-summary\"},\n    }\n"
               }
             }
           }
@@ -107,11 +107,11 @@
             "type": "expression",
             "expression": "{\n    \"label\": \"Select symbols to compare\",\n    \"options\": symbols,\n    \"value\": symbols_selector.value,\n}"
           },
-          "formats": {
+          "artifacts": {
             "json": {
               "export": {
                 "type": "code",
-                "code": "import json\n\n\ndef export(value, ctx, **options):\n    blob = ctx.write_blob(\n        \"symbols-selector.json\",\n        json.dumps(value, allow_nan=False, indent=2).encode(),\n        media_type=\"application/json\",\n    )\n    return {\n        \"format\": \"marimo.selector-state.json.v1\",\n        \"media_type\": \"application/json\",\n        \"data\": {\n            \"type\": \"bundle\",\n            \"files\": {\"data\": blob},\n            \"entry\": \"data\",\n        },\n        \"metadata\": {\"kind\": \"marimo-selector-state\"},\n    }\n"
+                "code": "import json\n\n\ndef export(value, ctx, **options):\n    blob = ctx.write_blob(\n        \"symbols-selector.json\",\n        json.dumps(value, allow_nan=False, indent=2).encode(),\n        media_type=\"application/json\",\n    )\n    return {\n        \"format_id\": \"marimo.selector-state.json.v1\",\n        \"media_type\": \"application/json\",\n        \"data\": {\n            \"type\": \"bundle\",\n            \"files\": {\"data\": blob},\n            \"entry\": \"data\",\n        },\n        \"metadata\": {\"kind\": \"marimo-selector-state\"},\n    }\n"
               }
             }
           }
@@ -121,7 +121,7 @@
             "type": "definition",
             "name": "df"
           },
-          "formats": {
+          "artifacts": {
             "arrow": {
               "export": {
                 "type": "ref",
@@ -144,11 +144,11 @@
             },
             "on_error": "raise"
           },
-          "formats": {
+          "artifacts": {
             "html": {
               "export": {
                 "type": "code",
-                "code": "def export(value, ctx, **options):\n    html = value.text if hasattr(value, \"text\") else str(value)\n    blob = ctx.write_blob(\n        options.get(\"filename\", \"change-desc.html\"),\n        html.encode(\"utf-8\"),\n        media_type=\"text/html\",\n    )\n    return {\n        \"format\": \"marimo.cell_output.html.v1\",\n        \"media_type\": \"text/html\",\n        \"data\": {\n            \"type\": \"bundle\",\n            \"files\": {\"html\": blob},\n            \"entry\": \"html\",\n        },\n        \"metadata\": {\n            \"kind\": \"marimo-cell-output\",\n            \"cell\": \"change_desc\",\n        },\n    }\n"
+                "code": "def export(value, ctx, **options):\n    html = value.text if hasattr(value, \"text\") else str(value)\n    blob = ctx.write_blob(\n        options.get(\"filename\", \"change-desc.html\"),\n        html.encode(\"utf-8\"),\n        media_type=\"text/html\",\n    )\n    return {\n        \"format_id\": \"marimo.cell_output.html.v1\",\n        \"media_type\": \"text/html\",\n        \"data\": {\n            \"type\": \"bundle\",\n            \"files\": {\"html\": blob},\n            \"entry\": \"html\",\n        },\n        \"metadata\": {\n            \"kind\": \"marimo-cell-output\",\n            \"cell\": \"change_desc\",\n        },\n    }\n"
               }
             }
           }
@@ -158,7 +158,7 @@
             "type": "definition",
             "name": "symbols_chart"
           },
-          "formats": {
+          "artifacts": {
             "vegalite": {
               "export": {
                 "type": "ref",
@@ -168,7 +168,7 @@
             "png_nogrid": {
               "export": {
                 "type": "code",
-                "code": "import json\n\n\ndef export(value, ctx, **options):\n    import vl_convert\n\n    spec = value.to_dict()\n    config = dict(spec.get(\"config\") or {})\n    axis = dict(config.get(\"axis\") or {})\n    axis[\"grid\"] = False\n    config[\"axis\"] = axis\n    spec[\"config\"] = config\n\n    scale = options.get(\"scale\", 2)\n    blob = ctx.write_blob(\n        \"chart-nogrid.png\",\n        vl_convert.vegalite_to_png(\n            vl_spec=json.dumps(spec, allow_nan=False),\n            scale=scale,\n        ),\n        media_type=\"image/png\",\n    )\n    return {\n        \"format\": \"image.png.nogrid.v1\",\n        \"media_type\": \"image/png\",\n        \"data\": {\n            \"type\": \"bundle\",\n            \"files\": {\"image\": blob},\n            \"entry\": \"image\",\n        },\n        \"metadata\": {\n            \"source_format\": \"vegalite.v1\",\n            \"grid\": False,\n            \"scale\": scale,\n        },\n    }\n"
+                "code": "import json\n\n\ndef export(value, ctx, **options):\n    import vl_convert\n\n    spec = value.to_dict()\n    config = dict(spec.get(\"config\") or {})\n    axis = dict(config.get(\"axis\") or {})\n    axis[\"grid\"] = False\n    config[\"axis\"] = axis\n    spec[\"config\"] = config\n\n    scale = options.get(\"scale\", 2)\n    blob = ctx.write_blob(\n        \"chart-nogrid.png\",\n        vl_convert.vegalite_to_png(\n            vl_spec=json.dumps(spec, allow_nan=False),\n            scale=scale,\n        ),\n        media_type=\"image/png\",\n    )\n    return {\n        \"format_id\": \"image.png.nogrid.v1\",\n        \"media_type\": \"image/png\",\n        \"data\": {\n            \"type\": \"bundle\",\n            \"files\": {\"image\": blob},\n            \"entry\": \"image\",\n        },\n        \"metadata\": {\n            \"source_format\": \"vegalite.v1\",\n            \"grid\": False,\n            \"scale\": scale,\n        },\n    }\n"
               },
               "options": {
                 "scale": 2
@@ -181,7 +181,7 @@
             "type": "definition",
             "name": "widget"
           },
-          "formats": {
+          "artifacts": {
             "bundle": {
               "export": {
                 "type": "ref",

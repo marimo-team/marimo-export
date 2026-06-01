@@ -18,6 +18,8 @@ from moexport.notebook import (
     inspect_notebook_defs,
     read_notebook_source,
 )
+from moexport.live_capture import LiveCapture, RuntimeInstall
+from moexport.request import resolve_export_request
 from moexport.runtime import RuntimeCell, NotebookRuntime, RuntimeNotebook
 from moexport.runtime import runtime as _runtime
 from moexport.query import BundleQuery, ExportQuery, open_export
@@ -33,11 +35,13 @@ __all__ = [
     "ExportSpec",
     "ExportResult",
     "ExportQuery",
+    "LiveCapture",
     "NotebookRuntime",
     "NotebookRunOptions",
     "NotebookDefs",
     "RuntimeNotebook",
     "NotebookSource",
+    "RuntimeInstall",
     "archive_bundle",
     "emit_bundle_archive",
     "evaluate",
@@ -48,6 +52,7 @@ __all__ = [
     "open_export",
     "parse_export_spec",
     "read_notebook_source",
+    "resolve_export_request",
     "runtime",
 ]
 
@@ -55,18 +60,18 @@ __all__ = [
 async def export(
     spec: Any,
     *,
-    bundle: str | Path | None = None,
+    to: str | Path | None = None,
 ) -> ExportResult:
     """Capture the active marimo runtime and write a static export bundle.
 
-    ``spec`` accepts an ``ExportSpec`` instance or raw spec mapping. ``bundle``
-    overrides the output root from the spec. Returns an ``ExportResult`` with
+    ``spec`` accepts an ``ExportSpec`` instance or raw spec mapping. ``to``
+    sets the output root. Returns an ``ExportResult`` with
     the written manifest, bundle identity, source spec, and invocation trace.
     Requires a live marimo runtime, usually through ``marimo-export notebook``
     or a notebook cell.
     """
 
-    return await _export(spec, bundle=bundle)
+    return await _export(spec, to=to)
 
 
 def runtime() -> NotebookRuntime:

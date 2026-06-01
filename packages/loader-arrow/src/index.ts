@@ -32,7 +32,7 @@ export interface ArrowArtifactHandle {
 
 export function arrowLoader(defaults: ArrowLoadOptions = {}): ArtifactLoader<ArrowArtifactHandle> {
   return defineLoader({
-    formats: dataframeArrowFormat,
+    supports: dataframeArrowFormat,
     load(context: ArtifactLoaderContext) {
       return createArrowHandle(context, defaults);
     },
@@ -44,20 +44,20 @@ function createArrowHandle(
   defaults: ArrowLoadOptions,
 ): ArrowArtifactHandle {
   const loadTable = async (options?: ArrowLoadOptions): Promise<unknown> => {
-    const bytes = await context.bytes();
+    const bytes = await context.entry().bytes();
     const buffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
     return tableFromIPC(buffer, { ...defaults, ...options });
   };
 
   return {
     artifact: context.artifact,
-    blob: context.file(),
+    blob: context.entry().ref,
     metadata: context.artifact.metadata,
     url() {
-      return context.url();
+      return context.entry().url();
     },
     bytes() {
-      return context.bytes();
+      return context.entry().bytes();
     },
     table: loadTable,
     async rows(options) {

@@ -24,12 +24,12 @@ def archive_bundle(result: ExportResult) -> bytes:
 async def emit_bundle_archive(
     spec: SpecInput,
     *,
-    bundle: str | Path | None = None,
+    to: str | Path | None = None,
     marker: str = "",
 ) -> None:
     """Export a bundle archive and emit it as base64 for scratchpad clients."""
 
-    archive = await _capture_bundle_archive(spec, bundle=bundle)
+    archive = await _capture_bundle_archive(spec, to=to)
     payload = base64.b64encode(archive).decode("ascii")
     print(f"{marker}{payload}")
 
@@ -73,10 +73,10 @@ def _export_root(result: ExportResult) -> Path:
 async def _capture_bundle_archive(
     spec: SpecInput,
     *,
-    bundle: str | Path | None,
+    to: str | Path | None,
 ) -> bytes:
-    if bundle is not None:
-        return archive_bundle(await export(spec, bundle=bundle))
+    if to is not None:
+        return archive_bundle(await export(spec, to=to))
 
     with TemporaryDirectory(prefix="moexport-archive-") as directory:
-        return archive_bundle(await export(spec, bundle=directory))
+        return archive_bundle(await export(spec, to=directory))

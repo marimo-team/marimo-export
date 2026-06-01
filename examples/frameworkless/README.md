@@ -34,7 +34,7 @@ http://localhost:3000/examples/frameworkless/
   AnyWidget bundle and recomputes the 2D QP client-side.
 - `live-capture-archive.html`: builds a spec in browser JavaScript, asks a
   running marimo server to capture an archive, and opens the returned zip with
-  `readExportArchive`.
+  `openExport(exportArchive(...))`.
 
 The static reader pages use a CDN import map for third-party dependencies. That
 keeps the examples browser-native while still reusing the local package
@@ -59,7 +59,7 @@ http://localhost:3000/examples/frameworkless/live-capture-archive.html
 ```
 
 The page imports `@marimo-team/export-client/browser`, creates a plain
-JavaScript spec object, calls `captureExportArchive(...)`, and reads the archive
+JavaScript spec object, calls `client.captureArchive(...)`, and reads the archive
 with `@marimo-team/export-reader`.
 
 ## Regenerate Bundles
@@ -67,11 +67,11 @@ with `@marimo-team/export-reader`.
 ```bash
 uv run marimo-export notebook notebooks/agentic_playground.py \
   --spec notebooks/export-specs/yaml/agentic-playground.yaml \
-  --bundle examples/frameworkless/exports/agentic-playground
+  --to examples/frameworkless/exports/agentic-playground
 
 uv run marimo-export notebook notebooks/queueing_lab.py \
   --spec notebooks/export-specs/yaml/queueing-lab.yaml \
-  --bundle examples/frameworkless/exports/queueing-lab
+  --to examples/frameworkless/exports/queueing-lab
 ```
 
 `quadratic-program.html` reads the checked-in quadratic export fixture under

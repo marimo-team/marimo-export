@@ -34,9 +34,9 @@ def main() -> None:
         help="Markdown document title. Defaults to the notebook filename.",
     )
     parser.add_argument(
-        "--bundle",
+        "--to",
         type=Path,
-        help="Optional bundle directory to keep for inspection.",
+        help="Optional static export root to keep for inspection.",
     )
     parser.add_argument(
         "--inline-html-bytes",
@@ -46,13 +46,14 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    state = _load_state(args.state_json)
+    state, patches = _load_scenario(args.state_json)
     result = export_notebook_markdown(
         args.notebook,
         args.output_dir,
         scenario_id=args.scenario_id,
         state=state,
-        bundle=args.bundle,
+        patches=patches,
+        to=args.to,
         title=args.title,
         inline_html_bytes=args.inline_html_bytes,
     )
@@ -72,14 +73,18 @@ def main() -> None:
     )
 
 
-def _load_state(path: Path | None) -> dict[str, Any]:
+def _load_scenario(path: Path | None) -> tuple[dict[str, Any], dict[str, Any]]:
     if path is None:
-        return {}
+        return {}, {}
 
     parsed = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(parsed, dict):
         raise TypeError("--state-json must point to a JSON object")
-    return parsed
+    state = parsed.get("state")
+    patches = parsed.get("patches")
+    if not isinstance(state, dict) or not isinstance(patches, dict):
+        raise TypeError("--state-json must contain 'state' and 'patches' objects")
+    return state, patches
 
 
 if __name__ == "__main__":

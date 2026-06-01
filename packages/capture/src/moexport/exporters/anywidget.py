@@ -216,7 +216,7 @@ def bundle(
         files[f"buffer_{index}"] = record.data
 
     return Artifact(
-        format=FORMAT,
+        format_id=FORMAT,
         media_type=MEDIA_TYPE,
         data=ArtifactData(files=files, entry="descriptor"),
         metadata=_metadata(

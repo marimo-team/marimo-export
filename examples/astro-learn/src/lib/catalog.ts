@@ -1,7 +1,7 @@
 import {
-  createCaptureClient,
-  listWorkspaceNotebooks,
-  type MarimoCaptureClient,
+  createExportClient,
+  type ExportClient,
+  type MarimoArchiveCaptureClient,
   type WorkspaceNotebook,
 } from "@marimo-team/export-client";
 
@@ -52,11 +52,11 @@ async function loadCatalog(): Promise<LearnCatalog> {
     };
   }
 
-  const client = createCaptureClient({
+  const client = createExportClient({
     server: process.env.MARIMO_LEARN_SERVER_URL,
     serverToken: process.env.MARIMO_LEARN_SERVER_TOKEN ?? "learn",
   });
-  const workspace = await listWorkspaceNotebooks(client);
+  const workspace = await client.listWorkspaceNotebooks();
   const notebooks = limitByPath(workspace.filter(isLearnNotebook));
   const records = await Promise.all(notebooks.map((notebook) => notebookRecord(client, notebook)));
 
@@ -66,10 +66,10 @@ async function loadCatalog(): Promise<LearnCatalog> {
 }
 
 async function notebookRecord(
-  client: MarimoCaptureClient,
+  client: ExportClient,
   notebook: WorkspaceNotebook,
 ): Promise<LearnNotebook> {
-  const source = await readNotebookSource(client, notebook.path);
+  const source = await readNotebookSource(client.marimo, notebook.path);
   const summary = description(source);
   return {
     name: notebook.name,
@@ -82,7 +82,10 @@ async function notebookRecord(
   };
 }
 
-async function readNotebookSource(client: MarimoCaptureClient, path: string): Promise<string> {
+async function readNotebookSource(
+  client: MarimoArchiveCaptureClient,
+  path: string,
+): Promise<string> {
   const { response, data } = await client.POST("/api/files/file_details", {
     body: { path },
   });

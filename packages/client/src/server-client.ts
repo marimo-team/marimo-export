@@ -3,11 +3,9 @@ import {
   captureExportArchiveWithClient as captureExportArchiveWithBaseClient,
   captureRequest,
   captureExportWithClient as captureExportWithBaseClient,
-  ensureCaptureRuntime,
   listRunningNotebooks,
-  resolveCaptureSession,
+  listWorkspaceNotebooks as listWorkspaceNotebooksWithClient,
 } from "./capture-core";
-import { isRecord } from "./support";
 import {
   baseUrl,
   createNotebookOpener,
@@ -20,6 +18,7 @@ import type {
   CaptureExportArchiveResult,
   CaptureExportRequest,
   CaptureExportResult,
+  ExportSpecInput,
   RunningNotebook,
   WorkspaceNotebook,
 } from "./types";
@@ -28,15 +27,26 @@ export type MarimoApiClient = ReturnType<typeof createMarimoClient>;
 export type MarimoCaptureClient = MarimoApiClient & CaptureClient;
 export type MarimoArchiveCaptureClient = MarimoCaptureClient;
 
-export type CaptureClientOptions = CaptureClientOptionsBase;
+export type ExportClientOptions = CaptureClientOptionsBase;
 
 export type CaptureExportOptions =
-  | (CaptureExportRequest & CaptureClientOptions & { client?: never })
-  | (CaptureExportRequest & { client: MarimoCaptureClient });
+  | (CaptureExportRequest & ExportClientOptions & { client?: never })
+  | (CaptureExportRequest & { client: ExportClient });
 
 export type CaptureExportArchiveOptions =
-  | (CaptureExportRequest & CaptureClientOptions & { client?: never })
-  | (CaptureExportRequest & { client: MarimoArchiveCaptureClient });
+  | (CaptureExportRequest & ExportClientOptions & { client?: never })
+  | (CaptureExportRequest & { client: ExportClient });
+
+export interface ExportClient {
+  readonly marimo: MarimoArchiveCaptureClient;
+  capture(spec: ExportSpecInput, options?: CaptureExportRequest): Promise<CaptureExportResult>;
+  captureArchive(
+    spec: ExportSpecInput,
+    options?: CaptureExportRequest,
+  ): Promise<CaptureExportArchiveResult>;
+  listSessions(): Promise<RunningNotebook[]>;
+  listWorkspaceNotebooks(): Promise<WorkspaceNotebook[]>;
+}
 
 export type {
   CaptureExportArchiveResult,
@@ -52,9 +62,32 @@ export type {
   WorkspaceNotebook,
 } from "./types";
 
-export { ensureCaptureRuntime, listRunningNotebooks, resolveCaptureSession };
+export function createExportClient(options: ExportClientOptions): ExportClient {
+  const marimo = createMarimoTransport(options);
+  return {
+    marimo,
+    capture(spec, request = {}) {
+      return captureExportWithBaseClient(spec, {
+        client: marimo,
+        ...captureRequest(request),
+      });
+    },
+    captureArchive(spec, request = {}) {
+      return captureExportArchiveWithBaseClient(spec, {
+        client: marimo,
+        ...captureRequest(request),
+      });
+    },
+    listSessions() {
+      return listRunningNotebooks(marimo);
+    },
+    listWorkspaceNotebooks() {
+      return listWorkspaceNotebooksWithClient(marimo);
+    },
+  };
+}
 
-export function createCaptureClient(options: CaptureClientOptions): MarimoArchiveCaptureClient {
+function createMarimoTransport(options: ExportClientOptions): MarimoArchiveCaptureClient {
   const { server, fetch } = options;
   const client = createMarimoClient({
     baseUrl: baseUrl(server),
@@ -69,119 +102,23 @@ export function createCaptureClient(options: CaptureClientOptions): MarimoArchiv
 }
 
 export async function captureExport(
-  spec: Record<string, unknown>,
+  spec: ExportSpecInput,
   options: CaptureExportOptions,
 ): Promise<CaptureExportResult> {
-  const client = hasCaptureClient(options) ? options.client : createCaptureClient(options);
-  return captureExportWithClient(spec, {
-    client,
-    ...captureRequest(options),
-  });
-}
-
-export async function captureExportWithClient(
-  spec: Record<string, unknown>,
-  options: CaptureExportRequest & { client: MarimoCaptureClient },
-): Promise<CaptureExportResult> {
-  return captureExportWithBaseClient(spec, options);
+  const client = hasExportClient(options) ? options.client : createExportClient(options);
+  return client.capture(spec, captureRequest(options));
 }
 
 export async function captureExportArchive(
-  spec: Record<string, unknown>,
+  spec: ExportSpecInput,
   options: CaptureExportArchiveOptions,
 ): Promise<CaptureExportArchiveResult> {
-  return captureExportArchiveWithBaseClient(spec, {
-    client: archiveCaptureClient(options),
-    ...captureRequest(options),
-  });
+  const client = hasExportClient(options) ? options.client : createExportClient(options);
+  return client.captureArchive(spec, captureRequest(options));
 }
 
-export async function listWorkspaceNotebooks(
-  client: MarimoCaptureClient,
-): Promise<WorkspaceNotebook[]> {
-  const { response: httpResponse, data } = await client.POST("/api/home/workspace_files", {
-    body: {
-      includeMarkdown: false,
-    },
-  });
-  const { ok, status, statusText } = httpResponse;
-
-  if (!ok) {
-    throw new Error(`Failed to list marimo workspace notebooks: ${status} ${statusText}`);
-  }
-
-  const files = isRecord(data) && Array.isArray(data.files) ? data.files : [];
-  return flattenWorkspaceFiles(files)
-    .filter(isMarimoWorkspaceFile)
-    .map((file) => ({
-      id: String(file.id),
-      name: String(file.name),
-      path: String(file.path),
-    }));
-}
-
-function hasCaptureClient(
-  options: CaptureExportOptions,
-): options is CaptureExportRequest & { client: MarimoCaptureClient } {
+function hasExportClient(
+  options: CaptureExportOptions | CaptureExportArchiveOptions,
+): options is CaptureExportRequest & { client: ExportClient } {
   return "client" in options && options.client !== undefined;
-}
-
-function hasArchiveCaptureClient(
-  options: CaptureExportArchiveOptions,
-): options is CaptureExportRequest & { client: MarimoArchiveCaptureClient } {
-  return (
-    "client" in options &&
-    options.client !== undefined &&
-    "executeScratchpad" in options.client &&
-    typeof options.client.executeScratchpad === "function"
-  );
-}
-
-function archiveCaptureClient(options: CaptureExportArchiveOptions): MarimoArchiveCaptureClient {
-  if (hasArchiveCaptureClient(options)) {
-    return options.client;
-  }
-
-  if ("client" in options) {
-    throw new Error("captureExportArchive requires a client returned by createCaptureClient(...).");
-  }
-
-  return createCaptureClient(options);
-}
-
-type WorkspaceFileNode = Record<string, unknown> & {
-  children?: unknown;
-  id: unknown;
-  isMarimoFile: unknown;
-  name: unknown;
-  path: unknown;
-};
-
-function flattenWorkspaceFiles(files: unknown[]): WorkspaceFileNode[] {
-  const flattened: WorkspaceFileNode[] = [];
-  for (const file of files) {
-    if (!isWorkspaceFileNode(file)) {
-      continue;
-    }
-
-    flattened.push(file);
-    if (Array.isArray(file.children)) {
-      flattened.push(...flattenWorkspaceFiles(file.children));
-    }
-  }
-  return flattened;
-}
-
-function isWorkspaceFileNode(value: unknown): value is WorkspaceFileNode {
-  return (
-    isRecord(value) &&
-    "id" in value &&
-    "isMarimoFile" in value &&
-    "name" in value &&
-    "path" in value
-  );
-}
-
-function isMarimoWorkspaceFile(file: WorkspaceFileNode): boolean {
-  return file.isMarimoFile === true;
 }

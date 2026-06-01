@@ -7,17 +7,16 @@ metadata handles with `hyparquet`.
 
 ```ts
 import { parquetLoader } from "@marimo-team/export-loader-parquet";
-import { readLatestExport } from "@marimo-team/export-reader";
+import { exportRoot, openExport } from "@marimo-team/export-reader";
 
-const exp = await readLatestExport({
-  root: "/export/",
+const exp = await openExport(exportRoot("/export/"), {
   loaders: [parquetLoader()],
 });
 
-const handle = exp.get({
+const handle = exp.artifact({
   scenario: "default",
   value: "prices",
-  format: "parquet",
+  artifact: "parquet",
 });
 
 const parquet = await handle.load();

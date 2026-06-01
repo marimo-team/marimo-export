@@ -7,15 +7,14 @@ the raw spec or render an interactive chart with `vega-embed`.
 
 ```ts
 import { vegaliteLoader } from "@marimo-team/export-loader-vegalite";
-import { readLatestExport } from "@marimo-team/export-reader";
+import { exportRoot, openExport } from "@marimo-team/export-reader";
 
-const exp = await readLatestExport({
-  root: "/export/",
+const exp = await openExport(exportRoot("/export/"), {
   loaders: [vegaliteLoader()],
 });
 
 const chart = await exp
-  .get({ scenario: "default", value: "comparison_chart", format: "vegalite" })
+  .artifact({ scenario: "default", value: "comparison_chart", artifact: "vegalite" })
   .load();
 
 await chart.render(document.querySelector("#chart")!);

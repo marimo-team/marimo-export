@@ -5,6 +5,7 @@ scenarios:
       window: 6
       demand_bias: 0
       scenario_name: north_balanced
+    patches:
       region_picker.value: North
       mode_picker.value: balanced
   - id: coast_surge
@@ -13,6 +14,7 @@ scenarios:
       window: 5
       demand_bias: 7
       scenario_name: coast_surge
+    patches:
       region_picker.value: Coast
       mode_picker.value: surge
   - id: south_conserve
@@ -23,12 +25,13 @@ scenarios:
         expression: 3 + 5
       demand_bias: -3
       scenario_name: south_conserve
+    patches:
       region_picker.value: South
       mode_picker.value: conserve
 values:
   summary:
     source: { def: summary }
-    formats:
+    artifacts:
       json:
         export:
           type: code
@@ -43,7 +46,7 @@ values:
                     media_type="application/json",
                 )
                 return ctx.artifact(
-                    format="playground.summary.json.v1",
+                    format_id="playground.summary.json.v1",
                     media_type="application/json",
                     files={"data": blob},
                     entry="data",
@@ -55,7 +58,7 @@ values:
                 )
   records:
     source: { def: rows }
-    formats:
+    artifacts:
       json:
         export:
           type: code
@@ -70,7 +73,7 @@ values:
                     media_type="application/json",
                 )
                 return ctx.artifact(
-                    format="playground.records.json.v1",
+                    format_id="playground.records.json.v1",
                     media_type="application/json",
                     files={"data": blob},
                     entry="data",
@@ -82,7 +85,7 @@ values:
                 )
   sparkline:
     source: { def: sparkline_svg }
-    formats:
+    artifacts:
       svg:
         export:
           type: code
@@ -94,7 +97,7 @@ values:
                     media_type="image/svg+xml",
                 )
                 return ctx.artifact(
-                    format="playground.sparkline.svg.v1",
+                    format_id="playground.sparkline.svg.v1",
                     media_type="image/svg+xml",
                     files={"image": blob},
                     entry="image",
@@ -105,7 +108,7 @@ values:
                 )
   note:
     source: { def: market_note }
-    formats:
+    artifacts:
       html:
         export:
           type: code
@@ -118,7 +121,7 @@ values:
                     media_type="text/html",
                 )
                 return ctx.artifact(
-                    format="playground.note.html.v1",
+                    format_id="playground.note.html.v1",
                     media_type="text/html",
                     files={"html": blob},
                     entry="html",

@@ -1,13 +1,13 @@
 {
   "schema": "moexport.invocation.v1",
   "version": 1,
-  "id": "sha256-e877443539c1fb1a",
-  "sha256": "e877443539c1fb1ae04111380a82f4bbf50ae3c1d1a7cc6f44b4d87f691ecb71",
+  "id": "sha256-b5202c0cf9d5fabe",
+  "sha256": "b5202c0cf9d5fabe4de449cfe276c39396d5e7740a28d022fe4c52625ab236b2",
   "created_at": "2026-06-01T13:27:13.011693Z",
   "bundle": {
-    "id": "sha256-87fd59875bf17e41",
-    "sha256": "87fd59875bf17e41bc1a87b5e25babbfa3c807fe191203a3a0bb10fb76c3578f",
-    "manifest_href": "bundles/sha256-87fd59875bf17e41/manifest.json"
+    "id": "sha256-1d70e1c92f2d79d5",
+    "sha256": "1d70e1c92f2d79d55a0d5bdd98cf882c7d58b67f7ee19bb2dcb7fdd37d8b6763",
+    "manifest_href": "bundles/sha256-1d70e1c92f2d79d5/manifest.json"
   },
   "notebook": {
     "name": "queueing_lab.py",
@@ -23,7 +23,7 @@
     "request_sha256": "a04083fb1204e47769a18186b78a424a062db9aa221503aae545bdd891c44523"
   },
   "source_spec": {
-    "sha256": "1acc67fd07d28b703dd608177a12d6cce883170f91c62f456e51f7467dbacb79",
+    "sha256": "da2000ce1c95e8e0d5f40d2d69b40351b12536290e30c2e2ee126931a81dde7a",
     "spec": {
       "scenarios": [
         {
@@ -73,7 +73,7 @@
             "type": "definition",
             "name": "queue_summary"
           },
-          "formats": {
+          "artifacts": {
             "json": {
               "export": {
                 "type": "ref",
@@ -81,7 +81,7 @@
               },
               "options": {
                 "filename": "queue-summary.json",
-                "format": "queue.summary.json.v1",
+                "format_id": "queue.summary.json.v1",
                 "metadata": {
                   "kind": "queue-summary"
                 }
@@ -94,7 +94,7 @@
             "type": "definition",
             "name": "arrival_distribution"
           },
-          "formats": {
+          "artifacts": {
             "arrow": {
               "export": {
                 "type": "ref",
@@ -114,7 +114,7 @@
             "type": "definition",
             "name": "queue_curve"
           },
-          "formats": {
+          "artifacts": {
             "arrow": {
               "export": {
                 "type": "ref",
@@ -128,7 +128,7 @@
             "type": "definition",
             "name": "wait_chart"
           },
-          "formats": {
+          "artifacts": {
             "vegalite": {
               "export": {
                 "type": "ref",
@@ -142,7 +142,7 @@
             "type": "definition",
             "name": "queue_note"
           },
-          "formats": {
+          "artifacts": {
             "html": {
               "export": {
                 "type": "ref",
@@ -150,7 +150,7 @@
               },
               "options": {
                 "filename": "queue-note.html",
-                "format": "queue.note.html.v1",
+                "format_id": "queue.note.html.v1",
                 "metadata": {
                   "kind": "marimo-markdown-output"
                 }

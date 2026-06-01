@@ -8,7 +8,7 @@
       {
         "imports": {
           "@marimo-team/export-client/browser": "../../packages/client/dist/browser.js",
-          "@marimo-team/export-reader": "../../packages/reader/dist/read-export.js",
+          "@marimo-team/export-reader": "../../packages/reader/dist/index.js",
           "fflate": "https://cdn.skypack.dev/fflate@0.8.2?min"
         }
       }
@@ -411,7 +411,7 @@
           <label>
             Runtime
             <select id="runtime" name="runtime">
-              <option value="skip">skip install</option>
+              <option value="preinstalled">preinstalled</option>
               <option value="install">install if missing</option>
               <option value="force">force install</option>
             </select>
@@ -513,12 +513,13 @@
     </main>
 
     <script type="module">
+      import { createExportClient } from "@marimo-team/export-client/browser";
       import {
-        captureExportArchive,
-        createBrowserCaptureClient,
-        listRunningNotebooks,
-      } from "@marimo-team/export-client/browser";
-      import { htmlLoader, jsonLoader, readExportArchive } from "@marimo-team/export-reader";
+        exportArchive,
+        htmlLoader,
+        jsonLoader,
+        openExport,
+      } from "@marimo-team/export-reader";
 
       const $ = (selector) => document.querySelector(selector);
       const state = { archive: null };
@@ -535,9 +536,11 @@
         setBusy(true, "Capturing archive...");
         try {
           const options = captureOptions();
-          const result = await captureExportArchive(createQueueingArchiveSpec(), options);
-          const archive = await readExportArchive({
-            bytes: result.bytes,
+          const result = await options.client.captureArchive(
+            createQueueingArchiveSpec(),
+            options.request,
+          );
+          const archive = await openExport(exportArchive(result.bytes), {
             loaders: [
               jsonLoader("queue.summary.json.v1"),
               htmlLoader("queue.note.html.v1"),
@@ -562,7 +565,7 @@
         clearError();
         setBusy(true, "Listing sessions...");
         try {
-          const sessions = await listRunningNotebooks(client());
+          const sessions = await client().listSessions();
           $("#status").textContent =
             sessions.length === 0
               ? "No running sessions"
@@ -581,18 +584,22 @@
         const summaries = await Promise.all(
           archive.scenarios().map(async (scenario) => ({
             scenario,
-            summary: await archive.get({ scenario, value: "summary", format: "json" }).load(),
+            summary: await archive
+              .artifact({ scenario, value: "summary", artifact: "json" })
+              .load(),
           })),
         );
         const firstScenario = archive.scenarios()[0];
         const firstNote =
           firstScenario === undefined
             ? ""
-            : await archive.get({ scenario: firstScenario, value: "note", format: "html" }).load();
+            : await archive
+                .artifact({ scenario: firstScenario, value: "note", artifact: "html" })
+                .load();
         const chartHandle =
           firstScenario === undefined
             ? null
-            : archive.get({ scenario: firstScenario, value: "chart", format: "vegalite" });
+            : archive.artifact({ scenario: firstScenario, value: "chart", artifact: "vegalite" });
         const chartSpec = chartHandle ? await chartHandle.json() : null;
 
         $("#metric-session").textContent = result.session.sessionId;
@@ -625,14 +632,14 @@
 
         $("#artifacts").innerHTML = archive.manifest.scenarios
           .flatMap((scenario) =>
-            Object.entries(scenario.values).flatMap(([value, formats]) =>
-              Object.entries(formats).map(([format, artifact]) => {
+            Object.entries(scenario.values).flatMap(([value, artifacts]) =>
+              Object.entries(artifacts).map(([artifactName, artifact]) => {
                 const file = artifact.data.files[artifact.data.entry];
                 return `
                   <tr>
                     <td><code>${scenario.id}</code></td>
                     <td><code>${value}</code></td>
-                    <td><code>${format}</code></td>
+                    <td><code>${artifactName}</code></td>
                     <td><code>${artifact.format_id}</code></td>
                     <td><code>${artifact.data.entry}</code></td>
                     <td>${formatBytes(file.size)}</td>
@@ -654,12 +661,12 @@
           values: {
             summary: {
               source: { def: "queue_summary" },
-              formats: {
+              artifacts: {
                 json: {
                   export: { type: "ref", ref: "moexport.exporters.core:json" },
                   options: {
                     filename: "queue-summary.json",
-                    format: "queue.summary.json.v1",
+                    format_id: "queue.summary.json.v1",
                     metadata: { kind: "queue-summary" },
                   },
                 },
@@ -667,7 +674,7 @@
             },
             chart: {
               source: { def: "wait_chart" },
-              formats: {
+              artifacts: {
                 vegalite: {
                   export: { type: "ref", ref: "moexport.exporters.altair:vegalite" },
                 },
@@ -675,12 +682,12 @@
             },
             note: {
               source: { def: "queue_note" },
-              formats: {
+              artifacts: {
                 html: {
                   export: { type: "ref", ref: "moexport.exporters.core:html" },
                   options: {
                     filename: "queue-note.html",
-                    format: "queue.note.html.v1",
+                    format_id: "queue.note.html.v1",
                     metadata: { kind: "marimo-markdown-output" },
                   },
                 },
@@ -707,26 +714,28 @@
       }
 
       function captureOptions() {
-        const options = {
-          client: client(),
+        const request = {
           executionTimeoutMs: Number($("#timeout").value || 90000),
           runtime: runtimeOption(),
         };
         const notebook = $("#notebook").value.trim();
         const sessionId = $("#session-id").value.trim();
         if (notebook) {
-          options.notebook = notebook;
+          request.notebook = notebook;
         }
         if (sessionId) {
-          options.sessionId = sessionId;
+          request.sessionId = sessionId;
         }
-        return options;
+        return {
+          client: client(),
+          request,
+        };
       }
 
       function client() {
         const token = $("#token").value.trim();
         const serverToken = $("#server-token").value.trim();
-        return createBrowserCaptureClient({
+        return createExportClient({
           server: $("#server").value.trim(),
           ...(token ? { token } : {}),
           ...(serverToken ? { serverToken } : {}),
@@ -735,10 +744,10 @@
 
       function runtimeOption() {
         const value = $("#runtime").value;
-        if (value === "skip") {
-          return false;
+        if (value === "preinstalled") {
+          return "preinstalled";
         }
-        return { force: value === "force" };
+        return { install: "moexport[all]", force: value === "force" };
       }
 
       function countArtifacts(archive) {
@@ -746,7 +755,7 @@
           return (
             total +
             Object.values(scenario.values).reduce(
-              (scenarioTotal, formats) => scenarioTotal + Object.keys(formats).length,
+              (scenarioTotal, artifacts) => scenarioTotal + Object.keys(artifacts).length,
               0,
             )
           );

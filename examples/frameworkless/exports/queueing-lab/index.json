@@ -2,19 +2,19 @@
   "schema": "moexport.root_index.v1",
   "version": 1,
   "latest": {
-    "id": "sha256-87fd59875bf17e41",
-    "sha256": "87fd59875bf17e41bc1a87b5e25babbfa3c807fe191203a3a0bb10fb76c3578f",
-    "manifest_href": "bundles/sha256-87fd59875bf17e41/manifest.json",
+    "id": "sha256-1d70e1c92f2d79d5",
+    "sha256": "1d70e1c92f2d79d55a0d5bdd98cf882c7d58b67f7ee19bb2dcb7fdd37d8b6763",
+    "manifest_href": "bundles/sha256-1d70e1c92f2d79d5/manifest.json",
     "updated_at": "2026-06-01T13:27:13.011693Z",
-    "latest_invocation_href": "bundles/sha256-87fd59875bf17e41/traces/sha256-e877443539c1fb1a.json"
+    "latest_invocation_href": "bundles/sha256-1d70e1c92f2d79d5/traces/sha256-b5202c0cf9d5fabe.json"
   },
   "bundles": [
     {
-      "id": "sha256-87fd59875bf17e41",
-      "sha256": "87fd59875bf17e41bc1a87b5e25babbfa3c807fe191203a3a0bb10fb76c3578f",
-      "manifest_href": "bundles/sha256-87fd59875bf17e41/manifest.json",
+      "id": "sha256-1d70e1c92f2d79d5",
+      "sha256": "1d70e1c92f2d79d55a0d5bdd98cf882c7d58b67f7ee19bb2dcb7fdd37d8b6763",
+      "manifest_href": "bundles/sha256-1d70e1c92f2d79d5/manifest.json",
       "updated_at": "2026-06-01T13:27:13.011693Z",
-      "latest_invocation_href": "bundles/sha256-87fd59875bf17e41/traces/sha256-e877443539c1fb1a.json"
+      "latest_invocation_href": "bundles/sha256-1d70e1c92f2d79d5/traces/sha256-b5202c0cf9d5fabe.json"
     }
   ]
 }

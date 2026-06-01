@@ -44,7 +44,7 @@ def display_json(value: Any, ctx: ExporterContext, **options: Any) -> Artifact:
         media_type=DISPLAY_JSON_MEDIA_TYPE,
     )
     return ctx.artifact(
-        format=DISPLAY_JSON_FORMAT,
+        format_id=DISPLAY_JSON_FORMAT,
         media_type=DISPLAY_JSON_MEDIA_TYPE,
         files={"display": blob},
         entry="display",
@@ -67,7 +67,7 @@ def markdown(value: Any, ctx: ExporterContext, **options: Any) -> Artifact:
         media_type=MARKDOWN_MEDIA_TYPE,
     )
     return ctx.artifact(
-        format=MARKDOWN_FORMAT,
+        format_id=MARKDOWN_FORMAT,
         media_type=MARKDOWN_MEDIA_TYPE,
         files={"markdown": blob},
         entry="markdown",

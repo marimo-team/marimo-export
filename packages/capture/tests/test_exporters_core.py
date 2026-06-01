@@ -13,7 +13,7 @@ from moexport.exporters import core
 class CapturingExporterContext:
     scenario_id = "default"
     value_name = "value"
-    format_name = "format"
+    artifact_name = "artifact"
 
     def __init__(self) -> None:
         self.blobs: dict[str, bytes] = {}
@@ -38,14 +38,14 @@ class CapturingExporterContext:
     def artifact(
         self,
         *,
-        format: str,
+        format_id: str,
         files: dict[str, BlobRef],
         entry: str | None = None,
         media_type: str | None = None,
         metadata: JsonObject | None = None,
     ) -> Artifact:
         return Artifact(
-            format=format,
+            format_id=format_id,
             media_type=media_type,
             data=ArtifactData(files=files, entry=entry),
             metadata=metadata,
@@ -67,11 +67,11 @@ def test_json_exporter_writes_json_blob_with_options() -> None:
         {"answer": 42},
         ctx,
         filename="answer.json",
-        format="example.answer.json.v1",
+        format_id="example.answer.json.v1",
         metadata={"kind": "answer"},
     )
 
-    assert artifact.format == "example.answer.json.v1"
+    assert artifact.format_id == "example.answer.json.v1"
     assert artifact.media_type == "application/json"
     assert artifact.metadata == {"kind": "answer"}
     assert json.loads(_payload(ctx, artifact)) == {"answer": 42}
@@ -82,16 +82,16 @@ def test_text_exporter_writes_text_blob() -> None:
 
     artifact = core.text(123, ctx)
 
-    assert artifact.format == "text.v1"
+    assert artifact.format_id == "text.v1"
     assert _payload(ctx, artifact) == b"123"
 
 
 def test_html_exporter_reads_text_attribute() -> None:
     ctx = CapturingExporterContext()
 
-    artifact = core.html(HtmlLike(), ctx, format="example.html.v1")
+    artifact = core.html(HtmlLike(), ctx, format_id="example.html.v1")
 
-    assert artifact.format == "example.html.v1"
+    assert artifact.format_id == "example.html.v1"
     assert artifact.media_type == "text/html"
     assert _payload(ctx, artifact) == b"<strong>hello</strong>"
 

@@ -1,11 +1,15 @@
 {
-  "symbols": ["AAPL", "MSFT", "GOOGL"],
-  "interval": "1d",
-  "start": "2025-04-01",
-  "end": "2025-05-02",
-  "chart_width": 760,
-  "symbols_selector.value": ["AAPL", "MSFT"],
-  "widget.widget.metric": "Close",
-  "widget.widget.mode": "absolute",
-  "widget.widget.selected_symbols": ["AAPL", "MSFT"]
+  "state": {
+    "symbols": ["AAPL", "MSFT", "GOOGL"],
+    "interval": "1d",
+    "start": "2025-04-01",
+    "end": "2025-05-02",
+    "chart_width": 760
+  },
+  "patches": {
+    "symbols_selector.value": ["AAPL", "MSFT"],
+    "widget.widget.metric": "Close",
+    "widget.widget.mode": "absolute",
+    "widget.widget.selected_symbols": ["AAPL", "MSFT"]
+  }
 }

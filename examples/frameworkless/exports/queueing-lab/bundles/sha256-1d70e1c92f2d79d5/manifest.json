@@ -1,8 +1,8 @@
 {
   "schema": "moexport.bundle.v1",
   "version": 1,
-  "id": "sha256-87fd59875bf17e41",
-  "sha256": "87fd59875bf17e41bc1a87b5e25babbfa3c807fe191203a3a0bb10fb76c3578f",
+  "id": "sha256-1d70e1c92f2d79d5",
+  "sha256": "1d70e1c92f2d79d55a0d5bdd98cf882c7d58b67f7ee19bb2dcb7fdd37d8b6763",
   "notebook": {
     "name": "queueing_lab.py",
     "source": null,
@@ -22,35 +22,35 @@
         "type": "definition",
         "name": "queue_summary"
       },
-      "formats": ["json"]
+      "artifacts": ["json"]
     },
     "arrivals": {
       "source": {
         "type": "definition",
         "name": "arrival_distribution"
       },
-      "formats": ["arrow", "parquet"]
+      "artifacts": ["arrow", "parquet"]
     },
     "response_curve": {
       "source": {
         "type": "definition",
         "name": "queue_curve"
       },
-      "formats": ["arrow"]
+      "artifacts": ["arrow"]
     },
     "chart": {
       "source": {
         "type": "definition",
         "name": "wait_chart"
       },
-      "formats": ["vegalite"]
+      "artifacts": ["vegalite"]
     },
     "note": {
       "source": {
         "type": "definition",
         "name": "queue_note"
       },
-      "formats": ["html"]
+      "artifacts": ["html"]
     }
   },
   "scenarios": [
@@ -482,8 +482,8 @@
     }
   ],
   "provenance": {
-    "invocations_index_href": "bundles/sha256-87fd59875bf17e41/traces/index.json",
-    "source_spec_sha256": "1acc67fd07d28b703dd608177a12d6cce883170f91c62f456e51f7467dbacb79",
+    "invocations_index_href": "bundles/sha256-1d70e1c92f2d79d5/traces/index.json",
+    "source_spec_sha256": "da2000ce1c95e8e0d5f40d2d69b40351b12536290e30c2e2ee126931a81dde7a",
     "source_spec": {
       "scenarios": [
         {
@@ -533,7 +533,7 @@
             "type": "definition",
             "name": "queue_summary"
           },
-          "formats": {
+          "artifacts": {
             "json": {
               "export": {
                 "type": "ref",
@@ -541,7 +541,7 @@
               },
               "options": {
                 "filename": "queue-summary.json",
-                "format": "queue.summary.json.v1",
+                "format_id": "queue.summary.json.v1",
                 "metadata": {
                   "kind": "queue-summary"
                 }
@@ -554,7 +554,7 @@
             "type": "definition",
             "name": "arrival_distribution"
           },
-          "formats": {
+          "artifacts": {
             "arrow": {
               "export": {
                 "type": "ref",
@@ -574,7 +574,7 @@
             "type": "definition",
             "name": "queue_curve"
           },
-          "formats": {
+          "artifacts": {
             "arrow": {
               "export": {
                 "type": "ref",
@@ -588,7 +588,7 @@
             "type": "definition",
             "name": "wait_chart"
           },
-          "formats": {
+          "artifacts": {
             "vegalite": {
               "export": {
                 "type": "ref",
@@ -602,7 +602,7 @@
             "type": "definition",
             "name": "queue_note"
           },
-          "formats": {
+          "artifacts": {
             "html": {
               "export": {
                 "type": "ref",
@@ -610,7 +610,7 @@
               },
               "options": {
                 "filename": "queue-note.html",
-                "format": "queue.note.html.v1",
+                "format_id": "queue.note.html.v1",
                 "metadata": {
                   "kind": "marimo-markdown-output"
                 }

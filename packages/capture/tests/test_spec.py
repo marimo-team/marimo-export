@@ -25,8 +25,6 @@ from moexport.spec import (
 def test_export_spec_parses_finance_like_shape() -> None:
     spec = parse_export_spec(
         {
-            "notebook": "notebooks/finance.py",
-            "bundle": "examples/finance/export_bundle",
             "scenarios": [
                 {"id": "default"},
                 {
@@ -47,7 +45,7 @@ def test_export_spec_parses_finance_like_shape() -> None:
             "values": {
                 "prices": {
                     "source": {"def": "df"},
-                    "formats": {
+                    "artifacts": {
                         "arrow": {
                             "export": {
                                 "type": "ref",
@@ -64,13 +62,13 @@ def test_export_spec_parses_finance_like_shape() -> None:
                 },
                 "prices_preview": {
                     "source": {"expr": "df.head(10)"},
-                    "formats": {
+                    "artifacts": {
                         "custom": {
                             "export": {
                                 "type": "code",
                                 "code": (
                                     "def export(value, ctx, **options):\n"
-                                    "    return {'format': 'custom.v1'}\n"
+                                    "    return {'format_id': 'custom.v1'}\n"
                                 ),
                             },
                             "options": {"limit": 10},
@@ -81,9 +79,6 @@ def test_export_spec_parses_finance_like_shape() -> None:
         }
     )
 
-    assert spec.notebook == "notebooks/finance.py"
-    assert spec.bundle is not None
-    assert spec.bundle.path == "examples/finance/export_bundle"
     assert spec.scenarios[1].state["chart_width"] == 1200
     assert spec.scenarios[2].state["symbols"] == ["AAPL", "MSFT"]
 
@@ -91,11 +86,11 @@ def test_export_spec_parses_finance_like_shape() -> None:
     assert isinstance(start, CodeStateValue)
     assert start.expression == "compute_start_date()"
 
-    arrow = spec.values["prices"].formats["arrow"].export
+    arrow = spec.values["prices"].artifacts["arrow"].export
     assert isinstance(arrow, RefExport)
     assert arrow.ref == "moexport.exporters.dataframe:arrow"
 
-    custom = spec.values["prices_preview"].formats["custom"]
+    custom = spec.values["prices_preview"].artifacts["custom"]
     assert isinstance(custom.export, CodeExport)
     assert custom.options == {"limit": 10}
 
@@ -106,7 +101,7 @@ def test_export_spec_defaults_to_one_default_scenario() -> None:
             "values": {
                 "prices": {
                     "source": {"def": "df"},
-                    "formats": {
+                    "artifacts": {
                         "arrow": {
                             "export": {
                                 "type": "ref",
@@ -123,21 +118,21 @@ def test_export_spec_defaults_to_one_default_scenario() -> None:
     assert spec.scenarios[0].state == {}
 
 
-def test_export_spec_accepts_product_shaped_sources_and_formats() -> None:
+def test_export_spec_accepts_product_shaped_sources_and_artifacts() -> None:
     spec = parse_export_spec(
         {
             "values": {
                 "prices": {
                     "source": {"expr": "df"},
-                    "formats": ["arrow", "parquet"],
+                    "artifacts": ["arrow", "parquet"],
                 },
                 "change_desc": {
                     "source": {"cell": "change_desc"},
-                    "formats": [{"html": {"filename": "change-desc.html"}}],
+                    "artifacts": [{"html": {"filename": "change-desc.html"}}],
                 },
                 "chart": {
                     "source": {"expr": "symbols_chart"},
-                    "formats": [
+                    "artifacts": [
                         "vegalite",
                         {"png": {"scale": 2}},
                     ],
@@ -150,11 +145,11 @@ def test_export_spec_accepts_product_shaped_sources_and_formats() -> None:
         "type": "expression",
         "expression": "df",
     }
-    assert spec.values["prices"].formats["arrow"].export == RefExport(
+    assert spec.values["prices"].artifacts["arrow"].export == RefExport(
         type="ref",
         ref="moexport.exporters.dataframe:arrow",
     )
-    assert spec.values["prices"].formats["parquet"].export == RefExport(
+    assert spec.values["prices"].artifacts["parquet"].export == RefExport(
         type="ref",
         ref="moexport.exporters.dataframe:parquet",
     )
@@ -165,28 +160,28 @@ def test_export_spec_accepts_product_shaped_sources_and_formats() -> None:
         "cell": {"name": "change_desc"},
         "on_error": "raise",
     }
-    assert spec.values["change_desc"].formats["html"].export == RefExport(
+    assert spec.values["change_desc"].artifacts["html"].export == RefExport(
         type="ref",
         ref="moexport.exporters.core:html",
     )
-    assert spec.values["change_desc"].formats["html"].options == {
+    assert spec.values["change_desc"].artifacts["html"].options == {
         "filename": "change-desc.html"
     }
-    assert spec.values["chart"].formats["vegalite"].export == RefExport(
+    assert spec.values["chart"].artifacts["vegalite"].export == RefExport(
         type="ref",
         ref="moexport.exporters.altair:vegalite",
     )
-    assert spec.values["chart"].formats["png"].options == {"scale": 2}
+    assert spec.values["chart"].artifacts["png"].options == {"scale": 2}
 
 
-def test_export_spec_rejects_unknown_format_shorthand() -> None:
-    with pytest.raises(ValidationError, match="unknown built-in format"):
+def test_export_spec_rejects_unknown_artifact_shorthand() -> None:
+    with pytest.raises(ValidationError, match="unknown built-in artifact"):
         parse_export_spec(
             {
                 "values": {
                     "prices": {
                         "source": {"expr": "df"},
-                        "formats": ["excel"],
+                        "artifacts": ["excel"],
                     }
                 }
             }
@@ -199,7 +194,7 @@ def test_export_spec_loads_json_and_yaml_files(tmp_path: Path) -> None:
         "values": {
             "prices": {
                 "source": {"def": "df"},
-                "formats": {
+                "artifacts": {
                     "arrow": {
                         "export": {
                             "type": "ref",
@@ -222,7 +217,7 @@ scenarios:
 values:
   prices:
     source: {def: df}
-    formats:
+    artifacts:
       arrow:
         export:
           type: ref
@@ -264,7 +259,7 @@ def test_export_spec_parses_yaml_text_without_extension() -> None:
 values:
   prices:
     source: {expr: df.head(10)}
-    formats:
+    artifacts:
       arrow:
         export:
           type: ref
@@ -295,7 +290,7 @@ def test_export_spec_serializes_code_state_stably() -> None:
             "values": {
                 "prices": {
                     "source": {"def": "df"},
-                    "formats": {
+                    "artifacts": {
                         "arrow": {
                             "export": {
                                 "type": "ref",
@@ -328,7 +323,7 @@ def test_export_spec_rejects_unknown_scenario_fields() -> None:
                 "values": {
                     "prices": {
                         "source": {"def": "df"},
-                        "formats": {
+                        "artifacts": {
                             "arrow": {
                                 "export": {
                                     "type": "ref",
@@ -353,7 +348,7 @@ def test_export_spec_rejects_duplicate_scenario_ids() -> None:
                 "values": {
                     "prices": {
                         "source": {"def": "df"},
-                        "formats": {
+                        "artifacts": {
                             "arrow": {
                                 "export": {
                                     "type": "ref",
@@ -374,7 +369,7 @@ def test_export_spec_rejects_bad_export_ref() -> None:
                 "values": {
                     "prices": {
                         "source": {"def": "df"},
-                        "formats": {
+                        "artifacts": {
                             "arrow": {
                                 "export": {
                                     "type": "ref",

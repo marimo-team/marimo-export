@@ -8,22 +8,26 @@ Python, Pyodide, or a marimo server.
 
 ```ts
 import { anywidgetLoader } from "@marimo-team/export-loader-anywidget";
-import { readLatestExport } from "@marimo-team/export-reader";
+import { exportRoot, openExport } from "@marimo-team/export-reader";
 
-const exp = await readLatestExport({
-  root: "/export/",
+const exp = await openExport(exportRoot("/export/"), {
   loaders: [anywidgetLoader()],
 });
 
-const handle = exp.get({
+const handle = exp.artifact({
   scenario: "default",
   value: "dashboard",
-  format: "bundle",
+  artifact: "bundle",
 });
 
 const widget = await handle.load();
+const mounted = await widget.mount(document.querySelector("#widget")!);
 
-await widget.mount(document.querySelector("#widget")!);
+try {
+  // The widget is mounted and can be bridged to application state here.
+} finally {
+  await mounted.unmount();
+}
 ```
 
 Mechanics:
@@ -32,5 +36,6 @@ Mechanics:
 - Reads the descriptor, frontend module, optional CSS, JSON state, and buffers.
 - Restores binary buffers into the exported state tree.
 - Imports the frontend module from a browser object URL.
+- `mounted.unmount()` tears down the widget instance and revokes the module URL.
 - Exposes a standalone runtime subpath at
   `@marimo-team/export-loader-anywidget/runtime`.

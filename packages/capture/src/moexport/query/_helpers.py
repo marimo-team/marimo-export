@@ -31,23 +31,23 @@ def catalog_values(rows: list[JsonObject]) -> list[JsonObject]:
         name = str(row["name"])
         record = by_name.setdefault(
             name,
-            {"name": name, "sources": [], "formats": [], "bundles": []},
+            {"name": name, "sources": [], "artifacts": [], "bundles": []},
         )
         append_unique(record["sources"], row.get("source"))
-        append_many_unique(record["formats"], row.get("formats", []))
+        append_many_unique(record["artifacts"], row.get("artifacts", []))
         append_unique(record["bundles"], row.get("bundle"))
     return sorted(by_name.values(), key=lambda record: record["name"])
 
 
-def catalog_formats(artifacts: list[JsonObject]) -> list[JsonObject]:
+def catalog_artifacts(artifacts: list[JsonObject]) -> list[JsonObject]:
     by_key: dict[tuple[str, str], JsonObject] = {}
     for artifact in artifacts:
-        key = (str(artifact["value"]), str(artifact["format"]))
+        key = (str(artifact["value"]), str(artifact["artifact"]))
         record = by_key.setdefault(
             key,
             {
                 "value": artifact["value"],
-                "format": artifact["format"],
+                "artifact": artifact["artifact"],
                 "format_ids": [],
                 "media_types": [],
                 "bundles": [],
@@ -60,7 +60,7 @@ def catalog_formats(artifacts: list[JsonObject]) -> list[JsonObject]:
         append_unique(record["scenarios"], artifact.get("scenario"))
 
     return sorted(
-        by_key.values(), key=lambda record: (record["value"], record["format"])
+        by_key.values(), key=lambda record: (record["value"], record["artifact"])
     )
 
 
@@ -154,7 +154,7 @@ def dedupe_bundle_files(rows: list[JsonObject]) -> list[JsonObject]:
             "state",
             "value",
             "source",
-            "format",
+            "artifact",
             "format_id",
             "file",
         ),
@@ -170,7 +170,7 @@ def dedupe_export_files(rows: list[JsonObject]) -> list[JsonObject]:
             "state",
             "value",
             "source",
-            "format",
+            "artifact",
             "format_id",
             "file",
         ),

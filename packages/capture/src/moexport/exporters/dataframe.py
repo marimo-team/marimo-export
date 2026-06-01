@@ -54,7 +54,7 @@ def parquet(value: Any, ctx: ExporterContext, **options: Any) -> Artifact:
     )
 
     return Artifact(
-        format=PARQUET_FORMAT,
+        format_id=PARQUET_FORMAT,
         media_type=PARQUET_MEDIA_TYPE,
         data=ArtifactData(files={"data": blob}, entry="data"),
         metadata={**_metadata(frame), "compression": "NONE"},
@@ -85,7 +85,7 @@ def arrow(value: Any, ctx: ExporterContext, **options: Any) -> Artifact:
     )
 
     return Artifact(
-        format=ARROW_FORMAT,
+        format_id=ARROW_FORMAT,
         media_type=ARROW_MEDIA_TYPE,
         data=ArtifactData(files={"data": blob}, entry="data"),
         metadata=_metadata(frame),

@@ -7,7 +7,7 @@ import {
   type VegaLiteArtifactHandle,
   type VegaLiteRenderResult,
 } from "@marimo-team/export-loader-vegalite";
-import { readLatestExport } from "@marimo-team/export-reader";
+import { exportRoot, openExport } from "@marimo-team/export-reader";
 
 import { exportPublicRoot } from "@/lib/export-paths";
 
@@ -32,12 +32,11 @@ export const VegaLiteChart = ({ scenario }: VegaLiteChartProps) => {
       setStatus("loading interactive Vega-Lite");
       host.replaceChildren();
 
-      const exp = await readLatestExport({
-        root: exportPublicRoot,
+      const exp = await openExport(exportRoot(exportPublicRoot), {
         loaders: [vegaliteLoader({ actions: true })],
       });
       const chart = await exp
-        .get({ scenario, value: "chart", format: "vegalite" })
+        .artifact({ scenario, value: "chart", artifact: "vegalite" })
         .load<VegaLiteArtifactHandle>();
 
       if (cancelled) {

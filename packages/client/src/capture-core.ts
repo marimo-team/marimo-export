@@ -1,24 +1,25 @@
 import {
-  DEFAULT_MOEXPORT_PACKAGE,
   EXPORT_ARCHIVE_MEDIA_TYPE,
   type CaptureClient,
   type CaptureExportArchiveResult,
   type CaptureExportRequest,
   type CaptureExportResult,
   type CaptureRuntimeOption,
+  type ExportSpecInput,
   type RunningNotebook,
+  type WorkspaceNotebook,
 } from "./types";
 import { isRecord, sleep } from "./support";
 
 export async function captureExportWithClient(
-  spec: Record<string, unknown>,
+  spec: ExportSpecInput,
   options: CaptureExportRequest & { client: CaptureClient },
 ): Promise<CaptureExportResult> {
-  const { client, bundle, runtime } = options;
+  const { client, to, runtime } = options;
   const session = await resolveCaptureSession(client, options);
   await ensureCaptureRuntime(client, session, runtime);
   const marker = captureMarker();
-  const code = captureCode(spec, bundle, marker);
+  const code = captureCode(spec, to, marker);
   const { stdout } = await client.executeScratchpad({
     code,
     sessionId: session.sessionId,
@@ -37,14 +38,14 @@ export async function captureExportWithClient(
 }
 
 export async function captureExportArchiveWithClient(
-  spec: Record<string, unknown>,
+  spec: ExportSpecInput,
   options: CaptureExportRequest & { client: CaptureClient },
 ): Promise<CaptureExportArchiveResult> {
-  const { client, bundle, runtime } = options;
+  const { client, to, runtime } = options;
   const session = await resolveCaptureSession(client, options);
   await ensureCaptureRuntime(client, session, runtime);
   const marker = archiveMarker();
-  const code = captureArchiveCode(spec, bundle, marker);
+  const code = captureArchiveCode(spec, to, marker);
   const { stdout } = await client.executeScratchpad({
     code,
     sessionId: session.sessionId,
@@ -74,6 +75,28 @@ export async function listRunningNotebooks(client: CaptureClient): Promise<Runni
     path: typeof file.path === "string" ? file.path : null,
     initializationId: typeof file.initializationId === "string" ? file.initializationId : null,
   }));
+}
+
+export async function listWorkspaceNotebooks(client: CaptureClient): Promise<WorkspaceNotebook[]> {
+  const { response: httpResponse, data } = await client.POST("/api/home/workspace_files", {
+    body: {
+      includeMarkdown: false,
+    },
+  });
+  const { ok, status, statusText } = httpResponse;
+
+  if (!ok) {
+    throw new Error(`Failed to list marimo workspace notebooks: ${status} ${statusText}`);
+  }
+
+  const files = isRecord(data) && Array.isArray(data.files) ? data.files : [];
+  return flattenWorkspaceFiles(files)
+    .filter(isMarimoWorkspaceFile)
+    .map((file) => ({
+      id: String(file.id),
+      name: String(file.name),
+      path: String(file.path),
+    }));
 }
 
 export async function resolveCaptureSession(
@@ -135,13 +158,22 @@ export async function resolveCaptureSession(
 export async function ensureCaptureRuntime(
   client: CaptureClient,
   session: Pick<RunningNotebook, "sessionId">,
-  options: CaptureRuntimeOption | undefined = {},
+  options: CaptureRuntimeOption | undefined = "preinstalled",
 ): Promise<void> {
-  if (options === false) {
+  if (options === "preinstalled") {
+    if (await canImportModule(client, session.sessionId, "moexport")) {
+      return;
+    }
+    throw new Error(
+      'moexport is not importable in the marimo kernel. Pass runtime: { install: "moexport @ ..." } to install it before capture.',
+    );
+  }
+
+  if (options === undefined) {
     return;
   }
 
-  const packageSpec = options.package ?? DEFAULT_MOEXPORT_PACKAGE;
+  const packageSpec = options.install;
   const moduleName = options.module ?? "moexport";
   const manager = options.manager ?? "uv";
   const source = options.source ?? "kernel";
@@ -180,7 +212,7 @@ export async function ensureCaptureRuntime(
 
 export function captureRequest(options: CaptureExportRequest): CaptureExportRequest {
   return {
-    ...(options.bundle !== undefined ? { bundle: options.bundle } : {}),
+    ...(options.to !== undefined ? { to: options.to } : {}),
     ...(options.notebook !== undefined ? { notebook: options.notebook } : {}),
     ...(options.sessionId !== undefined ? { sessionId: options.sessionId } : {}),
     ...(options.runtime !== undefined ? { runtime: options.runtime } : {}),
@@ -204,19 +236,52 @@ function sessionKey(notebook: RunningNotebook | undefined): string {
   return notebook ? `${notebook.path ?? ""}\0${notebook.name ?? ""}` : "";
 }
 
-function captureCode(
-  spec: Record<string, unknown>,
-  bundle: string | undefined,
-  marker: string,
-): string {
+type WorkspaceFileNode = Record<string, unknown> & {
+  children?: unknown;
+  id: unknown;
+  isMarimoFile: unknown;
+  name: unknown;
+  path: unknown;
+};
+
+function flattenWorkspaceFiles(files: unknown[]): WorkspaceFileNode[] {
+  const flattened: WorkspaceFileNode[] = [];
+  for (const file of files) {
+    if (!isWorkspaceFileNode(file)) {
+      continue;
+    }
+
+    flattened.push(file);
+    if (Array.isArray(file.children)) {
+      flattened.push(...flattenWorkspaceFiles(file.children));
+    }
+  }
+  return flattened;
+}
+
+function isWorkspaceFileNode(value: unknown): value is WorkspaceFileNode {
+  return (
+    isRecord(value) &&
+    "id" in value &&
+    "isMarimoFile" in value &&
+    "name" in value &&
+    "path" in value
+  );
+}
+
+function isMarimoWorkspaceFile(file: WorkspaceFileNode): boolean {
+  return file.isMarimoFile === true;
+}
+
+function captureCode(spec: ExportSpecInput, to: string | undefined, marker: string): string {
   const specJson = JSON.stringify(spec);
-  const bundleExpression = bundle === undefined ? "None" : JSON.stringify(bundle);
+  const toExpression = to === undefined ? "None" : JSON.stringify(to);
 
   return [
     "import json",
     "import moexport as mox",
     `__moexport_spec = json.loads(${JSON.stringify(specJson)})`,
-    `__moexport_result = await mox.export(__moexport_spec, bundle=${bundleExpression})`,
+    `__moexport_result = await mox.export(__moexport_spec, to=${toExpression})`,
     "__moexport_payload = {",
     '    "bundle_path": __moexport_result.bundle_path,',
     '    "manifest_path": __moexport_result.manifest_path,',
@@ -229,13 +294,9 @@ function captureCode(
   ].join("\n");
 }
 
-function captureArchiveCode(
-  spec: Record<string, unknown>,
-  bundle: string | undefined,
-  marker: string,
-): string {
+function captureArchiveCode(spec: ExportSpecInput, to: string | undefined, marker: string): string {
   const specJson = JSON.stringify(spec);
-  const bundleExpression = bundle === undefined ? "None" : JSON.stringify(bundle);
+  const toExpression = to === undefined ? "None" : JSON.stringify(to);
 
   return [
     "import json",
@@ -243,7 +304,7 @@ function captureArchiveCode(
     "import moexport.archive as __moexport_archive",
     "__moexport_archive = importlib.reload(__moexport_archive)",
     `__moexport_spec = json.loads(${JSON.stringify(specJson)})`,
-    `await __moexport_archive.emit_bundle_archive(__moexport_spec, bundle=${bundleExpression}, marker=${JSON.stringify(marker)})`,
+    `await __moexport_archive.emit_bundle_archive(__moexport_spec, to=${toExpression}, marker=${JSON.stringify(marker)})`,
   ].join("\n");
 }
 

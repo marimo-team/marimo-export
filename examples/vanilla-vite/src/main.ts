@@ -1,5 +1,6 @@
 import {
-  readLatestExport,
+  exportRoot,
+  openExport,
   type ArtifactHandle,
   type StaticExport,
 } from "@marimo-team/export-reader";
@@ -240,14 +241,14 @@ app.innerHTML = `
           </div>
           <span id="matrix-status" class="status">loading</span>
         </summary>
-        <dl class="format-strip" aria-label="Export formats">
+        <dl class="artifact-strip" aria-label="Export artifacts">
           <div>
             <dt>Bundle</dt>
             <dd id="manifest-id">loading</dd>
           </div>
           <div>
-            <dt>Formats</dt>
-            <dd id="format-list">loading</dd>
+            <dt>Artifacts</dt>
+            <dd id="artifact-list">loading</dd>
           </div>
         </dl>
         <pre id="trace" class="code-output">loading</pre>
@@ -293,8 +294,7 @@ let activeLoad = 0;
 
 async function main(): Promise<void> {
   try {
-    const exp = await readLatestExport({
-      root: EXPORT_ROOT,
+    const exp = await openExport(exportRoot(EXPORT_ROOT), {
       loaders: [
         anywidgetLoader(),
         arrowLoader({ useDate: true }),
@@ -305,7 +305,7 @@ async function main(): Promise<void> {
 
     renderScenarioTabs(exp);
     setText("manifest-id", exp.manifest.id);
-    setText("format-list", formatSummary(exp));
+    setText("artifact-list", artifactSummary(exp));
 
     await loadScenario(exp, firstScenario(exp));
   } catch (error) {
@@ -367,24 +367,24 @@ async function loadScenario(exp: StaticExport, scenario: string): Promise<void> 
 
 async function loadScenarioData(exp: StaticExport, scenario: string): Promise<LoadedScenarioData> {
   const summaryPromise = exp
-    .get({ scenario, value: "summary", format: "json" })
+    .artifact({ scenario, value: "summary", artifact: "json" })
     .json<SummaryPayload>();
   const symbolsSelectorPromise = exp
-    .get({ scenario, value: "symbols_selector", format: "json" })
+    .artifact({ scenario, value: "symbols_selector", artifact: "json" })
     .json<SymbolsSelectorPayload>();
   const arrowPromise = exp
-    .get({ scenario, value: "prices", format: "arrow" })
+    .artifact({ scenario, value: "prices", artifact: "arrow" })
     .load<ArrowArtifactHandle>();
   const parquetPromise = exp
-    .get({ scenario, value: "prices", format: "parquet" })
+    .artifact({ scenario, value: "prices", artifact: "parquet" })
     .load<ParquetArtifactHandle>();
   const vegalitePromise = exp
-    .get({ scenario, value: "comparison_chart", format: "vegalite" })
+    .artifact({ scenario, value: "comparison_chart", artifact: "vegalite" })
     .load<VegaLiteArtifactHandle>();
-  const png = exp.get({ scenario, value: "comparison_chart", format: "png_nogrid" });
-  const changeDesc = exp.get({ scenario, value: "change_desc", format: "html" });
+  const png = exp.artifact({ scenario, value: "comparison_chart", artifact: "png_nogrid" });
+  const changeDesc = exp.artifact({ scenario, value: "change_desc", artifact: "html" });
   const widgetPromise = exp
-    .get({ scenario, value: "ohlc_dashboard", format: "bundle" })
+    .artifact({ scenario, value: "ohlc_dashboard", artifact: "bundle" })
     .load<LoadedAnyWidget<OhlcWidgetState>>();
 
   const [summary, symbolsSelector, arrow, parquet, vegalite, widget] = await Promise.all([
@@ -471,7 +471,7 @@ async function commitScenario(
   chartImage.src = png.url();
   setText(
     "chart-meta",
-    `${png.file().size.toLocaleString()} bytes · ${summary.symbols.length} symbols · ${png.artifact.media_type}`,
+    `${png.entry().ref.size.toLocaleString()} bytes · ${summary.symbols.length} symbols · ${png.artifact.media_type}`,
   );
 
   const mount = await widget.mount(byId("widget-root"));
@@ -512,7 +512,7 @@ async function commitScenario(
         arrowRows: arrowRows.length,
         parquetRows: parquetRows.length,
         summaryRows: summary.rows,
-        changeDescBytes: changeDesc.file().size,
+        changeDescBytes: changeDesc.entry().ref.size,
         widgetRows: widget.initialState.rows.length,
         selectorValue: symbolsSelector.value,
         symbolUniverse: symbolsSelector.options,
@@ -655,10 +655,10 @@ function setScenarioButtonsDisabled(disabled: boolean): void {
   }
 }
 
-function formatSummary(exp: StaticExport): string {
+function artifactSummary(exp: StaticExport): string {
   return exp
     .values()
-    .map((value) => `${value}: ${exp.formats(value).join(", ")}`)
+    .map((value) => `${value}: ${exp.artifacts(value).join(", ")}`)
     .join(" · ");
 }
 

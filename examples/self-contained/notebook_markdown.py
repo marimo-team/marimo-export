@@ -43,20 +43,23 @@ def notebook_markdown_spec(
     *,
     scenario_id: str = "default",
     state: Mapping[str, Any] | None = None,
+    patches: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Return a spec that captures every notebook cell as a linear snapshot."""
 
+    scenario: dict[str, Any] = {
+        "id": scenario_id,
+        "state": dict(state or {}),
+    }
+    if patches:
+        scenario["patches"] = dict(patches)
+
     return {
-        "scenarios": [
-            {
-                "id": scenario_id,
-                "state": dict(state or {}),
-            }
-        ],
+        "scenarios": [scenario],
         "values": {
             NOTEBOOK_MARKDOWN_VALUE: {
                 "source": {"snapshot": True},
-                "formats": {
+                "artifacts": {
                     NOTEBOOK_MARKDOWN_FORMAT: {
                         "export": {
                             "type": "ref",
@@ -79,16 +82,21 @@ def export_notebook_markdown(
     *,
     scenario_id: str = "default",
     state: Mapping[str, Any] | None = None,
-    bundle: str | Path | None = None,
+    patches: Mapping[str, Any] | None = None,
+    to: str | Path | None = None,
     run: NotebookRunOptions | None = None,
     title: str | None = None,
     inline_html_bytes: int = _DEFAULT_INLINE_HTML_BYTES,
 ) -> MarkdownExportResult:
     """Capture a notebook and write `output.md` plus static media files."""
 
-    spec = notebook_markdown_spec(scenario_id=scenario_id, state=state)
-    if bundle is not None:
-        result = export_notebook(notebook, spec, bundle=bundle, run=run)
+    spec = notebook_markdown_spec(
+        scenario_id=scenario_id,
+        state=state,
+        patches=patches,
+    )
+    if to is not None:
+        result = export_notebook(notebook, spec, to=to, run=run)
         root = Path(result.bundle_path).parent.parent
         return write_markdown_from_bundle(
             root,
@@ -99,7 +107,7 @@ def export_notebook_markdown(
         )
 
     with TemporaryDirectory(prefix="moexport-markdown-") as directory:
-        result = export_notebook(notebook, spec, bundle=directory, run=run)
+        result = export_notebook(notebook, spec, to=directory, run=run)
         root = Path(result.bundle_path).parent.parent
         return write_markdown_from_bundle(
             root,
@@ -125,7 +133,7 @@ def write_markdown_from_bundle(
     entry = bundle.entry(
         scenario=scenario_id,
         value=NOTEBOOK_MARKDOWN_VALUE,
-        format=NOTEBOOK_MARKDOWN_FORMAT,
+        format_id=NOTEBOOK_MARKDOWN_FORMAT,
     )
     path = entry.get("path")
     if not isinstance(path, str):

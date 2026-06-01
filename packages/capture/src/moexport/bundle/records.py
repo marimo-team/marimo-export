@@ -49,7 +49,7 @@ def core_manifest(
         "values": {
             name: {
                 "source": source_record(value.source),
-                "formats": list(value.formats),
+                "artifacts": list(value.artifacts),
             }
             for name, value in request.spec.values.items()
         },
@@ -148,7 +148,7 @@ def _compact_source_spec(value: Any, *, key: str | None = None) -> Any:
             for item_key, item in value.items()
             if item is not None
         }
-        if key in {"options", "state"} and not result:
+        if key in {"options", "state", "patches"} and not result:
             return None
         return {item_key: item for item_key, item in result.items() if item is not None}
 

@@ -453,8 +453,8 @@
             <code id="svg-href">--</code>
           </div>
           <div>
-            <span>Formats</span>
-            <code id="formats">--</code>
+            <span>Artifacts</span>
+            <code id="artifacts">--</code>
           </div>
         </div>
       </section>
@@ -465,27 +465,28 @@
     <script type="module">
       import {
         defineLoader,
+        exportRoot,
         htmlLoader,
         jsonLoader,
-        readLatestExport,
-      } from "../../packages/reader/dist/read-export.js";
+        openExport,
+      } from "../../packages/reader/dist/index.js";
 
       const root = "./exports/agentic-playground/";
       const $ = (selector) => document.querySelector(selector);
 
       const svgLoader = defineLoader({
-        formats: "playground.sparkline.svg.v1",
+        supports: "playground.sparkline.svg.v1",
         async load(ctx) {
+          const entry = ctx.entry();
           return {
-            href: ctx.file().href,
-            markup: await ctx.text(),
-            url: ctx.url(),
+            href: entry.ref.href,
+            markup: await entry.text(),
+            url: entry.url(),
           };
         },
       });
 
-      const exportReader = await readLatestExport({
-        root,
+      const exportReader = await openExport(exportRoot(root), {
         loaders: [
           jsonLoader(["playground.summary.json.v1", "playground.records.json.v1"]),
           svgLoader,
@@ -500,9 +501,9 @@
       $("#bundle-id").textContent = exportReader.manifest.id;
       $("#spec-sha").textContent =
         exportReader.manifest.provenance?.source_spec_sha256 ?? "missing";
-      $("#formats").textContent = exportReader
+      $("#artifacts").textContent = exportReader
         .values()
-        .map((value) => `${value}:${exportReader.formats(value).join("|")}`)
+        .map((value) => `${value}:${exportReader.artifacts(value).join("|")}`)
         .join(", ");
       $("#scenario-count").textContent = `${exportReader.scenarios().length} finite states`;
 
@@ -535,10 +536,22 @@
       async function loadScenario(scenario) {
         try {
           $("#status").textContent = `Loading ${scenario}...`;
-          const summaryHandle = exportReader.get({ scenario, value: "summary", format: "json" });
-          const recordsHandle = exportReader.get({ scenario, value: "records", format: "json" });
-          const sparklineHandle = exportReader.get({ scenario, value: "sparkline", format: "svg" });
-          const noteHandle = exportReader.get({ scenario, value: "note", format: "html" });
+          const summaryHandle = exportReader.artifact({
+            scenario,
+            value: "summary",
+            artifact: "json",
+          });
+          const recordsHandle = exportReader.artifact({
+            scenario,
+            value: "records",
+            artifact: "json",
+          });
+          const sparklineHandle = exportReader.artifact({
+            scenario,
+            value: "sparkline",
+            artifact: "svg",
+          });
+          const noteHandle = exportReader.artifact({ scenario, value: "note", artifact: "html" });
 
           const [summary, records, sparkline, noteHtml] = await Promise.all([
             summaryHandle.load(),

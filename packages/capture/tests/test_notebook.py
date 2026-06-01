@@ -134,7 +134,7 @@ def _text_export_spec() -> dict[str, Any]:
         "values": {
             "title": {
                 "source": {"def": "title"},
-                "formats": {
+                "artifacts": {
                     "text": {
                         "export": {
                             "type": "code",
@@ -146,7 +146,7 @@ def export(value, ctx, **options):
         media_type="text/plain",
     )
     return {
-        "format": "text.v1",
+        "format_id": "text.v1",
         "media_type": "text/plain",
         "data": {
             "type": "bundle",
@@ -172,7 +172,7 @@ def _selected_export_spec() -> dict[str, Any]:
     spec["values"] = {
         "selected": {
             "source": {"def": "selected"},
-            "formats": spec["values"]["title"]["formats"],
+            "artifacts": spec["values"]["title"]["artifacts"],
         }
     }
     return spec
@@ -184,7 +184,7 @@ def _notebook_snapshot_spec() -> dict[str, Any]:
         "values": {
             "notebook": {
                 "source": {"snapshot": True},
-                "formats": {
+                "artifacts": {
                     "linear": {
                         "export": {
                             "type": "ref",
@@ -214,7 +214,7 @@ def test_export_notebook_loads_file_and_writes_bundle(tmp_path: Path) -> None:
             "values": {
                 "title": {
                     "source": {"def": "title"},
-                    "formats": {
+                    "artifacts": {
                         "text": {
                             "export": {
                                 "type": "code",
@@ -226,7 +226,7 @@ def export(value, ctx, **options):
         media_type="text/plain",
     )
     return {
-        "format": "text.v1",
+        "format_id": "text.v1",
         "media_type": "text/plain",
         "data": {
             "type": "bundle",
@@ -243,7 +243,7 @@ def export(value, ctx, **options):
             },
             "provenance": {"source": "source"},
         },
-        bundle=tmp_path / "export",
+        to=tmp_path / "export",
     )
 
     manifest = result.manifest
@@ -267,7 +267,7 @@ def export(value, ctx, **options):
     assert (output_root / source_blob["href"]).read_text() == notebook.read_text()
     assert manifest["values"]["title"] == {
         "source": {"type": "definition", "name": "title"},
-        "formats": ["text"],
+        "artifacts": ["text"],
     }
     assert (output_root / base_blob["href"]).read_text() == "Selected AAPL"
     assert (output_root / override_blob["href"]).read_text() == "Selected GOOGL"
@@ -280,7 +280,7 @@ def test_export_notebook_passes_notebook_args(tmp_path: Path) -> None:
     result = export_notebook(
         notebook,
         _text_export_spec(),
-        bundle=tmp_path / "export",
+        to=tmp_path / "export",
         run={"args": ["--symbol", "MSFT"]},
     )
 
@@ -302,7 +302,7 @@ def test_export_notebook_does_not_run_default_notebook_before_scenarios(
     result = export_notebook(
         notebook,
         _selected_export_spec(),
-        bundle=tmp_path / "export",
+        to=tmp_path / "export",
     )
 
     artifact = result.manifest["scenarios"][0]["values"]["selected"]["text"]
@@ -348,7 +348,7 @@ if __name__ == "__main__":
     result = export_notebook(
         notebook,
         spec,
-        bundle=tmp_path / "export",
+        to=tmp_path / "export",
     )
 
     artifact = result.manifest["scenarios"][0]["values"]["title"]["text"]
@@ -366,7 +366,7 @@ def test_export_notebook_object_patch_scenarios_do_not_leak(
     _write_object_patch_notebook(notebook)
     spec = _text_export_spec()
     spec["scenarios"] = [
-        {"id": "a-patched", "state": {"selector.value": ["CRWV", "MSFT"]}},
+        {"id": "a-patched", "patches": {"selector.value": ["CRWV", "MSFT"]}},
         {"id": "z-default"},
     ]
     spec["values"]["title"]["source"] = {"def": "chart"}
@@ -374,7 +374,7 @@ def test_export_notebook_object_patch_scenarios_do_not_leak(
     result = export_notebook(
         notebook,
         spec,
-        bundle=tmp_path / "export",
+        to=tmp_path / "export",
     )
 
     root = Path(result.bundle_path).parent.parent
@@ -399,7 +399,7 @@ def test_export_notebook_snapshot_excludes_internal_export_cells(
     result = export_notebook(
         notebook,
         _notebook_snapshot_spec(),
-        bundle=tmp_path / "export",
+        to=tmp_path / "export",
     )
 
     artifact = result.manifest["scenarios"][0]["values"]["notebook"]["linear"]
@@ -438,7 +438,7 @@ def test_export_notebook_uses_marimo_name_resolution(
     result = export_notebook(
         "https://example.com/notebook.py",
         _text_export_spec(),
-        bundle=tmp_path / "export",
+        to=tmp_path / "export",
     )
 
     assert calls == [("https://example.com/notebook.py", False, False)]
@@ -453,6 +453,6 @@ def test_export_notebook_rejects_unknown_run_options(tmp_path: Path) -> None:
         export_notebook(
             notebook,
             _text_export_spec(),
-            bundle=tmp_path / "export",
+            to=tmp_path / "export",
             run=cast(Any, {"mode": "unsupported"}),
         )

@@ -15,7 +15,7 @@ class ExporterContext(Protocol):
 
     scenario_id: str
     value_name: str
-    format_name: str
+    artifact_name: str
 
     def write_blob(
         self,
@@ -30,7 +30,7 @@ class ExporterContext(Protocol):
     def artifact(
         self,
         *,
-        format: str,
+        format_id: str,
         files: dict[str, BlobRef],
         entry: str | None = None,
         media_type: str | None = None,
@@ -48,12 +48,12 @@ class BundleExporterContext:
         *,
         scenario_id: str,
         value_name: str,
-        format_name: str,
+        artifact_name: str,
         blob_store: ContentAddressedBlobStore,
     ) -> None:
         self.scenario_id = scenario_id
         self.value_name = value_name
-        self.format_name = format_name
+        self.artifact_name = artifact_name
         self.blob_store = blob_store
 
     def write_blob(
@@ -70,7 +70,7 @@ class BundleExporterContext:
     def artifact(
         self,
         *,
-        format: str,
+        format_id: str,
         files: dict[str, BlobRef],
         entry: str | None = None,
         media_type: str | None = None,
@@ -79,7 +79,7 @@ class BundleExporterContext:
         """Create the standard artifact object returned by exporters."""
 
         return Artifact(
-            format=format,
+            format_id=format_id,
             media_type=media_type,
             data=ArtifactData(files=files, entry=entry),
             metadata=metadata,

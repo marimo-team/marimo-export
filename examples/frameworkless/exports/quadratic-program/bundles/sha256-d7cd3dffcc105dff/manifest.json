@@ -1,8 +1,8 @@
 {
   "schema": "moexport.bundle.v1",
   "version": 1,
-  "id": "sha256-c8ace94803f8b783",
-  "sha256": "c8ace94803f8b783e53ddc30b8a9939240253253cfcd491d563e511b65dc8977",
+  "id": "sha256-d7cd3dffcc105dff",
+  "sha256": "d7cd3dffcc105dffc685d722a507dfe70f6f59c14bb08b693831dc22d68e9a11",
   "notebook": {
     "name": "notebook.py",
     "source": {
@@ -23,14 +23,14 @@
         "type": "expression",
         "expression": "{\n  \"P\": np.asarray(P, dtype=float).tolist(),\n  \"q\": np.asarray(q, dtype=float).tolist(),\n  \"G\": np.asarray(G, dtype=float).tolist(),\n  \"h\": np.asarray(h, dtype=float).tolist(),\n  \"x\": np.asarray(x.value, dtype=float).tolist(),\n  \"objective\": float(problem.value),\n  \"dual\": np.asarray(problem.constraints[0].dual_value, dtype=float).tolist(),\n  \"slack\": np.asarray(h - G @ x.value, dtype=float).tolist(),\n  \"eigenvalues\": np.linalg.eigvalsh(P).tolist(),\n  \"condition_number\": float(np.linalg.cond(P)),\n}"
       },
-      "formats": ["json"]
+      "artifacts": ["json"]
     },
     "widget": {
       "source": {
         "type": "definition",
         "name": "P_widget"
       },
-      "formats": ["bundle"]
+      "artifacts": ["bundle"]
     }
   },
   "scenarios": [
@@ -820,8 +820,8 @@
     }
   ],
   "provenance": {
-    "invocations_index_href": "bundles/sha256-c8ace94803f8b783/traces/index.json",
-    "source_spec_sha256": "c7cfcf73c7694775d2cf8c166d09ce20a1e35aff64af98f845c8d05fd527b70e",
+    "invocations_index_href": "bundles/sha256-d7cd3dffcc105dff/traces/index.json",
+    "source_spec_sha256": "86361d48d011f11a0c1a16a46b1b9e9d83300d04f974aed390a436cb6f84421d",
     "source_spec": {
       "scenarios": [
         {
@@ -870,7 +870,7 @@
             "type": "expression",
             "expression": "{\n  \"P\": np.asarray(P, dtype=float).tolist(),\n  \"q\": np.asarray(q, dtype=float).tolist(),\n  \"G\": np.asarray(G, dtype=float).tolist(),\n  \"h\": np.asarray(h, dtype=float).tolist(),\n  \"x\": np.asarray(x.value, dtype=float).tolist(),\n  \"objective\": float(problem.value),\n  \"dual\": np.asarray(problem.constraints[0].dual_value, dtype=float).tolist(),\n  \"slack\": np.asarray(h - G @ x.value, dtype=float).tolist(),\n  \"eigenvalues\": np.linalg.eigvalsh(P).tolist(),\n  \"condition_number\": float(np.linalg.cond(P)),\n}"
           },
-          "formats": {
+          "artifacts": {
             "json": {
               "export": {
                 "type": "ref",
@@ -878,7 +878,7 @@
               },
               "options": {
                 "filename": "summary.json",
-                "format": "qp.summary.json.v1",
+                "format_id": "qp.summary.json.v1",
                 "metadata": {
                   "kind": "quadratic-program-summary"
                 }
@@ -891,7 +891,7 @@
             "type": "definition",
             "name": "P_widget"
           },
-          "formats": {
+          "artifacts": {
             "bundle": {
               "export": {
                 "type": "ref",

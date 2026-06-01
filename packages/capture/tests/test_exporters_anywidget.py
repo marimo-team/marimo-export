@@ -26,11 +26,11 @@ class CapturingExporterContext:
         *,
         scenario_id: str = "default",
         value_name: str = "widget",
-        format_name: str = "bundle",
+        artifact_name: str = "bundle",
     ) -> None:
         self.scenario_id = scenario_id
         self.value_name = value_name
-        self.format_name = format_name
+        self.artifact_name = artifact_name
         self.blobs: dict[str, bytes] = {}
 
     def write_blob(
@@ -53,14 +53,14 @@ class CapturingExporterContext:
     def artifact(
         self,
         *,
-        format: str,
+        format_id: str,
         files: dict[str, BlobRef],
         entry: str | None = None,
         media_type: str | None = None,
         metadata: JsonObject | None = None,
     ) -> Artifact:
         return Artifact(
-            format=format,
+            format_id=format_id,
             media_type=media_type,
             data=ArtifactData(files=files, entry=entry),
             metadata=metadata,
@@ -117,7 +117,7 @@ def test_bundle_exports_widget_assets_state_and_buffers() -> None:
 
     artifact = anywidget_exporters.bundle(DemoWidget(count=7), ctx)
 
-    assert artifact.format == "anywidget.bundle.v1"
+    assert artifact.format_id == "anywidget.bundle.v1"
     assert artifact.media_type == "application/vnd.moexport.anywidget+json"
     assert artifact.data.type == "bundle"
     assert artifact.data.entry == "descriptor"
@@ -181,13 +181,13 @@ def test_bundle_dedupes_identical_widget_files_across_value_names(
     first_ctx = BundleExporterContext(
         scenario_id="default",
         value_name="left_widget",
-        format_name="bundle",
+        artifact_name="bundle",
         blob_store=store,
     )
     second_ctx = BundleExporterContext(
         scenario_id="default",
         value_name="right_widget",
-        format_name="bundle",
+        artifact_name="bundle",
         blob_store=store,
     )
 

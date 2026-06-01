@@ -128,8 +128,8 @@ function manifestValue(value: unknown, label: string): ManifestValue {
   const record = object(value, label);
   return {
     source: sourceRecord(record.source, `${label}.source`),
-    formats: array(record.formats, `${label}.formats`).map((format, index) =>
-      string(format, `${label}.formats[${index}]`),
+    artifacts: array(record.artifacts, `${label}.artifacts`).map((artifact, index) =>
+      string(artifact, `${label}.artifacts[${index}]`),
     ),
   };
 }
@@ -174,8 +174,8 @@ function manifestScenario(value: unknown, label: string): ManifestScenario {
   const scenario: ManifestScenario = {
     id: string(record.id, `${label}.id`),
     state: jsonObject(record.state, `${label}.state`),
-    values: stringRecord(record.values, `${label}.values`, (formats, formatsLabel) =>
-      stringRecord(formats, formatsLabel, artifactRecord),
+    values: stringRecord(record.values, `${label}.values`, (artifacts, artifactsLabel) =>
+      stringRecord(artifacts, artifactsLabel, artifactRecord),
     ),
   };
 
@@ -276,18 +276,18 @@ function validateCatalog(
         );
       }
 
-      for (const formatName of declaration.formats) {
-        if (!scenarioValue[formatName]) {
+      for (const artifactName of declaration.artifacts) {
+        if (!scenarioValue[artifactName]) {
           throw new Error(
-            `${label}.scenarios.${scenario.id}.values.${valueName} must include declared format ${JSON.stringify(
-              formatName,
+            `${label}.scenarios.${scenario.id}.values.${valueName} must include declared artifact ${JSON.stringify(
+              artifactName,
             )}.`,
           );
         }
       }
     }
 
-    for (const [valueName, formats] of Object.entries(scenario.values)) {
+    for (const [valueName, artifacts] of Object.entries(scenario.values)) {
       const declaration = values[valueName];
       if (!declaration) {
         throw new Error(
@@ -297,12 +297,12 @@ function validateCatalog(
         );
       }
 
-      const declaredFormats = new Set(declaration.formats);
-      for (const formatName of Object.keys(formats)) {
-        if (!declaredFormats.has(formatName)) {
+      const declaredArtifacts = new Set(declaration.artifacts);
+      for (const artifactName of Object.keys(artifacts)) {
+        if (!declaredArtifacts.has(artifactName)) {
           throw new Error(
-            `${label}.scenarios.${scenario.id}.values.${valueName} contains undeclared format ${JSON.stringify(
-              formatName,
+            `${label}.scenarios.${scenario.id}.values.${valueName} contains undeclared artifact ${JSON.stringify(
+              artifactName,
             )}.`,
           );
         }

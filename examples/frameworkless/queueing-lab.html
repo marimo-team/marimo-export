@@ -7,7 +7,7 @@
     <script type="importmap">
       {
         "imports": {
-          "@marimo-team/export-reader": "../../packages/reader/dist/read-export.js",
+          "@marimo-team/export-reader": "../../packages/reader/dist/index.js",
           "@marimo-team/export-loader-arrow": "../../packages/loader-arrow/dist/index.js",
           "@marimo-team/export-loader-parquet": "../../packages/loader-parquet/dist/index.js",
           "@marimo-team/export-loader-vegalite": "../../packages/loader-vegalite/dist/index.js",
@@ -355,7 +355,7 @@
     </main>
 
     <script type="module">
-      import { htmlLoader, jsonLoader, readLatestExport } from "@marimo-team/export-reader";
+      import { exportRoot, htmlLoader, jsonLoader, openExport } from "@marimo-team/export-reader";
       import { arrowLoader } from "@marimo-team/export-loader-arrow";
       import { parquetLoader } from "@marimo-team/export-loader-parquet";
       import { vegaliteLoader } from "@marimo-team/export-loader-vegalite";
@@ -363,8 +363,7 @@
       const root = "./exports/queueing-lab/";
       const $ = (selector) => document.querySelector(selector);
 
-      const exp = await readLatestExport({
-        root,
+      const exp = await openExport(exportRoot(root), {
         loaders: [
           jsonLoader("queue.summary.json.v1"),
           htmlLoader("queue.note.html.v1"),
@@ -404,11 +403,15 @@
       async function loadScenario(scenario) {
         try {
           $("#status").textContent = `Loading ${label(scenario)}...`;
-          const summaryHandle = exp.get({ scenario, value: "summary", format: "json" });
-          const curveHandle = exp.get({ scenario, value: "response_curve", format: "arrow" });
-          const arrivalsHandle = exp.get({ scenario, value: "arrivals", format: "parquet" });
-          const chartHandle = exp.get({ scenario, value: "chart", format: "vegalite" });
-          const noteHandle = exp.get({ scenario, value: "note", format: "html" });
+          const summaryHandle = exp.artifact({ scenario, value: "summary", artifact: "json" });
+          const curveHandle = exp.artifact({
+            scenario,
+            value: "response_curve",
+            artifact: "arrow",
+          });
+          const arrivalsHandle = exp.artifact({ scenario, value: "arrivals", artifact: "parquet" });
+          const chartHandle = exp.artifact({ scenario, value: "chart", artifact: "vegalite" });
+          const noteHandle = exp.artifact({ scenario, value: "note", artifact: "html" });
 
           const [summary, curve, arrivals, chart, note] = await Promise.all([
             summaryHandle.load(),
