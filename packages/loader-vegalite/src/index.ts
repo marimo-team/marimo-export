@@ -1,5 +1,4 @@
 import {
-  defineLoader,
   type ExportBlob,
   type ExportLoader,
   type ExportLoaderContext,
@@ -23,12 +22,12 @@ export interface VegaLiteChart {
 }
 
 export function vegaliteLoader(defaults: VegaLiteRenderOptions = {}): ExportLoader<VegaLiteChart> {
-  return defineLoader({
+  return {
     formatId: vegaliteFormat,
     load(context: ExportLoaderContext) {
       return createVegaLiteHandle(context, defaults);
     },
-  });
+  };
 }
 
 function createVegaLiteHandle(

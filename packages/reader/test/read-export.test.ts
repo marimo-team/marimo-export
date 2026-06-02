@@ -1,11 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {
-  jsonLoader,
-  readExport,
-  type Export,
-  type ExportArchive,
-} from "@marimo-team/export-reader";
+import { readExport, type Export, type ExportArchive } from "@marimo-team/export-reader";
 import {
   archiveBytes,
   dataFile,
@@ -22,7 +17,12 @@ import {
 } from "./fixtures/export-fixture.js";
 
 const selection = { scenario: "default", value: "value", format: "json" };
-const json = jsonLoader<{ ok: boolean }>("json.v1");
+const json = {
+  formatId: "json.v1",
+  load(ctx) {
+    return ctx.entry().json<{ ok: boolean }>();
+  },
+} satisfies import("@marimo-team/export-reader").ExportLoader<{ ok: boolean }>;
 
 test("readExport rejects latest manifest hrefs outside the hosted root", async () => {
   const index = rootIndexFor(validManifest());

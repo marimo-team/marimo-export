@@ -7,7 +7,7 @@ import { parseExportSpec, type ExportSpec } from "@marimo-team/export-client";
 
 test("frameworkless server archive module builds a valid public export spec", async () => {
   const specModuleUrl = pathToFileURL(
-    path.resolve(process.cwd(), "../../examples/frameworkless/server-archive-spec.mjs"),
+    path.resolve(process.cwd(), "../../examples/frameworkless/generated/server-archive-spec.js"),
   ).href;
   const specModule = (await import(specModuleUrl)) as {
     createQueueingArchiveSpec(parseSpec: typeof parseExportSpec): ExportSpec;

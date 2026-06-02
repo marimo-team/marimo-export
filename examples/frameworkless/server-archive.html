@@ -517,7 +517,7 @@
         parseExportSpec,
       } from "@marimo-team/export-client/browser";
       import { readExport } from "@marimo-team/export-reader";
-      import { createQueueingArchiveSpec } from "./server-archive-spec.mjs";
+      import { createQueueingArchiveSpec } from "./generated/server-archive-spec.js";
 
       const $ = (selector) => document.querySelector(selector);
       const state = { archive: null };

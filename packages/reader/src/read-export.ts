@@ -5,7 +5,6 @@ import type {
   ExportFile,
   ExportLoader,
   ExportLoaderContext,
-  ExportLoaderSelector,
   ExportOptions,
   FormatRecord,
   FormatSelection,
@@ -118,32 +117,6 @@ async function openArchiveExport(options: ArchiveReadOptions): Promise<ExportArc
     manifest,
     source,
   });
-}
-
-export function defineLoader<T>(loader: ExportLoader<T>): ExportLoader<T> {
-  return loader;
-}
-
-export function jsonLoader<T = unknown>(formatIds: string | readonly string[]): ExportLoader<T> {
-  return defineLoader({
-    ...loaderFormats(formatIds),
-    load(context) {
-      return context.entry().json<T>();
-    },
-  });
-}
-
-export function textLoader(formatIds: string | readonly string[]): ExportLoader<string> {
-  return defineLoader({
-    ...loaderFormats(formatIds),
-    load(context) {
-      return context.entry().text();
-    },
-  });
-}
-
-export function htmlLoader(formatIds: string | readonly string[]): ExportLoader<string> {
-  return textLoader(formatIds);
 }
 
 interface ReaderOptions {
@@ -624,10 +597,6 @@ function loaderSupports(loader: ExportLoader, formatId: string): boolean {
     return true;
   }
   return loader.formatIds?.includes(formatId) ?? false;
-}
-
-function loaderFormats(formatIds: string | readonly string[]): ExportLoaderSelector {
-  return typeof formatIds === "string" ? { formatId: formatIds } : { formatIds };
 }
 
 function rootUrl(root: string | URL): URL {

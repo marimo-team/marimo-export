@@ -9,6 +9,7 @@ packages/*/src/**/*.d.ts.map
 examples/*/node_modules/
 examples/*/.astro/
 examples/*/dist/
+nogit/
 .venv/
 __pycache__/
 **/__pycache__/

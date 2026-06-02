@@ -1,6 +1,5 @@
 import { tableFromIPC } from "@uwdata/flechette";
 import {
-  defineLoader,
   type ExportBlob,
   type ExportLoader,
   type ExportLoaderContext,
@@ -30,12 +29,12 @@ export interface ArrowTable {
 }
 
 export function arrowLoader(defaults: ArrowLoadOptions = {}): ExportLoader<ArrowTable> {
-  return defineLoader({
+  return {
     formatId: dataframeArrowFormat,
     load(context: ExportLoaderContext) {
       return createArrowHandle(context, defaults);
     },
-  });
+  };
 }
 
 function createArrowHandle(context: ExportLoaderContext, defaults: ArrowLoadOptions): ArrowTable {
