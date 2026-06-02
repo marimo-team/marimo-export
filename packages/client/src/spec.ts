@@ -91,7 +91,7 @@ export type ReportCellInput = {
 );
 
 export interface ReportSourceInput {
-  cells: ReportCellInput[];
+  cells: readonly [ReportCellInput, ...ReportCellInput[]];
   include_source?: boolean;
   on_error?: "raise" | "record";
 }
@@ -124,16 +124,14 @@ export type BuiltinFormatMap = Partial<Record<BuiltinFormatName, BuiltinFormatCo
 export type ExplicitFormatMap = Record<string, ExplicitFormat>;
 
 export type NamedBuiltinFormat = {
-  [Name in BuiltinFormatName]: Record<Name, BuiltinFormatConfig>;
+  [Name in BuiltinFormatName]: Record<Name, BuiltinFormatConfig> &
+    Partial<Record<Exclude<BuiltinFormatName, Name>, never>>;
 }[BuiltinFormatName];
-
-export type NamedExplicitFormat = Record<string, ExplicitFormat>;
 
 export type FormatInput =
   | BuiltinFormatName
   | { format: BuiltinFormatName; options?: JsonObject }
-  | NamedBuiltinFormat
-  | NamedExplicitFormat;
+  | NamedBuiltinFormat;
 
 export interface ValueSpec {
   source: SourceSpec;
