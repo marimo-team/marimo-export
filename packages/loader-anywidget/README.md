@@ -6,6 +6,14 @@ This package hydrates an exported AnyWidget bundle in a browser page. It
 includes the format loader and runtime needed to mount the widget without
 Python, Pyodide, or a marimo server.
 
+## Installation
+
+```bash
+npm install @marimo-team/export-loader-anywidget @marimo-team/export-reader
+```
+
+## Usage
+
 ```ts
 import { anywidgetLoader } from "@marimo-team/export-loader-anywidget";
 import { readExport } from "@marimo-team/export-reader";
@@ -23,13 +31,13 @@ const widget = await handle.load(anywidget);
 const mounted = await widget.mount(document.querySelector("#widget")!);
 
 try {
-  // The widget is mounted and can be bridged to application state here.
+  // Bridge model state to the host app while the widget is mounted.
 } finally {
   await mounted.unmount();
 }
 ```
 
-Mechanics:
+## Contract
 
 - Supports `anywidget.bundle.v1`.
 - Reads the descriptor, frontend module, optional CSS, JSON state, and buffers.

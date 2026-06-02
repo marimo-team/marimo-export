@@ -6,6 +6,12 @@ The reader opens a hosted root, local directory, or in-memory archive. It select
 records by `scenario`, `value`, and authored `format` name. It never talks to a
 marimo server and never executes Python.
 
+## Installation
+
+```bash
+npm install @marimo-team/export-reader
+```
+
 ## Open A Hosted Export
 
 ```ts
