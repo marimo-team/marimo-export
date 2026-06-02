@@ -23,7 +23,7 @@ export function validateExportRootIndex(
   value: unknown,
   label = "export root index",
 ): ExportRootIndex {
-  const record = object(value, label);
+  const record = strictObject(value, label, ["schema", "version", "latest", "bundles"]);
   const schema = literal(record.schema, ROOT_INDEX_SCHEMA, `${label}.schema`);
   const version = integer(record.version, `${label}.version`);
   const latest = record.latest === null ? null : rootBundle(record.latest, `${label}.latest`);
@@ -40,7 +40,18 @@ export function validateExportRootIndex(
 }
 
 export function validateExportManifest(value: unknown, label = "export manifest"): ExportManifest {
-  const record = object(value, label);
+  const record = strictObject(value, label, [
+    "schema",
+    "version",
+    "id",
+    "sha256",
+    "notebook",
+    "scenario_set",
+    "capture",
+    "values",
+    "scenarios",
+    "provenance",
+  ]);
   const values = stringRecord(record.values, `${label}.values`, manifestValue);
   const scenarios = array(record.scenarios, `${label}.scenarios`).map((scenario, index) =>
     manifestScenario(scenario, `${label}.scenarios[${index}]`),
@@ -80,7 +91,13 @@ export function safeBundlePath(path: string, label: string): string {
 }
 
 function rootBundle(value: unknown, label: string): ExportRootBundle {
-  const record = object(value, label);
+  const record = strictObject(value, label, [
+    "id",
+    "sha256",
+    "manifest_href",
+    "updated_at",
+    "latest_invocation_href",
+  ]);
   return {
     id: string(record.id, `${label}.id`),
     sha256: string(record.sha256, `${label}.sha256`),
@@ -97,7 +114,7 @@ function rootBundle(value: unknown, label: string): ExportRootBundle {
 }
 
 function notebook(value: unknown, label: string): NotebookRecord {
-  const record = object(value, label);
+  const record = strictObject(value, label, ["name", "source", "source_sha256"]);
   return {
     name: nullableString(record.name, `${label}.name`),
     source: record.source === null ? null : blobRef(record.source, `${label}.source`),
@@ -109,7 +126,7 @@ function notebook(value: unknown, label: string): NotebookRecord {
 }
 
 function identity(value: unknown, label: string): IdentityRecord {
-  const record = object(value, label);
+  const record = strictObject(value, label, ["id", "sha256"]);
   return {
     id: string(record.id, `${label}.id`),
     sha256: string(record.sha256, `${label}.sha256`),
@@ -117,7 +134,7 @@ function identity(value: unknown, label: string): IdentityRecord {
 }
 
 function captureRecord(value: unknown, label: string): CaptureRecord {
-  const record = object(value, label);
+  const record = strictObject(value, label, ["id", "request_sha256"]);
   return {
     id: string(record.id, `${label}.id`),
     request_sha256: string(record.request_sha256, `${label}.request_sha256`),
@@ -125,7 +142,7 @@ function captureRecord(value: unknown, label: string): CaptureRecord {
 }
 
 function manifestValue(value: unknown, label: string): ManifestValue {
-  const record = object(value, label);
+  const record = strictObject(value, label, ["source", "formats"]);
   return {
     source: sourceRecord(record.source, `${label}.source`),
     formats: array(record.formats, `${label}.formats`).map((format, index) =>
@@ -170,7 +187,7 @@ function sourceRecord(value: unknown, label: string): SourceRecord {
 }
 
 function manifestScenario(value: unknown, label: string): ManifestScenario {
-  const record = object(value, label);
+  const record = strictObject(value, label, ["id", "state", "declared_state", "values"]);
   const scenario: ManifestScenario = {
     id: string(record.id, `${label}.id`),
     state: jsonObject(record.state, `${label}.state`),
@@ -190,7 +207,7 @@ function manifestScenario(value: unknown, label: string): ManifestScenario {
 }
 
 function formatRecord(value: unknown, label: string): FormatRecord {
-  const record = object(value, label);
+  const record = strictObject(value, label, ["format_id", "media_type", "data", "metadata"]);
   return {
     format_id: string(record.format_id, `${label}.format_id`),
     media_type: nullableString(record.media_type, `${label}.media_type`),
@@ -200,7 +217,7 @@ function formatRecord(value: unknown, label: string): FormatRecord {
 }
 
 function formatData(value: unknown, label: string): FormatData {
-  const record = object(value, label);
+  const record = strictObject(value, label, ["type", "files", "entry"]);
   const files = stringRecord(record.files, `${label}.files`, blobRef);
   const entry = nullableString(record.entry, `${label}.entry`);
   if (entry !== null && !(entry in files)) {
@@ -215,7 +232,7 @@ function formatData(value: unknown, label: string): FormatData {
 }
 
 function blobRef(value: unknown, label: string): BlobRef {
-  const record = object(value, label);
+  const record = strictObject(value, label, ["href", "media_type", "size", "sha256"]);
   return {
     href: safeBundlePath(string(record.href, `${label}.href`), `${label}.href`),
     media_type: nullableString(record.media_type, `${label}.media_type`),
@@ -225,7 +242,11 @@ function blobRef(value: unknown, label: string): BlobRef {
 }
 
 function provenance(value: unknown, label: string): ProvenanceRecord {
-  const record = object(value, label);
+  const record = strictObject(value, label, [
+    "invocations_index_href",
+    "source_spec_sha256",
+    "source_spec",
+  ]);
   const result: ProvenanceRecord = {};
 
   if (record.invocations_index_href !== undefined) {
@@ -359,6 +380,20 @@ function object(value: unknown, label: string): Record<string, unknown> {
     throw new Error(`${label} must be an object.`);
   }
   return value;
+}
+
+function strictObject(
+  value: unknown,
+  label: string,
+  keys: readonly string[],
+): Record<string, unknown> {
+  const record = object(value, label);
+  const allowed = new Set(keys);
+  const extra = Object.keys(record).find((key) => !allowed.has(key));
+  if (extra !== undefined) {
+    throw new Error(`${label} has unexpected field ${JSON.stringify(extra)}.`);
+  }
+  return record;
 }
 
 function array(value: unknown, label: string): unknown[] {

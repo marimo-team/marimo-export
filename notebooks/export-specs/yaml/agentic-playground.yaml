@@ -85,7 +85,7 @@ values:
     source:
       def: sparkline_svg
     formats:
-      svg:
+      - format: svg
         export:
           type: code
           code: |

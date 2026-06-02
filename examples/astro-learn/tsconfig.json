@@ -3,6 +3,7 @@
   "compilerOptions": {
     "paths": {
       "@marimo-team/export-client": ["../../packages/client/src/index"],
+      "@marimo-team/export-client/workspace": ["../../packages/client/src/workspace"],
       "@/*": ["./src/*"]
     }
   },

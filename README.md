@@ -97,6 +97,10 @@ Use `@marimo-team/export-client/browser` for frameworkless pages that need a
 plain `fetch` implementation and do not import the generated marimo OpenAPI
 client.
 
+Use `@marimo-team/export-client/workspace` when a build step needs to list
+running sessions, list workspace notebooks, or read notebook source from the
+marimo workspace API.
+
 ## Development
 
 Install dependencies with pnpm and run package commands through the workspace:

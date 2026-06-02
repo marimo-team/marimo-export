@@ -61,8 +61,9 @@ def test_export_spec_parses_finance_like_shape() -> None:
                 },
                 "prices_preview": {
                     "source": {"expr": "df.head(10)"},
-                    "formats": {
-                        "custom": {
+                    "formats": [
+                        {
+                            "format": "custom",
                             "export": {
                                 "type": "code",
                                 "code": (
@@ -72,7 +73,7 @@ def test_export_spec_parses_finance_like_shape() -> None:
                             },
                             "options": {"limit": 10},
                         }
-                    },
+                    ],
                 },
             },
         }
@@ -187,6 +188,27 @@ def test_export_spec_rejects_unknown_format_shorthand() -> None:
         )
 
 
+def test_export_spec_rejects_custom_format_maps() -> None:
+    with pytest.raises(ValidationError, match="custom format 'excel'"):
+        parse_export_spec(
+            {
+                "values": {
+                    "prices": {
+                        "source": {"expr": "df"},
+                        "formats": {
+                            "excel": {
+                                "export": {
+                                    "type": "ref",
+                                    "ref": "moexport.exporters.core:json",
+                                }
+                            }
+                        },
+                    }
+                }
+            }
+        )
+
+
 @pytest.mark.parametrize(
     ("source", "message"),
     [
@@ -251,15 +273,16 @@ def test_export_spec_rejects_explicit_null_format_options() -> None:
                 "values": {
                     "prices": {
                         "source": {"expr": "df"},
-                        "formats": {
-                            "custom": {
+                        "formats": [
+                            {
+                                "format": "custom",
                                 "export": {
                                     "type": "ref",
                                     "ref": "moexport.exporters.core:json",
                                 },
                                 "options": None,
                             }
-                        },
+                        ],
                     }
                 }
             }
@@ -341,14 +364,15 @@ def test_export_spec_rejects_reserved_builtin_format_option_keys() -> None:
             "values": {
                 "prices": {
                     "source": {"def": "df"},
-                    "formats": {
-                        "custom": {
+                    "formats": [
+                        {
+                            "format": "custom",
                             "export": {
                                 "type": "code",
                                 "code": b"def export(value, ctx):\n    return value",
-                            }
+                            },
                         }
-                    },
+                    ],
                 }
             }
         },

@@ -19,8 +19,8 @@ class ScratchpadResult:
 
 
 @dataclass(frozen=True)
-class RuntimeInstall:
-    """Runtime installation requested before export."""
+class Runtime:
+    """Runtime package installed before export when the kernel lacks moexport."""
 
     package: str
     module: str = "moexport"
@@ -43,7 +43,7 @@ class SessionInfo:
 
 @dataclass(frozen=True)
 class ExportResult:
-    """Static export bundle result returned by `ExportClient.export(...)`."""
+    """Static export bundle result returned by `Client.export(...)`."""
 
     bundle_path: str
     manifest_path: str
@@ -59,7 +59,7 @@ class ExportResult:
 
 @dataclass(frozen=True)
 class ExportArchiveResult:
-    """In-memory archive result returned by `ExportClient.archive(...)`."""
+    """In-memory archive result returned by `Client.archive(...)`."""
 
     bytes: bytes
     media_type: str

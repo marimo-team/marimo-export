@@ -32,52 +32,28 @@ values:
       def: queue_summary
     formats:
       json:
-        export:
-          type: ref
-          ref: moexport.exporters.core:json
-        options:
-          filename: queue-summary.json
-          format_id: queue.summary.json.v1
-          metadata:
-            kind: queue-summary
+        filename: queue-summary.json
+        format_id: queue.summary.json.v1
+        metadata:
+          kind: queue-summary
   arrivals:
     source:
       def: arrival_distribution
-    formats:
-      arrow:
-        export:
-          type: ref
-          ref: moexport.exporters.dataframe:arrow
-      parquet:
-        export:
-          type: ref
-          ref: moexport.exporters.dataframe:parquet
+    formats: [arrow, parquet]
   response_curve:
     source:
       def: queue_curve
-    formats:
-      arrow:
-        export:
-          type: ref
-          ref: moexport.exporters.dataframe:arrow
+    formats: [arrow]
   chart:
     source:
       def: wait_chart
-    formats:
-      vegalite:
-        export:
-          type: ref
-          ref: moexport.exporters.altair:vegalite
+    formats: [vegalite]
   note:
     source:
       def: queue_note
     formats:
       html:
-        export:
-          type: ref
-          ref: moexport.exporters.core:html
-        options:
-          filename: queue-note.html
-          format_id: queue.note.html.v1
-          metadata:
-            kind: marimo-markdown-output
+        filename: queue-note.html
+        format_id: queue.note.html.v1
+        metadata:
+          kind: marimo-markdown-output

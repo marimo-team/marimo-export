@@ -112,7 +112,7 @@ class CodeStateValue(SpecModel):
     code: str = Field(
         description=(
             "Python expression evaluated in the running notebook runtime before "
-            "calling `mox.evaluate`."
+            "calling the evaluator."
         ),
     )
 
@@ -281,8 +281,14 @@ def _normalize_format_item(value: object, label: str) -> tuple[str, object]:
 
     mapping = cast(Mapping[object, object], value)
     if "format" in mapping:
-        _require_exact_keys(mapping, {"format", "options"}, f"{label}.format")
         name = _required_string(mapping["format"], f"{label}.format")
+        if "export" in mapping:
+            _require_exact_keys(mapping, {"format", "export", "options"}, label)
+            return name, {
+                "export": mapping["export"],
+                "options": mapping.get("options", {}),
+            }
+        _require_exact_keys(mapping, {"format", "options"}, f"{label}.format")
         options = mapping.get("options", {})
         return name, _builtin_format(name, options)
 
@@ -295,6 +301,10 @@ def _normalize_format_item(value: object, label: str) -> tuple[str, object]:
 
 def _normalize_format_mapping(name: str, value: object) -> object:
     if isinstance(value, Mapping) and "export" in value:
+        if name not in BUILTIN_FORMAT_EXPORTERS:
+            raise ValueError(
+                f"custom format {name!r} must use {{format, export, options}}"
+            )
         return value
     if name in BUILTIN_FORMAT_EXPORTERS:
         if isinstance(value, Mapping) and _has_reserved_format_option(

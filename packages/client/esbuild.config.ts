@@ -21,4 +21,10 @@ await Promise.all([
     outfile: "dist/browser.js",
     platform: "browser",
   }),
+  build({
+    ...shared,
+    entryPoints: ["src/workspace.ts"],
+    outfile: "dist/workspace.js",
+    platform: "browser",
+  }),
 ]);

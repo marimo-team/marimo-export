@@ -20,21 +20,24 @@ from moexport.client._session import resolve_session
 from moexport.client._types import (
     ExportArchiveResult,
     ExportResult,
-    RuntimeInstall,
+    Runtime,
     SessionInfo,
     SpecInput,
 )
 
 
 @dataclass(frozen=True)
-class ExportClient:
+class Client:
     """Drive static exports from one running marimo server."""
 
     server: str
     notebook: str | None = None
     session_id: str | None = None
     token: str | None = None
-    runtime: Literal["preinstalled"] | RuntimeInstall = "preinstalled"
+    runtime: Literal["preinstalled"] | Runtime = "preinstalled"
+
+    def __post_init__(self) -> None:
+        _runtime_request(self.runtime, None)
 
     def export(
         self,
@@ -42,18 +45,20 @@ class ExportClient:
         *,
         to: str | Path | None = None,
         paths: Iterable[str | Path] = (),
-        runtime: Literal["preinstalled"] | RuntimeInstall | None = None,
+        runtime: Literal["preinstalled"] | Runtime | None = None,
         timeout: int = 120,
     ) -> ExportResult:
         """Write a static export bundle from the resolved session."""
 
-        session = self._session()
-        self._ensure_runtime(session, runtime)
+        requested_runtime = _runtime_request(self.runtime, runtime)
         export_marker = marker("EXPORT")
+        code = export_code(spec, to=to, paths=paths, marker=export_marker)
+        session = self._session()
+        self._ensure_runtime(session, requested_runtime)
         result = execute_scratchpad(
             self.server,
             session.session_id,
-            export_code(spec, to=to, paths=paths, marker=export_marker),
+            code,
             token=self.token,
             timeout=timeout,
         )
@@ -65,18 +70,20 @@ class ExportClient:
         spec: SpecInput,
         *,
         paths: Iterable[str | Path] = (),
-        runtime: Literal["preinstalled"] | RuntimeInstall | None = None,
+        runtime: Literal["preinstalled"] | Runtime | None = None,
         timeout: int = 120,
     ) -> ExportArchiveResult:
         """Return an in-memory static export archive from the resolved session."""
 
-        session = self._session()
-        self._ensure_runtime(session, runtime)
+        requested_runtime = _runtime_request(self.runtime, runtime)
         archive_marker = marker("ARCHIVE")
+        code = archive_code(spec, paths=paths, marker=archive_marker)
+        session = self._session()
+        self._ensure_runtime(session, requested_runtime)
         result = execute_scratchpad(
             self.server,
             session.session_id,
-            archive_code(spec, paths=paths, marker=archive_marker),
+            code,
             token=self.token,
             timeout=timeout,
         )
@@ -94,10 +101,9 @@ class ExportClient:
     def _ensure_runtime(
         self,
         session: SessionInfo,
-        runtime: Literal["preinstalled"] | RuntimeInstall | None,
+        runtime: Literal["preinstalled"] | Runtime,
     ) -> None:
-        requested = runtime if runtime is not None else self.runtime
-        if requested == "preinstalled":
+        if runtime == "preinstalled":
             if can_import(
                 self.server,
                 session.session_id,
@@ -107,24 +113,49 @@ class ExportClient:
                 return
             raise RuntimeError(
                 "moexport is not importable in the target kernel. "
-                "Pass RuntimeInstall(package=...) to install it before export."
-            )
-        if not isinstance(requested, RuntimeInstall):
-            raise TypeError(
-                "runtime must be 'preinstalled' or RuntimeInstall(package=...)"
+                "Pass Runtime(package=...) to install it before export."
             )
         ensure_runtime(
             server=self.server,
             session_id=session.session_id,
-            package=requested.package,
-            module=requested.module,
-            manager=requested.manager,
-            source=requested.source,
-            force=requested.force,
-            timeout_ms=requested.timeout_ms,
-            poll_interval_ms=requested.poll_interval_ms,
+            package=runtime.package,
+            module=runtime.module,
+            manager=runtime.manager,
+            source=runtime.source,
+            force=runtime.force,
+            timeout_ms=runtime.timeout_ms,
+            poll_interval_ms=runtime.poll_interval_ms,
             token=self.token,
         )
+
+
+def connect(
+    server: str,
+    *,
+    notebook: str | None = None,
+    session_id: str | None = None,
+    token: str | None = None,
+    runtime: Literal["preinstalled"] | Runtime = "preinstalled",
+) -> Client:
+    """Return a client for one running marimo server."""
+
+    return Client(
+        server=server,
+        notebook=notebook,
+        session_id=session_id,
+        token=token,
+        runtime=runtime,
+    )
+
+
+def _runtime_request(
+    default: Literal["preinstalled"] | Runtime,
+    override: Literal["preinstalled"] | Runtime | None,
+) -> Literal["preinstalled"] | Runtime:
+    requested = default if override is None else override
+    if requested == "preinstalled" or isinstance(requested, Runtime):
+        return requested
+    raise TypeError("runtime must be 'preinstalled' or Runtime(package=...)")
 
 
 def _export_result(payload: dict[str, Any], session: SessionInfo) -> ExportResult:

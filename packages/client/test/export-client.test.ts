@@ -2,31 +2,25 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   createMarimoExportClient as createServerMarimoExportClient,
-  createMarimoExportClientFromTransport,
-  createMarimoWorkspaceClient as createServerMarimoWorkspaceClient,
-  parseExportSpec,
-  type ExecuteScratchpadOptions,
   type ExportResult,
   type MarimoExportClient,
   type MarimoExportClientOptions,
-  type MarimoExportTransport,
-  type MarimoWorkspaceClient,
-  type ScratchpadExecutionMetadata,
 } from "@marimo-team/export-client";
-import {
-  createMarimoExportClient as createBrowserMarimoExportClient,
-  createMarimoWorkspaceClient as createBrowserMarimoWorkspaceClient,
-} from "@marimo-team/export-client/browser";
+import { createMarimoExportClient as createBrowserMarimoExportClient } from "@marimo-team/export-client/browser";
+import { createMarimoExportClientFromTransport } from "../src/export-client.js";
+import type {
+  ExecuteScratchpadOptions,
+  MarimoExportTransport,
+  ScratchpadExecutionMetadata,
+} from "../src/types.js";
 
 type ExportClientFactory = (options: MarimoExportClientOptions) => MarimoExportClient;
-type WorkspaceClientFactory = (options: MarimoExportClientOptions) => MarimoWorkspaceClient;
-type ExportFetch = NonNullable<MarimoExportClientOptions["fetch"]>;
 type ExportPayload = Omit<
   ExportResult,
   "sessionId" | "sessionName" | "sessionPath" | "sessionInitializationId"
 >;
 
-const specInput = {
+const spec = {
   scenarios: [{ id: "default" }],
   values: {
     title: {
@@ -35,8 +29,6 @@ const specInput = {
     },
   },
 } as const;
-
-const spec = parseExportSpec(specInput);
 
 const exportPayload = {
   bundlePath: "/tmp/export/bundles/sha256-demo",
@@ -52,26 +44,75 @@ const clientFactories: Array<{ name: string; create: ExportClientFactory }> = [
   { name: "browser entry", create: createBrowserMarimoExportClient },
 ];
 
-const workspaceFactories: Array<{ name: string; create: WorkspaceClientFactory }> = [
-  { name: "server entry", create: createServerMarimoWorkspaceClient },
-  { name: "browser entry", create: createBrowserMarimoWorkspaceClient },
-];
+test("MarimoExportClient exports bundles and archives through one client", async () => {
+  const requests: ExecuteScratchpadOptions[] = [];
+  const client = createMarimoExportClientFromTransport(scratchpadTransport(requests));
 
-test("MarimoExportClient exports bundles and archives through one public interface", async () => {
-  await assertExport();
+  const result = await client.export(spec, {
+    sessionId: "session-1",
+    outputRoot: "/tmp/export",
+    paths: ["/tmp/local-exporters"],
+    runtime: "preinstalled",
+  });
+  const archive = await client.archive(spec, {
+    sessionId: "session-1",
+    paths: ["/tmp/local-exporters"],
+    runtime: "preinstalled",
+  });
+
+  assert.deepEqual(
+    requests.map((request) => request.sessionId),
+    ["session-1", "session-1", "session-1", "session-1"],
+  );
+  assertImportMetadata(requests[0]?.metadata);
+  assertExportMetadata(requests[1]?.metadata);
+  assertImportMetadata(requests[2]?.metadata);
+  assertArchiveMetadata(requests[3]?.metadata);
+  assert.equal(result.bundlePath, exportPayload.bundlePath);
+  assert.equal(result.manifestPath, exportPayload.manifestPath);
+  assert.deepEqual(result.manifest, exportPayload.manifest);
+  assert.deepEqual(result.invocation, exportPayload.invocation);
+  assert.equal(result.sessionId, "session-1");
+  assert.equal(result.sessionName, null);
+  assert.equal(result.sessionPath, null);
+  assert.equal(result.sessionInitializationId, null);
+  assert.deepEqual([...archive.bytes], [...new TextEncoder().encode("zip-bytes")]);
+  assert.equal(archive.mediaType, "application/vnd.marimo.static-export+zip");
+  assert.equal(archive.sessionId, "session-1");
 });
 
-test("MarimoWorkspaceClient lists sessions and workspace notebooks", async (t) => {
-  for (const factory of workspaceFactories) {
-    await t.test(factory.name, async () => {
-      await assertLists(factory.create);
-    });
-  }
+test("MarimoExportClient resolves a notebook name before export", async () => {
+  const requests: ExecuteScratchpadOptions[] = [];
+  const client = createMarimoExportClientFromTransport(
+    scratchpadTransport(requests, {
+      runningNotebooks: [
+        {
+          sessionId: "session-1",
+          name: "finance.py",
+          path: "/work/finance.py",
+          initializationId: "init-1",
+        },
+      ],
+    }),
+  );
+
+  const result = await client.export(spec, {
+    notebook: "finance.py",
+    runtime: "preinstalled",
+  });
+
+  assertImportMetadata(requests[0]?.metadata);
+  assertExportMetadata(requests[1]?.metadata, { outputRoot: undefined, paths: undefined });
+  assert.equal(result.sessionName, "finance.py");
+  assert.equal(result.sessionPath, "/work/finance.py");
+  assert.equal(result.sessionInitializationId, "init-1");
 });
 
 test("MarimoExportClient reports missing preinstalled runtime through the import probe", async () => {
   const requests: ExecuteScratchpadOptions[] = [];
-  const client = createMarimoExportClientFromTransport(scratchpadTransport(requests, false));
+  const client = createMarimoExportClientFromTransport(
+    scratchpadTransport(requests, { canImport: false }),
+  );
 
   await assert.rejects(
     client.export(spec, {
@@ -84,7 +125,7 @@ test("MarimoExportClient reports missing preinstalled runtime through the import
   assertImportMetadata(requests[0]?.metadata);
 });
 
-test("MarimoExportClient propagates scratchpad HTTP failures from the import probe", async (t) => {
+test("public entries propagate scratchpad HTTP failures from the import probe", async (t) => {
   for (const factory of clientFactories) {
     await t.test(factory.name, async () => {
       const client = factory.create({
@@ -107,73 +148,38 @@ test("MarimoExportClient propagates scratchpad HTTP failures from the import pro
   }
 });
 
-async function assertLists(createClient: WorkspaceClientFactory): Promise<void> {
-  const requests: string[] = [];
-  const client = createClient({
-    server: "https://marimo.example.test",
-    fetch: listFetch(requests),
-  });
+test("public entries validate runtime options before contacting marimo", async (t) => {
+  for (const factory of clientFactories) {
+    await t.test(factory.name, async () => {
+      const requests: Request[] = [];
+      const client = factory.create({
+        server: "https://marimo.example.test",
+        fetch: async (request) => {
+          requests.push(request);
+          return new Response("unexpected", { status: 500 });
+        },
+      });
 
-  assert.deepEqual(await client.sessions.list(), [
-    {
-      sessionId: "session-1",
-      name: "finance.py",
-      path: "/work/finance.py",
-      initializationId: "init-1",
-    },
-  ]);
-  assert.deepEqual(await client.notebooks.list(), [
-    {
-      id: "finance",
-      name: "finance.py",
-      path: "/work/notebooks/finance.py",
-    },
-  ]);
-  assert.equal(await client.notebooks.source("/work/notebooks/finance.py"), "# Finance\n");
-  assert.deepEqual(requests, [
-    "/api/home/running_notebooks",
-    "/api/home/workspace_files",
-    "/api/files/file_details",
-  ]);
-}
-
-async function assertExport(): Promise<void> {
-  const requests: ExecuteScratchpadOptions[] = [];
-  const client = createMarimoExportClientFromTransport(scratchpadTransport(requests));
-
-  const result = await client.export(spec, {
-    sessionId: "session-1",
-    outputRoot: "/tmp/export",
-    paths: ["/tmp/local-exporters"],
-    runtime: "preinstalled",
-  });
-  const archive = await client.archive(spec, {
-    sessionId: "session-1",
-    paths: ["/tmp/local-exporters"],
-    runtime: "preinstalled",
-  });
-
-  assert.equal(requests.length, 4);
-  assert.deepEqual(
-    requests.map((request) => request.sessionId),
-    ["session-1", "session-1", "session-1", "session-1"],
-  );
-  assert.equal(requests[0]?.metadata?.kind, "import");
-  assert.equal(requests[2]?.metadata?.kind, "import");
-  assertExportMetadata(requests[1]?.metadata);
-  assertArchiveMetadata(requests[3]?.metadata);
-  assert.equal(result.bundlePath, exportPayload.bundlePath);
-  assert.equal(result.manifestPath, exportPayload.manifestPath);
-  assert.deepEqual(result.manifest, exportPayload.manifest);
-  assert.deepEqual(result.invocation, exportPayload.invocation);
-  assert.equal(result.sessionId, "session-1");
-  assert.equal(result.sessionName, null);
-  assert.equal(result.sessionPath, null);
-  assert.equal(result.sessionInitializationId, null);
-  assert.deepEqual([...archive.bytes], [...new TextEncoder().encode("zip-bytes")]);
-  assert.equal(archive.mediaType, "application/vnd.marimo.static-export+zip");
-  assert.equal(archive.sessionId, "session-1");
-}
+      await assert.rejects(
+        client.archive(spec, {
+          sessionId: "session-1",
+          // @ts-expect-error Runtime strings other than "preinstalled" are rejected before I/O.
+          runtime: "bad",
+        }),
+        /runtime must be "preinstalled"/,
+      );
+      await assert.rejects(
+        client.export(spec, {
+          sessionId: "session-1",
+          // @ts-expect-error Runtime install requests need a package specifier.
+          runtime: { module: "moexport" },
+        }),
+        /runtime\.package/,
+      );
+      assert.equal(requests.length, 0);
+    });
+  }
+});
 
 function assertImportMetadata(metadata: ScratchpadExecutionMetadata | undefined): void {
   assert.ok(metadata);
@@ -184,13 +190,19 @@ function assertImportMetadata(metadata: ScratchpadExecutionMetadata | undefined)
   assertMarker(metadata.marker);
 }
 
-function assertExportMetadata(metadata: ScratchpadExecutionMetadata | undefined): void {
+function assertExportMetadata(
+  metadata: ScratchpadExecutionMetadata | undefined,
+  expected: { outputRoot: string | undefined; paths: readonly string[] | undefined } = {
+    outputRoot: "/tmp/export",
+    paths: ["/tmp/local-exporters"],
+  },
+): void {
   assert.ok(metadata);
   if (metadata.kind !== "export") {
     assert.fail(`expected export metadata, received ${metadata.kind}`);
   }
-  assert.equal(metadata.outputRoot, "/tmp/export");
-  assert.deepEqual(metadata.paths, ["/tmp/local-exporters"]);
+  assert.equal(metadata.outputRoot, expected.outputRoot);
+  assert.deepEqual(metadata.paths, expected.paths);
   assert.deepEqual(metadata.spec, spec);
   assertMarker(metadata.marker);
 }
@@ -211,11 +223,18 @@ function assertMarker(marker: string): void {
 
 function scratchpadTransport(
   requests: ExecuteScratchpadOptions[],
-  canImport = true,
+  options: { canImport?: boolean; runningNotebooks?: unknown[] } = {},
 ): MarimoExportTransport {
+  const canImport = options.canImport ?? true;
   return {
-    async POST() {
-      throw new Error("unexpected POST call");
+    async POST(path) {
+      if (path === "/api/home/running_notebooks") {
+        return {
+          response: Response.json({}),
+          data: { files: options.runningNotebooks ?? [] },
+        };
+      }
+      throw new Error(`unexpected POST call: ${path}`);
     },
     async executeScratchpad(request) {
       requests.push(request);
@@ -234,50 +253,6 @@ function scratchpadTransport(
     async openNotebook() {
       throw new Error("unexpected openNotebook call");
     },
-  };
-}
-
-function listFetch(requests: string[]): ExportFetch {
-  return async (request) => {
-    const path = new URL(request.url).pathname;
-    requests.push(path);
-    if (path === "/api/home/running_notebooks") {
-      return Response.json({
-        files: [
-          {
-            sessionId: "session-1",
-            name: "finance.py",
-            path: "/work/finance.py",
-            initializationId: "init-1",
-          },
-          { name: "missing-session.py" },
-        ],
-      });
-    }
-    if (path === "/api/home/workspace_files") {
-      return Response.json({
-        files: [
-          {
-            id: "folder",
-            isMarimoFile: false,
-            name: "notebooks",
-            path: "/work/notebooks",
-            children: [
-              {
-                id: "finance",
-                isMarimoFile: true,
-                name: "finance.py",
-                path: "/work/notebooks/finance.py",
-              },
-            ],
-          },
-        ],
-      });
-    }
-    if (path === "/api/files/file_details") {
-      return Response.json({ contents: "# Finance\n" });
-    }
-    throw new Error(`unexpected request: ${path}`);
   };
 }
 

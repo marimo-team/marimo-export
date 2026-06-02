@@ -47,12 +47,34 @@ class NotebookSource(TypedDict):
     source: str
 
 
+class NotebookDefRecord(TypedDict):
+    """Definition metadata discovered by marimo's notebook parser."""
+
+    name: str
+    cell_id: str
+    cell_name: str | None
+    disabled: bool
+    refs: list[str]
+    preview: list[str]
+
+
+class NotebookCellRecord(TypedDict):
+    """Cell metadata discovered by marimo's notebook parser."""
+
+    cell_id: str
+    name: str | None
+    disabled: bool
+    defs: list[str]
+    refs: list[str]
+    preview: list[str]
+
+
 class NotebookDefs(TypedDict):
     """Defs and cell metadata discovered by marimo's notebook parser."""
 
     notebook: dict[str, str]
-    defs: list[dict[str, object]]
-    cells: list[dict[str, object]]
+    defs: list[NotebookDefRecord]
+    cells: list[NotebookCellRecord]
     root_defs: list[str]
 
 
@@ -89,33 +111,32 @@ def inspect_notebook_defs(notebook: NotebookReference) -> NotebookDefs:
     resolved = _resolve_notebook(notebook)
     app = _load_required_app(resolved.path)
 
-    cells = []
-    defs = []
+    cells: list[NotebookCellRecord] = []
+    defs: list[NotebookDefRecord] = []
     for cell_id, cell in app._cell_manager.valid_cells():
         impl = cell._cell
         cell_defs = sorted(impl.defs)
         cell_refs = sorted(impl.refs)
-        name = getattr(impl, "name", None)
-        cell_record = {
+        cell_name = getattr(impl, "name", None)
+        cell_record: NotebookCellRecord = {
             "cell_id": str(cell_id),
-            "name": name,
+            "name": cell_name,
             "disabled": impl.config.disabled,
             "defs": cell_defs,
             "refs": cell_refs,
             "preview": _preview(impl.code),
         }
         cells.append(cell_record)
-        defs.extend(
-            {
-                "name": name,
+        for def_name in cell_defs:
+            def_record: NotebookDefRecord = {
+                "name": def_name,
                 "cell_id": str(cell_id),
-                "cell_name": name,
+                "cell_name": cell_name,
                 "disabled": impl.config.disabled,
                 "refs": cell_refs,
                 "preview": _preview(impl.code),
             }
-            for name in cell_defs
-        )
+            defs.append(def_record)
 
     return {
         "notebook": {
@@ -153,9 +174,9 @@ def capture_notebook(
     ```
 
     Only this synthetic cell is scheduled by the outer script runner.
-    ``mox.evaluate`` runs scenario-specific notebook execution, so overrides
-    such as ``symbols=["CRWV", "MSFT"]`` apply before expensive downstream
-    cells run.
+    The evaluator runs scenario-specific notebook execution, so overrides such
+    as ``symbols=["CRWV", "MSFT"]`` apply before expensive downstream cells
+    run.
     """
 
     run_options = _run_options(run)
@@ -242,7 +263,7 @@ def _load_required_app(notebook: Path) -> App:
 
 def _append_export_cell(app: App) -> tuple[CellId_t, str, str, str]:
     # The hidden cell receives `spec` and `to` through the script runner's
-    # globals. It intentionally skips notebook defs. `mox.evaluate` owns
+    # globals. It intentionally skips notebook defs. The evaluator owns
     # dependency planning and scenario overrides.
     token = uuid.uuid4().hex
     result_name = f"__moexport_result_{token}"
@@ -305,7 +326,7 @@ def _run_export_cell(
         #       to=__moexport_to_abcd,
         #   )
         #
-        # Inside that cell, `mox.evaluate` performs the actual notebook graph
+        # Inside that cell, the evaluator performs the actual notebook graph
         # planning for each scenario.
         runner.cells_to_run = deque([cell_id])
         _outputs, defs = runner.run()

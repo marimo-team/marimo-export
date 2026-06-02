@@ -88,20 +88,7 @@
       "source": {
         "def": "df"
       },
-      "formats": {
-        "arrow": {
-          "export": {
-            "type": "ref",
-            "ref": "moexport.exporters.dataframe:arrow"
-          }
-        },
-        "parquet": {
-          "export": {
-            "type": "ref",
-            "ref": "moexport.exporters.dataframe:parquet"
-          }
-        }
-      }
+      "formats": ["arrow", "parquet"]
     },
     "change_desc": {
       "source": {
@@ -120,14 +107,10 @@
       "source": {
         "def": "symbols_chart"
       },
-      "formats": {
-        "vegalite": {
-          "export": {
-            "type": "ref",
-            "ref": "moexport.exporters.altair:vegalite"
-          }
-        },
-        "png_nogrid": {
+      "formats": [
+        "vegalite",
+        {
+          "format": "png_nogrid",
           "export": {
             "type": "code",
             "code": "import json\n\n\ndef export(value, ctx, **options):\n    import vl_convert\n\n    spec = value.to_dict()\n    config = dict(spec.get(\"config\") or {})\n    axis = dict(config.get(\"axis\") or {})\n    axis[\"grid\"] = False\n    config[\"axis\"] = axis\n    spec[\"config\"] = config\n\n    scale = options.get(\"scale\", 2)\n    blob = ctx.write_blob(\n        \"chart-nogrid.png\",\n        vl_convert.vegalite_to_png(\n            vl_spec=json.dumps(spec, allow_nan=False),\n            scale=scale,\n        ),\n        media_type=\"image/png\",\n    )\n    return {\n        \"format_id\": \"image.png.nogrid.v1\",\n        \"media_type\": \"image/png\",\n        \"data\": {\n            \"type\": \"bundle\",\n            \"files\": {\"image\": blob},\n            \"entry\": \"image\",\n        },\n        \"metadata\": {\n            \"source_format\": \"vegalite.v1\",\n            \"grid\": False,\n            \"scale\": scale,\n        },\n    }\n"
@@ -136,20 +119,21 @@
             "scale": 2
           }
         }
-      }
+      ]
     },
     "ohlc_dashboard": {
       "source": {
         "def": "widget"
       },
-      "formats": {
-        "bundle": {
+      "formats": [
+        {
+          "format": "bundle",
           "export": {
             "type": "ref",
             "ref": "moexport.exporters.anywidget:bundle"
           }
         }
-      }
+      ]
     }
   }
 }

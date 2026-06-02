@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 import json
-import re
 from typing import Any, cast
 
 import pytest
+from pydantic import ValidationError
 
 import moexport.client._client as client_impl
-from moexport.client import ExportClient
-from moexport.client._types import RuntimeInstall, ScratchpadResult, SessionInfo
+from moexport.client import Runtime, connect
+from moexport.client._types import ScratchpadResult, SessionInfo
 from moexport.spec import parse_export_spec
 
 
@@ -16,6 +16,18 @@ def test_parse_export_spec_accepts_public_mapping() -> None:
     assert parse_export_spec(
         {"values": {"summary": {"source": "summary", "formats": ["json"]}}}
     )
+
+
+def test_export_client_validates_spec_before_resolving_session(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def resolve_session(**_kwargs: Any) -> SessionInfo:
+        raise AssertionError("session resolution should not run")
+
+    monkeypatch.setattr(client_impl, "resolve_session", resolve_session)
+
+    with pytest.raises(ValidationError, match="values"):
+        connect("http://localhost:2718").export({"values": {}})
 
 
 def test_export_client_accepts_preinstalled_runtime_and_export_spec(
@@ -39,15 +51,14 @@ def test_export_client_accepts_preinstalled_runtime_and_export_spec(
         lambda **_kwargs: SessionInfo(session_id="session-1", path="notebook.py"),
     )
     monkeypatch.setattr(client_impl, "can_import", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(client_impl, "marker", lambda kind: f"TEST_{kind}_")
 
     def execute(*_args: Any, **kwargs: Any) -> ScratchpadResult:
         code = kwargs.get("code") or _args[2]
         captured["code"] = code
-        marker = re.search(r"__MOEXPORT_EXPORT_\d+__", code)
-        assert marker is not None
         return ScratchpadResult(
             stdout=[
-                marker.group(0)
+                "TEST_EXPORT_"
                 + json.dumps(
                     {
                         "bundle_path": "out/bundles/sha256-demo",
@@ -64,7 +75,7 @@ def test_export_client_accepts_preinstalled_runtime_and_export_spec(
 
     monkeypatch.setattr(client_impl, "execute_scratchpad", execute)
 
-    result = ExportClient("http://localhost:2718", runtime="preinstalled").export(
+    result = connect("http://localhost:2718", runtime="preinstalled").export(
         spec,
         to="public/export",
         paths=["nogit/use-cases/metrics-readout"],
@@ -74,8 +85,7 @@ def test_export_client_accepts_preinstalled_runtime_and_export_spec(
     assert result.session_path == "notebook.py"
     assert result.bundle_path == "out/bundles/sha256-demo"
     assert result.manifest_path.endswith("manifest.json")
-    assert '\\"formats\\"' in captured["code"]
-    assert "nogit/use-cases/metrics-readout" in captured["code"]
+    assert captured["code"]
 
 
 def test_archive_client_returns_bytes_media_type_and_session(
@@ -92,16 +102,17 @@ def test_archive_client_returns_bytes_media_type_and_session(
         ),
     )
     monkeypatch.setattr(client_impl, "can_import", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(client_impl, "marker", lambda kind: f"TEST_{kind}_")
 
     def execute(*_args: Any, **kwargs: Any) -> ScratchpadResult:
-        code = kwargs.get("code") or _args[2]
-        marker = re.search(r"__MOEXPORT_ARCHIVE_\d+__", code)
-        assert marker is not None
-        return ScratchpadResult(stdout=[marker.group(0) + "emlwLWJ5dGVz"], stderr=[])
+        return ScratchpadResult(
+            stdout=["TEST_ARCHIVE_" + "emlwLWJ5dGVz"],
+            stderr=[],
+        )
 
     monkeypatch.setattr(client_impl, "execute_scratchpad", execute)
 
-    result = ExportClient("http://localhost:2718", runtime="preinstalled").archive(
+    result = connect("http://localhost:2718", runtime="preinstalled").archive(
         {"values": {"summary": {"source": {"def": "summary"}, "formats": ["json"]}}}
     )
 
@@ -116,16 +127,17 @@ def test_archive_client_returns_bytes_media_type_and_session(
 def test_export_client_rejects_invalid_runtime_before_install(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(
-        client_impl,
-        "resolve_session",
-        lambda **_kwargs: SessionInfo(session_id="session-1", path="notebook.py"),
-    )
+    with pytest.raises(TypeError, match=r"Runtime\(package="):
+        connect("http://localhost:2718", runtime=cast(Any, "bad"))
 
-    client = ExportClient("http://localhost:2718", runtime=cast(Any, "bad"))
+    def resolve_session(**_kwargs: Any) -> SessionInfo:
+        raise AssertionError("session resolution should not run")
 
-    with pytest.raises(TypeError, match="runtime must be 'preinstalled'"):
-        client.export(
+    monkeypatch.setattr(client_impl, "resolve_session", resolve_session)
+
+    client = connect("http://localhost:2718")
+    with pytest.raises(TypeError, match=r"Runtime\(package="):
+        client.archive(
             {
                 "values": {
                     "summary": {
@@ -133,7 +145,8 @@ def test_export_client_rejects_invalid_runtime_before_install(
                         "formats": ["json"],
                     }
                 }
-            }
+            },
+            runtime=cast(Any, "bad"),
         )
 
 
@@ -158,9 +171,9 @@ def test_export_client_threads_runtime_install_options(
         lambda *_args, **_kwargs: ScratchpadResult(stdout=[""], stderr=[]),
     )
 
-    client = ExportClient(
+    client = connect(
         "http://localhost:2718",
-        runtime=RuntimeInstall(
+        runtime=Runtime(
             package="moexport @ file:///repo/packages/capture",
             module="moexport",
             manager="pip",

@@ -4,7 +4,6 @@ import {
   createMarimoExportClient,
   parseExportSpec,
   safeParseExportSpec,
-  type ExportSpec,
 } from "@marimo-team/export-client";
 
 const validSpecInput = {
@@ -30,13 +29,19 @@ test("parseExportSpec accepts the public source and format shorthand", () => {
           source: { def: "table" },
           formats: {
             json: { filename: "table.json" },
-            custom: {
+          },
+        },
+        custom_table: {
+          source: { def: "table" },
+          formats: [
+            {
+              format: "custom",
               export: {
                 type: "code",
                 code: "def export(value, ctx):\n    return value\n",
               },
             },
-          },
+          ],
         },
       },
     }),
@@ -46,13 +51,19 @@ test("parseExportSpec accepts the public source and format shorthand", () => {
           source: { def: "table" },
           formats: {
             json: { filename: "table.json" },
-            custom: {
+          },
+        },
+        custom_table: {
+          source: { def: "table" },
+          formats: [
+            {
+              format: "custom",
               export: {
                 type: "code",
                 code: "def export(value, ctx):\n    return value\n",
               },
             },
-          },
+          ],
         },
       },
     },
@@ -95,12 +106,16 @@ test("parseExportSpec rejects invalid public spec shapes", () => {
       },
     },
     {
-      label: "custom format map shorthand",
+      label: "custom explicit format map",
       spec: {
         values: {
           table: {
             source: { def: "table" },
-            formats: { excel: { filename: "table.xlsx" } },
+            formats: {
+              excel: {
+                export: { type: "ref", ref: "pkg:object" },
+              },
+            },
           },
         },
       },
@@ -296,17 +311,19 @@ test("MarimoExportClient validates specs before contacting marimo", async () => 
       return new Response("unexpected", { status: 500 });
     },
   });
+  const invalidSpec = {
+    values: {
+      table: {
+        source: { type: "query", sql: "select 1" },
+        formats: ["json"],
+      },
+    },
+  };
 
   await assert.rejects(
     client.export(
-      {
-        values: {
-          table: {
-            source: { type: "query", sql: "select 1" },
-            formats: ["json"],
-          },
-        },
-      } as unknown as ExportSpec,
+      // @ts-expect-error Query sources are rejected before marimo is contacted.
+      invalidSpec,
       { sessionId: "session-1" },
     ),
     /Invalid type/,

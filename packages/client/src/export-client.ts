@@ -6,21 +6,22 @@ import {
   listRunningNotebooks,
   listWorkspaceNotebookFiles,
   readWorkspaceNotebookSource,
-} from "./export-core";
+} from "./export-core.js";
 import type {
   ExportArchiveOptions,
   ExportArchiveResult,
   ExportOptions,
   ExportResult,
   MarimoExportTransport,
+  MarimoWorkspaceTransport,
   RunningNotebook,
   WorkspaceNotebook,
-} from "./types";
-import type { ExportSpec } from "./spec";
+} from "./types.js";
+import type { ExportSpecInput } from "./spec.js";
 
 export interface MarimoExportClient {
-  export(spec: ExportSpec, options?: ExportOptions): Promise<ExportResult>;
-  archive(spec: ExportSpec, options?: ExportArchiveOptions): Promise<ExportArchiveResult>;
+  export(spec: ExportSpecInput, options?: ExportOptions): Promise<ExportResult>;
+  archive(spec: ExportSpecInput, options?: ExportArchiveOptions): Promise<ExportArchiveResult>;
 }
 
 export interface MarimoWorkspaceClient {
@@ -53,7 +54,7 @@ export function createMarimoExportClientFromTransport(
 }
 
 export function createMarimoWorkspaceClientFromTransport(
-  client: MarimoExportTransport,
+  client: MarimoWorkspaceTransport,
 ): MarimoWorkspaceClient {
   return {
     sessions: {

@@ -184,8 +184,9 @@ def _notebook_snapshot_spec() -> dict[str, Any]:
         "values": {
             "notebook": {
                 "source": {"snapshot": True},
-                "formats": {
-                    "linear": {
+                "formats": [
+                    {
+                        "format": "linear",
                         "export": {
                             "type": "ref",
                             "ref": "moexport.exporters.notebook:linear",
@@ -194,7 +195,7 @@ def _notebook_snapshot_spec() -> dict[str, Any]:
                             "include_empty_outputs": True,
                         },
                     }
-                },
+                ],
             }
         },
     }
