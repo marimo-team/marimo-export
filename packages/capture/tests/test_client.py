@@ -1,13 +1,19 @@
 from __future__ import annotations
 
+import asyncio
 import json
-import re
+import sys
+import tempfile
+import textwrap
+import types
+from pathlib import Path
 from typing import Any, cast
 
 import pytest
 from pydantic import ValidationError
 
 import moexport.client._client as client_impl
+from moexport.client._code import transport_spec
 from moexport.client import Runtime, connect
 from moexport.client._types import ScratchpadResult, SessionInfo
 from moexport.spec import parse_export_spec
@@ -95,8 +101,17 @@ def test_export_client_accepts_preinstalled_runtime_and_export_spec(
     assert result.session_path == "notebook.py"
     assert result.bundle_path == "out/bundles/sha256-demo"
     assert result.manifest_path.endswith("manifest.json")
-    assert_fresh_import_code(captured["code"])
-    assert transported_spec(captured["code"])["values"]["readout"]["formats"] == [
+    assert_generated_code_runs_through_moexport(
+        captured["code"],
+        [
+            {
+                "kind": "capture",
+                "spec": transport_spec(spec),
+                "to": "public/export",
+            }
+        ],
+    )
+    assert transport_spec(spec)["values"]["readout"]["formats"] == [
         {
             "format": "metrics",
             "export": {
@@ -145,7 +160,26 @@ def test_archive_client_returns_bytes_media_type_and_session(
     assert result.session_name == "finance.py"
     assert result.session_path == "/work/finance.py"
     assert result.session_initialization_id == "init-1"
-    assert_fresh_import_code(captured["code"])
+    assert_generated_code_runs_through_moexport(
+        captured["code"],
+        [
+            {
+                "kind": "archive",
+                "spec": transport_spec(
+                    parse_export_spec(
+                        {
+                            "values": {
+                                "summary": {
+                                    "source": {"def": "summary"},
+                                    "formats": ["json"],
+                                }
+                            }
+                        }
+                    )
+                ),
+            }
+        ],
+    )
 
 
 def test_export_client_rejects_invalid_runtime_before_install(
@@ -234,19 +268,82 @@ def test_export_client_threads_runtime_install_options(
     }
 
 
-def transported_spec(code: str) -> dict[str, Any]:
-    match = re.search(r"^__moexport_spec = json\.loads\((.+)\)$", code, re.MULTILINE)
-    if match is None:
-        raise AssertionError("generated code did not load a serialized export spec")
+def assert_generated_code_runs_through_moexport(
+    code: str,
+    expected_calls: list[dict[str, Any]],
+) -> None:
+    existing = {
+        name: module
+        for name, module in sys.modules.items()
+        if name == "moexport" or name.startswith("moexport.")
+    }
+    original_path = list(sys.path)
+    try:
+        calls = run_generated_code_with_fake_moexport(code)
+        assert calls == expected_calls
+    finally:
+        for name in list(sys.modules):
+            if name == "moexport" or name.startswith("moexport."):
+                del sys.modules[name]
+        sys.modules.update(existing)
+        sys.path[:] = original_path
 
-    spec_json = json.loads(match.group(1))
-    spec = json.loads(spec_json)
-    assert parse_export_spec(spec)
-    return spec
 
+def run_generated_code_with_fake_moexport(code: str) -> list[dict[str, Any]]:
+    with tempfile.TemporaryDirectory(prefix="moexport-client-test-") as temp:
+        temp_path = Path(temp)
+        calls_path = temp_path / "calls.jsonl"
+        package_dir = temp_path / "moexport"
+        package_dir.mkdir()
+        (package_dir / "__init__.py").write_text(
+            f"""
+import json
+from pathlib import Path
 
-def assert_fresh_import_code(code: str) -> None:
-    assert "for __moexport_module in list(sys.modules):" in code
-    assert "__moexport_module == 'moexport'" in code
-    assert "__moexport_module.startswith('moexport.')" in code
-    assert "del sys.modules[__moexport_module]" in code
+CALLS_PATH = Path({str(calls_path)!r})
+
+def _record(payload):
+    with CALLS_PATH.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(payload, allow_nan=False) + "\\n")
+
+class Result:
+    bundle_path = "out/bundles/sha256-demo"
+    manifest_path = "out/bundles/sha256-demo/manifest.json"
+    invocation_path = "out/bundles/sha256-demo/traces/run.json"
+    invocation_index_path = "out/bundles/sha256-demo/traces/index.json"
+    manifest = {{}}
+    invocation = {{}}
+
+async def capture(spec, to=None):
+    _record({{"kind": "capture", "spec": spec, "to": to}})
+    return Result()
+""",
+            encoding="utf-8",
+        )
+        (package_dir / "archive.py").write_text(
+            f"""
+import base64
+import json
+from pathlib import Path
+
+CALLS_PATH = Path({str(calls_path)!r})
+
+async def emit_bundle_archive(spec, *, marker):
+    with CALLS_PATH.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps({{"kind": "archive", "spec": spec}}, allow_nan=False) + "\\n")
+    print(marker + base64.b64encode(b"zip-bytes").decode("ascii"))
+""",
+            encoding="utf-8",
+        )
+
+        sys.path.insert(0, temp)
+        sys.modules["moexport"] = types.ModuleType("moexport")
+        sys.modules["moexport.archive"] = types.ModuleType("moexport.archive")
+        namespace: dict[str, Any] = {}
+        exec("async def __run():\n" + textwrap.indent(code, "    "), namespace)
+        asyncio.run(namespace["__run"]())
+        return [
+            json.loads(line)
+            for line in calls_path.read_text(encoding="utf-8").splitlines()
+            if line
+        ]

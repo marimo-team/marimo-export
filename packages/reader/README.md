@@ -77,18 +77,14 @@ blob's size and SHA-256 digest before returning data. `url()` returns a direct
 bundle URL without reading bytes, so callers that fetch it directly own
 integrity checks.
 
-Common JSON, text, and HTML formats can use built-in loaders:
+Read JSON, text, and HTML formats directly from the selected entry:
 
 ```ts
-import { htmlLoader, jsonLoader, readExport } from "@marimo-team/export-reader";
+import { readExport } from "@marimo-team/export-reader";
 
 const exp = await readExport({ root: "/export/" });
-const summary = await exp
-  .get({ scenario: "default", value: "summary", format: "json" })
-  .load(jsonLoader("summary.json.v1"));
-const noteHtml = await exp
-  .get({ scenario: "default", value: "note", format: "html" })
-  .load(htmlLoader("note.html.v1"));
+const summary = await exp.get({ scenario: "default", value: "summary", format: "json" }).json();
+const noteHtml = await exp.get({ scenario: "default", value: "note", format: "html" }).text();
 ```
 
 Custom loaders match the portable `format_id` written by export. The authored
@@ -97,14 +93,12 @@ Custom loaders match the portable `format_id` written by export. The authored
 `handle.formatId` before running the loader.
 
 ```ts
-import { defineLoader } from "@marimo-team/export-reader";
-
-const svgLoader = defineLoader({
+const svgLoader = {
   formatId: "playground.sparkline.svg.v1",
   async load(ctx) {
     return ctx.entry().text();
   },
-});
+};
 ```
 
 ## API Surface
@@ -125,9 +119,7 @@ archives, which also has `dispose()`. Throws when the root index, manifest, or
 requested files fail validation. Hosted roots, local directories, and archives
 open the latest bundle from `index.json`.
 
-### `defineLoader(loader)`
-
-Returns an `ExportLoader`.
+### Loader Objects
 
 - `loader.formatId`: One format identifier, such as `dataframe.arrow.v1`.
   Mutually exclusive with `formatIds`.

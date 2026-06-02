@@ -463,19 +463,24 @@
     </main>
 
     <script type="module">
-      import {
-        defineLoader,
-        htmlLoader,
-        jsonLoader,
-        readExport,
-      } from "../../packages/reader/dist/index.js";
+      import { readExport } from "../../packages/reader/dist/index.js";
 
       const root = "./exports/agentic-playground/";
       const $ = (selector) => document.querySelector(selector);
 
-      const jsonFormats = jsonLoader(["playground.summary.json.v1", "playground.records.json.v1"]);
-      const noteHtmlLoader = htmlLoader("playground.note.html.v1");
-      const svgLoader = defineLoader({
+      const jsonFormats = {
+        formatIds: ["playground.summary.json.v1", "playground.records.json.v1"],
+        load(ctx) {
+          return ctx.entry().json();
+        },
+      };
+      const noteHtmlLoader = {
+        formatId: "playground.note.html.v1",
+        load(ctx) {
+          return ctx.entry().text();
+        },
+      };
+      const svgLoader = {
         formatId: "playground.sparkline.svg.v1",
         async load(ctx) {
           const entry = ctx.entry();
@@ -485,7 +490,7 @@
             url: entry.url(),
           };
         },
-      });
+      };
 
       const exportReader = await readExport({ root });
 

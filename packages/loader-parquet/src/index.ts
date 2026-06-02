@@ -1,5 +1,4 @@
 import {
-  defineLoader,
   type ExportBlob,
   type ExportLoader,
   type ExportLoaderContext,
@@ -33,12 +32,12 @@ export interface ParquetFile {
 }
 
 export function parquetLoader(defaults: ParquetReadOptions = {}): ExportLoader<ParquetFile> {
-  return defineLoader({
+  return {
     formatId: dataframeParquetFormat,
     load(context: ExportLoaderContext) {
       return createDataframeHandle(context, defaults);
     },
-  });
+  };
 }
 
 function createDataframeHandle(

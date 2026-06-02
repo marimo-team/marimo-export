@@ -1,5 +1,4 @@
 import {
-  defineLoader,
   type ExportBlob,
   type ExportLoader,
   type ExportLoaderContext,
@@ -60,12 +59,12 @@ export interface LoadedAnyWidget<T extends AnyWidgetState = AnyWidgetState> {
 export function anywidgetLoader<T extends AnyWidgetState = AnyWidgetState>(): ExportLoader<
   LoadedAnyWidget<T>
 > {
-  return defineLoader({
+  return {
     formatId: anywidgetFormat,
     async load(context: ExportLoaderContext) {
       return loadAnyWidget<T>(context);
     },
-  });
+  };
 }
 
 async function loadAnyWidget<T extends AnyWidgetState>(

@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import test from "node:test";
 import {
   createMarimoExportClient as createServerMarimoExportClient,
+  parseExportSpec,
   type ExportResult,
   type MarimoExportClient,
   type MarimoExportClientOptions,
@@ -86,8 +91,15 @@ test("MarimoExportClient exports bundles and archives through one client", async
   assertExportMetadata(requests[1]?.metadata);
   assertImportMetadata(requests[2]?.metadata);
   assertArchiveMetadata(requests[3]?.metadata);
-  assertFreshImportCode(requests[1]?.code);
-  assertFreshImportCode(requests[3]?.code);
+  assertGeneratedCodeRunsThroughMoexport(requests[1]?.code, {
+    kind: "capture",
+    spec: parseExportSpec(spec),
+    to: "/tmp/export",
+  });
+  assertGeneratedCodeRunsThroughMoexport(requests[3]?.code, {
+    kind: "archive",
+    spec: parseExportSpec(spec),
+  });
   assert.equal(result.bundlePath, exportPayload.bundlePath);
   assert.equal(result.manifestPath, exportPayload.manifestPath);
   assert.deepEqual(result.manifest, exportPayload.manifest);
@@ -110,8 +122,17 @@ test("MarimoExportClient transports custom formats through the public export pat
     runtime: "preinstalled",
   });
 
-  assertFreshImportCode(requests[1]?.code);
-  assert.deepEqual(readoutFormats(transportedSpec(requests[1]?.code)), [
+  assertExportMetadata(requests[1]?.metadata, {
+    outputRoot: undefined,
+    paths: undefined,
+    spec: parseExportSpec(customFormatSpec),
+  });
+  assertGeneratedCodeRunsThroughMoexport(requests[1]?.code, {
+    kind: "capture",
+    spec: parseExportSpec(customFormatSpec),
+    to: null,
+  });
+  assert.deepEqual(readoutFormats(parseExportSpec(customFormatSpec)), [
     {
       format: "metrics",
       export: {
@@ -234,7 +255,11 @@ function assertImportMetadata(metadata: ScratchpadExecutionMetadata | undefined)
 
 function assertExportMetadata(
   metadata: ScratchpadExecutionMetadata | undefined,
-  expected: { outputRoot: string | undefined; paths: readonly string[] | undefined } = {
+  expected: {
+    outputRoot: string | undefined;
+    paths: readonly string[] | undefined;
+    spec?: unknown;
+  } = {
     outputRoot: "/tmp/export",
     paths: ["/tmp/local-exporters"],
   },
@@ -245,7 +270,7 @@ function assertExportMetadata(
   }
   assert.equal(metadata.outputRoot, expected.outputRoot);
   assert.deepEqual(metadata.paths, expected.paths);
-  assert.deepEqual(metadata.spec, spec);
+  assert.deepEqual(metadata.spec, expected.spec ?? spec);
   assertMarker(metadata.marker);
 }
 
@@ -263,20 +288,100 @@ function assertMarker(marker: string): void {
   assert.ok(marker.length > 0);
 }
 
-function assertFreshImportCode(code: string | undefined): void {
+function assertGeneratedCodeRunsThroughMoexport(
+  code: string | undefined,
+  expected: { kind: "capture" | "archive"; spec: unknown; to?: string | null },
+): void {
   assert.ok(code);
-  assert.ok(code.includes("for __moexport_module in list(sys.modules):"));
-  assert.ok(code.includes("__moexport_module == 'moexport'"));
-  assert.ok(code.includes("__moexport_module.startswith('moexport.')"));
-  assert.ok(code.includes("del sys.modules[__moexport_module]"));
+  const calls = runGeneratedCodeWithFakeMoexport(code);
+  assert.deepEqual(calls, [canonicalJson(expected)]);
 }
 
-function transportedSpec(code: string | undefined): Record<string, unknown> {
-  assert.ok(code);
-  const match = /^__moexport_spec = json\.loads\((.+)\)$/m.exec(code);
-  assert.ok(match?.[1], "generated code did not load a serialized export spec");
-  const specJson = JSON.parse(match[1]) as string;
-  return JSON.parse(specJson) as Record<string, unknown>;
+function runGeneratedCodeWithFakeMoexport(code: string): unknown[] {
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "moexport-client-test-"));
+  const packageDir = path.join(tempDir, "moexport");
+  const callsPath = path.join(tempDir, "calls.jsonl");
+  mkdirSync(packageDir);
+  writeFileSync(
+    path.join(packageDir, "__init__.py"),
+    `
+import json
+from pathlib import Path
+
+CALLS_PATH = Path(${JSON.stringify(callsPath)})
+
+def _record(payload):
+    with CALLS_PATH.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(payload, allow_nan=False) + "\\n")
+
+class Result:
+    bundle_path = "/tmp/export/bundles/sha256-demo"
+    manifest_path = "/tmp/export/bundles/sha256-demo/manifest.json"
+    invocation_path = "/tmp/export/bundles/sha256-demo/traces/invocation.json"
+    invocation_index_path = "/tmp/export/bundles/sha256-demo/traces/index.json"
+    manifest = {"id": "sha256-demo"}
+    invocation = {"id": "invocation-demo"}
+
+async def capture(spec, to=None):
+    _record({"kind": "capture", "spec": spec, "to": to})
+    return Result()
+`,
+  );
+  writeFileSync(
+    path.join(packageDir, "archive.py"),
+    `
+import base64
+import json
+from pathlib import Path
+
+CALLS_PATH = Path(${JSON.stringify(callsPath)})
+
+async def emit_bundle_archive(spec, *, marker):
+    with CALLS_PATH.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps({"kind": "archive", "spec": spec}, allow_nan=False) + "\\n")
+    print(marker + base64.b64encode(b"zip-bytes").decode("ascii"))
+`,
+  );
+  const script = `
+import sys
+import types
+import asyncio
+sys.modules["moexport"] = types.ModuleType("moexport")
+sys.modules["moexport.archive"] = types.ModuleType("moexport.archive")
+
+async def __run():
+${indentPython(code)}
+
+asyncio.run(__run())
+`;
+  try {
+    const result = spawnSync(process.env.PYTHON ?? "python3", ["-c", script], {
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        PYTHONPATH: [tempDir, process.env.PYTHONPATH].filter(Boolean).join(path.delimiter),
+      },
+    });
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    return readFileSync(callsPath, "utf8")
+      .trim()
+      .split("\n")
+      .filter(Boolean)
+      .map((line) => JSON.parse(line) as unknown);
+  } finally {
+    rmSync(tempDir, { force: true, recursive: true });
+  }
+}
+
+function indentPython(code: string): string {
+  return code
+    .split("\n")
+    .map((line) => `    ${line}`)
+    .join("\n");
+}
+
+function canonicalJson(value: unknown): unknown {
+  return JSON.parse(JSON.stringify(value)) as unknown;
 }
 
 function readoutFormats(spec: Record<string, unknown>): unknown {
