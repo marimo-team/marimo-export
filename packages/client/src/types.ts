@@ -48,13 +48,16 @@ export interface WorkspaceNotebook {
   path: string;
 }
 
-export interface ExportOptions {
+export interface ExportArchiveOptions {
   sessionId?: string;
   notebook?: string;
-  outputRoot?: string;
   paths?: readonly string[];
   runtime?: RuntimeOption;
   timeoutMs?: number;
+}
+
+export interface ExportOptions extends ExportArchiveOptions {
+  outputRoot?: string;
 }
 
 export interface ExportResult {

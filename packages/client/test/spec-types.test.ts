@@ -1,4 +1,4 @@
-import type { ExportSpec } from "@marimo-team/export-client";
+import type { ExportSpec, MarimoExportClient } from "@marimo-team/export-client";
 
 const customExport = {
   type: "code",
@@ -91,3 +91,18 @@ void customFormatArrayItem;
 void multipleBuiltinFormatArrayItem;
 void emptyReport;
 void unknownSourceType;
+
+type ExportCallOptions = Parameters<MarimoExportClient["export"]>[1];
+type ArchiveCallOptions = Parameters<MarimoExportClient["archive"]>[1];
+
+const exportOptions = {
+  outputRoot: "/tmp/export",
+} satisfies ExportCallOptions;
+
+const archiveOptions = {
+  // @ts-expect-error Archives are in-memory results and do not write an output root.
+  outputRoot: "/tmp/export",
+} satisfies ArchiveCallOptions;
+
+void exportOptions;
+void archiveOptions;

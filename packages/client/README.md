@@ -128,8 +128,21 @@ invocation JSON, `sessionId`, `sessionName`, `sessionPath`, and
 
 ### `client.archive(spec, options?)`
 
-Runs the same export and returns zipped export bytes for API routes that stream
-the bundle to a caller.
+Runs the export in a temporary root and returns zipped export bytes for API
+routes that stream the bundle to a caller.
+
+- `spec`: `ExportSpec` with `scenarios`, `values`, and optional
+  `provenance`.
+- `options.notebook`: Notebook path or name to open or match.
+- `options.sessionId`: Existing marimo session id. Takes precedence over
+  `notebook`.
+- `options.paths`: Directories to prepend to kernel `sys.path` for local
+  exporters.
+- `options.runtime`: `"preinstalled"` or an explicit install request.
+- `options.timeoutMs`: Scratchpad execution timeout.
+
+Archive calls do not accept `outputRoot`. Use `client.export(...)` when the
+kernel should write a persistent export root.
 
 ### `createMarimoWorkspaceClient(options)`
 

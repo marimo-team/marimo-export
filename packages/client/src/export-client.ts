@@ -1,4 +1,5 @@
 import {
+  archiveRequest,
   archiveWithClient,
   exportRequest,
   exportWithClient,
@@ -7,6 +8,7 @@ import {
   readWorkspaceNotebookSource,
 } from "./export-core";
 import type {
+  ExportArchiveOptions,
   ExportArchiveResult,
   ExportOptions,
   ExportResult,
@@ -18,7 +20,7 @@ import type { ExportSpec } from "./spec";
 
 export interface MarimoExportClient {
   export(spec: ExportSpec, options?: ExportOptions): Promise<ExportResult>;
-  archive(spec: ExportSpec, options?: ExportOptions): Promise<ExportArchiveResult>;
+  archive(spec: ExportSpec, options?: ExportArchiveOptions): Promise<ExportArchiveResult>;
 }
 
 export interface MarimoWorkspaceClient {
@@ -44,7 +46,7 @@ export function createMarimoExportClientFromTransport(
     archive(spec, request = {}) {
       return archiveWithClient(spec, {
         client,
-        ...exportRequest(request),
+        ...archiveRequest(request),
       });
     },
   };

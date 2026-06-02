@@ -185,6 +185,8 @@ async function assertExport(createClient: ExportClientFactory): Promise<void> {
   assert.equal(result.sessionInitializationId, null);
   assert.equal(requests[1]?.code.includes("/tmp/local-exporters"), true);
   assert.equal(requests[3]?.code.includes("/tmp/local-exporters"), true);
+  assert.equal(requests[1]?.code.includes('to="/tmp/export"'), true);
+  assert.equal(requests[3]?.code.includes("to="), false);
   assert.deepEqual([...archive.bytes], [...new TextEncoder().encode("zip-bytes")]);
   assert.equal(archive.mediaType, "application/vnd.marimo.static-export+zip");
   assert.equal(archive.sessionId, "session-1");
