@@ -426,6 +426,7 @@ function exportCode(
   return [
     "import json",
     ...pathCode(paths),
+    ...freshImportCode(),
     "import moexport as mox",
     `__moexport_spec = json.loads(${JSON.stringify(specJson)})`,
     `__moexport_result = await mox.capture(__moexport_spec, to=${toExpression})`,
@@ -451,9 +452,8 @@ function archiveCode(
   return [
     "import json",
     ...pathCode(paths),
-    "import importlib",
+    ...freshImportCode(),
     "import moexport.archive as __moexport_archive",
-    "__moexport_archive = importlib.reload(__moexport_archive)",
     `__moexport_spec = json.loads(${JSON.stringify(specJson)})`,
     `await __moexport_archive.emit_bundle_archive(__moexport_spec, marker=${JSON.stringify(marker)})`,
   ].join("\n");
@@ -469,6 +469,17 @@ function pathCode(paths: readonly string[] | undefined): string[] {
     `for __moexport_path in ${JSON.stringify(paths)}:`,
     "    if __moexport_path not in sys.path:",
     "        sys.path.insert(0, __moexport_path)",
+    "importlib.invalidate_caches()",
+  ];
+}
+
+function freshImportCode(): string[] {
+  return [
+    "import importlib",
+    "import sys",
+    "for __moexport_module in list(sys.modules):",
+    "    if __moexport_module == 'moexport' or __moexport_module.startswith('moexport.'):",
+    "        del sys.modules[__moexport_module]",
     "importlib.invalidate_caches()",
   ];
 }

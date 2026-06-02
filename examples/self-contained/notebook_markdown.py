@@ -55,8 +55,9 @@ def notebook_markdown_spec(
         "values": {
             NOTEBOOK_MARKDOWN_VALUE: {
                 "source": {"snapshot": True},
-                "formats": {
-                    NOTEBOOK_MARKDOWN_FORMAT: {
+                "formats": [
+                    {
+                        "format": NOTEBOOK_MARKDOWN_FORMAT,
                         "export": {
                             "type": "ref",
                             "ref": "moexport.exporters.notebook:linear",
@@ -66,7 +67,7 @@ def notebook_markdown_spec(
                             "include_empty_outputs": True,
                         },
                     }
-                },
+                ],
             }
         },
     }

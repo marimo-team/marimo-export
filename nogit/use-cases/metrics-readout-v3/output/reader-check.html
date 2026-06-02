@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Metrics Readout Reader Check</title>
+    <style>
+      body {
+        margin: 0;
+        font:
+          15px/1.5 system-ui,
+          sans-serif;
+        color: #172033;
+        background: #f6f8fb;
+      }
+      main {
+        max-width: 760px;
+        margin: 0 auto;
+        padding: 32px 20px;
+      }
+      .panel {
+        background: #fff;
+        border: 1px solid #d9e0ea;
+        border-radius: 8px;
+        padding: 18px;
+      }
+      dt {
+        color: #5c667a;
+        margin-top: 12px;
+      }
+      dd {
+        margin: 4px 0 0;
+        font-weight: 650;
+      }
+      code {
+        overflow-wrap: anywhere;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Reader Check</h1>
+      <div class="panel">
+        <p id="status">Loading export bundle...</p>
+        <dl id="facts"></dl>
+      </div>
+    </main>
+    <script type="importmap">
+      {
+        "imports": {
+          "fflate": "../../../../node_modules/fflate/esm/browser.js"
+        }
+      }
+    </script>
+    <script type="module">
+      import { readExport } from "../../../../packages/reader/dist/index.js";
+
+      const status = document.querySelector("#status");
+      const facts = document.querySelector("#facts");
+      const exportRoot = new URL("../bundle/", window.location.href);
+
+      try {
+        const exp = await readExport({ root: exportRoot });
+        const scenario = exp.scenarios()[0];
+        const entry = exp.get({ scenario, value: "readout", format: "metrics" });
+        const payload = await entry.json();
+        status.textContent = "readExport loaded the latest metrics bundle.";
+        facts.innerHTML = [
+          ["Bundle id", exp.id],
+          ["Scenario", scenario],
+          ["Notebook", exp.notebook.name ?? "running notebook"],
+          ["Values", exp.values().join(", ")],
+          ["Formats", exp.formats("readout").join(", ")],
+          ["Readout items", String(Array.isArray(payload.items) ? payload.items.length : 0)],
+          ["Source spec hash", exp.sourceSpecSha256 ?? "not recorded"],
+        ]
+          .map(([label, value]) => `<dt>${label}</dt><dd><code>${value}</code></dd>`)
+          .join("");
+      } catch (error) {
+        status.textContent = `Reader check failed: ${error instanceof Error ? error.message : String(error)}`;
+        status.style.color = "#b42318";
+      }
+    </script>
+  </body>
+</html>

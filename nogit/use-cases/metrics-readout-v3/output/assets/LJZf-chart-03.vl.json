@@ -1,0 +1,179 @@
+{
+  "$schema": "https://vega.github.io/schema/vega-lite/v5.20.1.json",
+  "config": {
+    "view": {
+      "continuousHeight": 300,
+      "continuousWidth": 300
+    }
+  },
+  "data": {
+    "name": "data-d785bcb3f7b125a02d6607a5285fe436"
+  },
+  "datasets": {
+    "data-d785bcb3f7b125a02d6607a5285fe436": [
+      {
+        "avg_dau": 489.57142857142856,
+        "dau_mau": 11.3,
+        "label": "Mar 08",
+        "mau": 4331,
+        "wau": 1716,
+        "wau_mau": 39.6,
+        "week": "2026-03-08T00:00:00"
+      },
+      {
+        "avg_dau": 409.7142857142857,
+        "dau_mau": 8.8,
+        "label": "Mar 15",
+        "mau": 4652,
+        "wau": 2005,
+        "wau_mau": 43.1,
+        "week": "2026-03-15T00:00:00"
+      },
+      {
+        "avg_dau": 407.42857142857144,
+        "dau_mau": 8.8,
+        "label": "Mar 22",
+        "mau": 4652,
+        "wau": 1564,
+        "wau_mau": 33.6,
+        "week": "2026-03-22T00:00:00"
+      },
+      {
+        "avg_dau": 399.7142857142857,
+        "dau_mau": 8.4,
+        "label": "Mar 29",
+        "mau": 4759,
+        "wau": 1645,
+        "wau_mau": 34.6,
+        "week": "2026-03-29T00:00:00"
+      },
+      {
+        "avg_dau": 416.14285714285717,
+        "dau_mau": 8.9,
+        "label": "Apr 05",
+        "mau": 4677,
+        "wau": 1651,
+        "wau_mau": 35.3,
+        "week": "2026-04-05T00:00:00"
+      },
+      {
+        "avg_dau": 541.1428571428571,
+        "dau_mau": 12.3,
+        "label": "Apr 12",
+        "mau": 4400,
+        "wau": 1767,
+        "wau_mau": 40.2,
+        "week": "2026-04-12T00:00:00"
+      },
+      {
+        "avg_dau": 461.7142857142857,
+        "dau_mau": 9.3,
+        "label": "Apr 19",
+        "mau": 4969,
+        "wau": 2256,
+        "wau_mau": 45.4,
+        "week": "2026-04-19T00:00:00"
+      },
+      {
+        "avg_dau": 399.85714285714283,
+        "dau_mau": 8.0,
+        "label": "Apr 26",
+        "mau": 4985,
+        "wau": 1722,
+        "wau_mau": 34.5,
+        "week": "2026-04-26T00:00:00"
+      },
+      {
+        "avg_dau": 411.14285714285717,
+        "dau_mau": 8.2,
+        "label": "May 03",
+        "mau": 5034,
+        "wau": 1684,
+        "wau_mau": 33.5,
+        "week": "2026-05-03T00:00:00"
+      },
+      {
+        "avg_dau": 420.7142857142857,
+        "dau_mau": 8.5,
+        "label": "May 10",
+        "mau": 4943,
+        "wau": 1618,
+        "wau_mau": 32.7,
+        "week": "2026-05-10T00:00:00"
+      },
+      {
+        "avg_dau": 440.85714285714283,
+        "dau_mau": 10.1,
+        "label": "May 17",
+        "mau": 4368,
+        "wau": 1651,
+        "wau_mau": 37.8,
+        "week": "2026-05-17T00:00:00"
+      },
+      {
+        "avg_dau": 390.57142857142856,
+        "dau_mau": 9.0,
+        "label": "May 24",
+        "mau": 4319,
+        "wau": 1724,
+        "wau_mau": 39.9,
+        "week": "2026-05-24T00:00:00"
+      }
+    ]
+  },
+  "encoding": {
+    "tooltip": [
+      {
+        "field": "label",
+        "title": "Week",
+        "type": "nominal"
+      },
+      {
+        "field": "dau_mau",
+        "format": ".1f",
+        "title": "DAU/MAU %",
+        "type": "quantitative"
+      },
+      {
+        "field": "avg_dau",
+        "format": ".0f",
+        "title": "Avg DAU",
+        "type": "quantitative"
+      },
+      {
+        "field": "mau",
+        "title": "Rolling 28d MAU",
+        "type": "quantitative"
+      }
+    ],
+    "x": {
+      "axis": {
+        "labelAngle": -30
+      },
+      "field": "label",
+      "sort": null,
+      "title": "Week",
+      "type": "ordinal"
+    },
+    "y": {
+      "field": "dau_mau",
+      "scale": {
+        "domain": [0, 100]
+      },
+      "title": "DAU/MAU %",
+      "type": "quantitative"
+    }
+  },
+  "height": 180,
+  "mark": {
+    "color": "#FF5722",
+    "point": true,
+    "strokeWidth": 2,
+    "type": "line"
+  },
+  "title": "DAU/MAU %  |  >15% good, >25% exceptional for B2B (rolling 28-day MAU)",
+  "usermeta": {
+    "embedOptions": {}
+  },
+  "width": 960
+}

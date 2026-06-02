@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import Any, cast
 
 import pytest
@@ -37,9 +38,18 @@ def test_export_client_accepts_preinstalled_runtime_and_export_spec(
     spec = parse_export_spec(
         {
             "values": {
-                "summary": {
-                    "source": {"def": "summary"},
-                    "formats": ["json"],
+                "readout": {
+                    "source": {"def": "readout"},
+                    "formats": [
+                        {
+                            "format": "metrics",
+                            "export": {
+                                "type": "ref",
+                                "ref": "metrics_exporters:readout",
+                            },
+                            "options": {"title": "Metrics Readout"},
+                        }
+                    ],
                 }
             }
         }
@@ -85,12 +95,24 @@ def test_export_client_accepts_preinstalled_runtime_and_export_spec(
     assert result.session_path == "notebook.py"
     assert result.bundle_path == "out/bundles/sha256-demo"
     assert result.manifest_path.endswith("manifest.json")
-    assert captured["code"]
+    assert_fresh_import_code(captured["code"])
+    assert transported_spec(captured["code"])["values"]["readout"]["formats"] == [
+        {
+            "format": "metrics",
+            "export": {
+                "type": "ref",
+                "ref": "metrics_exporters:readout",
+            },
+            "options": {"title": "Metrics Readout"},
+        }
+    ]
 
 
 def test_archive_client_returns_bytes_media_type_and_session(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    captured: dict[str, Any] = {}
+
     monkeypatch.setattr(
         client_impl,
         "resolve_session",
@@ -105,6 +127,7 @@ def test_archive_client_returns_bytes_media_type_and_session(
     monkeypatch.setattr(client_impl, "marker", lambda kind: f"TEST_{kind}_")
 
     def execute(*_args: Any, **kwargs: Any) -> ScratchpadResult:
+        captured["code"] = kwargs.get("code") or _args[2]
         return ScratchpadResult(
             stdout=["TEST_ARCHIVE_" + "emlwLWJ5dGVz"],
             stderr=[],
@@ -122,6 +145,7 @@ def test_archive_client_returns_bytes_media_type_and_session(
     assert result.session_name == "finance.py"
     assert result.session_path == "/work/finance.py"
     assert result.session_initialization_id == "init-1"
+    assert_fresh_import_code(captured["code"])
 
 
 def test_export_client_rejects_invalid_runtime_before_install(
@@ -208,3 +232,21 @@ def test_export_client_threads_runtime_install_options(
         "poll_interval_ms": 250,
         "token": None,
     }
+
+
+def transported_spec(code: str) -> dict[str, Any]:
+    match = re.search(r"^__moexport_spec = json\.loads\((.+)\)$", code, re.MULTILINE)
+    if match is None:
+        raise AssertionError("generated code did not load a serialized export spec")
+
+    spec_json = json.loads(match.group(1))
+    spec = json.loads(spec_json)
+    assert parse_export_spec(spec)
+    return spec
+
+
+def assert_fresh_import_code(code: str) -> None:
+    assert "for __moexport_module in list(sys.modules):" in code
+    assert "__moexport_module == 'moexport'" in code
+    assert "__moexport_module.startswith('moexport.')" in code
+    assert "del sys.modules[__moexport_module]" in code

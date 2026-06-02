@@ -62,11 +62,31 @@ def execute_scratchpad(
         raise RuntimeError("marimo scratchpad stream ended without a done event")
     if done.get("success") is False:
         error = done.get("error")
-        message = (
+        message = str(
             error.get("msg") if isinstance(error, dict) else "marimo scratchpad failed"
         )
-        raise RuntimeError(str(message))
+        details = _failure_details(
+            message, stdout=stdout, stderr=stderr, output=done.get("output")
+        )
+        raise RuntimeError(details)
     return ScratchpadResult(stdout=stdout, stderr=stderr, output=done.get("output"))
+
+
+def _failure_details(
+    message: str,
+    *,
+    stdout: list[str],
+    stderr: list[str],
+    output: Any,
+) -> str:
+    parts = [message]
+    if stderr:
+        parts.append("stderr:\n" + "\n".join(stderr[-20:]))
+    if stdout:
+        parts.append("stdout:\n" + "\n".join(stdout[-20:]))
+    if output is not None:
+        parts.append("output:\n" + json.dumps(output, ensure_ascii=False, default=str))
+    return "\n\n".join(parts)
 
 
 def parse_sse(text: str) -> list[dict[str, Any]]:

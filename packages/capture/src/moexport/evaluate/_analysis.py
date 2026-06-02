@@ -157,6 +157,17 @@ def _assigned_names(code: str) -> set[str]:
     for node in ast.walk(ast.parse(code)):
         if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Store):
             assigned.add(node.id)
+        elif isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
+            assigned.add(node.name)
+        elif isinstance(node, ast.Import):
+            for alias in node.names:
+                assigned.add(alias.asname or alias.name.partition(".")[0])
+        elif isinstance(node, ast.ImportFrom):
+            for alias in node.names:
+                if alias.name != "*":
+                    assigned.add(alias.asname or alias.name)
+        elif isinstance(node, ast.ExceptHandler) and node.name:
+            assigned.add(node.name)
     return assigned
 
 

@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from moexport.client._types import SpecInput
+from moexport.spec import ExportSpec
 from moexport.spec import parse_export_spec
 
 
@@ -23,9 +24,8 @@ def export_code(
         [
             "import json",
             *_path_code(paths),
-            "import importlib",
+            *_fresh_import_code(),
             "import moexport as mox",
-            "mox = importlib.reload(mox)",
             f"__moexport_spec = json.loads({json.dumps(spec_json)})",
             f"__moexport_result = await mox.capture(__moexport_spec, to={to_expression})",
             "__moexport_payload = {",
@@ -52,9 +52,8 @@ def archive_code(
         [
             "import json",
             *_path_code(paths),
-            "import importlib",
+            *_fresh_import_code(),
             "import moexport.archive as __moexport_archive",
-            "__moexport_archive = importlib.reload(__moexport_archive)",
             f"__moexport_spec = json.loads({json.dumps(spec_json)})",
             f"await __moexport_archive.emit_bundle_archive(__moexport_spec, marker={json.dumps(marker)})",
         ]
@@ -81,8 +80,33 @@ def marker(kind: str) -> str:
 
 
 def spec_json_string(spec: SpecInput) -> str:
-    normalized = parse_export_spec(spec).model_dump(mode="json", exclude_none=True)
+    normalized = transport_spec(parse_export_spec(spec))
     return json.dumps(normalized, allow_nan=False)
+
+
+def transport_spec(spec: ExportSpec) -> dict[str, Any]:
+    """Return a validated spec shape that can be parsed again in the kernel."""
+
+    data = spec.model_dump(mode="json", exclude_none=True)
+    values = data.get("values")
+    if not isinstance(values, dict):
+        return data
+
+    for value in values.values():
+        if not isinstance(value, dict):
+            continue
+        formats = value.get("formats")
+        if not isinstance(formats, dict):
+            continue
+        value["formats"] = [
+            {
+                "format": name,
+                **format_spec,
+            }
+            for name, format_spec in formats.items()
+            if isinstance(format_spec, dict)
+        ]
+    return data
 
 
 def _path_code(paths: Iterable[str | Path]) -> list[str]:
@@ -95,5 +119,16 @@ def _path_code(paths: Iterable[str | Path]) -> list[str]:
         f"for __moexport_path in {json.dumps(values)}:",
         "    if __moexport_path not in sys.path:",
         "        sys.path.insert(0, __moexport_path)",
+        "importlib.invalidate_caches()",
+    ]
+
+
+def _fresh_import_code() -> list[str]:
+    return [
+        "import importlib",
+        "import sys",
+        "for __moexport_module in list(sys.modules):",
+        "    if __moexport_module == 'moexport' or __moexport_module.startswith('moexport.'):",
+        "        del sys.modules[__moexport_module]",
         "importlib.invalidate_caches()",
     ]

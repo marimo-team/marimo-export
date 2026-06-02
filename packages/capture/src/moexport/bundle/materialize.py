@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import importlib
 import inspect
 from collections.abc import Mapping
@@ -64,10 +65,13 @@ async def materialize_scenarios(
                 blob_store=blob_store,
             ),
         }
+        trace = trace_record(result)
+        if request.spec.provenance.source != "source":
+            trace = redact_source_trace(trace)
         trace_record_ = {
             "id": scenario.id,
             "state": scenario.manifest_state,
-            "trace": trace_record(result),
+            "trace": trace,
         }
         if scenario.declared_state is not None:
             manifest_record["declared_state"] = scenario.declared_state
@@ -80,6 +84,53 @@ async def materialize_scenarios(
         manifest=manifest_scenarios,
         traces=trace_scenarios,
     )
+
+
+def redact_source_trace(trace: dict[str, Any]) -> dict[str, Any]:
+    """Remove source-derived diagnostics when notebook source is hash-only."""
+
+    redacted = copy.deepcopy(trace)
+    redacted.pop("mermaid", None)
+    redacted["value_preview"] = "redacted"
+    redacted["source_details"] = "redacted"
+
+    target = redacted.get("target")
+    if isinstance(target, dict):
+        for key in (
+            "expression_refs",
+            "override_refs",
+            "root_names",
+            "state_update_refs",
+        ):
+            value = target.pop(key, None)
+            if isinstance(value, list):
+                target[f"{key}_count"] = len(value)
+
+    graph = redacted.get("graph")
+    if isinstance(graph, dict):
+        nodes = graph.get("nodes")
+        if isinstance(nodes, list):
+            for node in nodes:
+                if isinstance(node, dict):
+                    for key in (
+                        "body_refs",
+                        "defs",
+                        "overridden_defs",
+                        "preview",
+                        "refs",
+                    ):
+                        node.pop(key, None)
+
+    execution = redacted.get("execution")
+    if isinstance(execution, dict):
+        steps = execution.get("steps")
+        if isinstance(steps, list):
+            for step in steps:
+                if isinstance(step, dict):
+                    step.pop("defs", None)
+                    step.pop("output_preview", None)
+
+    return redacted
 
 
 async def materialize_values(

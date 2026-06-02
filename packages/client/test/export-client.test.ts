@@ -30,6 +30,24 @@ const spec = {
   },
 } as const;
 
+const customFormatSpec = {
+  values: {
+    readout: {
+      source: { def: "readout" },
+      formats: [
+        {
+          format: "metrics",
+          export: {
+            type: "ref",
+            ref: "metrics_exporters:readout",
+          },
+          options: { title: "Metrics Readout" },
+        },
+      ],
+    },
+  },
+} as const;
+
 const exportPayload = {
   bundlePath: "/tmp/export/bundles/sha256-demo",
   manifestPath: "/tmp/export/bundles/sha256-demo/manifest.json",
@@ -68,6 +86,8 @@ test("MarimoExportClient exports bundles and archives through one client", async
   assertExportMetadata(requests[1]?.metadata);
   assertImportMetadata(requests[2]?.metadata);
   assertArchiveMetadata(requests[3]?.metadata);
+  assertFreshImportCode(requests[1]?.code);
+  assertFreshImportCode(requests[3]?.code);
   assert.equal(result.bundlePath, exportPayload.bundlePath);
   assert.equal(result.manifestPath, exportPayload.manifestPath);
   assert.deepEqual(result.manifest, exportPayload.manifest);
@@ -79,6 +99,28 @@ test("MarimoExportClient exports bundles and archives through one client", async
   assert.deepEqual([...archive.bytes], [...new TextEncoder().encode("zip-bytes")]);
   assert.equal(archive.mediaType, "application/vnd.marimo.static-export+zip");
   assert.equal(archive.sessionId, "session-1");
+});
+
+test("MarimoExportClient transports custom formats through the public export path", async () => {
+  const requests: ExecuteScratchpadOptions[] = [];
+  const client = createMarimoExportClientFromTransport(scratchpadTransport(requests));
+
+  await client.export(customFormatSpec, {
+    sessionId: "session-1",
+    runtime: "preinstalled",
+  });
+
+  assertFreshImportCode(requests[1]?.code);
+  assert.deepEqual(readoutFormats(transportedSpec(requests[1]?.code)), [
+    {
+      format: "metrics",
+      export: {
+        type: "ref",
+        ref: "metrics_exporters:readout",
+      },
+      options: { title: "Metrics Readout" },
+    },
+  ]);
 });
 
 test("MarimoExportClient resolves a notebook name before export", async () => {
@@ -219,6 +261,28 @@ function assertArchiveMetadata(metadata: ScratchpadExecutionMetadata | undefined
 
 function assertMarker(marker: string): void {
   assert.ok(marker.length > 0);
+}
+
+function assertFreshImportCode(code: string | undefined): void {
+  assert.ok(code);
+  assert.ok(code.includes("for __moexport_module in list(sys.modules):"));
+  assert.ok(code.includes("__moexport_module == 'moexport'"));
+  assert.ok(code.includes("__moexport_module.startswith('moexport.')"));
+  assert.ok(code.includes("del sys.modules[__moexport_module]"));
+}
+
+function transportedSpec(code: string | undefined): Record<string, unknown> {
+  assert.ok(code);
+  const match = /^__moexport_spec = json\.loads\((.+)\)$/m.exec(code);
+  assert.ok(match?.[1], "generated code did not load a serialized export spec");
+  const specJson = JSON.parse(match[1]) as string;
+  return JSON.parse(specJson) as Record<string, unknown>;
+}
+
+function readoutFormats(spec: Record<string, unknown>): unknown {
+  const values = spec.values as Record<string, unknown>;
+  const readout = values.readout as Record<string, unknown>;
+  return readout.formats;
 }
 
 function scratchpadTransport(

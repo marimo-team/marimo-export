@@ -43,8 +43,29 @@ def test_capture_writes_manifest_formats_and_deduped_blobs(
                     "value_preview": "{'title': 'same'}",
                     "metadata": {
                         "target": {"root_names": ["title"]},
-                        "graph": {"nodes": [{"cell_id": "a", "status": "inactive"}]},
-                        "execution": {"stats": {"executed": 0}},
+                        "graph": {
+                            "nodes": [
+                                {
+                                    "cell_id": "a",
+                                    "status": "inactive",
+                                    "defs": ["PRIVATE_TOKEN"],
+                                    "refs": ["secret_ref"],
+                                    "body_refs": ["secret_ref"],
+                                    "preview": ["PRIVATE_TOKEN = 'secret'"],
+                                }
+                            ]
+                        },
+                        "execution": {
+                            "stats": {"executed": 0},
+                            "steps": [
+                                {
+                                    "cell_id": "a",
+                                    "defs": ["PRIVATE_TOKEN"],
+                                    "output_preview": "secret",
+                                }
+                            ],
+                        },
+                        "mermaid": "PRIVATE_TOKEN",
                     },
                 },
                 {
@@ -52,7 +73,15 @@ def test_capture_writes_manifest_formats_and_deduped_blobs(
                     "value_preview": "{'title': 'same'}",
                     "metadata": {
                         "target": {"root_names": ["title"]},
-                        "graph": {"nodes": [{"cell_id": "b", "status": "executed"}]},
+                        "graph": {
+                            "nodes": [
+                                {
+                                    "cell_id": "b",
+                                    "status": "executed",
+                                    "preview": ["PRIVATE_TOKEN = 'secret'"],
+                                }
+                            ]
+                        },
                         "execution": {"stats": {"executed": 1}},
                     },
                 },
@@ -172,6 +201,20 @@ def test_capture_writes_manifest_formats_and_deduped_blobs(
     assert invocation_scenario(invocation, "default")["trace"]["graph"]["nodes"] == [
         {"cell_id": "a", "status": "inactive"}
     ]
+    assert invocation_scenario(invocation, "default")["trace"]["execution"][
+        "steps"
+    ] == [{"cell_id": "a"}]
+    assert "mermaid" not in invocation_scenario(invocation, "default")["trace"]
+    assert invocation_scenario(invocation, "default")["trace"]["target"] == {
+        "root_names_count": 1
+    }
+    assert (
+        invocation_scenario(invocation, "default")["trace"]["source_details"]
+        == "redacted"
+    )
+    assert invocation_scenario(invocation, "default")["trace"]["value_preview"] == (
+        "redacted"
+    )
     assert invocation_scenario(invocation, "wide-chart")["trace"]["execution"][
         "stats"
     ] == {"executed": 1}

@@ -1,0 +1,33 @@
+{
+  "title": "Weekly Metrics Readout",
+  "scenario_id": "current",
+  "items": [
+    { "order": 5, "cell_id": "lEQa", "label": "Molab" },
+    { "order": 14, "cell_id": "nWHF", "label": "Molab stickiness" },
+    { "order": 17, "cell_id": "ROlb", "label": "OSS" },
+    { "order": 21, "cell_id": "DnEU", "label": "Downloads by system" },
+    { "order": 25, "cell_id": "ZBYS", "label": "PyPI downloads" },
+    { "order": 28, "cell_id": "xXTn", "label": "Dependent repositories" },
+    { "order": 30, "cell_id": "pHFh", "label": "Total GitHub forks" },
+    { "order": 31, "cell_id": "NCOB", "label": "Claude Skills downloads" },
+    { "order": 33, "cell_id": "TRpd", "label": "Skills overview" },
+    { "order": 34, "cell_id": "TXez", "label": "VSCode Extension" },
+    { "order": 40, "cell_id": "rEll", "label": "VSCode overview" },
+    { "order": 42, "cell_id": "SdmI", "label": "New VSCode installs" },
+    { "order": 43, "cell_id": "lgWD", "label": "Rolling 7-day WAU" },
+    { "order": 44, "cell_id": "yOPj", "label": "VSCode cohort retention heatmap" },
+    { "order": 45, "cell_id": "fwwy", "label": "VSCode retention curves" },
+    { "order": 46, "cell_id": "LJZf", "label": "VSCode stickiness" },
+    { "order": 47, "cell_id": "urSm", "label": "Socials" },
+    { "order": 48, "cell_id": "jxvo", "label": "YouTube" },
+    { "order": 49, "cell_id": "mWxS", "label": "Gallery" },
+    { "order": 51, "cell_id": "YWSi", "label": "Gallery clicks" },
+    { "order": 52, "cell_id": "zlud", "label": "Open in Molab" },
+    { "order": 58, "cell_id": "iXej", "label": "Open in Molab overview" },
+    { "order": 59, "cell_id": "EJmg", "label": "Referrer sources" },
+    { "order": 60, "cell_id": "UmEG", "label": "Top forked notebooks" },
+    { "order": 61, "cell_id": "vEBW", "label": "Notebook detail" },
+    { "order": 63, "cell_id": "IpqN", "label": "Most viewed notebooks" },
+    { "order": 64, "cell_id": "dxZZ", "label": "External fork provenance" }
+  ]
+}

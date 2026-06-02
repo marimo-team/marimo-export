@@ -14,7 +14,7 @@ the core package only for capture/query primitives:
 
 1. Build a spec whose value source is `{snapshot: true}`.
 2. Export it through `moexport.exporters.notebook:linear`.
-3. Read the finished bundle with `moexport.open_export`.
+3. Read the finished bundle with `open_export` from `moexport.query`.
 4. Materialize the linear notebook format as Markdown and static media from
    this example's `notebook_markdown.py`.
 
