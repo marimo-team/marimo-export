@@ -4,8 +4,8 @@ import type {
   MarimoExportTransport,
   ScratchpadExecutionResult,
   ScratchpadOutput,
-} from "./types";
-import { isRecord } from "./support";
+} from "./types.js";
+import { isRecord } from "./support.js";
 
 interface ScratchpadDoneData {
   success: boolean;

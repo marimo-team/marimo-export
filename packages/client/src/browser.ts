@@ -1,1 +1,1 @@
-export * from "./browser-client";
+export * from "./browser-client.js";

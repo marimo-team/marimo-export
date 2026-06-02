@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from moexport.client._client import ExportClient
-from moexport.client._types import ExportArchiveResult, ExportResult, RuntimeInstall
+from moexport.client._client import Client, connect
+from moexport.client._types import ExportArchiveResult, ExportResult, Runtime
 
-__all__ = ["ExportArchiveResult", "ExportClient", "ExportResult", "RuntimeInstall"]
+__all__ = ["Client", "ExportArchiveResult", "ExportResult", "Runtime", "connect"]

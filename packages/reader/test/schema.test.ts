@@ -26,6 +26,22 @@ test("readExport rejects the wrong manifest schema", async () => {
   );
 });
 
+test("readExport rejects unexpected manifest record fields", async () => {
+  await assert.rejects(
+    readExport({
+      root: "https://example.test/export/",
+      fetch: fetchFixtureFile(
+        hostedFiles(
+          manifestWith((manifest) => {
+            (manifest as unknown as Record<string, unknown>).extra = true;
+          }),
+        ),
+      ),
+    }),
+    /export manifest has unexpected field "extra"/,
+  );
+});
+
 test("readExport rejects an entry outside the format files", async () => {
   await assert.rejects(
     readExport({

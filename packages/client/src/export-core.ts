@@ -5,19 +5,22 @@ import {
   type ExportOptions,
   type ExportResult,
   type MarimoExportTransport,
+  type MarimoWorkspaceTransport,
   type RunningNotebook,
+  type Runtime,
   type RuntimeOption,
   type WorkspaceNotebook,
-} from "./types";
-import { parseExportSpec, type ExportSpec } from "./spec";
-import { isRecord, sleep } from "./support";
+} from "./types.js";
+import { parseExportSpec, type ExportSpec, type ExportSpecInput } from "./spec.js";
+import { isRecord, sleep } from "./support.js";
 
 export async function exportWithClient(
-  spec: ExportSpec,
+  spec: ExportSpecInput,
   options: ExportOptions & { client: MarimoExportTransport },
 ): Promise<ExportResult> {
   const parsedSpec = parseExportSpec(spec);
-  const { client, outputRoot, paths, runtime } = options;
+  const runtime = parseRuntimeOption(options.runtime);
+  const { client, outputRoot, paths } = options;
   const session = await resolveExportSession(client, options);
   await ensureExportRuntime(client, session, runtime);
   const marker = exportMarker();
@@ -47,11 +50,12 @@ export async function exportWithClient(
 }
 
 export async function archiveWithClient(
-  spec: ExportSpec,
+  spec: ExportSpecInput,
   options: ExportArchiveOptions & { client: MarimoExportTransport },
 ): Promise<ExportArchiveResult> {
   const parsedSpec = parseExportSpec(spec);
-  const { client, paths, runtime } = options;
+  const runtime = parseRuntimeOption(options.runtime);
+  const { client, paths } = options;
   const session = await resolveExportSession(client, options);
   await ensureExportRuntime(client, session, runtime);
   const marker = archiveMarker();
@@ -77,7 +81,7 @@ export async function archiveWithClient(
 }
 
 export async function listRunningNotebooks(
-  client: MarimoExportTransport,
+  client: MarimoWorkspaceTransport,
 ): Promise<RunningNotebook[]> {
   const { response: httpResponse, data } = await client.POST("/api/home/running_notebooks");
   const { ok, status, statusText } = httpResponse;
@@ -96,7 +100,7 @@ export async function listRunningNotebooks(
 }
 
 export async function listWorkspaceNotebookFiles(
-  client: MarimoExportTransport,
+  client: MarimoWorkspaceTransport,
 ): Promise<WorkspaceNotebook[]> {
   const { response: httpResponse, data } = await client.POST("/api/home/workspace_files", {
     body: {
@@ -120,7 +124,7 @@ export async function listWorkspaceNotebookFiles(
 }
 
 export async function readWorkspaceNotebookSource(
-  client: MarimoExportTransport,
+  client: MarimoWorkspaceTransport,
   path: string,
 ): Promise<string> {
   const { response: httpResponse, data } = await client.POST("/api/files/file_details", {
@@ -196,7 +200,7 @@ export async function resolveExportSession(
 export async function ensureExportRuntime(
   client: MarimoExportTransport,
   session: Pick<RunningNotebook, "sessionId">,
-  options: RuntimeOption | undefined = "preinstalled",
+  options: RuntimeOption = "preinstalled",
 ): Promise<void> {
   if (options === "preinstalled") {
     if (await canImportModule(client, session.sessionId, "moexport")) {
@@ -244,6 +248,30 @@ export async function ensureExportRuntime(
   });
 }
 
+export function parseRuntimeOption(value: unknown): RuntimeOption {
+  if (value === undefined || value === "preinstalled") {
+    return "preinstalled";
+  }
+  if (!isRecord(value)) {
+    throw new TypeError('runtime must be "preinstalled" or a Runtime with package.');
+  }
+
+  const packageSpec = value.package;
+  if (typeof packageSpec !== "string" || packageSpec.trim().length === 0) {
+    throw new TypeError("runtime.package must be a non-empty string.");
+  }
+
+  return {
+    package: packageSpec,
+    ...optionalStringField(value, "module"),
+    ...optionalStringField(value, "manager"),
+    ...optionalSourceField(value),
+    ...optionalBooleanField(value, "force"),
+    ...optionalPositiveIntegerField(value, "timeoutMs"),
+    ...optionalPositiveIntegerField(value, "pollIntervalMs"),
+  };
+}
+
 export function exportRequest(options: ExportOptions): ExportOptions {
   return {
     ...(options.outputRoot !== undefined ? { outputRoot: options.outputRoot } : {}),
@@ -263,6 +291,61 @@ export function archiveRequest(options: ExportArchiveOptions): ExportArchiveOpti
     ...(options.runtime !== undefined ? { runtime: options.runtime } : {}),
     ...(options.timeoutMs !== undefined ? { timeoutMs: options.timeoutMs } : {}),
   };
+}
+
+function optionalStringField<T extends "module" | "manager">(
+  value: Record<string, unknown>,
+  key: T,
+): Pick<Runtime, T> | Record<string, never> {
+  const field = value[key];
+  if (field === undefined) {
+    return {};
+  }
+  if (typeof field !== "string" || field.trim().length === 0) {
+    throw new TypeError(`runtime.${key} must be a non-empty string.`);
+  }
+  return { [key]: field } as Pick<Runtime, T>;
+}
+
+function optionalSourceField(
+  value: Record<string, unknown>,
+): Pick<Runtime, "source"> | Record<string, never> {
+  const field = value.source;
+  if (field === undefined) {
+    return {};
+  }
+  if (field !== "kernel" && field !== "server") {
+    throw new TypeError('runtime.source must be "kernel" or "server".');
+  }
+  return { source: field };
+}
+
+function optionalBooleanField(
+  value: Record<string, unknown>,
+  key: "force",
+): Pick<Runtime, "force"> | Record<string, never> {
+  const field = value[key];
+  if (field === undefined) {
+    return {};
+  }
+  if (typeof field !== "boolean") {
+    throw new TypeError(`runtime.${key} must be a boolean.`);
+  }
+  return { [key]: field };
+}
+
+function optionalPositiveIntegerField<T extends "timeoutMs" | "pollIntervalMs">(
+  value: Record<string, unknown>,
+  key: T,
+): Pick<Runtime, T> | Record<string, never> {
+  const field = value[key];
+  if (field === undefined) {
+    return {};
+  }
+  if (typeof field !== "number" || !Number.isInteger(field) || field <= 0) {
+    throw new TypeError(`runtime.${key} must be a positive integer.`);
+  }
+  return { [key]: field } as Pick<Runtime, T>;
 }
 
 function hasSessionId(value: unknown): value is Record<string, unknown> & { sessionId: unknown } {

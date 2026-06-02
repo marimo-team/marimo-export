@@ -23,7 +23,9 @@ def export_code(
         [
             "import json",
             *_path_code(paths),
+            "import importlib",
             "import moexport as mox",
+            "mox = importlib.reload(mox)",
             f"__moexport_spec = json.loads({json.dumps(spec_json)})",
             f"__moexport_result = await mox.capture(__moexport_spec, to={to_expression})",
             "__moexport_payload = {",
@@ -50,7 +52,9 @@ def archive_code(
         [
             "import json",
             *_path_code(paths),
+            "import importlib",
             "import moexport.archive as __moexport_archive",
+            "__moexport_archive = importlib.reload(__moexport_archive)",
             f"__moexport_spec = json.loads({json.dumps(spec_json)})",
             f"await __moexport_archive.emit_bundle_archive(__moexport_spec, marker={json.dumps(marker)})",
         ]

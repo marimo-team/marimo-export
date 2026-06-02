@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import json
-import re
 from typing import Any
 
 import httpx
 import pytest
 
 import moexport.client._runtime as runtime_impl
+import moexport.client._scratchpad as scratchpad_impl
 import moexport.client._session as session_impl
 from moexport.client._http import post_json
 from moexport.client._scratchpad import can_import, execute_scratchpad, parse_sse
@@ -195,16 +195,15 @@ def test_can_import_returns_probe_payload_without_masking_http_errors(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     requests: list[httpx.Request] = []
+    probe_marker = "TEST_IMPORT_"
+    monkeypatch.setattr(scratchpad_impl, "marker", lambda _kind: probe_marker)
 
     def handler(request: httpx.Request) -> httpx.Response:
         requests.append(request)
-        code = json.loads(request.content)["code"]
-        marker = re.search(r"__MOEXPORT_IMPORT_\d+__", code)
-        assert marker is not None
         return httpx.Response(
             200,
             text=(
-                f'event: stdout\ndata: {{"data": "{marker.group(0)}false"}}\n\n'
+                f'event: stdout\ndata: {{"data": "{probe_marker}false"}}\n\n'
                 'event: done\ndata: {"success": true, "output": null}\n\n'
             ),
             headers={"Content-Type": "text/event-stream"},

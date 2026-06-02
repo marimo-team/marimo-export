@@ -147,15 +147,7 @@ values:
   prices:
     source:
       def: df
-    formats:
-      arrow:
-        export:
-          type: ref
-          ref: moexport.exporters.dataframe:arrow
-      parquet:
-        export:
-          type: ref
-          ref: moexport.exporters.dataframe:parquet
+    formats: [arrow, parquet]
   change_desc:
     source:
       cell: change_desc
@@ -188,11 +180,8 @@ values:
     source:
       def: symbols_chart
     formats:
-      vegalite:
-        export:
-          type: ref
-          ref: moexport.exporters.altair:vegalite
-      png_nogrid:
+      - vegalite
+      - format: png_nogrid
         export:
           type: code
           code: |
@@ -238,7 +227,7 @@ values:
     source:
       def: widget
     formats:
-      bundle:
+      - format: bundle
         export:
           type: ref
           ref: moexport.exporters.anywidget:bundle

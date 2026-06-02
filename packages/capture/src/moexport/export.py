@@ -39,7 +39,7 @@ class CaptureResult(BaseModel):
         description="Invocation trace data written for this concrete export run.",
     )
     evaluation: EvaluateResult = Field(
-        description="Raw `mox.evaluate` result used to produce the bundle.",
+        description="Raw evaluator result used to produce the bundle.",
     )
 
 

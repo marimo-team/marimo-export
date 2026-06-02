@@ -23,6 +23,6 @@
   },
   "dependencies": {
     "@marimo-team/export-reader": "workspace:*",
-    "hyparquet": "^1.25.8"
+    "hyparquet": "^1.26.0"
   }
 }

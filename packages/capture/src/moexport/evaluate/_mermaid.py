@@ -1,6 +1,6 @@
 """Render evaluate trace metadata as a Mermaid dataflow chart.
 
-``mox.evaluate(...)`` returns JSON-shaped metadata for each result. This module
+``moexport.evaluate.evaluate(...)`` returns JSON-shaped metadata for each result. This module
 is the presentation layer for that metadata: it does not inspect the running
 runtime and can render traces from either fresh results or stored provenance.
 """
@@ -25,7 +25,7 @@ _STATUS_LABELS = {
 
 
 def trace_mermaid(metadata: JsonMapping) -> str:
-    """Return a Mermaid flowchart for one ``mox.evaluate`` result metadata."""
+    """Return a Mermaid flowchart for one evaluator result metadata."""
 
     graph = _expect_mapping(metadata.get("graph"), "metadata.graph")
     execution = _expect_mapping(metadata.get("execution"), "metadata.execution")
@@ -128,7 +128,7 @@ def _summary_label(metadata: JsonMapping) -> str:
     title = root_names or expression_refs or "expression"
 
     lines = [
-        "<b>mox.evaluate trace</b>",
+        "<b>evaluate trace</b>",
         f"<span>{_escape(title)}</span>",
         (
             "<small>"

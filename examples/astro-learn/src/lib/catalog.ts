@@ -2,7 +2,7 @@ import {
   createMarimoWorkspaceClient,
   type MarimoWorkspaceClient,
   type WorkspaceNotebook,
-} from "@marimo-team/export-client";
+} from "@marimo-team/export-client/workspace";
 
 import { fixtureCatalog } from "@/data/catalog";
 import type { CatalogStats, LearnCatalog, LearnNotebook, TopicGroup } from "@/types";

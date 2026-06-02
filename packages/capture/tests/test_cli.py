@@ -213,6 +213,8 @@ def test_cli_inspects_notebook_source_and_defs(tmp_path: Path) -> None:
     assert defs["notebook"]["name"] == "finance.py"
     assert defs["root_defs"] == ["symbol"]
     assert [item["name"] for item in defs["defs"]] == ["symbol", "title"]
+    assert defs["defs"][0]["cell_name"] is None
+    assert defs["defs"][0]["preview"] == ['symbol = "AAPL"']
     assert any(
         cell["defs"] == ["title"] and cell["refs"] == ["symbol"]
         for cell in defs["cells"]

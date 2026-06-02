@@ -29,8 +29,11 @@ export interface ExportTransportPostResult {
   data: unknown;
 }
 
-export interface MarimoExportTransport {
+export interface MarimoWorkspaceTransport {
   POST(path: string, options?: ExportTransportPostOptions): Promise<ExportTransportPostResult>;
+}
+
+export interface MarimoExportTransport extends MarimoWorkspaceTransport {
   executeScratchpad(options: ExecuteScratchpadOptions): Promise<ScratchpadExecutionResult>;
   openNotebook(options: OpenNotebookOptions): Promise<RunningNotebook>;
 }
@@ -115,9 +118,9 @@ export interface OpenNotebookOptions {
   timeoutMs?: number;
 }
 
-export type RuntimeOption = "preinstalled" | RuntimeInstallOptions;
+export type RuntimeOption = "preinstalled" | Runtime;
 
-export interface RuntimeInstallOptions {
+export interface Runtime {
   package: string;
   module?: string;
   manager?: "uv" | "pip" | string;

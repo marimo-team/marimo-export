@@ -1,6 +1,6 @@
 import * as v from "valibot";
 
-import type { JsonValue } from "./types";
+import type { JsonObject, JsonValue } from "./types.js";
 
 const SPEC_NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_-]*$/;
 const SOURCE_NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
@@ -325,6 +325,12 @@ export const explicitFormatSchema = v.strictObject({
   options: v.optional(jsonObjectSchema),
 });
 
+const explicitNamedFormatSchema = v.strictObject({
+  format: specNameSchema,
+  export: exportCallableSchema,
+  options: v.optional(jsonObjectSchema),
+});
+
 const builtinFormatConfigSchema = v.union([
   explicitFormatSchema,
   builtinFormatOptionsSchema,
@@ -355,14 +361,12 @@ const namedBuiltinFormatSchema = v.union([
   markdownFormatShorthandSchema,
 ]);
 
-type ExplicitFormatOutput = v.InferOutput<typeof explicitFormatSchema>;
 type BuiltinFormatConfigOutput = v.InferOutput<typeof builtinFormatConfigSchema>;
-type FormatMapOutput = Partial<Record<BuiltinFormatName, BuiltinFormatConfigOutput>> &
-  Record<string, BuiltinFormatConfigOutput | ExplicitFormatOutput>;
+type FormatMapOutput = Partial<Record<BuiltinFormatName, BuiltinFormatConfigOutput>>;
 
 const formatMapSchema = v.custom<FormatMapOutput>(
   isFormatMap,
-  "Format maps need built-in format options or explicit exporter configs.",
+  "Format maps need built-in format names. Custom formats use {format, export, options}.",
 );
 
 export const formatInputSchema = v.union([
@@ -371,6 +375,7 @@ export const formatInputSchema = v.union([
     format: v.picklist(builtinFormatNames),
     options: v.optional(jsonObjectSchema),
   }),
+  explicitNamedFormatSchema,
   namedBuiltinFormatSchema,
 ]);
 
@@ -414,6 +419,7 @@ export type RefExport = v.InferOutput<typeof refExportSchema>;
 export type CodeExport = v.InferOutput<typeof codeExportSchema>;
 export type ExportCallable = v.InferOutput<typeof exportCallableSchema>;
 export type ExplicitFormat = v.InferOutput<typeof explicitFormatSchema>;
+export type ExplicitNamedFormat = v.InferOutput<typeof explicitNamedFormatSchema>;
 export type BuiltinFormatConfig = v.InferOutput<typeof builtinFormatConfigSchema>;
 export type BuiltinFormatMap = Partial<Record<BuiltinFormatName, BuiltinFormatConfig>>;
 export type ExplicitFormatMap = Record<string, ExplicitFormat>;
@@ -425,6 +431,124 @@ export type ExportSpec = v.InferOutput<typeof exportSpecSchema> & {
   readonly [EXPORT_SPEC_BRAND]: true;
 };
 
+type NonEmptyReadonlyArray<T> = readonly [T, ...T[]];
+
+export type CellSelectorInput =
+  | string
+  | number
+  | { readonly id: string }
+  | { readonly name: string }
+  | { readonly index: number };
+export type SourceErrorMode = "raise" | "record";
+export type NotebookSnapshotInput = {
+  readonly include_source?: boolean | undefined;
+  readonly include_empty_outputs?: boolean | undefined;
+  readonly include_internal_cells?: boolean | undefined;
+  readonly on_error?: SourceErrorMode | undefined;
+};
+export type ReportCellInputSpec =
+  | {
+      readonly cell: CellSelectorInput;
+      readonly label?: string | null | undefined;
+      readonly order?: number | null | undefined;
+    }
+  | {
+      readonly id: string;
+      readonly label?: string | null | undefined;
+      readonly order?: number | null | undefined;
+    }
+  | {
+      readonly name: string;
+      readonly label?: string | null | undefined;
+      readonly order?: number | null | undefined;
+    }
+  | {
+      readonly index: number;
+      readonly label?: string | null | undefined;
+      readonly order?: number | null | undefined;
+    };
+export type ReportSourceInputSpec = {
+  readonly cells: NonEmptyReadonlyArray<ReportCellInputSpec>;
+  readonly include_source?: boolean | undefined;
+  readonly on_error?: SourceErrorMode | undefined;
+};
+export type SourceInput =
+  | string
+  | { readonly def: string }
+  | { readonly expr: string }
+  | { readonly cell: CellSelectorInput; readonly on_error?: SourceErrorMode | undefined }
+  | ({ readonly snapshot: true } & NotebookSnapshotInput)
+  | ({ readonly notebook: true } & NotebookSnapshotInput)
+  | { readonly report: ReportSourceInputSpec }
+  | { readonly type: "definition"; readonly name: string }
+  | { readonly type: "expression"; readonly expression: string }
+  | {
+      readonly type: "cell_output";
+      readonly cell: CellSelectorInput;
+      readonly on_error?: SourceErrorMode | undefined;
+    }
+  | ({ readonly type: "notebook_snapshot" } & NotebookSnapshotInput)
+  | ({ readonly type: "report" } & ReportSourceInputSpec);
+export type ExportCallableInput =
+  | { readonly type: "ref"; readonly ref: string }
+  | { readonly type: "code"; readonly code: string };
+export type ExplicitFormatInput = {
+  readonly export: ExportCallableInput;
+  readonly options?: JsonObject | undefined;
+};
+export type ExplicitNamedFormatInput = {
+  readonly format: string;
+  readonly export: ExportCallableInput;
+  readonly options?: JsonObject | undefined;
+};
+export type BuiltinFormatOptionsInput = JsonObject & {
+  readonly export?: never;
+  readonly options?: never;
+};
+export type BuiltinFormatConfigInput = BuiltinFormatOptionsInput | ExplicitFormatInput | null;
+export type BuiltinFormatObjectInput = {
+  readonly [Name in BuiltinFormatName]: {
+    readonly [Key in Name]: BuiltinFormatConfigInput;
+  };
+}[BuiltinFormatName];
+export type FormatListItemInput =
+  | BuiltinFormatName
+  | { readonly format: BuiltinFormatName; readonly options?: JsonObject | undefined }
+  | ExplicitNamedFormatInput
+  | BuiltinFormatObjectInput;
+export type FormatListInput = NonEmptyReadonlyArray<FormatListItemInput>;
+export type FormatMapInput = Readonly<Partial<Record<BuiltinFormatName, BuiltinFormatConfigInput>>>;
+
+export type ExportSpecInput = {
+  readonly scenarios?:
+    | readonly {
+        readonly id?: string | undefined;
+        readonly state?:
+          | Readonly<Record<string, JsonValue | { readonly code: string }>>
+          | undefined;
+      }[]
+    | undefined;
+  readonly provenance?:
+    | {
+        readonly source?: "none" | "hash" | "source" | undefined;
+        readonly spec?: "none" | "hash" | "embed" | undefined;
+      }
+    | undefined;
+  readonly values: Readonly<
+    Record<
+      string,
+      {
+        readonly source: SourceInput;
+        readonly formats: FormatListInput | FormatMapInput;
+      }
+    >
+  >;
+};
+export interface ExportSpecIssue {
+  path: string;
+  message: string;
+}
+
 export type ExportSpecParseResult =
   | {
       success: true;
@@ -434,7 +558,7 @@ export type ExportSpecParseResult =
   | {
       success: false;
       spec?: never;
-      issues: v.InferIssue<typeof exportSpecSchema>[];
+      issues: ExportSpecIssue[];
     };
 
 export function parseExportSpec(input: unknown): ExportSpec {
@@ -445,7 +569,21 @@ export function safeParseExportSpec(input: unknown): ExportSpecParseResult {
   const result = v.safeParse(exportSpecSchema, input);
   return result.success
     ? { success: true, spec: result.output as ExportSpec }
-    : { success: false, issues: result.issues };
+    : { success: false, issues: result.issues.map(formatIssue) };
+}
+
+function formatIssue(issue: v.InferIssue<typeof exportSpecSchema>): ExportSpecIssue {
+  return {
+    path: formatIssuePath(issue.path),
+    message: issue.message,
+  };
+}
+
+function formatIssuePath(path: v.InferIssue<typeof exportSpecSchema>["path"]): string {
+  if (!path) {
+    return "";
+  }
+  return path.map((item) => String(item.key)).join(".");
 }
 
 function uniqueScenarioIds(scenarios: readonly ScenarioSpec[]): boolean {
@@ -471,8 +609,11 @@ function isFormatMap(value: unknown): value is FormatMapOutput {
       return false;
     }
 
-    const schema = isBuiltinFormatName(name) ? builtinFormatConfigSchema : explicitFormatSchema;
-    if (!v.safeParse(schema, config).success) {
+    if (!isBuiltinFormatName(name)) {
+      return false;
+    }
+
+    if (!v.safeParse(builtinFormatConfigSchema, config).success) {
       return false;
     }
   }

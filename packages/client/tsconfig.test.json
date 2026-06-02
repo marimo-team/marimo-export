@@ -4,7 +4,8 @@
     "types": ["node"],
     "paths": {
       "@marimo-team/export-client": ["./src/index.ts"],
-      "@marimo-team/export-client/browser": ["./src/browser.ts"]
+      "@marimo-team/export-client/browser": ["./src/browser.ts"],
+      "@marimo-team/export-client/workspace": ["./src/workspace.ts"]
     }
   },
   "include": ["test/**/*.ts"]

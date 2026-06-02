@@ -9,6 +9,7 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from functools import cached_property
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, Protocol
 
 from marimo._ast.cell import CellImpl
@@ -29,7 +30,7 @@ from moexport.snapshots import (
 
 
 class RuntimeBinding(Protocol):
-    """Scenario-local values made available while ``mox.evaluate`` runs."""
+    """Scenario-local values made available while the evaluator runs."""
 
     @property
     def runtime(self) -> RuntimeContext:
@@ -49,7 +50,7 @@ _ACTIVE_RUNTIME: ContextVar[RuntimeBinding | None] = ContextVar(
 
 @contextmanager
 def bind_runtime(binding: RuntimeBinding) -> Generator[None]:
-    """Make scenario-local evaluation values visible to ``mox.runtime()``."""
+    """Make scenario-local evaluation values visible to export expressions."""
 
     token = _ACTIVE_RUNTIME.set(binding)
     try:
@@ -61,7 +62,7 @@ def bind_runtime(binding: RuntimeBinding) -> Generator[None]:
 def expression_globals() -> dict[str, Any]:
     """Globals intentionally available to user-authored export expressions."""
 
-    import moexport as mox
+    mox = SimpleNamespace(runtime=runtime)
 
     return {
         "mox": mox,
@@ -487,7 +488,7 @@ def materialize_cell_output(
     UI elements and descriptor-backed widgets. Ordinary markdown/HTML output is
     broadcast to the frontend but not retained on ``CellImpl._output``. For
     those cells, evaluate the compiled display expression against runtime globals,
-    plus optional scenario-local values produced by ``mox.evaluate``.
+        plus optional scenario-local values produced by the evaluator.
     """
 
     cell = runtime.graph.cells[cell_id]

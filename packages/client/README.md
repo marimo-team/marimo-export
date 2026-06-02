@@ -10,20 +10,20 @@ result or an in-memory archive. Finished bundle reading belongs to
 ## Export Through The Server Client
 
 ```ts
-import { createMarimoExportClient, parseExportSpec } from "@marimo-team/export-client";
+import { createMarimoExportClient } from "@marimo-team/export-client";
 
 const client = createMarimoExportClient({
   server: "http://localhost:2718",
 });
 
-const spec = parseExportSpec({
+const spec = {
   values: {
     summary: {
       source: { def: "summary" },
       formats: ["json"],
     },
   },
-});
+};
 
 const result = await client.export(spec, {
   notebook: "notebooks/finance.py",
@@ -62,6 +62,8 @@ await client.export(spec, {
 });
 ```
 
+The install request is a `Runtime`.
+
 `package` is passed to marimo's package installer. `module` defaults to
 `"moexport"` for the post-install import check. `manager` and `source` are
 forwarded to marimo's installer. `timeoutMs` and `pollIntervalMs` control the
@@ -70,18 +72,18 @@ post-install import probe.
 ## Archive Export
 
 ```ts
-import { createMarimoExportClient, parseExportSpec } from "@marimo-team/export-client";
+import { createMarimoExportClient } from "@marimo-team/export-client";
 import { readExport } from "@marimo-team/export-reader";
 
 const client = createMarimoExportClient({ server: "http://localhost:2718" });
-const spec = parseExportSpec({
+const spec = {
   values: {
     summary: {
       source: { def: "summary" },
       formats: ["json"],
     },
   },
-});
+};
 
 const archive = await client.archive(spec, {
   sessionId: "session-id",
@@ -112,18 +114,41 @@ const spec = parseExportSpec({
 });
 ```
 
-`parseExportSpec` returns an `ExportSpec`. Pass that validated object to
-`client.export(...)` or `client.archive(...)`.
+`parseExportSpec` returns an `ExportSpec`. Use it when a caller needs to inspect
+validation errors before calling `client.export(...)` or `client.archive(...)`.
 
 The parser validates the same public spec shape that Python accepts. It rejects
 unknown source keys, unknown built-in format names, malformed format configs,
 empty report sources, empty format maps, and duplicate scenario ids.
 Code-authored scenario state must use `{code: "..."}`.
 
+Custom format names use explicit list entries:
+
+```ts
+const spec = parseExportSpec({
+  values: {
+    chart: {
+      source: { def: "chart" },
+      formats: [
+        "vegalite",
+        {
+          format: "png_nogrid",
+          export: { type: "ref", ref: "my_exporters:png_nogrid" },
+          options: { scale: 2 },
+        },
+      ],
+    },
+  },
+});
+```
+
+Format maps accept built-in names only. Use a list entry when the format name is
+not one of the built-ins.
+
 `client.export(...)` and `client.archive(...)` call `parseExportSpec` before
 session discovery, runtime installation, or scratchpad execution. Use
 `safeParseExportSpec(input)` when the caller needs an issue list instead of an
-exception.
+exception. Each issue has a `path` and `message`.
 
 ## Browser Entry
 
@@ -144,6 +169,25 @@ const archive = await client.archive(spec, {
 });
 ```
 
+## Workspace Browsing
+
+Use the workspace subpath when a build step needs notebook discovery or source
+previews from a running marimo server:
+
+```ts
+import { createMarimoWorkspaceClient } from "@marimo-team/export-client/workspace";
+
+const workspace = createMarimoWorkspaceClient({
+  server: "http://localhost:2718",
+});
+
+const notebooks = await workspace.notebooks.list();
+const source = await workspace.notebooks.source(notebooks[0].path);
+```
+
+Keep workspace browsing separate from capture code that only needs
+`client.export(...)` or `client.archive(...)`.
+
 ## API Surface
 
 ### `createMarimoExportClient(options)`
@@ -156,29 +200,19 @@ Creates a `MarimoExportClient`.
   authentication inputs passed to marimo endpoints.
 - `options.WebSocket`: WebSocket constructor used when opening a notebook.
 
-### `createMarimoExportClientFromTransport(transport)`
-
-Creates a `MarimoExportClient` from an existing transport implementation.
-
-- `transport.POST`: marimo JSON POST adapter.
-- `transport.executeScratchpad`: Scratchpad execution adapter.
-- `transport.openNotebook`: Notebook opener used when `options.notebook` is set.
-
-Use this entry when a host already owns request routing, authentication, or test
-transport setup.
-
 ### `client.export(spec, options?)`
 
 Writes a static export root through the target marimo session.
 
-- `spec`: `ExportSpec` returned by `parseExportSpec`.
+- `spec`: Public export spec input. The client validates it before session
+  discovery, runtime installation, or scratchpad execution.
 - `options.notebook`: Notebook path or name to open or match.
 - `options.sessionId`: Existing marimo session id. Takes precedence over
   `notebook`.
 - `options.outputRoot`: Output root path seen by the Python kernel.
 - `options.paths`: Directories to prepend to kernel `sys.path` for local
   exporters.
-- `options.runtime`: `"preinstalled"` or an explicit install request.
+- `options.runtime`: `"preinstalled"` or a `Runtime` install request.
 - `options.timeoutMs`: Scratchpad execution timeout.
 
 Returns bundle path, manifest path, invocation trace paths, manifest JSON,
@@ -190,50 +224,15 @@ invocation JSON, `sessionId`, `sessionName`, `sessionPath`, and
 Runs the export in a temporary root and returns zipped export bytes for API
 routes that stream the bundle to a caller.
 
-- `spec`: `ExportSpec` returned by `parseExportSpec`.
+- `spec`: Public export spec input. The client validates it before session
+  discovery, runtime installation, or scratchpad execution.
 - `options.notebook`: Notebook path or name to open or match.
 - `options.sessionId`: Existing marimo session id. Takes precedence over
   `notebook`.
 - `options.paths`: Directories to prepend to kernel `sys.path` for local
   exporters.
-- `options.runtime`: `"preinstalled"` or an explicit install request.
+- `options.runtime`: `"preinstalled"` or a `Runtime` install request.
 - `options.timeoutMs`: Scratchpad execution timeout.
 
 Archive calls do not accept `outputRoot`. Use `client.export(...)` when the
 kernel should write a persistent export root.
-
-### `createMarimoWorkspaceClient(options)`
-
-Creates a `MarimoWorkspaceClient` for browsing marimo server state.
-
-```ts
-import { createMarimoWorkspaceClient } from "@marimo-team/export-client";
-
-const workspace = createMarimoWorkspaceClient({
-  server: "http://localhost:2718",
-});
-
-const sessions = await workspace.sessions.list();
-const notebooks = await workspace.notebooks.list();
-```
-
-Use this client when an app needs notebook discovery or source previews. Keep it
-separate from capture code that only needs `export(...)` or `archive(...)`.
-
-### `createMarimoWorkspaceClientFromTransport(transport)`
-
-Creates a `MarimoWorkspaceClient` from an existing transport implementation.
-Use it with `createMarimoExportClientFromTransport(...)` when both clients share
-the same request adapter.
-
-### `workspace.sessions.list()`
-
-Returns running marimo sessions from `/api/home/running_notebooks`.
-
-### `workspace.notebooks.list()`
-
-Returns marimo notebook files from the workspace file API.
-
-### `workspace.notebooks.source(path)`
-
-Returns the source text for one notebook path from the workspace file API.

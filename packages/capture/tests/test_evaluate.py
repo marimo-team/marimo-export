@@ -6,7 +6,6 @@ import importlib
 from contextlib import nullcontext
 from typing import Any
 
-import moexport as mox
 import pytest
 from moexport.evaluate import evaluate
 from marimo._ast.cell import CellConfig
@@ -348,7 +347,7 @@ def test_runtime_cell_exposes_authored_source(monkeypatch) -> None:
     ctx = FakeContext(graph=graph, globals={"symbols": ["AAPL"]})
     monkeypatch.setattr(runtime_module, "get_context", lambda: ctx)
 
-    cell = mox.runtime().cell(index=0)
+    cell = runtime_module.runtime().cell(index=0)
 
     assert cell.source == "symbols[0]"
 
@@ -362,7 +361,7 @@ def test_runtime_cell_output_materializes_live_markdown(monkeypatch) -> None:
     ctx = FakeContext(graph=graph, globals={"mo": FakeMo()})
     monkeypatch.setattr(runtime_module, "get_context", lambda: ctx)
 
-    cell = mox.runtime().cell(index=0)
+    cell = runtime_module.runtime().cell(index=0)
 
     assert cell.output == "md:hello"
 

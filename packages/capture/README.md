@@ -56,19 +56,19 @@ __moexport_result_abcd = await __moexport.capture(
 ```
 
 Only that synthetic cell is scheduled by the outer script runner.
-`mox.evaluate` applies scenario state before dirty downstream notebook cells run.
+The evaluator applies scenario state before dirty downstream notebook cells run.
 
 ## Export From A Running Server
 
-`ExportClient` drives a running marimo server from Python:
+`connect(...)` returns a client for a running marimo server:
 
 ```python
-from moexport.client import ExportClient, RuntimeInstall
+from moexport.client import Runtime, connect
 
-client = ExportClient(
+client = connect(
     "http://localhost:8787",
     notebook="finance.py",
-    runtime=RuntimeInstall(
+    runtime=Runtime(
         "moexport[all]",
         manager="uv",
         source="kernel",
@@ -92,14 +92,17 @@ archive.bytes
 `session_initialization_id`.
 
 The default runtime is `"preinstalled"`, which checks that `moexport` is already
-importable in the target kernel. Pass `RuntimeInstall(...)` when the caller owns
+importable in the target kernel. Pass `Runtime(...)` when the caller owns
 the package source and wants the client to install it.
 
-If `notebook` is provided and no matching session is running, `ExportClient`
+`client.export(...)` and `client.archive(...)` validate the spec before they
+resolve a session, install packages, or execute scratchpad code.
+
+If `notebook` is provided and no matching session is running, the client
 opens a marimo websocket session for that notebook before dispatching export
 code.
 
-`RuntimeInstall.package` is passed to marimo's package installer. `module`
+`Runtime.package` is passed to marimo's package installer. `module`
 defaults to `"moexport"` for the post-install import check. `manager` and
 `source` are forwarded to marimo's installer. `timeout_ms` and
 `poll_interval_ms` control the post-install import probe.
@@ -226,36 +229,45 @@ Built-in format names compile to exporter callables:
 | `display`   | `moexport.exporters.display:display_json` |
 | `markdown`  | `moexport.exporters.display:markdown`     |
 
-Use an explicit exporter config when a value needs custom projection code:
+Use an explicit list entry when a value needs a custom format name:
 
 ```yaml
-export:
-  type: ref
-  ref: moexport.exporters.dataframe:arrow
+formats:
+  - format: sparkline_svg
+    export:
+      type: ref
+      ref: my_exporters:sparkline_svg
+    options:
+      width: 720
 ```
+
+Format maps accept built-in names only. Built-in map entries can still use an
+explicit `export` config when they need to override the default exporter.
 
 Inline exporter code defines a callable named `export`:
 
 ```yaml
-export:
-  type: code
-  code: |
-    import json
+formats:
+  - format: summary_json
+    export:
+      type: code
+      code: |
+        import json
 
 
-    def export(value, ctx, **options):
-        blob = ctx.write_blob(
-            "summary.json",
-            json.dumps(value, allow_nan=False, indent=2).encode("utf-8"),
-            media_type="application/json",
-        )
-        return ctx.artifact(
-            format_id="summary.json.v1",
-            media_type="application/json",
-            files={"data": blob},
-            entry="data",
-            metadata={"kind": "summary"},
-        )
+        def export(value, ctx, **options):
+            blob = ctx.write_blob(
+                "summary.json",
+                json.dumps(value, allow_nan=False, indent=2).encode("utf-8"),
+                media_type="application/json",
+            )
+            return ctx.artifact(
+                format_id="summary.json.v1",
+                media_type="application/json",
+                files={"data": blob},
+                entry="data",
+                metadata={"kind": "summary"},
+            )
 ```
 
 An exporter receives the runtime Python value, an `ExporterContext`, and optional
@@ -295,9 +307,9 @@ when the format has one.
 ## Query API
 
 ```python
-import moexport as mox
+from moexport.query import open_export
 
-export = mox.open_export("notebooks/__marimo__/static-export")
+export = open_export("notebooks/__marimo__/static-export")
 
 export.catalog()
 export.notebooks()

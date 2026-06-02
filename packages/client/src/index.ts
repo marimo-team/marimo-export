@@ -1,1 +1,1 @@
-export * from "./server-client";
+export * from "./server-client.js";
