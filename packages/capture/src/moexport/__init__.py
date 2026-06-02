@@ -1,39 +1,28 @@
-from pathlib import Path
-from typing import Any
+from __future__ import annotations
 
-from moexport.archive import (
-    EXPORT_ARCHIVE_MEDIA_TYPE,
-    archive_bundle,
-    emit_bundle_archive,
-)
-from moexport.client import ExportClient, ExportResult, RuntimeInstall
-from moexport.export import CaptureResult, capture as _capture
-from moexport.exporters import ExporterContext
+from pathlib import Path
+from typing import TYPE_CHECKING, Any
+
+from moexport.archive import EXPORT_ARCHIVE_MEDIA_TYPE, archive_bundle
 from moexport.evaluate import evaluate
+from moexport.export import CaptureResult
 from moexport.notebook import capture_notebook
 from moexport.query import open_export
-from moexport.runtime import NotebookRuntime
-from moexport.runtime import runtime as _runtime
-from moexport.spec import ExportSpec, load_export_spec as load_spec
-from moexport.spec import parse_export_spec as parse_spec
+from moexport.spec import ExportSpec
+
+if TYPE_CHECKING:
+    from moexport.runtime import NotebookRuntime
 
 __all__ = [
     "EXPORT_ARCHIVE_MEDIA_TYPE",
     "CaptureResult",
-    "ExportClient",
-    "ExportResult",
     "ExportSpec",
-    "ExporterContext",
-    "NotebookRuntime",
-    "RuntimeInstall",
     "archive_bundle",
     "capture",
     "capture_notebook",
-    "emit_bundle_archive",
     "evaluate",
-    "load_spec",
+    "main",
     "open_export",
-    "parse_spec",
     "runtime",
 ]
 
@@ -52,7 +41,9 @@ async def capture(
     or a notebook cell.
     """
 
-    return await _capture(spec, to=to)
+    from moexport.export import capture as capture_export
+
+    return await capture_export(spec, to=to)
 
 
 def runtime() -> NotebookRuntime:
@@ -62,7 +53,9 @@ def runtime() -> NotebookRuntime:
     and cell outputs for the scenario currently being captured.
     """
 
-    return _runtime()
+    from moexport.runtime import runtime as active_runtime
+
+    return active_runtime()
 
 
 def main() -> None:

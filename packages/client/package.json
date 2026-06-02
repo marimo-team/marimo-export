@@ -1,6 +1,6 @@
 {
   "name": "@marimo-team/export-client",
-  "version": "0.1.0",
+  "version": "0.0.0",
   "description": "Client for asking a running marimo session to produce export bundles.",
   "files": [
     "dist"
@@ -20,6 +20,7 @@
   },
   "scripts": {
     "build": "rm -rf dist && tsc -p tsconfig.build.json && node --experimental-strip-types esbuild.config.ts",
+    "prepack": "pnpm build",
     "test": "rm -rf .test-dist && pnpm build && tsc -p tsconfig.test.build.json && node --test .test-dist/test/*.test.js; status=$?; rm -rf .test-dist; exit $status",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit",
     "lint": "oxlint .",

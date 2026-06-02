@@ -5,6 +5,7 @@ from typing import Any
 
 import httpx
 
+from moexport.client._code import marked_text, marker
 from moexport.client._types import ScratchpadResult
 
 
@@ -100,12 +101,17 @@ def can_import(
 ) -> bool:
     """Return whether `module` can be imported inside the kernel."""
 
-    code = (
-        "import importlib.util\n"
-        f"assert importlib.util.find_spec({module!r}) is not None\n"
+    probe_marker = marker("IMPORT")
+    code = "\n".join(
+        [
+            "import importlib.util",
+            "import json",
+            f"__moexport_can_import = importlib.util.find_spec({module!r}) is not None",
+            f"print({probe_marker!r} + json.dumps(__moexport_can_import))",
+        ]
     )
-    try:
-        execute_scratchpad(server, session_id, code, token=token, timeout=10)
-        return True
-    except Exception:
-        return False
+    result = execute_scratchpad(server, session_id, code, token=token, timeout=10)
+    value = json.loads(marked_text(result.stdout, probe_marker))
+    if not isinstance(value, bool):
+        raise RuntimeError("marimo import probe returned a non-boolean payload")
+    return value

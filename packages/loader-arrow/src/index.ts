@@ -1,10 +1,9 @@
 import { tableFromIPC } from "@uwdata/flechette";
 import {
   defineLoader,
-  type FormatLoader,
-  type FormatLoaderContext,
-  type FormatRecord,
-  type BlobRef,
+  type ExportBlob,
+  type ExportLoader,
+  type ExportLoaderContext,
   type JsonObject,
 } from "@marimo-team/export-reader";
 
@@ -19,9 +18,9 @@ export interface ArrowLoadOptions {
   useProxy?: boolean;
 }
 
-export interface ArrowFormatHandle {
-  record: FormatRecord;
-  blob: BlobRef;
+export interface ArrowTable {
+  formatId: string;
+  blob: ExportBlob;
   metadata: JsonObject | null;
   url(): string;
   bytes(): Promise<Uint8Array>;
@@ -30,19 +29,16 @@ export interface ArrowFormatHandle {
   columns(options?: ArrowLoadOptions): Promise<Record<string, unknown>>;
 }
 
-export function arrowLoader(defaults: ArrowLoadOptions = {}): FormatLoader<ArrowFormatHandle> {
+export function arrowLoader(defaults: ArrowLoadOptions = {}): ExportLoader<ArrowTable> {
   return defineLoader({
     formatId: dataframeArrowFormat,
-    load(context: FormatLoaderContext) {
+    load(context: ExportLoaderContext) {
       return createArrowHandle(context, defaults);
     },
   });
 }
 
-function createArrowHandle(
-  context: FormatLoaderContext,
-  defaults: ArrowLoadOptions,
-): ArrowFormatHandle {
+function createArrowHandle(context: ExportLoaderContext, defaults: ArrowLoadOptions): ArrowTable {
   const loadTable = async (options?: ArrowLoadOptions): Promise<unknown> => {
     const bytes = await context.entry().bytes();
     const buffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
@@ -50,9 +46,9 @@ function createArrowHandle(
   };
 
   return {
-    record: context.record,
+    formatId: context.formatId,
     blob: context.entry().ref,
-    metadata: context.record.metadata,
+    metadata: context.metadata,
     url() {
       return context.entry().url();
     },

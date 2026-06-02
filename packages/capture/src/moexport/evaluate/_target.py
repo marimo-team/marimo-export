@@ -1,4 +1,4 @@
-"""Single-target evaluation over the running marimo runtime.
+"""Single-target evaluation over the running marimo kernel.
 
 This module composes the evaluator pipeline for one target and one scenario:
 complete overrides, plan required cells, execute or cache them locally, patch
@@ -54,7 +54,7 @@ async def evaluate_target_once(
     output_cell_ids: set[Any] | None = None,
     output_error_policy: str = "raise",
 ) -> TargetRunResult:
-    """Evaluate a notebook definition or Python expression in the live runtime.
+    """Evaluate a notebook definition or Python expression in the running kernel.
 
     Existing values are reused from the running session unless an explicit override
     marks them dirty. The returned trace includes graph and execution metadata
@@ -160,9 +160,9 @@ async def evaluate_target_once(
     if plan.kind == "definition":
         value = glbls[target] if target in glbls else ctx.globals[target]
     else:
-        # Expressions run against live globals plus locally computed defs. This
-        # intentionally exposes real live objects. Callers must avoid mutating
-        # them in-place when they need a read-only export probe.
+        # Expressions run against runtime globals plus locally computed defs.
+        # This intentionally exposes real runtime objects. Callers must avoid
+        # mutating them in-place when they need a read-only export probe.
         expression_globals = {
             **ctx.globals,
             **glbls,

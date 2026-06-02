@@ -1,14 +1,14 @@
-import { readExport, type FormatHandle, type StaticExport } from "@marimo-team/export-reader";
+import { readExport, type Export, type ExportEntry } from "@marimo-team/export-reader";
 import {
   anywidgetLoader,
   createWidgetStore,
   type LoadedAnyWidget,
 } from "@marimo-team/export-loader-anywidget";
-import { arrowLoader, type ArrowFormatHandle } from "@marimo-team/export-loader-arrow";
-import { parquetLoader, type ParquetFormatHandle } from "@marimo-team/export-loader-parquet";
+import { arrowLoader, type ArrowTable } from "@marimo-team/export-loader-arrow";
+import { parquetLoader, type ParquetFile } from "@marimo-team/export-loader-parquet";
 import {
   vegaliteLoader,
-  type VegaLiteFormatHandle,
+  type VegaLiteChart,
   type VegaLiteRenderResult,
   type VegaLiteSpec,
 } from "@marimo-team/export-loader-vegalite";
@@ -68,15 +68,15 @@ interface DemoState {
 interface LoadedScenarioData {
   summary: SummaryPayload;
   symbolsSelector: SymbolsSelectorPayload;
-  arrow: ArrowFormatHandle;
+  arrow: ArrowTable;
   arrowRows: PriceRow[];
-  parquet: ParquetFormatHandle;
+  parquet: ParquetFile;
   parquetRows: PriceRow[];
   parquetMeta: { rows: number; columns: string[] };
-  vegalite: VegaLiteFormatHandle;
+  vegalite: VegaLiteChart;
   vegaliteSpec: VegaLiteSpec;
-  png: FormatHandle;
-  changeDesc: FormatHandle;
+  png: ExportEntry;
+  changeDesc: ExportEntry;
   changeDescHtml: string;
   widget: LoadedAnyWidget<OhlcWidgetState>;
 }
@@ -289,18 +289,10 @@ let activeLoad = 0;
 
 async function main(): Promise<void> {
   try {
-    const exp = await readExport({
-      root: EXPORT_ROOT,
-      loaders: [
-        anywidgetLoader(),
-        arrowLoader({ useDate: true }),
-        parquetLoader(),
-        vegaliteLoader({ actions: true }),
-      ],
-    });
+    const exp = await readExport({ root: EXPORT_ROOT });
 
     renderScenarioTabs(exp);
-    setText("manifest-id", exp.manifest.id);
+    setText("manifest-id", exp.id);
     setText("format-list", formatSummary(exp));
 
     await loadScenario(exp, firstScenario(exp));
@@ -309,7 +301,7 @@ async function main(): Promise<void> {
   }
 }
 
-function renderScenarioTabs(exp: StaticExport): void {
+function renderScenarioTabs(exp: Export): void {
   const target = byId("scenario-tabs");
   target.replaceChildren();
 
@@ -332,7 +324,7 @@ function renderScenarioTabs(exp: StaticExport): void {
   });
 }
 
-function firstScenario(exp: StaticExport): string {
+function firstScenario(exp: Export): string {
   const scenario =
     exp.scenarios().find((candidate) => candidate === "selector_crwv_msft") ?? exp.scenarios()[0];
   if (!scenario) {
@@ -341,7 +333,7 @@ function firstScenario(exp: StaticExport): string {
   return scenario;
 }
 
-async function loadScenario(exp: StaticExport, scenario: string): Promise<void> {
+async function loadScenario(exp: Export, scenario: string): Promise<void> {
   const loadId = ++activeLoad;
   try {
     beginScenarioTransition(exp, scenario);
@@ -361,27 +353,29 @@ async function loadScenario(exp: StaticExport, scenario: string): Promise<void> 
   }
 }
 
-async function loadScenarioData(exp: StaticExport, scenario: string): Promise<LoadedScenarioData> {
+async function loadScenarioData(exp: Export, scenario: string): Promise<LoadedScenarioData> {
+  const arrowData = arrowLoader({ useDate: true });
+  const parquetData = parquetLoader();
+  const vegaliteChart = vegaliteLoader({ actions: true });
+  const ohlcWidget = anywidgetLoader<OhlcWidgetState>();
   const summaryPromise = exp
     .get({ scenario, value: "summary", format: "json" })
     .json<SummaryPayload>();
   const symbolsSelectorPromise = exp
     .get({ scenario, value: "symbols_selector", format: "json" })
     .json<SymbolsSelectorPayload>();
-  const arrowPromise = exp
-    .get({ scenario, value: "prices", format: "arrow" })
-    .load(arrowLoader({ useDate: true }));
+  const arrowPromise = exp.get({ scenario, value: "prices", format: "arrow" }).load(arrowData);
   const parquetPromise = exp
     .get({ scenario, value: "prices", format: "parquet" })
-    .load(parquetLoader());
+    .load(parquetData);
   const vegalitePromise = exp
     .get({ scenario, value: "comparison_chart", format: "vegalite" })
-    .load(vegaliteLoader({ actions: true }));
+    .load(vegaliteChart);
   const png = exp.get({ scenario, value: "comparison_chart", format: "png_nogrid" });
   const changeDesc = exp.get({ scenario, value: "change_desc", format: "html" });
   const widgetPromise = exp
     .get({ scenario, value: "ohlc_dashboard", format: "bundle" })
-    .load(anywidgetLoader<OhlcWidgetState>());
+    .load(ohlcWidget);
 
   const [summary, symbolsSelector, arrow, parquet, vegalite, widget] = await Promise.all([
     summaryPromise,
@@ -417,7 +411,7 @@ async function loadScenarioData(exp: StaticExport, scenario: string): Promise<Lo
 }
 
 async function commitScenario(
-  exp: StaticExport,
+  exp: Export,
   scenario: string,
   data: LoadedScenarioData,
 ): Promise<void> {
@@ -467,7 +461,7 @@ async function commitScenario(
   chartImage.src = png.url();
   setText(
     "chart-meta",
-    `${png.entry().ref.size.toLocaleString()} bytes · ${summary.symbols.length} symbols · ${png.record.media_type}`,
+    `${png.entry().ref.size.toLocaleString()} bytes · ${summary.symbols.length} symbols · ${png.mediaType}`,
   );
 
   const mount = await widget.mount(byId("widget-root"));
@@ -484,7 +478,7 @@ async function commitScenario(
       window.__STATIC_EXPORT_DEMO__ = {
         ready: true,
         scenario,
-        manifestId: exp.manifest.id,
+        manifestId: exp.id,
         summary,
         symbolsSelector,
         changeDescHtml,
@@ -500,10 +494,10 @@ async function commitScenario(
 
   byId("trace").textContent = JSON.stringify(
     {
-      manifest: exp.manifest.id,
-      sourceSpec: exp.manifest.provenance?.source_spec_sha256,
+      manifest: exp.id,
+      sourceSpec: exp.sourceSpecSha256,
       scenario,
-      state: exp.manifest.scenarios.find((record) => record.id === scenario)?.state ?? {},
+      state: exp.scenario(scenario).state,
       checks: {
         arrowRows: arrowRows.length,
         parquetRows: parquetRows.length,
@@ -514,15 +508,15 @@ async function commitScenario(
         symbolUniverse: symbolsSelector.options,
       },
       loaders: {
-        anywidget: widget.record.format_id,
-        cellOutput: changeDesc.record.format_id,
+        anywidget: widget.formatId,
+        cellOutput: changeDesc.formatId,
         arrow: "dataframe.arrow.v1",
         parquet: "dataframe.parquet.v1",
-        vegalite: vegalite.record.format_id,
+        vegalite: vegalite.formatId,
       },
       rawFormats: {
         summary: "summary.json.v1",
-        customPng: png.record.format_id,
+        customPng: png.formatId,
       },
     },
     null,
@@ -607,7 +601,7 @@ function markScenario(scenario: string): void {
 }
 
 function renderSelectorStates(
-  exp: StaticExport,
+  exp: Export,
   activeScenario: string,
   selector: SymbolsSelectorPayload,
 ): void {
@@ -627,7 +621,7 @@ function renderSelectorStates(
   );
 }
 
-function beginScenarioTransition(exp: StaticExport, scenario: string): void {
+function beginScenarioTransition(exp: Export, scenario: string): void {
   const root = byId("dashboard-stage");
   root.dataset.loading = "true";
   root.setAttribute("aria-busy", "true");
@@ -651,7 +645,7 @@ function setScenarioButtonsDisabled(disabled: boolean): void {
   }
 }
 
-function formatSummary(exp: StaticExport): string {
+function formatSummary(exp: Export): string {
   return exp
     .values()
     .map((value) => `${value}: ${exp.formats(value).join(", ")}`)
@@ -662,7 +656,7 @@ function labelScenario(value: string): string {
   return value.replaceAll("_", " ");
 }
 
-function labelScenarioFromManifest(exp: StaticExport, scenario: string): string {
+function labelScenarioFromManifest(exp: Export, scenario: string): string {
   const value = selectorValue(exp.scenario(scenario).state);
   return value.length ? value.join(" + ") : labelScenario(scenario);
 }

@@ -12,7 +12,7 @@
 # ]
 #
 # [tool.uv.sources]
-# moexport = { url = "https://files.peter.gy/pkg/py/moexport/moexport-0.1.0-py3-none-any.whl" }
+# moexport = { url = "https://files.peter.gy/pkg/py/moexport/moexport-0.0.0-py3-none-any.whl" }
 # ///
 
 import marimo

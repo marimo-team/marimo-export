@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import time
 
 from moexport.client._http import post_json
@@ -11,11 +12,20 @@ def ensure_runtime(
     server: str,
     session_id: str,
     package: str,
+    manager: str,
+    source: str,
     force: bool,
     token: str | None,
     module: str = "moexport",
+    timeout_ms: int = 120_000,
+    poll_interval_ms: int = 1_000,
 ) -> None:
     """Install `package` into a kernel when `module` is unavailable."""
+
+    if timeout_ms <= 0:
+        raise ValueError("runtime timeout_ms must be positive")
+    if poll_interval_ms <= 0:
+        raise ValueError("runtime poll_interval_ms must be positive")
 
     if not force and can_import(server, session_id, module, token=token):
         return
@@ -24,17 +34,17 @@ def ensure_runtime(
         server,
         "/api/kernel/install_missing_packages",
         body={
-            "manager": "uv",
-            "source": "kernel",
+            "manager": manager,
+            "source": source,
             "versions": {package: ""},
         },
         headers={"Marimo-Session-Id": session_id},
         token=token,
-        timeout=30,
+        timeout=max(1, math.ceil(timeout_ms / 1000)),
     )
-    deadline = time.time() + 120
-    while time.time() < deadline:
+    deadline = time.monotonic() + timeout_ms / 1000
+    while time.monotonic() < deadline:
         if can_import(server, session_id, module, token=token):
             return
-        time.sleep(1)
+        time.sleep(poll_interval_ms / 1000)
     raise TimeoutError(f"Timed out waiting for {module} in the kernel")

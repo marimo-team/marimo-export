@@ -1,7 +1,7 @@
 """Value previews and cache fingerprints.
 
 Evaluation traces need readable previews, while batch execution needs stable
-cache keys for primitive containers and identity keys for expensive live
+cache keys for primitive containers and identity keys for expensive runtime
 objects. This module centralizes those rules so planning, execution, and
 metadata report values consistently.
 """
@@ -41,5 +41,5 @@ def value_fingerprint(value: Any) -> Any:
         return ("dict", _sort_fingerprints(items))
 
     # Avoid expensive dataframe/model hashing. Object identity is the cheap,
-    # correct cache key inside one live kernel call.
+    # correct cache key inside one running kernel call.
     return ("object", type(value).__module__, type(value).__qualname__, id(value))

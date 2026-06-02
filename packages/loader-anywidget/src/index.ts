@@ -1,9 +1,9 @@
 import {
   defineLoader,
-  type FormatLoader,
-  type FormatLoaderContext,
-  type FormatRecord,
-  type BlobRef,
+  type ExportBlob,
+  type ExportLoader,
+  type ExportLoaderContext,
+  type JsonObject,
   type JsonValue,
 } from "@marimo-team/export-reader";
 
@@ -48,7 +48,8 @@ export interface MountedAnyWidget<T extends AnyWidgetState = AnyWidgetState> {
 }
 
 export interface LoadedAnyWidget<T extends AnyWidgetState = AnyWidgetState> {
-  record: FormatRecord;
+  formatId: string;
+  metadata: JsonObject | null;
   descriptor: AnyWidgetDescriptor;
   initialState: T;
   createWidget(input?: AnyWidgetInput<T>): Promise<StandaloneWidget<T>>;
@@ -56,23 +57,25 @@ export interface LoadedAnyWidget<T extends AnyWidgetState = AnyWidgetState> {
   dispose(): void;
 }
 
-export function anywidgetLoader<T extends AnyWidgetState = AnyWidgetState>(): FormatLoader<
+export function anywidgetLoader<T extends AnyWidgetState = AnyWidgetState>(): ExportLoader<
   LoadedAnyWidget<T>
 > {
   return defineLoader({
     formatId: anywidgetFormat,
-    async load(context: FormatLoaderContext) {
+    async load(context: ExportLoaderContext) {
       return loadAnyWidget<T>(context);
     },
   });
 }
 
 async function loadAnyWidget<T extends AnyWidgetState>(
-  context: FormatLoaderContext,
+  context: ExportLoaderContext,
 ): Promise<LoadedAnyWidget<T>> {
   const descriptor = await context.file("descriptor").json<AnyWidgetDescriptor>();
   const initialState = await loadInitialState<T>(context, descriptor);
-  const inlineCssText = context.record.data.files.style ? await context.file("style").text() : null;
+  const inlineCssText = context.files().includes("style")
+    ? await context.file("style").text()
+    : null;
   const objectUrls = new Set<string>();
 
   const createWidgetWithCleanup = async (
@@ -104,7 +107,8 @@ async function loadAnyWidget<T extends AnyWidgetState>(
   };
 
   return {
-    record: context.record,
+    formatId: context.formatId,
+    metadata: context.metadata,
     descriptor,
     initialState,
     async createWidget(input) {
@@ -146,14 +150,14 @@ async function importRuntimeModule<T extends AnyWidgetState>(
 }
 
 async function loadInitialState<T extends AnyWidgetState>(
-  context: FormatLoaderContext,
+  context: ExportLoaderContext,
   descriptor: AnyWidgetDescriptor,
 ): Promise<T> {
   const state: Record<string, unknown> = {};
 
   for (const [key, value] of Object.entries(descriptor.state)) {
     state[key] =
-      isBlobRef(value) && context.record.data.files[`state.${key}`]
+      isBlobRef(value) && context.files().includes(`state.${key}`)
         ? await context.file(`state.${key}`).json<JsonValue>()
         : value;
   }
@@ -166,7 +170,7 @@ async function loadInitialState<T extends AnyWidgetState>(
   return restoreBufferBytes(state as T, bufferPaths, buffers);
 }
 
-function isBlobRef(value: unknown): value is BlobRef {
+function isBlobRef(value: unknown): value is ExportBlob {
   return (
     typeof value === "object" &&
     value !== null &&

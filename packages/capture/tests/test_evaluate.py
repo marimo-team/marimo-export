@@ -8,6 +8,7 @@ from typing import Any
 
 import moexport as mox
 import pytest
+from moexport.evaluate import evaluate
 from marimo._ast.cell import CellConfig
 from marimo._ast.compiler import compile_cell
 from marimo._messaging.notebook.document import (
@@ -69,7 +70,7 @@ def test_evaluate_expression_metadata_ignores_builtins(monkeypatch) -> None:
     ctx = FakeContext(graph=graph, globals={"df": [1], "xs": [2, 3]})
     monkeypatch.setattr(target_module, "get_context", lambda: ctx)
 
-    response = run(mox.evaluate("len(df) + max(xs)"))
+    response = run(evaluate("len(df) + max(xs)"))
     result = first_result(response)
 
     assert result["value"] == 4
@@ -84,7 +85,7 @@ def test_evaluate_expression_metadata_ignores_comprehension_locals(
     ctx = FakeContext(graph=graph, globals={"xs": [1, 2], "offset": 10})
     monkeypatch.setattr(target_module, "get_context", lambda: ctx)
 
-    response = run(mox.evaluate("{x: y for x in xs for y in [x + offset]}"))
+    response = run(evaluate("{x: y for x in xs for y in [x + offset]}"))
     result = first_result(response)
 
     assert result["value"] == {1: 11, 2: 12}
@@ -108,7 +109,7 @@ def test_evaluate_recomputes_cell_body_without_display_only_refs(
     )
     monkeypatch.setattr(target_module, "get_context", lambda: ctx)
 
-    response = run(mox.evaluate("y", {"x": 2}))
+    response = run(evaluate("y", {"x": 2}))
     result = first_result(response)
 
     assert result["value"] == 3
@@ -124,7 +125,7 @@ def test_evaluate_auto_fills_live_sibling_defs(monkeypatch) -> None:
     )
     monkeypatch.setattr(target_module, "get_context", lambda: ctx)
 
-    response = run(mox.evaluate("interval", {"symbols": ["GOOGL"]}))
+    response = run(evaluate("interval", {"symbols": ["GOOGL"]}))
     result = first_result(response)
 
     assert result["value"] == "1d"
@@ -141,7 +142,7 @@ def test_evaluate_computes_missing_sibling_defaults(monkeypatch) -> None:
     ctx = FakeContext(graph=graph, globals={"a": 1})
     monkeypatch.setattr(target_module, "get_context", lambda: ctx)
 
-    response = run(mox.evaluate("b", {"a": 10}))
+    response = run(evaluate("b", {"a": 10}))
     result = first_result(response)
 
     assert result["value"] == 2
@@ -159,7 +160,7 @@ def test_evaluate_errors_when_sibling_default_is_unavailable(monkeypatch) -> Non
     monkeypatch.setattr(target_module, "get_context", lambda: ctx)
 
     with pytest.raises(ValueError, match="Cannot auto-fill 'b'"):
-        run(mox.evaluate("b", {"a": 10}))
+        run(evaluate("b", {"a": 10}))
 
 
 def test_evaluate_definition_reuses_clean_live_value(monkeypatch) -> None:
@@ -182,7 +183,7 @@ def test_evaluate_definition_reuses_clean_live_value(monkeypatch) -> None:
     )
     monkeypatch.setattr(target_module, "get_context", lambda: ctx)
 
-    response = run(mox.evaluate("chart"))
+    response = run(evaluate("chart"))
     result = first_result(response)
 
     assert response["target"] == "chart"
@@ -221,7 +222,7 @@ def test_evaluate_definition_recomputes_dirty_dependencies(monkeypatch) -> None:
     )
     monkeypatch.setattr(target_module, "get_context", lambda: ctx)
 
-    response = run(mox.evaluate("chart", {"symbols": ["GOOGL"]}))
+    response = run(evaluate("chart", {"symbols": ["GOOGL"]}))
     result = first_result(response)
 
     assert result["value"] == "GOOGL:1d:800"
@@ -281,7 +282,7 @@ def test_evaluate_auto_filled_sibling_defs_do_not_dirty_dependencies(
     )
     monkeypatch.setattr(target_module, "get_context", lambda: ctx)
 
-    response = run(mox.evaluate("chart", {"chart_width": 1000}))
+    response = run(evaluate("chart", {"chart_width": 1000}))
     result = first_result(response)
 
     assert result["value"] == "AAPL:1d:1000"
@@ -297,7 +298,7 @@ def test_evaluate_expression_uses_live_values(monkeypatch) -> None:
     ctx = FakeContext(graph=graph, globals={"df": "AAPL:1d"})
     monkeypatch.setattr(target_module, "get_context", lambda: ctx)
 
-    response = run(mox.evaluate("df + ':close'"))
+    response = run(evaluate("df + ':close'"))
     result = first_result(response)
 
     assert result["kind"] == "expression"
@@ -316,7 +317,7 @@ def test_evaluate_result_metadata_includes_mermaid_trace(monkeypatch) -> None:
     ctx = FakeContext(graph=graph, globals={"symbol": "AAPL", "chart": "<b>AAPL</b>"})
     monkeypatch.setattr(target_module, "get_context", lambda: ctx)
 
-    response = run(mox.evaluate("chart", {"symbol": "MSFT"}))
+    response = run(evaluate("chart", {"symbol": "MSFT"}))
     mermaid = first_result(response)["metadata"]["mermaid"]
 
     assert mermaid
@@ -335,7 +336,7 @@ def test_runtime_expression_can_read_cell_source(monkeypatch) -> None:
     ctx = FakeContext(graph=graph, globals={"symbols": ["AAPL"]})
     monkeypatch.setattr(target_module, "get_context", lambda: ctx)
 
-    response = run(mox.evaluate("mox.runtime().cell(index=1).source"))
+    response = run(evaluate("mox.runtime().cell(index=1).source"))
     result = first_result(response)
 
     assert result["value"] == "symbols[0]"
@@ -404,7 +405,7 @@ if __name__ == "__main__":
     ctx = FakeContext(graph=graph, globals={}, filename=str(notebook))
     monkeypatch.setattr(target_module, "get_context", lambda: ctx)
 
-    response = run(mox.evaluate('mox.runtime().cell("change_desc").source'))
+    response = run(evaluate('mox.runtime().cell("change_desc").source'))
     result = first_result(response)
 
     assert result["value"] == 'mo.md("hello")'
@@ -436,7 +437,7 @@ def test_runtime_expression_selects_cell_name_from_live_document(
     )
 
     with notebook_document_context(document):
-        response = run(mox.evaluate('mox.runtime().cell("change_desc").source'))
+        response = run(evaluate('mox.runtime().cell("change_desc").source'))
     result = first_result(response)
 
     assert result["value"] == 'mo.md("hello")'
@@ -485,7 +486,7 @@ if __name__ == "__main__":
     ctx = FakeContext(graph=graph, globals={}, filename=str(notebook))
     monkeypatch.setattr(target_module, "get_context", lambda: ctx)
 
-    response = run(mox.evaluate('mox.runtime().cell("change_desc").source'))
+    response = run(evaluate('mox.runtime().cell("change_desc").source'))
     result = first_result(response)
 
     assert result["value"] == 'mo.md("hello")'
@@ -504,7 +505,7 @@ def test_runtime_expression_materializes_cell_output_with_overrides(
     monkeypatch.setattr(target_module, "get_context", lambda: ctx)
 
     response = run(
-        mox.evaluate(
+        evaluate(
             "mox.runtime().cell(index=1).output",
             {"symbols": ["MSFT"]},
         )
@@ -528,7 +529,7 @@ def test_runtime_stored_output_bypasses_scenario_output(monkeypatch) -> None:
     monkeypatch.setattr(target_module, "get_context", lambda: ctx)
 
     response = run(
-        mox.evaluate(
+        evaluate(
             "{"
             "'stored': mox.runtime().cell(index=1).stored_output(), "
             "'scenario': mox.runtime().cell(index=1).output"
@@ -553,7 +554,7 @@ def test_runtime_stored_output_records_materialization_errors(monkeypatch) -> No
     monkeypatch.setattr(target_module, "get_context", lambda: ctx)
 
     response = run(
-        mox.evaluate(
+        evaluate(
             "mox.runtime().cell(index=1).stored_output(on_error='record')",
         )
     )
@@ -577,7 +578,7 @@ def test_runtime_snapshot_records_scheduled_output_errors(monkeypatch) -> None:
     monkeypatch.setattr(target_module, "get_context", lambda: ctx)
 
     response = run(
-        mox.evaluate(
+        evaluate(
             "mox.runtime().snapshot(include_empty_outputs=True, on_error='record')",
             {"symbols": []},
             output_cell_ids={CellId_t("display")},
@@ -608,7 +609,7 @@ def test_runtime_scenario_output_raises_recorded_materialization_errors(
 
     with pytest.raises(RuntimeError, match="list index out of range"):
         run(
-            mox.evaluate(
+            evaluate(
                 "mox.runtime().cell(index=1).scenario_output(on_error='raise')",
                 {"symbols": []},
                 output_cell_ids={CellId_t("display")},
@@ -639,7 +640,7 @@ def test_evaluate_batch_reuses_cells_with_identical_body_dependencies(
     monkeypatch.setattr(target_module, "get_context", lambda: ctx)
 
     response = run(
-        mox.evaluate(
+        evaluate(
             "chart",
             states=[
                 {"symbols": ["TSLA"], "chart_width": 240},
@@ -688,7 +689,7 @@ selector = Selector()
     monkeypatch.setattr(target_module, "get_context", lambda: ctx)
 
     response = run(
-        mox.evaluate(
+        evaluate(
             "chart",
             states=[
                 {"selector.value": ["CRWV", "MSFT"]},
@@ -729,7 +730,7 @@ selector = Selector()
     monkeypatch.setattr(target_module, "get_context", lambda: ctx)
 
     response = run(
-        mox.evaluate(
+        evaluate(
             "chart",
             states=[
                 {"selector.value": ["CRWV", "MSFT"]},
@@ -750,8 +751,8 @@ def test_evaluate_shape_is_stable_for_single_and_batch(monkeypatch) -> None:
     ctx = FakeContext(graph=graph, globals={"width": 1, "x": 2})
     monkeypatch.setattr(target_module, "get_context", lambda: ctx)
 
-    single = run(mox.evaluate("x", {"width": 2}))
-    batch = run(mox.evaluate("x", states=[{"width": 2}]))
+    single = run(evaluate("x", {"width": 2}))
+    batch = run(evaluate("x", states=[{"width": 2}]))
 
     assert single.keys() == batch.keys() == {"target", "results", "metadata"}
     assert (

@@ -63,25 +63,46 @@ Only that synthetic cell is scheduled by the outer script runner.
 `ExportClient` drives a running marimo server from Python:
 
 ```python
-from moexport import ExportClient, RuntimeInstall
+from moexport.client import ExportClient, RuntimeInstall
 
 client = ExportClient(
     "http://localhost:8787",
     notebook="finance.py",
-    runtime=RuntimeInstall("moexport[all]"),
+    runtime=RuntimeInstall(
+        "moexport[all]",
+        manager="uv",
+        source="kernel",
+        timeout_ms=120_000,
+        poll_interval_ms=1_000,
+    ),
 )
 
 result = client.export(spec, to="examples/vanilla-vite/public/export")
 archive = client.archive(spec)
+archive.bytes
 ```
 
 `client.export(...)` returns an `ExportResult` with `bundle_path`,
 `manifest_path`, `invocation_path`, `invocation_index_path`, `manifest`,
-`invocation`, and `session`.
+`invocation`, `session_id`, `session_name`, `session_path`, and
+`session_initialization_id`.
+
+`client.archive(...)` returns an `ExportArchiveResult` with `bytes`,
+`media_type`, `session_id`, `session_name`, `session_path`, and
+`session_initialization_id`.
 
 The default runtime is `"preinstalled"`, which checks that `moexport` is already
 importable in the target kernel. Pass `RuntimeInstall(...)` when the caller owns
 the package source and wants the client to install it.
+
+If `notebook` is provided and no matching session is running, `ExportClient`
+opens a marimo websocket session for that notebook before dispatching export
+code.
+
+`RuntimeInstall.package` is passed to marimo's package installer. `module`
+defaults to `"moexport"` for the post-install import check. `manager` and
+`source` are forwarded to marimo's installer. `timeout_ms` and
+`poll_interval_ms` control the post-install import probe.
 
 Pass `paths=[...]` when a spec refers to local exporter modules that the running
 kernel should import before export.
@@ -221,7 +242,7 @@ export:
         )
 ```
 
-An exporter receives the live Python value, an `ExporterContext`, and optional
+An exporter receives the runtime Python value, an `ExporterContext`, and optional
 format options. The context exposes `scenario_id`, `value_name`, and
 `format_name`. `ctx.write_blob(...)` writes a content-addressed file.
 `ctx.artifact(...)` returns the manifest record for the format.

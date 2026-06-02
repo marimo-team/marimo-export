@@ -1,6 +1,6 @@
 """Trace metadata for graph and execution diagnostics.
 
-Evaluation returns live Python values, but bundle producers also need a JSON
+Evaluation returns runtime Python values, but bundle producers also need a JSON
 account of how the value was obtained. This module turns the plan/execution
 facts into graph nodes, dependency edges, timing steps, cache status, and skip
 reasons without leaking Python object handles.

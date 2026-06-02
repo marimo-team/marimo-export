@@ -1,23 +1,23 @@
 {
   "schema": "moexport.invocation.v1",
   "version": 1,
-  "id": "sha256-602a2318dfd7130a",
-  "sha256": "602a2318dfd7130a991096fd0b89c0a0ebaf692b460a15ff1c42b7dbc9304cb7",
+  "id": "sha256-e90576c98d0e14a3",
+  "sha256": "e90576c98d0e14a357207e4c7ea70f6541c23ed3db8fae2fb8ba01d6d37bbdd6",
   "created_at": "2026-05-05T16:29:39.049800Z",
   "bundle": {
-    "id": "sha256-d7cd3dffcc105dff",
-    "sha256": "d7cd3dffcc105dffc685d722a507dfe70f6f59c14bb08b693831dc22d68e9a11",
-    "manifest_href": "bundles/sha256-d7cd3dffcc105dff/manifest.json"
+    "id": "sha256-6eeec7206a1381ad",
+    "sha256": "6eeec7206a1381ad9f756a86899aae0a66b1a70c08ef25000e2dc222ecc79b93",
+    "manifest_href": "bundles/sha256-6eeec7206a1381ad/manifest.json"
   },
   "notebook": {
     "name": "notebook.py",
     "source": {
-      "href": "blobs/sha256/59/32/5932a996f69a8d8905b3da4335db04753daba4a73d42ae93a181b492f85b89c8",
+      "href": "blobs/sha256/36/f2/36f2f1c16ba3e0403365548ca1bcf6fcd95ccfd765ffd60ed009512e6ce6173c",
       "media_type": "text/x-python",
       "size": 7553,
-      "sha256": "5932a996f69a8d8905b3da4335db04753daba4a73d42ae93a181b492f85b89c8"
+      "sha256": "36f2f1c16ba3e0403365548ca1bcf6fcd95ccfd765ffd60ed009512e6ce6173c"
     },
-    "source_sha256": "5932a996f69a8d8905b3da4335db04753daba4a73d42ae93a181b492f85b89c8"
+    "source_sha256": "36f2f1c16ba3e0403365548ca1bcf6fcd95ccfd765ffd60ed009512e6ce6173c"
   },
   "scenario_set": {
     "id": "sha256-0187493045851e49",

@@ -2,7 +2,7 @@
 
 marimo treats all definitions produced by one cell as a group. If a scenario
 overrides one name from that cell, this module fills the sibling definitions
-from the live runtime or by locally computing the cell's default output, so
+from the running kernel or by locally computing the cell's default output, so
 later planning can prune the overridden cell without losing required values.
 """
 
@@ -61,7 +61,7 @@ async def complete_overrides(
                         except Exception as exc:
                             raise ValueError(
                                 f"Cannot auto-fill {sibling!r} because it is defined in "
-                                f"the same cell as {name!r} and no live value or "
+                                f"the same cell as {name!r} and no runtime value or "
                                 "default cell value is available."
                             ) from exc
 
@@ -105,7 +105,7 @@ async def _default_cell_defs(
         interval = "1d"
 
     If a scenario overrides only ``symbols``, marimo's cell-override semantics
-    still require ``interval``. A live kernel can provide it from
+    still require ``interval``. A running kernel can provide it from
     ``ctx.globals``. Source-file export computes that default locally here.
     """
 
@@ -123,7 +123,9 @@ async def _default_cell_defs(
             if ref in glbls:
                 continue
             if ref not in graph.definitions:
-                raise NameError(f"{ref!r} is not defined in the graph or live globals.")
+                raise NameError(
+                    f"{ref!r} is not defined in the graph or runtime globals."
+                )
             glbls.update(
                 await _default_cell_defs(
                     graph=graph,

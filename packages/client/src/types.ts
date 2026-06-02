@@ -52,12 +52,16 @@ export interface ExportOptions {
   sessionId?: string;
   notebook?: string;
   outputRoot?: string;
+  paths?: readonly string[];
   runtime?: RuntimeOption;
   timeoutMs?: number;
 }
 
 export interface ExportResult {
-  session: RunningNotebook;
+  sessionId: string;
+  sessionName: string | null;
+  sessionPath: string | null;
+  sessionInitializationId: string | null;
   bundlePath: string;
   manifestPath: string;
   invocationPath: string;
@@ -69,7 +73,10 @@ export interface ExportResult {
 export interface ExportArchiveResult {
   bytes: Uint8Array;
   mediaType: typeof EXPORT_ARCHIVE_MEDIA_TYPE;
-  session: RunningNotebook;
+  sessionId: string;
+  sessionName: string | null;
+  sessionPath: string | null;
+  sessionInitializationId: string | null;
 }
 
 export interface ExecuteScratchpadOptions {

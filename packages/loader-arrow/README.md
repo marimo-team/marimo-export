@@ -9,10 +9,8 @@ with `@uwdata/flechette`.
 import { arrowLoader } from "@marimo-team/export-loader-arrow";
 import { readExport } from "@marimo-team/export-reader";
 
-const exp = await readExport({
-  root: "/export/",
-  loaders: [arrowLoader()],
-});
+const arrow = arrowLoader();
+const exp = await readExport({ root: "/export/" });
 
 const handle = exp.get({
   scenario: "default",
@@ -20,7 +18,7 @@ const handle = exp.get({
   format: "arrow",
 });
 
-const frame = await handle.load();
+const frame = await handle.load(arrow);
 
 const rows = await frame.rows();
 const columns = await frame.columns();

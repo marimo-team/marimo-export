@@ -60,13 +60,9 @@ export const OhlcWidgetPanel = ({ scenario }: OhlcWidgetPanelProps) => {
       storeRef.current = null;
       host.replaceChildren();
 
-      const exp = await readExport({
-        root: exportPublicRoot,
-        loaders: [anywidgetLoader<OhlcWidgetState>()],
-      });
-      loaded = await exp
-        .get({ scenario, value: "ohlc_dashboard", format: "bundle" })
-        .load(anywidgetLoader<OhlcWidgetState>());
+      const widget = anywidgetLoader<OhlcWidgetState>();
+      const exp = await readExport({ root: exportPublicRoot });
+      loaded = await exp.get({ scenario, value: "ohlc_dashboard", format: "bundle" }).load(widget);
 
       if (cancelled) {
         return;

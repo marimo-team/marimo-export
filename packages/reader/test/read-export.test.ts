@@ -3,8 +3,8 @@ import test from "node:test";
 import {
   jsonLoader,
   readExport,
-  type StaticExport,
-  type StaticExportArchive,
+  type Export,
+  type ExportArchive,
 } from "@marimo-team/export-reader";
 import {
   archiveBytes,
@@ -17,32 +17,26 @@ import {
   jsonPayloadHref,
   manifestWith,
   readFixtureFile,
-  unreachableFetch,
+  rootIndexFor,
   validManifest,
 } from "./fixtures/export-fixture.js";
 
 const selection = { scenario: "default", value: "value", format: "json" };
-const loaders = [jsonLoader<{ ok: boolean }>("json.v1")];
+const json = jsonLoader<{ ok: boolean }>("json.v1");
 
-test("readExport rejects index hrefs outside the hosted root", async () => {
+test("readExport rejects latest manifest hrefs outside the hosted root", async () => {
+  const index = rootIndexFor(validManifest());
+  assert.ok(index.latest);
+  index.latest.manifest_href = "../secret.json";
+
   await assert.rejects(
     readExport({
       root: "https://example.test/export/",
-      index: "../index.json",
-      fetch: unreachableFetch,
+      fetch: fetchFixtureFile({
+        "https://example.test/export/index.json": index,
+      }),
     }),
-    /Invalid index href/,
-  );
-});
-
-test("readExport rejects manifest hrefs outside the hosted root", async () => {
-  await assert.rejects(
-    readExport({
-      root: "https://example.test/export/",
-      manifest: "https://example.test/other/manifest.json",
-      fetch: unreachableFetch,
-    }),
-    /Invalid bundle href/,
+    /Invalid export root index\.latest\.manifest_href/,
   );
 });
 
@@ -50,7 +44,6 @@ test("readExport rejects manifest file hrefs outside the export root", async () 
   await assert.rejects(
     readExport({
       root: "https://example.test/export/",
-      manifest: "bundles/sha256-test/manifest.json",
       fetch: fetchFixtureFile(
         hostedFiles(
           manifestWith((manifest) => {
@@ -63,16 +56,30 @@ test("readExport rejects manifest file hrefs outside the export root", async () 
   );
 });
 
-test("readExport reads hosted, directory, and archive sources through one handle contract", async (t) => {
-  const manifest = validManifest();
+test("readExport opens the latest hosted, directory, and archive bundle by default", async (t) => {
+  const oldManifest = manifestWith((manifest) => {
+    manifest.id = "sha256-old";
+    manifest.sha256 = "old";
+  });
+  const latestManifest = manifestWith((manifest) => {
+    manifest.id = "sha256-latest";
+    manifest.sha256 = "latest";
+  });
+  const rootIndex = rootIndexFor(latestManifest, [oldManifest, latestManifest]);
+
   const adapters = [
     {
       name: "hosted root",
       open: () =>
         readExport({
           root: "https://example.test/export/",
-          fetch: fetchFixtureFile(hostedFiles(manifest)),
-          loaders,
+          fetch: fetchFixtureFile({
+            "https://example.test/export/index.json": rootIndex,
+            [`https://example.test/export/bundles/${oldManifest.id}/manifest.json`]: oldManifest,
+            [`https://example.test/export/bundles/${latestManifest.id}/manifest.json`]:
+              latestManifest,
+            [`https://example.test/export/${jsonPayloadHref}`]: jsonPayload,
+          }),
         }),
     },
     {
@@ -80,23 +87,35 @@ test("readExport reads hosted, directory, and archive sources through one handle
       open: () =>
         readExport({
           root: "export",
-          readFile: readFixtureFile(directoryFiles(manifest)),
+          readFile: readFixtureFile({
+            "export/index.json": rootIndex,
+            [`export/bundles/${oldManifest.id}/manifest.json`]: oldManifest,
+            [`export/bundles/${latestManifest.id}/manifest.json`]: latestManifest,
+            [`export/${jsonPayloadHref}`]: jsonPayload,
+          }),
           url: (href) => `/export/${href}`,
-          loaders,
         }),
     },
     {
       name: "archive",
-      open: () => readExport({ bytes: archiveBytes(manifest), loaders }),
+      open: () =>
+        readExport({
+          bytes: archiveBytes(latestManifest, {
+            "index.json": rootIndex,
+            [`bundles/${oldManifest.id}/manifest.json`]: oldManifest,
+            [`bundles/${latestManifest.id}/manifest.json`]: latestManifest,
+            [jsonPayloadHref]: jsonPayload,
+          }),
+        }),
     },
   ] satisfies Array<{
     name: string;
-    open: () => Promise<StaticExport | StaticExportArchive>;
+    open: () => Promise<Export | ExportArchive>;
   }>;
 
   for (const adapter of adapters) {
     await t.test(adapter.name, async () => {
-      await assertStaticExport(await adapter.open());
+      await assertExport(await adapter.open(), latestManifest.id);
     });
   }
 });
@@ -131,21 +150,26 @@ test("format reads reject bytes that do not match the manifest digest", async ()
   await assert.rejects(exp.get(selection).bytes(), /SHA-256/);
 });
 
-async function assertStaticExport(exp: StaticExport | StaticExportArchive): Promise<void> {
+async function assertExport(
+  exp: Export | ExportArchive,
+  manifestId = "sha256-test",
+): Promise<void> {
+  assert.equal(exp.id, manifestId);
+  assert.equal(exp.notebook.name, "demo.py");
+  assert.equal(exp.notebook.sourceSha256, "notebook-sha");
   assert.deepEqual(exp.scenarios(), ["default"]);
   assert.deepEqual(exp.values(), ["value"]);
   assert.deepEqual(exp.formats("value"), ["json"]);
 
   const scenario = exp.scenario("default");
   assert.equal(scenario.id, "default");
-  assert.deepEqual(
-    exp.scenarioRecords().map((record) => record.id),
-    ["default"],
-  );
+  assert.deepEqual(scenario.state, {});
 
   const handle = exp.get(selection);
   assert.deepEqual(handle.selection, selection);
-  assert.equal(handle.record.format_id, "json.v1");
+  assert.equal(handle.formatId, "json.v1");
+  assert.equal(handle.mediaType, "application/json");
+  assert.deepEqual(handle.files(), ["data"]);
   assert.deepEqual(scenario.get("value", "json").selection, selection);
   const url = handle.url();
   assert.notEqual(url, "");
@@ -156,5 +180,5 @@ async function assertStaticExport(exp: StaticExport | StaticExportArchive): Prom
   }
   assert.equal(await handle.text(), jsonPayload);
   assert.deepEqual(await handle.json(), { ok: true });
-  assert.deepEqual(await handle.load(), { ok: true });
+  assert.deepEqual(await handle.load(json), { ok: true });
 }

@@ -19,6 +19,7 @@ const client = createMarimoExportClient({
 const result = await client.export(spec, {
   notebook: "notebooks/finance.py",
   outputRoot: "examples/vanilla-vite/public/export",
+  paths: ["./local-exporters"],
   runtime: "preinstalled",
 });
 ```
@@ -27,6 +28,9 @@ If `notebook` is provided and no matching session is running, the client opens a
 marimo websocket session for that notebook before dispatching export code. The
 promise resolves after `moexport` writes the export root and returns manifest and
 invocation paths.
+
+`paths` prepends directories to the kernel `sys.path` before export execution.
+Pass it when a spec references local exporter modules.
 
 ## Runtime Installation
 
@@ -42,12 +46,17 @@ await client.export(spec, {
     package: "moexport[all]",
     force: true,
     manager: "uv",
+    source: "kernel",
+    timeoutMs: 120_000,
+    pollIntervalMs: 1_000,
   },
 });
 ```
 
 `package` is passed to marimo's package installer. `module` defaults to
-`"moexport"` for the post-install import check.
+`"moexport"` for the post-install import check. `manager` and `source` are
+forwarded to marimo's installer. `timeoutMs` and `pollIntervalMs` control the
+post-install import probe.
 
 ## Archive Export
 
@@ -108,25 +117,46 @@ Writes a static export root through the target marimo session.
 - `options.sessionId`: Existing marimo session id. Takes precedence over
   `notebook`.
 - `options.outputRoot`: Output root path seen by the Python kernel.
+- `options.paths`: Directories to prepend to kernel `sys.path` for local
+  exporters.
 - `options.runtime`: `"preinstalled"` or an explicit install request.
 - `options.timeoutMs`: Scratchpad execution timeout.
 
 Returns bundle path, manifest path, invocation trace paths, manifest JSON,
-invocation JSON, and the resolved session.
+invocation JSON, `sessionId`, `sessionName`, `sessionPath`, and
+`sessionInitializationId`.
 
 ### `client.archive(spec, options?)`
 
 Runs the same export and returns zipped export bytes for API routes that stream
 the bundle to a caller.
 
-### `client.sessions.list()`
+### `createMarimoWorkspaceClient(options)`
+
+Creates a `MarimoWorkspaceClient` for browsing marimo server state.
+
+```ts
+import { createMarimoWorkspaceClient } from "@marimo-team/export-client";
+
+const workspace = createMarimoWorkspaceClient({
+  server: "http://localhost:2718",
+});
+
+const sessions = await workspace.sessions.list();
+const notebooks = await workspace.notebooks.list();
+```
+
+Use this client when an app needs notebook discovery or source previews. Keep it
+separate from capture code that only needs `export(...)` or `archive(...)`.
+
+### `workspace.sessions.list()`
 
 Returns running marimo sessions from `/api/home/running_notebooks`.
 
-### `client.notebooks.list()`
+### `workspace.notebooks.list()`
 
 Returns marimo notebook files from the workspace file API.
 
-### `client.notebooks.source(path)`
+### `workspace.notebooks.source(path)`
 
 Returns the source text for one notebook path from the workspace file API.

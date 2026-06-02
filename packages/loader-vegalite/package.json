@@ -1,6 +1,6 @@
 {
   "name": "@marimo-team/export-loader-vegalite",
-  "version": "0.1.0",
+  "version": "0.0.0",
   "description": "Vega-Lite chart loader for marimo export bundles.",
   "files": [
     "dist"
@@ -16,6 +16,7 @@
   },
   "scripts": {
     "build": "rm -rf dist && tsc -p tsconfig.build.json",
+    "prepack": "pnpm build",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "oxlint .",
     "format": "oxfmt --write ."

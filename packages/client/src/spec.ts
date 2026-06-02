@@ -36,10 +36,69 @@ export type SourceSpec =
   | string
   | { def: string }
   | { expr: string }
-  | { cell: string | number | JsonObject; on_error?: "raise" | "record" }
-  | { snapshot?: JsonObject; notebook?: JsonObject }
-  | { report: JsonObject }
-  | ({ type: string } & JsonObject);
+  | { cell: string | number | CellSelector; on_error?: "raise" | "record" }
+  | NotebookSnapshotShorthand
+  | { report: ReportSourceInput }
+  | DefinitionSource
+  | ExpressionSource
+  | CellOutputSource
+  | NotebookSnapshotSource
+  | ReportSource;
+
+export type CellSelector =
+  | { id: string; name?: never; index?: never }
+  | { name: string; id?: never; index?: never }
+  | { index: number; id?: never; name?: never };
+
+export interface DefinitionSource {
+  type: "definition";
+  name: string;
+}
+
+export interface ExpressionSource {
+  type: "expression";
+  expression: string;
+}
+
+export interface CellOutputSource {
+  type: "cell_output";
+  cell: string | number | CellSelector;
+  on_error?: "raise" | "record";
+}
+
+export interface NotebookSnapshotOptions {
+  include_source?: boolean;
+  include_empty_outputs?: boolean;
+  include_internal_cells?: boolean;
+  on_error?: "raise" | "record";
+}
+
+export type NotebookSnapshotShorthand = NotebookSnapshotOptions &
+  ({ snapshot: JsonValue; notebook?: JsonValue } | { notebook: JsonValue; snapshot?: JsonValue });
+
+export type NotebookSnapshotSource = NotebookSnapshotOptions & {
+  type: "notebook_snapshot";
+};
+
+export type ReportCellInput = {
+  label?: string | null;
+  order?: number | null;
+} & (
+  | { cell: string | number | CellSelector; id?: never; name?: never; index?: never }
+  | { id: string; cell?: never; name?: never; index?: never }
+  | { name: string; cell?: never; id?: never; index?: never }
+  | { index: number; cell?: never; id?: never; name?: never }
+);
+
+export interface ReportSourceInput {
+  cells: ReportCellInput[];
+  include_source?: boolean;
+  on_error?: "raise" | "record";
+}
+
+export type ReportSource = ReportSourceInput & {
+  type: "report";
+};
 
 export interface RefExport {
   type: "ref";
@@ -58,13 +117,25 @@ export interface ExplicitFormat {
   options?: JsonObject;
 }
 
+export type BuiltinFormatConfig = ExplicitFormat | JsonObject | null;
+
+export type BuiltinFormatMap = Partial<Record<BuiltinFormatName, BuiltinFormatConfig>>;
+
+export type ExplicitFormatMap = Record<string, ExplicitFormat>;
+
+export type NamedBuiltinFormat = {
+  [Name in BuiltinFormatName]: Record<Name, BuiltinFormatConfig>;
+}[BuiltinFormatName];
+
+export type NamedExplicitFormat = Record<string, ExplicitFormat>;
+
 export type FormatInput =
   | BuiltinFormatName
-  | string
-  | { format: string; options?: JsonObject }
-  | Record<string, JsonObject | ExplicitFormat | null>;
+  | { format: BuiltinFormatName; options?: JsonObject }
+  | NamedBuiltinFormat
+  | NamedExplicitFormat;
 
 export interface ValueSpec {
   source: SourceSpec;
-  formats: Record<string, ExplicitFormat | JsonObject | null> | FormatInput[];
+  formats: BuiltinFormatMap | ExplicitFormatMap | FormatInput[];
 }

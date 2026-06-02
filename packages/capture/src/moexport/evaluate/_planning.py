@@ -1,10 +1,9 @@
 """Target planning over the running notebook dataflow graph.
 
-The planner decides which values can be reused from the live runtime and which
-cells must run locally for a target, definition override set, object patch set,
-and selected output cells. It is the boundary between static dependency
-analysis and the execution loop: the result is a declarative plan, not executed
-state.
+The planner decides which existing runtime values can be reused and which cells
+must run locally for a target, definition override set, object patch set, and
+selected output cells. It is the boundary between static dependency analysis and
+the execution loop: the result is a declarative plan, not executed state.
 """
 
 from __future__ import annotations
@@ -34,7 +33,7 @@ def _name_is_dirty(
     memo: dict[str, bool],
     stack: set[str],
 ) -> bool:
-    # Dirty means "must be recomputed locally": explicit override, missing live
+    # Dirty means "must be recomputed locally": explicit override, missing
     # value, or a defining cell whose body depends on another dirty name.
     if name in dirty_names:
         return True
@@ -119,7 +118,7 @@ def plan_target(
                 return
 
         if name in ctx.globals:
-            # Clean live globals are cache hits. This is the behavior that lets
+            # Clean runtime globals are cache hits. This is the behavior that lets
             # evaluate("df.head()") avoid rerunning an expensive df cell.
             live_values[name] = ctx.globals[name]
             return
@@ -128,7 +127,7 @@ def plan_target(
             require_cell(single_defining_cell(graph, name))
             return
 
-        raise NameError(f"{name!r} is not defined in the graph or live globals.")
+        raise NameError(f"{name!r} is not defined in the graph or runtime globals.")
 
     def require_cell(cid: CellId_t) -> None:
         if cid in needed or cid in visiting_cells:
@@ -138,7 +137,7 @@ def plan_target(
         cell = graph.cells[cid]
 
         # Plan from body refs only. A final display expression may mention a
-        # large live object, but it should not be required to compute defs.
+        # large runtime object, but it should not be required to compute defs.
         refs = set(body_refs(cell))
         if cid in output_cell_ids:
             refs |= display_refs(cell)

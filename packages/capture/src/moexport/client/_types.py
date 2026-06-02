@@ -24,7 +24,21 @@ class RuntimeInstall:
 
     package: str
     module: str = "moexport"
+    manager: str = "uv"
+    source: str = "kernel"
     force: bool = False
+    timeout_ms: int = 120_000
+    poll_interval_ms: int = 1_000
+
+
+@dataclass(frozen=True)
+class SessionInfo:
+    """Resolved marimo session used for export."""
+
+    session_id: str
+    name: str | None = None
+    path: str | None = None
+    initialization_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -37,4 +51,19 @@ class ExportResult:
     invocation_index_path: str
     manifest: dict[str, Any]
     invocation: dict[str, Any]
-    session: dict[str, Any]
+    session_id: str
+    session_name: str | None
+    session_path: str | None
+    session_initialization_id: str | None
+
+
+@dataclass(frozen=True)
+class ExportArchiveResult:
+    """In-memory archive result returned by `ExportClient.archive(...)`."""
+
+    bytes: bytes
+    media_type: str
+    session_id: str
+    session_name: str | None
+    session_path: str | None
+    session_initialization_id: str | None

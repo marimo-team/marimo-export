@@ -1,9 +1,8 @@
 import {
   defineLoader,
-  type FormatLoader,
-  type FormatLoaderContext,
-  type FormatRecord,
-  type BlobRef,
+  type ExportBlob,
+  type ExportLoader,
+  type ExportLoaderContext,
   type JsonObject,
 } from "@marimo-team/export-reader";
 import { parquetMetadataAsync, parquetReadObjects, parquetSchema } from "hyparquet";
@@ -24,34 +23,32 @@ export interface ParquetMetadata {
   raw: unknown;
 }
 
-export interface ParquetFormatHandle {
-  record: FormatRecord;
-  blob: BlobRef;
+export interface ParquetFile {
+  formatId: string;
+  blob: ExportBlob;
   metadata: JsonObject | null;
   url(): string;
   readMetadata(options?: Pick<ParquetReadOptions, "requestInit">): Promise<ParquetMetadata>;
   readRows(options?: ParquetReadOptions): Promise<Record<string, unknown>[]>;
 }
 
-export function parquetLoader(
-  defaults: ParquetReadOptions = {},
-): FormatLoader<ParquetFormatHandle> {
+export function parquetLoader(defaults: ParquetReadOptions = {}): ExportLoader<ParquetFile> {
   return defineLoader({
     formatId: dataframeParquetFormat,
-    load(context: FormatLoaderContext) {
+    load(context: ExportLoaderContext) {
       return createDataframeHandle(context, defaults);
     },
   });
 }
 
 function createDataframeHandle(
-  context: FormatLoaderContext,
+  context: ExportLoaderContext,
   defaults: ParquetReadOptions,
-): ParquetFormatHandle {
+): ParquetFile {
   return {
-    record: context.record,
+    formatId: context.formatId,
     blob: context.entry().ref,
-    metadata: context.record.metadata,
+    metadata: context.metadata,
     url() {
       return context.entry().url();
     },
@@ -88,7 +85,7 @@ function createDataframeHandle(
   };
 }
 
-async function parquetFile(context: FormatLoaderContext, requestInit?: RequestInit) {
+async function parquetFile(context: ExportLoaderContext, requestInit?: RequestInit) {
   const bytes = requestInit
     ? new Uint8Array(await (await context.entry().fetch(requestInit)).arrayBuffer())
     : await context.entry().bytes();

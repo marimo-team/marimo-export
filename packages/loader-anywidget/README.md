@@ -10,10 +10,8 @@ Python, Pyodide, or a marimo server.
 import { anywidgetLoader } from "@marimo-team/export-loader-anywidget";
 import { readExport } from "@marimo-team/export-reader";
 
-const exp = await readExport({
-  root: "/export/",
-  loaders: [anywidgetLoader()],
-});
+const anywidget = anywidgetLoader();
+const exp = await readExport({ root: "/export/" });
 
 const handle = exp.get({
   scenario: "default",
@@ -21,7 +19,7 @@ const handle = exp.get({
   format: "bundle",
 });
 
-const widget = await handle.load();
+const widget = await handle.load(anywidget);
 const mounted = await widget.mount(document.querySelector("#widget")!);
 
 try {
