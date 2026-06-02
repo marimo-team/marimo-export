@@ -8,9 +8,9 @@ Python, Pyodide, or a marimo server.
 
 ```ts
 import { anywidgetLoader } from "@marimo-team/export-loader-anywidget";
-import { readLatestExport } from "@marimo-team/export-reader";
+import { readExport } from "@marimo-team/export-reader";
 
-const exp = await readLatestExport({
+const exp = await readExport({
   root: "/export/",
   loaders: [anywidgetLoader()],
 });

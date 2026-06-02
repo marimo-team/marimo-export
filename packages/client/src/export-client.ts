@@ -4,6 +4,7 @@ import {
   exportWithClient,
   listRunningNotebooks,
   listWorkspaceNotebookFiles,
+  readWorkspaceNotebookSource,
 } from "./export-core";
 import type {
   ExportArchiveResult,
@@ -23,15 +24,14 @@ export interface MarimoExportClient {
   };
   notebooks: {
     list(): Promise<WorkspaceNotebook[]>;
+    source(path: string): Promise<string>;
   };
-  raw: MarimoExportTransport;
 }
 
 export function createMarimoExportClientFromTransport(
   client: MarimoExportTransport,
 ): MarimoExportClient {
   return {
-    raw: client,
     export(spec, request = {}) {
       return exportWithClient(spec, {
         client,
@@ -52,6 +52,9 @@ export function createMarimoExportClientFromTransport(
     notebooks: {
       list() {
         return listWorkspaceNotebookFiles(client);
+      },
+      source(path) {
+        return readWorkspaceNotebookSource(client, path);
       },
     },
   };

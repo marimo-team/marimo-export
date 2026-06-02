@@ -58,9 +58,9 @@ test("MarimoExportClient lists sessions and workspace notebooks through one publ
   }
 });
 
-async function assertLists(createExportClient: ExportClientFactory): Promise<void> {
+async function assertLists(createClient: ExportClientFactory): Promise<void> {
   const requests: string[] = [];
-  const client = createExportClient({
+  const client = createClient({
     server: "https://marimo.example.test",
     fetch: listFetch(requests),
   });
@@ -80,12 +80,17 @@ async function assertLists(createExportClient: ExportClientFactory): Promise<voi
       path: "/work/notebooks/finance.py",
     },
   ]);
-  assert.deepEqual(requests, ["/api/home/running_notebooks", "/api/home/workspace_files"]);
+  assert.equal(await client.notebooks.source("/work/notebooks/finance.py"), "# Finance\n");
+  assert.deepEqual(requests, [
+    "/api/home/running_notebooks",
+    "/api/home/workspace_files",
+    "/api/files/file_details",
+  ]);
 }
 
-async function assertExport(createExportClient: ExportClientFactory): Promise<void> {
+async function assertExport(createClient: ExportClientFactory): Promise<void> {
   const requests: ScratchpadRequest[] = [];
-  const client = createExportClient({
+  const client = createClient({
     server: "https://marimo.example.test",
     fetch: scratchpadFetch(requests),
   });
@@ -134,14 +139,13 @@ function scratchpadFetch(requests: ScratchpadRequest[]): ExportFetch {
       url: request.url,
     });
 
-    if (code.includes("find_spec")) {
-      return scratchpadResponse();
+    if (hasMarker(code, "RESULT")) {
+      return scratchpadResponse(exportStdout(code, exportPayload));
     }
-    if (code.includes("emit_bundle_archive")) {
+    if (hasMarker(code, "ARCHIVE")) {
       return scratchpadResponse(archiveStdout(code));
     }
-
-    return scratchpadResponse(exportStdout(code, exportPayload));
+    return scratchpadResponse();
   };
 }
 
@@ -182,6 +186,9 @@ function listFetch(requests: string[]): ExportFetch {
         ],
       });
     }
+    if (path === "/api/files/file_details") {
+      return Response.json({ contents: "# Finance\n" });
+    }
     throw new Error(`unexpected request: ${path}`);
   };
 }
@@ -196,9 +203,7 @@ function requestCode(body: unknown): string {
 }
 
 function exportStdout(code: string, payload: Omit<ExportResult, "session">): string {
-  const markerMatch = /print\(("__MOEXPORT_RESULT_[^"]+__") \+ json\.dumps/.exec(code);
-  assert.ok(markerMatch?.[1]);
-  const marker = JSON.parse(markerMatch[1]) as string;
+  const marker = resultMarker(code, "RESULT");
   return `${marker}${JSON.stringify({
     bundle_path: payload.bundlePath,
     manifest_path: payload.manifestPath,
@@ -210,10 +215,22 @@ function exportStdout(code: string, payload: Omit<ExportResult, "session">): str
 }
 
 function archiveStdout(code: string): string {
-  const markerMatch = /marker=("__MOEXPORT_ARCHIVE_[^"]+__")/.exec(code);
-  assert.ok(markerMatch?.[1]);
-  const marker = JSON.parse(markerMatch[1]) as string;
+  const marker = resultMarker(code, "ARCHIVE");
   return `${marker}${Buffer.from("zip-bytes").toString("base64")}\n`;
+}
+
+function resultMarker(code: string, kind: "RESULT" | "ARCHIVE"): string {
+  const marker = code.match(markerPattern(kind))?.[0];
+  assert.ok(marker);
+  return marker;
+}
+
+function hasMarker(code: string, kind: "RESULT" | "ARCHIVE"): boolean {
+  return markerPattern(kind).test(code);
+}
+
+function markerPattern(kind: "RESULT" | "ARCHIVE"): RegExp {
+  return new RegExp(`__MOEXPORT_${kind}_[0-9]+_[a-z0-9]+__`);
 }
 
 function scratchpadResponse(stdout?: string): Response {

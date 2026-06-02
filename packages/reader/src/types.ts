@@ -104,50 +104,39 @@ export interface FormatSelection {
   format: string;
 }
 
-export interface HostedManifestOptions {
-  root: string | URL;
-  manifest: string;
-  loaders?: FormatLoader[];
-  fetch?: FetchLike;
-}
-
-export interface HostedIndexOptions {
-  root: string | URL;
-  index?: string;
-  fetch?: FetchLike;
-}
-
-export interface HostedLatestOptions {
-  root: string | URL;
-  index?: string;
-  loaders?: FormatLoader[];
-  fetch?: FetchLike;
-}
-
-export interface DirectoryManifestOptions {
-  root: string;
-  manifest: string;
-  loaders?: FormatLoader[];
-  readFile: LocalReadFile;
-  url?: LocalUrlResolver;
-}
-
-export interface DirectoryLatestOptions {
-  root: string;
-  index?: string;
-  manifest?: string;
-  loaders?: FormatLoader[];
-  readFile: LocalReadFile;
-  url?: LocalUrlResolver;
-}
-
 export type ExportArchiveInput = ArrayBuffer | ArrayBufferView | Blob;
 
-export interface ArchiveManifestOptions {
-  bytes: ExportArchiveInput;
-  manifest?: string;
-  loaders?: FormatLoader[];
-}
+export type ReadExportOptions =
+  | {
+      root: string | URL;
+      manifest?: string;
+      index?: string;
+      loaders?: FormatLoader[];
+      fetch?: FetchLike;
+      readFile?: never;
+      url?: never;
+      bytes?: never;
+    }
+  | {
+      root: string;
+      manifest?: string;
+      index?: string;
+      loaders?: FormatLoader[];
+      readFile: LocalReadFile;
+      url?: LocalUrlResolver;
+      fetch?: never;
+      bytes?: never;
+    }
+  | {
+      bytes: ExportArchiveInput;
+      manifest?: string;
+      loaders?: FormatLoader[];
+      root?: never;
+      index?: never;
+      readFile?: never;
+      url?: never;
+      fetch?: never;
+    };
 
 export interface StaticExport {
   manifest: ExportManifest;

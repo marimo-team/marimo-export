@@ -1,4 +1,4 @@
-"""Target planning over the live notebook dataflow graph.
+"""Target planning over the running notebook dataflow graph.
 
 The planner decides which values can be reused from the live runtime and which
 cells must run locally for a target, definition override set, object patch set,

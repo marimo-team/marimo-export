@@ -7,9 +7,9 @@ metadata handles with `hyparquet`.
 
 ```ts
 import { parquetLoader } from "@marimo-team/export-loader-parquet";
-import { readLatestExport } from "@marimo-team/export-reader";
+import { readExport } from "@marimo-team/export-reader";
 
-const exp = await readLatestExport({
+const exp = await readExport({
   root: "/export/",
   loaders: [parquetLoader()],
 });

@@ -29,18 +29,18 @@ http://localhost:3000/examples/frameworkless/
 - `queueing-lab.html`: reads `notebooks/queueing_lab.py` exports. It covers a
   scenario matrix, JSON and HTML formats, Arrow and Parquet dataframes, and
   Vega-Lite charts.
-- `quadratic-program.html`: reads a live notebook export captured from a
+- `quadratic-program.html`: reads a notebook export captured from a
   quadratic-program tutorial. It mounts the exported `wigglystuff.Matrix`
   AnyWidget bundle and recomputes the 2D QP client-side.
-- `live-capture-archive.html`: builds a spec in browser JavaScript, asks a
+- `server-archive.html`: builds a spec in browser JavaScript, asks a
   running marimo server to capture an archive, and opens the returned zip with
-  `readExportArchive(...)`.
+  `readExport(...)`.
 
 The static reader pages use a CDN import map for third-party dependencies. That
 keeps the examples browser-native while still reusing the local package
 `dist/` entrypoints.
 
-## Live Capture
+## Server Archive
 
 Start the queueing notebook from the repository root:
 
@@ -55,7 +55,7 @@ uv run marimo edit notebooks/queueing_lab.py \
 Then open:
 
 ```text
-http://localhost:3000/examples/frameworkless/live-capture-archive.html
+http://localhost:3000/examples/frameworkless/server-archive.html
 ```
 
 The page imports `@marimo-team/export-client/browser`, creates a plain

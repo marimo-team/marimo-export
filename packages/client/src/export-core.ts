@@ -103,6 +103,24 @@ export async function listWorkspaceNotebookFiles(
     }));
 }
 
+export async function readWorkspaceNotebookSource(
+  client: MarimoExportTransport,
+  path: string,
+): Promise<string> {
+  const { response: httpResponse, data } = await client.POST("/api/files/file_details", {
+    body: { path },
+  });
+  const { ok, status, statusText } = httpResponse;
+
+  if (!ok) {
+    throw new Error(
+      `Failed to read marimo notebook ${JSON.stringify(path)}: ${status} ${statusText}`,
+    );
+  }
+
+  return fileContents(data);
+}
+
 export async function resolveExportSession(
   client: MarimoExportTransport,
   options: Pick<ExportOptions, "sessionId" | "notebook"> = {},
@@ -273,6 +291,10 @@ function isWorkspaceFileNode(value: unknown): value is WorkspaceFileNode {
 
 function isMarimoWorkspaceFile(file: WorkspaceFileNode): boolean {
   return file.isMarimoFile === true;
+}
+
+function fileContents(value: unknown): string {
+  return isRecord(value) && typeof value.contents === "string" ? value.contents : "";
 }
 
 function exportCode(spec: ExportSpec, outputRoot: string | undefined, marker: string): string {

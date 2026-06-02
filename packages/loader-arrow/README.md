@@ -7,9 +7,9 @@ with `@uwdata/flechette`.
 
 ```ts
 import { arrowLoader } from "@marimo-team/export-loader-arrow";
-import { readLatestExport } from "@marimo-team/export-reader";
+import { readExport } from "@marimo-team/export-reader";
 
-const exp = await readLatestExport({
+const exp = await readExport({
   root: "/export/",
   loaders: [arrowLoader()],
 });

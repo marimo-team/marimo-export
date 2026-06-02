@@ -6,10 +6,10 @@ from moexport.archive import (
     archive_bundle,
     emit_bundle_archive,
 )
+from moexport.client import ExportClient, ExportResult, RuntimeInstall
 from moexport.export import CaptureResult, capture as _capture
 from moexport.exporters import ExporterContext
 from moexport.evaluate import evaluate
-from moexport.live_capture import CaptureClient, RuntimeInstall
 from moexport.notebook import capture_notebook
 from moexport.query import open_export
 from moexport.runtime import NotebookRuntime
@@ -19,8 +19,9 @@ from moexport.spec import parse_export_spec as parse_spec
 
 __all__ = [
     "EXPORT_ARCHIVE_MEDIA_TYPE",
-    "CaptureClient",
     "CaptureResult",
+    "ExportClient",
+    "ExportResult",
     "ExportSpec",
     "ExporterContext",
     "NotebookRuntime",
@@ -47,7 +48,7 @@ async def capture(
     ``spec`` accepts an ``ExportSpec`` instance or raw spec mapping. ``to``
     sets the output root. Returns a ``CaptureResult`` with the written
     manifest, bundle identity, source spec, and invocation trace.
-    Requires a live marimo runtime, usually through ``marimo-export notebook``
+    Requires a running marimo runtime, usually through ``marimo-export notebook``
     or a notebook cell.
     """
 

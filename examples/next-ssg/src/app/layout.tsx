@@ -7,7 +7,7 @@ import "@/styles/globals.css";
 
 export const metadata: Metadata = {
   title: "marimo export SSG finance",
-  description: "Static finance pages generated from a live marimo notebook export bundle.",
+  description: "Static finance pages generated from a running marimo notebook export bundle.",
 };
 
 interface RootLayoutProps {

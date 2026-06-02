@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { vegaliteLoader, type VegaLiteRenderResult } from "@marimo-team/export-loader-vegalite";
-import { readLatestExport } from "@marimo-team/export-reader";
+import { readExport } from "@marimo-team/export-reader";
 
 import { exportPublicRoot } from "@/lib/export-paths";
 
@@ -28,7 +28,7 @@ export const VegaLiteChart = ({ scenario }: VegaLiteChartProps) => {
       setStatus("loading interactive Vega-Lite");
       host.replaceChildren();
 
-      const exp = await readLatestExport({
+      const exp = await readExport({
         root: exportPublicRoot,
         loaders: [vegaliteLoader({ actions: true })],
       });

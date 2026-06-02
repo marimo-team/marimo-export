@@ -1,13 +1,4 @@
-export {
-  defineLoader,
-  htmlLoader,
-  jsonLoader,
-  readExportArchive,
-  readExportDirectory,
-  readExportManifest,
-  readLatestExport,
-  textLoader,
-} from "./read-export.js";
+export { defineLoader, htmlLoader, jsonLoader, readExport, textLoader } from "./read-export.js";
 export { validateExportManifest, validateExportRootIndex } from "./schema.js";
 export type {
   FormatData,
@@ -21,17 +12,12 @@ export type {
   FormatSelection,
   BlobRef,
   CaptureRecord,
-  DirectoryLatestOptions,
-  DirectoryManifestOptions,
   ExportArchiveInput,
   ExportScenario,
   ExportManifest,
   ExportRootBundle,
   ExportRootIndex,
   FetchLike,
-  HostedIndexOptions,
-  HostedLatestOptions,
-  HostedManifestOptions,
   IdentityRecord,
   JsonObject,
   JsonPrimitive,
@@ -42,6 +28,7 @@ export type {
   ManifestScenario,
   ManifestValue,
   NotebookRecord,
+  ReadExportOptions,
   StaticExport,
   StaticExportArchive,
 } from "./types.js";

@@ -472,7 +472,7 @@
 
             <div id="widget" class="widget-slot"></div>
             <p id="widget-note" class="reading">
-              The matrix editor above is the AnyWidget bundle exported from the live notebook.
+              The matrix editor above is the AnyWidget bundle exported from the running notebook.
             </p>
           </div>
         </div>
@@ -552,7 +552,7 @@
     </main>
 
     <script type="module">
-      import { jsonLoader, readLatestExport } from "@marimo-team/export-reader";
+      import { jsonLoader, readExport } from "@marimo-team/export-reader";
       import { anywidgetLoader } from "@marimo-team/export-loader-anywidget";
 
       const SUMMARY_FORMAT = "qp.summary.json.v1";
@@ -592,7 +592,7 @@
       boot().catch(showError);
 
       async function boot() {
-        const exported = await readLatestExport({
+        const exported = await readExport({
           root: ROOT,
           loaders: [jsonLoader(SUMMARY_FORMAT), anywidgetLoader()],
         });

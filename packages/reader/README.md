@@ -9,10 +9,10 @@ marimo server and never executes Python.
 ## Open A Hosted Export
 
 ```ts
-import { readLatestExport } from "@marimo-team/export-reader";
+import { readExport } from "@marimo-team/export-reader";
 import { arrowLoader } from "@marimo-team/export-loader-arrow";
 
-const exp = await readLatestExport({
+const exp = await readExport({
   root: "/export/",
   loaders: [arrowLoader()],
 });
@@ -20,15 +20,15 @@ const exp = await readLatestExport({
 const prices = await exp.get({ scenario: "default", value: "prices", format: "arrow" }).load();
 ```
 
-`readLatestExport(...)` reads `index.json`, opens the latest manifest, and
-validates the bundle shape before returning a `StaticExport`.
+`readExport(...)` reads `index.json`, opens the latest manifest, and validates
+the bundle shape before returning a `StaticExport`.
 
 Use an explicit manifest when the caller already has one:
 
 ```ts
-import { readExportManifest } from "@marimo-team/export-reader";
+import { readExport } from "@marimo-team/export-reader";
 
-const exp = await readExportManifest({
+const exp = await readExport({
   root: "/export/",
   manifest: "bundles/sha256-abc123/manifest.json",
 });
@@ -38,9 +38,9 @@ const exp = await readExportManifest({
 
 ```ts
 import fs from "node:fs/promises";
-import { readExportDirectory } from "@marimo-team/export-reader";
+import { readExport } from "@marimo-team/export-reader";
 
-const exp = await readExportDirectory({
+const exp = await readExport({
   root: "public/export",
   readFile: (file) => fs.readFile(file),
   url: (href) => `/export/${href}`,
@@ -53,10 +53,10 @@ const exp = await readExportDirectory({
 ## Open An Archive
 
 ```ts
-import { readExportArchive } from "@marimo-team/export-reader";
+import { readExport } from "@marimo-team/export-reader";
 
 const response = await fetch("/api/export");
-const exp = await readExportArchive({ bytes: await response.arrayBuffer() });
+const exp = await readExport({ bytes: await response.arrayBuffer() });
 
 try {
   const summary = await exp.get({ scenario: "default", value: "summary", format: "json" }).json();
@@ -93,9 +93,9 @@ checks.
 Common JSON, text, and HTML formats can use built-in loaders:
 
 ```ts
-import { htmlLoader, jsonLoader, readLatestExport } from "@marimo-team/export-reader";
+import { htmlLoader, jsonLoader, readExport } from "@marimo-team/export-reader";
 
-const exp = await readLatestExport({
+const exp = await readExport({
   root: "/export/",
   loaders: [jsonLoader("summary.json.v1"), htmlLoader("note.html.v1")],
 });
@@ -118,47 +118,25 @@ const svgLoader = defineLoader({
 
 ## API Surface
 
-### `readLatestExport(options)`
+### `readExport(options)`
 
-Opens the latest manifest from a hosted export root.
-
-- `options.root`: Base URL for the export root.
-- `options.index`: Root index href. Defaults to `index.json`.
-- `options.loaders`: Format loaders used by `handle.load()`.
-- `options.fetch`: Fetch implementation. Defaults to global `fetch`.
-
-Returns `StaticExport`. Throws when the root index, manifest, or requested files
-fail validation.
-
-### `readExportManifest(options)`
-
-Opens an explicit manifest from a hosted export root.
+Opens a hosted root, local directory, or archive.
 
 - `options.root`: Base URL for the export root.
-- `options.manifest`: Manifest href.
-- `options.loaders`: Format loaders used by `handle.load()`.
-- `options.fetch`: Fetch implementation. Defaults to global `fetch`.
-
-### `readExportDirectory(options)`
-
-Opens the latest manifest or an explicit manifest from a local directory.
-
-- `options.root`: Local export root path.
-- `options.readFile`: Async file reader.
-- `options.index`: Root index href. Defaults to `index.json`.
-- `options.manifest`: Manifest href. When present, `readExportDirectory` skips the
-  root index.
-- `options.url`: Optional URL resolver for `.url()`.
-- `options.loaders`: Format loaders used by `handle.load()`.
-
-### `readExportArchive(options)`
-
-Opens the latest manifest or an explicit manifest from zip bytes.
-
+- `options.root` with `options.readFile`: Local export root path.
 - `options.bytes`: Archive bytes as `ArrayBuffer`, `ArrayBufferView`, or `Blob`.
-- `options.manifest`: Manifest href. Defaults to the latest bundle in
+- `options.manifest`: Manifest href. When omitted, `readExport(...)` reads the
+  latest bundle from `index.json`.
+- `options.index`: Root index href for hosted and local roots. Defaults to
   `index.json`.
+- `options.readFile`: Async file reader for local roots.
+- `options.url`: Optional URL resolver for local `.url()` results.
+- `options.fetch`: Fetch implementation. Defaults to global `fetch`.
 - `options.loaders`: Format loaders used by `handle.load()`.
+
+Returns `StaticExport` for hosted and local roots. Returns `StaticExportArchive`
+for archives, which also has `dispose()`. Throws when the root index, manifest,
+or requested files fail validation.
 
 ### `defineLoader(loader)`
 

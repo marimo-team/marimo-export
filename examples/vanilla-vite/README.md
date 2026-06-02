@@ -27,7 +27,7 @@ pnpm --filter @marimo-team/export-example-vanilla dev
 
 ## Bundle Contents
 
-The app calls `readLatestExport({ root: "/export/" })`, reads `public/export/index.json`,
+The app calls `readExport({ root: "/export/" })`, reads `public/export/index.json`,
 opens the latest manifest, and loads:
 
 - `summary/json`: custom code-defined JSON exporter.

@@ -355,7 +355,7 @@
     </main>
 
     <script type="module">
-      import { htmlLoader, jsonLoader, readLatestExport } from "@marimo-team/export-reader";
+      import { htmlLoader, jsonLoader, readExport } from "@marimo-team/export-reader";
       import { arrowLoader } from "@marimo-team/export-loader-arrow";
       import { parquetLoader } from "@marimo-team/export-loader-parquet";
       import { vegaliteLoader } from "@marimo-team/export-loader-vegalite";
@@ -363,7 +363,7 @@
       const root = "./exports/queueing-lab/";
       const $ = (selector) => document.querySelector(selector);
 
-      const exp = await readLatestExport({
+      const exp = await readExport({
         root,
         loaders: [
           jsonLoader("queue.summary.json.v1"),

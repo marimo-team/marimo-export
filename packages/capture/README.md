@@ -58,26 +58,33 @@ __moexport_result_abcd = await __moexport.capture(
 Only that synthetic cell is scheduled by the outer script runner.
 `mox.evaluate` applies scenario state before dirty downstream notebook cells run.
 
-## Capture From A Live Server
+## Export From A Running Server
 
-`CaptureClient` is a small Python client for a running marimo server:
+`ExportClient` drives a running marimo server from Python:
 
 ```python
-from moexport import CaptureClient, RuntimeInstall
+from moexport import ExportClient, RuntimeInstall
 
-capture = CaptureClient(
+client = ExportClient(
     "http://localhost:8787",
     notebook="finance.py",
     runtime=RuntimeInstall("moexport[all]"),
 )
 
-result = capture.capture(spec, to="examples/vanilla-vite/public/export")
-archive = capture.archive(spec)
+result = client.export(spec, to="examples/vanilla-vite/public/export")
+archive = client.archive(spec)
 ```
+
+`client.export(...)` returns an `ExportResult` with `bundle_path`,
+`manifest_path`, `invocation_path`, `invocation_index_path`, `manifest`,
+`invocation`, and `session`.
 
 The default runtime is `"preinstalled"`, which checks that `moexport` is already
 importable in the target kernel. Pass `RuntimeInstall(...)` when the caller owns
 the package source and wants the client to install it.
+
+Pass `paths=[...]` when a spec refers to local exporter modules that the running
+kernel should import before export.
 
 ## CLI
 

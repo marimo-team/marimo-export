@@ -2,7 +2,7 @@
 
 TypeScript client for asking a running marimo server to produce a static export.
 
-Use this package when JavaScript can reach a live marimo session. It sends
+Use this package when JavaScript can reach a running marimo session. It sends
 export code through marimo's scratchpad API and returns either a written export
 result or an in-memory archive. Finished bundle reading belongs to
 `@marimo-team/export-reader`.
@@ -53,7 +53,7 @@ await client.export(spec, {
 
 ```ts
 import { createMarimoExportClient } from "@marimo-team/export-client";
-import { readExportArchive } from "@marimo-team/export-reader";
+import { readExport } from "@marimo-team/export-reader";
 
 const client = createMarimoExportClient({ server: "http://localhost:2718" });
 const archive = await client.archive(spec, {
@@ -61,7 +61,7 @@ const archive = await client.archive(spec, {
   timeoutMs: 60_000,
 });
 
-const exp = await readExportArchive({ bytes: archive.bytes });
+const exp = await readExport({ bytes: archive.bytes });
 ```
 
 Archive export returns zip bytes with media type
@@ -127,7 +127,6 @@ Returns running marimo sessions from `/api/home/running_notebooks`.
 
 Returns marimo notebook files from the workspace file API.
 
-### `client.raw`
+### `client.notebooks.source(path)`
 
-Raw marimo transport used by the high-level methods. Use it only for endpoints
-outside the export client contract.
+Returns the source text for one notebook path from the workspace file API.

@@ -4,7 +4,7 @@ import path from "node:path";
 
 import { createMarimoExportClient } from "@marimo-team/export-client";
 import { arrowLoader } from "@marimo-team/export-loader-arrow";
-import { readExportArchive } from "@marimo-team/export-reader";
+import { readExport } from "@marimo-team/export-reader";
 
 import { marimoNotebook, marimoServerToken, marimoServerUrl } from "@/lib/marimo-env";
 
@@ -151,7 +151,7 @@ export const getMarketWindowPage = async (
       ...sessionTarget,
     }),
   );
-  const exp = await readExportArchive({
+  const exp = await readExport({
     bytes: archive.bytes,
     loaders: [arrowLoader({ useDate: true })],
   });

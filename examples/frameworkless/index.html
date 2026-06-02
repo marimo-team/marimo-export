@@ -153,7 +153,7 @@
       <p class="lede">
         Each app is one HTML file. Each bundle was produced by
         <code>marimo-export notebook</code> from a notebook and YAML spec under
-        <code>notebooks/</code>. The live capture app produces its spec in the browser.
+        <code>notebooks/</code>. The archive client page produces its spec in the browser.
       </p>
 
       <section class="grid" aria-label="Frameworkless apps">
@@ -184,15 +184,15 @@
             <li><code>wigglystuff.Matrix</code></li>
           </ul>
         </a>
-        <a class="card" href="./live-capture-archive.html">
-          <span class="tag">live capture</span>
-          <h2>Archive capture client</h2>
+        <a class="card" href="./server-archive.html">
+          <span class="tag">server archive</span>
+          <h2>Browser archive client</h2>
           <p>
-            Programmatic browser spec, live marimo scratchpad capture, and in-memory archive read.
+            Programmatic browser spec, running marimo server export, and in-memory archive read.
           </p>
           <ul>
             <li><code>@marimo-team/export-client/browser</code></li>
-            <li><code>readExportArchive(...)</code></li>
+            <li><code>readExport(...)</code></li>
           </ul>
         </a>
       </section>
