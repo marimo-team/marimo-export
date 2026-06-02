@@ -13,7 +13,13 @@ const validSpec = {
     },
     snapshot: {
       source: { snapshot: true, include_source: false },
-      formats: [{ report: { export: customExport } }],
+      formats: {
+        report: { export: customExport },
+      },
+    },
+    report: {
+      source: { report: { cells: [{ name: "summary" }] } },
+      formats: ["markdown"],
     },
   },
 } satisfies ExportSpec;
@@ -38,6 +44,36 @@ const customFormatOptions = {
   },
 } satisfies ExportSpec;
 
+const customFormatArrayItem = {
+  values: {
+    table: {
+      source: { def: "table" },
+      // @ts-expect-error Custom formats use map form so one list item cannot hide multiple names.
+      formats: [{ report: { export: customExport }, summary: { export: customExport } }],
+    },
+  },
+} satisfies ExportSpec;
+
+const multipleBuiltinFormatArrayItem = {
+  values: {
+    table: {
+      source: { def: "table" },
+      // @ts-expect-error Format list objects contain one built-in format name.
+      formats: [{ json: {}, text: {} }],
+    },
+  },
+} satisfies ExportSpec;
+
+const emptyReport = {
+  values: {
+    table: {
+      // @ts-expect-error Report sources need at least one selected cell.
+      source: { report: { cells: [] } },
+      formats: ["markdown"],
+    },
+  },
+} satisfies ExportSpec;
+
 const unknownSourceType = {
   values: {
     table: {
@@ -51,4 +87,7 @@ const unknownSourceType = {
 void validSpec;
 void unknownFormatName;
 void customFormatOptions;
+void customFormatArrayItem;
+void multipleBuiltinFormatArrayItem;
+void emptyReport;
 void unknownSourceType;
