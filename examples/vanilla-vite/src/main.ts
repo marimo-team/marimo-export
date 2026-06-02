@@ -1,4 +1,4 @@
-import { readLatestExport, type FormatHandle, type StaticExport } from "@marimo-team/export-reader";
+import { readExport, type FormatHandle, type StaticExport } from "@marimo-team/export-reader";
 import {
   anywidgetLoader,
   createWidgetStore,
@@ -289,7 +289,7 @@ let activeLoad = 0;
 
 async function main(): Promise<void> {
   try {
-    const exp = await readLatestExport({
+    const exp = await readExport({
       root: EXPORT_ROOT,
       loaders: [
         anywidgetLoader(),

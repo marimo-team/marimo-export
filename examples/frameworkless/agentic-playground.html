@@ -467,7 +467,7 @@
         defineLoader,
         htmlLoader,
         jsonLoader,
-        readLatestExport,
+        readExport,
       } from "../../packages/reader/dist/index.js";
 
       const root = "./exports/agentic-playground/";
@@ -485,7 +485,7 @@
         },
       });
 
-      const exportReader = await readLatestExport({
+      const exportReader = await readExport({
         root,
         loaders: [
           jsonLoader(["playground.summary.json.v1", "playground.records.json.v1"]),

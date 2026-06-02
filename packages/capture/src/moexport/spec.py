@@ -108,7 +108,7 @@ class CodeStateValue(SpecModel):
 
     code: str = Field(
         description=(
-            "Python expression evaluated in the live notebook runtime before "
+            "Python expression evaluated in the running notebook runtime before "
             "calling `mox.evaluate`."
         ),
     )

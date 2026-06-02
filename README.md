@@ -60,10 +60,10 @@ uv run marimo-export query notebooks/__marimo__/static-export entries \
 ## Read In The Browser
 
 ```ts
-import { readLatestExport } from "@marimo-team/export-reader";
+import { readExport } from "@marimo-team/export-reader";
 import { arrowLoader } from "@marimo-team/export-loader-arrow";
 
-const exp = await readLatestExport({
+const exp = await readExport({
   root: "/export/",
   loaders: [arrowLoader()],
 });

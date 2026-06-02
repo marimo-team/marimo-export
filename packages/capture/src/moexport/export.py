@@ -1,4 +1,4 @@
-"""Public export entry point for live marimo notebook sessions."""
+"""Public export entry point for running marimo notebook sessions."""
 
 from __future__ import annotations
 
@@ -50,7 +50,7 @@ async def capture(
 ) -> CaptureResult:
     """Evaluate an export spec and write a static export bundle.
 
-    This must run inside a live marimo notebook session. Scenarios are resolved
+    This must run inside a running marimo notebook session. Scenarios are resolved
     into one batched evaluation plan so clean cells can be reused across the
     scenario matrix.
     """

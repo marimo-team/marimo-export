@@ -1,7 +1,7 @@
 {
   "name": "@marimo-team/export-client",
   "version": "0.1.0",
-  "description": "Client for asking a live marimo session to produce export bundles.",
+  "description": "Client for asking a running marimo session to produce export bundles.",
   "files": [
     "dist"
   ],

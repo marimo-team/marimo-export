@@ -3,7 +3,7 @@
 Next.js example that renders static pages from marimo export bundles.
 
 The default build reads the checked-in bundle at `public/export/finance`. A
-live marimo server is only needed when regenerating that public bundle or when
+running marimo server is only needed when regenerating that public bundle or when
 building the optional archive-backed routes.
 
 ## Build
@@ -56,7 +56,7 @@ Set `MARIMO_ARCHIVE_CAPTURE=1` to also render
   the public bundle.
 - `src/app/market-window/[start]/[end]/page.tsx` is optional. When
   `MARIMO_ARCHIVE_CAPTURE=1`, it captures an archive with
-  `client.archive`, opens the returned zip bytes with `readExportArchive(...)`,
+  `client.archive`, opens the returned zip bytes with `readExport(...)`,
   and renders JSON, Arrow, and PNG formats
   without writing a public bundle folder.
 - `src/components/ohlc-widget-panel.tsx` hydrates the AnyWidget format and

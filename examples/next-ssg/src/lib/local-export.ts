@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 import { createMarimoExportClient } from "@marimo-team/export-client";
-import { readExportDirectory, type StaticExport } from "@marimo-team/export-reader";
+import { readExport, type StaticExport } from "@marimo-team/export-reader";
 
 import { exportPublicRoot } from "@/lib/export-paths";
 import { marimoNotebook, marimoServerToken, marimoServerUrl } from "@/lib/marimo-env";
@@ -98,7 +98,7 @@ const ensureFinanceExport = async (): Promise<StaticExport> => {
     await captureFinanceBundle();
   }
 
-  return readExportDirectory({
+  return readExport({
     root: LOCAL_EXPORT_ROOT,
     readFile: (file) => fs.readFile(file),
     url: (href) => `${exportPublicRoot}${href}`,

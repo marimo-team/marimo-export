@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Live marimo archive capture</title>
+    <title>Running marimo archive export</title>
     <script type="importmap">
       {
         "imports": {
@@ -359,9 +359,9 @@
       <header class="topbar">
         <div>
           <p class="eyebrow"><a href="./">Frameworkless exports</a></p>
-          <h1>Live archive capture</h1>
+          <h1>Running server archive export</h1>
           <p class="lede">
-            A single HTML file creates a spec in JavaScript, asks a live marimo session for a zip
+            A single HTML file creates a spec in JavaScript, asks a running marimo session for a zip
             archive, then reads the returned bundle without a build step.
           </p>
         </div>
@@ -370,7 +370,7 @@
 
       <section class="section" aria-labelledby="connection-title">
         <div class="section-header">
-          <h2 id="connection-title">Capture target</h2>
+          <h2 id="connection-title">Server target</h2>
           <span>Queueing notebook archive mode</span>
         </div>
         <form id="capture-form" class="capture-form">
@@ -514,7 +514,7 @@
 
     <script type="module">
       import { createMarimoExportClient } from "@marimo-team/export-client/browser";
-      import { readExportArchive, htmlLoader, jsonLoader } from "@marimo-team/export-reader";
+      import { readExport, htmlLoader, jsonLoader } from "@marimo-team/export-reader";
 
       const $ = (selector) => document.querySelector(selector);
       const state = { archive: null };
@@ -532,7 +532,7 @@
         try {
           const options = captureOptions();
           const result = await options.client.archive(createQueueingArchiveSpec(), options.request);
-          const archive = await readExportArchive({
+          const archive = await readExport({
             bytes: result.bytes,
             loaders: [
               jsonLoader("queue.summary.json.v1"),

@@ -1,7 +1,7 @@
 [project]
 name = "moexport"
 version = "0.1.0"
-description = "Capture live marimo notebook values into export bundles."
+description = "Capture running marimo notebook values into export bundles."
 readme = "README.md"
 authors = [{ name = "Péter Ferenc Gyarmati", email = "dev.petergy@gmail.com" }]
 requires-python = ">=3.12"

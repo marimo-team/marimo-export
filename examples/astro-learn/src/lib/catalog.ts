@@ -68,7 +68,7 @@ async function notebookRecord(
   client: MarimoExportClient,
   notebook: WorkspaceNotebook,
 ): Promise<LearnNotebook> {
-  const source = await readNotebookSource(client.raw, notebook.path);
+  const source = await client.notebooks.source(notebook.path);
   const summary = description(source);
   return {
     name: notebook.name,
@@ -79,31 +79,6 @@ async function notebookRecord(
     topic: topic(notebook.path),
     cell_count: cellCount(source),
   };
-}
-
-async function readNotebookSource(
-  client: MarimoExportClient["raw"],
-  path: string,
-): Promise<string> {
-  const { response, data } = await client.POST("/api/files/file_details", {
-    body: { path },
-  });
-  if (!response.ok) {
-    return "";
-  }
-  return fileContents(data);
-}
-
-function fileContents(value: unknown): string {
-  if (
-    typeof value === "object" &&
-    value !== null &&
-    "contents" in value &&
-    typeof value.contents === "string"
-  ) {
-    return value.contents;
-  }
-  return "";
 }
 
 function limitByPath<T extends { path: string }>(notebooks: T[]): T[] {

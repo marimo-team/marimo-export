@@ -6,22 +6,17 @@ import type {
   FormatLoaderSelector,
   FormatRecord,
   FormatSelection,
-  ArchiveManifestOptions,
   BlobRef,
-  DirectoryLatestOptions,
-  DirectoryManifestOptions,
   ExportScenario,
   ExportArchiveInput,
   ExportManifest,
   ExportRootIndex,
   FetchLike,
-  HostedIndexOptions,
-  HostedLatestOptions,
-  HostedManifestOptions,
   LocalReadFile,
   LocalReadFileResult,
   LocalUrlResolver,
   ManifestScenario,
+  ReadExportOptions,
   StaticExport,
   StaticExportArchive,
 } from "./types.js";
@@ -30,32 +25,48 @@ import { safeBundlePath, validateExportManifest, validateExportRootIndex } from 
 
 const DEFAULT_ROOT_INDEX = "index.json";
 
-export function readLatestExport(options: HostedLatestOptions): Promise<StaticExport> {
-  return openLatestHostedExport(options);
-}
+type HostedReadOptions = {
+  root: string | URL;
+  manifest?: string;
+  index?: string;
+  loaders?: FormatLoader[];
+  fetch?: FetchLike;
+};
 
-export function readExportManifest(options: HostedManifestOptions): Promise<StaticExport> {
-  return openHostedManifest(options);
-}
+type DirectoryReadOptions = {
+  root: string;
+  manifest?: string;
+  index?: string;
+  loaders?: FormatLoader[];
+  readFile: LocalReadFile;
+  url?: LocalUrlResolver;
+};
 
-export function readExportDirectory(options: DirectoryLatestOptions): Promise<StaticExport> {
-  if (options.manifest) {
-    return openLocalManifest({
-      root: options.root,
-      manifest: options.manifest,
-      readFile: options.readFile,
-      ...(options.loaders !== undefined ? { loaders: options.loaders } : {}),
-      ...(options.url !== undefined ? { url: options.url } : {}),
-    });
+type ArchiveReadOptions = {
+  bytes: ExportArchiveInput;
+  manifest?: string;
+  loaders?: FormatLoader[];
+};
+
+export function readExport(
+  options: ReadExportOptions & { bytes: ExportArchiveInput },
+): Promise<StaticExportArchive>;
+export function readExport(
+  options: ReadExportOptions & { root: string | URL },
+): Promise<StaticExport>;
+export function readExport(
+  options: ReadExportOptions,
+): Promise<StaticExport | StaticExportArchive> {
+  if ("bytes" in options) {
+    return openArchiveExport(options as ArchiveReadOptions);
   }
-  return openLatestLocalExport(options);
+  if ("readFile" in options) {
+    return openDirectoryExport(options as DirectoryReadOptions);
+  }
+  return openHostedExport(options as HostedReadOptions);
 }
 
-export function readExportArchive(options: ArchiveManifestOptions): Promise<StaticExportArchive> {
-  return openArchiveManifest(options);
-}
-
-async function loadRootIndex(options: HostedIndexOptions): Promise<ExportRootIndex> {
+async function loadRootIndex(options: HostedReadOptions): Promise<ExportRootIndex> {
   const root = rootUrl(options.root);
   const fetchImpl = options.fetch ?? globalFetch();
   return validateExportRootIndex(
@@ -67,31 +78,27 @@ async function loadRootIndex(options: HostedIndexOptions): Promise<ExportRootInd
   );
 }
 
-async function openLatestHostedExport(options: HostedLatestOptions): Promise<StaticExport> {
+async function openHostedExport(options: HostedReadOptions): Promise<StaticExport> {
+  if (options.manifest) {
+    return openHostedManifest(options, options.manifest);
+  }
+
   const index = await loadRootIndex(options);
   if (!index.latest) {
     throw new Error("Export root index does not contain a latest bundle.");
   }
 
-  const readOptions: HostedManifestOptions = {
-    root: options.root,
-    manifest: index.latest.manifest_href,
-  };
-  if (options.loaders !== undefined) {
-    readOptions.loaders = options.loaders;
-  }
-  if (options.fetch !== undefined) {
-    readOptions.fetch = options.fetch;
-  }
-
-  return openHostedManifest(readOptions);
+  return openHostedManifest(options, index.latest.manifest_href);
 }
 
-async function openHostedManifest(options: HostedManifestOptions): Promise<StaticExport> {
+async function openHostedManifest(
+  options: HostedReadOptions,
+  manifestHref: string,
+): Promise<StaticExport> {
   const root = rootUrl(options.root);
   const fetchImpl = options.fetch ?? globalFetch();
   const source = new UrlExportSource(root, fetchImpl);
-  const manifest = validateExportManifest(await source.json(options.manifest, "export manifest"));
+  const manifest = validateExportManifest(await source.json(manifestHref, "export manifest"));
   return new StaticExportReader({
     manifest,
     source,
@@ -99,7 +106,11 @@ async function openHostedManifest(options: HostedManifestOptions): Promise<Stati
   });
 }
 
-async function openLatestLocalExport(options: DirectoryLatestOptions): Promise<StaticExport> {
+async function openDirectoryExport(options: DirectoryReadOptions): Promise<StaticExport> {
+  if (options.manifest) {
+    return openLocalManifest(options, options.manifest);
+  }
+
   const source = new LocalExportSource(options.root, options.readFile, options.url);
   const index = validateExportRootIndex(
     await source.json(
@@ -111,23 +122,15 @@ async function openLatestLocalExport(options: DirectoryLatestOptions): Promise<S
     throw new Error("Export root index does not contain a latest bundle.");
   }
 
-  const readOptions: DirectoryManifestOptions = {
-    root: options.root,
-    manifest: index.latest.manifest_href,
-    readFile: options.readFile,
-  };
-  if (options.loaders !== undefined) {
-    readOptions.loaders = options.loaders;
-  }
-  if (options.url !== undefined) {
-    readOptions.url = options.url;
-  }
-  return openLocalManifest(readOptions);
+  return openLocalManifest(options, index.latest.manifest_href);
 }
 
-async function openLocalManifest(options: DirectoryManifestOptions): Promise<StaticExport> {
+async function openLocalManifest(
+  options: DirectoryReadOptions,
+  manifestHref: string,
+): Promise<StaticExport> {
   const source = new LocalExportSource(options.root, options.readFile, options.url);
-  const manifest = validateExportManifest(await source.json(options.manifest, "export manifest"));
+  const manifest = validateExportManifest(await source.json(manifestHref, "export manifest"));
   return new StaticExportReader({
     manifest,
     source,
@@ -135,7 +138,7 @@ async function openLocalManifest(options: DirectoryManifestOptions): Promise<Sta
   });
 }
 
-async function openArchiveManifest(options: ArchiveManifestOptions): Promise<StaticExportArchive> {
+async function openArchiveExport(options: ArchiveReadOptions): Promise<StaticExportArchive> {
   const source = ArchiveExportSource.from(await archiveBytes(options.bytes));
   const manifestHref = options.manifest ?? (await latestArchiveManifestHref(source));
   const manifest = validateExportManifest(await source.json(manifestHref, "export manifest"));
@@ -700,7 +703,7 @@ async function archiveBytes(input: ExportArchiveInput): Promise<Uint8Array> {
     return new Uint8Array(await input.arrayBuffer());
   }
 
-  throw new TypeError("readExportArchive requires ArrayBuffer, ArrayBufferView, or Blob bytes.");
+  throw new TypeError("readExport requires ArrayBuffer, ArrayBufferView, or Blob bytes.");
 }
 
 async function localBytes(input: LocalReadFileResult): Promise<Uint8Array> {
@@ -769,9 +772,7 @@ async function fetchJson(fetchImpl: FetchLike, url: string, label: string): Prom
 
 function globalFetch(): FetchLike {
   if (typeof globalThis.fetch !== "function") {
-    throw new Error(
-      "readLatestExport(...) requires fetch. Pass a fetch implementation in the options.",
-    );
+    throw new Error("readExport(...) requires fetch. Pass a fetch implementation in the options.");
   }
 
   return globalThis.fetch.bind(globalThis);

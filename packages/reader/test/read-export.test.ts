@@ -2,10 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   jsonLoader,
-  readExportArchive,
-  readExportDirectory,
-  readExportManifest,
-  readLatestExport,
+  readExport,
   type StaticExport,
   type StaticExportArchive,
 } from "@marimo-team/export-reader";
@@ -27,9 +24,9 @@ import {
 const selection = { scenario: "default", value: "value", format: "json" };
 const loaders = [jsonLoader<{ ok: boolean }>("json.v1")];
 
-test("readLatestExport rejects index hrefs outside the hosted root", async () => {
+test("readExport rejects index hrefs outside the hosted root", async () => {
   await assert.rejects(
-    readLatestExport({
+    readExport({
       root: "https://example.test/export/",
       index: "../index.json",
       fetch: unreachableFetch,
@@ -38,9 +35,9 @@ test("readLatestExport rejects index hrefs outside the hosted root", async () =>
   );
 });
 
-test("readExportManifest rejects manifest hrefs outside the hosted root", async () => {
+test("readExport rejects manifest hrefs outside the hosted root", async () => {
   await assert.rejects(
-    readExportManifest({
+    readExport({
       root: "https://example.test/export/",
       manifest: "https://example.test/other/manifest.json",
       fetch: unreachableFetch,
@@ -49,9 +46,9 @@ test("readExportManifest rejects manifest hrefs outside the hosted root", async 
   );
 });
 
-test("readExportManifest rejects manifest file hrefs outside the export root", async () => {
+test("readExport rejects manifest file hrefs outside the export root", async () => {
   await assert.rejects(
-    readExportManifest({
+    readExport({
       root: "https://example.test/export/",
       manifest: "bundles/sha256-test/manifest.json",
       fetch: fetchFixtureFile(
@@ -66,13 +63,13 @@ test("readExportManifest rejects manifest file hrefs outside the export root", a
   );
 });
 
-test("reader entry points expose one interface through every source adapter", async (t) => {
+test("readExport reads hosted, directory, and archive sources through one handle contract", async (t) => {
   const manifest = validManifest();
   const adapters = [
     {
       name: "hosted root",
       open: () =>
-        readLatestExport({
+        readExport({
           root: "https://example.test/export/",
           fetch: fetchFixtureFile(hostedFiles(manifest)),
           loaders,
@@ -81,7 +78,7 @@ test("reader entry points expose one interface through every source adapter", as
     {
       name: "local directory",
       open: () =>
-        readExportDirectory({
+        readExport({
           root: "export",
           readFile: readFixtureFile(directoryFiles(manifest)),
           url: (href) => `/export/${href}`,
@@ -90,7 +87,7 @@ test("reader entry points expose one interface through every source adapter", as
     },
     {
       name: "archive",
-      open: () => readExportArchive({ bytes: archiveBytes(manifest), loaders }),
+      open: () => readExport({ bytes: archiveBytes(manifest), loaders }),
     },
   ] satisfies Array<{
     name: string;
@@ -105,7 +102,7 @@ test("reader entry points expose one interface through every source adapter", as
 });
 
 test("archive-backed exports revoke object URLs on dispose", async () => {
-  const exp = await readExportArchive({ bytes: archiveBytes(validManifest()) });
+  const exp = await readExport({ bytes: archiveBytes(validManifest()) });
   const originalRevoke = URL.revokeObjectURL;
   const revoked: string[] = [];
   URL.revokeObjectURL = (url) => {
@@ -126,7 +123,7 @@ test("format reads reject bytes that do not match the manifest digest", async ()
   const manifest = manifestWith((next) => {
     dataFile(defaultJsonFormat(next)).sha256 = "0".repeat(64);
   });
-  const exp = await readExportDirectory({
+  const exp = await readExport({
     root: "export",
     readFile: readFixtureFile(directoryFiles(manifest)),
   });

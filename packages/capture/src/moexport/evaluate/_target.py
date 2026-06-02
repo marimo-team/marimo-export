@@ -1,4 +1,4 @@
-"""Single-target evaluation over the live marimo runtime.
+"""Single-target evaluation over the running marimo runtime.
 
 This module composes the evaluator pipeline for one target and one scenario:
 complete overrides, plan required cells, execute or cache them locally, patch
@@ -56,7 +56,7 @@ async def evaluate_target_once(
 ) -> TargetRunResult:
     """Evaluate a notebook definition or Python expression in the live runtime.
 
-    Existing values are reused from the live session unless an explicit override
+    Existing values are reused from the running session unless an explicit override
     marks them dirty. The returned trace includes graph and execution metadata
     for the TS producer to explain the run without transporting Python object
     handles out of the kernel.

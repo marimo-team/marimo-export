@@ -30,7 +30,7 @@ async def complete_overrides(
     overrides: DefinitionOverrides,
 ) -> OverrideCompletion:
     # marimo overrides a cell's definitions as a group. If the user overrides
-    # one sibling def, fill the remaining siblings from the live session. When
+    # one sibling def, fill the remaining siblings from the running session. When
     # notebook export starts from source before a kernel exists, compute the
     # cell's default defs locally as a fallback.
     completed = dict(overrides)

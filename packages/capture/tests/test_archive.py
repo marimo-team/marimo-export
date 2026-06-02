@@ -51,9 +51,8 @@ def test_archive_bundle_returns_zip_bytes(
 
     async def fake_evaluate(
         target: str,
-        definition_overrides: list[dict[str, Any]],
-        *,
-        object_patches: list[dict[str, Any]] | None = None,
+        resolved_scenarios: list[dict[str, Any]],
+        **_runtime_options: Any,
     ):
         return {
             "target": target,

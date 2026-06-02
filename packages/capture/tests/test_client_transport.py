@@ -1,22 +1,14 @@
 from __future__ import annotations
 
 import json
-import re
-from typing import Any, cast
+from typing import Any
 
 import httpx
 import pytest
 
-import moexport as mox
-import moexport.live_capture as live_capture
-from moexport.live_capture import (
-    CaptureClient,
-    ScratchpadResult,
-    execute_scratchpad,
-    notebook_matches,
-    parse_sse,
-    post_json,
-)
+from moexport.client._http import post_json
+from moexport.client._scratchpad import execute_scratchpad, parse_sse
+from moexport.client._session import notebook_matches
 
 
 def _install_mock_transport(monkeypatch: pytest.MonkeyPatch, handler: Any) -> None:
@@ -141,88 +133,3 @@ def test_execute_scratchpad_reads_sse_stream(
     assert headers["accept"] == "text/event-stream"
     assert headers["marimo-session-id"] == "session-1"
     assert headers["marimo-server-token"] == "secret"
-
-
-def test_parse_spec_is_top_level_api() -> None:
-    assert mox.parse_spec(
-        {"values": {"summary": {"source": "summary", "formats": ["json"]}}}
-    )
-
-
-def test_live_capture_accepts_preinstalled_runtime_and_export_spec(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    captured: dict[str, Any] = {}
-    spec = mox.parse_spec(
-        {
-            "values": {
-                "summary": {
-                    "source": {"def": "summary"},
-                    "formats": ["json"],
-                }
-            }
-        }
-    )
-
-    monkeypatch.setattr(
-        live_capture,
-        "resolve_session",
-        lambda **_kwargs: {"sessionId": "session-1", "path": "notebook.py"},
-    )
-    monkeypatch.setattr(live_capture, "can_import", lambda *_args, **_kwargs: True)
-
-    def execute(*_args: Any, **kwargs: Any) -> ScratchpadResult:
-        code = kwargs.get("code") or _args[2]
-        captured["code"] = code
-        marker = re.search(r"__MOEXPORT_CAPTURE_\d+__", code)
-        assert marker is not None
-        return ScratchpadResult(
-            stdout=[
-                marker.group(0)
-                + json.dumps(
-                    {
-                        "bundle_path": "out/bundles/sha256-demo",
-                        "manifest_path": "out/bundles/sha256-demo/manifest.json",
-                        "invocation_path": "out/bundles/sha256-demo/traces/run.json",
-                        "invocation_index_path": "out/bundles/sha256-demo/traces/index.json",
-                        "manifest": {},
-                        "invocation": {},
-                    }
-                )
-            ],
-            stderr=[],
-        )
-
-    monkeypatch.setattr(live_capture, "execute_scratchpad", execute)
-
-    result = CaptureClient("http://localhost:2718", runtime="preinstalled").capture(
-        spec,
-        to="public/export",
-    )
-
-    assert result["session"]["sessionId"] == "session-1"
-    assert '\\"formats\\"' in captured["code"]
-
-
-def test_live_capture_rejects_invalid_runtime_before_install(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(
-        live_capture,
-        "resolve_session",
-        lambda **_kwargs: {"sessionId": "session-1", "path": "notebook.py"},
-    )
-
-    capture = CaptureClient("http://localhost:2718", runtime=cast(Any, "bad"))
-
-    with pytest.raises(TypeError, match="runtime must be 'preinstalled'"):
-        capture.capture(
-            {
-                "values": {
-                    "summary": {
-                        "source": {"def": "summary"},
-                        "formats": ["json"],
-                    }
-                }
-            }
-        )
