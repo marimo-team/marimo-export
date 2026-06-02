@@ -9,10 +9,8 @@ metadata handles with `hyparquet`.
 import { parquetLoader } from "@marimo-team/export-loader-parquet";
 import { readExport } from "@marimo-team/export-reader";
 
-const exp = await readExport({
-  root: "/export/",
-  loaders: [parquetLoader()],
-});
+const parquetLoaderForExport = parquetLoader();
+const exp = await readExport({ root: "/export/" });
 
 const handle = exp.get({
   scenario: "default",
@@ -20,7 +18,7 @@ const handle = exp.get({
   format: "parquet",
 });
 
-const parquet = await handle.load();
+const parquet = await handle.load(parquetLoaderForExport);
 
 const metadata = await parquet.readMetadata();
 const rows = await parquet.readRows({ columns: ["Date", "Close"] });

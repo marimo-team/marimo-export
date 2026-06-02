@@ -513,8 +513,11 @@
     </main>
 
     <script type="module">
-      import { createMarimoExportClient } from "@marimo-team/export-client/browser";
-      import { readExport, htmlLoader, jsonLoader } from "@marimo-team/export-reader";
+      import {
+        createMarimoExportClient,
+        createMarimoWorkspaceClient,
+      } from "@marimo-team/export-client/browser";
+      import { readExport } from "@marimo-team/export-reader";
 
       const $ = (selector) => document.querySelector(selector);
       const state = { archive: null };
@@ -532,14 +535,7 @@
         try {
           const options = captureOptions();
           const result = await options.client.archive(createQueueingArchiveSpec(), options.request);
-          const archive = await readExport({
-            bytes: result.bytes,
-            loaders: [
-              jsonLoader("queue.summary.json.v1"),
-              htmlLoader("queue.note.html.v1"),
-              jsonLoader("vegalite.v1"),
-            ],
-          });
+          const archive = await readExport({ bytes: result.bytes });
 
           state.archive?.dispose();
           state.archive = archive;
@@ -558,7 +554,7 @@
         clearError();
         setBusy(true, "Listing sessions...");
         try {
-          const sessions = await client().sessions.list();
+          const sessions = await workspaceClient().sessions.list();
           $("#status").textContent =
             sessions.length === 0
               ? "No running sessions"
@@ -577,21 +573,21 @@
         const summaries = await Promise.all(
           archive.scenarios().map(async (scenario) => ({
             scenario,
-            summary: await archive.get({ scenario, value: "summary", format: "json" }).load(),
+            summary: await archive.get({ scenario, value: "summary", format: "json" }).json(),
           })),
         );
         const firstScenario = archive.scenarios()[0];
         const firstNote =
           firstScenario === undefined
             ? ""
-            : await archive.get({ scenario: firstScenario, value: "note", format: "html" }).load();
+            : await archive.get({ scenario: firstScenario, value: "note", format: "html" }).text();
         const chartHandle =
           firstScenario === undefined
             ? null
             : archive.get({ scenario: firstScenario, value: "chart", format: "vegalite" });
         const chartSpec = chartHandle ? await chartHandle.json() : null;
 
-        $("#metric-session").textContent = result.session.sessionId;
+        $("#metric-session").textContent = result.sessionId;
         $("#metric-archive").textContent = formatBytes(result.bytes.byteLength);
         $("#metric-scenarios").textContent = String(archive.scenarios().length);
         $("#metric-formats").textContent = String(countFormats(archive));
@@ -619,7 +615,7 @@
           })
           .join("");
 
-        $("#formats").innerHTML = archive.manifest.scenarios
+        $("#formats").innerHTML = archive.raw.manifest.scenarios
           .flatMap((scenario) =>
             Object.entries(scenario.values).flatMap(([value, formats]) =>
               Object.entries(formats).map(([formatName, formatRecord]) => {
@@ -716,15 +712,25 @@
           request.sessionId = sessionId;
         }
         return {
-          client: client(),
+          client: exportClient(),
           request,
         };
       }
 
-      function client() {
+      function exportClient() {
         const token = $("#token").value.trim();
         const serverToken = $("#server-token").value.trim();
         return createMarimoExportClient({
+          server: $("#server").value.trim(),
+          ...(token ? { token } : {}),
+          ...(serverToken ? { serverToken } : {}),
+        });
+      }
+
+      function workspaceClient() {
+        const token = $("#token").value.trim();
+        const serverToken = $("#server-token").value.trim();
+        return createMarimoWorkspaceClient({
           server: $("#server").value.trim(),
           ...(token ? { token } : {}),
           ...(serverToken ? { serverToken } : {}),
@@ -740,7 +746,7 @@
       }
 
       function countFormats(archive) {
-        return archive.manifest.scenarios.reduce((total, scenario) => {
+        return archive.raw.manifest.scenarios.reduce((total, scenario) => {
           return (
             total +
             Object.values(scenario.values).reduce(

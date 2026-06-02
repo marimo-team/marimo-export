@@ -1,4 +1,4 @@
-"""Public live-runtime evaluation API.
+"""Public running-kernel evaluation API.
 
 This package exposes the small kernel-side surface used by export capture:
 ``evaluate(...)``. The implementation is split by responsibility below this

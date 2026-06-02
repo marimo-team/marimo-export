@@ -136,7 +136,7 @@ class FormatSpec(SpecModel):
     """One named format to produce for a value."""
 
     export: ExportCallable = Field(
-        description="Callable that projects the live Python value into a format.",
+        description="Callable that projects the runtime Python value into a format.",
     )
     options: JsonConfigObject = Field(
         default_factory=dict,

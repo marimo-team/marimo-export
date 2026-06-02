@@ -316,10 +316,10 @@ class NotebookRuntime:
     def _source_cell_names_by_id(self) -> dict[CellId_t, str]:
         """Map runtime cells to source-level function names by exact source.
 
-        Live marimo runtimes expose cell names through the in-memory notebook
+        Active marimo runtimes expose cell names through the in-memory notebook
         document. This saved-file fallback is intentionally stricter: it only
         maps names to runtime cells whose authored source matches exactly.
-        Positional matching is unsafe because live edits can leave stale or
+        Positional matching is unsafe because unsaved edits can leave stale or
         deleted cells in the document/file that are no longer in the graph.
         """
 
@@ -438,7 +438,7 @@ class RuntimeCell:
         return value
 
     def stored_output(self, *, on_error: str = "raise") -> Any:
-        """Return the live runtime output without scenario-local values."""
+        """Return the stored runtime output without scenario-local values."""
 
         try:
             return materialize_cell_output(self._notebook.runtime, self._cell_id)
@@ -486,7 +486,7 @@ def materialize_cell_output(
     Marimo only stores references for outputs that need to stay alive, such as
     UI elements and descriptor-backed widgets. Ordinary markdown/HTML output is
     broadcast to the frontend but not retained on ``CellImpl._output``. For
-    those cells, evaluate the compiled display expression against live globals,
+    those cells, evaluate the compiled display expression against runtime globals,
     plus optional scenario-local values produced by ``mox.evaluate``.
     """
 

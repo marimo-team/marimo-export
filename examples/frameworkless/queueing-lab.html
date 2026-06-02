@@ -355,7 +355,7 @@
     </main>
 
     <script type="module">
-      import { htmlLoader, jsonLoader, readExport } from "@marimo-team/export-reader";
+      import { readExport } from "@marimo-team/export-reader";
       import { arrowLoader } from "@marimo-team/export-loader-arrow";
       import { parquetLoader } from "@marimo-team/export-loader-parquet";
       import { vegaliteLoader } from "@marimo-team/export-loader-vegalite";
@@ -363,16 +363,10 @@
       const root = "./exports/queueing-lab/";
       const $ = (selector) => document.querySelector(selector);
 
-      const exp = await readExport({
-        root,
-        loaders: [
-          jsonLoader("queue.summary.json.v1"),
-          htmlLoader("queue.note.html.v1"),
-          arrowLoader(),
-          parquetLoader(),
-          vegaliteLoader(),
-        ],
-      });
+      const arrow = arrowLoader();
+      const parquet = parquetLoader();
+      const vegalite = vegaliteLoader();
+      const exp = await readExport({ root });
       const state = { active: exp.scenarios()[0] };
 
       $("#scenario-count").textContent = `${exp.scenarios().length} finite states`;
@@ -382,7 +376,8 @@
       function renderScenarioButtons() {
         const grid = $("#scenario-grid");
         grid.innerHTML = "";
-        for (const scenario of exp.scenarioRecords()) {
+        for (const scenarioId of exp.scenarios()) {
+          const scenario = exp.scenario(scenarioId);
           const button = document.createElement("button");
           button.type = "button";
           button.className = "scenario-button";
@@ -415,11 +410,11 @@
           const noteHandle = exp.get({ scenario, value: "note", format: "html" });
 
           const [summary, curve, arrivals, chart, note] = await Promise.all([
-            summaryHandle.load(),
-            curveHandle.load(),
-            arrivalsHandle.load(),
-            chartHandle.load(),
-            noteHandle.load(),
+            summaryHandle.json(),
+            curveHandle.load(arrow),
+            arrivalsHandle.load(parquet),
+            chartHandle.load(vegalite),
+            noteHandle.text(),
           ]);
           const [curveRows, arrivalRows, spec] = await Promise.all([
             curve.rows(),

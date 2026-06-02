@@ -473,6 +473,8 @@
       const root = "./exports/agentic-playground/";
       const $ = (selector) => document.querySelector(selector);
 
+      const jsonFormats = jsonLoader(["playground.summary.json.v1", "playground.records.json.v1"]);
+      const noteHtmlLoader = htmlLoader("playground.note.html.v1");
       const svgLoader = defineLoader({
         formatId: "playground.sparkline.svg.v1",
         async load(ctx) {
@@ -485,22 +487,14 @@
         },
       });
 
-      const exportReader = await readExport({
-        root,
-        loaders: [
-          jsonLoader(["playground.summary.json.v1", "playground.records.json.v1"]),
-          svgLoader,
-          htmlLoader("playground.note.html.v1"),
-        ],
-      });
+      const exportReader = await readExport({ root });
 
       const state = {
         activeScenario: exportReader.scenarios()[0],
       };
 
-      $("#bundle-id").textContent = exportReader.manifest.id;
-      $("#spec-sha").textContent =
-        exportReader.manifest.provenance?.source_spec_sha256 ?? "missing";
+      $("#bundle-id").textContent = exportReader.id;
+      $("#spec-sha").textContent = exportReader.sourceSpecSha256 ?? "missing";
       $("#formats").textContent = exportReader
         .values()
         .map((value) => `${value}:${exportReader.formats(value).join("|")}`)
@@ -514,7 +508,8 @@
         const grid = $("#scenario-grid");
         grid.innerHTML = "";
 
-        for (const scenario of exportReader.scenarioRecords()) {
+        for (const scenarioId of exportReader.scenarios()) {
+          const scenario = exportReader.scenario(scenarioId);
           const button = document.createElement("button");
           button.type = "button";
           button.className = "scenario-button";
@@ -554,10 +549,10 @@
           const noteHandle = exportReader.get({ scenario, value: "note", format: "html" });
 
           const [summary, records, sparkline, noteHtml] = await Promise.all([
-            summaryHandle.load(),
-            recordsHandle.load(),
-            sparklineHandle.load(),
-            noteHandle.load(),
+            summaryHandle.load(jsonFormats),
+            recordsHandle.load(jsonFormats),
+            sparklineHandle.load(svgLoader),
+            noteHandle.load(noteHtmlLoader),
           ]);
 
           renderSummary(summary);

@@ -2,7 +2,7 @@ import { Buffer } from "node:buffer";
 import fs from "node:fs/promises";
 import path from "node:path";
 
-import { createMarimoExportClient } from "@marimo-team/export-client";
+import { createMarimoExportClient, type ExportSpec } from "@marimo-team/export-client";
 import { arrowLoader } from "@marimo-team/export-loader-arrow";
 import { readExport } from "@marimo-team/export-reader";
 
@@ -151,10 +151,8 @@ export const getMarketWindowPage = async (
       ...sessionTarget,
     }),
   );
-  const exp = await readExport({
-    bytes: archive.bytes,
-    loaders: [arrowLoader({ useDate: true })],
-  });
+  const arrow = arrowLoader({ useDate: true });
+  const exp = await readExport({ bytes: archive.bytes });
 
   try {
     const summary = await exp
@@ -163,9 +161,7 @@ export const getMarketWindowPage = async (
     const sampleRows = await exp
       .get({ scenario, value: "sample_rows", format: "json" })
       .json<MarketWindowRow[]>();
-    const frame = await exp
-      .get({ scenario, value: "frame", format: "arrow" })
-      .load(arrowLoader({ useDate: true }));
+    const frame = await exp.get({ scenario, value: "frame", format: "arrow" }).load(arrow);
     const arrowRows = (await frame.rows()) as MarketWindowRow[];
     const chartPng = await exp.get({ scenario, value: "chart", format: "png" }).bytes();
 
@@ -175,10 +171,10 @@ export const getMarketWindowPage = async (
       title: window.title,
       note: window.note,
       scenario,
-      manifestId: exp.manifest.id,
+      manifestId: exp.id,
       archiveBytes: archive.bytes.byteLength,
-      notebookName: exp.manifest.notebook.name,
-      notebookSha: exp.manifest.notebook.source_sha256 ?? null,
+      notebookName: exp.notebook.name,
+      notebookSha: exp.notebook.sourceSha256,
       summary,
       sampleRows,
       arrowRows: arrowRows.slice(-12),
@@ -189,60 +185,61 @@ export const getMarketWindowPage = async (
   }
 };
 
-const buildMarketWindowSpec = (start: string, end: string) => ({
-  scenarios: [
-    {
-      id: scenarioId(start, end),
-      state: {
-        symbols: ["AAPL", "MSFT", "GOOGL"],
-        interval: "1d",
-        start,
-        end,
-        chart_width: 960,
+const buildMarketWindowSpec = (start: string, end: string) =>
+  ({
+    scenarios: [
+      {
+        id: scenarioId(start, end),
+        state: {
+          symbols: ["AAPL", "MSFT", "GOOGL"],
+          interval: "1d",
+          start,
+          end,
+          chart_width: 960,
+        },
+      },
+    ],
+    values: {
+      summary: {
+        source: { expr: summarySource },
+        formats: [
+          {
+            json: {
+              filename: "summary.json",
+              format_id: "finance.market_window.summary.json.v1",
+              metadata: {
+                transport: "archive",
+                kind: "market-window-summary",
+              },
+            },
+          },
+        ],
+      },
+      sample_rows: {
+        source: { expr: sampleRowsSource },
+        formats: [
+          {
+            json: {
+              filename: "sample-rows.json",
+              format_id: "finance.market_window.sample_rows.json.v1",
+              metadata: {
+                transport: "archive",
+                kind: "market-window-sample-rows",
+              },
+            },
+          },
+        ],
+      },
+      frame: {
+        source: { expr: arrowFrameSource },
+        formats: ["arrow"],
+      },
+      chart: {
+        source: { expr: chartSource },
+        formats: [{ png: { scale: 2 } }],
       },
     },
-  ],
-  values: {
-    summary: {
-      source: { expr: summarySource },
-      formats: [
-        {
-          json: {
-            filename: "summary.json",
-            format_id: "finance.market_window.summary.json.v1",
-            metadata: {
-              transport: "archive",
-              kind: "market-window-summary",
-            },
-          },
-        },
-      ],
-    },
-    sample_rows: {
-      source: { expr: sampleRowsSource },
-      formats: [
-        {
-          json: {
-            filename: "sample-rows.json",
-            format_id: "finance.market_window.sample_rows.json.v1",
-            metadata: {
-              transport: "archive",
-              kind: "market-window-sample-rows",
-            },
-          },
-        },
-      ],
-    },
-    frame: {
-      source: { expr: arrowFrameSource },
-      formats: ["arrow"],
-    },
-    chart: {
-      source: { expr: chartSource },
-      formats: [{ png: { scale: 2 } }],
-    },
-  },
-});
+  }) satisfies ExportSpec;
 
 const archiveSerially = async <T>(capture: () => Promise<T>): Promise<T> => {
   const release = await acquireArchiveLock();

@@ -1,5 +1,8 @@
 import { createMarimoClient } from "@marimo-team/marimo-api";
-import { createMarimoExportClientFromTransport } from "./export-client";
+import {
+  createMarimoExportClientFromTransport,
+  createMarimoWorkspaceClientFromTransport,
+} from "./export-client";
 import {
   baseUrl,
   createNotebookOpener,
@@ -7,7 +10,7 @@ import {
   requestHeaders,
 } from "./transport";
 import type { MarimoExportTransport } from "./types";
-import type { MarimoExportClient } from "./export-client";
+import type { MarimoExportClient, MarimoWorkspaceClient } from "./export-client";
 
 type MarimoApiClient = ReturnType<typeof createMarimoClient>;
 
@@ -22,7 +25,7 @@ export interface MarimoExportClientOptions {
   WebSocket?: typeof WebSocket;
 }
 
-export type { MarimoExportClient };
+export type { MarimoExportClient, MarimoWorkspaceClient };
 
 export type {
   ExportArchiveResult,
@@ -36,6 +39,13 @@ export type { ExportSpec } from "./spec";
 export function createMarimoExportClient(options: MarimoExportClientOptions): MarimoExportClient {
   const marimo = createMarimoTransport(options);
   return createMarimoExportClientFromTransport(marimo);
+}
+
+export function createMarimoWorkspaceClient(
+  options: MarimoExportClientOptions,
+): MarimoWorkspaceClient {
+  const marimo = createMarimoTransport(options);
+  return createMarimoWorkspaceClientFromTransport(marimo);
 }
 
 function createMarimoTransport(options: MarimoExportClientOptions): MarimoTransportClient {

@@ -2,12 +2,17 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   createMarimoExportClient as createServerMarimoExportClient,
+  createMarimoWorkspaceClient as createServerMarimoWorkspaceClient,
   type ExportResult,
   type MarimoExportClient,
   type MarimoExportClientOptions,
+  type MarimoWorkspaceClient,
   type ExportSpec,
 } from "@marimo-team/export-client";
-import { createMarimoExportClient as createBrowserMarimoExportClient } from "@marimo-team/export-client/browser";
+import {
+  createMarimoExportClient as createBrowserMarimoExportClient,
+  createMarimoWorkspaceClient as createBrowserMarimoWorkspaceClient,
+} from "@marimo-team/export-client/browser";
 
 interface ScratchpadRequest {
   code: string;
@@ -16,7 +21,12 @@ interface ScratchpadRequest {
 }
 
 type ExportClientFactory = (options: MarimoExportClientOptions) => MarimoExportClient;
+type WorkspaceClientFactory = (options: MarimoExportClientOptions) => MarimoWorkspaceClient;
 type ExportFetch = NonNullable<MarimoExportClientOptions["fetch"]>;
+type ExportPayload = Omit<
+  ExportResult,
+  "sessionId" | "sessionName" | "sessionPath" | "sessionInitializationId"
+>;
 
 const spec = {
   scenarios: [{ id: "default" }],
@@ -35,11 +45,16 @@ const exportPayload = {
   invocationIndexPath: "/tmp/export/bundles/sha256-demo/traces/index.json",
   manifest: { id: "sha256-demo" },
   invocation: { id: "invocation-demo" },
-} satisfies Omit<ExportResult, "session">;
+} satisfies ExportPayload;
 
 const clientFactories: Array<{ name: string; create: ExportClientFactory }> = [
   { name: "server entry", create: createServerMarimoExportClient },
   { name: "browser entry", create: createBrowserMarimoExportClient },
+];
+
+const workspaceFactories: Array<{ name: string; create: WorkspaceClientFactory }> = [
+  { name: "server entry", create: createServerMarimoWorkspaceClient },
+  { name: "browser entry", create: createBrowserMarimoWorkspaceClient },
 ];
 
 test("MarimoExportClient exports bundles and archives through one public interface", async (t) => {
@@ -50,15 +65,59 @@ test("MarimoExportClient exports bundles and archives through one public interfa
   }
 });
 
-test("MarimoExportClient lists sessions and workspace notebooks through one public interface", async (t) => {
-  for (const factory of clientFactories) {
+test("MarimoWorkspaceClient lists sessions and workspace notebooks", async (t) => {
+  for (const factory of workspaceFactories) {
     await t.test(factory.name, async () => {
       await assertLists(factory.create);
     });
   }
 });
 
-async function assertLists(createClient: ExportClientFactory): Promise<void> {
+test("MarimoExportClient reports missing preinstalled runtime through the import probe", async (t) => {
+  for (const factory of clientFactories) {
+    await t.test(factory.name, async () => {
+      const requests: ScratchpadRequest[] = [];
+      const client = factory.create({
+        server: "https://marimo.example.test",
+        fetch: scratchpadFetch(requests, false),
+      });
+
+      await assert.rejects(
+        client.export(spec, {
+          sessionId: "session-1",
+          runtime: "preinstalled",
+        }),
+        /moexport is not importable/,
+      );
+      assert.equal(requests.length, 1);
+    });
+  }
+});
+
+test("MarimoExportClient propagates scratchpad HTTP failures from the import probe", async (t) => {
+  for (const factory of clientFactories) {
+    await t.test(factory.name, async () => {
+      const client = factory.create({
+        server: "https://marimo.example.test",
+        fetch: async () =>
+          new Response("scratchpad failed", {
+            status: 500,
+            statusText: "Server Error",
+          }),
+      });
+
+      await assert.rejects(
+        client.export(spec, {
+          sessionId: "session-1",
+          runtime: "preinstalled",
+        }),
+        /Failed to execute marimo scratchpad: 500 Server Error/,
+      );
+    });
+  }
+});
+
+async function assertLists(createClient: WorkspaceClientFactory): Promise<void> {
   const requests: string[] = [];
   const client = createClient({
     server: "https://marimo.example.test",
@@ -98,10 +157,12 @@ async function assertExport(createClient: ExportClientFactory): Promise<void> {
   const result = await client.export(spec, {
     sessionId: "session-1",
     outputRoot: "/tmp/export",
+    paths: ["/tmp/local-exporters"],
     runtime: "preinstalled",
   });
   const archive = await client.archive(spec, {
     sessionId: "session-1",
+    paths: ["/tmp/local-exporters"],
     runtime: "preinstalled",
   });
 
@@ -118,18 +179,18 @@ async function assertExport(createClient: ExportClientFactory): Promise<void> {
   assert.equal(result.manifestPath, exportPayload.manifestPath);
   assert.deepEqual(result.manifest, exportPayload.manifest);
   assert.deepEqual(result.invocation, exportPayload.invocation);
-  assert.deepEqual(result.session, {
-    sessionId: "session-1",
-    name: null,
-    path: null,
-    initializationId: null,
-  });
+  assert.equal(result.sessionId, "session-1");
+  assert.equal(result.sessionName, null);
+  assert.equal(result.sessionPath, null);
+  assert.equal(result.sessionInitializationId, null);
+  assert.equal(requests[1]?.code.includes("/tmp/local-exporters"), true);
+  assert.equal(requests[3]?.code.includes("/tmp/local-exporters"), true);
   assert.deepEqual([...archive.bytes], [...new TextEncoder().encode("zip-bytes")]);
   assert.equal(archive.mediaType, "application/vnd.marimo.static-export+zip");
-  assert.equal(archive.session.sessionId, "session-1");
+  assert.equal(archive.sessionId, "session-1");
 }
 
-function scratchpadFetch(requests: ScratchpadRequest[]): ExportFetch {
+function scratchpadFetch(requests: ScratchpadRequest[], canImport = true): ExportFetch {
   return async (request) => {
     const code = requestCode(await request.json());
 
@@ -144,6 +205,9 @@ function scratchpadFetch(requests: ScratchpadRequest[]): ExportFetch {
     }
     if (hasMarker(code, "ARCHIVE")) {
       return scratchpadResponse(archiveStdout(code));
+    }
+    if (hasMarker(code, "IMPORT")) {
+      return scratchpadResponse(importStdout(code, canImport));
     }
     return scratchpadResponse();
   };
@@ -202,7 +266,7 @@ function requestCode(body: unknown): string {
   return code;
 }
 
-function exportStdout(code: string, payload: Omit<ExportResult, "session">): string {
+function exportStdout(code: string, payload: ExportPayload): string {
   const marker = resultMarker(code, "RESULT");
   return `${marker}${JSON.stringify({
     bundle_path: payload.bundlePath,
@@ -219,17 +283,22 @@ function archiveStdout(code: string): string {
   return `${marker}${Buffer.from("zip-bytes").toString("base64")}\n`;
 }
 
-function resultMarker(code: string, kind: "RESULT" | "ARCHIVE"): string {
+function importStdout(code: string, value: boolean): string {
+  const marker = resultMarker(code, "IMPORT");
+  return `${marker}${JSON.stringify(value)}\n`;
+}
+
+function resultMarker(code: string, kind: "RESULT" | "ARCHIVE" | "IMPORT"): string {
   const marker = code.match(markerPattern(kind))?.[0];
   assert.ok(marker);
   return marker;
 }
 
-function hasMarker(code: string, kind: "RESULT" | "ARCHIVE"): boolean {
+function hasMarker(code: string, kind: "RESULT" | "ARCHIVE" | "IMPORT"): boolean {
   return markerPattern(kind).test(code);
 }
 
-function markerPattern(kind: "RESULT" | "ARCHIVE"): RegExp {
+function markerPattern(kind: "RESULT" | "ARCHIVE" | "IMPORT"): RegExp {
   return new RegExp(`__MOEXPORT_${kind}_[0-9]+_[a-z0-9]+__`);
 }
 

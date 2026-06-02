@@ -9,7 +9,7 @@ import type {
   LocalReadFile,
   ManifestScenario,
   ManifestValue,
-} from "@marimo-team/export-reader";
+} from "../../src/types.js";
 
 export const jsonPayload = '{"ok":true}';
 export const jsonPayloadSha = "4062edaf750fb8074e7e83e0c9028c94e32468a8b6f1614774328ef045150f93";
@@ -80,18 +80,25 @@ export function manifestWith(mutator: (manifest: ExportManifest) => void): Expor
   return manifest;
 }
 
-export function rootIndexFor(manifest: ExportManifest = validManifest()): ExportRootIndex {
+export function rootIndexFor(
+  manifest: ExportManifest = validManifest(),
+  bundles: ExportManifest[] = [manifest],
+): ExportRootIndex {
   return {
     schema: "moexport.root_index.v1",
     version: 1,
-    latest: {
-      id: manifest.id,
-      sha256: manifest.sha256,
-      manifest_href: `bundles/${manifest.id}/manifest.json`,
-      updated_at: "2026-06-01T00:00:00Z",
-      latest_invocation_href: `bundles/${manifest.id}/traces/sha256-trace.json`,
-    },
-    bundles: [],
+    latest: rootBundle(manifest),
+    bundles: bundles.map(rootBundle),
+  };
+}
+
+function rootBundle(manifest: ExportManifest): ExportRootIndex["bundles"][number] {
+  return {
+    id: manifest.id,
+    sha256: manifest.sha256,
+    manifest_href: `bundles/${manifest.id}/manifest.json`,
+    updated_at: "2026-06-01T00:00:00Z",
+    latest_invocation_href: `bundles/${manifest.id}/traces/sha256-trace.json`,
   };
 }
 

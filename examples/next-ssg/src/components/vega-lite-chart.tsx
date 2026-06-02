@@ -28,13 +28,9 @@ export const VegaLiteChart = ({ scenario }: VegaLiteChartProps) => {
       setStatus("loading interactive Vega-Lite");
       host.replaceChildren();
 
-      const exp = await readExport({
-        root: exportPublicRoot,
-        loaders: [vegaliteLoader({ actions: true })],
-      });
-      const chart = await exp
-        .get({ scenario, value: "chart", format: "vegalite" })
-        .load(vegaliteLoader({ actions: true }));
+      const vegalite = vegaliteLoader({ actions: true });
+      const exp = await readExport({ root: exportPublicRoot });
+      const chart = await exp.get({ scenario, value: "chart", format: "vegalite" }).load(vegalite);
 
       if (cancelled) {
         return;

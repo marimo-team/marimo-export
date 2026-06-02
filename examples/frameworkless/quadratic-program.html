@@ -552,10 +552,9 @@
     </main>
 
     <script type="module">
-      import { jsonLoader, readExport } from "@marimo-team/export-reader";
+      import { readExport } from "@marimo-team/export-reader";
       import { anywidgetLoader } from "@marimo-team/export-loader-anywidget";
 
-      const SUMMARY_FORMAT = "qp.summary.json.v1";
       const ROOT = "./exports/quadratic-program/";
       const DOMAIN = { min: -5, max: 5 };
       const EPS = 1e-7;
@@ -592,16 +591,13 @@
       boot().catch(showError);
 
       async function boot() {
-        const exported = await readExport({
-          root: ROOT,
-          loaders: [jsonLoader(SUMMARY_FORMAT), anywidgetLoader()],
-        });
+        const exported = await readExport({ root: ROOT });
         state.export = exported;
         state.summaries = await Promise.all(
           exported.scenarios().map(async (scenario) => ({
             scenario,
             title: PRESET_TITLES.get(scenario) ?? scenario,
-            summary: await exported.get({ scenario, value: "summary", format: "json" }).load(),
+            summary: await exported.get({ scenario, value: "summary", format: "json" }).json(),
           })),
         );
         state.summaries.sort((a, b) => presetRank(a.scenario) - presetRank(b.scenario));
@@ -661,7 +657,7 @@
           const scenario = state.summaries[0].scenario;
           state.widgetBundle = await exported
             .get({ scenario, value: "widget", format: "bundle" })
-            .load();
+            .load(anywidgetLoader());
         } catch (error) {
           $("#widget-note").classList.add("warning");
           $("#widget-note").textContent =

@@ -106,12 +106,9 @@ export interface FormatSelection {
 
 export type ExportArchiveInput = ArrayBuffer | ArrayBufferView | Blob;
 
-export type ReadExportOptions =
+export type ExportOptions =
   | {
       root: string | URL;
-      manifest?: string;
-      index?: string;
-      loaders?: FormatLoader[];
       fetch?: FetchLike;
       readFile?: never;
       url?: never;
@@ -119,9 +116,6 @@ export type ReadExportOptions =
     }
   | {
       root: string;
-      manifest?: string;
-      index?: string;
-      loaders?: FormatLoader[];
       readFile: LocalReadFile;
       url?: LocalUrlResolver;
       fetch?: never;
@@ -129,54 +123,68 @@ export type ReadExportOptions =
     }
   | {
       bytes: ExportArchiveInput;
-      manifest?: string;
-      loaders?: FormatLoader[];
       root?: never;
-      index?: never;
       readFile?: never;
       url?: never;
       fetch?: never;
     };
 
-export interface StaticExport {
+export interface ExportNotebook {
+  name: string | null;
+  sourceSha256: string | null;
+}
+
+export interface ExportRaw {
   manifest: ExportManifest;
+}
+
+export interface Export {
+  id: string;
+  notebook: ExportNotebook;
+  sourceSpecSha256: string | null;
+  raw: ExportRaw;
   scenarios(): string[];
   scenario(id: string): ExportScenario;
-  scenarioRecord(id: string): ManifestScenario;
-  scenarioRecords(): ManifestScenario[];
   values(): string[];
   formats(value: string): string[];
-  get(selection: FormatSelection): FormatHandle;
+  get(selection: ExportSelection): ExportEntry;
 }
 
 export interface ExportScenario {
   id: string;
-  record: ManifestScenario;
   state: JsonObject;
   values(): string[];
   formats(value: string): string[];
-  get(value: string, format: string): FormatHandle;
+  get(value: string, format: string): ExportEntry;
 }
 
-export interface StaticExportArchive extends StaticExport {
+export interface ExportArchive extends Export {
   dispose(): void;
 }
 
-export interface FormatHandle {
+export type ExportSelection = FormatSelection;
+export type ExportBlob = BlobRef;
+
+export interface ExportEntry {
   selection: FormatSelection;
-  record: FormatRecord;
-  entry(): FormatFile;
-  file(key: string): FormatFile;
+  formatId: string;
+  mediaType: string | null;
+  metadata: JsonObject | null;
+  raw: {
+    record: FormatRecord;
+  };
+  entry(): ExportFile;
+  files(): string[];
+  file(key: string): ExportFile;
   url(): string;
   fetch(init?: RequestInit): Promise<Response>;
   bytes(): Promise<Uint8Array>;
   text(): Promise<string>;
   json<T = unknown>(): Promise<T>;
-  load<T>(loader: FormatLoader<T>): Promise<T>;
-  load(): Promise<unknown>;
+  load<T>(loader: ExportLoader<T>): Promise<T>;
 }
 
-export interface FormatFile {
+export interface ExportFile {
   ref: BlobRef;
   url(): string;
   fetch(init?: RequestInit): Promise<Response>;
@@ -185,14 +193,20 @@ export interface FormatFile {
   json<T = unknown>(): Promise<T>;
 }
 
-export interface FormatLoaderContext {
-  record: FormatRecord;
+export interface ExportLoaderContext {
   selection: FormatSelection;
-  entry(): FormatFile;
-  file(key: string): FormatFile;
+  formatId: string;
+  mediaType: string | null;
+  metadata: JsonObject | null;
+  raw: {
+    record: FormatRecord;
+  };
+  entry(): ExportFile;
+  files(): string[];
+  file(key: string): ExportFile;
 }
 
-export type FormatLoaderSelector =
+export type ExportLoaderSelector =
   | {
       formatId: string;
       formatIds?: never;
@@ -202,6 +216,6 @@ export type FormatLoaderSelector =
       formatIds: readonly string[];
     };
 
-export type FormatLoader<T = unknown> = FormatLoaderSelector & {
-  load(context: FormatLoaderContext): T | Promise<T>;
+export type ExportLoader<T = unknown> = ExportLoaderSelector & {
+  load(context: ExportLoaderContext): T | Promise<T>;
 };

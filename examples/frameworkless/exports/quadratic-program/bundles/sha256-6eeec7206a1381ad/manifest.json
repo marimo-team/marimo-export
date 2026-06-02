@@ -1,17 +1,17 @@
 {
   "schema": "moexport.bundle.v1",
   "version": 1,
-  "id": "sha256-d7cd3dffcc105dff",
-  "sha256": "d7cd3dffcc105dffc685d722a507dfe70f6f59c14bb08b693831dc22d68e9a11",
+  "id": "sha256-6eeec7206a1381ad",
+  "sha256": "6eeec7206a1381ad9f756a86899aae0a66b1a70c08ef25000e2dc222ecc79b93",
   "notebook": {
     "name": "notebook.py",
     "source": {
-      "href": "blobs/sha256/59/32/5932a996f69a8d8905b3da4335db04753daba4a73d42ae93a181b492f85b89c8",
+      "href": "blobs/sha256/36/f2/36f2f1c16ba3e0403365548ca1bcf6fcd95ccfd765ffd60ed009512e6ce6173c",
       "media_type": "text/x-python",
       "size": 7553,
-      "sha256": "5932a996f69a8d8905b3da4335db04753daba4a73d42ae93a181b492f85b89c8"
+      "sha256": "36f2f1c16ba3e0403365548ca1bcf6fcd95ccfd765ffd60ed009512e6ce6173c"
     },
-    "source_sha256": "5932a996f69a8d8905b3da4335db04753daba4a73d42ae93a181b492f85b89c8"
+    "source_sha256": "36f2f1c16ba3e0403365548ca1bcf6fcd95ccfd765ffd60ed009512e6ce6173c"
   },
   "scenario_set": {
     "id": "sha256-0187493045851e49",
@@ -816,7 +816,7 @@
     }
   ],
   "provenance": {
-    "invocations_index_href": "bundles/sha256-d7cd3dffcc105dff/traces/index.json",
+    "invocations_index_href": "bundles/sha256-6eeec7206a1381ad/traces/index.json",
     "source_spec_sha256": "86361d48d011f11a0c1a16a46b1b9e9d83300d04f974aed390a436cb6f84421d",
     "source_spec": {
       "scenarios": [

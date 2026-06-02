@@ -9,14 +9,12 @@ the raw spec or render an interactive chart with `vega-embed`.
 import { vegaliteLoader } from "@marimo-team/export-loader-vegalite";
 import { readExport } from "@marimo-team/export-reader";
 
-const exp = await readExport({
-  root: "/export/",
-  loaders: [vegaliteLoader()],
-});
+const vegalite = vegaliteLoader();
+const exp = await readExport({ root: "/export/" });
 
 const chart = await exp
   .get({ scenario: "default", value: "comparison_chart", format: "vegalite" })
-  .load();
+  .load(vegalite);
 
 await chart.render(document.querySelector("#chart")!);
 

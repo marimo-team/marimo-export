@@ -15,7 +15,7 @@ pnpm --filter @marimo-team/export-example-astro-learn build
 
 The gallery is scoped to the `altair`, `optimization`, and `tools` learn topics.
 
-## Live Catalog
+## Server Catalog
 
 Start the learn repository separately:
 

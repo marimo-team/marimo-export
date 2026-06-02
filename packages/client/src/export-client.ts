@@ -19,6 +19,9 @@ import type { ExportSpec } from "./spec";
 export interface MarimoExportClient {
   export(spec: ExportSpec, options?: ExportOptions): Promise<ExportResult>;
   archive(spec: ExportSpec, options?: ExportOptions): Promise<ExportArchiveResult>;
+}
+
+export interface MarimoWorkspaceClient {
   sessions: {
     list(): Promise<RunningNotebook[]>;
   };
@@ -44,6 +47,13 @@ export function createMarimoExportClientFromTransport(
         ...exportRequest(request),
       });
     },
+  };
+}
+
+export function createMarimoWorkspaceClientFromTransport(
+  client: MarimoExportTransport,
+): MarimoWorkspaceClient {
+  return {
     sessions: {
       list() {
         return listRunningNotebooks(client);

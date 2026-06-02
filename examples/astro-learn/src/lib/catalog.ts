@@ -1,6 +1,6 @@
 import {
-  createMarimoExportClient,
-  type MarimoExportClient,
+  createMarimoWorkspaceClient,
+  type MarimoWorkspaceClient,
   type WorkspaceNotebook,
 } from "@marimo-team/export-client";
 
@@ -51,7 +51,7 @@ async function loadCatalog(): Promise<LearnCatalog> {
     };
   }
 
-  const client = createMarimoExportClient({
+  const client = createMarimoWorkspaceClient({
     server: process.env.MARIMO_LEARN_SERVER_URL,
     serverToken: process.env.MARIMO_LEARN_SERVER_TOKEN ?? "learn",
   });
@@ -65,7 +65,7 @@ async function loadCatalog(): Promise<LearnCatalog> {
 }
 
 async function notebookRecord(
-  client: MarimoExportClient,
+  client: MarimoWorkspaceClient,
   notebook: WorkspaceNotebook,
 ): Promise<LearnNotebook> {
   const source = await client.notebooks.source(notebook.path);

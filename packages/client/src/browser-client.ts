@@ -1,7 +1,10 @@
-import { createMarimoExportClientFromTransport } from "./export-client";
+import {
+  createMarimoExportClientFromTransport,
+  createMarimoWorkspaceClientFromTransport,
+} from "./export-client";
 import { createNotebookOpener, createPost, createScratchpadExecutor } from "./transport";
 import type { MarimoExportTransport } from "./types";
-import type { MarimoExportClient } from "./export-client";
+import type { MarimoExportClient, MarimoWorkspaceClient } from "./export-client";
 
 export interface MarimoExportClientOptions {
   server: string | URL;
@@ -12,7 +15,7 @@ export interface MarimoExportClientOptions {
   WebSocket?: typeof WebSocket;
 }
 
-export type { MarimoExportClient };
+export type { MarimoExportClient, MarimoWorkspaceClient };
 export type {
   ExportArchiveResult,
   ExportOptions,
@@ -25,6 +28,13 @@ export type { ExportSpec } from "./spec";
 export function createMarimoExportClient(options: MarimoExportClientOptions): MarimoExportClient {
   const marimo = createBrowserTransport(options);
   return createMarimoExportClientFromTransport(marimo);
+}
+
+export function createMarimoWorkspaceClient(
+  options: MarimoExportClientOptions,
+): MarimoWorkspaceClient {
+  const marimo = createBrowserTransport(options);
+  return createMarimoWorkspaceClientFromTransport(marimo);
 }
 
 function createBrowserTransport(options: MarimoExportClientOptions): MarimoExportTransport {

@@ -1,19 +1,19 @@
-import type { BlobRef, JsonValue } from "@marimo-team/export-reader";
+import type { ExportBlob, JsonValue } from "@marimo-team/export-reader";
 
 export interface AnyWidgetBufferRef {
   path: Array<string | number>;
-  data: BlobRef;
+  data: ExportBlob;
 }
 
 export interface AnyWidgetAssetRefs {
-  module: BlobRef;
-  style?: BlobRef | null;
+  module: ExportBlob;
+  style?: ExportBlob | null;
 }
 
 export interface AnyWidgetDescriptor {
   schema: "moexport.anywidget.bundle.v1";
   anywidget_id: string;
-  state: Record<string, JsonValue | BlobRef>;
+  state: Record<string, JsonValue | ExportBlob>;
   assets: AnyWidgetAssetRefs;
   buffers: AnyWidgetBufferRef[];
 }

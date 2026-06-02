@@ -15,11 +15,11 @@ export async function exportWithClient(
   spec: ExportSpec,
   options: ExportOptions & { client: MarimoExportTransport },
 ): Promise<ExportResult> {
-  const { client, outputRoot, runtime } = options;
+  const { client, outputRoot, paths, runtime } = options;
   const session = await resolveExportSession(client, options);
   await ensureExportRuntime(client, session, runtime);
   const marker = exportMarker();
-  const code = exportCode(spec, outputRoot, marker);
+  const code = exportCode(spec, outputRoot, paths, marker);
   const { stdout } = await client.executeScratchpad({
     code,
     sessionId: session.sessionId,
@@ -27,7 +27,7 @@ export async function exportWithClient(
   });
   const payload = exportPayload(stdout, marker);
   return {
-    session,
+    ...sessionFields(session),
     bundlePath: stringField(payload, "bundle_path"),
     manifestPath: stringField(payload, "manifest_path"),
     invocationPath: stringField(payload, "invocation_path"),
@@ -41,11 +41,11 @@ export async function archiveWithClient(
   spec: ExportSpec,
   options: ExportOptions & { client: MarimoExportTransport },
 ): Promise<ExportArchiveResult> {
-  const { client, outputRoot, runtime } = options;
+  const { client, outputRoot, paths, runtime } = options;
   const session = await resolveExportSession(client, options);
   await ensureExportRuntime(client, session, runtime);
   const marker = archiveMarker();
-  const code = archiveCode(spec, outputRoot, marker);
+  const code = archiveCode(spec, outputRoot, paths, marker);
   const { stdout } = await client.executeScratchpad({
     code,
     sessionId: session.sessionId,
@@ -56,7 +56,7 @@ export async function archiveWithClient(
   return {
     bytes: base64ToBytes(payload),
     mediaType: EXPORT_ARCHIVE_MEDIA_TYPE,
-    session,
+    ...sessionFields(session),
   };
 }
 
@@ -191,10 +191,6 @@ export async function ensureExportRuntime(
     );
   }
 
-  if (options === undefined) {
-    return;
-  }
-
   const packageSpec = options.package;
   const moduleName = options.module ?? "moexport";
   const manager = options.manager ?? "uv";
@@ -236,6 +232,7 @@ export function exportRequest(options: ExportOptions): ExportOptions {
   return {
     ...(options.outputRoot !== undefined ? { outputRoot: options.outputRoot } : {}),
     ...(options.notebook !== undefined ? { notebook: options.notebook } : {}),
+    ...(options.paths !== undefined ? { paths: options.paths } : {}),
     ...(options.sessionId !== undefined ? { sessionId: options.sessionId } : {}),
     ...(options.runtime !== undefined ? { runtime: options.runtime } : {}),
     ...(options.timeoutMs !== undefined ? { timeoutMs: options.timeoutMs } : {}),
@@ -254,6 +251,17 @@ function notebookMatches(notebook: RunningNotebook, query: string): boolean {
 
 function sessionKey(notebook: RunningNotebook | undefined): string {
   return notebook ? `${notebook.path ?? ""}\0${notebook.name ?? ""}` : "";
+}
+
+function sessionFields(
+  session: RunningNotebook,
+): Pick<ExportResult, "sessionId" | "sessionName" | "sessionPath" | "sessionInitializationId"> {
+  return {
+    sessionId: session.sessionId,
+    sessionName: session.name,
+    sessionPath: session.path,
+    sessionInitializationId: session.initializationId,
+  };
 }
 
 type WorkspaceFileNode = Record<string, unknown> & {
@@ -297,12 +305,18 @@ function fileContents(value: unknown): string {
   return isRecord(value) && typeof value.contents === "string" ? value.contents : "";
 }
 
-function exportCode(spec: ExportSpec, outputRoot: string | undefined, marker: string): string {
+function exportCode(
+  spec: ExportSpec,
+  outputRoot: string | undefined,
+  paths: readonly string[] | undefined,
+  marker: string,
+): string {
   const specJson = JSON.stringify(spec);
   const toExpression = outputRoot === undefined ? "None" : JSON.stringify(outputRoot);
 
   return [
     "import json",
+    ...pathCode(paths),
     "import moexport as mox",
     `__moexport_spec = json.loads(${JSON.stringify(specJson)})`,
     `__moexport_result = await mox.capture(__moexport_spec, to=${toExpression})`,
@@ -318,12 +332,18 @@ function exportCode(spec: ExportSpec, outputRoot: string | undefined, marker: st
   ].join("\n");
 }
 
-function archiveCode(spec: ExportSpec, outputRoot: string | undefined, marker: string): string {
+function archiveCode(
+  spec: ExportSpec,
+  outputRoot: string | undefined,
+  paths: readonly string[] | undefined,
+  marker: string,
+): string {
   const specJson = JSON.stringify(spec);
   const toExpression = outputRoot === undefined ? "None" : JSON.stringify(outputRoot);
 
   return [
     "import json",
+    ...pathCode(paths),
     "import importlib",
     "import moexport.archive as __moexport_archive",
     "__moexport_archive = importlib.reload(__moexport_archive)",
@@ -332,12 +352,30 @@ function archiveCode(spec: ExportSpec, outputRoot: string | undefined, marker: s
   ].join("\n");
 }
 
+function pathCode(paths: readonly string[] | undefined): string[] {
+  if (!paths || paths.length === 0) {
+    return [];
+  }
+  return [
+    "import importlib",
+    "import sys",
+    `for __moexport_path in ${JSON.stringify(paths)}:`,
+    "    if __moexport_path not in sys.path:",
+    "        sys.path.insert(0, __moexport_path)",
+    "importlib.invalidate_caches()",
+  ];
+}
+
 function archiveMarker(): string {
   return `__MOEXPORT_ARCHIVE_${Date.now()}_${Math.random().toString(36).slice(2)}__`;
 }
 
 function exportMarker(): string {
   return `__MOEXPORT_RESULT_${Date.now()}_${Math.random().toString(36).slice(2)}__`;
+}
+
+function importMarker(): string {
+  return `__MOEXPORT_IMPORT_${Date.now()}_${Math.random().toString(36).slice(2)}__`;
 }
 
 function archivePayload(stdout: string[], marker: string): string {
@@ -402,17 +440,21 @@ async function canImportModule(
   sessionId: string,
   moduleName: string,
 ): Promise<boolean> {
-  try {
-    await client.executeScratchpad({
-      sessionId,
-      code: `import importlib.util\nif importlib.util.find_spec(${JSON.stringify(
-        moduleName,
-      )}) is None:\n    raise ModuleNotFoundError(${JSON.stringify(moduleName)})`,
-    });
-    return true;
-  } catch {
-    return false;
+  const marker = importMarker();
+  const { stdout } = await client.executeScratchpad({
+    sessionId,
+    code: [
+      "import importlib.util",
+      "import json",
+      `__moexport_can_import = importlib.util.find_spec(${JSON.stringify(moduleName)}) is not None`,
+      `print(${JSON.stringify(marker)} + json.dumps(__moexport_can_import))`,
+    ].join("\n"),
+  });
+  const payload = JSON.parse(markedPayload(stdout, marker, "import probe")) as unknown;
+  if (typeof payload !== "boolean") {
+    throw new Error("marimo import probe returned a non-boolean payload.");
   }
+  return payload;
 }
 
 async function waitForImport(

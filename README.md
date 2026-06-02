@@ -63,12 +63,10 @@ uv run marimo-export query notebooks/__marimo__/static-export entries \
 import { readExport } from "@marimo-team/export-reader";
 import { arrowLoader } from "@marimo-team/export-loader-arrow";
 
-const exp = await readExport({
-  root: "/export/",
-  loaders: [arrowLoader()],
-});
+const arrow = arrowLoader();
+const exp = await readExport({ root: "/export/" });
 
-const table = await exp.get({ scenario: "default", value: "prices", format: "arrow" }).load();
+const table = await exp.get({ scenario: "default", value: "prices", format: "arrow" }).load(arrow);
 ```
 
 `@marimo-team/export-reader` also exposes raw `.url()`, `.bytes()`, `.text()`,

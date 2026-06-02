@@ -1,7 +1,7 @@
 """Render evaluate trace metadata as a Mermaid dataflow chart.
 
 ``mox.evaluate(...)`` returns JSON-shaped metadata for each result. This module
-is the presentation layer for that metadata: it does not inspect the live
+is the presentation layer for that metadata: it does not inspect the running
 runtime and can render traces from either fresh results or stored provenance.
 """
 

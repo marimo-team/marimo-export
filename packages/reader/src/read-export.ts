@@ -1,9 +1,12 @@
 import type {
-  FormatHandle,
-  FormatFile,
-  FormatLoader,
-  FormatLoaderContext,
-  FormatLoaderSelector,
+  Export,
+  ExportArchive,
+  ExportEntry,
+  ExportFile,
+  ExportLoader,
+  ExportLoaderContext,
+  ExportLoaderSelector,
+  ExportOptions,
   FormatRecord,
   FormatSelection,
   BlobRef,
@@ -16,9 +19,6 @@ import type {
   LocalReadFileResult,
   LocalUrlResolver,
   ManifestScenario,
-  ReadExportOptions,
-  StaticExport,
-  StaticExportArchive,
 } from "./types.js";
 import { unzipSync } from "fflate";
 import { safeBundlePath, validateExportManifest, validateExportRootIndex } from "./schema.js";
@@ -27,43 +27,39 @@ const DEFAULT_ROOT_INDEX = "index.json";
 
 type HostedReadOptions = {
   root: string | URL;
-  manifest?: string;
-  index?: string;
-  loaders?: FormatLoader[];
   fetch?: FetchLike;
 };
 
 type DirectoryReadOptions = {
   root: string;
-  manifest?: string;
-  index?: string;
-  loaders?: FormatLoader[];
   readFile: LocalReadFile;
   url?: LocalUrlResolver;
 };
 
 type ArchiveReadOptions = {
   bytes: ExportArchiveInput;
-  manifest?: string;
-  loaders?: FormatLoader[];
 };
 
 export function readExport(
-  options: ReadExportOptions & { bytes: ExportArchiveInput },
-): Promise<StaticExportArchive>;
-export function readExport(
-  options: ReadExportOptions & { root: string | URL },
-): Promise<StaticExport>;
-export function readExport(
-  options: ReadExportOptions,
-): Promise<StaticExport | StaticExportArchive> {
-  if ("bytes" in options) {
-    return openArchiveExport(options as ArchiveReadOptions);
+  options: ExportOptions & { bytes: ExportArchiveInput },
+): Promise<ExportArchive>;
+export function readExport(options: ExportOptions & { root: string | URL }): Promise<Export>;
+export function readExport(options: ExportOptions): Promise<Export | ExportArchive> {
+  if (isArchiveReadOptions(options)) {
+    return openArchiveExport(options);
   }
-  if ("readFile" in options) {
-    return openDirectoryExport(options as DirectoryReadOptions);
+  if (isDirectoryReadOptions(options)) {
+    return openDirectoryExport(options);
   }
-  return openHostedExport(options as HostedReadOptions);
+  return openHostedExport(options);
+}
+
+function isArchiveReadOptions(options: ExportOptions): options is ArchiveReadOptions {
+  return "bytes" in options;
+}
+
+function isDirectoryReadOptions(options: ExportOptions): options is DirectoryReadOptions {
+  return "readFile" in options;
 }
 
 async function loadRootIndex(options: HostedReadOptions): Promise<ExportRootIndex> {
@@ -72,88 +68,63 @@ async function loadRootIndex(options: HostedReadOptions): Promise<ExportRootInde
   return validateExportRootIndex(
     await fetchJson(
       fetchImpl,
-      resolveHref(root, safeBundlePath(options.index ?? DEFAULT_ROOT_INDEX, "index href")),
+      resolveHref(root, safeBundlePath(DEFAULT_ROOT_INDEX, "index href")),
       "export root index",
     ),
   );
 }
 
-async function openHostedExport(options: HostedReadOptions): Promise<StaticExport> {
-  if (options.manifest) {
-    return openHostedManifest(options, options.manifest);
-  }
-
+async function openHostedExport(options: HostedReadOptions): Promise<Export> {
   const index = await loadRootIndex(options);
   if (!index.latest) {
     throw new Error("Export root index does not contain a latest bundle.");
   }
 
-  return openHostedManifest(options, index.latest.manifest_href);
-}
-
-async function openHostedManifest(
-  options: HostedReadOptions,
-  manifestHref: string,
-): Promise<StaticExport> {
   const root = rootUrl(options.root);
   const fetchImpl = options.fetch ?? globalFetch();
   const source = new UrlExportSource(root, fetchImpl);
-  const manifest = validateExportManifest(await source.json(manifestHref, "export manifest"));
-  return new StaticExportReader({
+  const manifest = validateExportManifest(
+    await source.json(index.latest.manifest_href, "export manifest"),
+  );
+  return new ExportReader({
     manifest,
     source,
-    loaders: options.loaders ?? [],
   });
 }
 
-async function openDirectoryExport(options: DirectoryReadOptions): Promise<StaticExport> {
-  if (options.manifest) {
-    return openLocalManifest(options, options.manifest);
-  }
-
+async function openDirectoryExport(options: DirectoryReadOptions): Promise<Export> {
   const source = new LocalExportSource(options.root, options.readFile, options.url);
   const index = validateExportRootIndex(
-    await source.json(
-      safeBundlePath(options.index ?? DEFAULT_ROOT_INDEX, "index href"),
-      "export root index",
-    ),
+    await source.json(safeBundlePath(DEFAULT_ROOT_INDEX, "index href"), "export root index"),
   );
   if (!index.latest) {
     throw new Error("Export root index does not contain a latest bundle.");
   }
 
-  return openLocalManifest(options, index.latest.manifest_href);
-}
-
-async function openLocalManifest(
-  options: DirectoryReadOptions,
-  manifestHref: string,
-): Promise<StaticExport> {
-  const source = new LocalExportSource(options.root, options.readFile, options.url);
-  const manifest = validateExportManifest(await source.json(manifestHref, "export manifest"));
-  return new StaticExportReader({
+  const manifest = validateExportManifest(
+    await source.json(index.latest.manifest_href, "export manifest"),
+  );
+  return new ExportReader({
     manifest,
     source,
-    loaders: options.loaders ?? [],
   });
 }
 
-async function openArchiveExport(options: ArchiveReadOptions): Promise<StaticExportArchive> {
+async function openArchiveExport(options: ArchiveReadOptions): Promise<ExportArchive> {
   const source = ArchiveExportSource.from(await archiveBytes(options.bytes));
-  const manifestHref = options.manifest ?? (await latestArchiveManifestHref(source));
+  const manifestHref = await latestArchiveManifestHref(source);
   const manifest = validateExportManifest(await source.json(manifestHref, "export manifest"));
-  return new StaticExportArchiveReader({
+  return new ArchiveExportReader({
     manifest,
     source,
-    loaders: options.loaders ?? [],
   });
 }
 
-export function defineLoader<T>(loader: FormatLoader<T>): FormatLoader<T> {
+export function defineLoader<T>(loader: ExportLoader<T>): ExportLoader<T> {
   return loader;
 }
 
-export function jsonLoader<T = unknown>(formatIds: string | readonly string[]): FormatLoader<T> {
+export function jsonLoader<T = unknown>(formatIds: string | readonly string[]): ExportLoader<T> {
   return defineLoader({
     ...loaderFormats(formatIds),
     load(context) {
@@ -162,7 +133,7 @@ export function jsonLoader<T = unknown>(formatIds: string | readonly string[]): 
   });
 }
 
-export function textLoader(formatIds: string | readonly string[]): FormatLoader<string> {
+export function textLoader(formatIds: string | readonly string[]): ExportLoader<string> {
   return defineLoader({
     ...loaderFormats(formatIds),
     load(context) {
@@ -171,53 +142,55 @@ export function textLoader(formatIds: string | readonly string[]): FormatLoader<
   });
 }
 
-export function htmlLoader(formatIds: string | readonly string[]): FormatLoader<string> {
+export function htmlLoader(formatIds: string | readonly string[]): ExportLoader<string> {
   return textLoader(formatIds);
 }
 
 interface ReaderOptions {
   manifest: ExportManifest;
   source: ExportSource;
-  loaders: FormatLoader[];
 }
 
-class StaticExportReader implements StaticExport {
-  readonly manifest: ExportManifest;
+class ExportReader implements Export {
+  readonly id: string;
+  readonly notebook: Export["notebook"];
+  readonly sourceSpecSha256: string | null;
+  readonly raw: Export["raw"];
 
+  readonly #manifest: ExportManifest;
   readonly #source: ExportSource;
-  readonly #loaders: FormatLoader[];
 
   constructor(options: ReaderOptions) {
-    this.manifest = options.manifest;
+    this.id = options.manifest.id;
+    this.notebook = {
+      name: options.manifest.notebook.name,
+      sourceSha256: options.manifest.notebook.source_sha256 ?? null,
+    };
+    this.sourceSpecSha256 = options.manifest.provenance?.source_spec_sha256 ?? null;
+    this.raw = {
+      manifest: cloneJson(options.manifest),
+    };
+    this.#manifest = options.manifest;
     this.#source = options.source;
-    this.#loaders = options.loaders;
   }
 
   scenarios(): string[] {
-    return this.manifest.scenarios.map((scenario) => scenario.id);
+    return this.#manifest.scenarios.map((scenario) => scenario.id);
   }
 
   scenario(id: string): ExportScenario {
-    return new StaticExportScenario({
-      scenario: this.scenarioRecord(id),
+    return new ExportScenarioReader({
+      scenario: this.scenarioById(id),
       reader: this,
     });
   }
 
-  scenarioRecord(id: string): ManifestScenario {
-    return cloneJson(this.scenarioById(id));
-  }
-
-  scenarioRecords(): ManifestScenario[] {
-    return cloneJson(this.manifest.scenarios);
-  }
-
   values(): string[] {
-    return Object.keys(this.manifest.values);
+    return Object.keys(this.#manifest.values);
   }
 
   formats(value: string): string[] {
-    const record = this.manifest.values[value];
+    const record = this.#manifest.values[value];
     if (!record) {
       throw new Error(`Export value ${JSON.stringify(value)} does not exist.`);
     }
@@ -225,7 +198,7 @@ class StaticExportReader implements StaticExport {
     return [...record.formats];
   }
 
-  get(selection: FormatSelection): FormatHandle {
+  get(selection: FormatSelection): ExportEntry {
     const scenario = this.scenarioById(selection.scenario);
 
     const value = scenario.values[selection.value];
@@ -244,16 +217,15 @@ class StaticExportReader implements StaticExport {
       );
     }
 
-    return new BundleFormatHandle({
+    return new BundleExportEntry({
       record,
       selection,
       source: this.#source,
-      loaders: this.#loaders,
     });
   }
 
   private scenarioById(id: string): ManifestScenario {
-    const scenario = this.manifest.scenarios.find((candidate) => candidate.id === id);
+    const scenario = this.#manifest.scenarios.find((candidate) => candidate.id === id);
     if (!scenario) {
       throw new Error(`Export scenario ${JSON.stringify(id)} does not exist.`);
     }
@@ -263,32 +235,32 @@ class StaticExportReader implements StaticExport {
 
 interface ScenarioOptions {
   scenario: ManifestScenario;
-  reader: StaticExportReader;
+  reader: ExportReader;
 }
 
-class StaticExportScenario implements ExportScenario {
+class ExportScenarioReader implements ExportScenario {
   readonly id: string;
-  readonly record: ManifestScenario;
   readonly state: ManifestScenario["state"];
 
-  readonly #reader: StaticExportReader;
+  readonly #scenario: ManifestScenario;
+  readonly #reader: ExportReader;
 
   constructor(options: ScenarioOptions) {
     this.id = options.scenario.id;
-    this.record = cloneJson(options.scenario);
     this.state = cloneJson(options.scenario.state);
+    this.#scenario = options.scenario;
     this.#reader = options.reader;
   }
 
   values(): string[] {
-    return Object.keys(this.record.values);
+    return Object.keys(this.#scenario.values);
   }
 
   formats(value: string): string[] {
     return this.#reader.formats(value);
   }
 
-  get(value: string, format: string): FormatHandle {
+  get(value: string, format: string): ExportEntry {
     return this.#reader.get({
       scenario: this.id,
       value,
@@ -297,7 +269,7 @@ class StaticExportScenario implements ExportScenario {
   }
 }
 
-class StaticExportArchiveReader extends StaticExportReader implements StaticExportArchive {
+class ArchiveExportReader extends ExportReader implements ExportArchive {
   readonly #source: ExportSource;
 
   constructor(options: ReaderOptions) {
@@ -314,36 +286,45 @@ interface HandleOptions {
   record: FormatRecord;
   selection: FormatSelection;
   source: ExportSource;
-  loaders: FormatLoader[];
 }
 
-class BundleFormatHandle implements FormatHandle, FormatLoaderContext {
-  readonly record: FormatRecord;
+class BundleExportEntry implements ExportEntry, ExportLoaderContext {
   readonly selection: FormatSelection;
+  readonly formatId: string;
+  readonly mediaType: string | null;
+  readonly metadata: FormatRecord["metadata"];
+  readonly raw: ExportEntry["raw"];
 
+  readonly #record: FormatRecord;
   readonly #source: ExportSource;
-  readonly #loaders: FormatLoader[];
 
   constructor(options: HandleOptions) {
-    this.record = options.record;
     this.selection = options.selection;
+    this.formatId = options.record.format_id;
+    this.mediaType = options.record.media_type;
+    this.metadata = options.record.metadata === null ? null : cloneJson(options.record.metadata);
+    this.raw = {
+      record: cloneJson(options.record),
+    };
+    this.#record = options.record;
     this.#source = options.source;
-    this.#loaders = options.loaders;
   }
 
-  entry(): FormatFile {
-    const selectedKey = this.record.data.entry;
+  entry(): ExportFile {
+    const selectedKey = this.#record.data.entry;
     if (!selectedKey) {
-      throw new Error(
-        `Format ${this.record.format_id} has no entry file. Pass an explicit file key.`,
-      );
+      throw new Error(`Format ${this.formatId} has no entry file. Pass an explicit file key.`);
     }
     return this.file(selectedKey);
   }
 
-  file(key: string): FormatFile {
+  files(): string[] {
+    return Object.keys(this.#record.data.files);
+  }
+
+  file(key: string): ExportFile {
     const ref = this.blob(key);
-    return new BundleFormatFile({
+    return new BundleExportFile({
       ref,
       selection: this.selection,
       source: this.#source,
@@ -371,37 +352,24 @@ class BundleFormatHandle implements FormatHandle, FormatLoaderContext {
   }
 
   private blob(key: string): BlobRef {
-    const selectedKey = key ?? this.record.data.entry;
-    if (!selectedKey) {
-      throw new Error(
-        `Format ${this.record.format_id} has no entry file. Pass an explicit file key.`,
-      );
-    }
-
-    const file = this.record.data.files[selectedKey];
+    const file = this.#record.data.files[key];
     if (!file) {
-      throw new Error(
-        `Format ${this.record.format_id} has no file named ${JSON.stringify(selectedKey)}.`,
-      );
+      throw new Error(`Format ${this.formatId} has no file named ${JSON.stringify(key)}.`);
     }
 
     return file;
   }
 
-  async load<T>(loader: FormatLoader<T>): Promise<T>;
-  async load(): Promise<unknown>;
-  async load<T>(loader?: FormatLoader<T>): Promise<T | unknown> {
-    const selectedLoader =
-      loader ?? this.#loaders.find((candidate) => loaderSupports(candidate, this.record.format_id));
-    if (!selectedLoader) {
+  async load<T>(loader: ExportLoader<T>): Promise<T> {
+    if (!loaderSupports(loader, this.formatId)) {
       throw new Error(
-        `No loader registered for format id ${JSON.stringify(
-          this.record.format_id,
-        )}. Use .entry().url(), .entry().bytes(), .entry().text(), .entry().json(), or pass a loader to .load(...).`,
+        `Loader does not support format id ${JSON.stringify(
+          this.formatId,
+        )}. Use .entry().url(), .entry().bytes(), .entry().text(), .entry().json(), or pass a matching loader.`,
       );
     }
 
-    return selectedLoader.load(this);
+    return loader.load(this);
   }
 }
 
@@ -411,7 +379,7 @@ interface FileOptions {
   source: ExportSource;
 }
 
-class BundleFormatFile implements FormatFile {
+class BundleExportFile implements ExportFile {
   readonly ref: BlobRef;
 
   readonly #selection: FormatSelection;
@@ -600,7 +568,7 @@ class ArchiveExportSource implements ExportSource {
     }
     if (typeof Blob === "undefined" || typeof URL.createObjectURL !== "function") {
       throw new Error(
-        "Archive-backed format URLs require Blob URL support. Use .bytes(), .text(), .json(), or .load() instead.",
+        "Archive-backed format URLs require Blob URL support. Use .bytes(), .text(), .json(), or .load(loader) instead.",
       );
     }
 
@@ -651,14 +619,14 @@ class ArchiveExportSource implements ExportSource {
   }
 }
 
-function loaderSupports(loader: FormatLoader, formatId: string): boolean {
+function loaderSupports(loader: ExportLoader, formatId: string): boolean {
   if (loader.formatId === formatId) {
     return true;
   }
   return loader.formatIds?.includes(formatId) ?? false;
 }
 
-function loaderFormats(formatIds: string | readonly string[]): FormatLoaderSelector {
+function loaderFormats(formatIds: string | readonly string[]): ExportLoaderSelector {
   return typeof formatIds === "string" ? { formatId: formatIds } : { formatIds };
 }
 

@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 import { createMarimoExportClient } from "@marimo-team/export-client";
-import { readExport, type StaticExport } from "@marimo-team/export-reader";
+import { readExport, type Export } from "@marimo-team/export-reader";
 
 import { exportPublicRoot } from "@/lib/export-paths";
 import { marimoNotebook, marimoServerToken, marimoServerUrl } from "@/lib/marimo-env";
@@ -13,7 +13,7 @@ const LOCAL_EXPORT_ROOT = path.join(process.cwd(), "public", "export", "finance"
 const LOCAL_EXPORT_PARENT = path.dirname(LOCAL_EXPORT_ROOT);
 const CAPTURE_LOCK = path.join(LOCAL_EXPORT_PARENT, ".finance-capture.lock");
 
-let exportPromise: Promise<StaticExport> | undefined;
+let exportPromise: Promise<Export> | undefined;
 
 export interface SummaryPayload {
   rows: number;
@@ -54,7 +54,7 @@ export interface FinancePairPage {
   notebookSha: string | null;
 }
 
-export const loadFinanceExport = (): Promise<StaticExport> => {
+export const loadFinanceExport = (): Promise<Export> => {
   exportPromise ??= ensureFinanceExport();
   return exportPromise;
 };
@@ -62,9 +62,9 @@ export const loadFinanceExport = (): Promise<StaticExport> => {
 export const getFinanceOverview = async (): Promise<FinanceOverview> => {
   const exp = await loadFinanceExport();
   return {
-    manifestId: exp.manifest.id,
-    notebookName: exp.manifest.notebook.name,
-    notebookSha: exp.manifest.notebook.source_sha256 ?? null,
+    manifestId: exp.id,
+    notebookName: exp.notebook.name,
+    notebookSha: exp.notebook.sourceSha256,
     scenarios: exp.scenarios(),
   };
 };
@@ -86,13 +86,13 @@ export const getFinancePairPage = async (scenario: string): Promise<FinancePairP
     changeDescHtml,
     sampleRows,
     pngUrl: `${exportPublicRoot}${pngFile.href}`,
-    manifestId: exp.manifest.id,
-    notebookName: exp.manifest.notebook.name,
-    notebookSha: exp.manifest.notebook.source_sha256 ?? null,
+    manifestId: exp.id,
+    notebookName: exp.notebook.name,
+    notebookSha: exp.notebook.sourceSha256,
   };
 };
 
-const ensureFinanceExport = async (): Promise<StaticExport> => {
+const ensureFinanceExport = async (): Promise<Export> => {
   const shouldCapture = await needsCapture();
   if (shouldCapture) {
     await captureFinanceBundle();

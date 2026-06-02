@@ -12,6 +12,7 @@ from typing import Any
 from zipfile import ZipFile
 
 import moexport as mox
+from moexport.archive import emit_bundle_archive
 from moexport.artifacts import Artifact, ArtifactData
 from moexport.exporters import ExporterContext
 
@@ -113,7 +114,7 @@ def test_archive_bundle_returns_zip_bytes(
         assert zip_file.read(blob_href) == b"archived"
 
     run(
-        mox.emit_bundle_archive(
+        emit_bundle_archive(
             {
                 "scenarios": [{"id": "default"}],
                 "values": {

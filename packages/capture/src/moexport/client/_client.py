@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 
+from moexport.archive import EXPORT_ARCHIVE_MEDIA_TYPE
 from moexport.client._code import (
     archive_code,
     export_code,
@@ -16,7 +17,13 @@ from moexport.client._code import (
 from moexport.client._runtime import ensure_runtime
 from moexport.client._scratchpad import can_import, execute_scratchpad
 from moexport.client._session import resolve_session
-from moexport.client._types import ExportResult, RuntimeInstall, SpecInput
+from moexport.client._types import (
+    ExportArchiveResult,
+    ExportResult,
+    RuntimeInstall,
+    SessionInfo,
+    SpecInput,
+)
 
 
 @dataclass(frozen=True)
@@ -29,16 +36,6 @@ class ExportClient:
     token: str | None = None
     runtime: Literal["preinstalled"] | RuntimeInstall = "preinstalled"
 
-    def session(self) -> dict[str, Any]:
-        """Resolve the running marimo session used by this client."""
-
-        return resolve_session(
-            server=self.server,
-            notebook=self.notebook,
-            session_id=self.session_id,
-            token=self.token,
-        )
-
     def export(
         self,
         spec: SpecInput,
@@ -50,12 +47,12 @@ class ExportClient:
     ) -> ExportResult:
         """Write a static export bundle from the resolved session."""
 
-        session = self.session()
+        session = self._session()
         self._ensure_runtime(session, runtime)
         export_marker = marker("EXPORT")
         result = execute_scratchpad(
             self.server,
-            str(session["sessionId"]),
+            session.session_id,
             export_code(spec, to=to, paths=paths, marker=export_marker),
             token=self.token,
             timeout=timeout,
@@ -70,32 +67,40 @@ class ExportClient:
         paths: Iterable[str | Path] = (),
         runtime: Literal["preinstalled"] | RuntimeInstall | None = None,
         timeout: int = 120,
-    ) -> bytes:
-        """Return zip bytes for an in-memory static export bundle."""
+    ) -> ExportArchiveResult:
+        """Return an in-memory static export archive from the resolved session."""
 
-        session = self.session()
+        session = self._session()
         self._ensure_runtime(session, runtime)
         archive_marker = marker("ARCHIVE")
         result = execute_scratchpad(
             self.server,
-            str(session["sessionId"]),
+            session.session_id,
             archive_code(spec, paths=paths, marker=archive_marker),
             token=self.token,
             timeout=timeout,
         )
         payload = marked_text(result.stdout, archive_marker)
-        return base64.b64decode(payload)
+        return _archive_result(base64.b64decode(payload), session)
+
+    def _session(self) -> SessionInfo:
+        return resolve_session(
+            server=self.server,
+            notebook=self.notebook,
+            session_id=self.session_id,
+            token=self.token,
+        )
 
     def _ensure_runtime(
         self,
-        session: dict[str, Any],
+        session: SessionInfo,
         runtime: Literal["preinstalled"] | RuntimeInstall | None,
     ) -> None:
         requested = runtime if runtime is not None else self.runtime
         if requested == "preinstalled":
             if can_import(
                 self.server,
-                str(session["sessionId"]),
+                session.session_id,
                 "moexport",
                 token=self.token,
             ):
@@ -110,15 +115,19 @@ class ExportClient:
             )
         ensure_runtime(
             server=self.server,
-            session_id=str(session["sessionId"]),
+            session_id=session.session_id,
             package=requested.package,
             module=requested.module,
+            manager=requested.manager,
+            source=requested.source,
             force=requested.force,
+            timeout_ms=requested.timeout_ms,
+            poll_interval_ms=requested.poll_interval_ms,
             token=self.token,
         )
 
 
-def _export_result(payload: dict[str, Any], session: dict[str, Any]) -> ExportResult:
+def _export_result(payload: dict[str, Any], session: SessionInfo) -> ExportResult:
     return ExportResult(
         bundle_path=_string_field(payload, "bundle_path"),
         manifest_path=_string_field(payload, "manifest_path"),
@@ -126,7 +135,21 @@ def _export_result(payload: dict[str, Any], session: dict[str, Any]) -> ExportRe
         invocation_index_path=_string_field(payload, "invocation_index_path"),
         manifest=_dict_field(payload, "manifest"),
         invocation=_dict_field(payload, "invocation"),
-        session=session,
+        session_id=session.session_id,
+        session_name=session.name,
+        session_path=session.path,
+        session_initialization_id=session.initialization_id,
+    )
+
+
+def _archive_result(payload: bytes, session: SessionInfo) -> ExportArchiveResult:
+    return ExportArchiveResult(
+        bytes=payload,
+        media_type=EXPORT_ARCHIVE_MEDIA_TYPE,
+        session_id=session.session_id,
+        session_name=session.name,
+        session_path=session.path,
+        session_initialization_id=session.initialization_id,
     )
 
 
