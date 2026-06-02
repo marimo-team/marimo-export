@@ -17,6 +17,7 @@ export interface MarimoExportClientOptions {
 
 export type { MarimoExportClient, MarimoWorkspaceClient };
 export type {
+  ExportArchiveOptions,
   ExportArchiveResult,
   ExportOptions,
   ExportResult,

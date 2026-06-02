@@ -1,5 +1,6 @@
 import {
   EXPORT_ARCHIVE_MEDIA_TYPE,
+  type ExportArchiveOptions,
   type ExportArchiveResult,
   type ExportOptions,
   type ExportResult,
@@ -39,13 +40,13 @@ export async function exportWithClient(
 
 export async function archiveWithClient(
   spec: ExportSpec,
-  options: ExportOptions & { client: MarimoExportTransport },
+  options: ExportArchiveOptions & { client: MarimoExportTransport },
 ): Promise<ExportArchiveResult> {
-  const { client, outputRoot, paths, runtime } = options;
+  const { client, paths, runtime } = options;
   const session = await resolveExportSession(client, options);
   await ensureExportRuntime(client, session, runtime);
   const marker = archiveMarker();
-  const code = archiveCode(spec, outputRoot, paths, marker);
+  const code = archiveCode(spec, paths, marker);
   const { stdout } = await client.executeScratchpad({
     code,
     sessionId: session.sessionId,
@@ -239,6 +240,16 @@ export function exportRequest(options: ExportOptions): ExportOptions {
   };
 }
 
+export function archiveRequest(options: ExportArchiveOptions): ExportArchiveOptions {
+  return {
+    ...(options.notebook !== undefined ? { notebook: options.notebook } : {}),
+    ...(options.paths !== undefined ? { paths: options.paths } : {}),
+    ...(options.sessionId !== undefined ? { sessionId: options.sessionId } : {}),
+    ...(options.runtime !== undefined ? { runtime: options.runtime } : {}),
+    ...(options.timeoutMs !== undefined ? { timeoutMs: options.timeoutMs } : {}),
+  };
+}
+
 function hasSessionId(value: unknown): value is Record<string, unknown> & { sessionId: unknown } {
   return isRecord(value) && Boolean(value.sessionId);
 }
@@ -334,12 +345,10 @@ function exportCode(
 
 function archiveCode(
   spec: ExportSpec,
-  outputRoot: string | undefined,
   paths: readonly string[] | undefined,
   marker: string,
 ): string {
   const specJson = JSON.stringify(spec);
-  const toExpression = outputRoot === undefined ? "None" : JSON.stringify(outputRoot);
 
   return [
     "import json",
@@ -348,7 +357,7 @@ function archiveCode(
     "import moexport.archive as __moexport_archive",
     "__moexport_archive = importlib.reload(__moexport_archive)",
     `__moexport_spec = json.loads(${JSON.stringify(specJson)})`,
-    `await __moexport_archive.emit_bundle_archive(__moexport_spec, to=${toExpression}, marker=${JSON.stringify(marker)})`,
+    `await __moexport_archive.emit_bundle_archive(__moexport_spec, marker=${JSON.stringify(marker)})`,
   ].join("\n");
 }
 
