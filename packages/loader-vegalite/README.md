@@ -5,6 +5,14 @@ Loader for `vegalite.v1` formats.
 This package turns exported Vega-Lite JSON into a browser handle that can return
 the raw spec or render an interactive chart with `vega-embed`.
 
+## Installation
+
+```bash
+npm install @marimo-team/export-loader-vegalite @marimo-team/export-reader
+```
+
+## Usage
+
 ```ts
 import { vegaliteLoader } from "@marimo-team/export-loader-vegalite";
 import { readExport } from "@marimo-team/export-reader";
@@ -21,7 +29,7 @@ await chart.render(document.querySelector("#chart")!);
 const spec = await chart.spec();
 ```
 
-Mechanics:
+## Contract
 
 - Supports `vegalite.v1`.
 - Reads the format entry file as JSON.

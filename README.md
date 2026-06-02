@@ -1,44 +1,37 @@
-# marimo static export workspace
+# marimo static export
 
-This repository contains the capture runtime, TypeScript readers, modular
-loaders, notebooks, and examples for marimo static export bundles.
+marimo static export captures selected values, display cells, and scenario
+states from a marimo notebook and writes a static bundle that web apps can read
+without Python.
 
-The core flow is:
-
-1. A marimo notebook runs in Python.
-2. An export spec selects typed notebook sources and finite scenario states.
-3. `moexport` evaluates those selections, turns Python objects into portable
-   formats, and writes a static bundle.
-4. Web code opens the bundle with `@marimo-team/export-reader` and loads only
-   the formats it needs.
-
-The finished site does not need a Python server, Pyodide, or a marimo runtime.
-
-## Workspace
-
-- `packages/capture`: Python package `moexport` and the `marimo-export` CLI.
-  This is the only package that sees Python object handles.
-- `packages/client`: TypeScript client for asking a running marimo server to
-  produce a bundle from JavaScript.
-- `packages/reader`: TypeScript reader for finished static bundles.
-- `packages/loader-*`: optional web loaders for format families such as
-  AnyWidget, Arrow, Parquet, and Vega-Lite.
-- `notebooks`: source notebooks plus YAML and JSON export specs used by the
-  examples.
-- `examples`: framework and frameworkless apps that consume the exported
-  bundles.
-- `examples/self-contained`: a Markdown export example that turns one
-  notebook into `output.md` plus a static `media/` directory for PR review.
+The capture runtime records a manifest, content-addressed blobs, provenance, and
+invocation traces. Browser code opens the bundle with
+`@marimo-team/export-reader`, then loads only the JSON, Arrow, Parquet,
+Vega-Lite, AnyWidget, HTML, Markdown, or custom formats it needs.
 
 ## Capture A Notebook
 
-Inspect the notebook first so the spec can refer to real defs and cell names:
+Start from an export spec. Each value names a notebook source and the formats to
+materialize for each scenario:
 
-```bash
-uv run marimo-export inspect defs notebooks/finance.py
+```yaml
+scenarios:
+  - id: default
+  - id: wide_chart
+    state:
+      chart_width: 1200
+
+values:
+  prices:
+    source: { def: df }
+    formats: [arrow, parquet]
+
+  comparison_chart:
+    source: { def: chart }
+    formats: [vegalite, png]
 ```
 
-Write a static bundle:
+Capture the notebook from this checkout:
 
 ```bash
 uv run marimo-export notebook notebooks/finance.py \
@@ -46,40 +39,58 @@ uv run marimo-export notebook notebooks/finance.py \
   --to notebooks/__marimo__/static-export
 ```
 
-Query the result without a web runtime:
+Inspect the finished bundle from Python:
 
 ```bash
 uv run marimo-export query notebooks/__marimo__/static-export
-uv run marimo-export query notebooks/__marimo__/static-export scenarios
 uv run marimo-export query notebooks/__marimo__/static-export entries \
   --value summary \
   --format json \
   --content
 ```
 
-## Read In The Browser
+The export root contains `index.json`, one or more `bundles/<id>/manifest.json`
+files, invocation traces, and `blobs/sha256/...` payload files.
+
+## Read A Bundle
+
+Hosted bundles load through `readExport({ root })`:
 
 ```ts
 import { readExport } from "@marimo-team/export-reader";
 import { arrowLoader } from "@marimo-team/export-loader-arrow";
 
-const arrow = arrowLoader();
 const exp = await readExport({ root: "/export/" });
+const summary = await exp.get({ scenario: "default", value: "summary", format: "json" }).json();
 
-const table = await exp.get({ scenario: "default", value: "prices", format: "arrow" }).load(arrow);
+const prices = await exp
+  .get({ scenario: "default", value: "prices", format: "arrow" })
+  .load(arrowLoader());
 ```
 
-`@marimo-team/export-reader` also exposes raw `.url()`, `.bytes()`, `.text()`,
-and `.json()` access for formats that do not need a loader. `.bytes()`,
-`.text()`, `.json()`, `.fetch()`, and loader-backed `.load()` verify the
-recorded size and SHA-256 digest before returning payload data. `.url()` returns
-the bundle URL without reading the blob, so callers that fetch it directly own
-integrity checks.
+`bytes()`, `text()`, `json()`, `fetch()`, and loader-backed `load(...)` verify
+the recorded size and SHA-256 digest before returning payload data. `url()`
+returns the bundle URL directly for browser APIs that need a URL.
+
+Archive-backed reads use the same API:
+
+```ts
+const response = await fetch("/api/export");
+const exp = await readExport({ bytes: await response.arrayBuffer() });
+
+try {
+  const html = await exp.get({ scenario: "default", value: "report", format: "html" }).text();
+} finally {
+  exp.dispose();
+}
+```
+
+Call `dispose()` when an archive reader has created object URLs.
 
 ## Capture From JavaScript
 
-Use `@marimo-team/export-client` when a build step or browser page can reach a
-running marimo server:
+Use `@marimo-team/export-client` when JavaScript can reach a running marimo
+server:
 
 ```ts
 import { createMarimoExportClient } from "@marimo-team/export-client";
@@ -93,100 +104,80 @@ await client.export(spec, {
 });
 ```
 
-Use `@marimo-team/export-client/browser` for frameworkless pages that need a
-plain `fetch` implementation and do not import the generated marimo OpenAPI
-client.
+`client.export(...)` writes a persistent export root from the target kernel.
+`client.archive(...)` captures into a temporary root and returns zip bytes for
+API routes that stream a bundle to the caller.
 
-Use `@marimo-team/export-client/workspace` when a build step needs to list
-running sessions, list workspace notebooks, or read notebook source from the
-marimo workspace API.
+Use `@marimo-team/export-client/browser` for frameworkless pages that need
+plain `fetch` plus marimo HTTP and WebSocket endpoints. Use
+`@marimo-team/export-client/workspace` for notebook discovery and source
+previews from the marimo workspace API.
+
+## Package Map
+
+| Package                                | Runtime    | Contract                                                                                         |
+| -------------------------------------- | ---------- | ------------------------------------------------------------------------------------------------ |
+| `moexport`                             | Python     | Captures notebook sources, applies exporters, writes bundles, archives, and queryable manifests. |
+| `@marimo-team/export-client`           | TypeScript | Asks a running marimo server to write or archive a bundle.                                       |
+| `@marimo-team/export-reader`           | TypeScript | Opens a hosted root, local directory, or archive and returns integrity-checked format handles.   |
+| `@marimo-team/export-loader-arrow`     | TypeScript | Loads `dataframe.arrow.v1` payloads into `@uwdata/flechette` tables.                             |
+| `@marimo-team/export-loader-parquet`   | TypeScript | Loads `dataframe.parquet.v1` payloads with `hyparquet`.                                          |
+| `@marimo-team/export-loader-vegalite`  | TypeScript | Reads `vegalite.v1` specs and renders charts with `vega-embed`.                                  |
+| `@marimo-team/export-loader-anywidget` | TypeScript | Hydrates `anywidget.bundle.v1` payloads without Python, Pyodide, or a marimo server.             |
+
+## Spec Sources
+
+Specs can select several notebook surfaces:
+
+| Source                         | Captures                                                 |
+| ------------------------------ | -------------------------------------------------------- |
+| `{ def: df }`                  | A notebook definition by name.                           |
+| `{ expr: "df.head(10)" }`      | A Python expression evaluated in the scenario.           |
+| `{ cell: summary }`            | A marimo cell output by name, id, or index.              |
+| `{ snapshot: true }`           | A linear notebook snapshot.                              |
+| `{ report: { cells: [...] } }` | A selected display-cell report with labels and ordering. |
+
+Scenario `state` keys override notebook definitions. Dotted keys patch object
+attributes after producer cells run, for example `symbols_selector.value`.
+Code-authored state values use `{ code: "..." }` and the evaluated value must be
+JSON-compatible.
+
+## Examples
+
+- `examples/vanilla-vite`: browser SPA over the checked-in finance bundle.
+- `examples/frameworkless`: single-file HTML apps that import local package
+  `dist/` entrypoints and read static bundles directly.
+- `examples/next-ssg`: static Next.js pages built from public bundles or
+  archive capture during `next build`.
+- `examples/astro-learn`: Astro SSG gallery built from marimo learn notebook
+  metadata.
+- `examples/self-contained`: Markdown export that writes `output.md` and
+  `media/` for review workflows.
+- `notebooks`: source notebooks and YAML or JSON specs used by the packages and
+  examples.
 
 ## Development
 
-Install dependencies with pnpm and run package commands through the workspace:
+Install workspace dependencies:
 
 ```bash
 pnpm install
+uv sync --all-extras
+```
+
+Run the package checks:
+
+```bash
 pnpm build
 pnpm lint
 pnpm typecheck
+pnpm test
 ```
 
-Before handoff, this workspace expects:
+Before handoff in this checkout, run:
 
 ```bash
 pnpm format
 pnpm lint
 pnpm typecheck
 ```
-
-### Browser Smoke Matrix
-
-Run the browser smoke after `pnpm build`. Serve the repo root for
-frameworkless pages:
-
-```bash
-python3 -m http.server 8799 --bind 127.0.0.1
-```
-
-Use one `agent-browser` session and assert each page through visible text plus
-the no-horizontal-overflow predicate:
-
-```bash
-agent-browser --session marimo-export-smoke open http://127.0.0.1:8799/examples/frameworkless/index.html
-agent-browser --session marimo-export-smoke wait --text "Single-file apps over static bundles"
-agent-browser --session marimo-export-smoke wait --fn "document.documentElement.scrollWidth <= document.documentElement.clientWidth"
-
-agent-browser --session marimo-export-smoke open http://127.0.0.1:8799/examples/frameworkless/agentic-playground.html
-agent-browser --session marimo-export-smoke wait --text "Agentic export playground"
-agent-browser --session marimo-export-smoke wait --fn "document.querySelectorAll('button').length >= 3 && document.documentElement.scrollWidth <= document.documentElement.clientWidth"
-
-agent-browser --session marimo-export-smoke open http://127.0.0.1:8799/examples/frameworkless/queueing-lab.html
-agent-browser --session marimo-export-smoke wait --text "Queueing lab"
-agent-browser --session marimo-export-smoke wait --fn "document.querySelectorAll('img').length >= 2 && document.documentElement.scrollWidth <= document.documentElement.clientWidth"
-
-agent-browser --session marimo-export-smoke open http://127.0.0.1:8799/examples/frameworkless/quadratic-program.html
-agent-browser --session marimo-export-smoke wait --text "Quadratic program, from the bowl up"
-agent-browser --session marimo-export-smoke wait --fn "document.querySelectorAll('button').length >= 5 && document.documentElement.scrollWidth <= document.documentElement.clientWidth"
-```
-
-For `server-archive.html`, run the queueing notebook on port `8383`, open the
-page above from the same root server, click **Capture archive**, then assert
-`Captured`, `pooled_rush`, `3`, and `9` appear in the summary tables.
-
-For built examples, preview each app and run the same session:
-
-```bash
-pnpm --filter @marimo-team/export-example-vanilla build
-pnpm --filter @marimo-team/export-example-vanilla preview
-agent-browser --session marimo-export-smoke open http://localhost:4173
-agent-browser --session marimo-export-smoke wait --text "Market monitor"
-
-pnpm --filter @marimo-team/export-example-astro-learn build
-pnpm --filter @marimo-team/export-example-astro-learn preview
-agent-browser --session marimo-export-smoke open http://127.0.0.1:4175
-agent-browser --session marimo-export-smoke wait --text "Notebook gallery"
-
-pnpm --filter @marimo-team/export-example-next-ssg build
-python3 -m http.server 5187 --bind 127.0.0.1 --directory examples/next-ssg/out
-agent-browser --session marimo-export-smoke open http://127.0.0.1:5187/compare/crwv-msft/
-agent-browser --session marimo-export-smoke wait --text "CoreWeave vs Microsoft"
-```
-
-For the self-contained example, render the Quarto output and assert the report
-loads without broken images:
-
-```bash
-cd examples/self-contained/finance
-quarto render output.md --output output.html
-python3 -m http.server 5188 --bind 127.0.0.1
-agent-browser --session marimo-export-smoke open http://127.0.0.1:5188/output.html
-agent-browser --session marimo-export-smoke wait --text "Finance notebook static review"
-agent-browser --session marimo-export-smoke wait --fn "Array.from(document.images).every((img) => img.complete && img.naturalWidth > 0)"
-```
-
-When the local metrics use cases exist under `nogit/use-cases`, run each
-`run.py --strict`, open its `output/index.html` and `output/reader-check.html`,
-and assert `Weekly Metrics Readout`, `Reader Check`, counters `27`, `19`, `19`,
-and `0`, plus the labels `Rendered items`, `Image assets`, `Spec assets`, and
-`Diagnostics`.

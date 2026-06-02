@@ -5,6 +5,14 @@ Loader for `dataframe.parquet.v1` formats.
 This package converts exported Parquet bytes into browser-usable row and
 metadata handles with `hyparquet`.
 
+## Installation
+
+```bash
+npm install @marimo-team/export-loader-parquet @marimo-team/export-reader
+```
+
+## Usage
+
 ```ts
 import { parquetLoader } from "@marimo-team/export-loader-parquet";
 import { readExport } from "@marimo-team/export-reader";
@@ -24,7 +32,7 @@ const metadata = await parquet.readMetadata();
 const rows = await parquet.readRows({ columns: ["Date", "Close"] });
 ```
 
-Mechanics:
+## Contract
 
 - Supports `dataframe.parquet.v1`.
 - Reads verified format bytes through the reader context before passing them

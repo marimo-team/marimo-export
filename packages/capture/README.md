@@ -6,6 +6,18 @@ Python capture runtime for marimo static export bundles.
 content-addressed blobs, records provenance, and produces manifests that browser
 packages can read without Python.
 
+## Installation
+
+```bash
+pip install "moexport[all]"
+```
+
+In this checkout, install the Python workspace dependencies with:
+
+```bash
+uv sync --all-extras
+```
+
 ## Export From A Running Notebook
 
 ```python

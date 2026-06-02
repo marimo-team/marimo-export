@@ -7,6 +7,12 @@ export code through marimo's scratchpad API and returns either a written export
 result or an in-memory archive. Finished bundle reading belongs to
 `@marimo-team/export-reader`.
 
+## Installation
+
+```bash
+npm install @marimo-team/export-client
+```
+
 ## Export Through The Server Client
 
 ```ts
