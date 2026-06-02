@@ -1,0 +1,1684 @@
+{
+  "schema": "moexport.invocation.v1",
+  "version": 1,
+  "id": "sha256-39d5db8cc5b422e7",
+  "sha256": "39d5db8cc5b422e745220779a6399851d3b8593308949eefa877bf0b4b934959",
+  "created_at": "2026-06-02T10:53:17.410570Z",
+  "bundle": {
+    "id": "sha256-9d7f220e787856c0",
+    "sha256": "9d7f220e787856c0811acbad93f727fe1437978fac3539bc937f7c7e43d9519d",
+    "manifest_href": "bundles/sha256-9d7f220e787856c0/manifest.json"
+  },
+  "notebook": {
+    "name": "master-metrics.py",
+    "source": null,
+    "source_sha256": "b01c7cfd602a9daeedf290e540cba47e033966d73808a39839918782cd3192ba"
+  },
+  "scenario_set": {
+    "id": "sha256-667060c75f1ba4d0",
+    "sha256": "667060c75f1ba4d02ae46cdf76d404461171915c4d2fc09ad0bc3f06f58047b5"
+  },
+  "capture": {
+    "id": "sha256-d0af1f4c06c62739",
+    "request_sha256": "d0af1f4c06c627397b39c9c942683e8d2e015bd49434caa17bb49198b74f4721"
+  },
+  "source_spec": {
+    "sha256": "ffc6c393074b185119e5ed4fcc0ecd6671ff7ee259112be3ee4d7fa9d8c29765",
+    "spec": {
+      "scenarios": [
+        {
+          "id": "current"
+        }
+      ],
+      "provenance": {
+        "source": "hash",
+        "spec": "embed"
+      },
+      "values": {
+        "readout": {
+          "source": {
+            "type": "report",
+            "cells": [
+              {
+                "cell": {
+                  "id": "lEQa"
+                },
+                "label": "Molab",
+                "order": 5
+              },
+              {
+                "cell": {
+                  "id": "nWHF"
+                },
+                "label": "Molab stickiness",
+                "order": 14
+              },
+              {
+                "cell": {
+                  "id": "ROlb"
+                },
+                "label": "OSS",
+                "order": 17
+              },
+              {
+                "cell": {
+                  "id": "DnEU"
+                },
+                "label": "Downloads by system",
+                "order": 21
+              },
+              {
+                "cell": {
+                  "id": "ZBYS"
+                },
+                "label": "PyPI downloads",
+                "order": 25
+              },
+              {
+                "cell": {
+                  "id": "xXTn"
+                },
+                "label": "Dependent repositories",
+                "order": 28
+              },
+              {
+                "cell": {
+                  "id": "pHFh"
+                },
+                "label": "Total GitHub forks",
+                "order": 30
+              },
+              {
+                "cell": {
+                  "id": "NCOB"
+                },
+                "label": "Claude Skills downloads",
+                "order": 31
+              },
+              {
+                "cell": {
+                  "id": "TRpd"
+                },
+                "label": "Skills overview",
+                "order": 33
+              },
+              {
+                "cell": {
+                  "id": "TXez"
+                },
+                "label": "VSCode Extension",
+                "order": 34
+              },
+              {
+                "cell": {
+                  "id": "rEll"
+                },
+                "label": "VSCode overview",
+                "order": 40
+              },
+              {
+                "cell": {
+                  "id": "SdmI"
+                },
+                "label": "New VSCode installs",
+                "order": 42
+              },
+              {
+                "cell": {
+                  "id": "lgWD"
+                },
+                "label": "Rolling 7-day WAU",
+                "order": 43
+              },
+              {
+                "cell": {
+                  "id": "yOPj"
+                },
+                "label": "VSCode cohort retention heatmap",
+                "order": 44
+              },
+              {
+                "cell": {
+                  "id": "fwwy"
+                },
+                "label": "VSCode retention curves",
+                "order": 45
+              },
+              {
+                "cell": {
+                  "id": "LJZf"
+                },
+                "label": "VSCode stickiness",
+                "order": 46
+              },
+              {
+                "cell": {
+                  "id": "urSm"
+                },
+                "label": "Socials",
+                "order": 47
+              },
+              {
+                "cell": {
+                  "id": "jxvo"
+                },
+                "label": "YouTube",
+                "order": 48
+              },
+              {
+                "cell": {
+                  "id": "mWxS"
+                },
+                "label": "Gallery",
+                "order": 49
+              },
+              {
+                "cell": {
+                  "id": "YWSi"
+                },
+                "label": "Gallery clicks",
+                "order": 51
+              },
+              {
+                "cell": {
+                  "id": "zlud"
+                },
+                "label": "Open in Molab",
+                "order": 52
+              },
+              {
+                "cell": {
+                  "id": "iXej"
+                },
+                "label": "Open in Molab overview",
+                "order": 58
+              },
+              {
+                "cell": {
+                  "id": "EJmg"
+                },
+                "label": "Referrer sources",
+                "order": 59
+              },
+              {
+                "cell": {
+                  "id": "UmEG"
+                },
+                "label": "Top forked notebooks",
+                "order": 60
+              },
+              {
+                "cell": {
+                  "id": "vEBW"
+                },
+                "label": "Notebook detail",
+                "order": 61
+              },
+              {
+                "cell": {
+                  "id": "IpqN"
+                },
+                "label": "Most viewed notebooks",
+                "order": 63
+              },
+              {
+                "cell": {
+                  "id": "dxZZ"
+                },
+                "label": "External fork provenance",
+                "order": 64
+              }
+            ],
+            "include_source": false,
+            "on_error": "record"
+          },
+          "formats": {
+            "metrics": {
+              "export": {
+                "type": "ref",
+                "ref": "metrics_exporters:readout"
+              },
+              "options": {
+                "title": "Weekly Metrics Readout",
+                "items": [
+                  {
+                    "order": 5,
+                    "cell_id": "lEQa",
+                    "label": "Molab"
+                  },
+                  {
+                    "order": 14,
+                    "cell_id": "nWHF",
+                    "label": "Molab stickiness"
+                  },
+                  {
+                    "order": 17,
+                    "cell_id": "ROlb",
+                    "label": "OSS"
+                  },
+                  {
+                    "order": 21,
+                    "cell_id": "DnEU",
+                    "label": "Downloads by system"
+                  },
+                  {
+                    "order": 25,
+                    "cell_id": "ZBYS",
+                    "label": "PyPI downloads"
+                  },
+                  {
+                    "order": 28,
+                    "cell_id": "xXTn",
+                    "label": "Dependent repositories"
+                  },
+                  {
+                    "order": 30,
+                    "cell_id": "pHFh",
+                    "label": "Total GitHub forks"
+                  },
+                  {
+                    "order": 31,
+                    "cell_id": "NCOB",
+                    "label": "Claude Skills downloads"
+                  },
+                  {
+                    "order": 33,
+                    "cell_id": "TRpd",
+                    "label": "Skills overview"
+                  },
+                  {
+                    "order": 34,
+                    "cell_id": "TXez",
+                    "label": "VSCode Extension"
+                  },
+                  {
+                    "order": 40,
+                    "cell_id": "rEll",
+                    "label": "VSCode overview"
+                  },
+                  {
+                    "order": 42,
+                    "cell_id": "SdmI",
+                    "label": "New VSCode installs"
+                  },
+                  {
+                    "order": 43,
+                    "cell_id": "lgWD",
+                    "label": "Rolling 7-day WAU"
+                  },
+                  {
+                    "order": 44,
+                    "cell_id": "yOPj",
+                    "label": "VSCode cohort retention heatmap"
+                  },
+                  {
+                    "order": 45,
+                    "cell_id": "fwwy",
+                    "label": "VSCode retention curves"
+                  },
+                  {
+                    "order": 46,
+                    "cell_id": "LJZf",
+                    "label": "VSCode stickiness"
+                  },
+                  {
+                    "order": 47,
+                    "cell_id": "urSm",
+                    "label": "Socials"
+                  },
+                  {
+                    "order": 48,
+                    "cell_id": "jxvo",
+                    "label": "YouTube"
+                  },
+                  {
+                    "order": 49,
+                    "cell_id": "mWxS",
+                    "label": "Gallery"
+                  },
+                  {
+                    "order": 51,
+                    "cell_id": "YWSi",
+                    "label": "Gallery clicks"
+                  },
+                  {
+                    "order": 52,
+                    "cell_id": "zlud",
+                    "label": "Open in Molab"
+                  },
+                  {
+                    "order": 58,
+                    "cell_id": "iXej",
+                    "label": "Open in Molab overview"
+                  },
+                  {
+                    "order": 59,
+                    "cell_id": "EJmg",
+                    "label": "Referrer sources"
+                  },
+                  {
+                    "order": 60,
+                    "cell_id": "UmEG",
+                    "label": "Top forked notebooks"
+                  },
+                  {
+                    "order": 61,
+                    "cell_id": "vEBW",
+                    "label": "Notebook detail"
+                  },
+                  {
+                    "order": 63,
+                    "cell_id": "IpqN",
+                    "label": "Most viewed notebooks"
+                  },
+                  {
+                    "order": 64,
+                    "cell_id": "dxZZ",
+                    "label": "External fork provenance"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "scenarios": [
+    {
+      "id": "current",
+      "state": {},
+      "trace": {
+        "value_preview": "redacted",
+        "target": {
+          "expression_refs_count": 1,
+          "override_refs_count": 0,
+          "root_names_count": 1,
+          "state_update_refs_count": 0
+        },
+        "state": {
+          "applied_state_updates": []
+        },
+        "graph": {
+          "nodes": [
+            {
+              "cell_id": "setup",
+              "short_id": "setup",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false
+            },
+            {
+              "cell_id": "Hbol",
+              "short_id": "Hbol",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false
+            },
+            {
+              "cell_id": "MJUe",
+              "short_id": "MJUe",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false
+            },
+            {
+              "cell_id": "vblA",
+              "short_id": "vblA",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false
+            },
+            {
+              "cell_id": "bkHC",
+              "short_id": "bkHC",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false
+            },
+            {
+              "cell_id": "lEQa",
+              "short_id": "lEQa",
+              "status": "executed",
+              "skip_reason": null,
+              "disabled": false
+            },
+            {
+              "cell_id": "PKri",
+              "short_id": "PKri",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false
+            },
+            {
+              "cell_id": "Xref",
+              "short_id": "Xref",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false
+            },
+            {
+              "cell_id": "SFPL",
+              "short_id": "SFPL",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false
+            },
+            {
+              "cell_id": "BYtC",
+              "short_id": "BYtC",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false
+            },
+            {
+              "cell_id": "RGSE",
+              "short_id": "RGSE",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false
+            },
+            {
+              "cell_id": "Kclp",
+              "short_id": "Kclp",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false
+            },
+            {
+              "cell_id": "emfo",
+              "short_id": "emfo",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false
+            },
+            {
+              "cell_id": "Hstk",
+              "short_id": "Hstk",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false
+            },
+            {
+              "cell_id": "nWHF",
+              "short_id": "nWHF",
+              "status": "executed",
+              "skip_reason": null,
+              "disabled": false
+            },
+            {
+              "cell_id": "iLit",
+              "short_id": "iLit",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false
+            },
+            {
+              "cell_id": "ZHCJ",
+              "short_id": "ZHCJ",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false
+            },
+            {
+              "cell_id": "ROlb",
+              "short_id": "ROlb",
+              "status": "executed",
+              "skip_reason": null,
+              "disabled": false
+            },
+            {
+              "cell_id": "qnkX",
+              "short_id": "qnkX",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false
+            },
+            {
+              "cell_id": "TqIu",
+              "short_id": "TqIu",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false
+            },
+            {
+              "cell_id": "Vxnm",
+              "short_id": "Vxnm",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false
+            },
+            {
+              "cell_id": "DnEU",
+              "short_id": "DnEU",
+              "status": "executed",
+              "skip_reason": null,
+              "disabled": false
+            },
+            {
+              "cell_id": "ulZA",
+              "short_id": "ulZA",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false
+            },
+            {
+              "cell_id": "ecfG",
+              "short_id": "ecfG",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false
+            },
+            {
+              "cell_id": "Pvdt",
+              "short_id": "Pvdt",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false
+            },
+            {
+              "cell_id": "ZBYS",
+              "short_id": "ZBYS",
+              "status": "executed",
+              "skip_reason": null,
+              "disabled": false
+            },
+            {
+              "cell_id": "aLJB",
+              "short_id": "aLJB",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false
+            },
+            {
+              "cell_id": "nHfw",
+              "short_id": "nHfw",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false
+            },
+            {
+              "cell_id": "xXTn",
+              "short_id": "xXTn",
+              "status": "executed",
+              "skip_reason": null,
+              "disabled": false
+            },
+            {
+              "cell_id": "AjVT",
+              "short_id": "AjVT",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false
+            },
+            {
+              "cell_id": "pHFh",
+              "short_id": "pHFh",
+              "status": "executed",
+              "skip_reason": null,
+              "disabled": false
+            },
+            {
+              "cell_id": "NCOB",
+              "short_id": "NCOB",
+              "status": "executed",
+              "skip_reason": null,
+              "disabled": false
+            },
+            {
+              "cell_id": "aqbW",
+              "short_id": "aqbW",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false
+            },
+            {
+              "cell_id": "TRpd",
+              "short_id": "TRpd",
+              "status": "executed",
+              "skip_reason": null,
+              "disabled": false
+            },
+            {
+              "cell_id": "TXez",
+              "short_id": "TXez",
+              "status": "executed",
+              "skip_reason": null,
+              "disabled": false
+            },
+            {
+              "cell_id": "dNNg",
+              "short_id": "dNNg",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false
+            },
+            {
+              "cell_id": "yCnT",
+              "short_id": "yCnT",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false
+            },
+            {
+              "cell_id": "wlCL",
+              "short_id": "wlCL",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false
+            },
+            {
+              "cell_id": "kqZH",
+              "short_id": "kqZH",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false
+            },
+            {
+              "cell_id": "wAgl",
+              "short_id": "wAgl",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false
+            },
+            {
+              "cell_id": "rEll",
+              "short_id": "rEll",
+              "status": "executed",
+              "skip_reason": null,
+              "disabled": false
+            },
+            {
+              "cell_id": "dGlV",
+              "short_id": "dGlV",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false
+            },
+            {
+              "cell_id": "SdmI",
+              "short_id": "SdmI",
+              "status": "executed",
+              "skip_reason": null,
+              "disabled": false
+            },
+            {
+              "cell_id": "lgWD",
+              "short_id": "lgWD",
+              "status": "executed",
+              "skip_reason": null,
+              "disabled": false
+            },
+            {
+              "cell_id": "yOPj",
+              "short_id": "yOPj",
+              "status": "executed",
+              "skip_reason": null,
+              "disabled": false
+            },
+            {
+              "cell_id": "fwwy",
+              "short_id": "fwwy",
+              "status": "executed",
+              "skip_reason": null,
+              "disabled": false
+            },
+            {
+              "cell_id": "LJZf",
+              "short_id": "LJZf",
+              "status": "executed",
+              "skip_reason": null,
+              "disabled": false
+            },
+            {
+              "cell_id": "urSm",
+              "short_id": "urSm",
+              "status": "executed",
+              "skip_reason": null,
+              "disabled": false
+            },
+            {
+              "cell_id": "jxvo",
+              "short_id": "jxvo",
+              "status": "executed",
+              "skip_reason": null,
+              "disabled": false
+            },
+            {
+              "cell_id": "mWxS",
+              "short_id": "mWxS",
+              "status": "executed",
+              "skip_reason": null,
+              "disabled": false
+            },
+            {
+              "cell_id": "CcZR",
+              "short_id": "CcZR",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false
+            },
+            {
+              "cell_id": "YWSi",
+              "short_id": "YWSi",
+              "status": "executed",
+              "skip_reason": null,
+              "disabled": false
+            },
+            {
+              "cell_id": "zlud",
+              "short_id": "zlud",
+              "status": "executed",
+              "skip_reason": null,
+              "disabled": false
+            },
+            {
+              "cell_id": "tZnO",
+              "short_id": "tZnO",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false
+            },
+            {
+              "cell_id": "xvXZ",
+              "short_id": "xvXZ",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false
+            },
+            {
+              "cell_id": "CLip",
+              "short_id": "CLip",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false
+            },
+            {
+              "cell_id": "YECM",
+              "short_id": "YECM",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false
+            },
+            {
+              "cell_id": "cEAS",
+              "short_id": "cEAS",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false
+            },
+            {
+              "cell_id": "iXej",
+              "short_id": "iXej",
+              "status": "executed",
+              "skip_reason": null,
+              "disabled": false
+            },
+            {
+              "cell_id": "EJmg",
+              "short_id": "EJmg",
+              "status": "executed",
+              "skip_reason": null,
+              "disabled": false
+            },
+            {
+              "cell_id": "UmEG",
+              "short_id": "UmEG",
+              "status": "executed",
+              "skip_reason": null,
+              "disabled": false
+            },
+            {
+              "cell_id": "vEBW",
+              "short_id": "vEBW",
+              "status": "executed",
+              "skip_reason": null,
+              "disabled": false
+            },
+            {
+              "cell_id": "kLmu",
+              "short_id": "kLmu",
+              "status": "inactive",
+              "skip_reason": null,
+              "disabled": false
+            },
+            {
+              "cell_id": "IpqN",
+              "short_id": "IpqN",
+              "status": "executed",
+              "skip_reason": null,
+              "disabled": false
+            },
+            {
+              "cell_id": "dxZZ",
+              "short_id": "dxZZ",
+              "status": "executed",
+              "skip_reason": null,
+              "disabled": false
+            }
+          ],
+          "edges": [
+            {
+              "from": "BYtC",
+              "to": "emfo"
+            },
+            {
+              "from": "CLip",
+              "to": "UmEG"
+            },
+            {
+              "from": "CLip",
+              "to": "vEBW"
+            },
+            {
+              "from": "CcZR",
+              "to": "YWSi"
+            },
+            {
+              "from": "Hbol",
+              "to": "BYtC"
+            },
+            {
+              "from": "Hbol",
+              "to": "CLip"
+            },
+            {
+              "from": "Hbol",
+              "to": "CcZR"
+            },
+            {
+              "from": "Hbol",
+              "to": "PKri"
+            },
+            {
+              "from": "Hbol",
+              "to": "Pvdt"
+            },
+            {
+              "from": "Hbol",
+              "to": "RGSE"
+            },
+            {
+              "from": "Hbol",
+              "to": "SFPL"
+            },
+            {
+              "from": "Hbol",
+              "to": "YECM"
+            },
+            {
+              "from": "Hbol",
+              "to": "cEAS"
+            },
+            {
+              "from": "Hbol",
+              "to": "dGlV"
+            },
+            {
+              "from": "Hbol",
+              "to": "dNNg"
+            },
+            {
+              "from": "Hbol",
+              "to": "kLmu"
+            },
+            {
+              "from": "Hbol",
+              "to": "kqZH"
+            },
+            {
+              "from": "Hbol",
+              "to": "qnkX"
+            },
+            {
+              "from": "Hbol",
+              "to": "tZnO"
+            },
+            {
+              "from": "Hbol",
+              "to": "wAgl"
+            },
+            {
+              "from": "Hbol",
+              "to": "wlCL"
+            },
+            {
+              "from": "Hbol",
+              "to": "xvXZ"
+            },
+            {
+              "from": "Hbol",
+              "to": "yCnT"
+            },
+            {
+              "from": "MJUe",
+              "to": "BYtC"
+            },
+            {
+              "from": "MJUe",
+              "to": "CLip"
+            },
+            {
+              "from": "MJUe",
+              "to": "CcZR"
+            },
+            {
+              "from": "MJUe",
+              "to": "YECM"
+            },
+            {
+              "from": "MJUe",
+              "to": "cEAS"
+            },
+            {
+              "from": "MJUe",
+              "to": "dGlV"
+            },
+            {
+              "from": "MJUe",
+              "to": "dNNg"
+            },
+            {
+              "from": "MJUe",
+              "to": "kLmu"
+            },
+            {
+              "from": "MJUe",
+              "to": "kqZH"
+            },
+            {
+              "from": "MJUe",
+              "to": "tZnO"
+            },
+            {
+              "from": "MJUe",
+              "to": "wAgl"
+            },
+            {
+              "from": "MJUe",
+              "to": "wlCL"
+            },
+            {
+              "from": "MJUe",
+              "to": "xvXZ"
+            },
+            {
+              "from": "MJUe",
+              "to": "yCnT"
+            },
+            {
+              "from": "PKri",
+              "to": "Hstk"
+            },
+            {
+              "from": "PKri",
+              "to": "Kclp"
+            },
+            {
+              "from": "PKri",
+              "to": "Xref"
+            },
+            {
+              "from": "PKri",
+              "to": "emfo"
+            },
+            {
+              "from": "Pvdt",
+              "to": "xXTn"
+            },
+            {
+              "from": "RGSE",
+              "to": "emfo"
+            },
+            {
+              "from": "SFPL",
+              "to": "Hstk"
+            },
+            {
+              "from": "SFPL",
+              "to": "emfo"
+            },
+            {
+              "from": "SFPL",
+              "to": "nWHF"
+            },
+            {
+              "from": "TqIu",
+              "to": "aLJB"
+            },
+            {
+              "from": "TqIu",
+              "to": "nHfw"
+            },
+            {
+              "from": "Vxnm",
+              "to": "DnEU"
+            },
+            {
+              "from": "Xref",
+              "to": "ZHCJ"
+            },
+            {
+              "from": "Xref",
+              "to": "iLit"
+            },
+            {
+              "from": "YECM",
+              "to": "iXej"
+            },
+            {
+              "from": "aqbW",
+              "to": "TRpd"
+            },
+            {
+              "from": "bkHC",
+              "to": "CLip"
+            },
+            {
+              "from": "bkHC",
+              "to": "cEAS"
+            },
+            {
+              "from": "bkHC",
+              "to": "kLmu"
+            },
+            {
+              "from": "cEAS",
+              "to": "dxZZ"
+            },
+            {
+              "from": "dGlV",
+              "to": "SdmI"
+            },
+            {
+              "from": "dNNg",
+              "to": "rEll"
+            },
+            {
+              "from": "ecfG",
+              "to": "AjVT"
+            },
+            {
+              "from": "kLmu",
+              "to": "IpqN"
+            },
+            {
+              "from": "kqZH",
+              "to": "fwwy"
+            },
+            {
+              "from": "kqZH",
+              "to": "yOPj"
+            },
+            {
+              "from": "qnkX",
+              "to": "ZBYS"
+            },
+            {
+              "from": "setup",
+              "to": "AjVT"
+            },
+            {
+              "from": "setup",
+              "to": "BYtC"
+            },
+            {
+              "from": "setup",
+              "to": "CLip"
+            },
+            {
+              "from": "setup",
+              "to": "CcZR"
+            },
+            {
+              "from": "setup",
+              "to": "DnEU"
+            },
+            {
+              "from": "setup",
+              "to": "EJmg"
+            },
+            {
+              "from": "setup",
+              "to": "Hbol"
+            },
+            {
+              "from": "setup",
+              "to": "Hstk"
+            },
+            {
+              "from": "setup",
+              "to": "IpqN"
+            },
+            {
+              "from": "setup",
+              "to": "Kclp"
+            },
+            {
+              "from": "setup",
+              "to": "LJZf"
+            },
+            {
+              "from": "setup",
+              "to": "MJUe"
+            },
+            {
+              "from": "setup",
+              "to": "NCOB"
+            },
+            {
+              "from": "setup",
+              "to": "PKri"
+            },
+            {
+              "from": "setup",
+              "to": "Pvdt"
+            },
+            {
+              "from": "setup",
+              "to": "RGSE"
+            },
+            {
+              "from": "setup",
+              "to": "ROlb"
+            },
+            {
+              "from": "setup",
+              "to": "SFPL"
+            },
+            {
+              "from": "setup",
+              "to": "SdmI"
+            },
+            {
+              "from": "setup",
+              "to": "TRpd"
+            },
+            {
+              "from": "setup",
+              "to": "TXez"
+            },
+            {
+              "from": "setup",
+              "to": "TqIu"
+            },
+            {
+              "from": "setup",
+              "to": "UmEG"
+            },
+            {
+              "from": "setup",
+              "to": "Vxnm"
+            },
+            {
+              "from": "setup",
+              "to": "Xref"
+            },
+            {
+              "from": "setup",
+              "to": "YECM"
+            },
+            {
+              "from": "setup",
+              "to": "YWSi"
+            },
+            {
+              "from": "setup",
+              "to": "ZBYS"
+            },
+            {
+              "from": "setup",
+              "to": "ZHCJ"
+            },
+            {
+              "from": "setup",
+              "to": "aLJB"
+            },
+            {
+              "from": "setup",
+              "to": "aqbW"
+            },
+            {
+              "from": "setup",
+              "to": "bkHC"
+            },
+            {
+              "from": "setup",
+              "to": "cEAS"
+            },
+            {
+              "from": "setup",
+              "to": "dGlV"
+            },
+            {
+              "from": "setup",
+              "to": "dNNg"
+            },
+            {
+              "from": "setup",
+              "to": "dxZZ"
+            },
+            {
+              "from": "setup",
+              "to": "ecfG"
+            },
+            {
+              "from": "setup",
+              "to": "emfo"
+            },
+            {
+              "from": "setup",
+              "to": "fwwy"
+            },
+            {
+              "from": "setup",
+              "to": "iLit"
+            },
+            {
+              "from": "setup",
+              "to": "iXej"
+            },
+            {
+              "from": "setup",
+              "to": "jxvo"
+            },
+            {
+              "from": "setup",
+              "to": "kLmu"
+            },
+            {
+              "from": "setup",
+              "to": "kqZH"
+            },
+            {
+              "from": "setup",
+              "to": "lEQa"
+            },
+            {
+              "from": "setup",
+              "to": "lgWD"
+            },
+            {
+              "from": "setup",
+              "to": "mWxS"
+            },
+            {
+              "from": "setup",
+              "to": "nHfw"
+            },
+            {
+              "from": "setup",
+              "to": "nWHF"
+            },
+            {
+              "from": "setup",
+              "to": "pHFh"
+            },
+            {
+              "from": "setup",
+              "to": "qnkX"
+            },
+            {
+              "from": "setup",
+              "to": "rEll"
+            },
+            {
+              "from": "setup",
+              "to": "tZnO"
+            },
+            {
+              "from": "setup",
+              "to": "ulZA"
+            },
+            {
+              "from": "setup",
+              "to": "urSm"
+            },
+            {
+              "from": "setup",
+              "to": "vEBW"
+            },
+            {
+              "from": "setup",
+              "to": "vblA"
+            },
+            {
+              "from": "setup",
+              "to": "wAgl"
+            },
+            {
+              "from": "setup",
+              "to": "wlCL"
+            },
+            {
+              "from": "setup",
+              "to": "xXTn"
+            },
+            {
+              "from": "setup",
+              "to": "xvXZ"
+            },
+            {
+              "from": "setup",
+              "to": "yCnT"
+            },
+            {
+              "from": "setup",
+              "to": "yOPj"
+            },
+            {
+              "from": "setup",
+              "to": "zlud"
+            },
+            {
+              "from": "tZnO",
+              "to": "iXej"
+            },
+            {
+              "from": "ulZA",
+              "to": "xXTn"
+            },
+            {
+              "from": "wAgl",
+              "to": "LJZf"
+            },
+            {
+              "from": "wlCL",
+              "to": "LJZf"
+            },
+            {
+              "from": "wlCL",
+              "to": "lgWD"
+            },
+            {
+              "from": "wlCL",
+              "to": "rEll"
+            },
+            {
+              "from": "xvXZ",
+              "to": "EJmg"
+            },
+            {
+              "from": "yCnT",
+              "to": "LJZf"
+            },
+            {
+              "from": "yCnT",
+              "to": "rEll"
+            }
+          ],
+          "stats": {
+            "nodes": 65,
+            "edges": 137,
+            "required": 27,
+            "status_counts": {
+              "executed": 27,
+              "cached": 0,
+              "pruned": 0,
+              "skipped": 0,
+              "needed": 0,
+              "inactive": 38
+            }
+          }
+        },
+        "execution": {
+          "elapsed_ms": 201.4,
+          "required_order": [
+            "lEQa",
+            "nWHF",
+            "ROlb",
+            "DnEU",
+            "ZBYS",
+            "xXTn",
+            "pHFh",
+            "NCOB",
+            "TRpd",
+            "TXez",
+            "rEll",
+            "SdmI",
+            "lgWD",
+            "yOPj",
+            "fwwy",
+            "LJZf",
+            "urSm",
+            "jxvo",
+            "mWxS",
+            "YWSi",
+            "zlud",
+            "iXej",
+            "EJmg",
+            "UmEG",
+            "vEBW",
+            "IpqN",
+            "dxZZ"
+          ],
+          "scheduled_order": [
+            "lEQa",
+            "nWHF",
+            "ROlb",
+            "DnEU",
+            "ZBYS",
+            "xXTn",
+            "pHFh",
+            "NCOB",
+            "TRpd",
+            "TXez",
+            "rEll",
+            "SdmI",
+            "lgWD",
+            "yOPj",
+            "fwwy",
+            "LJZf",
+            "urSm",
+            "jxvo",
+            "mWxS",
+            "YWSi",
+            "zlud",
+            "iXej",
+            "EJmg",
+            "UmEG",
+            "vEBW",
+            "IpqN",
+            "dxZZ"
+          ],
+          "executed_cell_ids": [
+            "lEQa",
+            "nWHF",
+            "ROlb",
+            "DnEU",
+            "ZBYS",
+            "xXTn",
+            "pHFh",
+            "NCOB",
+            "TRpd",
+            "TXez",
+            "rEll",
+            "SdmI",
+            "lgWD",
+            "yOPj",
+            "fwwy",
+            "LJZf",
+            "urSm",
+            "jxvo",
+            "mWxS",
+            "YWSi",
+            "zlud",
+            "iXej",
+            "EJmg",
+            "UmEG",
+            "vEBW",
+            "IpqN",
+            "dxZZ"
+          ],
+          "cached_cell_ids": [],
+          "pruned_cell_ids": [],
+          "skipped_cell_ids": [],
+          "skip_reasons": {},
+          "steps": [
+            {
+              "cell_id": "lEQa",
+              "status": "executed",
+              "elapsed_ms": 0.45
+            },
+            {
+              "cell_id": "nWHF",
+              "status": "executed",
+              "elapsed_ms": 18.73
+            },
+            {
+              "cell_id": "ROlb",
+              "status": "executed",
+              "elapsed_ms": 0.22
+            },
+            {
+              "cell_id": "DnEU",
+              "status": "executed",
+              "elapsed_ms": 5.52
+            },
+            {
+              "cell_id": "ZBYS",
+              "status": "executed",
+              "elapsed_ms": 22.93
+            },
+            {
+              "cell_id": "xXTn",
+              "status": "executed",
+              "elapsed_ms": 4.23
+            },
+            {
+              "cell_id": "pHFh",
+              "status": "executed",
+              "elapsed_ms": 0.3
+            },
+            {
+              "cell_id": "NCOB",
+              "status": "executed",
+              "elapsed_ms": 0.13
+            },
+            {
+              "cell_id": "TRpd",
+              "status": "executed",
+              "elapsed_ms": 6.36
+            },
+            {
+              "cell_id": "TXez",
+              "status": "executed",
+              "elapsed_ms": 0.16
+            },
+            {
+              "cell_id": "rEll",
+              "status": "executed",
+              "elapsed_ms": 8.19
+            },
+            {
+              "cell_id": "SdmI",
+              "status": "executed",
+              "elapsed_ms": 6.12
+            },
+            {
+              "cell_id": "lgWD",
+              "status": "executed",
+              "elapsed_ms": 5.17
+            },
+            {
+              "cell_id": "yOPj",
+              "status": "executed",
+              "elapsed_ms": 15.24
+            },
+            {
+              "cell_id": "fwwy",
+              "status": "executed",
+              "elapsed_ms": 5.07
+            },
+            {
+              "cell_id": "LJZf",
+              "status": "executed",
+              "elapsed_ms": 19.72
+            },
+            {
+              "cell_id": "urSm",
+              "status": "executed",
+              "elapsed_ms": 0.26
+            },
+            {
+              "cell_id": "jxvo",
+              "status": "executed",
+              "elapsed_ms": 0.48
+            },
+            {
+              "cell_id": "mWxS",
+              "status": "executed",
+              "elapsed_ms": 0.12
+            },
+            {
+              "cell_id": "YWSi",
+              "status": "executed",
+              "elapsed_ms": 8.27
+            },
+            {
+              "cell_id": "zlud",
+              "status": "executed",
+              "elapsed_ms": 0.23
+            },
+            {
+              "cell_id": "iXej",
+              "status": "executed",
+              "elapsed_ms": 4.08
+            },
+            {
+              "cell_id": "EJmg",
+              "status": "executed",
+              "elapsed_ms": 3.0
+            },
+            {
+              "cell_id": "UmEG",
+              "status": "executed",
+              "elapsed_ms": 3.22
+            },
+            {
+              "cell_id": "vEBW",
+              "status": "executed",
+              "elapsed_ms": 7.79
+            },
+            {
+              "cell_id": "IpqN",
+              "status": "executed",
+              "elapsed_ms": 11.82
+            },
+            {
+              "cell_id": "dxZZ",
+              "status": "executed",
+              "elapsed_ms": 21.22
+            }
+          ],
+          "stats": {
+            "required": 27,
+            "scheduled": 27,
+            "executed": 27,
+            "cached": 0,
+            "pruned": 0,
+            "skipped": 0
+          }
+        },
+        "source_details": "redacted"
+      }
+    }
+  ],
+  "evaluation": {
+    "batch": {
+      "result_count": 1,
+      "cache_scope": "call"
+    },
+    "execution": {
+      "elapsed_ms": 358.42,
+      "stats": {
+        "required": 27,
+        "scheduled": 27,
+        "executed": 27,
+        "cached": 0,
+        "pruned": 0,
+        "skipped": 0
+      }
+    }
+  }
+}

@@ -32,14 +32,19 @@ def test_notebook_markdown_spec_captures_whole_notebook() -> None:
 
     assert spec["scenarios"] == [{"id": "review", "state": {"symbol": "MSFT"}}]
     assert spec["values"]["notebook"]["source"] == {"snapshot": True}
-    assert spec["values"]["notebook"]["formats"]["linear"]["export"] == {
-        "type": "ref",
-        "ref": "moexport.exporters.notebook:linear",
-    }
-    assert spec["values"]["notebook"]["formats"]["linear"]["options"] == {
-        "include_source": True,
-        "include_empty_outputs": True,
-    }
+    assert spec["values"]["notebook"]["formats"] == [
+        {
+            "format": "linear",
+            "export": {
+                "type": "ref",
+                "ref": "moexport.exporters.notebook:linear",
+            },
+            "options": {
+                "include_source": True,
+                "include_empty_outputs": True,
+            },
+        }
+    ]
 
     patched = notebook_markdown_spec(
         scenario_id="review",

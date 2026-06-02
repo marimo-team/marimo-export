@@ -19,6 +19,6 @@
     "@marimo-team/export-reader": "workspace:*"
   },
   "devDependencies": {
-    "vite": "^7.3.3"
+    "vite": "^7.3.5"
   }
 }

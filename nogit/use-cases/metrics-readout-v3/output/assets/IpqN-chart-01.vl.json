@@ -1,0 +1,243 @@
+{
+  "$schema": "https://vega.github.io/schema/vega-lite/v5.20.1.json",
+  "config": {
+    "view": {
+      "continuousHeight": 300,
+      "continuousWidth": 300
+    }
+  },
+  "data": {
+    "name": "data-84c8413f642f8e783023e818258d3915"
+  },
+  "datasets": {
+    "data-84c8413f642f8e783023e818258d3915": [
+      {
+        "notebook": "molab | marimo",
+        "unique_viewers": 3684,
+        "url": "https://molab.marimo.io/notebooks",
+        "views": 9578
+      },
+      {
+        "notebook": "Embedding visualizer",
+        "unique_viewers": 2195,
+        "url": "https://molab.marimo.io/notebooks/nb_jJiFFtznAy4BxkrrZA1o9b/app",
+        "views": 2941
+      },
+      {
+        "notebook": "marimo | a next-generation Python notebook",
+        "unique_viewers": 1036,
+        "url": "https://molab.marimo.io/auth/organization/auto",
+        "views": 1049
+      },
+      {
+        "notebook": "visualizing-embeddings - marimo-team/gallery-examples | marimo",
+        "unique_viewers": 700,
+        "url": "https://molab.marimo.io/github/marimo-team/gallery-examples/blob/main/notebooks/algorithms/visualizing-embeddings.py",
+        "views": 909
+      },
+      {
+        "notebook": "portfolio - marimo-team/gallery-examples | marimo",
+        "unique_viewers": 533,
+        "url": "https://molab.marimo.io/github/marimo-team/gallery-examples/blob/main/notebooks/dashboard/portfolio.py",
+        "views": 703
+      },
+      {
+        "notebook": "https://molab.marimo.io/sign-up",
+        "unique_viewers": 450,
+        "url": "https://molab.marimo.io/sign-up",
+        "views": 587
+      },
+      {
+        "notebook": "cellular-automaton-art - marimo-team/gallery-examples | marimo",
+        "unique_viewers": 443,
+        "url": "https://molab.marimo.io/github/marimo-team/gallery-examples/blob/main/notebooks/math/cellular-automaton-art.py/wasm",
+        "views": 563
+      },
+      {
+        "notebook": "marimo | a next-generation Python notebook",
+        "unique_viewers": 443,
+        "url": "https://molab.marimo.io/sign-up/sso-callback",
+        "views": 553
+      },
+      {
+        "notebook": "nb_umwPmkRWuqnJCy6mXPpYKm",
+        "unique_viewers": 219,
+        "url": "https://molab.marimo.io/notebooks/nb_umwPmkRWuqnJCy6mXPpYKm",
+        "views": 374
+      },
+      {
+        "notebook": "evoc-fashion - koaning/notebooks | marimo",
+        "unique_viewers": 219,
+        "url": "https://molab.marimo.io/github/koaning/notebooks/blob/main/evoc-fashion.py",
+        "views": 346
+      },
+      {
+        "notebook": "ode-solver - marimo-team/gallery-examples | marimo",
+        "unique_viewers": 290,
+        "url": "https://molab.marimo.io/github/marimo-team/gallery-examples/blob/main/notebooks/math/ode-solver.py",
+        "views": 340
+      },
+      {
+        "notebook": "Open from GitHub | marimo",
+        "unique_viewers": 264,
+        "url": "https://molab.marimo.io/github",
+        "views": 339
+      },
+      {
+        "notebook": "marimo | a next-generation Python notebook",
+        "unique_viewers": 234,
+        "url": "https://molab.marimo.io/new",
+        "views": 305
+      },
+      {
+        "notebook": "sqlite - marimo-team/gallery-examples | marimo",
+        "unique_viewers": 224,
+        "url": "https://molab.marimo.io/github/marimo-team/gallery-examples/blob/main/notebooks/sql/sqlite.py/wasm",
+        "views": 301
+      },
+      {
+        "notebook": "Welcome to marimo 🍃",
+        "unique_viewers": 225,
+        "url": "https://molab.marimo.io/notebooks/nb_TWVGCgZZK4L8zj5ziUBNVL",
+        "views": 295
+      },
+      {
+        "notebook": "bookshelf - marimo-team/gallery-examples | marimo",
+        "unique_viewers": 227,
+        "url": "https://molab.marimo.io/github/marimo-team/gallery-examples/blob/main/notebooks/cad/bookshelf.py",
+        "views": 282
+      },
+      {
+        "notebook": "Page Not Found | marimo",
+        "unique_viewers": 7,
+        "url": "https://molab.marimo.io/admin/plans",
+        "views": 270
+      },
+      {
+        "notebook": "fashion-mnist-parallel-coords - marimo-team/gallery-examples | marimo",
+        "unique_viewers": 192,
+        "url": "https://molab.marimo.io/github/marimo-team/gallery-examples/blob/main/notebooks/wigglystuff/fashion-mnist-parallel-coords.py",
+        "views": 242
+      },
+      {
+        "notebook": "neural_thickets",
+        "unique_viewers": 174,
+        "url": "https://molab.marimo.io/notebooks/nb_v48H54PQBFWQ1fhBoizSjj",
+        "views": 238
+      },
+      {
+        "notebook": "bak-sneppen-model - marimo-team/gallery-examples | marimo",
+        "unique_viewers": 184,
+        "url": "https://molab.marimo.io/github/marimo-team/gallery-examples/blob/main/notebooks/math/bak-sneppen-model.py/wasm",
+        "views": 229
+      },
+      {
+        "notebook": "ais-t03-visualization",
+        "unique_viewers": 80,
+        "url": "https://molab.marimo.io/notebooks/nb_fXFsU46T1gXCTRsxzwv2AD",
+        "views": 186
+      },
+      {
+        "notebook": "Notebook Preview | marimo",
+        "unique_viewers": 121,
+        "url": "https://molab.marimo.io/new/wasm",
+        "views": 171
+      },
+      {
+        "notebook": "manz_talk.py",
+        "unique_viewers": 127,
+        "url": "https://molab.marimo.io/notebooks/nb_1hQx9ALCBwMvMT5orP7kkK/app",
+        "views": 165
+      },
+      {
+        "notebook": "Summary Ελληνικά Β, ενότητα 01",
+        "unique_viewers": 118,
+        "url": "https://molab.marimo.io/notebooks/nb_8v7mka8fAYhWUxasStsKwf/app",
+        "views": 147
+      },
+      {
+        "notebook": "movies - marimo-team/gallery-examples | marimo",
+        "unique_viewers": 103,
+        "url": "https://molab.marimo.io/github/marimo-team/gallery-examples/blob/main/notebooks/dashboard/movies.py/wasm",
+        "views": 142
+      },
+      {
+        "notebook": "neural_networks_micrograd - marimo-team/gallery-examples | marimo",
+        "unique_viewers": 113,
+        "url": "https://molab.marimo.io/github/marimo-team/gallery-examples/blob/main/notebooks/algorithms/neural_networks_micrograd.py/wasm",
+        "views": 141
+      },
+      {
+        "notebook": "Plotting",
+        "unique_viewers": 125,
+        "url": "https://molab.marimo.io/notebooks/nb_vXxD13t2RoMTLjC89qdn6c",
+        "views": 137
+      },
+      {
+        "notebook": "environment",
+        "unique_viewers": 4,
+        "url": "https://molab.marimo.io/notebooks/nb_ZtWMaZ3snVCEn1y3CpQRh7",
+        "views": 137
+      },
+      {
+        "notebook": "marimo | a next-generation Python notebook",
+        "unique_viewers": 98,
+        "url": "https://molab.marimo.io/sign-in",
+        "views": 134
+      },
+      {
+        "notebook": "marimo | a next-generation Python notebook",
+        "unique_viewers": 127,
+        "url": "https://molab.marimo.io/sign-up/continue",
+        "views": 133
+      }
+    ]
+  },
+  "encoding": {
+    "tooltip": [
+      {
+        "field": "notebook",
+        "title": "Notebook",
+        "type": "nominal"
+      },
+      {
+        "field": "views",
+        "title": "Views",
+        "type": "quantitative"
+      },
+      {
+        "field": "unique_viewers",
+        "title": "Unique Viewers",
+        "type": "quantitative"
+      },
+      {
+        "field": "url",
+        "title": "URL",
+        "type": "nominal"
+      }
+    ],
+    "x": {
+      "field": "views",
+      "title": "Page Views",
+      "type": "quantitative"
+    },
+    "y": {
+      "field": "notebook",
+      "sort": "-x",
+      "title": null,
+      "type": "nominal"
+    }
+  },
+  "height": 660,
+  "mark": {
+    "color": "#9467bd",
+    "cornerRadiusBottomRight": 3,
+    "cornerRadiusTopRight": 3,
+    "type": "bar"
+  },
+  "title": "Most Viewed Notebooks (L30D)",
+  "usermeta": {
+    "embedOptions": {}
+  },
+  "width": 960
+}

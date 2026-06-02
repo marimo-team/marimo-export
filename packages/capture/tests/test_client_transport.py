@@ -191,6 +191,38 @@ def test_execute_scratchpad_reads_sse_stream(
     assert headers["marimo-server-token"] == "secret"
 
 
+def test_execute_scratchpad_reports_failed_done_event_details(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            text=(
+                'event: stdout\ndata: {"data": "progress"}\n\n'
+                'event: stderr\ndata: {"data": "warning"}\n\n'
+                'event: done\ndata: {"success": false, "error": {"msg": "boom"}, "output": {"cell": "a"}}\n\n'
+            ),
+            headers={"Content-Type": "text/event-stream"},
+        )
+
+    _install_mock_transport(monkeypatch, handler)
+
+    with pytest.raises(RuntimeError) as exc_info:
+        execute_scratchpad(
+            "http://localhost:2718",
+            "session-1",
+            "raise RuntimeError('boom')",
+            token=None,
+            timeout=5,
+        )
+
+    message = str(exc_info.value)
+    assert "boom" in message
+    assert "stderr:\nwarning" in message
+    assert "stdout:\nprogress" in message
+    assert 'output:\n{"cell": "a"}' in message
+
+
 def test_can_import_returns_probe_payload_without_masking_http_errors(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
