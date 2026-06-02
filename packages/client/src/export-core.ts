@@ -9,20 +9,28 @@ import {
   type RuntimeOption,
   type WorkspaceNotebook,
 } from "./types";
-import type { ExportSpec } from "./spec";
+import { parseExportSpec, type ExportSpec } from "./spec";
 import { isRecord, sleep } from "./support";
 
 export async function exportWithClient(
   spec: ExportSpec,
   options: ExportOptions & { client: MarimoExportTransport },
 ): Promise<ExportResult> {
+  const parsedSpec = parseExportSpec(spec);
   const { client, outputRoot, paths, runtime } = options;
   const session = await resolveExportSession(client, options);
   await ensureExportRuntime(client, session, runtime);
   const marker = exportMarker();
-  const code = exportCode(spec, outputRoot, paths, marker);
+  const code = exportCode(parsedSpec, outputRoot, paths, marker);
   const { stdout } = await client.executeScratchpad({
     code,
+    metadata: {
+      kind: "export",
+      marker,
+      ...(outputRoot === undefined ? {} : { outputRoot }),
+      ...(paths === undefined ? {} : { paths }),
+      spec: parsedSpec,
+    },
     sessionId: session.sessionId,
     ...(options.timeoutMs !== undefined ? { timeoutMs: options.timeoutMs } : {}),
   });
@@ -42,13 +50,20 @@ export async function archiveWithClient(
   spec: ExportSpec,
   options: ExportArchiveOptions & { client: MarimoExportTransport },
 ): Promise<ExportArchiveResult> {
+  const parsedSpec = parseExportSpec(spec);
   const { client, paths, runtime } = options;
   const session = await resolveExportSession(client, options);
   await ensureExportRuntime(client, session, runtime);
   const marker = archiveMarker();
-  const code = archiveCode(spec, paths, marker);
+  const code = archiveCode(parsedSpec, paths, marker);
   const { stdout } = await client.executeScratchpad({
     code,
+    metadata: {
+      kind: "archive",
+      marker,
+      ...(paths === undefined ? {} : { paths }),
+      spec: parsedSpec,
+    },
     sessionId: session.sessionId,
     ...(options.timeoutMs !== undefined ? { timeoutMs: options.timeoutMs } : {}),
   });
@@ -458,6 +473,11 @@ async function canImportModule(
       `__moexport_can_import = importlib.util.find_spec(${JSON.stringify(moduleName)}) is not None`,
       `print(${JSON.stringify(marker)} + json.dumps(__moexport_can_import))`,
     ].join("\n"),
+    metadata: {
+      kind: "import",
+      marker,
+      moduleName,
+    },
   });
   const payload = JSON.parse(markedPayload(stdout, marker, "import probe")) as unknown;
   if (typeof payload !== "boolean") {

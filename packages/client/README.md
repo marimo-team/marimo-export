@@ -10,10 +10,19 @@ result or an in-memory archive. Finished bundle reading belongs to
 ## Export Through The Server Client
 
 ```ts
-import { createMarimoExportClient } from "@marimo-team/export-client";
+import { createMarimoExportClient, parseExportSpec } from "@marimo-team/export-client";
 
 const client = createMarimoExportClient({
   server: "http://localhost:2718",
+});
+
+const spec = parseExportSpec({
+  values: {
+    summary: {
+      source: { def: "summary" },
+      formats: ["json"],
+    },
+  },
 });
 
 const result = await client.export(spec, {
@@ -61,10 +70,19 @@ post-install import probe.
 ## Archive Export
 
 ```ts
-import { createMarimoExportClient } from "@marimo-team/export-client";
+import { createMarimoExportClient, parseExportSpec } from "@marimo-team/export-client";
 import { readExport } from "@marimo-team/export-reader";
 
 const client = createMarimoExportClient({ server: "http://localhost:2718" });
+const spec = parseExportSpec({
+  values: {
+    summary: {
+      source: { def: "summary" },
+      formats: ["json"],
+    },
+  },
+});
+
 const archive = await client.archive(spec, {
   sessionId: "session-id",
   timeoutMs: 60_000,
@@ -75,6 +93,37 @@ const exp = await readExport({ bytes: archive.bytes });
 
 Archive export returns zip bytes with media type
 `application/vnd.marimo.static-export+zip`.
+
+## Spec Validation
+
+Use `parseExportSpec(input)` when a spec is generated from user input, JSON, or
+framework state:
+
+```ts
+import { parseExportSpec } from "@marimo-team/export-client";
+
+const spec = parseExportSpec({
+  values: {
+    summary: {
+      source: { def: "summary" },
+      formats: ["json"],
+    },
+  },
+});
+```
+
+`parseExportSpec` returns an `ExportSpec`. Pass that validated object to
+`client.export(...)` or `client.archive(...)`.
+
+The parser validates the same public spec shape that Python accepts. It rejects
+unknown source keys, unknown built-in format names, malformed format configs,
+empty report sources, empty format maps, and duplicate scenario ids.
+Code-authored scenario state must use `{code: "..."}`.
+
+`client.export(...)` and `client.archive(...)` call `parseExportSpec` before
+session discovery, runtime installation, or scratchpad execution. Use
+`safeParseExportSpec(input)` when the caller needs an issue list instead of an
+exception.
 
 ## Browser Entry
 
@@ -107,12 +156,22 @@ Creates a `MarimoExportClient`.
   authentication inputs passed to marimo endpoints.
 - `options.WebSocket`: WebSocket constructor used when opening a notebook.
 
+### `createMarimoExportClientFromTransport(transport)`
+
+Creates a `MarimoExportClient` from an existing transport implementation.
+
+- `transport.POST`: marimo JSON POST adapter.
+- `transport.executeScratchpad`: Scratchpad execution adapter.
+- `transport.openNotebook`: Notebook opener used when `options.notebook` is set.
+
+Use this entry when a host already owns request routing, authentication, or test
+transport setup.
+
 ### `client.export(spec, options?)`
 
 Writes a static export root through the target marimo session.
 
-- `spec`: `ExportSpec` with `scenarios`, `values`, and optional
-  `provenance`.
+- `spec`: `ExportSpec` returned by `parseExportSpec`.
 - `options.notebook`: Notebook path or name to open or match.
 - `options.sessionId`: Existing marimo session id. Takes precedence over
   `notebook`.
@@ -131,8 +190,7 @@ invocation JSON, `sessionId`, `sessionName`, `sessionPath`, and
 Runs the export in a temporary root and returns zipped export bytes for API
 routes that stream the bundle to a caller.
 
-- `spec`: `ExportSpec` with `scenarios`, `values`, and optional
-  `provenance`.
+- `spec`: `ExportSpec` returned by `parseExportSpec`.
 - `options.notebook`: Notebook path or name to open or match.
 - `options.sessionId`: Existing marimo session id. Takes precedence over
   `notebook`.
@@ -161,6 +219,12 @@ const notebooks = await workspace.notebooks.list();
 
 Use this client when an app needs notebook discovery or source previews. Keep it
 separate from capture code that only needs `export(...)` or `archive(...)`.
+
+### `createMarimoWorkspaceClientFromTransport(transport)`
+
+Creates a `MarimoWorkspaceClient` from an existing transport implementation.
+Use it with `createMarimoExportClientFromTransport(...)` when both clients share
+the same request adapter.
 
 ### `workspace.sessions.list()`
 

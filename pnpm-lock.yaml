@@ -103,6 +103,9 @@ importers:
       '@marimo-team/marimo-api':
         specifier: github:marimo-team/marimo#0.23.4&path:/packages/openapi
         version: https://codeload.github.com/marimo-team/marimo/tar.gz/3687c768a9232a0a10989909e1aaa2a88e11eabb#path:/packages/openapi
+      valibot:
+        specifier: 1.4.1
+        version: 1.4.1(typescript@6.0.3)
     devDependencies:
       esbuild:
         specifier: 0.27.7
@@ -2325,6 +2328,14 @@ packages:
       ioredis:
         optional: true
       uploadthing:
+        optional: true
+
+  valibot@1.4.1:
+    resolution: {integrity: sha512-klCmFTz2jeDluy9RwX+F884TCiogtdBJ/YaxSx1EOBYXa3NXNWj8kR1jjN8rzluwojJVWWaHJ4r1U5LfICnM3g==}
+    peerDependencies:
+      typescript: '>=5'
+    peerDependenciesMeta:
+      typescript:
         optional: true
 
   vega-canvas@2.0.0:
@@ -4862,6 +4873,10 @@ snapshots:
       node-fetch-native: 1.6.7
       ofetch: 1.5.1
       ufo: 1.6.4
+
+  valibot@1.4.1(typescript@6.0.3):
+    optionalDependencies:
+      typescript: 6.0.3
 
   vega-canvas@2.0.0: {}
 

@@ -12,6 +12,9 @@ from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
+    StrictBool,
+    StrictInt,
+    StrictStr,
     TypeAdapter,
     field_validator,
     model_validator,
@@ -19,12 +22,15 @@ from pydantic import (
 
 from moexport.runtime import NotebookRuntime
 
-SourceKey: TypeAlias = Annotated[str, Field(pattern=r"^[A-Za-z_][A-Za-z0-9_]*$")]
+SourceKey: TypeAlias = Annotated[
+    StrictStr,
+    Field(pattern=r"^[A-Za-z_][A-Za-z0-9_]*$"),
+]
 SourceRecord: TypeAlias = dict[str, Any]
 
 
 class SourceModel(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", strict=True)
 
 
 class CellSelector(SourceModel):
@@ -38,7 +44,7 @@ class CellSelector(SourceModel):
         default=None,
         description="Public cell function name to select.",
     )
-    index: int | None = Field(
+    index: StrictInt | None = Field(
         default=None,
         description="Zero-based notebook cell position to select.",
     )
@@ -61,7 +67,7 @@ class CellSelector(SourceModel):
     def from_value(cls, value: object) -> CellSelector:
         if isinstance(value, CellSelector):
             return value
-        if isinstance(value, int):
+        if type(value) is int:
             return cls(index=value)
         if isinstance(value, str):
             return cls(name=value)
@@ -150,15 +156,15 @@ class NotebookSnapshotSource(SourceModel):
         default="notebook_snapshot",
         description="Discriminator for a whole-notebook snapshot source.",
     )
-    include_source: bool = Field(
+    include_source: StrictBool = Field(
         default=True,
         description="Include authored Python source in each cell record.",
     )
-    include_empty_outputs: bool = Field(
+    include_empty_outputs: StrictBool = Field(
         default=True,
         description="Include cells that have no display output.",
     )
-    include_internal_cells: bool = Field(
+    include_internal_cells: StrictBool = Field(
         default=False,
         description="Include exporter-generated internal cells.",
     )
@@ -178,7 +184,7 @@ class ReportCell(SourceModel):
         default=None,
         description="Optional report label for this cell.",
     )
-    order: int | None = Field(
+    order: StrictInt | None = Field(
         default=None,
         description="Optional sort key for report ordering.",
     )
@@ -221,7 +227,7 @@ class ReportSource(SourceModel):
         min_length=1,
         description="Ordered cell outputs to include in the report.",
     )
-    include_source: bool = Field(
+    include_source: StrictBool = Field(
         default=True,
         description="Include authored Python source in each report cell.",
     )
@@ -255,17 +261,34 @@ def normalize_source(value: object) -> SourceSpec:
     if "type" in mapping:
         return SOURCE_SPEC_ADAPTER.validate_python(dict(mapping))
     if "def" in mapping:
+        _require_exact_keys(mapping, {"def"}, "source.def")
         return DefinitionSource(name=_required_string(mapping["def"], "source.def"))
     if "expr" in mapping:
+        _require_exact_keys(mapping, {"expr"}, "source.expr")
         return ExpressionSource(
             expression=_required_string(mapping["expr"], "source.expr")
         )
     if "cell" in mapping:
+        _require_exact_keys(mapping, {"cell", "on_error"}, "source.cell")
         return CellOutputSource(
             cell=CellSelector.from_value(mapping["cell"]),
             on_error=_on_error(mapping.get("on_error", "raise")),
         )
     if "snapshot" in mapping or "notebook" in mapping:
+        marker = _snapshot_marker(mapping)
+        if mapping[marker] is not True:
+            raise ValueError(f"source.{marker} must be true")
+        _require_exact_keys(
+            mapping,
+            {
+                marker,
+                "include_source",
+                "include_empty_outputs",
+                "include_internal_cells",
+                "on_error",
+            },
+            f"source.{marker}",
+        )
         return NotebookSnapshotSource.model_validate(
             {
                 "type": "notebook_snapshot",
@@ -277,6 +300,7 @@ def normalize_source(value: object) -> SourceSpec:
             }
         )
     if "report" in mapping:
+        _require_exact_keys(mapping, {"report"}, "source.report")
         report = mapping["report"]
         if not isinstance(report, Mapping):
             raise ValueError("source.report must be an object")
@@ -378,6 +402,31 @@ def _on_error(value: object) -> Literal["raise", "record"]:
     if value not in {"raise", "record"}:
         raise ValueError("source.on_error must be 'raise' or 'record'")
     return cast(Literal["raise", "record"], value)
+
+
+def _snapshot_marker(
+    mapping: Mapping[object, object],
+) -> Literal["snapshot", "notebook"]:
+    markers = [marker for marker in ("snapshot", "notebook") if marker in mapping]
+    if len(markers) != 1:
+        raise ValueError("source snapshot shorthand must set exactly one marker")
+    return cast(Literal["snapshot", "notebook"], markers[0])
+
+
+def _require_exact_keys(
+    mapping: Mapping[object, object],
+    allowed: set[str],
+    label: str,
+) -> None:
+    keys = {key for key in mapping if isinstance(key, str)}
+    unknown = keys - allowed
+    if unknown:
+        joined = ", ".join(sorted(unknown))
+        raise ValueError(f"{label} does not accept key(s): {joined}")
+
+    non_string = [key for key in mapping if not isinstance(key, str)]
+    if non_string:
+        raise ValueError(f"{label} keys must be strings")
 
 
 __all__ = [

@@ -516,6 +516,7 @@
       import {
         createMarimoExportClient,
         createMarimoWorkspaceClient,
+        parseExportSpec,
       } from "@marimo-team/export-client/browser";
       import { readExport } from "@marimo-team/export-reader";
 
@@ -637,7 +638,7 @@
       }
 
       function createQueueingArchiveSpec() {
-        return {
+        return parseExportSpec({
           scenarios: [
             queueScenario("steady_single", 6.0, 11.0, 1),
             queueScenario("rush_single", 8.0, 9.0, 1),
@@ -679,7 +680,7 @@
               },
             },
           },
-        };
+        });
       }
 
       function queueScenario(id, arrival, service, servers) {
@@ -695,7 +696,7 @@
       }
 
       function pythonExpression(expression) {
-        return { type: "code", expression };
+        return { code: expression };
       }
 
       function captureOptions() {
