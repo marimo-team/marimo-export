@@ -2,7 +2,7 @@ import { Buffer } from "node:buffer";
 import fs from "node:fs/promises";
 import path from "node:path";
 
-import { createMarimoExportClient, type ExportSpec } from "@marimo-team/export-client";
+import { createMarimoExportClient, parseExportSpec } from "@marimo-team/export-client";
 import { arrowLoader } from "@marimo-team/export-loader-arrow";
 import { readExport } from "@marimo-team/export-reader";
 
@@ -186,7 +186,7 @@ export const getMarketWindowPage = async (
 };
 
 const buildMarketWindowSpec = (start: string, end: string) =>
-  ({
+  parseExportSpec({
     scenarios: [
       {
         id: scenarioId(start, end),
@@ -239,7 +239,7 @@ const buildMarketWindowSpec = (start: string, end: string) =>
         formats: [{ png: { scale: 2 } }],
       },
     },
-  }) satisfies ExportSpec;
+  });
 
 const archiveSerially = async <T>(capture: () => Promise<T>): Promise<T> => {
   const release = await acquireArchiveLock();

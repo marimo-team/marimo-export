@@ -1,11 +1,15 @@
-import type { ExportSpec, MarimoExportClient } from "@marimo-team/export-client";
+import {
+  parseExportSpec,
+  type FormatMap,
+  type MarimoExportClient,
+} from "@marimo-team/export-client";
 
 const customExport = {
   type: "code",
   code: "def export(value, ctx):\n    return value\n",
 } as const;
 
-const validSpec = {
+const validSpec = parseExportSpec({
   values: {
     title: {
       source: { def: "title" },
@@ -22,75 +26,35 @@ const validSpec = {
       formats: ["markdown"],
     },
   },
-} satisfies ExportSpec;
+});
 
-const unknownFormatName = {
+type ExportSpecArgument = Parameters<MarimoExportClient["export"]>[0];
+
+const exportSpecArgument: ExportSpecArgument = validSpec;
+
+const rawSpec = {
   values: {
     table: {
       source: { def: "table" },
-      // @ts-expect-error Unknown built-in shorthand needs an explicit exporter record.
-      formats: ["excel"],
-    },
-  },
-} satisfies ExportSpec;
-
-const customFormatOptions = {
-  values: {
-    table: {
-      source: { def: "table" },
-      // @ts-expect-error Custom formats cannot use built-in option shorthand.
-      formats: [{ excel: { filename: "table.xlsx" } }],
-    },
-  },
-} satisfies ExportSpec;
-
-const customFormatArrayItem = {
-  values: {
-    table: {
-      source: { def: "table" },
-      // @ts-expect-error Custom formats use map form so one list item cannot hide multiple names.
-      formats: [{ report: { export: customExport }, summary: { export: customExport } }],
-    },
-  },
-} satisfies ExportSpec;
-
-const multipleBuiltinFormatArrayItem = {
-  values: {
-    table: {
-      source: { def: "table" },
-      // @ts-expect-error Format list objects contain one built-in format name.
-      formats: [{ json: {}, text: {} }],
-    },
-  },
-} satisfies ExportSpec;
-
-const emptyReport = {
-  values: {
-    table: {
-      // @ts-expect-error Report sources need at least one selected cell.
-      source: { report: { cells: [] } },
-      formats: ["markdown"],
-    },
-  },
-} satisfies ExportSpec;
-
-const unknownSourceType = {
-  values: {
-    table: {
-      // @ts-expect-error Source type names mirror the Python spec discriminators.
-      source: { type: "query", sql: "select 1" },
       formats: ["json"],
     },
   },
-} satisfies ExportSpec;
+};
+
+// @ts-expect-error Export calls require a spec returned by parseExportSpec.
+const rawExportSpec: ExportSpecArgument = rawSpec;
+
+// @ts-expect-error FormatMap is parser output, so custom keys need runtime validation.
+const customFormatOptions: FormatMap = { excel: { filename: "table.xlsx" } };
+
+// @ts-expect-error Custom format maps cannot use null shorthand.
+const customFormatNull: FormatMap = { excel: null };
 
 void validSpec;
-void unknownFormatName;
+void exportSpecArgument;
+void rawExportSpec;
 void customFormatOptions;
-void customFormatArrayItem;
-void multipleBuiltinFormatArrayItem;
-void emptyReport;
-void unknownSourceType;
+void customFormatNull;
 
 type ExportCallOptions = Parameters<MarimoExportClient["export"]>[1];
 type ArchiveCallOptions = Parameters<MarimoExportClient["archive"]>[1];

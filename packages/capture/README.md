@@ -184,6 +184,23 @@ Dotted `state` keys update object attributes after producer cells run. For
 example, `symbols_selector.value` sets the `value` attribute on
 `symbols_selector`.
 
+Sources select the runtime object that each value exports:
+
+| Source shape                       | Allowed keys                                                                                | Defaults                                                                                                  |
+| ---------------------------------- | ------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `"df.head(10)"`                    | Python expression string                                                                    | none                                                                                                      |
+| `{expr: "df.head(10)"}`            | `expr`                                                                                      | none                                                                                                      |
+| `{def: df}`                        | `def`                                                                                       | none                                                                                                      |
+| `{cell: summary}`                  | `cell`, `on_error`                                                                          | `on_error: raise`                                                                                         |
+| `{snapshot: true}`                 | `snapshot`, `include_source`, `include_empty_outputs`, `include_internal_cells`, `on_error` | `include_source: true`, `include_empty_outputs: true`, `include_internal_cells: false`, `on_error: raise` |
+| `{type: "notebook_snapshot", ...}` | `type`, `include_source`, `include_empty_outputs`, `include_internal_cells`, `on_error`     | same as `snapshot`                                                                                        |
+| `{report: {cells: [...]}}`         | `report.cells`, `report.include_source`, `report.on_error`                                  | `include_source: true`, `on_error: record`                                                                |
+
+Source shorthand is strict. Unknown keys, mixed source modes,
+`snapshot: false`, boolean cell indexes, non-boolean snapshot flags, and
+non-integer report ordering fail validation. Use `{code: "..."}` for computed
+scenario state values.
+
 `source.report` captures selected display cells as an ordered report snapshot.
 `on_error: record` stores display failures as format diagnostics so the
 remaining cells can still be exported.
@@ -196,19 +213,18 @@ for provenance. The evaluated value must be JSON-compatible.
 
 Built-in format names compile to exporter callables:
 
-| Format         | Exporter                                  |
-| -------------- | ----------------------------------------- |
-| `json`         | `moexport.exporters.core:json`            |
-| `text`         | `moexport.exporters.core:text`            |
-| `html`         | `moexport.exporters.core:html`            |
-| `arrow`        | `moexport.exporters.dataframe:arrow`      |
-| `parquet`      | `moexport.exporters.dataframe:parquet`    |
-| `vegalite`     | `moexport.exporters.altair:vegalite`      |
-| `png`          | `moexport.exporters.altair:png`           |
-| `anywidget`    | `moexport.exporters.anywidget:bundle`     |
-| `display`      | `moexport.exporters.display:display_json` |
-| `display_json` | `moexport.exporters.display:display_json` |
-| `markdown`     | `moexport.exporters.display:markdown`     |
+| Format      | Exporter                                  |
+| ----------- | ----------------------------------------- |
+| `json`      | `moexport.exporters.core:json`            |
+| `text`      | `moexport.exporters.core:text`            |
+| `html`      | `moexport.exporters.core:html`            |
+| `arrow`     | `moexport.exporters.dataframe:arrow`      |
+| `parquet`   | `moexport.exporters.dataframe:parquet`    |
+| `vegalite`  | `moexport.exporters.altair:vegalite`      |
+| `png`       | `moexport.exporters.altair:png`           |
+| `anywidget` | `moexport.exporters.anywidget:bundle`     |
+| `display`   | `moexport.exporters.display:display_json` |
+| `markdown`  | `moexport.exporters.display:markdown`     |
 
 Use an explicit exporter config when a value needs custom projection code:
 
@@ -246,6 +262,11 @@ An exporter receives the runtime Python value, an `ExporterContext`, and optiona
 format options. The context exposes `scenario_id`, `value_name`, and
 `format_name`. `ctx.write_blob(...)` writes a content-addressed file.
 `ctx.artifact(...)` returns the manifest record for the format.
+
+Format options are JSON objects. In a built-in format map, `null` means default
+options. Explicit exporter configs require `options` to be an object when the
+field is present. Built-in option objects cannot use `export` or `options` as
+top-level keys because those keys select the explicit exporter config shape.
 
 ## Archive Transport
 

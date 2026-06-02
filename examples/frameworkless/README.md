@@ -58,8 +58,8 @@ Then open:
 http://localhost:3000/examples/frameworkless/server-archive.html
 ```
 
-The page imports `@marimo-team/export-client/browser`, creates a plain
-JavaScript spec object, calls `client.archive(...)`, and reads the archive
+The page imports `@marimo-team/export-client/browser`, creates an `ExportSpec`
+with `parseExportSpec(...)`, calls `client.archive(...)`, and reads the archive
 with `@marimo-team/export-reader`.
 
 ## Regenerate Bundles

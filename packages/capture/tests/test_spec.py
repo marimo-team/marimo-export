@@ -187,6 +187,190 @@ def test_export_spec_rejects_unknown_format_shorthand() -> None:
         )
 
 
+@pytest.mark.parametrize(
+    ("source", "message"),
+    [
+        ({"def": "df", "extra": True}, "source.def does not accept"),
+        ({"def": "df", "expr": "other"}, "source.def does not accept"),
+        ({"cell": "summary", "extra": True}, "source.cell does not accept"),
+        ({"cell": True}, "cell selector"),
+        ({"cell": {"index": True}}, "valid integer"),
+        ({"snapshot": False}, "source.snapshot must be true"),
+        ({"snapshot": True, "include_source": "false"}, "valid boolean"),
+        ({"snapshot": True, "include_internal_cells": 1}, "valid boolean"),
+        ({"snapshot": True, "notebook": True}, "exactly one marker"),
+        (
+            {"report": {"cells": [{"name": "summary"}]}, "extra": True},
+            "source.report does not accept",
+        ),
+        (
+            {"report": {"cells": [{"name": "summary", "order": True}]}},
+            "valid integer",
+        ),
+        (
+            {"report": {"cells": [{"name": "summary"}], "include_source": "false"}},
+            "valid boolean",
+        ),
+    ],
+)
+def test_export_spec_rejects_invalid_source_shorthand(
+    source: dict[str, object],
+    message: str,
+) -> None:
+    with pytest.raises(ValidationError, match=message):
+        parse_export_spec(
+            {
+                "values": {
+                    "item": {
+                        "source": source,
+                        "formats": ["json"],
+                    }
+                }
+            }
+        )
+
+
+def test_export_spec_rejects_unknown_format_list_fields() -> None:
+    with pytest.raises(ValidationError, match="formats\\[0\\].format does not accept"):
+        parse_export_spec(
+            {
+                "values": {
+                    "prices": {
+                        "source": {"expr": "df"},
+                        "formats": [{"format": "json", "unexpected": True}],
+                    }
+                }
+            }
+        )
+
+
+def test_export_spec_rejects_explicit_null_format_options() -> None:
+    with pytest.raises(ValidationError, match="format options must be a JSON object"):
+        parse_export_spec(
+            {
+                "values": {
+                    "prices": {
+                        "source": {"expr": "df"},
+                        "formats": {
+                            "custom": {
+                                "export": {
+                                    "type": "ref",
+                                    "ref": "moexport.exporters.core:json",
+                                },
+                                "options": None,
+                            }
+                        },
+                    }
+                }
+            }
+        )
+
+
+def test_export_spec_rejects_reserved_builtin_format_option_keys() -> None:
+    with pytest.raises(ValidationError, match="reserved export or options keys"):
+        parse_export_spec(
+            {
+                "values": {
+                    "prices": {
+                        "source": {"expr": "df"},
+                        "formats": {"json": {"options": {}}},
+                    }
+                }
+            }
+        )
+
+
+@pytest.mark.parametrize(
+    "patch",
+    [
+        {"scenarios": [{"id": b"default"}]},
+        {"scenarios": [{"state": {b"width": 1200}}]},
+        {"scenarios": [{"state": {"width": {"code": b"1200"}}}]},
+        {"values": {b"prices": {"source": {"def": "df"}, "formats": ["json"]}}},
+        {
+            "values": {
+                "prices": {
+                    "source": {"type": "definition", "name": b"df"},
+                    "formats": ["json"],
+                }
+            }
+        },
+        {
+            "values": {
+                "prices": {
+                    "source": {"type": "expression", "expression": b"df"},
+                    "formats": ["json"],
+                }
+            }
+        },
+        {
+            "values": {
+                "prices": {
+                    "source": {"type": "cell_output", "cell": {"name": b"summary"}},
+                    "formats": ["json"],
+                }
+            }
+        },
+        {
+            "values": {
+                "prices": {
+                    "source": {
+                        "type": "report",
+                        "cells": [{"name": "summary", "label": b"Summary"}],
+                    },
+                    "formats": ["json"],
+                }
+            }
+        },
+        {
+            "values": {
+                "prices": {
+                    "source": {"def": "df"},
+                    "formats": {
+                        "json": {
+                            "export": {
+                                "type": "ref",
+                                "ref": b"moexport.exporters.core:json",
+                            }
+                        }
+                    },
+                }
+            }
+        },
+        {
+            "values": {
+                "prices": {
+                    "source": {"def": "df"},
+                    "formats": {
+                        "custom": {
+                            "export": {
+                                "type": "code",
+                                "code": b"def export(value, ctx):\n    return value",
+                            }
+                        }
+                    },
+                }
+            }
+        },
+    ],
+)
+def test_export_spec_rejects_bytes_in_public_string_fields(
+    patch: dict[str, object],
+) -> None:
+    base_spec: dict[str, object] = {
+        "values": {
+            "prices": {
+                "source": {"def": "df"},
+                "formats": ["json"],
+            }
+        }
+    }
+    spec = {**base_spec, **patch}
+
+    with pytest.raises(ValidationError, match="string"):
+        parse_export_spec(spec)
+
+
 def test_export_spec_loads_json_and_yaml_files(tmp_path: Path) -> None:
     value = {
         "scenarios": [{"id": "wide", "state": {"chart_width": 1200}}],
@@ -305,6 +489,35 @@ def test_export_spec_serializes_code_state_stably() -> None:
     assert dumped["scenarios"][0]["state"]["end"] == {
         "code": "latest_market_close()",
     }
+
+
+@pytest.mark.parametrize(
+    "state_value",
+    [
+        {"type": "code", "expression": "1200"},
+        {"type": "code"},
+    ],
+)
+def test_export_spec_rejects_code_state_marker_objects(
+    state_value: dict[str, object],
+) -> None:
+    with pytest.raises(ValidationError, match="scenario code values use"):
+        parse_export_spec(
+            {
+                "scenarios": [
+                    {
+                        "id": "computed",
+                        "state": {"chart_width": state_value},
+                    }
+                ],
+                "values": {
+                    "prices": {
+                        "source": {"def": "df"},
+                        "formats": ["json"],
+                    }
+                },
+            }
+        )
 
 
 def test_export_spec_rejects_unknown_scenario_fields() -> None:

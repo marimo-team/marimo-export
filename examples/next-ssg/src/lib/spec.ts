@@ -1,4 +1,4 @@
-import type { ExportSpec } from "@marimo-team/export-client";
+import { parseExportSpec } from "@marimo-team/export-client";
 
 import { financePairs, type FinancePair } from "@/lib/pairs";
 
@@ -30,7 +30,7 @@ const sampleRowsSource = `(
 )`;
 
 export const buildFinanceSpec = (pairs: readonly FinancePair[] = financePairs) =>
-  ({
+  parseExportSpec({
     scenarios: pairs.map((pair) => ({
       id: pair.slug,
       state: {
@@ -101,6 +101,6 @@ export const buildFinanceSpec = (pairs: readonly FinancePair[] = financePairs) =
         },
       },
     },
-  }) satisfies ExportSpec;
+  });
 
 export type FinanceSpec = ReturnType<typeof buildFinanceSpec>;

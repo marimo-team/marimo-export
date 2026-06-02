@@ -85,8 +85,29 @@ export interface ExportArchiveResult {
 export interface ExecuteScratchpadOptions {
   code: string;
   sessionId: string;
+  metadata?: ScratchpadExecutionMetadata;
   timeoutMs?: number;
 }
+
+export type ScratchpadExecutionMetadata =
+  | {
+      kind: "export";
+      marker: string;
+      outputRoot?: string;
+      paths?: readonly string[];
+      spec: unknown;
+    }
+  | {
+      kind: "archive";
+      marker: string;
+      paths?: readonly string[];
+      spec: unknown;
+    }
+  | {
+      kind: "import";
+      marker: string;
+      moduleName: string;
+    };
 
 export interface OpenNotebookOptions {
   notebook: string;

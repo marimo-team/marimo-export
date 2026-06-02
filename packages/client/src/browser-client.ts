@@ -16,15 +16,51 @@ export interface MarimoExportClientOptions {
 }
 
 export type { MarimoExportClient, MarimoWorkspaceClient };
+export {
+  createMarimoExportClientFromTransport,
+  createMarimoWorkspaceClientFromTransport,
+} from "./export-client";
 export type {
+  BuiltinFormatName,
+  BuiltinFormatConfig,
+  BuiltinFormatMap,
+  CellSelector,
+  CodeExport,
+  DefinitionSource,
+  ExportCallable,
+  ExportSpec,
+  ExportSpecParseResult,
+  ExplicitFormat,
+  ExplicitFormatMap,
+  ExpressionSource,
+  FormatInput,
+  FormatMap,
+  NamedBuiltinFormat,
+  NotebookSnapshotOptions,
+  NotebookSnapshotShorthand,
+  NotebookSnapshotSource,
+  ProvenanceSpec,
+  RefExport,
+  ReportCellInput,
+  ReportSource,
+  ReportSourceInput,
+  ScenarioSpec,
+  SourceSpec,
+  ValueSpec,
+} from "./spec";
+export { builtinFormatNames, exportSpecSchema, parseExportSpec, safeParseExportSpec } from "./spec";
+
+export type {
+  ExecuteScratchpadOptions,
   ExportArchiveOptions,
   ExportArchiveResult,
   ExportOptions,
   ExportResult,
+  MarimoExportTransport,
   RunningNotebook,
+  ScratchpadExecutionMetadata,
   WorkspaceNotebook,
 } from "./types";
-export type { ExportSpec } from "./spec";
 
 export function createMarimoExportClient(options: MarimoExportClientOptions): MarimoExportClient {
   const marimo = createBrowserTransport(options);

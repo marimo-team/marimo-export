@@ -1,139 +1,485 @@
-import type { JsonObject, JsonValue } from "./types";
+import * as v from "valibot";
 
+import type { JsonValue } from "./types";
+
+const SPEC_NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_-]*$/;
+const SOURCE_NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
+const STATE_KEY_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*$/;
+declare const EXPORT_SPEC_BRAND: unique symbol;
+declare const FORMAT_MAP_BRAND: unique symbol;
+
+export const builtinFormatNames = [
+  "json",
+  "text",
+  "html",
+  "arrow",
+  "parquet",
+  "vegalite",
+  "png",
+  "anywidget",
+  "display",
+  "markdown",
+] as const;
+
+export type BuiltinFormatName = (typeof builtinFormatNames)[number];
 export type SpecName = string;
-export type BuiltinFormatName =
-  | "json"
-  | "text"
-  | "html"
-  | "arrow"
-  | "parquet"
-  | "vegalite"
-  | "png"
-  | "anywidget"
-  | "display"
-  | "display_json"
-  | "markdown";
 
-export interface ExportSpec {
-  scenarios?: ScenarioSpec[];
-  provenance?: ProvenanceSpec;
-  values: Record<SpecName, ValueSpec>;
-}
+type JsonValueSchema = v.GenericSchema<JsonValue>;
 
-export interface ScenarioSpec {
-  id?: SpecName;
-  state?: Record<string, ScenarioValue>;
-}
-
-export type ScenarioValue = JsonValue | { code: string };
-
-export interface ProvenanceSpec {
-  source?: "none" | "hash" | "source";
-  spec?: "none" | "hash" | "embed";
-}
-
-export type SourceSpec =
-  | string
-  | { def: string }
-  | { expr: string }
-  | { cell: string | number | CellSelector; on_error?: "raise" | "record" }
-  | NotebookSnapshotShorthand
-  | { report: ReportSourceInput }
-  | DefinitionSource
-  | ExpressionSource
-  | CellOutputSource
-  | NotebookSnapshotSource
-  | ReportSource;
-
-export type CellSelector =
-  | { id: string; name?: never; index?: never }
-  | { name: string; id?: never; index?: never }
-  | { index: number; id?: never; name?: never };
-
-export interface DefinitionSource {
-  type: "definition";
-  name: string;
-}
-
-export interface ExpressionSource {
-  type: "expression";
-  expression: string;
-}
-
-export interface CellOutputSource {
-  type: "cell_output";
-  cell: string | number | CellSelector;
-  on_error?: "raise" | "record";
-}
-
-export interface NotebookSnapshotOptions {
-  include_source?: boolean;
-  include_empty_outputs?: boolean;
-  include_internal_cells?: boolean;
-  on_error?: "raise" | "record";
-}
-
-export type NotebookSnapshotShorthand = NotebookSnapshotOptions &
-  ({ snapshot: JsonValue; notebook?: JsonValue } | { notebook: JsonValue; snapshot?: JsonValue });
-
-export type NotebookSnapshotSource = NotebookSnapshotOptions & {
-  type: "notebook_snapshot";
-};
-
-export type ReportCellInput = {
-  label?: string | null;
-  order?: number | null;
-} & (
-  | { cell: string | number | CellSelector; id?: never; name?: never; index?: never }
-  | { id: string; cell?: never; name?: never; index?: never }
-  | { name: string; cell?: never; id?: never; index?: never }
-  | { index: number; cell?: never; id?: never; name?: never }
+const jsonValueSchema: JsonValueSchema = v.lazy(() =>
+  v.union([
+    v.string(),
+    v.pipe(
+      v.number(),
+      v.check((value: number) => Number.isFinite(value), "JSON numbers must be finite."),
+    ),
+    v.boolean(),
+    v.null_(),
+    v.array(jsonValueSchema),
+    v.record(v.string(), jsonValueSchema),
+  ]),
 );
 
-export interface ReportSourceInput {
-  cells: readonly [ReportCellInput, ...ReportCellInput[]];
-  include_source?: boolean;
-  on_error?: "raise" | "record";
-}
+const jsonObjectSchema = v.record(v.string(), jsonValueSchema);
+const builtinFormatOptionsSchema = v.pipe(
+  jsonObjectSchema,
+  v.check(
+    (value) => !("export" in value) && !("options" in value),
+    "Built-in format options cannot use reserved export or options keys.",
+  ),
+);
 
-export type ReportSource = ReportSourceInput & {
-  type: "report";
+const specNameSchema = v.pipe(
+  v.string(),
+  v.regex(SPEC_NAME_PATTERN, "Spec names must start with a letter or underscore."),
+);
+
+const sourceNameSchema = v.pipe(
+  v.string(),
+  v.regex(SOURCE_NAME_PATTERN, "Source names must be valid Python identifiers."),
+);
+
+const stateKeySchema = v.pipe(
+  v.string(),
+  v.regex(STATE_KEY_PATTERN, "State keys must be Python names or dotted Python paths."),
+);
+
+const codeStateValueSchema = v.strictObject({
+  code: v.pipe(
+    v.string(),
+    v.check((value) => value.trim().length > 0, "State code cannot be empty."),
+  ),
+});
+
+const jsonScenarioValueSchema = v.pipe(
+  jsonValueSchema,
+  v.check(
+    (value) => !isPlainRecord(value) || !("code" in value),
+    'Scenario code values use { code: "..." }.',
+  ),
+  v.check((value) => !isCodeStateMarkerObject(value), 'Scenario code values use { code: "..." }.'),
+);
+
+const scenarioValueSchema = v.union([codeStateValueSchema, jsonScenarioValueSchema]);
+
+export const scenarioSpecSchema = v.strictObject({
+  id: v.optional(specNameSchema),
+  state: v.optional(v.record(stateKeySchema, scenarioValueSchema)),
+});
+
+export const provenanceSpecSchema = v.strictObject({
+  source: v.optional(v.picklist(["none", "hash", "source"])),
+  spec: v.optional(v.picklist(["none", "hash", "embed"])),
+});
+
+const selectorByIdSchema = v.strictObject({
+  id: v.pipe(
+    v.string(),
+    v.check((value) => value.trim().length > 0, "Cell id cannot be empty."),
+  ),
+});
+
+const selectorByNameSchema = v.strictObject({
+  name: v.pipe(
+    v.string(),
+    v.check((value) => value.trim().length > 0, "Cell name cannot be empty."),
+  ),
+});
+
+const selectorByIndexSchema = v.strictObject({
+  index: v.pipe(
+    v.number(),
+    v.check(
+      (value) => Number.isInteger(value) && value >= 0,
+      "Cell index must be a non-negative integer.",
+    ),
+  ),
+});
+
+export const cellSelectorSchema = v.union([
+  selectorByIdSchema,
+  selectorByNameSchema,
+  selectorByIndexSchema,
+]);
+
+const cellReferenceSchema = v.union([
+  v.pipe(
+    v.string(),
+    v.check((value) => value.trim().length > 0, "Cell name cannot be empty."),
+  ),
+  v.pipe(
+    v.number(),
+    v.check(
+      (value) => Number.isInteger(value) && value >= 0,
+      "Cell index must be a non-negative integer.",
+    ),
+  ),
+  cellSelectorSchema,
+]);
+
+export const definitionSourceSchema = v.strictObject({
+  type: v.literal("definition"),
+  name: sourceNameSchema,
+});
+
+export const expressionSourceSchema = v.strictObject({
+  type: v.literal("expression"),
+  expression: v.pipe(
+    v.string(),
+    v.check((value) => value.trim().length > 0, "Source expression cannot be empty."),
+  ),
+});
+
+export const cellOutputSourceSchema = v.strictObject({
+  type: v.literal("cell_output"),
+  cell: cellReferenceSchema,
+  on_error: v.optional(v.picklist(["raise", "record"])),
+});
+
+const notebookSnapshotOptionsSchema = {
+  include_source: v.optional(v.boolean()),
+  include_empty_outputs: v.optional(v.boolean()),
+  include_internal_cells: v.optional(v.boolean()),
+  on_error: v.optional(v.picklist(["raise", "record"])),
 };
 
-export interface RefExport {
-  type: "ref";
-  ref: string;
-}
+export const notebookSnapshotSourceSchema = v.strictObject({
+  type: v.literal("notebook_snapshot"),
+  ...notebookSnapshotOptionsSchema,
+});
 
-export interface CodeExport {
-  type: "code";
-  code: string;
-}
+const notebookSnapshotShorthandSchema = v.union([
+  v.strictObject({
+    snapshot: v.literal(true),
+    ...notebookSnapshotOptionsSchema,
+  }),
+  v.strictObject({
+    notebook: v.literal(true),
+    ...notebookSnapshotOptionsSchema,
+  }),
+]);
 
-export type ExportCallable = RefExport | CodeExport;
+const reportCellByCellSchema = v.strictObject({
+  cell: cellReferenceSchema,
+  label: v.optional(v.nullable(v.string())),
+  order: v.optional(
+    v.nullable(
+      v.pipe(
+        v.number(),
+        v.check((value: number) => Number.isInteger(value), "Report order must be an integer."),
+      ),
+    ),
+  ),
+});
 
-export interface ExplicitFormat {
-  export: ExportCallable;
-  options?: JsonObject;
-}
+const reportCellByIdSchema = v.strictObject({
+  id: v.pipe(
+    v.string(),
+    v.check((value) => value.trim().length > 0, "Report cell id cannot be empty."),
+  ),
+  label: v.optional(v.nullable(v.string())),
+  order: v.optional(
+    v.nullable(
+      v.pipe(
+        v.number(),
+        v.check((value: number) => Number.isInteger(value), "Report order must be an integer."),
+      ),
+    ),
+  ),
+});
 
-export type BuiltinFormatConfig = ExplicitFormat | JsonObject | null;
+const reportCellByNameSchema = v.strictObject({
+  name: v.pipe(
+    v.string(),
+    v.check((value) => value.trim().length > 0, "Report cell name cannot be empty."),
+  ),
+  label: v.optional(v.nullable(v.string())),
+  order: v.optional(
+    v.nullable(
+      v.pipe(
+        v.number(),
+        v.check((value: number) => Number.isInteger(value), "Report order must be an integer."),
+      ),
+    ),
+  ),
+});
 
+const reportCellByIndexSchema = v.strictObject({
+  index: v.pipe(
+    v.number(),
+    v.check(
+      (value) => Number.isInteger(value) && value >= 0,
+      "Report cell index must be a non-negative integer.",
+    ),
+  ),
+  label: v.optional(v.nullable(v.string())),
+  order: v.optional(
+    v.nullable(
+      v.pipe(
+        v.number(),
+        v.check((value: number) => Number.isInteger(value), "Report order must be an integer."),
+      ),
+    ),
+  ),
+});
+
+export const reportCellInputSchema = v.union([
+  reportCellByCellSchema,
+  reportCellByIdSchema,
+  reportCellByNameSchema,
+  reportCellByIndexSchema,
+]);
+
+const reportCellsSchema = v.tupleWithRest([reportCellInputSchema], reportCellInputSchema);
+
+const reportSourceInputSchema = v.strictObject({
+  cells: reportCellsSchema,
+  include_source: v.optional(v.boolean()),
+  on_error: v.optional(v.picklist(["raise", "record"])),
+});
+
+export const reportSourceSchema = v.strictObject({
+  type: v.literal("report"),
+  cells: reportCellsSchema,
+  include_source: v.optional(v.boolean()),
+  on_error: v.optional(v.picklist(["raise", "record"])),
+});
+
+const definitionShorthandSchema = v.strictObject({
+  def: sourceNameSchema,
+});
+
+const expressionShorthandSchema = v.strictObject({
+  expr: v.pipe(
+    v.string(),
+    v.check((value) => value.trim().length > 0, "Source expression cannot be empty."),
+  ),
+});
+
+const cellOutputShorthandSchema = v.strictObject({
+  cell: cellReferenceSchema,
+  on_error: v.optional(v.picklist(["raise", "record"])),
+});
+
+const reportShorthandSchema = v.strictObject({
+  report: reportSourceInputSchema,
+});
+
+export const sourceSpecSchema = v.union([
+  v.pipe(
+    v.string(),
+    v.check((value) => value.trim().length > 0, "Source expression cannot be empty."),
+  ),
+  definitionShorthandSchema,
+  expressionShorthandSchema,
+  cellOutputShorthandSchema,
+  notebookSnapshotShorthandSchema,
+  reportShorthandSchema,
+  definitionSourceSchema,
+  expressionSourceSchema,
+  cellOutputSourceSchema,
+  notebookSnapshotSourceSchema,
+  reportSourceSchema,
+]);
+
+export const refExportSchema = v.strictObject({
+  type: v.literal("ref"),
+  ref: v.pipe(
+    v.string(),
+    v.check((value) => /^[^:]+:[^:]+$/.test(value), "Export ref must use module:object syntax."),
+  ),
+});
+
+export const codeExportSchema = v.strictObject({
+  type: v.literal("code"),
+  code: v.pipe(
+    v.string(),
+    v.check((value) => value.trim().length > 0, "Export code cannot be empty."),
+  ),
+});
+
+export const exportCallableSchema = v.union([refExportSchema, codeExportSchema]);
+
+export const explicitFormatSchema = v.strictObject({
+  export: exportCallableSchema,
+  options: v.optional(jsonObjectSchema),
+});
+
+const builtinFormatConfigSchema = v.union([
+  explicitFormatSchema,
+  builtinFormatOptionsSchema,
+  v.null_(),
+]);
+
+const jsonFormatShorthandSchema = v.strictObject({ json: builtinFormatConfigSchema });
+const textFormatShorthandSchema = v.strictObject({ text: builtinFormatConfigSchema });
+const htmlFormatShorthandSchema = v.strictObject({ html: builtinFormatConfigSchema });
+const arrowFormatShorthandSchema = v.strictObject({ arrow: builtinFormatConfigSchema });
+const parquetFormatShorthandSchema = v.strictObject({ parquet: builtinFormatConfigSchema });
+const vegaliteFormatShorthandSchema = v.strictObject({ vegalite: builtinFormatConfigSchema });
+const pngFormatShorthandSchema = v.strictObject({ png: builtinFormatConfigSchema });
+const anywidgetFormatShorthandSchema = v.strictObject({ anywidget: builtinFormatConfigSchema });
+const displayFormatShorthandSchema = v.strictObject({ display: builtinFormatConfigSchema });
+const markdownFormatShorthandSchema = v.strictObject({ markdown: builtinFormatConfigSchema });
+
+const namedBuiltinFormatSchema = v.union([
+  jsonFormatShorthandSchema,
+  textFormatShorthandSchema,
+  htmlFormatShorthandSchema,
+  arrowFormatShorthandSchema,
+  parquetFormatShorthandSchema,
+  vegaliteFormatShorthandSchema,
+  pngFormatShorthandSchema,
+  anywidgetFormatShorthandSchema,
+  displayFormatShorthandSchema,
+  markdownFormatShorthandSchema,
+]);
+
+type ExplicitFormatOutput = v.InferOutput<typeof explicitFormatSchema>;
+type BuiltinFormatConfigOutput = v.InferOutput<typeof builtinFormatConfigSchema>;
+type FormatMapOutput = Partial<Record<BuiltinFormatName, BuiltinFormatConfigOutput>> &
+  Record<string, BuiltinFormatConfigOutput | ExplicitFormatOutput>;
+
+const formatMapSchema = v.custom<FormatMapOutput>(
+  isFormatMap,
+  "Format maps need built-in format options or explicit exporter configs.",
+);
+
+export const formatInputSchema = v.union([
+  v.picklist(builtinFormatNames),
+  v.strictObject({
+    format: v.picklist(builtinFormatNames),
+    options: v.optional(jsonObjectSchema),
+  }),
+  namedBuiltinFormatSchema,
+]);
+
+export const valueSpecSchema = v.strictObject({
+  source: sourceSpecSchema,
+  formats: v.pipe(
+    v.union([formatMapSchema, v.tupleWithRest([formatInputSchema], formatInputSchema)]),
+    v.check((value) => Object.keys(value).length > 0, "Values need at least one format."),
+  ),
+});
+
+export const exportSpecSchema = v.strictObject({
+  scenarios: v.optional(
+    v.pipe(
+      v.array(scenarioSpecSchema),
+      v.check((value) => uniqueScenarioIds(value), "Scenario ids must be unique."),
+    ),
+  ),
+  provenance: v.optional(provenanceSpecSchema),
+  values: v.pipe(
+    v.record(specNameSchema, valueSpecSchema),
+    v.check((value) => Object.keys(value).length > 0, "Export specs need at least one value."),
+  ),
+});
+
+export type ScenarioSpec = v.InferOutput<typeof scenarioSpecSchema>;
+export type ScenarioValue = v.InferOutput<typeof scenarioValueSchema>;
+export type ProvenanceSpec = v.InferOutput<typeof provenanceSpecSchema>;
+export type CellSelector = v.InferOutput<typeof cellSelectorSchema>;
+export type DefinitionSource = v.InferOutput<typeof definitionSourceSchema>;
+export type ExpressionSource = v.InferOutput<typeof expressionSourceSchema>;
+export type CellOutputSource = v.InferOutput<typeof cellOutputSourceSchema>;
+export type NotebookSnapshotSource = v.InferOutput<typeof notebookSnapshotSourceSchema>;
+export type NotebookSnapshotOptions = Omit<NotebookSnapshotSource, "type">;
+export type NotebookSnapshotShorthand = v.InferOutput<typeof notebookSnapshotShorthandSchema>;
+export type ReportCellInput = v.InferOutput<typeof reportCellInputSchema>;
+export type ReportSourceInput = v.InferOutput<typeof reportSourceInputSchema>;
+export type ReportSource = v.InferOutput<typeof reportSourceSchema>;
+export type SourceSpec = v.InferOutput<typeof sourceSpecSchema>;
+export type RefExport = v.InferOutput<typeof refExportSchema>;
+export type CodeExport = v.InferOutput<typeof codeExportSchema>;
+export type ExportCallable = v.InferOutput<typeof exportCallableSchema>;
+export type ExplicitFormat = v.InferOutput<typeof explicitFormatSchema>;
+export type BuiltinFormatConfig = v.InferOutput<typeof builtinFormatConfigSchema>;
 export type BuiltinFormatMap = Partial<Record<BuiltinFormatName, BuiltinFormatConfig>>;
-
 export type ExplicitFormatMap = Record<string, ExplicitFormat>;
+export type FormatMap = FormatMapOutput & { readonly [FORMAT_MAP_BRAND]: true };
+export type NamedBuiltinFormat = v.InferOutput<typeof namedBuiltinFormatSchema>;
+export type FormatInput = v.InferOutput<typeof formatInputSchema>;
+export type ValueSpec = v.InferOutput<typeof valueSpecSchema>;
+export type ExportSpec = v.InferOutput<typeof exportSpecSchema> & {
+  readonly [EXPORT_SPEC_BRAND]: true;
+};
 
-export type NamedBuiltinFormat = {
-  [Name in BuiltinFormatName]: Record<Name, BuiltinFormatConfig> &
-    Partial<Record<Exclude<BuiltinFormatName, Name>, never>>;
-}[BuiltinFormatName];
+export type ExportSpecParseResult =
+  | {
+      success: true;
+      spec: ExportSpec;
+      issues?: never;
+    }
+  | {
+      success: false;
+      spec?: never;
+      issues: v.InferIssue<typeof exportSpecSchema>[];
+    };
 
-export type FormatInput =
-  | BuiltinFormatName
-  | { format: BuiltinFormatName; options?: JsonObject }
-  | NamedBuiltinFormat;
+export function parseExportSpec(input: unknown): ExportSpec {
+  return v.parse(exportSpecSchema, input) as ExportSpec;
+}
 
-export interface ValueSpec {
-  source: SourceSpec;
-  formats: BuiltinFormatMap | ExplicitFormatMap | FormatInput[];
+export function safeParseExportSpec(input: unknown): ExportSpecParseResult {
+  const result = v.safeParse(exportSpecSchema, input);
+  return result.success
+    ? { success: true, spec: result.output as ExportSpec }
+    : { success: false, issues: result.issues };
+}
+
+function uniqueScenarioIds(scenarios: readonly ScenarioSpec[]): boolean {
+  const ids = scenarios.map((scenario) => scenario.id ?? "default");
+  return new Set(ids).size === ids.length;
+}
+
+function isCodeStateMarkerObject(value: unknown): boolean {
+  return isPlainRecord(value) && value.type === "code" && !("code" in value);
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isFormatMap(value: unknown): value is FormatMapOutput {
+  if (!isPlainRecord(value) || Object.keys(value).length === 0) {
+    return false;
+  }
+
+  for (const [name, config] of Object.entries(value)) {
+    if (!SPEC_NAME_PATTERN.test(name)) {
+      return false;
+    }
+
+    const schema = isBuiltinFormatName(name) ? builtinFormatConfigSchema : explicitFormatSchema;
+    if (!v.safeParse(schema, config).success) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function isBuiltinFormatName(name: string): name is BuiltinFormatName {
+  return (builtinFormatNames as readonly string[]).includes(name);
 }

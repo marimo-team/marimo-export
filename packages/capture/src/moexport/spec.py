@@ -13,6 +13,7 @@ from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
+    StrictStr,
     TypeAdapter,
     field_validator,
     model_validator,
@@ -21,9 +22,12 @@ import yaml
 
 from moexport.sources import SourceSpec, normalize_source
 
-SpecKey: TypeAlias = Annotated[str, Field(pattern=r"^[A-Za-z_][A-Za-z0-9_-]*$")]
+SpecKey: TypeAlias = Annotated[
+    StrictStr,
+    Field(pattern=r"^[A-Za-z_][A-Za-z0-9_-]*$"),
+]
 StateKey: TypeAlias = Annotated[
-    str,
+    StrictStr,
     Field(pattern=r"^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*$"),
 ]
 JsonConfigValue: TypeAlias = (
@@ -39,7 +43,7 @@ class SpecModel(BaseModel):
     change the authored export silently.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", strict=True)
 
 
 class RefExport(SpecModel):
@@ -98,7 +102,6 @@ BUILTIN_FORMAT_EXPORTERS = {
     "png": "moexport.exporters.altair:png",
     "anywidget": "moexport.exporters.anywidget:bundle",
     "display": "moexport.exporters.display:display_json",
-    "display_json": "moexport.exporters.display:display_json",
     "markdown": "moexport.exporters.display:markdown",
 }
 
@@ -126,6 +129,8 @@ def _validate_state_value(value: object) -> object:
         mapping = cast(Mapping[object, object], value)
         if "code" in mapping:
             return CodeStateValue.model_validate(dict(mapping))
+        if mapping.get("type") == "code":
+            raise ValueError("scenario code values use {code: ...}")
     return _validate_json_value(value)
 
 
@@ -147,7 +152,7 @@ class FormatSpec(SpecModel):
     @classmethod
     def _options_must_be_json_object(cls, value: object) -> object:
         if value is None:
-            return {}
+            raise ValueError("format options must be a JSON object")
 
         validated = _validate_json_value(value)
         if not isinstance(validated, dict):
@@ -276,6 +281,7 @@ def _normalize_format_item(value: object, label: str) -> tuple[str, object]:
 
     mapping = cast(Mapping[object, object], value)
     if "format" in mapping:
+        _require_exact_keys(mapping, {"format", "options"}, f"{label}.format")
         name = _required_string(mapping["format"], f"{label}.format")
         options = mapping.get("options", {})
         return name, _builtin_format(name, options)
@@ -291,6 +297,12 @@ def _normalize_format_mapping(name: str, value: object) -> object:
     if isinstance(value, Mapping) and "export" in value:
         return value
     if name in BUILTIN_FORMAT_EXPORTERS:
+        if isinstance(value, Mapping) and _has_reserved_format_option(
+            cast(Mapping[object, object], value)
+        ):
+            raise ValueError(
+                f"format {name!r} options cannot use reserved export or options keys"
+            )
         return _builtin_format(name, {} if value is None else value)
     return value
 
@@ -315,6 +327,26 @@ def _required_string(value: object, label: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"{label} must be a non-empty string")
     return value
+
+
+def _has_reserved_format_option(mapping: Mapping[object, object]) -> bool:
+    return "export" in mapping or "options" in mapping
+
+
+def _require_exact_keys(
+    mapping: Mapping[object, object],
+    allowed: set[str],
+    label: str,
+) -> None:
+    keys = {key for key in mapping if isinstance(key, str)}
+    unknown = keys - allowed
+    if unknown:
+        joined = ", ".join(sorted(unknown))
+        raise ValueError(f"{label} does not accept key(s): {joined}")
+
+    non_string = [key for key in mapping if not isinstance(key, str)]
+    if non_string:
+        raise ValueError(f"{label} keys must be strings")
 
 
 class ExportSpec(SpecModel):
