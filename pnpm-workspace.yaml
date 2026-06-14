@@ -5,6 +5,11 @@ minimumReleaseAge: 20160
 verifyDepsBeforeRun: install
 blockExoticSubdeps: true
 trustPolicy: no-downgrade
+trustPolicyExclude:
+  - "chokidar@4.0.3"
+  - "tinyclip@0.1.13"
 minimumReleaseAgeExclude:
   - "@marimo-team/*"
-onlyBuiltDependencies: []
+allowBuilds:
+  esbuild: true
+  sharp: true
