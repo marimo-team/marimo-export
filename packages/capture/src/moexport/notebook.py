@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import sys
 import uuid
-from collections import deque
 from collections.abc import Generator, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, field
@@ -328,7 +327,8 @@ def _run_export_cell(
         #
         # Inside that cell, the evaluator performs the actual notebook graph
         # planning for each scenario.
-        runner.cells_to_run = deque([cell_id])
+        runner._scheduler.cells_to_run.clear()
+        runner._scheduler.cells_to_run.append(cell_id)
         _outputs, defs = runner.run()
 
     return defs
