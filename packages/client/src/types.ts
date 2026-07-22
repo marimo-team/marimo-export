@@ -1,143 +1,113 @@
-export const EXPORT_ARCHIVE_MEDIA_TYPE = "application/vnd.marimo.static-export+zip";
-
-export type ExportTransportFetch = (request: Request) => Promise<Response>;
 export type JsonPrimitive = string | number | boolean | null;
-export type JsonValue =
-  | JsonPrimitive
-  | readonly JsonValue[]
-  | { readonly [key: string]: JsonValue };
-export type JsonObject = { readonly [key: string]: JsonValue };
 
-export interface ExportTransportOptions {
-  server: string | URL;
-  fetch?: ExportTransportFetch;
-  headers?: HeadersInit;
-  token?: string;
-  serverToken?: string;
-  WebSocket?: typeof WebSocket;
+export type JsonValue = JsonPrimitive | readonly JsonValue[] | JsonObject;
+
+export interface JsonObject {
+  readonly [key: string]: JsonValue;
 }
 
-export interface ExportTransportPostOptions {
-  params?: {
-    header?: Record<string, string>;
-  };
-  body?: unknown;
+export interface ReadOptions {
+  readonly signal?: AbortSignal;
+  readonly maxBytes?: number;
 }
 
-export interface ExportTransportPostResult {
-  response: Response;
-  data: unknown;
+export interface ExportSource {
+  read(path: string, options?: ReadOptions): Promise<Uint8Array>;
 }
 
-export interface MarimoWorkspaceTransport {
-  POST(path: string, options?: ExportTransportPostOptions): Promise<ExportTransportPostResult>;
+export type ExportKey = `marimo-export/indexes/${string}.json`;
+export type PayloadKey = `marimo-export/payloads/sha256/${string}`;
+
+export interface ExportRef {
+  readonly key: ExportKey;
+  readonly sha256: string;
+  readonly size: number;
 }
 
-export interface MarimoExportTransport extends MarimoWorkspaceTransport {
-  executeScratchpad(options: ExecuteScratchpadOptions): Promise<ScratchpadExecutionResult>;
-  openNotebook(options: OpenNotebookOptions): Promise<RunningNotebook>;
+export interface PayloadRef {
+  readonly key: PayloadKey;
+  readonly sha256: string;
+  readonly size: number;
 }
 
-export interface RunningNotebook {
-  sessionId: string;
-  name: string | null;
-  path: string | null;
-  initializationId: string | null;
+export interface NotebookProvenance {
+  readonly name: string;
+  readonly sourceSha256: string;
 }
 
-export interface WorkspaceNotebook {
-  id: string;
-  name: string;
-  path: string;
+export interface ProducerInfo {
+  readonly marimoVersion: string;
+  readonly marimoExportVersion: string;
 }
 
-export interface ExportArchiveOptions {
-  sessionId?: string;
-  notebook?: string;
-  paths?: readonly string[];
-  runtime?: RuntimeOption;
-  timeoutMs?: number;
+const EXPORT_ERROR_CODES = [
+  "ambiguous_format",
+  "build_failed",
+  "cache_read_failed",
+  "decode_failed",
+  "describe_failed",
+  "integrity_failed",
+  "internal_error",
+  "invalid_index",
+  "invalid_plan",
+  "invalid_ref",
+  "invalid_request",
+  "missing_format",
+  "missing_output",
+  "missing_scenario",
+  "output_too_large",
+  "protocol_mismatch",
+  "release_failed",
+  "remote_closed",
+  "remote_request_failed",
+  "remote_timeout",
+  "remote_unavailable",
+  "scenario_failed",
+  "session_close_failed",
+  "session_open_failed",
+  "session_timeout",
+  "session_unavailable",
+  "source_read_failed",
+  "stage_failed",
+  "timeout",
+  "unsupported_format",
+  "unsupported_marimo",
+  "unsupported_mode",
+  "usage_error",
+] as const;
+
+export type ExportErrorCode = (typeof EXPORT_ERROR_CODES)[number];
+
+const exportErrorCodes = new Set<string>(EXPORT_ERROR_CODES);
+
+export function isExportErrorCode(code: string): code is ExportErrorCode {
+  return exportErrorCodes.has(code);
 }
 
-export interface ExportOptions extends ExportArchiveOptions {
-  outputRoot?: string;
+export class MarimoExportError extends Error {
+  readonly code: ExportErrorCode;
+  readonly details: JsonObject | undefined;
+
+  constructor(
+    code: ExportErrorCode,
+    message: string,
+    options: { cause?: unknown; details?: JsonObject } = {},
+  ) {
+    super(message, options.cause === undefined ? undefined : { cause: options.cause });
+    this.name = "MarimoExportError";
+    this.code = code;
+    this.details = options.details === undefined ? undefined : freezeJsonObject(options.details);
+  }
 }
 
-export interface ExportResult {
-  sessionId: string;
-  sessionName: string | null;
-  sessionPath: string | null;
-  sessionInitializationId: string | null;
-  bundlePath: string;
-  manifestPath: string;
-  invocationPath: string;
-  invocationIndexPath: string;
-  manifest: Record<string, unknown>;
-  invocation: Record<string, unknown>;
+function freezeJsonObject(value: JsonObject): JsonObject {
+  return Object.freeze(
+    Object.fromEntries(Object.entries(value).map(([key, item]) => [key, freezeJsonValue(item)])),
+  );
 }
 
-export interface ExportArchiveResult {
-  bytes: Uint8Array;
-  mediaType: typeof EXPORT_ARCHIVE_MEDIA_TYPE;
-  sessionId: string;
-  sessionName: string | null;
-  sessionPath: string | null;
-  sessionInitializationId: string | null;
-}
-
-export interface ExecuteScratchpadOptions {
-  code: string;
-  sessionId: string;
-  metadata?: ScratchpadExecutionMetadata;
-  timeoutMs?: number;
-}
-
-export type ScratchpadExecutionMetadata =
-  | {
-      kind: "export";
-      marker: string;
-      outputRoot?: string;
-      paths?: readonly string[];
-      spec: unknown;
-    }
-  | {
-      kind: "archive";
-      marker: string;
-      paths?: readonly string[];
-      spec: unknown;
-    }
-  | {
-      kind: "import";
-      marker: string;
-      moduleName: string;
-    };
-
-export interface OpenNotebookOptions {
-  notebook: string;
-  sessionId?: string;
-  timeoutMs?: number;
-}
-
-export type RuntimeOption = "preinstalled" | Runtime;
-
-export interface Runtime {
-  package: string;
-  module?: string;
-  manager?: "uv" | "pip" | string;
-  source?: "kernel" | "server";
-  force?: boolean;
-  timeoutMs?: number;
-  pollIntervalMs?: number;
-}
-
-export interface ScratchpadExecutionResult {
-  success: boolean;
-  output: ScratchpadOutput | null;
-  stdout: string[];
-  stderr: string[];
-}
-
-export interface ScratchpadOutput {
-  mimetype: string;
-  data: string;
+function freezeJsonValue(value: JsonValue): JsonValue {
+  if (Array.isArray(value)) return Object.freeze(value.map(freezeJsonValue));
+  if (typeof value === "object" && value !== null) return freezeJsonObject(value as JsonObject);
+  return value;
 }

@@ -1,12 +1,27 @@
 [tool.uv.workspace]
-members = ["packages/capture"]
+members = ["packages/producer"]
 
 [dependency-groups]
-dev = ["marimo[recommended]", "pytest>=9", "ruff>=0.15", "ty>=0.0.33"]
+dev = ["pyrefly>=1.1.1", "pytest>=9", "ruff>=0.15", "ty>=0.0.39"]
+
+[tool.pyrefly]
+project-includes = ["packages/producer/src", "packages/producer/tests"]
+search-path = ["packages/producer/src"]
+python-version = "3.10"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
 
 [tool.ruff.lint]
 pydocstyle = { convention = "numpy" }
-ignore = []
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+
+[tool.ty.src]
+include = ["packages/producer/src", "packages/producer/tests"]
 
 [tool.marimo.runtime]
-output_max_bytes = 10_000_000_000
+cache_cells = true
+
+[tool.marimo.experimental]
+execution_type = "relaxed"

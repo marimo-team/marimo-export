@@ -1,57 +1,66 @@
-import {
-  type ExportBlob,
-  type ExportLoader,
-  type ExportLoaderContext,
-  type JsonObject,
-} from "@marimo-team/export-reader";
-import type { EmbedOptions, Result as VegaEmbedResult } from "vega-embed";
+import type { JsonObject, OutputLoader } from "@marimo-team/marimo-export";
+import type { EmbedOptions, Result as VegaEmbedResult, VisualizationSpec } from "vega-embed";
 
-export const vegaliteFormat = "vegalite.v1";
+const FORMAT_ID = "vegalite.v1";
 
-export type VegaLiteSpec = Record<string, unknown>;
-export type VegaLiteRenderOptions = EmbedOptions;
-export type VegaLiteRenderResult = VegaEmbedResult;
+export type VegaLiteSpec = Readonly<JsonObject>;
+export type VegaLiteMountOptions = EmbedOptions;
+export type MountedVegaLite = VegaEmbedResult;
 
 export interface VegaLiteChart {
-  formatId: string;
-  blob: ExportBlob;
-  metadata: JsonObject | null;
-  url(): string;
-  spec<T extends VegaLiteSpec = VegaLiteSpec>(): Promise<T>;
-  render(element: HTMLElement, options?: VegaLiteRenderOptions): Promise<VegaLiteRenderResult>;
+  readonly spec: VegaLiteSpec;
+  mount(element: HTMLElement, options?: VegaLiteMountOptions): Promise<MountedVegaLite>;
 }
 
-export function vegaliteLoader(defaults: VegaLiteRenderOptions = {}): ExportLoader<VegaLiteChart> {
+/** Load a Vega-Lite projection and prepare it for browser mounting. */
+export function vegaLite(defaults: VegaLiteMountOptions = {}): OutputLoader<VegaLiteChart> {
+  const defaultOptions = { ...defaults };
   return {
-    formatId: vegaliteFormat,
-    load(context: ExportLoaderContext) {
-      return createVegaLiteHandle(context, defaults);
+    formatId: FORMAT_ID,
+    async load(output) {
+      const value = await output.json();
+      if (value === null || typeof value !== "object" || Array.isArray(value)) {
+        throw new TypeError("Vega-Lite output must contain a JSON object.");
+      }
+      const template = value as JsonObject;
+      const spec = freezeJson(structuredClone(template));
+      return {
+        spec,
+        async mount(element, options) {
+          const { default: embed } = await import("vega-embed");
+          return embed(element, structuredClone(template) as unknown as VisualizationSpec, {
+            renderer: "canvas",
+            ...defaultOptions,
+            ...options,
+          });
+        },
+      };
     },
   };
 }
 
-function createVegaLiteHandle(
-  context: ExportLoaderContext,
-  defaults: VegaLiteRenderOptions,
-): VegaLiteChart {
-  return {
-    formatId: context.formatId,
-    blob: context.entry().ref,
-    metadata: context.metadata,
-    url() {
-      return context.entry().url();
-    },
-    spec<T extends VegaLiteSpec = VegaLiteSpec>() {
-      return context.entry().json<T>();
-    },
-    async render(element, options) {
-      const spec = await context.entry().json<VegaLiteSpec>();
-      const { default: embed } = await import("vega-embed");
-      return embed(element, spec, {
-        renderer: "canvas",
-        ...defaults,
-        ...options,
-      });
-    },
-  };
+function freezeJson<T extends JsonObject>(value: T): Readonly<T> {
+  for (const child of Object.values(value)) {
+    if (child !== null && typeof child === "object") {
+      if (Array.isArray(child)) {
+        freezeArray(child);
+      } else {
+        freezeJson(child as JsonObject);
+      }
+    }
+  }
+  return Object.freeze(value);
+}
+
+function freezeArray(value: readonly unknown[]): void {
+  for (const child of value) {
+    if (child !== null && typeof child === "object") {
+      if (Array.isArray(child)) {
+        freezeArray(child);
+      } else {
+        freezeJson(child as JsonObject);
+      }
+    }
+  }
+  Object.freeze(value);
 }

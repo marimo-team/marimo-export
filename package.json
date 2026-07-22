@@ -1,24 +1,21 @@
 {
-  "name": "@marimo-team/export-workspace",
+  "name": "@marimo-team/marimo-export-workspace",
   "version": "0.0.0",
   "private": true,
-  "description": "",
-  "keywords": [],
-  "license": "ISC",
-  "author": "",
+  "license": "Apache-2.0",
   "type": "module",
   "scripts": {
-    "build": "pnpm -r --if-present build",
-    "typecheck": "pnpm -r --if-present typecheck",
-    "lint": "pnpm -r --if-present lint",
-    "test": "pnpm -r --if-present test",
-    "format": "oxfmt . && pnpm -r --if-present format"
+    "prepare": "vp config"
   },
   "devDependencies": {
-    "@types/node": "24.12.2",
-    "oxfmt": "0.47.0",
-    "oxlint": "1.62.0",
-    "typescript": "6.0.3"
+    "@types/node": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vite-plus": "catalog:",
+    "vue": "catalog:"
   },
-  "packageManager": "pnpm@11.6.0+sha512.9a36518224080c6fe5165afdcfe79bfa118c29be703f3f462b1e32efe1e98e47e8750b148e08286250aad4113cc7993ca413c4e2cd447752708c2ee5751bc95f"
+  "engines": {
+    "node": ">=22.18.0"
+  },
+  "packageManager": "pnpm@11.15.1+sha512.81350b07e53c9538a02f1f2303b4290fa2d7be04e56e2a970c4cc4b417dc761de196edabd49d55c7dc9580db81007c44143e4e3d7e462b3000d23c255122d065"
 }

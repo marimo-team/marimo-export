@@ -1,0 +1,75 @@
+# AnyWidget publication plan
+#
+# Start a marimo server with the notebook's pinned dependencies:
+#
+#   uv run --package marimo-export --extra anywidget marimo edit \
+#     examples/_notebooks/widgets.py \
+#     --headless \
+#     --no-sandbox \
+#     --host 127.0.0.1 \
+#     --port 2718 \
+#     --session-ttl 300 \
+#     --no-token \
+#     --no-skew-protection \
+#     --skip-update-check
+#
+# Build the frontend packages, execute each scenario, and pull the publication:
+#
+#   make build
+#   node packages/client/dist/cli.mjs publish \
+#     --server http://127.0.0.1:2718/ \
+#     --notebook examples/_notebooks/widgets.py \
+#     --plan examples/_notebooks/widgets.plan.yaml \
+#     --out /tmp/widgets-export
+#
+# The raw and wrapped outputs use the same `anywidget.v1` portable model graph.
+# Each graph includes its root model, reachable child models, binary buffers,
+# frontend modules, and styles.
+
+schema: marimo-export.plan.v1
+
+# Definition inputs initialize the synchronized state captured in each scenario.
+inputs:
+  seed:
+    definition: seed
+    default: 2
+  accent:
+    definition: accent
+    default: "#2563eb"
+
+# Every scenario becomes an immutable lookup target in the published index.
+scenarios:
+  - id: baseline
+    inputs: {}
+  - id: boosted
+    inputs:
+      seed: 7
+  - id: violet
+    inputs:
+      seed: 4
+      accent: "#7c3aed"
+
+outputs:
+  # Small JSON state supports cards, server rendering, and agent reads.
+  projected:
+    source: projected
+    formats:
+      json: {}
+
+  # The chart carries the scenario values as a portable Vega-Lite spec.
+  chart:
+    source: chart
+    formats:
+      vegalite: {}
+
+  # A raw AnyWidget exercises direct model capture and binary state restoration.
+  raw_counter:
+    source: raw_counter
+    formats:
+      anywidget: {}
+
+  # The marimo wrapper contains a parent model that renders and observes a child.
+  wrapped_dashboard:
+    source: wrapped_dashboard
+    formats:
+      anywidget: {}

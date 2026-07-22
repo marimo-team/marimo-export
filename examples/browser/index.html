@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="data:," />
+    <title>Portable marimo widgets</title>
+  </head>
+  <body>
+    <main id="app" data-status="loading" data-cleanup-count="0" data-testid="app">
+      <header class="masthead">
+        <p class="eyebrow">marimo export · static browser consumer</p>
+        <h1>Notebook outputs, running without Python</h1>
+        <p class="intro">
+          Choose a cached scenario to mount its chart, raw AnyWidget, and composed dashboard from
+          verified publication files.
+        </p>
+      </header>
+
+      <section class="scenario-bar" aria-labelledby="scenario-heading">
+        <div>
+          <h2 id="scenario-heading">Published scenario</h2>
+          <p>Each selection loads one immutable notebook execution.</p>
+        </div>
+        <label class="scenario-field">
+          <span>Scenario</span>
+          <select data-testid="scenario-select" disabled>
+            <option>Loading publication…</option>
+          </select>
+        </label>
+        <p class="load-status" data-testid="load-status" role="status" aria-live="polite">
+          Opening publication…
+        </p>
+      </section>
+
+      <section class="overview" aria-label="Scenario data">
+        <article class="panel summary-panel">
+          <div class="panel-heading">
+            <div>
+              <p class="kicker">Typed JSON</p>
+              <h2>Projected state</h2>
+            </div>
+            <span class="format-pill">json.v1</span>
+          </div>
+          <dl class="metrics">
+            <div>
+              <dt>Raw count</dt>
+              <dd data-testid="projected-raw-count">–</dd>
+            </div>
+            <div>
+              <dt>Child count</dt>
+              <dd data-testid="projected-child-count">–</dd>
+            </div>
+            <div>
+              <dt>Accent</dt>
+              <dd class="accent-value">
+                <span class="accent-swatch" data-testid="accent-swatch"></span>
+                <code data-testid="projected-accent">–</code>
+              </dd>
+            </div>
+          </dl>
+          <details>
+            <summary>Inspect decoded values</summary>
+            <pre data-testid="projected-json">Loading…</pre>
+          </details>
+        </article>
+
+        <article class="panel chart-panel">
+          <div class="panel-heading">
+            <div>
+              <p class="kicker">Portable chart</p>
+              <h2>Initial counters</h2>
+            </div>
+            <span class="format-pill">vegalite.v1</span>
+          </div>
+          <div class="chart-host" data-testid="chart"></div>
+        </article>
+      </section>
+
+      <section class="widgets" aria-label="Hydrated AnyWidgets">
+        <article class="panel widget-panel">
+          <div class="panel-heading">
+            <div>
+              <p class="kicker">Raw model</p>
+              <h2>Counter widget</h2>
+            </div>
+            <span class="format-pill">anywidget.v1</span>
+          </div>
+          <div class="widget-host" data-testid="raw-counter"></div>
+          <div class="widget-readout">
+            <span>Live model count</span>
+            <output data-testid="raw-model-count">–</output>
+          </div>
+          <p class="buffer-state" data-testid="buffer-state">Buffer state loads with the model.</p>
+          <div class="control-row" aria-label="Raw counter controls">
+            <button type="button" data-testid="raw-increment" disabled>Increment via model</button>
+            <button type="button" class="secondary" data-testid="raw-reset" disabled>
+              Reset via exports
+            </button>
+          </div>
+        </article>
+
+        <article class="panel widget-panel">
+          <div class="panel-heading">
+            <div>
+              <p class="kicker">Composed model graph</p>
+              <h2>Dashboard and child widget</h2>
+            </div>
+            <span class="format-pill">anywidget.v1</span>
+          </div>
+          <div class="widget-host" data-testid="wrapped-dashboard"></div>
+          <div class="widget-readout">
+            <span>Live dashboard title</span>
+            <output data-testid="dashboard-model-title">–</output>
+          </div>
+          <form class="rename-form" data-testid="dashboard-rename-form">
+            <label>
+              <span>New dashboard title</span>
+              <input data-testid="dashboard-title" value="Published dashboard" required />
+            </label>
+            <button type="submit" data-testid="dashboard-rename" disabled>
+              Rename via exports
+            </button>
+          </form>
+        </article>
+      </section>
+
+      <section class="lifecycle-panel" aria-labelledby="lifecycle-heading">
+        <div>
+          <p class="kicker">Lifecycle proof</p>
+          <h2 id="lifecycle-heading">Mounted resources are released on scenario changes</h2>
+          <p>Cleanup events come from the exported widget modules.</p>
+        </div>
+        <div class="cleanup-total">
+          <span>Cleanup events</span>
+          <output data-testid="cleanup-count">0</output>
+        </div>
+        <ol class="cleanup-log" data-testid="cleanup-log" aria-live="polite"></ol>
+      </section>
+    </main>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

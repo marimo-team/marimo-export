@@ -1,0 +1,39 @@
+{
+  "schema": "marimo-export.anywidget.v1",
+  "rootModelId": "model-0",
+  "files": {
+    "./@file/root.js": "data:text/javascript;base64,ZXhwb3J0IGRlZmF1bHQge30="
+  },
+  "modelNotifications": [
+    {
+      "op": "model-lifecycle",
+      "model_id": "model-0",
+      "message": {
+        "method": "open",
+        "state": {
+          "child": "anywidget:model-1",
+          "binary": {}
+        },
+        "buffer_paths": [["binary", "view"]],
+        "buffers": ["AQID"],
+        "esm_spec": {
+          "url": "./@file/root.js",
+          "hash": "root-hash"
+        }
+      }
+    },
+    {
+      "op": "model-lifecycle",
+      "model_id": "model-1",
+      "message": {
+        "method": "open",
+        "state": {
+          "value": 2
+        },
+        "buffer_paths": [],
+        "buffers": [],
+        "esm_spec": null
+      }
+    }
+  ]
+}

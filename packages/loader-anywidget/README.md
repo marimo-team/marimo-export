@@ -1,48 +1,41 @@
-# @marimo-team/export-loader-anywidget
+# @marimo-team/marimo-export-anywidget
 
-Loader for `anywidget.bundle.v1` formats.
+`anywidget()` validates an `anywidget.v1` projection and returns a mountable static model graph. Loading is inert and works during server-side rendering. Mounting runs the notebook-authored frontend module in a browser.
 
-This package hydrates an exported AnyWidget bundle in a browser page. It
-includes the format loader and runtime needed to mount the widget without
-Python, Pyodide, or a marimo server.
-
-## Installation
-
-```bash
-npm install @marimo-team/export-loader-anywidget @marimo-team/export-reader
+```sh
+pnpm add @marimo-team/marimo-export @marimo-team/marimo-export-anywidget
 ```
 
-## Usage
+Treat mounted projections as executable application code. Add `blob:` to the application's `script-src` content security policy for embedded modules. A projection that uses a `data:`, `http:`, or `https:` ESM URL also requires that scheme or origin in `script-src`. External modules must permit cross-origin ESM loading.
 
 ```ts
-import { anywidgetLoader } from "@marimo-team/export-loader-anywidget";
-import { readExport } from "@marimo-team/export-reader";
+import { httpSource, openExport } from "@marimo-team/marimo-export";
+import { anywidget } from "@marimo-team/marimo-export-anywidget";
 
-const anywidget = anywidgetLoader();
-const exp = await readExport({ root: "/export/" });
+interface MapState {
+  zoom: number;
+}
 
-const handle = exp.get({
-  scenario: "default",
-  value: "dashboard",
-  format: "bundle",
-});
+interface MapExports {
+  reset(): void;
+}
 
-const widget = await handle.load(anywidget);
-const mounted = await widget.mount(document.querySelector("#widget")!);
+const published = await openExport(httpSource("/published"));
+const output = published.scenario("baseline").output("map", "anywidget");
+const widget = await output.load(anywidget<MapState, MapExports>());
 
+const host = document.querySelector<HTMLElement>("#map");
+if (host === null) throw new Error("Missing #map mount point");
+
+const mounted = await widget.mount(host);
 try {
-  // Bridge model state to the host app while the widget is mounted.
+  mounted.model.set("zoom", 8);
+  mounted.model.save_changes();
 } finally {
-  await mounted.unmount();
+  await mounted.dispose();
 }
 ```
 
-## Contract
+`widget.initialState` exposes the root model state for inspection during server-side rendering. Each `mount()` call owns an isolated model graph, child widget registry, styles, listeners, and module URLs. Call `dispose()` for every successful mount.
 
-- Supports `anywidget.bundle.v1`.
-- Reads the descriptor, frontend module, optional CSS, JSON state, and buffers.
-- Restores binary buffers into the exported state tree.
-- Imports the frontend module from a browser object URL.
-- `mounted.unmount()` tears down the widget instance and revokes the module URL.
-- Exposes a standalone runtime subpath at
-  `@marimo-team/export-loader-anywidget/runtime`.
+The static graph supports local model changes and composed child views. `experimental.invoke()` raises because the exported snapshot has no Python peer.

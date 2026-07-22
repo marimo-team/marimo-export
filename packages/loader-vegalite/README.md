@@ -1,37 +1,28 @@
-# @marimo-team/export-loader-vegalite
+# @marimo-team/marimo-export-vegalite
 
-Loader for `vegalite.v1` formats.
+`vegaLite()` loads a verified `vegalite.v1` specification and mounts it with Vega-Embed.
 
-This package turns exported Vega-Lite JSON into a browser handle that can return
-the raw spec or render an interactive chart with `vega-embed`.
-
-## Installation
-
-```bash
-npm install @marimo-team/export-loader-vegalite @marimo-team/export-reader
+```sh
+pnpm add @marimo-team/marimo-export @marimo-team/marimo-export-vegalite
 ```
-
-## Usage
 
 ```ts
-import { vegaliteLoader } from "@marimo-team/export-loader-vegalite";
-import { readExport } from "@marimo-team/export-reader";
+import { httpSource, openExport } from "@marimo-team/marimo-export";
+import { vegaLite } from "@marimo-team/marimo-export-vegalite";
 
-const vegalite = vegaliteLoader();
-const exp = await readExport({ root: "/export/" });
+const published = await openExport(httpSource("/published"));
+const output = published.scenario("baseline").output("chart", "vegalite");
+const chart = await output.load(vegaLite({ actions: false }));
 
-const chart = await exp
-  .get({ scenario: "default", value: "comparison_chart", format: "vegalite" })
-  .load(vegalite);
+const host = document.querySelector<HTMLElement>("#chart");
+if (host === null) throw new Error("Missing #chart mount point");
 
-await chart.render(document.querySelector("#chart")!);
-
-const spec = await chart.spec();
+const mounted = await chart.mount(host, { renderer: "svg" });
+window.addEventListener("pagehide", () => mounted.finalize(), { once: true });
 ```
 
-## Contract
+`chart.spec` contains the parsed JSON specification. Reading the specification works in browser, Node, and server-rendered code. `chart.mount()` imports Vega-Embed on demand and requires a browser DOM.
 
-- Supports `vegalite.v1`.
-- Reads the format entry file as JSON.
-- Renders through `vega-embed`.
-- Exposes `.spec()` for callers that need the language-agnostic payload.
+The producer derives the output media type from the major version in an official Vega-Lite `$schema` URL. For example, a v6 specification uses `application/vnd.vegalite.v6+json`. The loader selects the stable `vegalite.v1` format ID across Vega-Lite schema majors.
+
+Call `finalize()` for every successful mount. Vega-Embed uses it to release event listeners and view resources.

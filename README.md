@@ -1,183 +1,71 @@
-# marimo static export
+# marimo-export
 
-marimo static export captures selected values, display cells, and scenario
-states from a marimo notebook and writes a static bundle that web apps can read
-without Python.
+Publish selected marimo notebook results as verified static data for frontend apps and agents to read without Python.
 
-The capture runtime records a manifest, content-addressed blobs, provenance, and
-invocation traces. Browser code opens the bundle with
-`@marimo-team/export-reader`, then loads only the JSON, Arrow, Parquet,
-Vega-Lite, AnyWidget, HTML, Markdown, or custom formats it needs.
+The notebook remains the source of truth. An export plan declares a finite set of input scenarios and the projections to publish from each one. `marimo-export` runs that plan in an existing marimo server, reuses marimo's native cell cache, and pulls the resulting index and content-addressed payloads to the consumer.
 
-## Capture A Notebook
+Use the remote machine for Python, data, and accelerator work. Use the published files from browsers, Node, Next.js, Astro, static sites, or CLI-driven agents after the producer stops.
 
-Start from an export spec. Each value names a notebook source and the formats to
-materialize for each scenario:
+## Install
 
-```yaml
-scenarios:
-  - id: default
-  - id: wide_chart
-    state:
-      chart_width: 1200
-
-values:
-  prices:
-    source: { def: df }
-    formats: [arrow, parquet]
-
-  comparison_chart:
-    source: { def: chart }
-    formats: [vegalite, png]
-```
-
-Capture the notebook from this checkout:
+Install the Python producer in the notebook environment:
 
 ```bash
-uv run marimo-export notebook notebooks/finance.py \
-  --spec notebooks/export-specs/yaml/finance--dashboard.yaml \
-  --to notebooks/__marimo__/static-export
+uv add marimo-export
 ```
 
-Inspect the finished bundle from Python:
+Install the client and reader in the consuming project:
 
 ```bash
-uv run marimo-export query notebooks/__marimo__/static-export
-uv run marimo-export query notebooks/__marimo__/static-export entries \
-  --value summary \
-  --format json \
-  --content
+pnpm add @marimo-team/marimo-export
 ```
 
-The export root contains `index.json`, one or more `bundles/<id>/manifest.json`
-files, invocation traces, and `blobs/sha256/...` payload files.
+## Publish
 
-## Read A Bundle
+Connect to a running `marimo edit` server and publish a notebook plan:
 
-Hosted bundles load through `readExport({ root })`:
+```bash
+marimo-export publish \
+  --server http://127.0.0.1:2718/ \
+  --notebook /absolute/path/on/server/notebook.py \
+  --plan notebook.plan.yaml \
+  --out public/export
+```
+
+The notebook path is resolved on the server. Set `MARIMO_TOKEN` or `MARIMO_SERVER_TOKEN` when the server requires authentication. `marimo-export` uses the environment and kernel managed by that server.
+
+An export plan names notebook inputs, scenario values, output sources, and portable formats. Built-in formats include JSON, text, HTML, bytes, Arrow, Parquet, Vega-Lite, PNG, and AnyWidget. A notebook can return a custom `Projection` when an application needs a different payload contract.
+
+Follow [Getting started](docs/getting-started.md) for a complete local workflow. See [Export plans](docs/export-plans.md) for the plan schema and projection formats.
+
+## Read
+
+Serve the publication at `/export/`, then read it from a browser or server runtime:
 
 ```ts
-import { readExport } from "@marimo-team/export-reader";
-import { arrowLoader } from "@marimo-team/export-loader-arrow";
+import { httpSource, openExport } from "@marimo-team/marimo-export";
 
-const exp = await readExport({ root: "/export/" });
-const summary = await exp.get({ scenario: "default", value: "summary", format: "json" }).json();
-
-const prices = await exp
-  .get({ scenario: "default", value: "prices", format: "arrow" })
-  .load(arrowLoader());
+const published = await openExport(httpSource("/export/"));
+const scenario = published.scenario("baseline");
+const summary = await scenario.output("summary", "json").json();
 ```
 
-`bytes()`, `text()`, `json()`, `fetch()`, and loader-backed `load(...)` verify
-the recorded size and SHA-256 digest before returning payload data. `url()`
-returns the bundle URL directly for browser APIs that need a URL.
+For a local directory in Node, import `directorySource` from `@marimo-team/marimo-export/node`. Every output is checked against the byte size and SHA-256 digest recorded in the publication index before it is decoded.
 
-Archive-backed reads use the same API:
-
-```ts
-const response = await fetch("/api/export");
-const exp = await readExport({ bytes: await response.arrayBuffer() });
-
-try {
-  const html = await exp.get({ scenario: "default", value: "report", format: "html" }).text();
-} finally {
-  exp.dispose();
-}
-```
-
-Call `dispose()` when an archive reader has created object URLs.
-
-## Capture From JavaScript
-
-Use `@marimo-team/export-client` when JavaScript can reach a running marimo
-server:
-
-```ts
-import { createMarimoExportClient } from "@marimo-team/export-client";
-
-const client = createMarimoExportClient({ server: "http://localhost:2718" });
-
-await client.export(spec, {
-  notebook: "notebooks/finance.py",
-  outputRoot: "examples/vanilla-vite/public/export",
-  runtime: "preinstalled",
-});
-```
-
-`client.export(...)` writes a persistent export root from the target kernel.
-`client.archive(...)` captures into a temporary root and returns zip bytes for
-API routes that stream a bundle to the caller.
-
-Use `@marimo-team/export-client/browser` for frameworkless pages that need
-plain `fetch` plus marimo HTTP and WebSocket endpoints. Use
-`@marimo-team/export-client/workspace` for notebook discovery and source
-previews from the marimo workspace API.
-
-## Package Map
-
-| Package                                | Runtime    | Contract                                                                                         |
-| -------------------------------------- | ---------- | ------------------------------------------------------------------------------------------------ |
-| `moexport`                             | Python     | Captures notebook sources, applies exporters, writes bundles, archives, and queryable manifests. |
-| `@marimo-team/export-client`           | TypeScript | Asks a running marimo server to write or archive a bundle.                                       |
-| `@marimo-team/export-reader`           | TypeScript | Opens a hosted root, local directory, or archive and returns integrity-checked format handles.   |
-| `@marimo-team/export-loader-arrow`     | TypeScript | Loads `dataframe.arrow.v1` payloads into `@uwdata/flechette` tables.                             |
-| `@marimo-team/export-loader-parquet`   | TypeScript | Loads `dataframe.parquet.v1` payloads with `hyparquet`.                                          |
-| `@marimo-team/export-loader-vegalite`  | TypeScript | Reads `vegalite.v1` specs and renders charts with `vega-embed`.                                  |
-| `@marimo-team/export-loader-anywidget` | TypeScript | Hydrates `anywidget.bundle.v1` payloads without Python, Pyodide, or a marimo server.             |
-
-## Spec Sources
-
-Specs can select several notebook surfaces:
-
-| Source                         | Captures                                                 |
-| ------------------------------ | -------------------------------------------------------- |
-| `{ def: df }`                  | A notebook definition by name.                           |
-| `{ expr: "df.head(10)" }`      | A Python expression evaluated in the scenario.           |
-| `{ cell: summary }`            | A marimo cell output by name, id, or index.              |
-| `{ snapshot: true }`           | A linear notebook snapshot.                              |
-| `{ report: { cells: [...] } }` | A selected display-cell report with labels and ordering. |
-
-Scenario `state` keys override notebook definitions. Dotted keys patch object
-attributes after producer cells run, for example `symbols_selector.value`.
-Code-authored state values use `{ code: "..." }` and the evaluated value must be
-JSON-compatible.
-
-## Examples
-
-- `examples/vanilla-vite`: browser SPA over the checked-in finance bundle.
-- `examples/frameworkless`: single-file HTML apps that import local package
-  `dist/` entrypoints and read static bundles directly.
-- `examples/next-ssg`: static Next.js pages built from public bundles or
-  archive capture during `next build`.
-- `examples/astro-learn`: Astro SSG gallery built from marimo learn notebook
-  metadata.
-- `examples/self-contained`: Markdown export that writes `output.md` and
-  `media/` for review workflows.
-- `notebooks`: source notebooks and YAML or JSON specs used by the packages and
-  examples.
-
-## Development
-
-Install workspace dependencies:
+Agents can inspect and read the same publication through bounded JSON commands:
 
 ```bash
-pnpm install
-uv sync --all-extras
+marimo-export inspect public/export --json
+marimo-export read public/export baseline summary --format json --json
 ```
 
-Run the package checks:
+See [Read exports](docs/read-exports.md) for browser, Node, Next.js, and Astro examples. See [CLI](docs/cli.md) for command output and exit codes.
 
-```bash
-pnpm build
-pnpm lint
-pnpm typecheck
-pnpm test
-```
+## More
 
-Before handoff in this checkout, run:
+- [Remote execution](docs/remote-execution.md)
+- [AnyWidget](docs/anywidget.md)
+- [Trust and integrity](docs/trust.md)
+- [Contributor documentation](development_docs/README.md)
 
-```bash
-pnpm format
-pnpm lint
-pnpm typecheck
-```
+Licensed under the [Apache License 2.0](LICENSE).

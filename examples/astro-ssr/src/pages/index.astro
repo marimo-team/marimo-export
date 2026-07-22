@@ -1,0 +1,225 @@
+---
+import { anywidget } from "@marimo-team/marimo-export-anywidget";
+import { openExport } from "@marimo-team/marimo-export";
+import { directorySource } from "@marimo-team/marimo-export/node";
+
+import type { CounterState } from "../widget-state.js";
+
+const publicationDirectory = process.env.MARIMO_EXPORT_DIR;
+const loaded =
+  publicationDirectory === undefined
+    ? undefined
+    : await openExport(directorySource(publicationDirectory)).then((published) =>
+        published
+          .scenario("baseline")
+          .output("raw_counter", "anywidget")
+          .load(anywidget<CounterState>()),
+      );
+const initialState = loaded?.initialState;
+const ssrState =
+  initialState === undefined
+    ? undefined
+    : {
+        accent: initialState.accent,
+        bufferBytes: initialState.payload.byteLength,
+        count: initialState.count,
+        label: initialState.label,
+      };
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <link rel="icon" href="data:," />
+    <title>Pythonless AnyWidget in Astro</title>
+    <style>
+      :root {
+        color: #17211b;
+        background: #f5f7f3;
+        font-family: ui-sans-serif, system-ui, sans-serif;
+      }
+
+      body {
+        margin: 0;
+      }
+
+      main {
+        width: min(62rem, calc(100% - 2rem));
+        margin: 4rem auto;
+      }
+
+      h1,
+      h2,
+      p {
+        margin-top: 0;
+      }
+
+      .eyebrow {
+        color: #56635a;
+        font-family: ui-monospace, monospace;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+
+      .lede {
+        max-width: 46rem;
+        color: #465249;
+        font-size: 1.1rem;
+        line-height: 1.65;
+      }
+
+      .proof-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+        gap: 1rem;
+        margin-top: 2rem;
+      }
+
+      .panel {
+        padding: 1.25rem;
+        border: 1px solid #ced6cf;
+        background: white;
+      }
+
+      .panel header {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 1rem;
+        margin-bottom: 1rem;
+      }
+
+      .panel header h2 {
+        margin-bottom: 0;
+        font-size: 1.05rem;
+      }
+
+      .status {
+        color: #56635a;
+        font-family: ui-monospace, monospace;
+        font-size: 0.8rem;
+      }
+
+      pre {
+        min-height: 8rem;
+        margin: 0;
+        padding: 1rem;
+        overflow: auto;
+        background: #17211b;
+        color: #eff7f1;
+        font-size: 0.82rem;
+        line-height: 1.55;
+      }
+
+      [data-widget-host] {
+        min-height: 9rem;
+      }
+
+      .controls {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        margin-top: 1rem;
+      }
+
+      .controls button {
+        padding: 0.55rem 0.8rem;
+        border: 1px solid #17211b;
+        border-radius: 0.35rem;
+        background: white;
+        color: #17211b;
+        cursor: pointer;
+      }
+
+      .controls button:disabled {
+        cursor: wait;
+        opacity: 0.5;
+      }
+
+      .live-value {
+        color: #56635a;
+      }
+
+      .live-value output {
+        color: #17211b;
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .error {
+        color: #a2191f;
+      }
+
+      @media (max-width: 46rem) {
+        main {
+          margin: 2rem auto;
+        }
+
+        .proof-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .controls {
+          align-items: stretch;
+          flex-direction: column;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <p class="eyebrow">Astro static build and browser hydration</p>
+      <h1>One publication, two Pythonless consumers</h1>
+      <p class="lede">
+        Astro reads the exported model graph from disk while building this page. The browser reads
+        the same files over HTTP, executes the widget module on mount, and keeps its model local.
+      </p>
+
+      <div
+        class="proof-grid"
+        data-anywidget-example
+        data-scenario="baseline"
+        data-widget-status={initialState === undefined ? "unconfigured" : "ssr-ready"}
+        data-widget-count={initialState?.count}
+      >
+        <section class="panel" aria-labelledby="ssr-heading">
+          <header>
+            <h2 id="ssr-heading">Server-rendered state</h2>
+            <span class="status">inert</span>
+          </header>
+          {
+            ssrState === undefined ? (
+              <p data-ssr-status="unconfigured">
+                Set <code>MARIMO_EXPORT_DIR</code> to build from a widgets publication.
+              </p>
+            ) : (
+              <pre data-ssr-state>{JSON.stringify(ssrState, null, 2)}</pre>
+            )
+          }
+        </section>
+
+        <section class="panel" aria-labelledby="browser-heading">
+          <header>
+            <h2 id="browser-heading">Browser-mounted widget</h2>
+            <span class="status" role="status" aria-live="polite" data-widget-status-text>
+              Waiting for browser
+            </span>
+          </header>
+          <div data-widget-host></div>
+          <div class="controls">
+            <button type="button" data-widget-control disabled>Add five from Astro</button>
+            <span class="live-value">Local model count <output data-widget-count></output></span>
+          </div>
+          <p class="error" data-widget-error hidden></p>
+        </section>
+      </div>
+    </main>
+
+    <script>
+      import "../widget-client.js";
+    </script>
+  </body>
+</html>

@@ -1,41 +1,29 @@
-# @marimo-team/export-loader-parquet
+# @marimo-team/marimo-export-parquet
 
-Loader for `dataframe.parquet.v1` formats.
+`parquet()` decodes a verified `dataframe.parquet.v1` output into row objects.
 
-This package converts exported Parquet bytes into browser-usable row and
-metadata handles with `hyparquet`.
-
-## Installation
-
-```bash
-npm install @marimo-team/export-loader-parquet @marimo-team/export-reader
+```sh
+pnpm add @marimo-team/marimo-export @marimo-team/marimo-export-parquet
 ```
-
-## Usage
 
 ```ts
-import { parquetLoader } from "@marimo-team/export-loader-parquet";
-import { readExport } from "@marimo-team/export-reader";
+import { httpSource, openExport } from "@marimo-team/marimo-export";
+import { parquet } from "@marimo-team/marimo-export-parquet";
 
-const parquetLoaderForExport = parquetLoader();
-const exp = await readExport({ root: "/export/" });
+interface Price {
+  symbol: string;
+  close: number;
+}
 
-const handle = exp.get({
-  scenario: "default",
-  value: "prices",
-  format: "parquet",
-});
-
-const parquet = await handle.load(parquetLoaderForExport);
-
-const metadata = await parquet.readMetadata();
-const rows = await parquet.readRows({ columns: ["Date", "Close"] });
+const published = await openExport(httpSource("/published"));
+const output = published.scenario("baseline").output("prices", "parquet");
+const rows = await output.load(
+  parquet<Price>({
+    columns: ["symbol", "close"],
+    rowStart: 0,
+    rowEnd: 100,
+  }),
+);
 ```
 
-## Contract
-
-- Supports `dataframe.parquet.v1`.
-- Reads verified format bytes through the reader context before passing them
-  to `hyparquet`.
-- Exposes `.readMetadata()` and `.readRows()`.
-- Supports column and row-range reads.
+`parquet(options)` accepts Hyparquet read options such as `columns`, `rowStart`, `rowEnd`, `filter`, `utf8`, and custom decompressors. The export reader downloads and verifies the complete payload before Hyparquet applies row and column selection in memory.

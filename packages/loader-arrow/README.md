@@ -1,40 +1,35 @@
-# @marimo-team/export-loader-arrow
+# @marimo-team/marimo-export-arrow
 
-Loader for `dataframe.arrow.v1` formats.
+`arrow()` decodes a verified `dataframe.arrow.v1` output into a Flechette table.
 
-This package converts exported Arrow IPC bytes into browser-usable table handles
-with `@uwdata/flechette`.
-
-## Installation
-
-```bash
-npm install @marimo-team/export-loader-arrow @marimo-team/export-reader
+```sh
+pnpm add @marimo-team/marimo-export @marimo-team/marimo-export-arrow
 ```
-
-## Usage
 
 ```ts
-import { arrowLoader } from "@marimo-team/export-loader-arrow";
-import { readExport } from "@marimo-team/export-reader";
+import { httpSource, openExport } from "@marimo-team/marimo-export";
+import { arrow } from "@marimo-team/marimo-export-arrow";
 
-const arrow = arrowLoader();
-const exp = await readExport({ root: "/export/" });
+interface Price {
+  symbol: string;
+  close: number;
+}
 
-const handle = exp.get({
-  scenario: "default",
-  value: "prices",
-  format: "arrow",
-});
+const published = await openExport(httpSource("/published"));
+const output = published.scenario("baseline").output("prices", "arrow");
+const table = await output.load(arrow<Price>());
 
-const frame = await handle.load(arrow);
-
-const rows = await frame.rows();
-const columns = await frame.columns();
+console.log(table.numRows);
+console.log(table.toArray());
 ```
 
-## Contract
+Pass Flechette extraction options to `arrow(options)`. The returned table exposes Flechette's column selection, row access, iteration, `toArray()`, and `toColumns()` APIs.
 
-- Supports `dataframe.arrow.v1`.
-- Reads the format entry file through the reader context.
-- Parses Arrow IPC bytes with `tableFromIPC`.
-- Exposes `.table()`, `.rows()`, and `.columns()`.
+```ts
+const table = await output.load(
+  arrow<Price>({
+    useBigInt: true,
+    useDate: true,
+  }),
+);
+```

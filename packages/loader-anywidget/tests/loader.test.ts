@@ -1,0 +1,208 @@
+import { anywidget } from "@marimo-team/marimo-export-anywidget";
+import type { LoadedAnyWidget } from "@marimo-team/marimo-export-anywidget";
+import type { OutputLoader } from "@marimo-team/marimo-export";
+import { describe, expect, expectTypeOf, test } from "vite-plus/test";
+import producerPayload from "../../producer/tests/fixtures/anywidget-v1.json";
+import { moduleUrl, notification, outputFor, payload } from "./fixture.js";
+
+describe("anywidget", () => {
+  test("accepts state interfaces with required and optional fields", () => {
+    interface MapState {
+      zoom: number;
+      label?: string;
+    }
+
+    const loader = anywidget<MapState>();
+
+    expect(loader.formatId).toBe("anywidget.v1");
+    expectTypeOf(loader).toEqualTypeOf<OutputLoader<LoadedAnyWidget<MapState>>>();
+    expectTypeOf<LoadedAnyWidget<MapState>["initialState"]["label"]>().toEqualTypeOf<
+      string | undefined
+    >();
+  });
+
+  test("loads the producer contract fixture", async () => {
+    const output = await outputFor(producerPayload);
+
+    const loaded = await output.load(anywidget<{ child: string; binary: { view: DataView } }>());
+
+    expect(loaded.initialState.child).toBe("anywidget:model-1");
+    expect([...new Uint8Array(loaded.initialState.binary.view.buffer)]).toEqual([1, 2, 3]);
+  });
+
+  test("loads state and buffers without executing the frontend module", async () => {
+    const marker = "__marimoExportAnyWidgetLoaded";
+    Reflect.deleteProperty(globalThis, marker);
+    const url = moduleUrl(`globalThis.${marker} = true; export default { render() {} };`);
+    const output = await outputFor(
+      payload({
+        modelNotifications: [
+          notification({
+            id: "model-0",
+            state: { count: 2, binary: {} },
+            moduleUrl: url,
+            bufferPaths: [["binary", "view"]],
+            buffers: ["AQID"],
+          }),
+        ],
+      }),
+    );
+
+    const loaded = await output.load(anywidget<{ count: number; binary: { view: DataView } }>());
+
+    expect(Reflect.has(globalThis, marker)).toBe(false);
+    expect(loaded.initialState.count).toBe(2);
+    expect([...new Uint8Array(loaded.initialState.binary.view.buffer)]).toEqual([1, 2, 3]);
+    expect(Object.isFrozen(loaded.initialState)).toBe(true);
+    await expect(loaded.mount({} as HTMLElement)).rejects.toThrow(
+      "AnyWidget mount requires a browser element",
+    );
+  });
+
+  test("validates the media type through the loader boundary", async () => {
+    const output = await outputFor(
+      payload({
+        modelNotifications: [
+          notification({ id: "model-0", state: {}, moduleUrl: moduleUrl("export default {}") }),
+        ],
+      }),
+      { mediaType: "application/json" },
+    );
+
+    await expect(output.load(anywidget())).rejects.toThrow("output media type must be");
+  });
+
+  test("rejects unresolved model references before module execution", async () => {
+    const marker = "__marimoExportDanglingModule";
+    Reflect.deleteProperty(globalThis, marker);
+    const output = await outputFor(
+      payload({
+        modelNotifications: [
+          notification({
+            id: "model-0",
+            state: { child: "anywidget:missing" },
+            moduleUrl: moduleUrl(`globalThis.${marker} = true; export default { render() {} };`),
+          }),
+        ],
+      }),
+    );
+
+    await expect(output.load(anywidget())).rejects.toThrow('reference "missing" is unresolved');
+    expect(Reflect.has(globalThis, marker)).toBe(false);
+  });
+
+  test("rejects malformed binary state before module execution", async () => {
+    const output = await outputFor(
+      payload({
+        modelNotifications: [
+          notification({
+            id: "model-0",
+            state: { binary: null },
+            moduleUrl: moduleUrl("export default { render() {} }"),
+            bufferPaths: [["binary"]],
+            buffers: ["not-base64"],
+          }),
+        ],
+      }),
+    );
+
+    await expect(output.load(anywidget())).rejects.toThrow("not canonical base64");
+  });
+
+  test("requires each buffer path parent to exist", async () => {
+    const output = await outputFor(
+      payload({
+        modelNotifications: [
+          notification({
+            id: "model-0",
+            state: {},
+            moduleUrl: moduleUrl("export default { render() {} }"),
+            bufferPaths: [["binary", "view"]],
+            buffers: ["AQID"],
+          }),
+        ],
+      }),
+    );
+
+    await expect(output.load(anywidget())).rejects.toThrow("does not target existing state");
+  });
+
+  test("rejects virtual ESM files that are absent from the payload", async () => {
+    const output = await outputFor(
+      payload({
+        modelNotifications: [
+          notification({ id: "model-0", state: {}, moduleUrl: "/@file/widget.js" }),
+        ],
+      }),
+    );
+
+    await expect(output.load(anywidget())).rejects.toThrow("missing virtual file");
+  });
+
+  test("rejects malformed embedded modules while loading", async () => {
+    const output = await outputFor(
+      payload({
+        files: { "/@file/widget.js": "data:text/javascript;base64,%%%" },
+        modelNotifications: [
+          notification({ id: "model-0", state: {}, moduleUrl: "/@file/widget.js" }),
+        ],
+      }),
+    );
+
+    await expect(output.load(anywidget())).rejects.toThrow("malformed base64 data");
+  });
+
+  test("loads an IPython widget model reference in the root closure", async () => {
+    const output = await outputFor(
+      payload({
+        modelNotifications: [
+          notification({
+            id: "model-0",
+            state: { layout: "IPY_MODEL_model-1" },
+            moduleUrl: moduleUrl("export default { render() {} }"),
+          }),
+          notification({ id: "model-1", state: { width: "100%" } }),
+        ],
+      }),
+    );
+
+    const loaded = await output.load(anywidget<{ layout: string }>());
+
+    expect(loaded.initialState.layout).toBe("IPY_MODEL_model-1");
+  });
+
+  test("requires the canonical root model ID", async () => {
+    const output = await outputFor(
+      payload({
+        rootModelId: "root",
+        modelNotifications: [
+          notification({
+            id: "model-0",
+            state: {},
+            moduleUrl: moduleUrl("export default { render() {} }"),
+          }),
+        ],
+      }),
+    );
+
+    await expect(output.load(anywidget())).rejects.toThrow('rootModelId must be "model-0"');
+  });
+
+  test("requires model notifications in canonical order", async () => {
+    const output = await outputFor(
+      payload({
+        modelNotifications: [
+          notification({
+            id: "model-1",
+            state: {},
+            moduleUrl: moduleUrl("export default { render() {} }"),
+          }),
+        ],
+      }),
+    );
+
+    await expect(output.load(anywidget())).rejects.toThrow(
+      'modelNotifications[0].model_id must be "model-0"',
+    );
+  });
+});

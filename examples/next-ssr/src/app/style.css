@@ -1,0 +1,87 @@
+:root {
+  color: #17211b;
+  background: #f5f7f3;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+}
+
+body {
+  margin: 0;
+}
+
+main {
+  display: grid;
+  gap: 1rem;
+  width: min(52rem, calc(100% - 2rem));
+  margin: 4rem auto;
+}
+
+h1,
+h2,
+p {
+  margin: 0;
+}
+
+.eyebrow,
+.step {
+  color: #56635a;
+  font-family: ui-monospace, monospace;
+  font-size: 0.82rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.lede {
+  max-width: 44rem;
+  color: #425047;
+  line-height: 1.6;
+}
+
+.panel {
+  display: grid;
+  gap: 0.9rem;
+  padding: 1.25rem;
+  border: 1px solid #ced6cf;
+  background: white;
+}
+
+pre {
+  margin: 0;
+  padding: 1rem;
+  overflow-x: auto;
+  background: #f0f3ef;
+  font-size: 0.82rem;
+}
+
+code {
+  font-family: ui-monospace, monospace;
+}
+
+.status {
+  color: #56635a;
+}
+
+.widget-host {
+  min-height: 12rem;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.actions button {
+  width: fit-content;
+  padding: 0.55rem 0.8rem;
+  border: 1px solid #375843;
+  border-radius: 0.3rem;
+  background: #375843;
+  color: white;
+  cursor: pointer;
+  font: inherit;
+}
+
+.actions button:disabled {
+  cursor: wait;
+  opacity: 0.5;
+}

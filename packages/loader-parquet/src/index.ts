@@ -1,105 +1,37 @@
-import {
-  type ExportBlob,
-  type ExportLoader,
-  type ExportLoaderContext,
-  type JsonObject,
-} from "@marimo-team/export-reader";
-import { parquetMetadataAsync, parquetReadObjects, parquetSchema } from "hyparquet";
-import type { AsyncBuffer } from "hyparquet";
+import type { OutputLoader } from "@marimo-team/marimo-export";
+import { parquetReadObjects } from "hyparquet";
+import type { AsyncBuffer, ParquetReadOptions } from "hyparquet";
 
-export const dataframeParquetFormat = "dataframe.parquet.v1";
+const FORMAT_ID = "dataframe.parquet.v1";
 
-export interface ParquetReadOptions {
-  columns?: string[];
-  rowStart?: number;
-  rowEnd?: number;
-  requestInit?: RequestInit;
-}
+export type ParquetOptions = Omit<
+  ParquetReadOptions,
+  "file" | "onChunk" | "onComplete" | "onPage" | "rowFormat"
+>;
 
-export interface ParquetMetadata {
-  rows: number;
-  columns: string[];
-  raw: unknown;
-}
-
-export interface ParquetFile {
-  formatId: string;
-  blob: ExportBlob;
-  metadata: JsonObject | null;
-  url(): string;
-  readMetadata(options?: Pick<ParquetReadOptions, "requestInit">): Promise<ParquetMetadata>;
-  readRows(options?: ParquetReadOptions): Promise<Record<string, unknown>[]>;
-}
-
-export function parquetLoader(defaults: ParquetReadOptions = {}): ExportLoader<ParquetFile> {
+/** Decode a Parquet projection into row objects. */
+export function parquet<Row extends object = Record<string, unknown>>(
+  options: ParquetOptions = {},
+): OutputLoader<Row[]> {
+  const settings = { ...options };
   return {
-    formatId: dataframeParquetFormat,
-    load(context: ExportLoaderContext) {
-      return createDataframeHandle(context, defaults);
+    formatId: FORMAT_ID,
+    async load(output) {
+      const file = asyncBuffer(await output.bytes());
+      return (await parquetReadObjects({ ...settings, file })) as Row[];
     },
   };
 }
 
-function createDataframeHandle(
-  context: ExportLoaderContext,
-  defaults: ParquetReadOptions,
-): ParquetFile {
-  return {
-    formatId: context.formatId,
-    blob: context.entry().ref,
-    metadata: context.metadata,
-    url() {
-      return context.entry().url();
-    },
-    async readMetadata(options) {
-      const file = await parquetFile(context, options?.requestInit ?? defaults.requestInit);
-      const metadata = await parquetMetadataAsync(file);
-      const schema = parquetSchema(metadata);
-      return {
-        rows: Number(metadata.num_rows),
-        columns: schema.children.map((child) => child.element.name),
-        raw: metadata,
-      };
-    },
-    async readRows(options) {
-      const merged = { ...defaults, ...options };
-      const file = await parquetFile(context, merged.requestInit);
-      const readOptions: {
-        file: Awaited<ReturnType<typeof parquetFile>>;
-        columns?: string[];
-        rowStart?: number;
-        rowEnd?: number;
-      } = { file };
-      if (merged.columns) {
-        readOptions.columns = merged.columns;
-      }
-      if (merged.rowStart !== undefined) {
-        readOptions.rowStart = merged.rowStart;
-      }
-      if (merged.rowEnd !== undefined) {
-        readOptions.rowEnd = merged.rowEnd;
-      }
-      return (await parquetReadObjects(readOptions)) as Record<string, unknown>[];
-    },
-  };
-}
-
-async function parquetFile(context: ExportLoaderContext, requestInit?: RequestInit) {
-  const bytes = requestInit
-    ? new Uint8Array(await (await context.entry().fetch(requestInit)).arrayBuffer())
-    : await context.entry().bytes();
-  return asyncBufferFromBytes(bytes);
-}
-
-function asyncBufferFromBytes(bytes: Uint8Array): AsyncBuffer {
+function asyncBuffer(bytes: Uint8Array): AsyncBuffer {
   return {
     byteLength: bytes.byteLength,
     slice(start, end) {
-      return arrayBuffer(bytes.slice(start, end));
+      const slice = bytes.slice(start, end);
+      return slice.buffer.slice(
+        slice.byteOffset,
+        slice.byteOffset + slice.byteLength,
+      ) as ArrayBuffer;
     },
   };
-}
-
-function arrayBuffer(bytes: Uint8Array): ArrayBuffer {
-  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
 }

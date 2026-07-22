@@ -1,0 +1,181 @@
+# Finance publication plan
+#
+# This plan pairs with `finance.py` in the same directory. The notebook embeds
+# its market data, builds a reactive report, and defines the Python objects used
+# by these projections. The plan declares a finite input matrix and the portable
+# formats that frontend code can read after publication.
+#
+# Start the notebook server from the repository root:
+#
+#   uv run --package marimo-export --all-extras \
+#     --with "altair==6.0.0" \
+#     marimo edit examples/_notebooks/finance.py \
+#     --headless \
+#     --no-sandbox \
+#     --host 127.0.0.1 \
+#     --port 2718 \
+#     --session-ttl 300 \
+#     --no-token \
+#     --no-skew-protection \
+#     --skip-update-check
+#
+# The five-minute session TTL closes a disconnected notebook kernel. The relaxed
+# authentication flags suit a loopback development server. Keep token and skew
+# protection enabled when another machine can reach marimo.
+# The repository `pyproject.toml` also selects marimo's `relaxed` execution type,
+# which is required by the producer. Begin with a fresh notebook
+# `__marimo__/cache` directory if this notebook previously ran in strict mode.
+#
+# Build the workspace package, execute this plan, and pull the verified checkout:
+#
+#   make build
+#   node packages/client/dist/cli.mjs publish \
+#     --server http://127.0.0.1:2718/ \
+#     --notebook examples/_notebooks/finance.py \
+#     --plan examples/_notebooks/finance.plan.yaml \
+#     --out /tmp/finance-export
+#
+# The checkout contains `index.json` and content-addressed files under `cache/`.
+# Browser, Node, Next.js, Astro, and agent processes read the same layout.
+
+# `schema` selects the complete plan contract. The decoder rejects unknown
+# fields and normalizes exporter defaults before computing the plan hash.
+schema: marimo-export.plan.v1
+
+# `inputs` names the public controls for this publication. A public input is
+# separate from the notebook identifier it drives. This lets a plan expose a
+# stable product term while the notebook keeps concise Python names.
+#
+# Every input declares exactly one notebook target:
+#
+# - `definition` names a Python definition to replace with a JSON-compatible value.
+# - `ui` names a marimo UI element that receives its frontend value through the
+#   element's conversion path.
+#
+# `default` completes scenarios that omit an input. The resolved input object is
+# stored in the export index, so consumers can select a scenario by its exact
+# public inputs.
+inputs:
+  # The notebook defines `window_days` in a dedicated cell. Each scenario can
+  # replace that definition before dependent cells run.
+  lookback:
+    definition: window_days
+    default: 5
+
+  # The chart width is another definition input. Keeping it explicit makes the
+  # PNG and Vega-Lite projections reproduce the authored layout choice.
+  width:
+    definition: chart_width
+    default: 640
+
+  # `symbol_picker` is a marimo multiselect. Its frontend value is an array of
+  # selected option strings, which is also the JSON shape used in each scenario.
+  symbols:
+    ui: symbol_picker
+    default: [AAPL, MSFT]
+
+# `scenarios` is the finite publication matrix. Each item has a durable public
+# `id` and an `inputs` object keyed by the public names declared above.
+#
+# Defaults are resolved before execution. The three scenarios therefore become:
+#
+# - `baseline`: lookback 5, width 640, symbols AAPL and MSFT
+# - `semiconductors`: lookback 5, width 640, symbols MSFT and NVDA
+# - `compact`: lookback 3, width 480, symbols AAPL and NVDA
+#
+# Each resolved input object must be unique. Scenario ids label lookup results
+# while computation reuse follows marimo's cache identity for the affected cells.
+scenarios:
+  # An empty object selects every declared default.
+  - id: baseline
+    inputs: {}
+
+  # This scenario changes one UI input. Cells that do not depend on the symbol
+  # picker can reuse their existing marimo cache entries.
+  - id: semiconductors
+    inputs:
+      symbols: [MSFT, NVDA]
+
+  # This scenario changes two definition inputs and the UI input together.
+  - id: compact
+    inputs:
+      lookback: 3
+      width: 480
+      symbols: [AAPL, NVDA]
+
+# `outputs` names the data contracts available to consumers. Each output selects
+# one notebook result through `source` and projects it through one or more named
+# `formats`.
+#
+# Source selectors have two forms:
+#
+# - A string such as `summary` selects a Python definition.
+# - `{expression: ...}` evaluates one trusted Python expression in notebook scope.
+#
+# `formats` is always a mapping. Its key is the frontend-facing format name. An
+# empty object selects the built-in exporter with the same name. `exporter`
+# chooses a built-in explicitly, a versioned `module:object` callable, or a
+# callable definition from the notebook. `options` is passed to that exporter
+# and participates in the projection's marimo cache identity.
+#
+# A custom exporter receives the selected Python object plus the declared
+# options and returns `marimo_export.Projection`. Importable callables declare a
+# version. Notebook definitions can also declare a version when authors need an
+# explicit revision beyond the function code tracked by marimo.
+outputs:
+  # `summary` is a small JSON contract for cards, page metadata, and agent reads.
+  # The source string selects the `summary` Python definition.
+  summary:
+    source: summary
+    formats:
+      # The explicit exporter form binds a public format name to an exporter when
+      # those names differ. Here it also shows where exporter options belong.
+      json:
+        exporter: json
+        options:
+          # Pretty printing changes the bytes and therefore the payload digest.
+          indent: 2
+          # Stable key ordering keeps equivalent dictionaries byte-identical.
+          sort_keys: true
+
+  # `headline` demonstrates an expression source. The expression reads the
+  # scenario-specific summary and returns one concise UTF-8 string.
+  headline:
+    source:
+      expression: 'f"{'', ''.join(summary[''symbols''])}: {summary[''rows'']} price rows"'
+    formats:
+      text: {}
+
+  # `visible_rows` is the notebook's ordinary list of row dictionaries. Both
+  # projections read that object and expose different frontend storage formats.
+  market_table:
+    source: visible_rows
+    formats:
+      # Arrow IPC provides in-memory columnar interchange. The frontend loader
+      # downloads and verifies the complete payload before Flechette decodes it.
+      arrow: {}
+
+      # Parquet carries a compact analytical file representation. Snappy is
+      # handled by PyArrow during export and by the frontend loader during read.
+      # The selected codec is also recorded in projection metadata.
+      parquet:
+        options:
+          compression: snappy
+
+  # `chart` publishes the same Altair object as a Vega-Lite JSON specification
+  # and as a rendered PNG. A frontend can choose the interactive or raster form.
+  chart:
+    source: price_chart
+    formats:
+      vegalite: {}
+      png:
+        options:
+          # Renderer scale multiplies the PNG pixel density.
+          scale: 2
+
+  # `market_note` selects the `market_note` marimo HTML definition. The HTML
+  # exporter uses marimo's canonical conversion before storing the UTF-8 payload.
+  market_note:
+    source: market_note
+    formats:
+      html: {}

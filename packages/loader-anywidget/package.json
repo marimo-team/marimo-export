@@ -1,37 +1,38 @@
 {
-  "name": "@marimo-team/export-loader-anywidget",
+  "name": "@marimo-team/marimo-export-anywidget",
   "version": "0.0.0",
-  "description": "AnyWidget loader and standalone hydration runtime for marimo export bundles.",
+  "description": "Pythonless AnyWidget loader for marimo exports.",
+  "license": "Apache-2.0",
   "files": [
-    "dist"
+    "dist",
+    "README.md"
   ],
   "type": "module",
   "sideEffects": false,
-  "imports": {
-    "#anywidget/*": {
-      "types": "./dist/*.d.ts",
-      "import": "./dist/*.js"
-    }
-  },
   "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
-    },
-    "./runtime": {
-      "types": "./dist/runtime/export-runtime.d.ts",
-      "import": "./dist/runtime/export-runtime.js"
-    },
+    ".": "./src/index.ts",
     "./package.json": "./package.json"
   },
+  "publishConfig": {
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js"
+      },
+      "./package.json": "./package.json"
+    },
+    "access": "public"
+  },
   "scripts": {
-    "build": "rm -rf dist && tsc -p tsconfig.build.json",
-    "prepack": "pnpm build",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
-    "lint": "oxlint .",
-    "format": "oxfmt --write ."
+    "prepack": "vp run -t build",
+    "test": "vp test"
   },
   "dependencies": {
-    "@marimo-team/export-reader": "workspace:*"
+    "@anywidget/types": "catalog:",
+    "@marimo-team/marimo-export": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "catalog:",
+    "vite-plus": "catalog:"
   }
 }
