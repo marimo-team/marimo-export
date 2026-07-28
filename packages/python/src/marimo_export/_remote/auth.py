@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+import ipaddress
 from dataclasses import dataclass, field
-from urllib.parse import parse_qsl, urlsplit, urlunsplit
+from urllib.parse import urlsplit, urlunsplit
 
 
 @dataclass(frozen=True)
@@ -17,7 +18,7 @@ def parse_server_address(
     *,
     access_token: str | None = None,
 ) -> ServerAddress:
-    """Parse a marimo URL and remove its ``access_token`` query value."""
+    """Parse a marimo URL and keep credentials in dedicated arguments."""
 
     if not isinstance(server, str) or not server:
         raise ValueError("server must be a non-empty HTTP or HTTPS URL.")
@@ -32,15 +33,6 @@ def parse_server_address(
 
     try:
         parsed = urlsplit(server)
-        query = (
-            parse_qsl(
-                parsed.query,
-                keep_blank_values=True,
-                strict_parsing=True,
-            )
-            if parsed.query
-            else []
-        )
         port = parsed.port
     except ValueError as error:
         raise ValueError("server must be a valid HTTP or HTTPS URL.") from error
@@ -53,20 +45,12 @@ def parse_server_address(
         raise ValueError("server must not contain user information.")
     if parsed.fragment:
         raise ValueError("server must not contain a fragment.")
+    if parsed.query:
+        raise ValueError("server must not contain a query string.")
     if port is not None and not 1 <= port <= 65535:
         raise ValueError("server port must be between 1 and 65535.")
-
-    url_token: str | None = None
-    for name, value in query:
-        if name != "access_token":
-            raise ValueError("server query must contain only one access_token value.")
-        if url_token is not None or not value:
-            raise ValueError("server query must contain only one non-empty access_token value.")
-        url_token = value
-        _validate_credential(url_token, "access_token")
-
-    if url_token is not None and access_token is not None and url_token != access_token:
-        raise ValueError("server URL and access_token argument contain different credentials.")
+    if parsed.scheme.lower() == "http" and not _loopback(parsed.hostname):
+        raise ValueError("plain HTTP servers must use a loopback host.")
 
     path = parsed.path or "/"
     if not path.endswith("/"):
@@ -82,7 +66,7 @@ def parse_server_address(
     )
     return ServerAddress(
         base_url=base_url,
-        access_token=access_token if access_token is not None else url_token,
+        access_token=access_token,
     )
 
 
@@ -110,3 +94,12 @@ def _validate_credential(value: str, label: str) -> None:
         ord(character) < 32 or ord(character) == 127 or ord(character) > 255 for character in value
     ):
         raise ValueError(f"{label} must contain HTTP header-compatible characters.")
+
+
+def _loopback(hostname: str) -> bool:
+    if hostname.lower() == "localhost":
+        return True
+    try:
+        return ipaddress.ip_address(hostname).is_loopback
+    except ValueError:
+        return False

@@ -7,17 +7,18 @@ import time
 from collections.abc import Callable, Iterable
 from contextlib import suppress
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Protocol, cast
+from typing import Any, Protocol, cast
 from urllib.parse import urlsplit
 from uuid import uuid4
 
 from marimo_export._json import JsonObject
-from marimo_export._portable import validate_asset_key
+from marimo_export._marimo.compat import (
+    NativeReceipt,
+    new_transfer_virtual_file,
+    transfer_runtime_context,
+)
 from marimo_export.errors import TransferError
-
-if TYPE_CHECKING:
-    from marimo_export._marimo.cache import CacheAssetReceipt
-
+from marimo_export.publication import OutputCodec, ScalarDescriptor
 
 _DEFAULT_TTL_SECONDS = 5 * 60.0
 _MAX_TTL_SECONDS = 30 * 60.0
@@ -25,7 +26,6 @@ _CLEANUP_RETRY_SECONDS = 1.0
 _MAX_ASSETS_PER_TICKET = 4096
 _MAX_VIRTUAL_FILE_URL_LENGTH = 2048
 _TICKET_ID = re.compile(r"[0-9a-f]{32}")
-_SHA256 = re.compile(r"[0-9a-f]{64}")
 
 
 class _VirtualFile(Protocol):
@@ -49,16 +49,16 @@ class _RuntimeContext(Protocol):
 
 @dataclass(frozen=True, slots=True)
 class TransferAsset:
-    """One temporary download URL for an exact marimo cache asset."""
+    """One temporary URL for one content-addressed publication asset."""
 
-    key: str
+    codec: OutputCodec
     sha256: str
     size: int
     url: str
 
     def wire(self) -> JsonObject:
         return {
-            "key": self.key,
+            "codec": self.codec,
             "sha256": self.sha256,
             "size": self.size,
             "url": self.url,
@@ -95,23 +95,15 @@ _SCHEDULER_TOKEN: object | None = None
 
 
 def create_ticket(
-    receipts: Iterable[CacheAssetReceipt],
+    receipts: Iterable[NativeReceipt],
     *,
     ttl_seconds: float = _DEFAULT_TTL_SECONDS,
 ) -> TransferTicket:
-    """Register exact cache envelopes as temporary virtual files.
-
-    Repeated references to the same cache key share one virtual file. A cache
-    key repeated with different bytes or integrity fields is rejected before
-    any resource is registered.
-    """
+    """Register each unique non-scalar payload as a temporary virtual file."""
 
     ttl = _validate_ttl(ttl_seconds)
-    unique = _validate_receipts(receipts)
-    if not unique:
-        raise TransferError("a transfer ticket requires at least one cache asset")
-
-    context = _runtime_context()
+    unique = _payloads(receipts)
+    context = cast(_RuntimeContext, transfer_runtime_context())
     if not context.virtual_files_supported:
         raise TransferError("the attached marimo runtime cannot serve virtual files")
     registry = context.virtual_file_registry
@@ -122,27 +114,24 @@ def create_ticket(
         assets: list[TransferAsset] = []
         ticket_id: str | None = None
         try:
-            for receipt in unique:
+            for codec, digest, payload in unique:
                 virtual_file = _register(
                     registry,
                     context,
-                    receipt.envelope,
+                    payload,
                     owned_files=files,
                 )
-                asset = receipt.asset
                 assets.append(
                     TransferAsset(
-                        key=asset.key,
-                        sha256=asset.sha256,
-                        size=asset.size,
+                        codec=codec,
+                        sha256=digest,
+                        size=len(payload),
                         url=virtual_file.url,
                     )
                 )
 
             ticket_id = _allocate_ticket_id_locked()
             deadline = _monotonic() + ttl
-            expires_at_ms = int((_wall_time() + ttl) * 1000)
-            asset_tuple = tuple(assets)
             _TICKETS[ticket_id] = _Lease(
                 registry=registry,
                 files=files,
@@ -151,8 +140,8 @@ def create_ticket(
             _schedule_locked()
             return TransferTicket(
                 id=ticket_id,
-                expires_at_ms=expires_at_ms,
-                assets=asset_tuple,
+                expires_at_ms=int((_wall_time() + ttl) * 1000),
+                assets=tuple(assets),
             )
         except Exception as error:
             if ticket_id is not None:
@@ -161,12 +150,9 @@ def create_ticket(
             if _TICKETS:
                 with suppress(Exception):
                     _schedule_locked()
-            message = "failed to register cache assets"
-            if cleanup_errors:
-                message += f"; cleanup also failed for {len(cleanup_errors)} resource(s)"
             if isinstance(error, TransferError) and not cleanup_errors:
                 raise
-            raise TransferError(message) from error
+            raise TransferError("failed to register publication assets") from error
 
 
 def release(ticket_id: str) -> bool:
@@ -193,12 +179,45 @@ def release(ticket_id: str) -> bool:
 
 
 def sweep_expired() -> int:
-    """Release expired tickets and return the number fully removed."""
+    """Release expired tickets and return the count fully removed."""
 
     with _LOCK:
         removed = _sweep_expired_locked(_monotonic())
         _schedule_locked()
         return removed
+
+
+def _payloads(
+    receipts: Iterable[NativeReceipt],
+) -> tuple[tuple[OutputCodec, str, bytes], ...]:
+    try:
+        materialized = tuple(receipts)
+    except TypeError as error:
+        raise TypeError("receipts must be iterable") from error
+    if len(materialized) > _MAX_ASSETS_PER_TICKET:
+        raise TransferError(
+            f"a transfer ticket may contain at most {_MAX_ASSETS_PER_TICKET} receipts"
+        )
+    unique: dict[tuple[OutputCodec, str], bytes] = {}
+    for receipt in materialized:
+        if not isinstance(receipt, NativeReceipt):
+            raise TypeError("receipts must contain NativeReceipt values")
+        if isinstance(receipt.descriptor, ScalarDescriptor):
+            if receipt.payload is not None:
+                raise TransferError("a scalar receipt cannot carry transfer bytes")
+            continue
+        payload = receipt.payload
+        if not isinstance(payload, bytes) or not payload:
+            raise TransferError("an asset receipt must carry nonempty bytes")
+        identity = (receipt.descriptor.codec, receipt.descriptor.asset.sha256)
+        if len(payload) != receipt.descriptor.asset.size:
+            raise TransferError("an asset receipt size disagrees with its descriptor")
+        if hashlib.sha256(payload).hexdigest() != identity[1]:
+            raise TransferError("an asset receipt digest disagrees with its descriptor")
+        previous = unique.setdefault(identity, payload)
+        if previous != payload:
+            raise TransferError(f"asset identity {identity!r} has conflicting bytes")
+    return tuple((codec, digest, payload) for (codec, digest), payload in sorted(unique.items()))
 
 
 def _validate_ttl(value: float) -> float:
@@ -210,81 +229,20 @@ def _validate_ttl(value: float) -> float:
     return ttl
 
 
-def _validate_receipts(
-    receipts: Iterable[CacheAssetReceipt],
-) -> tuple[CacheAssetReceipt, ...]:
-    try:
-        materialized = tuple(receipts)
-    except TypeError as error:
-        raise TypeError("receipts must be iterable") from error
-    if len(materialized) > _MAX_ASSETS_PER_TICKET:
-        raise TransferError(
-            f"a transfer ticket may contain at most {_MAX_ASSETS_PER_TICKET} cache assets"
-        )
-
-    unique: dict[str, CacheAssetReceipt] = {}
-    for index, receipt in enumerate(materialized):
-        try:
-            asset = receipt.asset
-            envelope = receipt.envelope
-        except AttributeError as error:
-            raise TypeError(f"receipt {index} is not a cache asset receipt") from error
-        _validate_asset(asset.key, asset.sha256, asset.size, envelope, index)
-        previous = unique.get(asset.key)
-        if previous is None:
-            unique[asset.key] = receipt
-            continue
-        if (
-            previous.asset.sha256 != asset.sha256
-            or previous.asset.size != asset.size
-            or previous.envelope != envelope
-        ):
-            raise TransferError(f"cache asset key {asset.key!r} has conflicting transfer receipts")
-    return tuple(unique.values())
-
-
-def _validate_asset(
-    key: object,
-    digest: object,
-    size: object,
-    envelope: object,
-    index: int,
-) -> None:
-    label = f"receipt {index}"
-    try:
-        validate_asset_key(key, f"{label} cache asset key")
-    except (TypeError, ValueError) as error:
-        raise TransferError(f"{label} has an invalid .bin cache asset key") from error
-    if not isinstance(digest, str) or _SHA256.fullmatch(digest) is None:
-        raise TransferError(f"{label} has an invalid SHA-256 digest")
-    if isinstance(size, bool) or not isinstance(size, int) or size <= 0:
-        raise TransferError(f"{label} has an invalid cache asset size")
-    if not isinstance(envelope, bytes) or not envelope:
-        raise TransferError(f"{label} has an empty or invalid .bin envelope")
-    if len(envelope) != size:
-        raise TransferError(f"{label} envelope size {len(envelope)} does not match {size}")
-    actual = hashlib.sha256(envelope).hexdigest()
-    if actual != digest:
-        raise TransferError(f"{label} envelope failed SHA-256 verification")
-
-
 def _register(
     registry: _VirtualFileRegistry,
     context: _RuntimeContext,
-    envelope: bytes,
+    payload: bytes,
     *,
     owned_files: list[_VirtualFile],
 ) -> _VirtualFile:
     for _ in range(100):
-        virtual_file = _new_virtual_file(envelope)
+        virtual_file = cast(_VirtualFile, new_transfer_virtual_file(payload))
         if not registry.has(virtual_file.filename):
             break
     else:
         raise TransferError("failed to allocate a unique virtual file name")
-
-    _validate_virtual_file(virtual_file, envelope)
-    # Track ownership before calling the storage adapter. Some adapters can
-    # raise after allocating the resource.
+    _validate_virtual_file(virtual_file, payload)
     owned_files.append(virtual_file)
     registry.add(virtual_file, context)
     if not registry.has(virtual_file.filename):
@@ -292,10 +250,10 @@ def _register(
     return virtual_file
 
 
-def _validate_virtual_file(virtual_file: _VirtualFile, envelope: bytes) -> None:
+def _validate_virtual_file(virtual_file: _VirtualFile, payload: bytes) -> None:
     filename = virtual_file.filename
     url = virtual_file.url
-    if not isinstance(virtual_file.buffer, bytes) or virtual_file.buffer != envelope:
+    if virtual_file.buffer != payload:
         raise TransferError("marimo changed the transfer virtual-file bytes")
     if (
         not isinstance(filename, str)
@@ -305,19 +263,16 @@ def _validate_virtual_file(virtual_file: _VirtualFile, envelope: bytes) -> None:
         or any(character in filename for character in ("/", "\\", "\x00"))
     ):
         raise TransferError("marimo produced an invalid transfer filename")
-    if not isinstance(url, str) or not url:
+    if not isinstance(url, str) or not url or len(url) > _MAX_VIRTUAL_FILE_URL_LENGTH:
         raise TransferError("marimo produced an invalid transfer URL")
-    if len(url) > _MAX_VIRTUAL_FILE_URL_LENGTH:
-        raise TransferError("marimo produced an overlong transfer URL")
     parsed = urlsplit(url)
-    expected_prefix = f"./@file/{len(envelope)}-"
+    prefix = f"./@file/{len(payload)}-"
     if (
         parsed.scheme
         or parsed.netloc
         or parsed.query
         or parsed.fragment
-        or not parsed.path.startswith(expected_prefix)
-        or parsed.path != f"{expected_prefix}{filename}"
+        or parsed.path != f"{prefix}{filename}"
     ):
         raise TransferError("marimo virtual-file transfer requires a relative @file URL")
 
@@ -361,7 +316,6 @@ def _schedule_locked() -> None:
         _SCHEDULER_TIMER = None
         _SCHEDULER_TOKEN = None
         return
-
     token = object()
     deadline = min(lease.deadline for lease in _TICKETS.values())
     timer = _make_timer(max(0.0, deadline - _monotonic()), _run_scheduler, token)
@@ -383,35 +337,10 @@ def _run_scheduler(token: object) -> None:
         _schedule_locked()
 
 
-def _runtime_context() -> _RuntimeContext:
-    try:
-        from marimo._runtime.context import get_context
-
-        context = get_context()
-    except Exception as error:
-        raise TransferError(
-            "virtual-file transfer requires an active marimo runtime context"
-        ) from error
-    return cast(_RuntimeContext, context)
-
-
-def _new_virtual_file(envelope: bytes) -> _VirtualFile:
-    from marimo._runtime.virtual_file import VirtualFile, random_filename
-
-    return VirtualFile(filename=random_filename("bin"), buffer=envelope)
-
-
-def _new_ticket_id() -> str:
-    ticket_id = uuid4().hex
-    if _TICKET_ID.fullmatch(ticket_id) is None:
-        raise RuntimeError("failed to create a bounded transfer ticket identifier")
-    return ticket_id
-
-
 def _allocate_ticket_id_locked() -> str:
     for _ in range(100):
-        ticket_id = _new_ticket_id()
-        if ticket_id not in _TICKETS:
+        ticket_id = uuid4().hex
+        if ticket_id not in _TICKETS and _TICKET_ID.fullmatch(ticket_id):
             return ticket_id
     raise TransferError("failed to allocate a unique transfer ticket identifier")
 

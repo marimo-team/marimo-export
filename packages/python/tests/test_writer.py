@@ -129,13 +129,25 @@ def test_writer_rejects_missing_extra_and_mismatched_assets(tmp_path: Path) -> N
     assert raised.value.code == "asset_conflict"
 
 
-def test_writer_rejects_an_unverified_replacement_target(tmp_path: Path) -> None:
+def test_writer_replaces_any_existing_real_directory(tmp_path: Path) -> None:
     index, assets = _publication()
     target = tmp_path / "publication"
     target.mkdir()
     (target / "unrelated.txt").write_text("user data", encoding="utf-8")
 
-    with pytest.raises(PublicationError):
-        write_publication(index, assets, target, replace=True)
+    result = write_publication(index, assets, target, replace=True)
 
-    assert (target / "unrelated.txt").read_text(encoding="utf-8") == "user data"
+    assert result.path == target.absolute()
+    assert not (target / "unrelated.txt").exists()
+    assert open_publication(target).verify().assets == 1
+
+
+def test_writer_preflight_requires_an_existing_parent(tmp_path: Path) -> None:
+    index, assets = _publication()
+    target = tmp_path / "missing" / "publication"
+
+    with pytest.raises(PublicationError) as raised:
+        write_publication(index, assets, target, replace=False)
+
+    assert raised.value.code == "destination_invalid"
+    assert not target.parent.exists()

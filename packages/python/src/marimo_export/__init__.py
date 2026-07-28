@@ -1,7 +1,7 @@
 """Publish finite marimo state matrices for Python-free clients."""
 
-from marimo._save.stubs import BlobAsset
-
+from marimo_export._build import build
+from marimo_export._marimo.compat import BlobAsset
 from marimo_export.client import Client, Session, capture
 from marimo_export.errors import (
     CodecError,
@@ -39,6 +39,7 @@ __all__ = [
     "SpecError",
     "StateUnavailableError",
     "TransportError",
+    "build",
     "capture",
     "open_publication",
 ]

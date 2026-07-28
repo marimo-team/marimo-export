@@ -336,6 +336,7 @@ class HttpKernelTransport:
                     )
                 if not chunk:
                     break
+                deadline = time.monotonic() + self._timeout
                 for event in parser.feed(chunk):
                     completed, success = _dispatch_event(
                         event,

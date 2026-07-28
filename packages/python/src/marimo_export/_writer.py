@@ -1,13 +1,17 @@
 from __future__ import annotations
 
+import ctypes
+import errno
 import os
 import shutil
+import stat
+import sys
 import tempfile
-import uuid
 from collections.abc import Mapping
 from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from marimo_export._json import sha256_bytes
 from marimo_export.errors import IntegrityError, PublicationError
@@ -46,8 +50,7 @@ def write_publication(
         raise TypeError("assets must be a mapping")
     if not isinstance(replace, bool):
         raise TypeError("replace must be a boolean")
-    target = _destination(destination)
-    _preflight_destination(target, replace=replace)
+    target = preflight_publication(destination, replace=replace)
     expected = {(codec, asset.sha256): asset for codec, asset in index.assets()}
     if set(assets) != set(expected):
         raise PublicationError(
@@ -64,7 +67,6 @@ def write_publication(
         )
 
     parent = target.parent
-    parent.mkdir(parents=True, exist_ok=True)
     staging = Path(
         tempfile.mkdtemp(
             prefix=f".{target.name}.staging-",
@@ -145,23 +147,59 @@ def write_publication(
 def _destination(value: str | os.PathLike[str]) -> Path:
     if not isinstance(value, (str, os.PathLike)):
         raise TypeError("destination must be a string or path-like object")
-    target = Path(value).absolute()
+    target = Path(value).expanduser().absolute()
     if target.name in {"", ".", ".."}:
         raise ValueError("destination must name a publication directory")
     return target
 
 
-def _preflight_destination(target: Path, *, replace: bool) -> None:
+def preflight_publication(
+    destination: str | os.PathLike[str],
+    *,
+    replace: bool,
+) -> Path:
+    """Validate a publication destination before notebook execution."""
+
+    if not isinstance(replace, bool):
+        raise TypeError("replace must be a boolean")
+    requested = _destination(destination)
+    parent = requested.parent
     try:
-        inspected = target.lstat()
+        parent_metadata = parent.lstat()
+    except OSError as error:
+        raise PublicationError(
+            f"destination parent could not be inspected: {parent}",
+            code="destination_invalid",
+        ) from error
+    if not stat.S_ISDIR(parent_metadata.st_mode):
+        raise PublicationError(
+            "destination parent must be a directory",
+            code="destination_invalid",
+        )
+    if not os.access(parent, os.W_OK | os.X_OK):
+        raise PublicationError(
+            "destination parent must be writable",
+            code="destination_invalid",
+        )
+    try:
+        target = parent.resolve(strict=True) / requested.name
+    except (OSError, RuntimeError) as error:
+        raise PublicationError(
+            f"destination parent could not be resolved: {parent}",
+            code="destination_invalid",
+        ) from error
+
+    try:
+        target_metadata = requested.lstat()
     except FileNotFoundError:
-        return
+        _require_atomic_rename()
+        return target
     except OSError as error:
         raise PublicationError(
             f"destination could not be inspected: {target}",
             code="destination_invalid",
         ) from error
-    if not target.is_dir() or target.is_symlink():
+    if not stat.S_ISDIR(target_metadata.st_mode) or stat.S_ISLNK(target_metadata.st_mode):
         raise PublicationError(
             "destination must be a real directory",
             code="destination_invalid",
@@ -171,8 +209,8 @@ def _preflight_destination(target: Path, *, replace: bool) -> None:
             f"destination already exists: {target}",
             code="destination_exists",
         )
-    del inspected
-    open_publication(target).verify()
+    _require_atomic_exchange()
+    return target
 
 
 def _write_file(path: Path, data: bytes) -> None:
@@ -192,23 +230,100 @@ def _write_file(path: Path, data: bytes) -> None:
 
 def _commit(staging: Path, target: Path, *, replace: bool) -> Path | None:
     if not replace:
-        if target.exists() or target.is_symlink():
+        try:
+            _rename_no_replace(staging, target)
+        except FileExistsError as error:
             raise PublicationError(
                 f"destination already exists: {target}",
                 code="destination_exists",
-            )
-        staging.rename(target)
+            ) from error
         return None
 
-    retired = target.with_name(f".{target.name}.retired-{uuid.uuid4().hex}")
-    target.rename(retired)
     try:
-        staging.rename(target)
-    except BaseException:
-        with suppress(OSError):
-            retired.rename(target)
-        raise
-    return retired
+        target_metadata = target.lstat()
+    except FileNotFoundError:
+        try:
+            _rename_no_replace(staging, target)
+        except FileExistsError:
+            return _commit(staging, target, replace=True)
+        return None
+    if not stat.S_ISDIR(target_metadata.st_mode) or stat.S_ISLNK(target_metadata.st_mode):
+        raise PublicationError(
+            "destination must be a real directory",
+            code="destination_invalid",
+        )
+    _rename_exchange(staging, target)
+    return staging
+
+
+def _require_atomic_rename() -> None:
+    if not _rename_available():
+        raise PublicationError(
+            "this platform has no atomic no-replace directory rename",
+            code="destination_invalid",
+        )
+
+
+def _require_atomic_exchange() -> None:
+    if not _exchange_available():
+        raise PublicationError(
+            "this platform has no atomic directory exchange",
+            code="destination_invalid",
+        )
+
+
+def _rename_available() -> bool:
+    return _rename_symbol() is not None
+
+
+def _exchange_available() -> bool:
+    return _rename_symbol() is not None
+
+
+def _rename_no_replace(source: Path, target: Path) -> None:
+    _rename_with_flag(source, target, 0x00000004 if sys.platform == "darwin" else 1)
+
+
+def _rename_exchange(source: Path, target: Path) -> None:
+    _rename_with_flag(source, target, 2)
+
+
+def _rename_symbol() -> tuple[Any, int] | None:
+    library = ctypes.CDLL(None, use_errno=True)
+    if sys.platform == "darwin":
+        function = getattr(library, "renameatx_np", None)
+        return None if function is None else (function, -2)
+    if sys.platform.startswith("linux"):
+        function = getattr(library, "renameat2", None)
+        return None if function is None else (function, -100)
+    return None
+
+
+def _rename_with_flag(source: Path, target: Path, flag: int) -> None:
+    symbol = _rename_symbol()
+    if symbol is None:
+        raise OSError(errno.ENOSYS, "atomic directory rename is unavailable")
+    function, at_fdcwd = symbol
+    function.argtypes = [
+        ctypes.c_int,
+        ctypes.c_char_p,
+        ctypes.c_int,
+        ctypes.c_char_p,
+        ctypes.c_uint,
+    ]
+    function.restype = ctypes.c_int
+    result = function(
+        at_fdcwd,
+        os.fsencode(source),
+        at_fdcwd,
+        os.fsencode(target),
+        flag,
+    )
+    if result != 0:
+        error_number = ctypes.get_errno()
+        if error_number in {errno.EEXIST, errno.ENOTEMPTY}:
+            raise FileExistsError(error_number, os.strerror(error_number), target)
+        raise OSError(error_number, os.strerror(error_number), target)
 
 
 def _sync_directory(path: Path) -> None:
@@ -224,4 +339,4 @@ def _sync_directory(path: Path) -> None:
         os.close(descriptor)
 
 
-__all__ = ["WriteResult", "write_publication"]
+__all__ = ["WriteResult", "preflight_publication", "write_publication"]

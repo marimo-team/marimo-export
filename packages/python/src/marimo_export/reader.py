@@ -9,10 +9,9 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import cast
 
-from marimo._save.stubs import BlobAsset
-
 from marimo_export._blob_asset import BlobAssetEnvelope, decode_blob_asset
 from marimo_export._json import JsonObject, JsonValue, canonical_bytes
+from marimo_export._marimo.compat import BlobAsset
 from marimo_export._secure_io import (
     SecureReadError,
     read_publication_asset,
@@ -300,12 +299,12 @@ def open_publication(path: StrPath) -> Publication:
 def _publication_root(path: StrPath) -> Path:
     if not isinstance(path, (str, os.PathLike)):
         raise TypeError("publication path must be a string or path-like object")
-    root = Path(path).absolute()
+    requested = Path(path).expanduser().absolute()
     try:
-        inspected = root.lstat()
+        inspected = requested.lstat()
     except OSError as error:
         raise PublicationError(
-            f"publication directory is unavailable: {root}",
+            f"publication directory is unavailable: {requested}",
             code="publication_invalid",
         ) from error
     if stat.S_ISLNK(inspected.st_mode) or not stat.S_ISDIR(inspected.st_mode):
@@ -313,7 +312,13 @@ def _publication_root(path: StrPath) -> Path:
             "publication root must be a real directory",
             code="publication_invalid",
         )
-    return root
+    try:
+        return requested.resolve(strict=True)
+    except (OSError, RuntimeError) as error:
+        raise PublicationError(
+            f"publication directory is unavailable: {requested}",
+            code="publication_invalid",
+        ) from error
 
 
 def _complete_inputs(

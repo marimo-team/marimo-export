@@ -92,7 +92,8 @@ def test_session_discovery_is_validated_and_deterministic() -> None:
         )
     )
     transport = HttpKernelTransport(
-        "https://marimo.test/root/?access_token=secret",
+        "https://marimo.test/root/",
+        access_token="secret",
         _opener=opener,
     )
 
@@ -122,7 +123,8 @@ def test_invoke_posts_correlated_bridge_request_once() -> None:
 
     opener = Opener(respond)
     transport = HttpKernelTransport(
-        "https://marimo.test/?access_token=auth-secret",
+        "https://marimo.test/",
+        access_token="auth-secret",
         server_token="server-secret",
         _opener=opener,
     )
@@ -203,7 +205,8 @@ def test_invoke_surfaces_structured_bridge_error_and_redacts_tokens() -> None:
         return scratchpad_response(marker, envelope)
 
     transport = HttpKernelTransport(
-        "https://marimo.test/?access_token=auth",
+        "https://marimo.test/",
+        access_token="auth",
         server_token="auth-secret",
         _opener=Opener(respond),
     )
@@ -240,7 +243,8 @@ def test_failed_scratchpad_preserves_bounded_redacted_stderr() -> None:
         return Response(body.encode())
 
     transport = HttpKernelTransport(
-        "https://marimo.test/?access_token=auth-secret",
+        "https://marimo.test/",
+        access_token="auth-secret",
         _opener=Opener(respond),
     )
 
@@ -273,7 +277,8 @@ def test_bridge_error_diagnostics_are_bounded_ascii_and_credential_safe() -> Non
         return scratchpad_response(marker, envelope)
 
     transport = HttpKernelTransport(
-        "https://marimo.test/?access_token=url-secret",
+        "https://marimo.test/",
+        access_token="url-secret",
         server_token="detail-secret",
         _opener=Opener(respond),
     )
@@ -360,7 +365,8 @@ def test_execute_timeout_is_translated_without_exposing_credentials() -> None:
         raise TimeoutError("secret-token")
 
     transport = HttpKernelTransport(
-        "https://marimo.test/?access_token=secret-token",
+        "https://marimo.test/",
+        access_token="secret-token",
         _opener=Opener(timeout),
     )
 

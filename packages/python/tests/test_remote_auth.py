@@ -4,8 +4,11 @@ import pytest
 from marimo_export._remote.auth import auth_headers, parse_server_address
 
 
-def test_server_url_extracts_and_redacts_access_token() -> None:
-    address = parse_server_address("http://localhost:3456/workspace?access_token=top%20secret")
+def test_server_url_keeps_explicit_access_token_out_of_the_address() -> None:
+    address = parse_server_address(
+        "http://localhost:3456/workspace",
+        access_token="top secret",
+    )
 
     assert address.base_url == "http://localhost:3456/workspace/"
     assert address.access_token == "top secret"
@@ -30,6 +33,7 @@ def test_authentication_and_skew_tokens_keep_distinct_headers() -> None:
     "server",
     [
         "ftp://marimo.test/",
+        "http://marimo.test/",
         "https://user:secret@marimo.test/",
         "https://marimo.test/?other=value",
         "https://marimo.test/?access_token=",
@@ -44,12 +48,9 @@ def test_server_url_rejects_ambiguous_or_unsafe_routing(server: str) -> None:
         parse_server_address(server)
 
 
-def test_server_url_rejects_conflicting_token_sources() -> None:
-    with pytest.raises(ValueError, match="different credentials"):
-        parse_server_address(
-            "https://marimo.test/?access_token=from-url",
-            access_token="from-argument",
-        )
+def test_server_url_rejects_credentials_in_query_strings() -> None:
+    with pytest.raises(ValueError, match="query"):
+        parse_server_address("https://marimo.test/?access_token=from-url")
 
 
 def test_auth_headers_reject_unsafe_header_characters() -> None:
