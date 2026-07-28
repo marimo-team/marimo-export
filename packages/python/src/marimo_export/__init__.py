@@ -1,66 +1,43 @@
-"""Capture and read portable results from running marimo notebooks."""
+"""Publish finite marimo state matrices for Python-free clients."""
 
-from marimo_export._json import JsonObject, JsonValue
-from marimo_export.client import (
-    BuiltinExporterDescription,
-    CacheSummary,
-    CaptureResult,
-    CellDescription,
-    Client,
-    ControlDescription,
-    GlobalDescription,
-    Session,
-    SessionDescription,
-    capture,
-)
+from marimo._save.stubs import BlobAsset
+
+from marimo_export.client import Client, Session, capture
 from marimo_export.errors import (
-    CaptureError,
+    CodecError,
+    CompatibilityError,
+    ExecutionError,
     IntegrityError,
     MarimoExportError,
+    OutputError,
     PublicationError,
     SessionError,
     SpecError,
+    StateUnavailableError,
     TransportError,
 )
-from marimo_export.projection import Projection
-from marimo_export.reader import (
-    NotebookProvenance,
-    ProducerProvenance,
-    Publication,
-    PublishedFormat,
-    PublishedOutput,
-    PublishedVariant,
-    open_publication,
-)
+from marimo_export.publication import PublicationResult
+from marimo_export.reader import Publication, open_publication
 from marimo_export.spec import ExportSpec, OutputSpec
 
 __all__ = [
-    "BuiltinExporterDescription",
-    "CacheSummary",
-    "CaptureError",
-    "CaptureResult",
-    "CellDescription",
+    "BlobAsset",
     "Client",
-    "ControlDescription",
+    "CodecError",
+    "CompatibilityError",
+    "ExecutionError",
     "ExportSpec",
-    "GlobalDescription",
     "IntegrityError",
-    "JsonObject",
-    "JsonValue",
     "MarimoExportError",
-    "NotebookProvenance",
+    "OutputError",
     "OutputSpec",
-    "ProducerProvenance",
-    "Projection",
     "Publication",
     "PublicationError",
-    "PublishedFormat",
-    "PublishedOutput",
-    "PublishedVariant",
+    "PublicationResult",
     "Session",
-    "SessionDescription",
     "SessionError",
     "SpecError",
+    "StateUnavailableError",
     "TransportError",
     "capture",
     "open_publication",

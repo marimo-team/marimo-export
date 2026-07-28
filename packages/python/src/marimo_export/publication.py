@@ -2,395 +2,79 @@ from __future__ import annotations
 
 import math
 import re
-from collections.abc import Iterator, Mapping
+from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from types import MappingProxyType
-from typing import Annotated, Literal, cast
+from typing import Literal, TypeAlias, cast
 
-from pydantic import (
-    BaseModel,
-    BeforeValidator,
-    ConfigDict,
-    Field,
-    StringConstraints,
-    ValidationError,
-)
-from pydantic.json_schema import GenerateJsonSchema
-from typing_extensions import TypeAliasType
-
-from marimo_export._format import (
-    FORMAT_ID_SCHEMA_PATTERN,
-    MAX_FORMAT_ID_ASCII_BYTES,
-    MAX_MEDIA_TYPE_ASCII_BYTES,
-    MEDIA_TYPE_SCHEMA_PATTERN,
-    validate_format_id,
-    validate_media_type,
-)
+from marimo_export._format import MAX_FORMAT_METADATA_JSON_BYTES, validate_media_type
 from marimo_export._json import (
     JsonObject,
     JsonValue,
     canonical_bytes,
     decode_json_object,
-    json_equal,
     json_object,
     json_string,
+    portable_json_object,
+    sha256_bytes,
 )
-from marimo_export._portable import (
-    ASSET_KEY_SCHEMA_PATTERN,
-    MAX_ASSET_KEY_UTF8_BYTES,
-    NOTEBOOK_BASENAME_SCHEMA_PATTERN,
-    validate_asset_key,
-    validate_notebook_basename,
-)
+from marimo_export._portable import validate_portable_basename
 from marimo_export.errors import PublicationError
 
 PUBLICATION_SCHEMA = "marimo-export.publication.v1"
-ASSET_CODEC = "marimo.blob-asset.msgpack.v1"
+SCALAR_CODEC = "marimo.scalar.v1"
+NUMPY_CODEC = "numpy.npy.v1"
+ARROW_CODEC = "apache.arrow.file.v1"
+BLOB_ASSET_CODEC = "marimo.blob-asset.msgpack.v1"
+SCALAR_MEDIA_TYPE = "application/vnd.marimo.scalar.v1+json"
+NUMPY_MEDIA_TYPE = "application/x-npy"
+ARROW_MEDIA_TYPE = "application/vnd.apache.arrow.file"
 
-_SHA256 = re.compile(r"[0-9a-f]{64}")
+OutputCodec: TypeAlias = Literal[
+    "marimo.scalar.v1",
+    "numpy.npy.v1",
+    "apache.arrow.file.v1",
+    "marimo.blob-asset.msgpack.v1",
+]
+ScalarValue: TypeAlias = None | bool | str | int | float
+ScalarWireValue: TypeAlias = JsonValue
+
+_CODECS = frozenset({SCALAR_CODEC, NUMPY_CODEC, ARROW_CODEC, BLOB_ASSET_CODEC})
+_ASSET_EXTENSIONS: dict[str, str] = {
+    NUMPY_CODEC: "npy",
+    ARROW_CODEC: "arrow",
+    BLOB_ASSET_CODEC: "bin",
+}
+_MAX_ASSET_SIZE = 2_147_483_647
+_MAX_INDEX_BYTES = 16 * 1024 * 1024
+_MAX_INDEX_VALUES = 2_000_000
+_MAX_NAME_BYTES = 255
+_MAX_PROVENANCE_BYTES = 2_048
 _MAX_SAFE_INTEGER = 2**53 - 1
-_PYTHON_WHITESPACE = (
-    r"\u0009-\u000d\u001c-\u0020\u0085\u00a0\u1680"
-    r"\u2000-\u200a\u2028\u2029\u202f\u205f\u3000"
-)
-_UNICODE_SCALAR_LOOKAHEAD = r"(?![\s\S]*[\uD800-\uDFFF])"
-_TRUE_END = r"(?![\s\S])"
-_UNICODE_STRING_SCHEMA = rf"^{_UNICODE_SCALAR_LOOKAHEAD}[\s\S]*{_TRUE_END}"
-_PUBLIC_NAME_SCHEMA = (
-    rf"^{_UNICODE_SCALAR_LOOKAHEAD}(?![\s\S]*[\u0000-\u001f\u007f])"
-    rf"(?![{_PYTHON_WHITESPACE}])"
-    rf"(?![\s\S]*[{_PYTHON_WHITESPACE}]{_TRUE_END})[\s\S]+{_TRUE_END}"
-)
-_SHA256_SCHEMA = rf"^[0-9a-f]{{64}}{_TRUE_END}"
-
-
-def _wire_unicode_string(value: object) -> object:
-    if not isinstance(value, str):
-        return value
-    return json_string(value, "value")
-
-
-def _wire_public_name(value: object) -> object:
-    if not isinstance(value, str):
-        return value
-    return _name(value, "value")
-
-
-def _wire_provenance_filename(value: object) -> object:
-    if not isinstance(value, str):
-        return value
-    return validate_notebook_basename(value, "value")
-
-
-def _wire_asset_key(value: object) -> object:
-    if not isinstance(value, str):
-        return value
-    return validate_asset_key(value, "value")
-
-
-def _wire_digest(value: object) -> object:
-    if not isinstance(value, str):
-        return value
-    return _digest(value, "value")
-
-
-def _wire_format_id(value: object) -> object:
-    if not isinstance(value, str):
-        return value
-    return validate_format_id(value, "value")
-
-
-def _wire_media_type(value: object) -> object:
-    if not isinstance(value, str):
-        return value
-    return validate_media_type(value, "value")
-
-
-def _normalize_positive_integer(value: object) -> object:
-    if isinstance(value, float) and math.isfinite(value) and value.is_integer():
-        return int(value)
-    return value
-
-
-_UnicodeStringWire = TypeAliasType(
-    "_UnicodeStringWire",
-    Annotated[
-        str,
-        StringConstraints(strict=True, pattern=_UNICODE_STRING_SCHEMA),
-        BeforeValidator(_wire_unicode_string),
-    ],
-)
-_PublicNameWire = TypeAliasType(
-    "_PublicNameWire",
-    Annotated[
-        str,
-        StringConstraints(strict=True, pattern=_PUBLIC_NAME_SCHEMA),
-        BeforeValidator(_wire_public_name),
-    ],
-)
-_ProvenanceFilenameWire = TypeAliasType(
-    "_ProvenanceFilenameWire",
-    Annotated[
-        str,
-        StringConstraints(strict=True, pattern=NOTEBOOK_BASENAME_SCHEMA_PATTERN),
-        BeforeValidator(_wire_provenance_filename),
-    ],
-)
-_AssetKeyWire = TypeAliasType(
-    "_AssetKeyWire",
-    Annotated[
-        str,
-        StringConstraints(
-            strict=True,
-            pattern=ASSET_KEY_SCHEMA_PATTERN,
-            max_length=MAX_ASSET_KEY_UTF8_BYTES,
-        ),
-        BeforeValidator(_wire_asset_key),
-    ],
-)
-_DigestWire = TypeAliasType(
-    "_DigestWire",
-    Annotated[
-        str,
-        StringConstraints(strict=True, pattern=_SHA256_SCHEMA),
-        BeforeValidator(_wire_digest),
-    ],
-)
-_FormatIdWire = TypeAliasType(
-    "_FormatIdWire",
-    Annotated[
-        str,
-        StringConstraints(
-            strict=True,
-            pattern=FORMAT_ID_SCHEMA_PATTERN,
-            max_length=MAX_FORMAT_ID_ASCII_BYTES,
-        ),
-        BeforeValidator(_wire_format_id),
-    ],
-)
-_MediaTypeWire = TypeAliasType(
-    "_MediaTypeWire",
-    Annotated[
-        str,
-        StringConstraints(
-            strict=True,
-            pattern=MEDIA_TYPE_SCHEMA_PATTERN,
-            max_length=MAX_MEDIA_TYPE_ASCII_BYTES,
-        ),
-        BeforeValidator(_wire_media_type),
-    ],
-)
-_JsonWireInteger = Annotated[
-    int,
-    Field(strict=True, ge=-_MAX_SAFE_INTEGER, le=_MAX_SAFE_INTEGER),
-]
-_JsonWireFloat = Annotated[
-    float,
-    Field(
-        strict=True,
-        allow_inf_nan=False,
-        ge=-_MAX_SAFE_INTEGER,
-        le=_MAX_SAFE_INTEGER,
-    ),
-]
-_PositiveInteger = Annotated[
-    int,
-    Field(strict=True, ge=1, le=_MAX_SAFE_INTEGER),
-    BeforeValidator(_normalize_positive_integer),
-]
-_JsonWireValue = TypeAliasType(
-    "_JsonWireValue",
-    None
-    | bool
-    | _UnicodeStringWire
-    | _JsonWireInteger
-    | _JsonWireFloat
-    | list["_JsonWireValue"]
-    | dict[_UnicodeStringWire, "_JsonWireValue"],
-)
-
-
-class _WireModel(BaseModel):
-    model_config = ConfigDict(
-        extra="forbid",
-        frozen=True,
-        regex_engine="python-re",
-        strict=True,
-    )
-
-
-class _AssetWire(_WireModel):
-    model_config = ConfigDict(title="asset")
-
-    key: _AssetKeyWire
-    sha256: _DigestWire
-    size: _PositiveInteger
-
-
-class _FormatWire(_WireModel):
-    model_config = ConfigDict(title="format")
-
-    format_id: _FormatIdWire
-    media_type: _MediaTypeWire
-    metadata: dict[_UnicodeStringWire, _JsonWireValue]
-    asset: _AssetWire
-
-
-class _OutputWire(_WireModel):
-    model_config = ConfigDict(title="output")
-
-    formats: Annotated[dict[_PublicNameWire, _FormatWire], Field(min_length=1)]
-
-
-class _VariantWire(_WireModel):
-    model_config = ConfigDict(title="variant")
-
-    controls: dict[_PublicNameWire, _JsonWireValue]
-    outputs: Annotated[dict[_PublicNameWire, _OutputWire], Field(min_length=1)]
-
-
-class _NotebookWire(_WireModel):
-    model_config = ConfigDict(title="notebook")
-
-    filename: _ProvenanceFilenameWire
-    document_sha256: _DigestWire
-
-
-class _ProducerWire(_WireModel):
-    model_config = ConfigDict(title="producer")
-
-    marimo: _PublicNameWire
-    marimo_export: _PublicNameWire
-
-
-class _PublicationWire(_WireModel):
-    model_config = ConfigDict(
-        title="marimo-export publication index",
-        json_schema_extra={
-            "$schema": "https://json-schema.org/draft/2020-12/schema",
-            "$id": "https://marimo.io/schemas/marimo-export/publication.v1.json",
-        },
-    )
-
-    schema_: Literal["marimo-export.publication.v1"] = Field(alias="schema")
-    asset_codec: Literal["marimo.blob-asset.msgpack.v1"]
-    notebook: _NotebookWire
-    producer: _ProducerWire
-    variants: Annotated[dict[_PublicNameWire, _VariantWire], Field(min_length=1)]
-
-
-@dataclass(frozen=True, slots=True)
-class AssetRef:
-    key: str
-    sha256: str
-    size: int
-
-    def __post_init__(self) -> None:
-        validate_asset_key(self.key, "asset.key")
-        _digest(self.sha256, "asset.sha256")
-        _positive_integer(self.size, "asset.size")
-
-    def wire(self) -> JsonObject:
-        return {"key": self.key, "sha256": self.sha256, "size": self.size}
-
-
-@dataclass(frozen=True, slots=True, init=False)
-class FormatEntry:
-    format_id: str
-    media_type: str
-    _metadata_bytes: bytes = field(repr=False)
-    asset: AssetRef
-
-    def __init__(
-        self,
-        *,
-        format_id: str,
-        media_type: str,
-        metadata: Mapping[str, JsonValue],
-        asset: AssetRef,
-    ) -> None:
-        format_id = validate_format_id(format_id, "format.format_id")
-        media_type = validate_media_type(media_type, "format.media_type")
-        metadata_bytes = canonical_bytes(json_object(metadata, "format.metadata"))
-        if not isinstance(asset, AssetRef):
-            raise TypeError("format.asset must be an AssetRef")
-        object.__setattr__(self, "format_id", format_id)
-        object.__setattr__(self, "media_type", media_type)
-        object.__setattr__(self, "_metadata_bytes", metadata_bytes)
-        object.__setattr__(self, "asset", asset)
-
-    @property
-    def metadata(self) -> JsonObject:
-        return decode_json_object(self._metadata_bytes, "format.metadata")
-
-    def wire(self) -> JsonObject:
-        return {
-            "format_id": self.format_id,
-            "media_type": self.media_type,
-            "metadata": json_object(self.metadata, "format.metadata"),
-            "asset": self.asset.wire(),
-        }
-
-
-@dataclass(frozen=True, slots=True)
-class OutputEntry:
-    formats: Mapping[str, FormatEntry]
-
-    def __post_init__(self) -> None:
-        object.__setattr__(
-            self,
-            "formats",
-            MappingProxyType(_entry_mapping(self.formats, FormatEntry, "output.formats")),
-        )
-
-    def wire(self) -> JsonObject:
-        return {"formats": {name: entry.wire() for name, entry in self.formats.items()}}
-
-
-@dataclass(frozen=True, slots=True, init=False)
-class VariantEntry:
-    _controls_bytes: bytes = field(repr=False)
-    outputs: Mapping[str, OutputEntry]
-
-    def __init__(
-        self,
-        *,
-        controls: Mapping[str, JsonValue],
-        outputs: Mapping[str, OutputEntry],
-    ) -> None:
-        parsed_controls = {
-            _name(name, "variant.controls key"): value
-            for name, value in json_object(controls, "variant.controls").items()
-        }
-        object.__setattr__(self, "_controls_bytes", canonical_bytes(parsed_controls))
-        object.__setattr__(
-            self,
-            "outputs",
-            MappingProxyType(_entry_mapping(outputs, OutputEntry, "variant.outputs")),
-        )
-
-    @property
-    def controls(self) -> JsonObject:
-        return decode_json_object(self._controls_bytes, "variant.controls")
-
-    def wire(self) -> JsonObject:
-        return {
-            "controls": json_object(self.controls, "variant.controls"),
-            "outputs": {name: entry.wire() for name, entry in self.outputs.items()},
-        }
+_SHA256 = re.compile(r"[0-9a-f]{64}")
+_BIGINT = re.compile(r"(?:0|-[1-9][0-9]*|[1-9][0-9]*)")
+_SPECIAL_FLOATS = frozenset({"nan", "infinity", "-infinity", "negative-zero"})
 
 
 @dataclass(frozen=True, slots=True)
 class NotebookProvenance:
-    filename: str
+    filename: str | None
     document_sha256: str
 
     def __post_init__(self) -> None:
-        validate_notebook_basename(self.filename, "notebook.filename")
+        if self.filename is not None:
+            try:
+                validate_portable_basename(self.filename, "notebook.filename")
+            except (TypeError, ValueError) as error:
+                raise ValueError("notebook.filename must be a portable basename or null") from error
         _digest(self.document_sha256, "notebook.document_sha256")
 
-    def wire(self) -> JsonObject:
-        return {"filename": self.filename, "document_sha256": self.document_sha256}
+    def to_value(self) -> JsonObject:
+        return {
+            "filename": self.filename,
+            "document_sha256": self.document_sha256,
+        }
 
 
 @dataclass(frozen=True, slots=True)
@@ -399,293 +83,865 @@ class ProducerProvenance:
     marimo_export: str
 
     def __post_init__(self) -> None:
-        _name(self.marimo, "producer.marimo")
-        _name(self.marimo_export, "producer.marimo_export")
+        _bounded_printable(self.marimo, "producer.marimo", _MAX_NAME_BYTES)
+        _bounded_printable(
+            self.marimo_export,
+            "producer.marimo_export",
+            _MAX_NAME_BYTES,
+        )
 
-    def wire(self) -> JsonObject:
+    def to_value(self) -> JsonObject:
         return {"marimo": self.marimo, "marimo_export": self.marimo_export}
+
+
+@dataclass(frozen=True, slots=True)
+class Provenance:
+    cache_key: str
+    return_reference: str | None
+    python_type: str
+
+    def __post_init__(self) -> None:
+        _opaque_store_reference(self.cache_key, "provenance.cache_key")
+        if self.return_reference is not None:
+            _opaque_store_reference(
+                self.return_reference,
+                "provenance.return_reference",
+            )
+        _bounded_printable(
+            self.python_type,
+            "provenance.python_type",
+            _MAX_PROVENANCE_BYTES,
+        )
+
+    def to_value(self) -> JsonObject:
+        return {
+            "cache_key": self.cache_key,
+            "return_reference": self.return_reference,
+            "python_type": self.python_type,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class AssetRef:
+    sha256: str
+    size: int
+
+    def __post_init__(self) -> None:
+        _digest(self.sha256, "asset.sha256")
+        if (
+            not isinstance(self.size, int)
+            or isinstance(self.size, bool)
+            or not 1 <= self.size <= _MAX_ASSET_SIZE
+        ):
+            raise ValueError(f"asset.size must be an integer from 1 through {_MAX_ASSET_SIZE}")
+
+    def to_value(self) -> JsonObject:
+        return {"sha256": self.sha256, "size": self.size}
+
+    def path(self, codec: OutputCodec) -> str:
+        return asset_path(codec, self.sha256)
+
+
+@dataclass(frozen=True, slots=True)
+class ScalarDescriptor:
+    value: ScalarValue
+    provenance: Provenance
+    codec: Literal["marimo.scalar.v1"] = field(default=SCALAR_CODEC, init=False)
+    media_type: Literal["application/vnd.marimo.scalar.v1+json"] = field(
+        default=SCALAR_MEDIA_TYPE,
+        init=False,
+    )
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.provenance, Provenance):
+            raise TypeError("scalar provenance must be Provenance")
+        if self.provenance.return_reference is not None:
+            raise ValueError("scalar provenance.return_reference must be null")
+        _scalar_to_wire(self.value)
+
+    def to_value(self) -> JsonObject:
+        return {
+            "codec": self.codec,
+            "media_type": self.media_type,
+            "provenance": self.provenance.to_value(),
+            "value": _scalar_to_wire(self.value),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class NumpyDescriptor:
+    asset: AssetRef
+    provenance: Provenance
+    codec: Literal["numpy.npy.v1"] = field(default=NUMPY_CODEC, init=False)
+    media_type: Literal["application/x-npy"] = field(default=NUMPY_MEDIA_TYPE, init=False)
+
+    def __post_init__(self) -> None:
+        _asset_descriptor(self.asset, self.provenance, "NumPy")
+
+    def to_value(self) -> JsonObject:
+        return _asset_descriptor_value(self.codec, self.media_type, self.asset, self.provenance)
+
+
+@dataclass(frozen=True, slots=True)
+class ArrowDescriptor:
+    asset: AssetRef
+    provenance: Provenance
+    codec: Literal["apache.arrow.file.v1"] = field(default=ARROW_CODEC, init=False)
+    media_type: Literal["application/vnd.apache.arrow.file"] = field(
+        default=ARROW_MEDIA_TYPE,
+        init=False,
+    )
+
+    def __post_init__(self) -> None:
+        _asset_descriptor(self.asset, self.provenance, "Arrow")
+
+    def to_value(self) -> JsonObject:
+        return _asset_descriptor_value(self.codec, self.media_type, self.asset, self.provenance)
+
+
+@dataclass(frozen=True, slots=True, init=False)
+class BlobAssetDescriptor:
+    asset: AssetRef
+    provenance: Provenance
+    media_type: str
+    filename: str | None
+    _metadata_bytes: bytes = field(repr=False)
+    codec: Literal["marimo.blob-asset.msgpack.v1"] = field(
+        default=BLOB_ASSET_CODEC,
+        init=False,
+    )
+
+    def __init__(
+        self,
+        *,
+        asset: AssetRef,
+        provenance: Provenance,
+        media_type: str,
+        filename: str | None,
+        metadata: Mapping[str, JsonValue],
+    ) -> None:
+        _asset_descriptor(asset, provenance, "BlobAsset")
+        try:
+            validated_media_type = validate_media_type(media_type, "BlobAsset media_type")
+        except (TypeError, ValueError) as error:
+            raise ValueError("BlobAsset media_type is invalid") from error
+        if filename is not None:
+            try:
+                validate_portable_basename(filename, "BlobAsset filename")
+            except (TypeError, ValueError) as error:
+                raise ValueError(
+                    "BlobAsset filename must be a portable basename or null"
+                ) from error
+        metadata_bytes = canonical_bytes(portable_json_object(metadata, "BlobAsset metadata"))
+        if len(metadata_bytes) > MAX_FORMAT_METADATA_JSON_BYTES:
+            raise ValueError(
+                f"BlobAsset metadata exceeds {MAX_FORMAT_METADATA_JSON_BYTES} canonical JSON bytes"
+            )
+        object.__setattr__(self, "asset", asset)
+        object.__setattr__(self, "provenance", provenance)
+        object.__setattr__(self, "media_type", validated_media_type)
+        object.__setattr__(self, "filename", filename)
+        object.__setattr__(self, "_metadata_bytes", metadata_bytes)
+        object.__setattr__(self, "codec", BLOB_ASSET_CODEC)
+
+    @property
+    def metadata(self) -> JsonObject:
+        return decode_json_object(self._metadata_bytes, "BlobAsset metadata")
+
+    def to_value(self) -> JsonObject:
+        return {
+            "asset": self.asset.to_value(),
+            "codec": self.codec,
+            "filename": self.filename,
+            "media_type": self.media_type,
+            "metadata": self.metadata,
+            "provenance": self.provenance.to_value(),
+        }
+
+
+OutputDescriptor: TypeAlias = (
+    ScalarDescriptor | NumpyDescriptor | ArrowDescriptor | BlobAssetDescriptor
+)
+AssetDescriptor: TypeAlias = NumpyDescriptor | ArrowDescriptor | BlobAssetDescriptor
+
+
+@dataclass(frozen=True, slots=True, init=False)
+class StateEntry:
+    fingerprint: str
+    outputs: Mapping[str, OutputDescriptor]
+    _inputs_bytes: bytes = field(repr=False)
+
+    def __init__(
+        self,
+        *,
+        inputs: Mapping[str, JsonValue],
+        outputs: Mapping[str, OutputDescriptor],
+        fingerprint: str | None = None,
+    ) -> None:
+        input_value = _normalize_input_object(inputs, "state.inputs")
+        computed = state_fingerprint(input_value)
+        if fingerprint is not None and _digest(fingerprint, "state.fingerprint") != computed:
+            raise ValueError("state.fingerprint does not match state.inputs")
+        if not isinstance(outputs, Mapping) or not outputs:
+            raise ValueError("state.outputs must contain at least one output")
+        parsed_outputs: dict[str, OutputDescriptor] = {}
+        for name, descriptor in outputs.items():
+            public_name = _public_name(name, "state.outputs key")
+            if not isinstance(
+                descriptor,
+                (ScalarDescriptor, NumpyDescriptor, ArrowDescriptor, BlobAssetDescriptor),
+            ):
+                raise TypeError(f"state.outputs[{public_name!r}] has an invalid descriptor")
+            parsed_outputs[public_name] = descriptor
+        object.__setattr__(self, "fingerprint", computed)
+        object.__setattr__(self, "_inputs_bytes", canonical_bytes(input_value))
+        object.__setattr__(self, "outputs", MappingProxyType(parsed_outputs))
+
+    @property
+    def inputs(self) -> JsonObject:
+        return decode_json_object(self._inputs_bytes, "state.inputs")
+
+    def to_value(self) -> JsonObject:
+        return {
+            "fingerprint": self.fingerprint,
+            "inputs": self.inputs,
+            "outputs": {name: descriptor.to_value() for name, descriptor in self.outputs.items()},
+        }
 
 
 @dataclass(frozen=True, slots=True)
 class PublicationIndex:
     notebook: NotebookProvenance
     producer: ProducerProvenance
-    variants: Mapping[str, VariantEntry]
+    inputs: tuple[str, ...]
+    outputs: tuple[str, ...]
+    states: Mapping[str, StateEntry]
 
     def __post_init__(self) -> None:
         if not isinstance(self.notebook, NotebookProvenance):
             raise TypeError("publication.notebook must be NotebookProvenance")
         if not isinstance(self.producer, ProducerProvenance):
             raise TypeError("publication.producer must be ProducerProvenance")
-        object.__setattr__(
-            self,
-            "variants",
-            MappingProxyType(_entry_mapping(self.variants, VariantEntry, "publication.variants")),
+        parsed_inputs = _ordered_names(self.inputs, "publication.inputs", identifier=True)
+        parsed_outputs = _ordered_names(
+            self.outputs,
+            "publication.outputs",
+            identifier=False,
+            nonempty=True,
         )
+        if not isinstance(self.states, Mapping) or not self.states:
+            raise ValueError("publication.states must contain at least one state")
+        parsed_states: dict[str, StateEntry] = {}
+        input_set = set(parsed_inputs)
+        output_set = set(parsed_outputs)
+        fingerprints: dict[bytes, str] = {}
+        representation: dict[str, tuple[str, str]] = {}
+        for name, state in self.states.items():
+            state_name = _public_name(name, "publication.states key")
+            if not isinstance(state, StateEntry):
+                raise TypeError(f"publication.states[{state_name!r}] must be StateEntry")
+            if set(state.inputs) != input_set:
+                raise ValueError(
+                    f"publication.states[{state_name!r}].inputs must equal publication.inputs"
+                )
+            if set(state.outputs) != output_set:
+                raise ValueError(
+                    f"publication.states[{state_name!r}].outputs must equal publication.outputs"
+                )
+            vector = canonical_bytes(state.inputs)
+            other = fingerprints.setdefault(vector, state_name)
+            if other != state_name:
+                raise ValueError(
+                    f"publication states {other!r} and {state_name!r} have equal inputs"
+                )
+            for output_name, descriptor in state.outputs.items():
+                current = (descriptor.codec, descriptor.media_type)
+                previous = representation.setdefault(output_name, current)
+                if previous != current:
+                    raise ValueError(
+                        f"output {output_name!r} changes codec or media type across states"
+                    )
+            parsed_states[state_name] = state
+        object.__setattr__(self, "inputs", parsed_inputs)
+        object.__setattr__(self, "outputs", parsed_outputs)
+        object.__setattr__(self, "states", MappingProxyType(parsed_states))
         self.assets()
 
-    def wire(self) -> JsonObject:
+    def to_value(self) -> JsonObject:
         return {
             "schema": PUBLICATION_SCHEMA,
-            "asset_codec": ASSET_CODEC,
-            "notebook": self.notebook.wire(),
-            "producer": self.producer.wire(),
-            "variants": {name: entry.wire() for name, entry in self.variants.items()},
+            "notebook": self.notebook.to_value(),
+            "producer": self.producer.to_value(),
+            "inputs": list(self.inputs),
+            "outputs": list(self.outputs),
+            "states": {name: state.to_value() for name, state in self.states.items()},
         }
 
     def to_bytes(self) -> bytes:
-        return canonical_bytes(self.wire())
+        data = canonical_bytes(self.to_value())
+        if len(data) > _MAX_INDEX_BYTES:
+            raise PublicationError(
+                f"canonical index exceeds {_MAX_INDEX_BYTES} bytes",
+                code="publication_invalid",
+            )
+        return data
 
     @classmethod
-    def from_wire(cls, value: object) -> PublicationIndex:
+    def from_value(cls, value: object) -> PublicationIndex:
         try:
-            wire = _PublicationWire.model_validate(json_object(value, "publication"))
-            return cls._from_wire_model(wire)
+            root = json_object(value, "publication")
+            _exact_fields(
+                root,
+                {"schema", "notebook", "producer", "inputs", "outputs", "states"},
+                "publication",
+            )
+            if root["schema"] != PUBLICATION_SCHEMA:
+                raise ValueError(f"publication.schema must be {PUBLICATION_SCHEMA!r}")
+            notebook = _notebook(root["notebook"])
+            producer = _producer(root["producer"])
+            inputs = _name_array(root["inputs"], "publication.inputs")
+            outputs = _name_array(root["outputs"], "publication.outputs")
+            states_value = _object(root["states"], "publication.states")
+            states = {
+                _public_name(name, "publication.states key"): _state(item, name)
+                for name, item in states_value.items()
+            }
+            return cls(
+                notebook=notebook,
+                producer=producer,
+                inputs=inputs,
+                outputs=outputs,
+                states=states,
+            )
         except PublicationError:
             raise
-        except ValidationError as error:
-            message = _validation_message(error)
-            raise PublicationError(f"invalid publication index: {message}") from error
         except (TypeError, ValueError) as error:
-            message = _safe_error_text(str(error))
-            raise PublicationError(f"invalid publication index: {message}") from error
-
-    @classmethod
-    def _from_wire_model(cls, wire: _PublicationWire) -> PublicationIndex:
-        return cls(
-            notebook=NotebookProvenance(
-                filename=wire.notebook.filename,
-                document_sha256=wire.notebook.document_sha256,
-            ),
-            producer=ProducerProvenance(
-                marimo=wire.producer.marimo,
-                marimo_export=wire.producer.marimo_export,
-            ),
-            variants={
-                variant_name: VariantEntry(
-                    controls=cast(Mapping[str, JsonValue], variant.controls),
-                    outputs={
-                        output_name: OutputEntry(
-                            formats={
-                                format_name: FormatEntry(
-                                    format_id=format_entry.format_id,
-                                    media_type=format_entry.media_type,
-                                    metadata=cast(
-                                        Mapping[str, JsonValue],
-                                        format_entry.metadata,
-                                    ),
-                                    asset=AssetRef(
-                                        key=format_entry.asset.key,
-                                        sha256=format_entry.asset.sha256,
-                                        size=format_entry.asset.size,
-                                    ),
-                                )
-                                for format_name, format_entry in output.formats.items()
-                            }
-                        )
-                        for output_name, output in variant.outputs.items()
-                    },
-                )
-                for variant_name, variant in wire.variants.items()
-            },
-        )
+            raise PublicationError(
+                f"invalid publication index: {error}",
+                code="publication_invalid",
+            ) from error
 
     @classmethod
     def from_bytes(cls, data: bytes) -> PublicationIndex:
-        try:
-            root = decode_json_object(data, "publication")
-        except (TypeError, ValueError) as error:
-            message = _safe_error_text(str(error))
-            raise PublicationError(f"invalid publication index: {message}") from error
-        return cls.from_wire(root)
-
-    def assets(self) -> tuple[AssetRef, ...]:
-        """Return the unique asset closure in cache-key order."""
-
-        assets: dict[str, AssetRef] = {}
-        contracts: dict[str, tuple[str, str, JsonObject]] = {}
-        for _, _, _, entry in self.format_entries():
-            existing = assets.setdefault(entry.asset.key, entry.asset)
-            if existing != entry.asset:
-                raise ValueError(
-                    f"conflicting asset reference for {_bounded_repr(entry.asset.key)}"
-                )
-            contract = (
-                entry.format_id,
-                entry.media_type,
-                json_object(entry.metadata, "format.metadata"),
+        if not isinstance(data, bytes):
+            raise TypeError("publication index must be bytes")
+        if len(data) > _MAX_INDEX_BYTES:
+            raise PublicationError(
+                f"publication index exceeds {_MAX_INDEX_BYTES} bytes",
+                code="publication_invalid",
             )
-            existing_contract = contracts.get(entry.asset.key)
-            if existing_contract is None:
-                contracts[entry.asset.key] = contract
-            elif existing_contract[:2] != contract[:2] or not json_equal(
-                existing_contract[2], contract[2]
-            ):
-                raise ValueError(
-                    f"conflicting format contract for asset {_bounded_repr(entry.asset.key)}"
-                )
-        return tuple(assets[key] for key in sorted(assets))
+        try:
+            root = decode_json_object(
+                data,
+                "publication",
+                max_values=_MAX_INDEX_VALUES,
+            )
+        except (TypeError, ValueError) as error:
+            raise PublicationError(
+                f"invalid publication index: {error}",
+                code="publication_invalid",
+            ) from error
+        index = cls.from_value(root)
+        if index.to_bytes() != data:
+            raise PublicationError(
+                "publication index is not canonical JSON",
+                code="publication_noncanonical",
+            )
+        return index
 
-    def format_entries(self) -> Iterator[tuple[str, str, str, FormatEntry]]:
-        for variant_name, variant in self.variants.items():
-            for output_name, output in variant.outputs.items():
-                for format_name, entry in output.formats.items():
-                    yield variant_name, output_name, format_name, entry
+    def assets(self) -> tuple[tuple[OutputCodec, AssetRef], ...]:
+        assets: dict[tuple[str, str], tuple[AssetRef, tuple[object, ...]]] = {}
+        total = 0
+        for _, _, descriptor in self.descriptor_entries():
+            if isinstance(descriptor, ScalarDescriptor):
+                continue
+            identity = (descriptor.codec, descriptor.asset.sha256)
+            facts = _descriptor_asset_facts(descriptor)
+            previous = assets.get(identity)
+            if previous is None:
+                assets[identity] = (descriptor.asset, facts)
+                total += descriptor.asset.size
+                if total > _MAX_SAFE_INTEGER:
+                    raise ValueError("aggregate unique asset size exceeds the safe integer range")
+            elif previous != (descriptor.asset, facts):
+                raise ValueError(f"asset identity {identity!r} has conflicting descriptor facts")
+        order = {NUMPY_CODEC: 0, ARROW_CODEC: 1, BLOB_ASSET_CODEC: 2}
+        return tuple(
+            (cast(OutputCodec, codec), value[0])
+            for (codec, _), value in sorted(
+                assets.items(),
+                key=lambda item: (order[item[0][0]], item[0][1]),
+            )
+        )
+
+    def descriptor_entries(self) -> Iterator[tuple[str, str, OutputDescriptor]]:
+        for state_name, state in self.states.items():
+            for output_name, descriptor in state.outputs.items():
+                yield state_name, output_name, descriptor
 
 
-def _entry_mapping(
-    value: Mapping[str, object],
-    entry_type: type[object],
+@dataclass(frozen=True, slots=True)
+class CacheSummary:
+    hits: int
+    misses: int
+
+    def __post_init__(self) -> None:
+        for name, value in (("hits", self.hits), ("misses", self.misses)):
+            if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+                raise ValueError(f"cache.{name} must be a non-negative integer")
+
+
+@dataclass(frozen=True, slots=True, init=False)
+class PublicationWarning:
+    code: Literal["retired_destination_cleanup_failed"]
+    message: str
+    _details_bytes: bytes = field(repr=False)
+
+    def __init__(
+        self,
+        *,
+        code: Literal["retired_destination_cleanup_failed"],
+        message: str,
+        details: Mapping[str, JsonValue],
+    ) -> None:
+        if code != "retired_destination_cleanup_failed":
+            raise ValueError("publication warning code is invalid")
+        _bounded_printable(message, "publication warning message", _MAX_PROVENANCE_BYTES)
+        object.__setattr__(self, "code", code)
+        object.__setattr__(self, "message", message)
+        object.__setattr__(
+            self,
+            "_details_bytes",
+            canonical_bytes(json_object(details, "publication warning details")),
+        )
+
+    @property
+    def details(self) -> JsonObject:
+        return decode_json_object(self._details_bytes, "publication warning details")
+
+    def to_dict(self) -> JsonObject:
+        return {"code": self.code, "message": self.message, "details": self.details}
+
+
+@dataclass(frozen=True, slots=True)
+class PublicationResult:
+    path: Path
+    mode: Literal["build", "capture"]
+    session_id: str | None
+    notebook_filename: str | None
+    document_sha256: str
+    producer: ProducerProvenance
+    states: tuple[str, ...]
+    outputs: tuple[str, ...]
+    assets: int
+    asset_bytes: int
+    index_bytes: int
+    cache: CacheSummary
+    warnings: tuple[PublicationWarning, ...] = ()
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.path, Path) or not self.path.is_absolute():
+            raise ValueError("publication result path must be absolute")
+        if self.mode not in {"build", "capture"}:
+            raise ValueError("publication result mode must be build or capture")
+        if self.session_id is not None:
+            _bounded_printable(self.session_id, "session_id", _MAX_PROVENANCE_BYTES)
+        if self.notebook_filename is not None:
+            validate_portable_basename(self.notebook_filename, "notebook_filename")
+        _digest(self.document_sha256, "document_sha256")
+        if not isinstance(self.producer, ProducerProvenance):
+            raise TypeError("producer must be ProducerProvenance")
+        _ordered_names(self.states, "states", identifier=False)
+        _ordered_names(self.outputs, "outputs", identifier=False, nonempty=True)
+        for name, value in (
+            ("assets", self.assets),
+            ("asset_bytes", self.asset_bytes),
+            ("index_bytes", self.index_bytes),
+        ):
+            if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+                raise ValueError(f"{name} must be a non-negative integer")
+        if not isinstance(self.cache, CacheSummary):
+            raise TypeError("cache must be CacheSummary")
+        if any(not isinstance(warning, PublicationWarning) for warning in self.warnings):
+            raise TypeError("warnings must contain PublicationWarning values")
+
+    def to_dict(self) -> JsonObject:
+        return {
+            "path": str(self.path),
+            "mode": self.mode,
+            "session_id": self.session_id,
+            "notebook_filename": self.notebook_filename,
+            "document_sha256": self.document_sha256,
+            "producer": self.producer.to_value(),
+            "states": list(self.states),
+            "outputs": list(self.outputs),
+            "assets": self.assets,
+            "asset_bytes": self.asset_bytes,
+            "index_bytes": self.index_bytes,
+            "cache": {"hits": self.cache.hits, "misses": self.cache.misses},
+            "warnings": [warning.to_dict() for warning in self.warnings],
+        }
+
+
+def state_fingerprint(inputs: Mapping[str, JsonValue]) -> str:
+    return sha256_bytes(canonical_bytes(_normalize_input_object(inputs, "state.inputs")))
+
+
+def asset_path(codec: OutputCodec, digest: str) -> str:
+    if codec not in _ASSET_EXTENSIONS:
+        raise ValueError(f"codec {codec!r} has no asset path")
+    validated = _digest(digest, "asset digest")
+    return f"assets/{validated}.{_ASSET_EXTENSIONS[codec]}"
+
+
+def _notebook(value: object) -> NotebookProvenance:
+    item = _object(value, "publication.notebook")
+    _exact_fields(item, {"filename", "document_sha256"}, "publication.notebook")
+    filename = item["filename"]
+    if filename is not None and not isinstance(filename, str):
+        raise TypeError("publication.notebook.filename must be a string or null")
+    return NotebookProvenance(
+        filename=filename,
+        document_sha256=cast(str, item["document_sha256"]),
+    )
+
+
+def _producer(value: object) -> ProducerProvenance:
+    item = _object(value, "publication.producer")
+    _exact_fields(item, {"marimo", "marimo_export"}, "publication.producer")
+    return ProducerProvenance(
+        marimo=cast(str, item["marimo"]),
+        marimo_export=cast(str, item["marimo_export"]),
+    )
+
+
+def _state(value: object, state_name: str) -> StateEntry:
+    path = f"publication.states[{state_name!r}]"
+    item = _object(value, path)
+    _exact_fields(item, {"fingerprint", "inputs", "outputs"}, path)
+    output_values = _object(item["outputs"], f"{path}.outputs")
+    return StateEntry(
+        fingerprint=cast(str, item["fingerprint"]),
+        inputs=_object(item["inputs"], f"{path}.inputs"),
+        outputs={
+            _public_name(name, f"{path}.outputs key"): _descriptor(descriptor, name)
+            for name, descriptor in output_values.items()
+        },
+    )
+
+
+def _descriptor(value: object, output_name: str) -> OutputDescriptor:
+    path = f"output {output_name!r}"
+    item = _object(value, path)
+    codec = item.get("codec")
+    if codec == SCALAR_CODEC:
+        _exact_fields(item, {"codec", "media_type", "provenance", "value"}, path)
+        if item["media_type"] != SCALAR_MEDIA_TYPE:
+            raise ValueError(f"{path} has an invalid scalar media_type")
+        return ScalarDescriptor(
+            value=_scalar_from_wire(item["value"]),
+            provenance=_provenance(item["provenance"], path),
+        )
+    if codec in {NUMPY_CODEC, ARROW_CODEC}:
+        _exact_fields(item, {"asset", "codec", "media_type", "provenance"}, path)
+        provenance = _provenance(item["provenance"], path)
+        asset = _asset(item["asset"], path)
+        if codec == NUMPY_CODEC:
+            if item["media_type"] != NUMPY_MEDIA_TYPE:
+                raise ValueError(f"{path} has an invalid NumPy media_type")
+            return NumpyDescriptor(asset=asset, provenance=provenance)
+        if item["media_type"] != ARROW_MEDIA_TYPE:
+            raise ValueError(f"{path} has an invalid Arrow media_type")
+        return ArrowDescriptor(asset=asset, provenance=provenance)
+    if codec == BLOB_ASSET_CODEC:
+        _exact_fields(
+            item,
+            {
+                "asset",
+                "codec",
+                "filename",
+                "media_type",
+                "metadata",
+                "provenance",
+            },
+            path,
+        )
+        filename = item["filename"]
+        if filename is not None and not isinstance(filename, str):
+            raise TypeError(f"{path}.filename must be a string or null")
+        return BlobAssetDescriptor(
+            asset=_asset(item["asset"], path),
+            provenance=_provenance(item["provenance"], path),
+            media_type=cast(str, item["media_type"]),
+            filename=filename,
+            metadata=_object(item["metadata"], f"{path}.metadata"),
+        )
+    raise ValueError(f"{path}.codec must be one of {sorted(_CODECS)!r}")
+
+
+def _provenance(value: object, path: str) -> Provenance:
+    item = _object(value, f"{path}.provenance")
+    _exact_fields(
+        item,
+        {"cache_key", "return_reference", "python_type"},
+        f"{path}.provenance",
+    )
+    reference = item["return_reference"]
+    if reference is not None and not isinstance(reference, str):
+        raise TypeError(f"{path}.provenance.return_reference must be a string or null")
+    return Provenance(
+        cache_key=cast(str, item["cache_key"]),
+        return_reference=reference,
+        python_type=cast(str, item["python_type"]),
+    )
+
+
+def _asset(value: object, path: str) -> AssetRef:
+    item = _object(value, f"{path}.asset")
+    _exact_fields(item, {"sha256", "size"}, f"{path}.asset")
+    return AssetRef(sha256=cast(str, item["sha256"]), size=cast(int, item["size"]))
+
+
+def _scalar_to_wire(value: ScalarValue) -> ScalarWireValue:
+    if value is None or isinstance(value, (bool, str)):
+        return value
+    if isinstance(value, int) and not isinstance(value, bool):
+        if abs(value) <= _MAX_SAFE_INTEGER:
+            return value
+        return {"type": "bigint", "value": str(value)}
+    if isinstance(value, float):
+        if math.isnan(value):
+            return {"type": "float", "value": "nan"}
+        if math.isinf(value):
+            return {
+                "type": "float",
+                "value": "infinity" if value > 0 else "-infinity",
+            }
+        if value == 0 and math.copysign(1.0, value) < 0:
+            return {"type": "float", "value": "negative-zero"}
+        return value
+    raise TypeError("scalar value must be None, bool, str, int, or float")
+
+
+def _scalar_from_wire(value: object) -> ScalarValue:
+    if value is None or isinstance(value, (bool, str)):
+        return value
+    if isinstance(value, int) and not isinstance(value, bool):
+        if abs(value) > _MAX_SAFE_INTEGER:
+            raise ValueError("untagged scalar integer exceeds the safe integer range")
+        return value
+    if isinstance(value, float):
+        if not math.isfinite(value):
+            raise ValueError("untagged scalar float must be finite")
+        return value
+    item = _object(value, "scalar.value")
+    _exact_fields(item, {"type", "value"}, "scalar.value")
+    kind = item["type"]
+    encoded = item["value"]
+    if kind == "bigint":
+        if not isinstance(encoded, str) or _BIGINT.fullmatch(encoded) is None:
+            raise ValueError("tagged bigint has an invalid decimal value")
+        parsed = int(encoded)
+        if abs(parsed) <= _MAX_SAFE_INTEGER:
+            raise ValueError("tagged bigint must lie outside the safe integer range")
+        return parsed
+    if kind == "float":
+        if not isinstance(encoded, str) or encoded not in _SPECIAL_FLOATS:
+            raise ValueError("tagged float has an invalid value")
+        return {
+            "nan": math.nan,
+            "infinity": math.inf,
+            "-infinity": -math.inf,
+            "negative-zero": -0.0,
+        }[encoded]
+    raise ValueError("scalar tag type must be 'bigint' or 'float'")
+
+
+def _asset_descriptor(asset: AssetRef, provenance: Provenance, label: str) -> None:
+    if not isinstance(asset, AssetRef):
+        raise TypeError(f"{label} asset must be AssetRef")
+    if not isinstance(provenance, Provenance):
+        raise TypeError(f"{label} provenance must be Provenance")
+    if provenance.return_reference is None:
+        raise ValueError(f"{label} provenance.return_reference must be present")
+
+
+def _asset_descriptor_value(
+    codec: OutputCodec,
+    media_type: str,
+    asset: AssetRef,
+    provenance: Provenance,
+) -> JsonObject:
+    return {
+        "asset": asset.to_value(),
+        "codec": codec,
+        "media_type": media_type,
+        "provenance": provenance.to_value(),
+    }
+
+
+def _descriptor_asset_facts(descriptor: AssetDescriptor) -> tuple[object, ...]:
+    if isinstance(descriptor, BlobAssetDescriptor):
+        return (
+            descriptor.asset.size,
+            descriptor.media_type,
+            descriptor.filename,
+            canonical_bytes(descriptor.metadata),
+        )
+    return (descriptor.asset.size, descriptor.media_type)
+
+
+def _object(value: object, path: str) -> JsonObject:
+    return json_object(value, path)
+
+
+def _exact_fields(value: Mapping[str, object], expected: set[str], path: str) -> None:
+    actual = set(value)
+    missing = sorted(expected - actual)
+    extra = sorted(actual - expected)
+    if missing:
+        raise ValueError(f"{path} is missing fields: {', '.join(missing)}")
+    if extra:
+        raise ValueError(f"{path} does not accept fields: {', '.join(extra)}")
+
+
+def _name_array(value: object, path: str) -> tuple[str, ...]:
+    if not isinstance(value, list):
+        raise TypeError(f"{path} must be an array")
+    return tuple(cast(str, item) for item in value)
+
+
+def _ordered_names(
+    value: Sequence[str],
     path: str,
-) -> dict[str, object]:
-    if not isinstance(value, Mapping) or not value:
-        raise ValueError(f"{path} must contain at least one entry")
-    result: dict[str, object] = {}
-    for name, entry in value.items():
-        validated_name = _name(name, f"{path} key")
-        if not isinstance(entry, entry_type):
-            raise TypeError(f"{path}.{validated_name} must be {entry_type.__name__}")
-        result[validated_name] = entry
+    *,
+    identifier: bool,
+    nonempty: bool = False,
+) -> tuple[str, ...]:
+    if isinstance(value, (str, bytes)) or not isinstance(value, Sequence):
+        raise TypeError(f"{path} must be a sequence")
+    result = tuple(
+        _identifier(name, f"{path}[{index}]")
+        if identifier
+        else _public_name(name, f"{path}[{index}]")
+        for index, name in enumerate(value)
+    )
+    if nonempty and not result:
+        raise ValueError(f"{path} must contain at least one name")
+    if len(result) != len(set(result)):
+        raise ValueError(f"{path} must contain unique names")
     return result
 
 
-def _name(value: object, path: str) -> str:
-    result = _string(value, path)
-    if result != result.strip() or any(
-        ord(character) < 32 or ord(character) == 127 for character in result
+def _identifier(value: object, path: str) -> str:
+    name = json_string(value, path)
+    if (
+        not name.isidentifier()
+        or __import__("keyword").iskeyword(name)
+        or len(name.encode("utf-8")) > _MAX_NAME_BYTES
     ):
-        raise TypeError(f"{path} must not contain surrounding whitespace or control characters")
-    return result
+        raise ValueError(f"{path} must be a bounded non-keyword Python identifier")
+    return name
 
 
-def _string(value: object, path: str) -> str:
-    value = json_string(value, path)
-    if not value:
-        raise TypeError(f"{path} must be a non-empty string")
-    return value
+def _public_name(value: object, path: str) -> str:
+    return _bounded_printable(value, path, _MAX_NAME_BYTES)
+
+
+def _bounded_printable(value: object, path: str, maximum_bytes: int) -> str:
+    text = json_string(value, path)
+    if (
+        not text
+        or text != text.strip()
+        or any(ord(character) < 32 or ord(character) == 127 for character in text)
+        or len(text.encode("utf-8")) > maximum_bytes
+    ):
+        raise ValueError(
+            f"{path} must be a non-empty printable string of at most {maximum_bytes} UTF-8 bytes"
+        )
+    return text
+
+
+def _opaque_store_reference(value: object, path: str) -> str:
+    text = _bounded_printable(value, path, _MAX_PROVENANCE_BYTES)
+    if PurePosixPath(text).is_absolute() or PureWindowsPath(text).is_absolute():
+        raise ValueError(f"{path} must be a store-relative opaque identifier")
+    return text
 
 
 def _digest(value: object, path: str) -> str:
-    digest = _string(value, path)
-    if _SHA256.fullmatch(digest) is None:
-        raise TypeError(f"{path} must be a lowercase SHA-256 digest")
-    return digest
+    text = json_string(value, path)
+    if _SHA256.fullmatch(text) is None:
+        raise ValueError(f"{path} must be a lowercase SHA-256 digest")
+    return text
 
 
-def _positive_integer(value: object, path: str) -> int:
-    if (
-        not isinstance(value, int)
-        or isinstance(value, bool)
-        or value <= 0
-        or value > _MAX_SAFE_INTEGER
-    ):
-        raise TypeError(f"{path} must be a positive safe integer")
+def _normalize_input_object(value: Mapping[str, JsonValue], path: str) -> JsonObject:
+    parsed = json_object(value, path)
+    _validate_portable_input_numbers(parsed, path)
+    return cast(JsonObject, _normalize_zero(parsed))
+
+
+def _normalize_zero(value: JsonValue) -> JsonValue:
+    if isinstance(value, float) and value == 0:
+        return 0
+    if isinstance(value, list):
+        return [_normalize_zero(item) for item in value]
+    if isinstance(value, dict):
+        return {key: _normalize_zero(item) for key, item in value.items()}
     return value
 
 
-_SCHEMA_FIELDS = frozenset(
-    {
-        "schema",
-        "asset_codec",
-        "notebook",
-        "filename",
-        "document_sha256",
-        "producer",
-        "marimo",
-        "marimo_export",
-        "variants",
-        "controls",
-        "outputs",
-        "formats",
-        "format_id",
-        "media_type",
-        "metadata",
-        "asset",
-        "key",
-        "sha256",
-        "size",
-    }
-)
-_SCHEMA_NAMES = {
-    "_UnicodeStringWire": "unicode_string",
-    "_PublicNameWire": "public_name",
-    "_ProvenanceFilenameWire": "filename",
-    "_AssetKeyWire": "asset_key",
-    "_DigestWire": "sha256",
-    "_FormatIdWire": "format_id",
-    "_MediaTypeWire": "media_type",
-    "_AssetWire": "asset",
-    "_FormatWire": "format",
-    "_JsonWireValue": "json_value",
-    "_NotebookWire": "notebook",
-    "_OutputWire": "output",
-    "_ProducerWire": "producer",
-    "_VariantWire": "variant",
-}
+def _validate_portable_input_numbers(value: JsonValue, path: str) -> None:
+    pending: list[tuple[JsonValue, str]] = [(value, path)]
+    while pending:
+        item, item_path = pending.pop()
+        if isinstance(item, bool) or item is None or isinstance(item, str):
+            continue
+        if isinstance(item, int):
+            if abs(item) > _MAX_SAFE_INTEGER:
+                raise ValueError(f"{item_path} integer exceeds the safe integer range")
+            continue
+        if isinstance(item, float):
+            if not math.isfinite(item):
+                raise ValueError(f"{item_path} must be finite")
+            if item.is_integer() and abs(item) > _MAX_SAFE_INTEGER:
+                raise ValueError(f"{item_path} integer exceeds the safe integer range")
+            continue
+        if isinstance(item, list):
+            pending.extend((child, f"{item_path}[{index}]") for index, child in enumerate(item))
+            continue
+        pending.extend(
+            (child, f"{item_path}.{key}") for key, child in cast(dict[str, JsonValue], item).items()
+        )
 
 
-class _PublicationSchemaGenerator(GenerateJsonSchema):
-    def normalize_name(self, name: str) -> str:
-        normalized = super().normalize_name(name)
-        return _SCHEMA_NAMES.get(normalized, normalized)
-
-
-def _safe_location_segment(value: object) -> str:
-    if isinstance(value, int):
-        return str(value)
-    text = str(value)
-    suffix = "..." if len(text) > 96 else ""
-    return ascii(text[:96]) + suffix
-
-
-def _bounded_repr(value: str) -> str:
-    suffix = "..." if len(value) > 96 else ""
-    return ascii(value[:96]) + suffix
-
-
-def _validation_path(location: tuple[object, ...]) -> str:
-    result = "publication"
-    for segment in location:
-        if segment == "[key]":
-            result += " key"
-        elif isinstance(segment, int):
-            result += f"[{segment}]"
-        elif isinstance(segment, str) and segment in _SCHEMA_FIELDS:
-            result += f".{segment}"
-        else:
-            result += f"[{_safe_location_segment(segment)}]"
-        if len(result) > 512:
-            return result[:509] + "..."
-    return result
-
-
-def _safe_error_text(message: str) -> str:
-    clipped = message[:512]
-    result = clipped.encode("unicode_escape", errors="backslashreplace").decode("ascii")
-    return result if len(result) <= 512 else result[:509] + "..."
-
-
-def _validation_message(error: ValidationError) -> str:
-    detail = error.errors(include_input=False, include_url=False)[0]
-    location = cast(tuple[object, ...], detail.get("loc", ()))
-    error_type = detail.get("type")
-    if error_type == "extra_forbidden" and location:
-        parent = _validation_path(location[:-1])
-        return f"{parent} does not accept: {_safe_location_segment(location[-1])}"
-    if error_type == "missing" and location:
-        parent = _validation_path(location[:-1])
-        return f"{parent} is missing: {_safe_location_segment(location[-1])}"
-    message = str(detail.get("msg", "validation failed"))
-    if message.startswith("Value error, "):
-        message = message.removeprefix("Value error, ")
-    return f"{_validation_path(location)} {_safe_error_text(message)}"
-
-
-def publication_json_schema() -> JsonObject:
-    """Return the JSON Schema for ``marimo-export.publication.v1``."""
-
-    schema = _PublicationWire.model_json_schema(
-        by_alias=True,
-        schema_generator=_PublicationSchemaGenerator,
-    )
-    return json_object(schema, "publication schema")
+__all__ = [
+    "ARROW_CODEC",
+    "ARROW_MEDIA_TYPE",
+    "BLOB_ASSET_CODEC",
+    "NUMPY_CODEC",
+    "NUMPY_MEDIA_TYPE",
+    "PUBLICATION_SCHEMA",
+    "SCALAR_CODEC",
+    "SCALAR_MEDIA_TYPE",
+    "ArrowDescriptor",
+    "AssetDescriptor",
+    "AssetRef",
+    "BlobAssetDescriptor",
+    "CacheSummary",
+    "NotebookProvenance",
+    "NumpyDescriptor",
+    "OutputCodec",
+    "OutputDescriptor",
+    "ProducerProvenance",
+    "Provenance",
+    "PublicationIndex",
+    "PublicationResult",
+    "PublicationWarning",
+    "ScalarDescriptor",
+    "ScalarValue",
+    "StateEntry",
+    "asset_path",
+    "state_fingerprint",
+]

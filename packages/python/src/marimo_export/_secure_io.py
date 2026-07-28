@@ -8,8 +8,6 @@ from contextlib import suppress
 from pathlib import Path
 from typing import NoReturn
 
-from marimo_export._portable import asset_key_components
-
 _READ_BUFFER_BYTES = 64 * 1024
 
 
@@ -49,9 +47,9 @@ def read_publication_index(root: Path, *, max_bytes: int) -> bytes:
     )
 
 
-def read_cache_asset(
+def read_publication_asset(
     root: Path,
-    key: str,
+    relative_path: str,
     *,
     expected_size: int,
     max_bytes: int,
@@ -62,10 +60,15 @@ def read_cache_asset(
     _validate_expected_size(expected_size)
     if expected_size > max_bytes:
         raise SecureReadLimitError(actual_size=expected_size, limit=max_bytes)
+    if not isinstance(relative_path, str):
+        raise TypeError("relative_path must be a string")
+    components = tuple(relative_path.split("/"))
+    if len(components) != 2 or components[0] != "assets":
+        raise SecureReadError("publication asset path is invalid")
     try:
-        components = ("cache", *asset_key_components(key, "cache asset key"))
-    except (TypeError, ValueError) as error:
-        raise SecureReadError("cache asset key is not a portable path") from error
+        _validate_component(components[1])
+    except ValueError as error:
+        raise SecureReadError("publication asset path is invalid") from error
     return _translate_read_errors(
         lambda: _read_relative_file(
             root,
@@ -361,6 +364,8 @@ def _translate_read_errors(read: Callable[[], bytes]) -> bytes:
         return read()
     except SecureReadError:
         raise
+    except ValueError as error:
+        raise SecureReadError(str(error)) from error
     except (OSError, OverflowError, MemoryError) as error:
         _raise_secure_read_error(error)
 
@@ -373,6 +378,6 @@ __all__ = [
     "SecureFileSizeError",
     "SecureReadError",
     "SecureReadLimitError",
-    "read_cache_asset",
+    "read_publication_asset",
     "read_publication_index",
 ]

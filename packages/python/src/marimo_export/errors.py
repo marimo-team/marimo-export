@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+
 from marimo_export._json import JsonObject, canonical_bytes, decode_json_object, json_object
 
 

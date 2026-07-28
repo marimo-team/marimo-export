@@ -63,14 +63,10 @@ def _json_value(
     if isinstance(value, str):
         return json_string(value, path)
     if isinstance(value, int):
-        if abs(value) > _MAX_SAFE_INTEGER:
-            raise ValueError(f"{path} integer must be within the JavaScript safe range")
         return value
     if isinstance(value, float):
         if not math.isfinite(value):
             raise ValueError(f"{path} must not contain NaN or infinity")
-        if value.is_integer() and abs(value) > _MAX_SAFE_INTEGER:
-            raise ValueError(f"{path} integer must be within the JavaScript safe range")
         return value
     if isinstance(value, Mapping):
         result: JsonObject = {}
@@ -185,6 +181,39 @@ def json_object(value: object, path: str = "value") -> JsonObject:
     return parsed
 
 
+def portable_json_object(value: object, path: str = "value") -> JsonObject:
+    """Return a JSON object whose numbers preserve ECMAScript value identity."""
+
+    parsed = json_object(value, path)
+    _validate_portable_numbers(parsed, path)
+    return parsed
+
+
+def _validate_portable_numbers(value: JsonValue, path: str) -> None:
+    pending: list[tuple[JsonValue, str]] = [(value, path)]
+    while pending:
+        item, item_path = pending.pop()
+        if isinstance(item, bool) or item is None or isinstance(item, str):
+            continue
+        if isinstance(item, int):
+            if abs(item) > _MAX_SAFE_INTEGER:
+                raise ValueError(f"{item_path} integer must be within the JavaScript safe range")
+            continue
+        if isinstance(item, float):
+            if item.is_integer() and abs(item) > _MAX_SAFE_INTEGER:
+                raise ValueError(f"{item_path} integer must be within the JavaScript safe range")
+            continue
+        if isinstance(item, list):
+            pending.extend(
+                (child, _bounded_path(item_path, f"[{index}]")) for index, child in enumerate(item)
+            )
+            continue
+        pending.extend(
+            (child, _bounded_path(item_path, key))
+            for key, child in cast(dict[str, JsonValue], item).items()
+        )
+
+
 def json_equal(left: JsonValue, right: JsonValue) -> bool:
     """Compare validated JSON trees using JSON type and number semantics."""
 
@@ -237,13 +266,73 @@ def json_equal(left: JsonValue, right: JsonValue) -> bool:
 
 
 def canonical_bytes(value: object) -> bytes:
-    return json.dumps(
-        json_value(value),
-        allow_nan=False,
-        ensure_ascii=False,
-        separators=(",", ":"),
-        sort_keys=True,
-    ).encode("utf-8")
+    """Serialize a portable value with the publication's canonical JSON rules."""
+
+    parsed = json_value(value)
+    chunks: list[str] = []
+    _write_canonical(parsed, chunks)
+    return "".join(chunks).encode("utf-8")
+
+
+def _write_canonical(value: JsonValue, chunks: list[str]) -> None:
+    if value is None:
+        chunks.append("null")
+    elif value is True:
+        chunks.append("true")
+    elif value is False:
+        chunks.append("false")
+    elif isinstance(value, str):
+        chunks.append(json.dumps(value, ensure_ascii=False, separators=(",", ":")))
+    elif isinstance(value, int):
+        chunks.append(str(value))
+    elif isinstance(value, float):
+        chunks.append(_ecmascript_number(value))
+    elif isinstance(value, list):
+        chunks.append("[")
+        for index, item in enumerate(value):
+            if index:
+                chunks.append(",")
+            _write_canonical(item, chunks)
+        chunks.append("]")
+    else:
+        chunks.append("{")
+        for index, key in enumerate(sorted(value)):
+            if index:
+                chunks.append(",")
+            chunks.append(json.dumps(key, ensure_ascii=False, separators=(",", ":")))
+            chunks.append(":")
+            _write_canonical(value[key], chunks)
+        chunks.append("}")
+
+
+def _ecmascript_number(value: float) -> str:
+    if not math.isfinite(value):
+        raise ValueError("canonical JSON cannot contain NaN or infinity")
+    if value == 0:
+        return "0"
+
+    absolute = abs(value)
+    rendered = repr(value).lower()
+    if 1e-6 <= absolute < 1e21:
+        if "e" in rendered:
+            rendered = format(Decimal(rendered), "f")
+        if "." in rendered:
+            rendered = rendered.rstrip("0").rstrip(".")
+        return rendered
+
+    if "e" not in rendered:
+        decimal = Decimal(rendered)
+        exponent = decimal.adjusted()
+        digits = "".join(str(digit) for digit in decimal.copy_abs().normalize().as_tuple().digits)
+        mantissa = digits[0]
+        if len(digits) > 1:
+            mantissa += f".{digits[1:]}"
+        rendered = f"{'-' if value < 0 else ''}{mantissa}e{exponent:+d}"
+
+    mantissa, exponent_text = rendered.split("e", 1)
+    mantissa = mantissa.rstrip("0").rstrip(".")
+    exponent = int(exponent_text)
+    return f"{mantissa}e{exponent:+d}" if exponent >= 0 else f"{mantissa}e{exponent}"
 
 
 def decode_json(
@@ -287,14 +376,10 @@ def decode_json(
         if not exact.is_finite():
             raise ValueError(f"{path} must not contain a non-finite number")
         if _decimal_lexeme_is_integral(value):
-            if exact.copy_abs() > _MAX_SAFE_INTEGER:
-                raise ValueError(f"{path} integer must be within the JavaScript safe range")
             return float(exact)
         converted = float(exact)
         if not math.isfinite(converted):
             raise ValueError(f"{path} must not contain a non-finite number")
-        if converted.is_integer():
-            raise ValueError(f"{path} number loses its fractional component as a JavaScript number")
         return converted
 
     def parse_int(value: str) -> int | float:
@@ -553,8 +638,13 @@ def _skip_json_string(text: str, index: int) -> int:
     raise _InvalidJsonSyntax
 
 
-def decode_json_object(data: JsonInput, path: str = "value") -> JsonObject:
-    decoded = decode_json(data, path)
+def decode_json_object(
+    data: JsonInput,
+    path: str = "value",
+    *,
+    max_values: int = _MAX_JSON_VALUES,
+) -> JsonObject:
+    decoded = decode_json(data, path, max_values=max_values)
     if not isinstance(decoded, dict):
         raise TypeError(f"{path} must be a JSON object")
     return cast(JsonObject, decoded)

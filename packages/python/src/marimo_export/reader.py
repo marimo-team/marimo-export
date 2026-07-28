@@ -1,676 +1,565 @@
 from __future__ import annotations
 
-import builtins
-from bisect import insort
-from collections.abc import Collection
+import ast
+import os
+import stat
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Protocol, runtime_checkable
+from types import MappingProxyType
+from typing import cast
 
-from marimo_export._blob_asset import (
-    _BlobAssetFieldLimitError,
-    decode_blob_asset_wire,
-)
-from marimo_export._json import (
-    JsonObject,
-    JsonValue,
-    decode_json,
-    decode_json_object,
-    json_equal,
-    json_object,
-    sha256_bytes,
-)
-from marimo_export._portable import validate_portable_basename
+from marimo._save.stubs import BlobAsset
+
+from marimo_export._blob_asset import BlobAssetEnvelope, decode_blob_asset
+from marimo_export._json import JsonObject, JsonValue, canonical_bytes
 from marimo_export._secure_io import (
-    SecureFileSizeError,
     SecureReadError,
-    SecureReadLimitError,
-    read_cache_asset,
+    read_publication_asset,
     read_publication_index,
 )
-from marimo_export.errors import IntegrityError, PublicationError
+from marimo_export.errors import (
+    IntegrityError,
+    PublicationError,
+    StateUnavailableError,
+)
 from marimo_export.publication import (
-    ASSET_CODEC,
-    PUBLICATION_SCHEMA,
-    AssetRef,
-    FormatEntry,
-    OutputEntry,
+    ArrowDescriptor,
+    BlobAssetDescriptor,
+    NotebookProvenance,
+    NumpyDescriptor,
+    OutputDescriptor,
+    ProducerProvenance,
     PublicationIndex,
-    VariantEntry,
+    ScalarDescriptor,
+    ScalarValue,
+    StateEntry,
+    asset_path,
+    state_fingerprint,
 )
-from marimo_export.publication import (
-    NotebookProvenance as _NotebookProvenance,
-)
-from marimo_export.publication import (
-    ProducerProvenance as _ProducerProvenance,
-)
+from marimo_export.spec import FrozenJsonObject, FrozenJsonValue, StrPath
 
-_DEFAULT_MAX_INDEX_BYTES = 16 * 1024 * 1024
-_DEFAULT_MAX_ASSET_BYTES = 64 * 1024 * 1024
-_DEFAULT_MAX_PUBLICATION_BYTES = 512 * 1024 * 1024
-_NOT_FOUND_AVAILABLE_LIMIT = 16
-_NOT_FOUND_AVAILABLE_UTF8_LIMIT = 2_048
-_NOT_FOUND_NAME_UTF8_LIMIT = 2_048
-_NOT_FOUND_MESSAGE_LIMIT = 4_096
-_TRUNCATION_MARKER = "..."
-
-
-class _PublicationNotFoundError(PublicationError):
-    code = "not_found"
+_MAX_INDEX_BYTES = 16 * 1024 * 1024
+_MAX_ASSET_BYTES = 64 * 1024 * 1024
+_MAX_PUBLICATION_BYTES = 512 * 1024 * 1024
+_NPY_MAX_HEADER_BYTES = 1024 * 1024
 
 
 @dataclass(frozen=True, slots=True)
-class _BlobAsset:
-    data: memoryview
-    media_type: str
-    filename: str | None
-    format_id: str
-    metadata: JsonObject
+class VerificationResult:
+    states: int
+    outputs: int
+    assets: int
+    bytes_verified: int
+
+    def to_dict(self) -> JsonObject:
+        return {
+            "states": self.states,
+            "outputs": self.outputs,
+            "assets": self.assets,
+            "bytes_verified": self.bytes_verified,
+        }
 
 
-@runtime_checkable
-class NotebookProvenance(Protocol):
-    @property
-    def filename(self) -> str: ...
+class Publication:
+    """An immutable local publication opened from canonical `index.json`."""
 
-    @property
-    def document_sha256(self) -> str: ...
+    __slots__ = ("_index", "_path", "_states", "_vectors")
 
-
-@runtime_checkable
-class ProducerProvenance(Protocol):
-    @property
-    def marimo(self) -> str: ...
-
-    @property
-    def marimo_export(self) -> str: ...
-
-
-@runtime_checkable
-class Publication(Protocol):
-    @property
-    def notebook(self) -> NotebookProvenance: ...
-
-    @property
-    def producer(self) -> ProducerProvenance: ...
-
-    @property
-    def variant_names(self) -> tuple[str, ...]: ...
-
-    def variant(self, name: str) -> PublishedVariant: ...
-
-    def describe(self) -> JsonObject: ...
-
-    def verify(self) -> int: ...
-
-
-@runtime_checkable
-class PublishedVariant(Protocol):
-    @property
-    def name(self) -> str: ...
-
-    @property
-    def controls(self) -> JsonObject: ...
-
-    @property
-    def outputs(self) -> tuple[str, ...]: ...
-
-    def output(self, name: str) -> PublishedOutput: ...
-
-
-@runtime_checkable
-class PublishedOutput(Protocol):
-    @property
-    def variant(self) -> str: ...
-
-    @property
-    def name(self) -> str: ...
-
-    @property
-    def formats(self) -> tuple[str, ...]: ...
-
-    def format(self, name: str) -> PublishedFormat: ...
-
-
-@runtime_checkable
-class PublishedFormat(Protocol):
-    @property
-    def variant(self) -> str: ...
-
-    @property
-    def output(self) -> str: ...
-
-    @property
-    def name(self) -> str: ...
-
-    @property
-    def format_id(self) -> str: ...
-
-    @property
-    def media_type(self) -> str: ...
-
-    @property
-    def metadata(self) -> JsonObject: ...
-
-    @property
-    def filename(self) -> str | None: ...
-
-    def bytes(self) -> builtins.bytes: ...
-
-    def text(self) -> str: ...
-
-    def json(self, *, max_values: int = 100_000) -> JsonValue: ...
-
-    def verify(self) -> None: ...
-
-
-class _Publication:
-    """A verified-on-read static publication directory."""
-
-    __slots__ = ("_index", "_source")
-
-    def __init__(self, source: _DirectorySource, index: PublicationIndex) -> None:
-        self._source = source
+    def __init__(self, path: Path, index: PublicationIndex) -> None:
+        self._path = path
         self._index = index
+        self._states = {
+            name: PublishedState(self, name, entry) for name, entry in sorted(index.states.items())
+        }
+        self._vectors = {
+            canonical_bytes(entry.inputs): self._states[name]
+            for name, entry in index.states.items()
+        }
 
     @property
-    def notebook(self) -> _NotebookProvenance:
+    def path(self) -> Path:
+        return self._path
+
+    @property
+    def input_names(self) -> tuple[str, ...]:
+        return self._index.inputs
+
+    @property
+    def output_names(self) -> tuple[str, ...]:
+        return self._index.outputs
+
+    @property
+    def notebook(self) -> NotebookProvenance:
         return self._index.notebook
 
     @property
-    def producer(self) -> _ProducerProvenance:
+    def producer(self) -> ProducerProvenance:
         return self._index.producer
 
-    @property
-    def variant_names(self) -> tuple[str, ...]:
-        return tuple(sorted(self._index.variants))
+    def states(self) -> tuple[PublishedState, ...]:
+        return tuple(self._states.values())
 
-    def variant(self, name: str) -> PublishedVariant:
-        _selection_name(name, "variant")
+    def state(self, name: str) -> PublishedState:
+        if not isinstance(name, str):
+            raise TypeError("state name must be a string")
         try:
-            entry = self._index.variants[name]
+            return self._states[name]
         except KeyError as error:
-            raise _not_found("variant", name, self._index.variants.keys()) from error
-        return _PublishedVariant(self, name, entry)
+            raise PublicationError(
+                f"publication state {name!r} was not found",
+                code="state_not_found",
+                details={"name": name, "available": list(self._states)[:16]},
+            ) from error
 
-    def describe(self) -> JsonObject:
-        """Return public publication metadata detached from cache references."""
+    def resolve(self, inputs: Mapping[str, JsonValue]) -> PublishedState:
+        vector = _complete_inputs(inputs, self.input_names)
+        try:
+            return self._vectors[canonical_bytes(vector)]
+        except KeyError as error:
+            raise StateUnavailableError(
+                "publication has no state for the requested input vector",
+                details={"fingerprint": state_fingerprint(vector)},
+            ) from error
 
-        variants: JsonObject = {}
-        for variant_name in sorted(self._index.variants):
-            variant = self._index.variants[variant_name]
-            outputs: JsonObject = {}
-            for output_name in sorted(variant.outputs):
-                output = variant.outputs[output_name]
-                formats: JsonObject = {}
-                for format_name in sorted(output.formats):
-                    entry = output.formats[format_name]
-                    formats[format_name] = {
-                        "format_id": entry.format_id,
-                        "media_type": entry.media_type,
-                        "metadata": json_object(entry.metadata, "format metadata"),
-                    }
-                outputs[output_name] = {"formats": formats}
-            variants[variant_name] = {
-                "controls": json_object(variant.controls, "variant controls"),
-                "outputs": outputs,
-            }
-        return {
-            "schema": PUBLICATION_SCHEMA,
-            "asset_codec": ASSET_CODEC,
-            "notebook": self.notebook.wire(),
-            "producer": self.producer.wire(),
-            "variants": variants,
+    def verify(self) -> VerificationResult:
+        declared = {asset_path(codec, asset.sha256) for codec, asset in self._index.assets()}
+        _verify_asset_directory(self.path, declared)
+        verified: set[tuple[str, str]] = set()
+        total = 0
+        for _, _, descriptor in self._index.descriptor_entries():
+            if isinstance(descriptor, ScalarDescriptor):
+                continue
+            identity = (descriptor.codec, descriptor.asset.sha256)
+            if identity in verified:
+                continue
+            data = _read_asset(self.path, descriptor)
+            _validate_asset(descriptor, data)
+            verified.add(identity)
+            total += len(data)
+        return VerificationResult(
+            states=len(self._index.states),
+            outputs=len(self._index.states) * len(self._index.outputs),
+            assets=len(verified),
+            bytes_verified=total,
+        )
+
+
+class PublishedState:
+    __slots__ = ("_entry", "_inputs", "_outputs", "_publication", "fingerprint", "name")
+
+    def __init__(
+        self,
+        publication: Publication,
+        name: str,
+        entry: StateEntry,
+    ) -> None:
+        self._publication = publication
+        self.name = name
+        self.fingerprint = entry.fingerprint
+        self._entry = entry
+        self._inputs = cast(FrozenJsonObject, _freeze(entry.inputs))
+        self._outputs = {
+            output_name: PublishedOutput(self, output_name, entry.outputs[output_name])
+            for output_name in publication.output_names
         }
 
-    def verify(self) -> int:
-        """Verify every format reference and BlobAsset envelope."""
-
-        seen: set[str] = set()
-        for _, _, _, entry in self._index.format_entries():
-            if entry.asset.key in seen:
-                continue
-            seen.add(entry.asset.key)
-            _verify_index_agreement(self._read_asset(entry.asset), entry)
-        return len(seen)
-
-    def _read_entry(self, entry: FormatEntry) -> _BlobAsset:
-        asset = self._read_asset(entry.asset)
-        _verify_index_agreement(asset, entry)
-        return asset
-
-    def _read_asset(self, reference: AssetRef) -> _BlobAsset:
-        raw = self._source.read_asset(reference)
-        return _decode_blob_asset(raw, reference)
-
-
-class _PublishedVariant:
-    __slots__ = ("_entry", "_name", "_publication")
-
-    def __init__(
-        self,
-        publication: _Publication,
-        name: str,
-        entry: VariantEntry,
-    ) -> None:
-        self._publication = publication
-        self._entry = entry
-        self._name = name
+    @property
+    def publication(self) -> Publication:
+        return self._publication
 
     @property
-    def name(self) -> str:
-        return self._name
+    def inputs(self) -> FrozenJsonObject:
+        return self._inputs
 
-    @property
-    def controls(self) -> JsonObject:
-        return json_object(self._entry.controls, f"variant {self.name!r} controls")
-
-    @property
-    def outputs(self) -> tuple[str, ...]:
-        return tuple(sorted(self._entry.outputs))
+    def outputs(self) -> tuple[PublishedOutput, ...]:
+        return tuple(self._outputs.values())
 
     def output(self, name: str) -> PublishedOutput:
-        _selection_name(name, "output")
+        if not isinstance(name, str):
+            raise TypeError("output name must be a string")
         try:
-            entry = self._entry.outputs[name]
+            return self._outputs[name]
         except KeyError as error:
-            raise _not_found("output", name, self._entry.outputs.keys()) from error
-        return _PublishedOutput(self._publication, self.name, name, entry)
+            raise PublicationError(
+                f"publication output {name!r} was not found",
+                code="output_not_found",
+                details={"name": name, "available": list(self._outputs)[:16]},
+            ) from error
+
+    def resolve(self, patch: Mapping[str, JsonValue]) -> PublishedState:
+        if not isinstance(patch, Mapping):
+            raise PublicationError(
+                "state patch must be an object",
+                code="state_input_invalid",
+            )
+        if not patch:
+            return self
+        unknown = sorted(set(patch) - set(self.publication.input_names))
+        if unknown:
+            raise PublicationError(
+                f"state patch names unknown inputs: {', '.join(unknown)}",
+                code="state_input_invalid",
+                details={"unknown": unknown},
+            )
+        merged = _thaw(self.inputs)
+        assert isinstance(merged, dict)
+        for name, value in patch.items():
+            merged[name] = value
+        return self.publication.resolve(cast(Mapping[str, JsonValue], merged))
 
 
-class _PublishedOutput:
-    __slots__ = ("_entry", "_name", "_publication", "_variant")
+class PublishedOutput:
+    __slots__ = ("_descriptor", "_state", "name")
 
     def __init__(
         self,
-        publication: _Publication,
-        variant: str,
+        state: PublishedState,
         name: str,
-        entry: OutputEntry,
+        descriptor: OutputDescriptor,
     ) -> None:
-        self._publication = publication
-        self._entry = entry
-        self._variant = variant
-        self._name = name
+        self._state = state
+        self.name = name
+        self._descriptor = descriptor
 
     @property
-    def variant(self) -> str:
-        return self._variant
+    def state(self) -> PublishedState:
+        return self._state
 
     @property
-    def name(self) -> str:
-        return self._name
-
-    @property
-    def formats(self) -> tuple[str, ...]:
-        return tuple(sorted(self._entry.formats))
-
-    def format(self, name: str) -> PublishedFormat:
-        _selection_name(name, "format")
-        try:
-            entry = self._entry.formats[name]
-        except KeyError as error:
-            raise _not_found("format", name, self._entry.formats.keys()) from error
-        return _PublishedFormat(self._publication, self.variant, self.name, name, entry)
-
-
-class _PublishedFormat:
-    __slots__ = ("_entry", "_name", "_output", "_publication", "_variant")
-
-    def __init__(
-        self,
-        publication: _Publication,
-        variant: str,
-        output: str,
-        name: str,
-        entry: FormatEntry,
-    ) -> None:
-        self._publication = publication
-        self._entry = entry
-        self._variant = variant
-        self._output = output
-        self._name = name
-
-    @property
-    def variant(self) -> str:
-        return self._variant
-
-    @property
-    def output(self) -> str:
-        return self._output
-
-    @property
-    def name(self) -> str:
-        return self._name
-
-    @property
-    def format_id(self) -> str:
-        return self._entry.format_id
+    def codec(self) -> str:
+        return self._descriptor.codec
 
     @property
     def media_type(self) -> str:
-        return self._entry.media_type
+        return self._descriptor.media_type
 
     @property
-    def metadata(self) -> JsonObject:
-        return json_object(self._entry.metadata, "format metadata")
+    def descriptor(self) -> OutputDescriptor:
+        return self._descriptor
 
-    @property
-    def filename(self) -> str | None:
-        return self._blob().filename
-
-    def bytes(self) -> builtins.bytes:
-        return self._blob().data.tobytes()
-
-    def text(self) -> str:
-        data = self._blob().data
-        try:
-            declared = _charset(self.media_type)
-        except (LookupError, UnicodeError, ValueError) as error:
+    def scalar(self) -> ScalarValue:
+        if not isinstance(self._descriptor, ScalarDescriptor):
             raise PublicationError(
-                f"format {self.name!r} declares an invalid text charset"
-            ) from error
-        if declared is not None and declared.lower() != "utf-8":
-            raise PublicationError(
-                f"format {self.name!r} declares charset {declared!r}. "
-                "use bytes() for explicit decoding"
+                f"output {self.name!r} does not use the scalar codec",
+                code="codec_invalid",
             )
-        try:
-            return str(data, "utf-8-sig")
-        except (UnicodeError, ValueError) as error:
-            raise PublicationError(
-                f"format {self.name!r} cannot be decoded as UTF-8 text"
-            ) from error
+        return self._descriptor.value
 
-    def json(self, *, max_values: int = 100_000) -> JsonValue:
-        _read_limit(max_values, "max_values")
-        try:
-            return decode_json(
-                self._blob().data,
-                f"format {self.name!r}",
-                max_values=max_values,
+    def asset_bytes(self) -> bytes:
+        if isinstance(self._descriptor, ScalarDescriptor):
+            raise PublicationError(
+                f"output {self.name!r} has no asset bytes",
+                code="codec_invalid",
             )
-        except (TypeError, ValueError) as error:
-            raise PublicationError(f"format {self.name!r} does not contain valid JSON") from error
-
-    def verify(self) -> None:
-        self._blob()
-
-    def _blob(self) -> _BlobAsset:
-        return self._publication._read_entry(self._entry)
-
-
-def open_publication(
-    path: str | Path,
-    *,
-    max_index_bytes: int = _DEFAULT_MAX_INDEX_BYTES,
-    max_asset_bytes: int = _DEFAULT_MAX_ASSET_BYTES,
-    max_publication_bytes: int = _DEFAULT_MAX_PUBLICATION_BYTES,
-) -> Publication:
-    source = _DirectorySource.open(
-        path,
-        max_index_bytes=max_index_bytes,
-        max_asset_bytes=max_asset_bytes,
-        max_publication_bytes=max_publication_bytes,
-    )
-    index_bytes = source.read_index()
-    index = PublicationIndex.from_bytes(index_bytes)
-    source.verify_closure(index, index_bytes=len(index_bytes))
-    return _Publication(source, index)
-
-
-class _DirectorySource:
-    def __init__(
-        self,
-        root: Path,
-        max_index_bytes: int,
-        max_asset_bytes: int,
-        max_publication_bytes: int,
-    ) -> None:
-        self.root = root
-        self.max_index_bytes = max_index_bytes
-        self.max_asset_bytes = max_asset_bytes
-        self.max_publication_bytes = max_publication_bytes
-
-    @classmethod
-    def open(
-        cls,
-        path: str | Path,
-        *,
-        max_index_bytes: int,
-        max_asset_bytes: int,
-        max_publication_bytes: int,
-    ) -> _DirectorySource:
-        _read_limit(max_index_bytes, "max_index_bytes")
-        _read_limit(max_asset_bytes, "max_asset_bytes")
-        _read_limit(max_publication_bytes, "max_publication_bytes")
-        try:
-            root = Path(path).expanduser().resolve(strict=True)
-        except (OSError, RuntimeError, TypeError) as error:
-            raise PublicationError(f"publication directory is unavailable: {path}") from error
-        if not root.is_dir():
-            raise PublicationError(f"publication path is not a directory: {path}")
-        if not (root / "cache").is_dir():
-            raise PublicationError(f"publication cache path is not a directory: {root / 'cache'}")
-        return cls(root, max_index_bytes, max_asset_bytes, max_publication_bytes)
-
-    def read_index(self) -> bytes:
-        try:
-            return read_publication_index(self.root, max_bytes=self.max_index_bytes)
-        except SecureReadLimitError as error:
-            raise PublicationError(
-                f"publication index exceeds the {self.max_index_bytes} byte read limit"
-            ) from error
-        except SecureFileSizeError as error:
-            raise PublicationError("publication index changed while it was read") from error
-        except SecureReadError as error:
-            raise PublicationError("publication index could not be read securely") from error
-
-    def read_asset(self, reference: AssetRef) -> bytes:
-        try:
-            data = read_cache_asset(
-                self.root,
-                reference.key,
-                expected_size=reference.size,
-                max_bytes=self.max_asset_bytes,
-            )
-        except SecureReadLimitError as error:
-            raise PublicationError(
-                f"cache asset {reference.key!r} exceeds the {self.max_asset_bytes} byte read limit"
-            ) from error
-        except SecureFileSizeError as error:
-            raise IntegrityError(
-                f"cache asset {reference.key!r} has an unexpected size",
-                details={"expected": error.expected_size, "actual": error.actual_size},
-            ) from error
-        except SecureReadError as error:
-            raise PublicationError(
-                f"cache asset {reference.key!r} could not be read securely"
-            ) from error
-        digest = sha256_bytes(data)
-        if digest != reference.sha256:
-            raise IntegrityError(
-                f"cache asset {reference.key!r} failed SHA-256 verification",
-                details={"expected": reference.sha256, "actual": digest},
-            )
+        data = _read_asset(self.state.publication.path, self._descriptor)
+        _validate_asset(self._descriptor, data)
         return data
 
-    def verify_closure(self, index: PublicationIndex, *, index_bytes: int) -> None:
-        total = index_bytes
-        if total > self.max_publication_bytes:
+    def blob_asset(self) -> BlobAsset:
+        if not isinstance(self._descriptor, BlobAssetDescriptor):
             raise PublicationError(
-                f"publication closure exceeds the {self.max_publication_bytes} byte read limit"
+                f"output {self.name!r} does not use the BlobAsset codec",
+                code="codec_invalid",
             )
-        for asset in index.assets():
-            if asset.size > self.max_asset_bytes:
-                raise PublicationError(
-                    f"cache asset {asset.key!r} exceeds the {self.max_asset_bytes} byte read limit"
-                )
-            if asset.size > self.max_publication_bytes - total:
-                raise PublicationError(
-                    f"publication closure exceeds the {self.max_publication_bytes} byte read limit"
-                )
-            total += asset.size
-
-
-def _read_limit(value: object, name: str) -> None:
-    if not isinstance(value, int) or isinstance(value, bool) or value <= 0 or value > 2**53 - 1:
-        raise TypeError(f"{name} must be a positive safe integer")
-
-
-def _selection_name(name: object, kind: str) -> None:
-    if not isinstance(name, str):
-        raise TypeError(f"{kind} name must be a string")
-
-
-def _not_found(kind: str, name: str, available: Collection[str]) -> PublicationError:
-    bounded_name, name_truncated = _diagnostic_name(name)
-    shown_available, available_count = _available_prefix(available)
-    message = _bounded_message(f"publication has no {kind} {bounded_name!r}")
-    return _PublicationNotFoundError(
-        message,
-        details={
-            "kind": kind,
-            "name": bounded_name,
-            "name_truncated": name_truncated,
-            "available": shown_available,
-            "available_count": available_count,
-            "available_truncated": len(shown_available) < available_count,
-        },
-    )
-
-
-def _diagnostic_name(name: str) -> tuple[str, bool]:
-    pieces: list[tuple[str, int]] = []
-    size = 0
-    for character in name:
-        piece = character if character.isprintable() else repr(character)[1:-1]
-        piece_size = len(piece.encode("utf-8"))
-        if size + piece_size > _NOT_FOUND_NAME_UTF8_LIMIT:
-            marker_size = len(_TRUNCATION_MARKER)
-            while pieces and size + marker_size > _NOT_FOUND_NAME_UTF8_LIMIT:
-                _, removed_size = pieces.pop()
-                size -= removed_size
-            pieces.append((_TRUNCATION_MARKER, marker_size))
-            return "".join(piece for piece, _ in pieces), True
-        pieces.append((piece, piece_size))
-        size += piece_size
-    return "".join(piece for piece, _ in pieces), False
-
-
-def _available_prefix(available: Collection[str]) -> tuple[list[str], int]:
-    names: list[str] = []
-    available_count = 0
-    for name in available:
-        available_count += 1
-        insort(names, name)
-        if len(names) > _NOT_FOUND_AVAILABLE_LIMIT:
-            names.pop()
-
-    prefix: list[str] = []
-    used_bytes = 0
-    for name in names:
-        if len(prefix) == _NOT_FOUND_AVAILABLE_LIMIT:
-            break
-        remaining = _NOT_FOUND_AVAILABLE_UTF8_LIMIT - used_bytes
-        name_size = _utf8_size_within(name, remaining)
-        if name_size is None:
-            break
-        prefix.append(name)
-        used_bytes += name_size
-    return prefix, available_count
-
-
-def _utf8_size_within(value: str, maximum: int) -> int | None:
-    size = 0
-    for character in value:
-        size += len(character.encode("utf-8"))
-        if size > maximum:
-            return None
-    return size
-
-
-def _bounded_message(message: str) -> str:
-    if len(message) <= _NOT_FOUND_MESSAGE_LIMIT:
-        return message
-    return f"{message[: _NOT_FOUND_MESSAGE_LIMIT - len(_TRUNCATION_MARKER)]}{_TRUNCATION_MARKER}"
-
-
-def _decode_blob_asset(data: bytes, reference: AssetRef) -> _BlobAsset:
-    try:
-        value = decode_blob_asset_wire(data, maximum_bytes=reference.size)
-    except _BlobAssetFieldLimitError as error:
-        if error.field == "filename":
-            raise IntegrityError(f"cache asset {reference.key!r} filename is invalid") from error
-        raise IntegrityError(
-            f"cache asset {reference.key!r} is not a valid BlobAsset envelope"
-        ) from error
-    except (RecursionError, TypeError, ValueError) as error:
-        raise IntegrityError(
-            f"cache asset {reference.key!r} is not a valid BlobAsset envelope"
-        ) from error
-    if not value.media_type:
-        raise IntegrityError(f"cache asset {reference.key!r} media_type must be a string")
-    if value.filename is not None:
-        try:
-            validate_portable_basename(value.filename, "BlobAsset.filename")
-        except (TypeError, ValueError) as error:
-            raise IntegrityError(f"cache asset {reference.key!r} filename is invalid") from error
-    if not value.format_id:
-        raise IntegrityError(f"cache asset {reference.key!r} format_id must be a string")
-    try:
-        metadata = decode_json_object(
-            value.metadata_json,
-            "BlobAsset.metadata.metadata_json",
+        envelope = _validated_blob(self._descriptor, self.asset_bytes())
+        return BlobAsset(
+            data=envelope.data,
+            media_type=envelope.media_type,
+            filename=envelope.filename,
+            metadata=envelope.metadata,
         )
+
+
+def open_publication(path: StrPath) -> Publication:
+    """Open and validate a local publication index without reading assets."""
+
+    root = _publication_root(path)
+    try:
+        data = read_publication_index(root, max_bytes=_MAX_INDEX_BYTES)
+    except SecureReadError as error:
+        raise PublicationError(
+            f"could not read publication index: {error}",
+            code="publication_invalid",
+        ) from error
+    index = PublicationIndex.from_bytes(data)
+    closure = len(data) + sum(asset.size for _, asset in index.assets())
+    if closure > _MAX_PUBLICATION_BYTES:
+        raise PublicationError(
+            f"publication closure exceeds {_MAX_PUBLICATION_BYTES} bytes",
+            code="publication_invalid",
+        )
+    if any(asset.size > _MAX_ASSET_BYTES for _, asset in index.assets()):
+        raise PublicationError(
+            f"publication asset exceeds {_MAX_ASSET_BYTES} bytes",
+            code="publication_invalid",
+        )
+    return Publication(root, index)
+
+
+def _publication_root(path: StrPath) -> Path:
+    if not isinstance(path, (str, os.PathLike)):
+        raise TypeError("publication path must be a string or path-like object")
+    root = Path(path).absolute()
+    try:
+        inspected = root.lstat()
+    except OSError as error:
+        raise PublicationError(
+            f"publication directory is unavailable: {root}",
+            code="publication_invalid",
+        ) from error
+    if stat.S_ISLNK(inspected.st_mode) or not stat.S_ISDIR(inspected.st_mode):
+        raise PublicationError(
+            "publication root must be a real directory",
+            code="publication_invalid",
+        )
+    return root
+
+
+def _complete_inputs(
+    inputs: Mapping[str, JsonValue],
+    names: tuple[str, ...],
+) -> JsonObject:
+    if not isinstance(inputs, Mapping):
+        raise PublicationError(
+            "state inputs must be an object",
+            code="state_input_invalid",
+        )
+    expected = set(names)
+    actual = set(inputs)
+    if actual != expected:
+        raise PublicationError(
+            "state input keys must exactly match publication.input_names",
+            code="state_input_invalid",
+            details={
+                "missing": sorted(expected - actual),
+                "extra": sorted(actual - expected),
+            },
+        )
+    try:
+        return {name: cast(JsonValue, _thaw(_freeze(inputs[name]))) for name in names}
+    except (TypeError, ValueError) as error:
+        raise PublicationError(
+            f"state inputs are invalid: {error}",
+            code="state_input_invalid",
+        ) from error
+
+
+def _read_asset(path: Path, descriptor: OutputDescriptor) -> bytes:
+    if isinstance(descriptor, ScalarDescriptor):
+        raise TypeError("scalar descriptors have no assets")
+    relative = asset_path(descriptor.codec, descriptor.asset.sha256)
+    try:
+        data = read_publication_asset(
+            path,
+            relative,
+            expected_size=descriptor.asset.size,
+            max_bytes=_MAX_ASSET_BYTES,
+        )
+    except SecureReadError as error:
+        raise IntegrityError(
+            f"could not read publication asset {relative}: {error}",
+            details={"path": relative},
+        ) from error
+    from marimo_export._json import sha256_bytes
+
+    digest = sha256_bytes(data)
+    if digest != descriptor.asset.sha256:
+        raise IntegrityError(
+            f"publication asset {relative} failed SHA-256 verification",
+            details={"path": relative},
+        )
+    return data
+
+
+def _validate_asset(descriptor: OutputDescriptor, data: bytes) -> None:
+    if isinstance(descriptor, NumpyDescriptor):
+        _validate_npy(data)
+    elif isinstance(descriptor, ArrowDescriptor):
+        _validate_arrow(data)
+    elif isinstance(descriptor, BlobAssetDescriptor):
+        _validated_blob(descriptor, data)
+
+
+def _validated_blob(
+    descriptor: BlobAssetDescriptor,
+    data: bytes,
+) -> BlobAssetEnvelope:
+    try:
+        envelope = decode_blob_asset(data, maximum_bytes=_MAX_ASSET_BYTES)
     except (TypeError, ValueError) as error:
         raise IntegrityError(
-            f"cache asset {reference.key!r} metadata must be JSON-compatible"
+            "BlobAsset envelope is invalid",
+            code="asset_invalid",
         ) from error
-    return _BlobAsset(
-        data=value.data,
-        media_type=value.media_type,
-        filename=value.filename,
-        format_id=value.format_id,
-        metadata=metadata,
-    )
+    if envelope.media_type != descriptor.media_type:
+        raise IntegrityError(
+            "BlobAsset media type disagrees with its descriptor",
+            code="asset_invalid",
+        )
+    if envelope.filename != descriptor.filename:
+        raise IntegrityError(
+            "BlobAsset filename disagrees with its descriptor",
+            code="asset_invalid",
+        )
+    if canonical_bytes(envelope.metadata) != canonical_bytes(descriptor.metadata):
+        raise IntegrityError(
+            "BlobAsset metadata disagrees with its descriptor",
+            code="asset_invalid",
+        )
+    return envelope
 
 
-def _verify_index_agreement(asset: _BlobAsset, entry: FormatEntry) -> None:
-    if asset.media_type != entry.media_type:
-        raise IntegrityError(f"cache asset {entry.asset.key!r} media type disagrees with the index")
-    if asset.format_id != entry.format_id:
-        raise IntegrityError(f"cache asset {entry.asset.key!r} format ID disagrees with the index")
-    indexed_metadata = json_object(entry.metadata, "format.metadata")
-    if not json_equal(asset.metadata, indexed_metadata):
-        raise IntegrityError(f"cache asset {entry.asset.key!r} metadata disagrees with the index")
+def _validate_npy(data: bytes) -> None:
+    if len(data) < 10 or data[:6] != b"\x93NUMPY":
+        raise IntegrityError("NumPy asset has invalid NPY magic", code="asset_invalid")
+    major, minor = data[6], data[7]
+    if (major, minor) not in {(1, 0), (2, 0), (3, 0)}:
+        raise IntegrityError("NumPy asset uses an unsupported NPY version", code="asset_invalid")
+    length_bytes = 2 if major == 1 else 4
+    header_start = 8 + length_bytes
+    if len(data) < header_start:
+        raise IntegrityError("NumPy asset has a truncated NPY header", code="asset_invalid")
+    header_length = int.from_bytes(data[8:header_start], "little")
+    if not 0 < header_length <= _NPY_MAX_HEADER_BYTES:
+        raise IntegrityError("NumPy asset has an invalid NPY header length", code="asset_invalid")
+    header_end = header_start + header_length
+    if header_end > len(data):
+        raise IntegrityError("NumPy asset has a truncated NPY header", code="asset_invalid")
+    try:
+        header = ast.literal_eval(data[header_start:header_end].decode("latin1").strip())
+    except (SyntaxError, ValueError, UnicodeError) as error:
+        raise IntegrityError(
+            "NumPy asset has an invalid NPY header", code="asset_invalid"
+        ) from error
+    if not isinstance(header, dict) or set(header) != {"descr", "fortran_order", "shape"}:
+        raise IntegrityError("NumPy asset has an invalid NPY header", code="asset_invalid")
+    descr = header["descr"]
+    order = header["fortran_order"]
+    shape = header["shape"]
+    if not isinstance(descr, str) or len(descr) < 2:
+        raise IntegrityError("NumPy asset has an invalid dtype", code="asset_invalid")
+    if descr[1:2] not in {"?", "b", "i", "u", "f", "c"}:
+        raise IntegrityError("NumPy asset dtype is outside the portable set", code="asset_invalid")
+    try:
+        item_size = int(descr[2:] or "1")
+    except ValueError as error:
+        raise IntegrityError(
+            "NumPy asset has an invalid dtype size", code="asset_invalid"
+        ) from error
+    if item_size <= 0 or not isinstance(order, bool) or not isinstance(shape, tuple):
+        raise IntegrityError("NumPy asset has an invalid NPY header", code="asset_invalid")
+    items = 1
+    for dimension in shape:
+        if (
+            not isinstance(dimension, int)
+            or isinstance(dimension, bool)
+            or dimension < 0
+            or dimension > 2**53 - 1
+        ):
+            raise IntegrityError("NumPy asset has an invalid shape", code="asset_invalid")
+        items *= dimension
+        if items > 2**53 - 1:
+            raise IntegrityError("NumPy asset shape is too large", code="asset_invalid")
+    if header_end + items * item_size != len(data):
+        raise IntegrityError(
+            "NumPy asset payload length does not match its shape", code="asset_invalid"
+        )
 
 
-def _charset(media_type: str) -> str | None:
-    for parameter in media_type.split(";")[1:]:
-        name, separator, value = parameter.partition("=")
-        if separator and name.strip().lower() == "charset":
-            charset = value.strip()
-            if not charset:
-                raise LookupError("media type charset is empty")
-            if charset.startswith('"') and charset.endswith('"') and len(charset) >= 2:
-                charset = charset[1:-1]
-            elif '"' in charset:
-                raise LookupError("media type charset has unbalanced quotes")
-            if '"' in charset:
-                raise LookupError("media type charset contains an unexpected quote")
-            if not charset:
-                raise LookupError("media type charset is empty")
-            return charset
-    return None
+def _validate_arrow(data: bytes) -> None:
+    if len(data) < 16 or data[:6] != b"ARROW1" or data[-6:] != b"ARROW1":
+        raise IntegrityError("Arrow asset has invalid file framing", code="asset_invalid")
+    footer_length = int.from_bytes(data[-10:-6], "little")
+    if footer_length <= 0 or footer_length > len(data) - 16:
+        raise IntegrityError("Arrow asset has an invalid footer length", code="asset_invalid")
+
+
+def _verify_asset_directory(root: Path, declared: set[str]) -> None:
+    directory = root / "assets"
+    try:
+        inspected = directory.lstat()
+    except FileNotFoundError:
+        if declared:
+            raise PublicationError(
+                "publication assets directory is missing",
+                code="asset_invalid",
+            ) from None
+        return
+    except OSError as error:
+        raise PublicationError(
+            "publication assets directory is unavailable",
+            code="asset_invalid",
+        ) from error
+    if stat.S_ISLNK(inspected.st_mode) or not stat.S_ISDIR(inspected.st_mode):
+        raise PublicationError(
+            "publication assets path must be a real directory",
+            code="asset_invalid",
+        )
+    expected = {Path(path).name for path in declared}
+    try:
+        entries = tuple(directory.iterdir())
+    except OSError as error:
+        raise PublicationError(
+            "publication assets directory could not be enumerated",
+            code="asset_invalid",
+        ) from error
+    actual: set[str] = set()
+    for entry in entries:
+        try:
+            entry_stat = entry.lstat()
+        except OSError as error:
+            raise PublicationError(
+                "publication asset could not be inspected",
+                code="asset_invalid",
+            ) from error
+        if stat.S_ISLNK(entry_stat.st_mode) or not stat.S_ISREG(entry_stat.st_mode):
+            raise PublicationError(
+                f"publication contains an undeclared asset entry: {entry.name}",
+                code="asset_undeclared",
+            )
+        actual.add(entry.name)
+    undeclared = sorted(actual - expected)
+    if undeclared:
+        raise PublicationError(
+            f"publication contains undeclared assets: {', '.join(undeclared[:16])}",
+            code="asset_undeclared",
+            details={"assets": undeclared[:16]},
+        )
+
+
+def _freeze(value: object) -> FrozenJsonValue:
+    if value is None or isinstance(value, (str, bool, int, float)):
+        if isinstance(value, float) and not __import__("math").isfinite(value):
+            raise ValueError("JSON values must be finite")
+        return value
+    if isinstance(value, Mapping):
+        result: dict[str, FrozenJsonValue] = {}
+        for key, item in value.items():
+            if not isinstance(key, str):
+                raise TypeError("JSON object keys must be strings")
+            result[key] = _freeze(item)
+        return MappingProxyType(result)
+    if isinstance(value, list | tuple):
+        return tuple(_freeze(item) for item in value)
+    raise TypeError(f"value must be portable JSON, got {type(value).__name__}")
+
+
+def _thaw(value: FrozenJsonValue) -> JsonValue:
+    if isinstance(value, Mapping):
+        mapping = cast(Mapping[str, FrozenJsonValue], value)
+        return {key: _thaw(item) for key, item in mapping.items()}
+    if isinstance(value, tuple):
+        return [_thaw(item) for item in value]
+    return value
 
 
 __all__ = [
     "NotebookProvenance",
     "ProducerProvenance",
     "Publication",
-    "PublishedFormat",
     "PublishedOutput",
-    "PublishedVariant",
+    "PublishedState",
+    "VerificationResult",
     "open_publication",
 ]

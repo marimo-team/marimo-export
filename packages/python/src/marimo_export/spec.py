@@ -118,7 +118,12 @@ _SafeIntegerWire = Annotated[
 ]
 _FiniteNumberWire = Annotated[
     float,
-    Field(strict=True, allow_inf_nan=False),
+    Field(
+        strict=True,
+        allow_inf_nan=False,
+        ge=-_MAX_SAFE_INTEGER,
+        le=_MAX_SAFE_INTEGER,
+    ),
 ]
 _PortableValueWire = TypeAliasType(
     "_PortableValueWire",
