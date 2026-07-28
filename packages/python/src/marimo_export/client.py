@@ -41,7 +41,7 @@ from marimo_export.errors import (
 )
 from marimo_export.publication import AssetRef, PublicationIndex
 from marimo_export.reader import open_publication
-from marimo_export.spec import ExportSpec, decode_spec, load_spec
+from marimo_export.spec import ExportSpec
 
 _DEFAULT_MAX_ASSET_BYTES = 64 * 1024 * 1024
 _DEFAULT_MAX_INDEX_BYTES = 16 * 1024 * 1024
@@ -640,10 +640,10 @@ def _coerce_spec(
     if isinstance(value, ExportSpec):
         return value
     if isinstance(value, Mapping):
-        return decode_spec(value)
+        return ExportSpec.from_value(value)
     if isinstance(value, (str, os.PathLike)):
-        return load_spec(Path(value).expanduser())
-    return decode_spec(value)
+        return ExportSpec.from_file(value)
+    return ExportSpec.from_value(value)
 
 
 def _session_diagnostics(
@@ -725,7 +725,7 @@ def _invoke_capture(
             session_id,
             "capture",
             {
-                "spec": spec.wire(),
+                "spec": spec.to_value(),
                 "maximum_index_bytes": max_index_bytes,
                 "maximum_publication_bytes": max_publication_bytes,
             },

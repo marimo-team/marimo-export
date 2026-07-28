@@ -1,24 +1,27 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import ClassVar
-
 from marimo_export._json import JsonObject, canonical_bytes, decode_json_object, json_object
 
 
 class MarimoExportError(Exception):
     """Base class for errors exposed by marimo-export."""
 
-    code: ClassVar[str] = "marimo_export_error"
+    code: str = "marimo_export_error"
 
     def __init__(
         self,
         message: str,
         *,
+        code: str | None = None,
         details: Mapping[str, object] | None = None,
     ) -> None:
         if not isinstance(message, str) or not message:
             raise TypeError("error message must be a non-empty string")
+        if code is not None:
+            if not isinstance(code, str) or not code:
+                raise TypeError("error code must be a non-empty string")
+            self.code = code
         parsed_details = json_object(
             {} if details is None else details,
             "error.details",
@@ -46,13 +49,13 @@ class MarimoExportError(Exception):
 class SpecError(MarimoExportError):
     """The export specification is invalid."""
 
-    code = "spec_error"
+    code = "spec_invalid"
 
 
 class TransportError(MarimoExportError):
     """A server request, stream, or bridge response failed."""
 
-    code = "transport_error"
+    code = "transport_failed"
 
 
 class SessionError(MarimoExportError):
@@ -70,28 +73,58 @@ class CaptureError(MarimoExportError):
 class SelectionError(CaptureError):
     """A requested global, expression, cell, or UI control is unavailable."""
 
-    code = "selection_error"
+    code = "selection_failed"
 
 
 class ProjectionError(CaptureError):
     """An exporter could not produce the requested representation."""
 
-    code = "projection_error"
+    code = "output_execution_failed"
 
 
 class TransferError(CaptureError):
     """A captured cache asset could not be transferred."""
 
-    code = "transfer_error"
+    code = "integrity_failed"
 
 
 class PublicationError(MarimoExportError):
     """A static publication is missing, malformed, or cannot be read."""
 
-    code = "publication_error"
+    code = "publication_invalid"
 
 
 class IntegrityError(PublicationError):
     """A publication asset failed integrity or envelope validation."""
 
-    code = "integrity_error"
+    code = "integrity_failed"
+
+
+class CompatibilityError(MarimoExportError):
+    """The installed marimo runtime lacks a required capability."""
+
+    code = "marimo_incompatible"
+
+
+class ExecutionError(MarimoExportError):
+    """A notebook baseline or state could not execute."""
+
+    code = "state_execution_failed"
+
+
+class OutputError(ExecutionError):
+    """A projected notebook output could not execute."""
+
+    code = "output_execution_failed"
+
+
+class CodecError(MarimoExportError):
+    """A native cache return cannot enter the publication protocol."""
+
+    code = "codec_invalid"
+
+
+class StateUnavailableError(PublicationError):
+    """A publication has no state for the requested complete input vector."""
+
+    code = "state_unavailable"

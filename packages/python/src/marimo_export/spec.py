@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-import ast
 import keyword
-import re
+import os
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Annotated, Any, Literal, cast
+from types import MappingProxyType
+from typing import Annotated, Any, ClassVar, Literal, TypeAlias, cast
 
 import yaml
 from pydantic import (
@@ -13,13 +14,14 @@ from pydantic import (
     BeforeValidator,
     ConfigDict,
     Field,
-    SkipValidation,
     StringConstraints,
     ValidationError,
     field_validator,
+    model_validator,
 )
 from pydantic.json_schema import GenerateJsonSchema
 from typing_extensions import TypeAliasType
+from yaml.events import AliasEvent
 from yaml.nodes import MappingNode, Node
 from yaml.resolver import BaseResolver
 
@@ -31,58 +33,34 @@ from marimo_export._json import (
     decode_json_object,
     json_object,
 )
-from marimo_export._python import validate_import_reference
 from marimo_export.errors import SpecError
-from marimo_export.exporters._registry import _builtin_exporter, _normalize_options
 
 SPEC_SCHEMA = "marimo-export.spec.v1"
-_MAX_SAFE_INTEGER = 2**53 - 1
-_PYTHON_WHITESPACE = (
-    r"\u0009-\u000d\u001c-\u0020\u0085\u00a0\u1680"
-    r"\u2000-\u200a\u2028\u2029\u202f\u205f\u3000"
+
+FrozenJsonPrimitive: TypeAlias = str | int | float | bool | None
+FrozenJsonValue: TypeAlias = (
+    FrozenJsonPrimitive | tuple["FrozenJsonValue", ...] | Mapping[str, "FrozenJsonValue"]
 )
-_UNICODE_SCALAR_LOOKAHEAD = r"(?![\s\S]*[\uD800-\uDFFF])"
-_TRUE_END = r"(?![\s\S])"
-_UNICODE_STRING_SCHEMA = rf"^{_UNICODE_SCALAR_LOOKAHEAD}[\s\S]*{_TRUE_END}"
-_PUBLIC_NAME_SCHEMA = (
-    rf"^{_UNICODE_SCALAR_LOOKAHEAD}(?![\s\S]*[\u0000-\u001f\u007f])"
-    rf"(?![{_PYTHON_WHITESPACE}])"
-    rf"(?![\s\S]*[{_PYTHON_WHITESPACE}]{_TRUE_END})[\s\S]+{_TRUE_END}"
-)
-_IDENTIFIER_TOKEN_SCHEMA = r"(?:[A-Za-z_]|[^\u0000-\u007f])(?:[A-Za-z0-9_]|[^\u0000-\u007f])*"
-_PYTHON_IDENTIFIER_SCHEMA = (
-    rf"^{_UNICODE_SCALAR_LOOKAHEAD}(?![\s\S]*[{_PYTHON_WHITESPACE}])"
-    rf"{_IDENTIFIER_TOKEN_SCHEMA}{_TRUE_END}"
-)
-_IMPORT_REFERENCE_SCHEMA = (
-    rf"^{_UNICODE_SCALAR_LOOKAHEAD}(?![\s\S]*[{_PYTHON_WHITESPACE}])"
-    rf"{_IDENTIFIER_TOKEN_SCHEMA}(?:\.{_IDENTIFIER_TOKEN_SCHEMA})*:"
-    rf"{_IDENTIFIER_TOKEN_SCHEMA}(?:\.{_IDENTIFIER_TOKEN_SCHEMA})*{_TRUE_END}"
-)
-_SAFE_ERROR_PART = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
-_MAX_VALIDATION_ERRORS = 8
-_MAX_ERROR_PATH_LENGTH = 512
-_MAX_ERROR_MESSAGE_LENGTH = 2_048
+FrozenJsonObject: TypeAlias = Mapping[str, FrozenJsonValue]
+StrPath: TypeAlias = str | os.PathLike[str]
+
+_MAX_NAME_BYTES = 255
 _MAX_SPEC_BYTES = 16 * 1024 * 1024
 _MAX_YAML_DEPTH = 256
 _MAX_YAML_NODES = 100_000
-_SCHEMA_NAMES = {
-    "_UnicodeStringWire": "unicode_string",
-    "_PublicNameWire": "public_name",
-    "_PythonIdentifierWire": "python_identifier",
-    "_ImportReferenceWire": "import_reference",
-    "_JsonValueWire": "json",
-    "_JsonObjectWire": "json_object",
-    "_ControlsWire": "controls",
-    "_ExpressionSourceWire": "expression_source",
-    "_CellSourceWire": "cell_source",
-    "_SourceWire": "source",
-    "_ImportExporterWire": "import_exporter",
-    "_VariableExporterWire": "variable_exporter",
-    "_ExporterWire": "exporter",
-    "_FormatWire": "format",
-    "_OutputWire": "output",
-}
+_MAX_VALIDATION_ERRORS = 8
+_MAX_ERROR_MESSAGE_CHARS = 2_048
+_MAX_SAFE_INTEGER = 2**53 - 1
+_UNICODE_SCALAR_LOOKAHEAD = r"(?![\s\S]*[\uD800-\uDFFF])"
+_TRUE_END = r"(?![\s\S])"
+_UNICODE_STRING_PATTERN = rf"^{_UNICODE_SCALAR_LOOKAHEAD}[\s\S]*{_TRUE_END}"
+_PUBLIC_NAME_PATTERN = (
+    rf"^{_UNICODE_SCALAR_LOOKAHEAD}(?![\s\S]*[\u0000-\u001f\u007f])[\s\S]+{_TRUE_END}"
+)
+_IDENTIFIER_PATTERN = (
+    rf"^{_UNICODE_SCALAR_LOOKAHEAD}(?:[A-Za-z_]|[^\u0000-\u007f])"
+    rf"(?:[A-Za-z0-9_]|[^\u0000-\u007f])*{_TRUE_END}"
+)
 
 
 def _validate_public_name(value: object) -> object:
@@ -93,87 +71,64 @@ def _validate_public_name(value: object) -> object:
         or value != value.strip()
         or any(ord(character) < 32 or ord(character) == 127 for character in value)
     ):
-        raise ValueError("must be a non-empty string without surrounding whitespace")
+        raise ValueError("must be a non-empty name without surrounding whitespace or controls")
+    if len(value.encode("utf-8")) > _MAX_NAME_BYTES:
+        raise ValueError(f"must contain at most {_MAX_NAME_BYTES} UTF-8 bytes")
     return value
 
 
-def _validate_python_identifier(value: object) -> object:
+def _validate_identifier(value: object) -> object:
     if not isinstance(value, str):
         return value
-    value = _validate_public_name(value)
-    assert isinstance(value, str)
-    if not value.isidentifier() or keyword.iskeyword(value):
-        raise ValueError("must be a Python identifier")
+    if (
+        not value.isidentifier()
+        or keyword.iskeyword(value)
+        or len(value.encode("utf-8")) > _MAX_NAME_BYTES
+    ):
+        raise ValueError("must be a non-keyword Python identifier of at most 255 UTF-8 bytes")
     return value
-
-
-def _validate_import_reference(value: object) -> object:
-    if not isinstance(value, str):
-        return value
-    return validate_import_reference(value, "value")
 
 
 _UnicodeStringWire = TypeAliasType(
     "_UnicodeStringWire",
     Annotated[
         str,
-        StringConstraints(strict=True, pattern=_UNICODE_STRING_SCHEMA),
+        StringConstraints(strict=True, pattern=_UNICODE_STRING_PATTERN),
     ],
 )
 _PublicNameWire = TypeAliasType(
     "_PublicNameWire",
     Annotated[
         str,
-        StringConstraints(strict=True, pattern=_PUBLIC_NAME_SCHEMA),
+        StringConstraints(strict=True, pattern=_PUBLIC_NAME_PATTERN),
         BeforeValidator(_validate_public_name),
     ],
 )
-_PythonIdentifierWire = TypeAliasType(
-    "_PythonIdentifierWire",
+_IdentifierWire = TypeAliasType(
+    "_IdentifierWire",
     Annotated[
         str,
-        StringConstraints(strict=True, pattern=_PYTHON_IDENTIFIER_SCHEMA),
-        BeforeValidator(_validate_python_identifier),
-    ],
-)
-_ImportReferenceWire = TypeAliasType(
-    "_ImportReferenceWire",
-    Annotated[
-        str,
-        StringConstraints(strict=True, pattern=_IMPORT_REFERENCE_SCHEMA),
-        BeforeValidator(_validate_import_reference),
+        StringConstraints(strict=True, pattern=_IDENTIFIER_PATTERN),
+        BeforeValidator(_validate_identifier),
     ],
 )
 _SafeIntegerWire = Annotated[
     int,
     Field(strict=True, ge=-_MAX_SAFE_INTEGER, le=_MAX_SAFE_INTEGER),
 ]
-_NonIntegerNumberWire = Annotated[
+_FiniteNumberWire = Annotated[
     float,
-    Field(
-        strict=True,
-        allow_inf_nan=False,
-        ge=-_MAX_SAFE_INTEGER,
-        le=_MAX_SAFE_INTEGER,
-    ),
+    Field(strict=True, allow_inf_nan=False),
 ]
-_JsonValueWire = TypeAliasType(
-    "_JsonValueWire",
-    _UnicodeStringWire
-    | _SafeIntegerWire
-    | _NonIntegerNumberWire
+_PortableValueWire = TypeAliasType(
+    "_PortableValueWire",
+    None
     | bool
-    | None
-    | list["_JsonValueWire"]
-    | dict[_UnicodeStringWire, SkipValidation["_JsonValueWire"]],
-)
-_JsonObjectWire = TypeAliasType(
-    "_JsonObjectWire",
-    dict[_UnicodeStringWire, SkipValidation[_JsonValueWire]],
-)
-_ControlsWire = TypeAliasType(
-    "_ControlsWire",
-    dict[_PythonIdentifierWire, SkipValidation[_JsonValueWire]],
+    | _UnicodeStringWire
+    | _SafeIntegerWire
+    | _FiniteNumberWire
+    | list["_PortableValueWire"]
+    | dict[_UnicodeStringWire, "_PortableValueWire"],
 )
 
 
@@ -187,102 +142,20 @@ class _WireModel(BaseModel):
     )
 
 
-class _ExpressionSourceWireModel(_WireModel):
-    model_config = ConfigDict(title="expression source")
-
-    expression: _PublicNameWire
-
-    @field_validator("expression")
-    @classmethod
-    def _valid_expression(cls, value: str) -> str:
-        try:
-            ast.parse(value, mode="eval")
-        except SyntaxError as error:
-            raise ValueError("must be a valid Python expression") from error
-        return value
-
-
-class _CellSourceWireModel(_WireModel):
-    model_config = ConfigDict(title="cell source")
-
-    cell: _PublicNameWire
-
-
-_ExpressionSourceWire = TypeAliasType(
-    "_ExpressionSourceWire",
-    _ExpressionSourceWireModel,
-)
-_CellSourceWire = TypeAliasType(
-    "_CellSourceWire",
-    _CellSourceWireModel,
-)
-_SourceWire = TypeAliasType(
-    "_SourceWire",
-    _PythonIdentifierWire | _ExpressionSourceWire | _CellSourceWire,
-)
-
-
-class _ImportExporterWireModel(_WireModel):
-    model_config = ConfigDict(title="import exporter")
-
-    import_: _ImportReferenceWire = Field(alias="import")
-    version: _PublicNameWire
-
-
-class _VariableExporterWireModel(_WireModel):
-    model_config = ConfigDict(title="variable exporter")
-
-    variable: _PythonIdentifierWire
-    version: _PublicNameWire
-
-
-_ImportExporterWire = TypeAliasType(
-    "_ImportExporterWire",
-    _ImportExporterWireModel,
-)
-_VariableExporterWire = TypeAliasType(
-    "_VariableExporterWire",
-    _VariableExporterWireModel,
-)
-_ExporterWire = TypeAliasType(
-    "_ExporterWire",
-    _PublicNameWire | _ImportExporterWire | _VariableExporterWire,
-)
-
-
-class _FormatWireModel(_WireModel):
-    model_config = ConfigDict(title="format")
-
-    exporter: _ExporterWire = Field(default_factory=str, validate_default=False)
-    options: _JsonObjectWire = Field(default_factory=dict)
-
-
-_FormatWire = TypeAliasType(
-    "_FormatWire",
-    _FormatWireModel,
-)
-
-
-class _OutputWireModel(_WireModel):
+class _OutputWire(_WireModel):
     model_config = ConfigDict(title="output")
 
-    source: _SourceWire
-    formats: dict[_PublicNameWire, _FormatWire] = Field(min_length=1)
-
-
-_OutputWire = TypeAliasType(
-    "_OutputWire",
-    _OutputWireModel,
-)
+    source: _IdentifierWire
 
 
 class _SpecWire(_WireModel):
     model_config = ConfigDict(
         extra="forbid",
         frozen=True,
+        regex_engine="python-re",
         strict=True,
         validate_default=True,
-        title="marimo-export capture specification",
+        title="marimo-export specification",
         json_schema_extra={
             "$schema": "https://json-schema.org/draft/2020-12/schema",
             "$id": "https://marimo.io/schemas/marimo-export/spec.v1.json",
@@ -290,408 +163,390 @@ class _SpecWire(_WireModel):
     )
 
     schema_: Literal["marimo-export.spec.v1"] = Field(alias="schema")
-    variants: dict[_PublicNameWire, _ControlsWire] = Field(
-        default={"current": {}},
-        min_length=1,
-    )
+    inputs: list[_IdentifierWire]
+    states: dict[_PublicNameWire, dict[_IdentifierWire, _PortableValueWire]] = Field(min_length=1)
     outputs: dict[_PublicNameWire, _OutputWire] = Field(min_length=1)
+
+    @field_validator("inputs")
+    @classmethod
+    def _unique_inputs(cls, values: list[str]) -> list[str]:
+        if len(values) != len(set(values)):
+            raise ValueError("must contain unique definition names")
+        return values
+
+    @model_validator(mode="after")
+    def _declared_state_inputs(self) -> _SpecWire:
+        declared = set(self.inputs)
+        unknown = sorted(
+            {name for state in self.states.values() for name in state if name not in declared}
+        )
+        if unknown:
+            raise ValueError(f"state rows name undeclared inputs: {', '.join(unknown)}")
+        return self
 
 
 class _SpecSchemaGenerator(GenerateJsonSchema):
+    _NAMES: ClassVar[dict[str, str]] = {
+        "_UnicodeStringWire": "unicode_string",
+        "_PublicNameWire": "public_name",
+        "_IdentifierWire": "python_identifier",
+        "_PortableValueWire": "portable_input_value",
+        "_OutputWire": "output",
+    }
+
     def normalize_name(self, name: str) -> str:
         normalized = super().normalize_name(name)
-        return _SCHEMA_NAMES.get(normalized, normalized)
-
-
-@dataclass(frozen=True, slots=True)
-class Source:
-    kind: Literal["global", "expression", "cell"]
-    value: str
-
-    def wire(self) -> JsonValue:
-        if self.kind == "global":
-            return self.value
-        return {self.kind: self.value}
-
-
-@dataclass(frozen=True, slots=True)
-class ExporterSpec:
-    kind: Literal["builtin", "import", "variable"]
-    reference: str
-    version: str | None = None
-
-    def wire(self) -> JsonValue:
-        if self.kind == "builtin":
-            return self.reference
-        result: JsonObject = {self.kind: self.reference}
-        if self.version is not None:
-            result["version"] = self.version
-        return result
-
-
-@dataclass(frozen=True, slots=True, init=False)
-class FormatSpec:
-    name: str
-    exporter: ExporterSpec
-    _options_bytes: bytes = field(repr=False)
-
-    @classmethod
-    def _from_decoded(
-        cls,
-        *,
-        name: str,
-        exporter: ExporterSpec,
-        options: JsonObject,
-    ) -> FormatSpec:
-        instance = object.__new__(cls)
-        object.__setattr__(instance, "name", name)
-        object.__setattr__(instance, "exporter", exporter)
-        object.__setattr__(instance, "_options_bytes", canonical_bytes(options))
-        return instance
-
-    @property
-    def options(self) -> JsonObject:
-        return decode_json_object(self._options_bytes, f"formats.{self.name}.options")
-
-    def wire(self) -> JsonObject:
-        result: JsonObject = {}
-        if self.exporter.kind != "builtin" or self.exporter.reference != self.name:
-            result["exporter"] = self.exporter.wire()
-        if self.options:
-            result["options"] = json_object(self.options, f"formats.{self.name}.options")
-        return result
+        return self._NAMES.get(normalized, normalized)
 
 
 @dataclass(frozen=True, slots=True)
 class OutputSpec:
-    name: str
-    source: Source
-    formats: tuple[FormatSpec, ...]
+    """Select one notebook definition as a public output."""
 
-    def wire(self) -> JsonObject:
-        return {
-            "source": self.source.wire(),
-            "formats": {item.name: item.wire() for item in self.formats},
-        }
+    source: str
 
-
-@dataclass(frozen=True, slots=True, init=False)
-class Variant:
-    name: str
-    _controls_bytes: bytes = field(repr=False)
-
-    @classmethod
-    def _from_decoded(cls, *, name: str, controls: JsonObject) -> Variant:
-        instance = object.__new__(cls)
-        object.__setattr__(instance, "name", name)
-        object.__setattr__(instance, "_controls_bytes", canonical_bytes(controls))
-        return instance
-
-    @property
-    def controls(self) -> JsonObject:
-        return decode_json_object(self._controls_bytes, f"variants.{self.name}")
-
-    def wire(self) -> JsonObject:
-        return json_object(self.controls, f"variants.{self.name}")
+    def __post_init__(self) -> None:
+        if not isinstance(self.source, str):
+            raise TypeError("source must be a string")
+        try:
+            _validate_identifier(self.source)
+        except ValueError as error:
+            raise SpecError(
+                f"invalid output source {self.source!r}: {error}",
+                code="spec_output_invalid",
+            ) from error
 
 
 @dataclass(frozen=True, slots=True, init=False)
 class ExportSpec:
-    variants: tuple[Variant, ...]
-    outputs: tuple[OutputSpec, ...]
+    """Declare a finite state matrix and the definitions to publish."""
+
+    inputs: tuple[str, ...]
+    states: Mapping[str, FrozenJsonObject]
+    outputs: Mapping[str, OutputSpec]
     _wire_bytes: bytes = field(repr=False)
 
-    def __init__(self, value: object) -> None:
-        decoded = decode_spec(value)
-        object.__setattr__(self, "variants", decoded.variants)
+    def __init__(
+        self,
+        *,
+        inputs: Iterable[str],
+        states: Mapping[str, Mapping[str, JsonValue]],
+        outputs: Mapping[str, OutputSpec],
+    ) -> None:
+        if isinstance(inputs, (str, bytes)) or not isinstance(inputs, Iterable):
+            raise TypeError("inputs must be an iterable of definition names")
+        if not isinstance(states, Mapping):
+            raise TypeError("states must be a mapping")
+        if not isinstance(outputs, Mapping):
+            raise TypeError("outputs must be a mapping")
+        output_values: JsonObject = {}
+        for name, output in outputs.items():
+            if not isinstance(name, str):
+                raise TypeError("output names must be strings")
+            if not isinstance(output, OutputSpec):
+                raise TypeError(f"outputs[{name!r}] must be an OutputSpec")
+            output_values[name] = {"source": output.source}
+        state_values: JsonObject = {}
+        for name, row in states.items():
+            if not isinstance(name, str):
+                raise TypeError("state names must be strings")
+            if not isinstance(row, Mapping):
+                raise TypeError(f"states[{name!r}] must be a mapping")
+            state_values[name] = cast(JsonValue, dict(row))
+        decoded = self._decode(
+            {
+                "schema": SPEC_SCHEMA,
+                "inputs": list(inputs),
+                "states": state_values,
+                "outputs": output_values,
+            }
+        )
+        object.__setattr__(self, "inputs", decoded.inputs)
+        object.__setattr__(self, "states", decoded.states)
         object.__setattr__(self, "outputs", decoded.outputs)
         object.__setattr__(self, "_wire_bytes", decoded._wire_bytes)
 
     @classmethod
-    def _from_decoded(
-        cls,
-        *,
-        variants: tuple[Variant, ...],
-        outputs: tuple[OutputSpec, ...],
-    ) -> ExportSpec:
-        wire: JsonObject = {
+    def _create(cls, wire: _SpecWire) -> ExportSpec:
+        value: JsonObject = {
             "schema": SPEC_SCHEMA,
-            "variants": {item.name: item.wire() for item in variants},
-            "outputs": {item.name: item.wire() for item in outputs},
+            "inputs": list(wire.inputs),
+            "states": {name: cast(JsonValue, dict(row)) for name, row in wire.states.items()},
+            "outputs": {name: {"source": output.source} for name, output in wire.outputs.items()},
         }
         instance = object.__new__(cls)
-        object.__setattr__(instance, "variants", variants)
-        object.__setattr__(instance, "outputs", outputs)
-        object.__setattr__(instance, "_wire_bytes", canonical_bytes(wire))
+        object.__setattr__(instance, "inputs", tuple(wire.inputs))
+        object.__setattr__(
+            instance,
+            "states",
+            MappingProxyType(
+                {
+                    name: cast(FrozenJsonObject, _freeze(cast(JsonObject, dict(row))))
+                    for name, row in wire.states.items()
+                }
+            ),
+        )
+        object.__setattr__(
+            instance,
+            "outputs",
+            MappingProxyType(
+                {name: OutputSpec(source=output.source) for name, output in wire.outputs.items()}
+            ),
+        )
+        object.__setattr__(instance, "_wire_bytes", canonical_bytes(value))
         return instance
 
     @classmethod
-    def from_value(cls, value: object) -> ExportSpec:
-        return decode_spec(value)
+    def _decode(cls, value: object) -> ExportSpec:
+        try:
+            root = json_object(value, "spec")
+            wire = _SpecWire.model_validate(root)
+            return cls._create(wire)
+        except SpecError:
+            raise
+        except ValidationError as error:
+            code = _spec_error_code(error)
+            raise SpecError(_validation_message(error), code=code) from error
+        except (TypeError, ValueError) as error:
+            raise SpecError(
+                safe_diagnostic(error, maximum_chars=_MAX_ERROR_MESSAGE_CHARS),
+                code="spec_value_invalid",
+            ) from error
 
     @classmethod
-    def from_file(cls, path: str | Path) -> ExportSpec:
-        return load_spec(path)
+    def from_value(cls, value: object) -> ExportSpec:
+        """Validate the exact wire value."""
 
-    def wire(self) -> JsonObject:
+        if isinstance(value, ExportSpec):
+            return value
+        return cls._decode(value)
+
+    @classmethod
+    def from_file(cls, path: StrPath) -> ExportSpec:
+        """Load a strict UTF-8 JSON or safe YAML specification."""
+
+        source = _spec_path(path)
+        data = _read_spec(source)
+        suffix = source.suffix.lower()
+        if suffix == ".json":
+            try:
+                value = decode_json_object(data, f"export spec {source}")
+            except (TypeError, ValueError) as error:
+                raise SpecError(
+                    safe_diagnostic(error, maximum_chars=_MAX_ERROR_MESSAGE_CHARS),
+                    code="spec_invalid",
+                ) from error
+        elif suffix in {".yaml", ".yml"}:
+            value = _decode_yaml(data, source)
+        else:
+            raise SpecError(
+                f"export spec path must end in .json, .yaml, or .yml: {source}",
+                code="spec_invalid",
+            )
+        return cls.from_value(value)
+
+    @classmethod
+    def json_schema(cls) -> JsonObject:
+        """Return a detached Draft 2020-12 authoring schema."""
+
+        schema = _SpecWire.model_json_schema(
+            by_alias=True,
+            schema_generator=_SpecSchemaGenerator,
+        )
+        return json_object(schema, "export spec schema")
+
+    def to_value(self) -> JsonObject:
+        """Return a detached mutable wire value."""
+
         return decode_json_object(self._wire_bytes, "export spec")
 
 
-def decode_spec(value: object) -> ExportSpec:
-    if isinstance(value, ExportSpec):
-        return value
-    try:
-        return _decode_spec(value)
-    except SpecError:
-        raise
-    except (TypeError, ValueError) as error:
-        raise SpecError(_safe_diagnostic(error)) from error
+def _freeze(value: JsonValue) -> FrozenJsonValue:
+    if isinstance(value, list):
+        return tuple(_freeze(item) for item in value)
+    if isinstance(value, dict):
+        return MappingProxyType({key: _freeze(item) for key, item in value.items()})
+    return value
 
 
-def load_spec(path: str | Path) -> ExportSpec:
+def _spec_path(path: StrPath) -> Path:
+    if not isinstance(path, (str, os.PathLike)):
+        raise TypeError("path must be a string or path-like object")
     try:
-        source = Path(path).expanduser()
-    except (OSError, RuntimeError, TypeError) as error:
+        return Path(path)
+    except (OSError, RuntimeError, TypeError, ValueError) as error:
         raise SpecError(
-            _safe_diagnostic(
-                "could not resolve export spec path ",
+            safe_diagnostic(
+                "could not resolve export spec path: ",
+                error,
+                maximum_chars=_MAX_ERROR_MESSAGE_CHARS,
+            ),
+            code="spec_invalid",
+        ) from error
+
+
+def _read_spec(path: Path) -> bytes:
+    try:
+        with path.open("rb") as stream:
+            data = stream.read(_MAX_SPEC_BYTES + 1)
+    except (OSError, OverflowError, ValueError) as error:
+        raise SpecError(
+            safe_diagnostic(
+                "could not read export spec ",
                 path,
                 ": ",
                 error,
-            )
-        ) from error
-    try:
-        with source.open("rb") as stream:
-            data = stream.read(_MAX_SPEC_BYTES + 1)
-    except (OSError, OverflowError, UnicodeError, ValueError) as error:
-        raise SpecError(
-            _safe_diagnostic("could not read export spec ", source, ": ", error)
+                maximum_chars=_MAX_ERROR_MESSAGE_CHARS,
+            ),
+            code="spec_invalid",
         ) from error
     if len(data) > _MAX_SPEC_BYTES:
         raise SpecError(
-            _safe_diagnostic(
-                "export spec ",
-                source,
-                f" exceeds {_MAX_SPEC_BYTES} bytes",
-            )
+            f"export spec exceeds {_MAX_SPEC_BYTES} bytes: {path}",
+            code="spec_invalid",
         )
+    return data
+
+
+def _decode_yaml(data: bytes, source: Path) -> object:
     try:
         text = data.decode("utf-8")
-    except UnicodeError as error:
+    except UnicodeDecodeError as error:
         raise SpecError(
-            _safe_diagnostic("could not read export spec ", source, ": ", error)
+            f"export spec must be UTF-8: {source}",
+            code="spec_invalid",
         ) from error
     try:
-        value = yaml.load(text, Loader=_UniqueKeyLoader)
+        return yaml.load(text, Loader=_UniqueSafeLoader)
     except SpecError:
         raise
     except RecursionError as error:
         raise SpecError(
-            f"export spec YAML exceeds maximum nesting depth of {_MAX_YAML_DEPTH}"
+            f"export spec YAML exceeds {_MAX_YAML_DEPTH} container levels",
+            code="spec_invalid",
         ) from error
     except yaml.YAMLError as error:
         problem = getattr(error, "problem", None) or str(error)
         raise SpecError(
-            _safe_diagnostic(
+            safe_diagnostic(
                 "invalid YAML in export spec ",
                 source,
                 ": ",
                 problem,
-            )
+                maximum_chars=_MAX_ERROR_MESSAGE_CHARS,
+            ),
+            code="spec_invalid",
         ) from error
-    except (OverflowError, ValueError) as error:
-        raise SpecError(
-            _safe_diagnostic(
-                "invalid YAML value in export spec ",
-                source,
-                ": ",
-                error,
-            )
-        ) from error
-    return decode_spec(value)
 
 
-def _decode_spec(value: object) -> ExportSpec:
-    root = json_object(value, "spec")
-    try:
-        wire = _SpecWire.model_validate(root)
-    except ValidationError as error:
-        raise SpecError(_validation_message(error)) from error
-
-    variants = tuple(_variant(name, item) for name, item in wire.variants.items())
-    outputs = tuple(_output(name, item) for name, item in wire.outputs.items())
-    return ExportSpec._from_decoded(variants=variants, outputs=outputs)
-
-
-def _variant(name: str, controls: _ControlsWire) -> Variant:
-    return Variant._from_decoded(
-        name=name,
-        controls={key: cast(JsonValue, value) for key, value in controls.items()},
-    )
-
-
-def _output(name: str, item: _OutputWireModel) -> OutputSpec:
-    source = _source(item.source)
-    formats = tuple(
-        _format(format_name, spec, output=name) for format_name, spec in item.formats.items()
-    )
-    return OutputSpec(name=name, source=source, formats=formats)
-
-
-def _source(value: _SourceWire) -> Source:
-    if isinstance(value, str):
-        return Source(kind="global", value=value)
-    if isinstance(value, _ExpressionSourceWireModel):
-        return Source(kind="expression", value=value.expression)
-    return Source(kind="cell", value=value.cell)
-
-
-def _format(name: str, item: _FormatWireModel, *, output: str) -> FormatSpec:
-    path = _wire_location(("outputs", output, "formats", name))
-    exporter_value = item.exporter if "exporter" in item.model_fields_set else name
-    exporter = _exporter(exporter_value)
-    options = cast(JsonObject, item.options)
-    if exporter.kind == "builtin":
-        try:
-            _builtin_exporter(exporter.reference)
-        except ValueError as error:
-            raise ValueError(
-                f"unknown built-in exporter: {_error_part(exporter.reference)}"
-            ) from error
-        options = _normalize_options(exporter.reference, options, f"{path}.options")
-    return FormatSpec._from_decoded(name=name, exporter=exporter, options=options)
-
-
-def _exporter(value: _ExporterWire) -> ExporterSpec:
-    if isinstance(value, str):
-        return ExporterSpec(kind="builtin", reference=value)
-    if isinstance(value, _ImportExporterWireModel):
-        return ExporterSpec(
-            kind="import",
-            reference=value.import_,
-            version=value.version,
-        )
-    return ExporterSpec(
-        kind="variable",
-        reference=value.variable,
-        version=value.version,
-    )
-
-
-def _validation_message(error: ValidationError) -> str:
-    messages: list[str] = []
-    errors = error.errors(include_url=False, include_context=False, include_input=False)
-    for item in errors[:_MAX_VALIDATION_ERRORS]:
-        location = _wire_location(item["loc"])
-        error_type = item["type"]
-        if error_type == "extra_forbidden":
-            parent = _wire_location(item["loc"][:-1])
-            field = _error_part(item["loc"][-1])
-            message = f"{parent} does not accept: {field}"
-        elif error_type == "missing":
-            parent = _wire_location(item["loc"][:-1])
-            field = _error_part(item["loc"][-1])
-            message = f"{parent} is missing: {field}"
-        elif error_type == "too_short":
-            message = f"{location} must contain at least one item"
-        else:
-            detail = item["msg"].removeprefix("Value error, ")
-            message = f"{location}: {detail}"
-        if message not in messages:
-            messages.append(message)
-    if len(errors) > _MAX_VALIDATION_ERRORS:
-        messages.append(
-            f"spec: {len(errors) - _MAX_VALIDATION_ERRORS} additional validation errors"
-        )
-    return _safe_diagnostic(". ".join(messages))
-
-
-def _wire_location(location: tuple[int | str, ...]) -> str:
-    branches = {
-        "str",
-        "_ExpressionSourceWireModel",
-        "_CellSourceWireModel",
-        "_ImportExporterWireModel",
-        "_VariableExporterWireModel",
-    }
-    path = "spec"
-    for part in location:
-        if part in branches or (isinstance(part, str) and part.startswith("function-after[")):
-            continue
-        rendered = _error_part(part)
-        path += f"[{rendered}]" if isinstance(part, int) else f".{rendered}"
-    return path[:_MAX_ERROR_PATH_LENGTH]
-
-
-def _error_part(part: int | str) -> str:
-    if isinstance(part, int):
-        return str(part)
-    if _SAFE_ERROR_PART.fullmatch(part) is not None:
-        return part
-    shortened = part if len(part) <= 80 else f"{part[:77]}..."
-    return ascii(shortened)
-
-
-def _safe_diagnostic(*parts: object) -> str:
-    return safe_diagnostic(*parts, maximum_chars=_MAX_ERROR_MESSAGE_LENGTH)
-
-
-class _UniqueKeyLoader(yaml.SafeLoader):
+class _UniqueSafeLoader(yaml.SafeLoader):
     def __init__(self, stream: Any) -> None:
         super().__init__(stream)
         self._composition_depth = 0
         self._composition_nodes = 0
 
     def compose_node(self, parent: Node | None, index: Any) -> Node:
+        if self.check_event(AliasEvent):
+            raise SpecError("export spec YAML aliases are invalid", code="spec_invalid")
         self._composition_depth += 1
         self._composition_nodes += 1
         try:
             if self._composition_depth > _MAX_YAML_DEPTH:
                 raise SpecError(
-                    f"export spec YAML exceeds maximum nesting depth of {_MAX_YAML_DEPTH}"
+                    f"export spec YAML exceeds {_MAX_YAML_DEPTH} container levels",
+                    code="spec_invalid",
                 )
             if self._composition_nodes > _MAX_YAML_NODES:
-                raise SpecError(f"export spec YAML exceeds maximum node count of {_MAX_YAML_NODES}")
-            try:
-                return cast(Node, super().compose_node(parent, index))
-            except RecursionError as error:
                 raise SpecError(
-                    f"export spec YAML exceeds maximum nesting depth of {_MAX_YAML_DEPTH}"
-                ) from error
+                    f"export spec YAML exceeds {_MAX_YAML_NODES} nodes",
+                    code="spec_invalid",
+                )
+            return cast(Node, super().compose_node(parent, index))
         finally:
             self._composition_depth -= 1
 
 
 def _construct_unique_mapping(
-    loader: _UniqueKeyLoader,
+    loader: _UniqueSafeLoader,
     node: MappingNode,
     deep: bool = False,
 ) -> dict[object, object]:
-    loader.flatten_mapping(node)
     result: dict[object, object] = {}
     for key_node, value_node in node.value:
+        if key_node.tag == "tag:yaml.org,2002:merge":
+            raise SpecError("export spec YAML merge keys are invalid", code="spec_invalid")
         key = loader.construct_object(key_node, deep=deep)
         try:
             duplicate = key in result
         except TypeError as error:
-            raise SpecError("export spec object keys must be scalar values") from error
+            raise SpecError(
+                "export spec object keys must be scalar values",
+                code="spec_invalid",
+            ) from error
         if duplicate:
-            raise SpecError(_safe_diagnostic("export spec contains duplicate key ", repr(key)))
+            raise SpecError(
+                safe_diagnostic(
+                    "export spec contains duplicate key ",
+                    repr(key),
+                    maximum_chars=_MAX_ERROR_MESSAGE_CHARS,
+                ),
+                code="spec_invalid",
+            )
         result[key] = loader.construct_object(value_node, deep=deep)
     return result
 
 
-_UniqueKeyLoader.add_constructor(
+_UniqueSafeLoader.add_constructor(
     BaseResolver.DEFAULT_MAPPING_TAG,
     _construct_unique_mapping,
 )
 
 
-def spec_json_schema() -> JsonObject:
-    """Return the JSON Schema for ``marimo-export.spec.v1``."""
+def _spec_error_code(error: ValidationError) -> str:
+    items = error.errors(include_url=False)
+    if any("undeclared inputs" in str(item.get("msg", "")) for item in items):
+        return "spec_state_input_unknown"
+    locations = [tuple(item.get("loc", ())) for item in items]
+    if any("states" in location for location in locations):
+        return "spec_value_invalid"
+    if any("outputs" in location for location in locations):
+        return "spec_output_invalid"
+    return "spec_invalid"
 
-    schema = _SpecWire.model_json_schema(
-        by_alias=True,
-        schema_generator=_SpecSchemaGenerator,
+
+def _validation_message(error: ValidationError) -> str:
+    messages: list[str] = []
+    items = error.errors(include_url=False, include_context=False, include_input=False)
+    for item in items[:_MAX_VALIDATION_ERRORS]:
+        location = _validation_path(cast(tuple[object, ...], item.get("loc", ())))
+        kind = item.get("type")
+        if kind == "extra_forbidden":
+            message = (
+                f"{_validation_path(tuple(item['loc'][:-1]))} does not accept {item['loc'][-1]!r}"
+            )
+        elif kind == "missing":
+            message = f"{_validation_path(tuple(item['loc'][:-1]))} is missing {item['loc'][-1]!r}"
+        else:
+            detail = str(item.get("msg", "validation failed")).removeprefix("Value error, ")
+            message = f"{location}: {detail}"
+        if message not in messages:
+            messages.append(message)
+    remaining = len(items) - len(items[:_MAX_VALIDATION_ERRORS])
+    if remaining:
+        messages.append(f"spec: {remaining} additional validation errors")
+    return safe_diagnostic(
+        ". ".join(messages),
+        maximum_chars=_MAX_ERROR_MESSAGE_CHARS,
     )
-    return json_object(schema, "spec schema")
+
+
+def _validation_path(location: tuple[object, ...]) -> str:
+    path = "spec"
+    for part in location:
+        if isinstance(part, str) and part.startswith("function-after["):
+            continue
+        path += f"[{part}]" if isinstance(part, int) else f".{part}"
+    return path
+
+
+__all__ = ["ExportSpec", "FrozenJsonObject", "FrozenJsonValue", "OutputSpec", "StrPath"]

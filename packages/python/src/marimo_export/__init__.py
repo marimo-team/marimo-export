@@ -32,7 +32,7 @@ from marimo_export.reader import (
     PublishedVariant,
     open_publication,
 )
-from marimo_export.spec import ExportSpec
+from marimo_export.spec import ExportSpec, OutputSpec
 
 __all__ = [
     "BuiltinExporterDescription",
@@ -49,6 +49,7 @@ __all__ = [
     "JsonValue",
     "MarimoExportError",
     "NotebookProvenance",
+    "OutputSpec",
     "ProducerProvenance",
     "Projection",
     "Publication",

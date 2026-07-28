@@ -22,7 +22,7 @@ from marimo_export.errors import (
     TransportError,
 )
 from marimo_export.reader import open_publication
-from marimo_export.spec import load_spec
+from marimo_export.spec import ExportSpec
 
 EXIT_INPUT = 2
 EXIT_TRANSPORT = 3
@@ -203,7 +203,7 @@ def _run(arguments: argparse.Namespace, *, json_mode: bool) -> object:
             return client.session(arguments.session_id).inspect().to_dict()
 
     if arguments.command == "capture":
-        spec = load_spec(Path(arguments.spec).expanduser())
+        spec = ExportSpec.from_file(Path(arguments.spec))
         try:
             destination = _prepare_destination(
                 arguments.output,
