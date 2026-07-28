@@ -4,138 +4,64 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" href="data:," />
-    <title>Portable marimo widgets</title>
+    <title>marimo finance publication</title>
   </head>
   <body>
-    <main id="app" data-status="loading" data-cleanup-count="0" data-testid="app">
-      <header class="masthead">
-        <p class="eyebrow">marimo export · static browser consumer</p>
-        <h1>Notebook outputs, running without Python</h1>
+    <main id="app" data-status="loading">
+      <header>
+        <p class="eyebrow">marimo-export browser example</p>
+        <h1>Market report from a static notebook publication</h1>
         <p class="intro">
-          Choose a cached scenario to mount its chart, raw AnyWidget, and composed dashboard from
-          verified publication files.
+          The browser verifies cached assets, reads JSON, and mounts Vega-Lite with no Python
+          process.
         </p>
       </header>
 
-      <section class="scenario-bar" aria-labelledby="scenario-heading">
-        <div>
-          <h2 id="scenario-heading">Published scenario</h2>
-          <p>Each selection loads one immutable notebook execution.</p>
-        </div>
-        <label class="scenario-field">
-          <span>Scenario</span>
-          <select data-testid="scenario-select" disabled>
-            <option>Loading publication…</option>
-          </select>
-        </label>
-        <p class="load-status" data-testid="load-status" role="status" aria-live="polite">
-          Opening publication…
-        </p>
+      <section class="toolbar" aria-label="Publication variant">
+        <label for="variant">Variant</label>
+        <select id="variant" disabled>
+          <option>Opening publication…</option>
+        </select>
+        <p id="status" role="status" aria-live="polite">Opening publication…</p>
       </section>
 
-      <section class="overview" aria-label="Scenario data">
-        <article class="panel summary-panel">
-          <div class="panel-heading">
+      <section class="grid">
+        <article class="panel summary">
+          <div class="heading">
             <div>
-              <p class="kicker">Typed JSON</p>
-              <h2>Projected state</h2>
+              <p class="eyebrow">JSON output</p>
+              <h2>Summary</h2>
             </div>
-            <span class="format-pill">json.v1</span>
+            <code>json.v1</code>
           </div>
-          <dl class="metrics">
+          <dl>
             <div>
-              <dt>Raw count</dt>
-              <dd data-testid="projected-raw-count">–</dd>
+              <dt>Symbols</dt>
+              <dd id="symbols">Loading…</dd>
             </div>
             <div>
-              <dt>Child count</dt>
-              <dd data-testid="projected-child-count">–</dd>
-            </div>
-            <div>
-              <dt>Accent</dt>
-              <dd class="accent-value">
-                <span class="accent-swatch" data-testid="accent-swatch"></span>
-                <code data-testid="projected-accent">–</code>
-              </dd>
+              <dt>Rows</dt>
+              <dd id="rows">Loading…</dd>
             </div>
           </dl>
+          <h3>Latest close</h3>
+          <ul id="latest-close"></ul>
           <details>
-            <summary>Inspect decoded values</summary>
-            <pre data-testid="projected-json">Loading…</pre>
+            <summary>Raw JSON</summary>
+            <pre id="summary-json">Loading…</pre>
           </details>
         </article>
 
-        <article class="panel chart-panel">
-          <div class="panel-heading">
+        <article class="panel">
+          <div class="heading">
             <div>
-              <p class="kicker">Portable chart</p>
-              <h2>Initial counters</h2>
+              <p class="eyebrow">Mounted output</p>
+              <h2>Closing prices</h2>
             </div>
-            <span class="format-pill">vegalite.v1</span>
+            <code>vegalite.v1</code>
           </div>
-          <div class="chart-host" data-testid="chart"></div>
+          <div id="chart" aria-live="polite"></div>
         </article>
-      </section>
-
-      <section class="widgets" aria-label="Hydrated AnyWidgets">
-        <article class="panel widget-panel">
-          <div class="panel-heading">
-            <div>
-              <p class="kicker">Raw model</p>
-              <h2>Counter widget</h2>
-            </div>
-            <span class="format-pill">anywidget.v1</span>
-          </div>
-          <div class="widget-host" data-testid="raw-counter"></div>
-          <div class="widget-readout">
-            <span>Live model count</span>
-            <output data-testid="raw-model-count">–</output>
-          </div>
-          <p class="buffer-state" data-testid="buffer-state">Buffer state loads with the model.</p>
-          <div class="control-row" aria-label="Raw counter controls">
-            <button type="button" data-testid="raw-increment" disabled>Increment via model</button>
-            <button type="button" class="secondary" data-testid="raw-reset" disabled>
-              Reset via exports
-            </button>
-          </div>
-        </article>
-
-        <article class="panel widget-panel">
-          <div class="panel-heading">
-            <div>
-              <p class="kicker">Composed model graph</p>
-              <h2>Dashboard and child widget</h2>
-            </div>
-            <span class="format-pill">anywidget.v1</span>
-          </div>
-          <div class="widget-host" data-testid="wrapped-dashboard"></div>
-          <div class="widget-readout">
-            <span>Live dashboard title</span>
-            <output data-testid="dashboard-model-title">–</output>
-          </div>
-          <form class="rename-form" data-testid="dashboard-rename-form">
-            <label>
-              <span>New dashboard title</span>
-              <input data-testid="dashboard-title" value="Published dashboard" required />
-            </label>
-            <button type="submit" data-testid="dashboard-rename" disabled>
-              Rename via exports
-            </button>
-          </form>
-        </article>
-      </section>
-
-      <section class="lifecycle-panel" aria-labelledby="lifecycle-heading">
-        <div>
-          <p class="kicker">Lifecycle proof</p>
-          <h2 id="lifecycle-heading">Mounted resources are released on scenario changes</h2>
-          <p>Cleanup events come from the exported widget modules.</p>
-        </div>
-        <div class="cleanup-total">
-          <span>Cleanup events</span>
-          <output data-testid="cleanup-count">0</output>
-        </div>
-        <ol class="cleanup-log" data-testid="cleanup-log" aria-live="polite"></ol>
       </section>
     </main>
 

@@ -1,13 +1,6 @@
 import { defineConfig } from "vite-plus";
 
-const generated = [
-  "**/.astro/**",
-  "**/.next/**",
-  "**/.output/**",
-  "**/dist/**",
-  "**/node_modules/**",
-  "packages/producer/.pytest_cache/**",
-];
+const generated = ["**/dist/**", "**/node_modules/**", "packages/python/.pytest_cache/**"];
 
 export default defineConfig({
   staged: {
@@ -46,15 +39,9 @@ export default defineConfig({
       },
       {
         files: [
-          "packages/client/src/index.ts",
-          "packages/client/src/hash.ts",
-          "packages/client/src/loader.ts",
-          "packages/client/src/reader.ts",
-          "packages/client/src/remote.ts",
-          "packages/client/src/remote/**/*.ts",
-          "packages/client/src/schema.ts",
-          "packages/client/src/source.ts",
-          "packages/client/src/types.ts",
+          "packages/browser/src/**/*.ts",
+          "packages/loader-vegalite/src/**/*.ts",
+          "packages/loader-anywidget/src/**/*.ts",
         ],
         rules: {
           "no-restricted-imports": [

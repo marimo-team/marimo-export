@@ -1,132 +1,147 @@
 # Getting started
 
-This workflow runs the cache-matrix notebook on a local marimo server, publishes three scenarios, verifies the publication, and reads it after the Python producer stops.
+This workflow captures the live state of a regular marimo notebook, reads one selected result from Python, then reads the same publication from a browser after the notebook server stops.
 
-Run every command from the repository root. The workflow requires Node 22.18 or newer, pnpm, and uv.
+## Start the notebook environment
 
-## Install and build
-
-```bash
-pnpm install --frozen-lockfile
-pnpm --filter @marimo-team/marimo-export build
-```
-
-The Python producer is a uv workspace package. `uv run --package marimo-export` installs its exact marimo dependency into the command environment when needed.
-
-## Start the producer
-
-Keep this command running in one terminal:
+From this checkout, prepare the Python environment and start the finance notebook:
 
 ```bash
-uv run --package marimo-export marimo edit \
-  examples/_notebooks/cache_matrix.py \
-  --headless \
+uv sync --all-extras --locked
+uv run --with altair==6.0.0 marimo edit examples/_notebooks/finance.py \
   --no-sandbox \
   --host 127.0.0.1 \
-  --port 2718 \
-  --session-ttl 300 \
-  --no-token \
-  --no-skew-protection \
-  --skip-update-check
+  --port 3456
 ```
 
-`--no-sandbox` keeps the notebook kernel in the environment that contains `marimo-export`. The server binds to loopback. The two `--no-*` security flags make this local workflow copyable. Omit both when the server is reachable from another machine so marimo authentication and skew protection remain enabled.
+Open the notebook, run it, and set its controls to the state you want as `current`. Capture uses the running kernel. Unsaved executed edits and current UI values are part of that live state.
 
-The repository selects marimo's default `relaxed` execution type and enables cell caching in `pyproject.toml`. Both interactive notebook work and export builds therefore use the notebook's file-backed cache. If this notebook has previously run with `strict` execution, begin with a fresh `examples/_notebooks/__marimo__/cache` directory before publishing.
+`--no-sandbox` keeps the kernel in the prepared uv environment. That environment must contain the same `marimo-export` version as the capture client and every requested exporter extra. The session needs edit permission because capture uses marimo's code execution endpoint. Keep the server running through the capture command.
 
-## Check producer capabilities
+The current Python dependency and lockfile pin `peter-gy/marimo` commit `0f5fd5d55b4d65d06a814842af3228f57c8ae9c8`, which supplies the required `BlobAsset` lazy-cache codec. Python package publication requires a compatible marimo core release and a corresponding released dependency bound.
 
-Run this command in a second terminal:
+## Inspect the active session
+
+List the active sessions:
 
 ```bash
-node packages/client/dist/cli.mjs describe \
-  --server http://127.0.0.1:2718/ \
-  --notebook examples/_notebooks/cache_matrix.py
+export MARIMO_EXPORT_TOKEN="<token>"
+uv run marimo-export session http://localhost:3456/ --json
 ```
 
-`describe` reports the marimo and marimo-export versions, the active marimo adapter, and the available built-in projection exporters.
-
-## Publish the scenario matrix
+The result lists session IDs, filenames, and server-side paths. Inspect one session to discover selectable globals with their qualified Python type descriptors, frozen cell-output descriptors, UI controls, built-in exporter availability, the producer versions, and the live document digest:
 
 ```bash
-node packages/client/dist/cli.mjs publish \
-  --server http://127.0.0.1:2718/ \
-  --notebook examples/_notebooks/cache_matrix.py \
-  --plan examples/_notebooks/cache_matrix.plan.json \
-  --out /tmp/cache-matrix-export \
-  --record /tmp/cache-matrix.build.json
+uv run marimo-export session http://localhost:3456/ \
+  --session SESSION_ID \
+  --json
 ```
 
-`publish` performs three operations in order:
+Each inspected control reports its type, current detached value, sensitivity, and available JSON domain information. Password values are redacted as `null`. Variants can target nonsensitive controls.
 
-1. It builds the plan inside an attached marimo kernel.
-2. It stages the immutable projection closure on the server and pulls it into `/tmp/cache-matrix-export`.
-3. It verifies the local index and every referenced payload against the build's `ExportRef`.
+Pass `--session SESSION_ID` to capture when the server hosts several sessions. A local one-off command may carry one `access_token` query value in the server URL. Prefer `MARIMO_EXPORT_TOKEN` for shell history, scripts, and shared examples.
 
-The build record at `/tmp/cache-matrix.build.json` contains the server, notebook path, `ExportRef`, and build receipt. Keep it when another process needs to anchor `index.json` to the authenticated build response.
+## Select outputs and variants
 
-## Inspect and read
+Use the adjacent `examples/_notebooks/finance.export.yaml` specification:
+
+```yaml
+schema: marimo-export.spec.v1
+
+variants:
+  current: {}
+  aapl:
+    symbol_picker: [AAPL]
+  nvda:
+    symbol_picker: [NVDA]
+
+outputs:
+  summary:
+    source: summary
+    formats:
+      json: {}
+
+  chart:
+    source:
+      expression: price_chart.properties(width=800)
+    formats:
+      vegalite: {}
+      png:
+        options:
+          scale: 2
+
+  market_note:
+    source:
+      cell: market_note
+    formats:
+      html: {}
+```
+
+`summary` selects a live global. The chart expression runs against the live globals inside the kernel. `market_note` selects the rendered payload data from a named cell.
+
+The variant keys target existing marimo UI controls. A plain Python assignment has no live input channel, so expose a parameter as a marimo control when it needs finite variants.
+
+## Capture the publication
 
 ```bash
-node packages/client/dist/cli.mjs inspect \
-  /tmp/cache-matrix-export \
-  --ref /tmp/cache-matrix.build.json
-
-node packages/client/dist/cli.mjs read \
-  /tmp/cache-matrix-export large calculation \
-  --format json \
-  --ref /tmp/cache-matrix.build.json
+uv run marimo-export capture \
+  http://localhost:3456/ \
+  --spec examples/_notebooks/finance.export.yaml \
+  --output dist/finance \
+  --json
 ```
 
-The `large` scenario resolves `scale` to `5` and the `multiplier` UI value to `3`. Its `calculation` output is:
+Capture performs this transaction:
 
-```json
-{
-  "multiplier": 3,
-  "result": 153,
-  "scale": 5
-}
+1. Select the active session and record its document digest and starting UI vector.
+2. Resolve every exporter and preflight named global and cell selectors against the starting live state.
+3. Apply one variant through marimo's UI update path.
+4. Resolve selected globals, variant-time expressions, and rendered cell payloads.
+5. Run or restore each projector through marimo's persistent cache.
+6. Restore the starting UI vector and stale-cell set.
+7. Transfer and verify the selected projected results.
+8. Commit the cache objects, then `index.json`.
+9. Release server-side capture resources.
+
+The command validates the specification and destination before connecting to the notebook server. For replacement, it verifies the current publication and every referenced asset during this preflight. A new destination commits through an atomic no-replace directory rename. Add `--replace` to update an existing publication at the same path. Replacement revalidates the destination before commit, links verified new cache assets into the existing cache, retains old assets for readers that already loaded the previous index, and atomically replaces `index.json` last. A cache key collision with different bytes fails the replacement.
+
+## Read from Python
+
+```python
+from marimo_export import open_publication
+
+publication = open_publication("dist/finance")
+
+print(publication.variant_names)
+summary = (
+    publication
+    .variant("current")
+    .output("summary")
+    .format("json")
+    .json()
+)
+print(summary)
 ```
 
-Verify the complete publication explicitly:
+The Python reader verifies the asset envelope's size and SHA-256 before decoding the `BlobAsset` and parsing the inner JSON bytes.
+
+## Read from a browser
+
+Serve `dist` through your application's static file path, then install the browser package:
 
 ```bash
-node packages/client/dist/cli.mjs verify \
-  /tmp/cache-matrix-export \
-  --ref /tmp/cache-matrix.build.json
+pnpm add @marimo-team/marimo-export
 ```
 
-## Stop Python and read again
+```ts
+import { openPublication } from "@marimo-team/marimo-export";
 
-Stop the marimo server with `Ctrl-C`, then rerun the `read` command. The publication contains the complete JavaScript consumption boundary:
+const publication = await openPublication("/finance/");
+const summary = await publication.variant("current").output("summary").format("json").json();
 
-```text
-/tmp/cache-matrix-export/
-├── index.json
-└── cache/
-    └── marimo-export/
-        └── payloads/
-            └── sha256/
-                └── <payload digest>
+console.log(summary);
 ```
 
-The checked-in Node example reads every scenario from the same directory:
+Stop the marimo server and reload the application. The publication contains the index and selected portable cache objects required by the browser.
 
-```bash
-node examples/read-checkout.mjs /tmp/cache-matrix-export
-```
-
-The browser, Next.js, and Astro commands are in [Read exports](./read-exports.md).
-
-## Run a warm build
-
-Start the producer again and rerun `publish`. marimo restores matching authored and projection cells from `__marimo__/cache/`. The pull verifies the local content-addressed payloads and skips matching files.
-
-Interactive execution can warm authored cells whose marimo identity matches the build. Synthetic projection cells exist during export builds, so a matching earlier export warms those cells. See [Cache identity](./export-plans.md#cache-identity) for the exact identity rules.
-
-## Next steps
-
-- Edit [the cache-matrix plan](https://github.com/marimo-team/marimo-export/blob/main/examples/_notebooks/cache_matrix.plan.json) and learn the contract in [Export plans](./export-plans.md).
-- Run the prepared environment on another machine through [Remote execution](./remote-execution.md).
-- Publish an interactive widget through [AnyWidget](./anywidget.md).
-- Use `openExport()` from [Read exports](./read-exports.md).
+Continue with [Export specifications](./export-specification.md) for sources, formats, variants, and custom exporters.

@@ -1,28 +1,40 @@
-# @marimo-team/marimo-export-vegalite
+# @marimo-team/marimo-export-loader-vegalite
 
-`vegaLite()` loads a verified `vegalite.v1` specification and mounts it with Vega-Embed.
+`vegaLiteLoader()` loads a `vegalite.v1` specification and mounts it with Vega-Embed.
+
+The publication reader verifies the indexed cache asset before Vega-Lite parses it. Use this loader with a publication whose producer you trust.
 
 ```sh
-pnpm add @marimo-team/marimo-export @marimo-team/marimo-export-vegalite
+pnpm add @marimo-team/marimo-export @marimo-team/marimo-export-loader-vegalite
 ```
 
 ```ts
-import { httpSource, openExport } from "@marimo-team/marimo-export";
-import { vegaLite } from "@marimo-team/marimo-export-vegalite";
+import { openPublication } from "@marimo-team/marimo-export";
+import { vegaLiteLoader } from "@marimo-team/marimo-export-loader-vegalite";
 
-const published = await openExport(httpSource("/published"));
-const output = published.scenario("baseline").output("chart", "vegalite");
-const chart = await output.load(vegaLite({ actions: false }));
+const loader = vegaLiteLoader({ actions: false });
+const publication = await openPublication("/exports/finance/", { loaders: [loader] });
+const format = publication.variant("current").output("chart").format("vegalite");
 
 const host = document.querySelector<HTMLElement>("#chart");
 if (host === null) throw new Error("Missing #chart mount point");
 
-const mounted = await chart.mount(host, { renderer: "svg" });
-window.addEventListener("pagehide", () => mounted.finalize(), { once: true });
+const mounted = await format.mount(host);
+window.addEventListener("pagehide", () => void mounted.dispose(), { once: true });
 ```
 
-`chart.spec` contains the parsed JSON specification. Reading the specification works in browser, Node, and server-rendered code. `chart.mount()` imports Vega-Embed on demand and requires a browser DOM.
+Use `format.load(loader)` to inspect the parsed specification or apply mount-specific options:
 
-The producer derives the output media type from the major version in an official Vega-Lite `$schema` URL. For example, a v6 specification uses `application/vnd.vegalite.v6+json`. The loader selects the stable `vegalite.v1` format ID across Vega-Lite schema majors.
+```ts
+const chart = await format.load(loader);
+console.log(chart.spec);
 
-Call `finalize()` for every successful mount. Vega-Embed uses it to release event listeners and view resources.
+const mounted = await chart.mount(host, { renderer: "svg" });
+await mounted.dispose();
+```
+
+The producer derives the media type from the major version in the Vega-Lite `$schema` URL. The loader uses `vegalite.v1` as the stable representation ID across Vega-Lite schema majors.
+
+Vega specifications can load data, images, and other resources from external URLs. Apply the same origin and content security policy checks you use for application-authored Vega specifications. Pass an `AbortSignal` to `chart.mount(host, { signal })` when the caller needs cancellable mounting.
+
+Browser embedding cannot be cancelled after Vega-Embed starts its own work. A cancelled mount settles immediately, then finalizes a result that arrives later. If that late finalization fails, the loader reports the failure through `console.error`.

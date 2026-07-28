@@ -2,13 +2,10 @@ node_modules/
 .vite-hooks/
 **/.vitepress/cache/
 **/.vitepress/dist/
-.astro/
-.next/
 coverage/
 /dist/
 packages/*/node_modules/
 packages/*/dist/
-packages/*/.test-dist/
 packages/*/src/**/*.js
 packages/*/src/**/*.js.map
 packages/*/src/**/*.d.ts
@@ -22,7 +19,5 @@ __pycache__/
 *.py[cod]
 *.tsbuildinfo
 **/__marimo__/
-**/public/.marimo-export/
-*.executions
-examples/browser/public/export/
+examples/browser/public/publication/
 examples/*/dist/

@@ -7,22 +7,16 @@ catalogMode: prefer
 
 catalog:
   "@anywidget/types": ^0.4.0
-  "@uwdata/flechette": ^2.5.0
-  "@types/react": ^19.2.14
-  "@types/react-dom": ^19.2.3
+  "@msgpack/msgpack": ^3.1.2
+  "@vitest/browser-playwright": 4.1.10
   "@types/node": ^24.10.0
-  astro: ^7.0.6
-  hyparquet: ^1.26.2
-  next: 16.2.10
-  react: ^19.2.7
-  react-dom: ^19.2.7
+  playwright: 1.61.1
   typescript: ^6.0.3
   vega-embed: ^7.1.0
   vite: npm:@voidzero-dev/vite-plus-core@0.2.4
   vite-plus: 0.2.4
   vitepress: ^1.6.3
   vue: ^3.5.39
-  yaml: ^2.8.0
 
 minimumReleaseAge: 1440
 minimumReleaseAgeStrict: true

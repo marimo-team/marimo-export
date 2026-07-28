@@ -1,6 +1,6 @@
 # Validation
 
-Validate through the boundary a consumer depends on. Unit tests protect local contracts. The remote integration proves production, transfer, and consumption across real marimo, Python, HTTP, WebSocket, filesystem, and TypeScript boundaries.
+Validate through the boundary a consumer depends on. Unit tests protect strict local contracts. The integration suite proves live capture, same-process marimo cache reuse, transfer, local commit, and detached Python and CLI reading against a real server.
 
 ## Required handoff gate
 
@@ -11,44 +11,64 @@ make format
 make check
 ```
 
-Review the files changed by `make format` before running the gate. `make check` runs:
+Review the files changed by `make format` before running the gate. `make check` covers formatting, lint, TypeScript and Python types, unit tests, real integration, package builds, and packed-package smoke tests.
 
-1. Vite+ and Ruff format checks.
-2. Vite+ and Ruff linting.
-3. TypeScript, ty, and Pyrefly type checks.
-4. TypeScript and Python unit suites.
-5. Every TypeScript workspace build.
-6. Python wheel and source-distribution builds through uv.
-7. The real remote marimo integration.
-8. A packed npm install that imports every public entrypoint and runs the installed CLI.
+CI also runs the publication reader suite on native Windows so the reparse-point and stable-path contract is exercised through that platform's filesystem APIs.
 
 ## Evidence by change surface
 
-| Change surface                                                         | Required evidence                                                                 |
-| ---------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| Plan decoding, defaults, inputs, options, or scenario uniqueness       | Python and TypeScript plan tests plus ty and Pyrefly                              |
-| Authored scheduling, UI convergence, state guards, or runner lifecycle | `test_runner.py`, context tests, and remote integration                           |
-| Process gate, notebook user arguments, nested apps, or Polars restore  | Runner subprocess tests, context tests, and remote integration                    |
-| Producer mode and execution-type boundary                              | Context and actual-kernel remote tests plus a relaxed edit-mode integration       |
-| Synthetic-cell identity or `Projection`                                | Projection and execution-boundary tests plus remote integration                   |
-| HTML cache identity, virtual media repair, or static HTML portability  | HTML and runner tests, plus a fresh-process proof for restart changes             |
-| Root `Store` keys, immutable writes, or mirror repair                  | Cache, index, worker tests, and remote integration                                |
-| Index or reference schema                                              | Python index tests, TypeScript reference and reader tests, and remote integration |
-| Universal reader or `ExportSource`                                     | Reader and source tests in browser-compatible modules                             |
-| Remote protocol, attachment, ownership, close, or timeout              | Remote and session tests plus remote integration                                  |
-| Stage TTL, release, or restart adoption                                | Python delivery tests plus remote integration                                     |
-| Pull, atomic writes, local path safety, or verification                | Checkout and source tests plus remote integration                                 |
-| CLI arguments, stdout, stderr, JSON, or exit codes                     | CLI tests through `runCli()` and the owning package build                         |
-| Arrow, Parquet, Vega-Lite, or AnyWidget loader                         | Owning loader tests, package build, and a real decoder or browser mount           |
-| Package exports, versions, dependencies, or build backend              | Public API tests, full build, packed install smoke, and content inspection        |
-| Browser rendering or interaction                                       | Browser run against a pulled publication                                          |
-| Next.js or Astro integration                                           | Framework build and server-rendered or generated-page read                        |
-| Documentation navigation or examples                                   | VitePress build and copied-command verification                                   |
-| marimo pin or private adapter                                          | Python suite, remote integration, package inspection, and upstream seam review    |
+| Change surface                                      | Required evidence                                                                                                     |
+| --------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `ExportSpec` fields, defaults, or validation        | Pydantic wire model, generated schema, parser tests, ty, and Pyrefly                                                  |
+| Projection fields or exporter registry              | Projection and exporter tests plus live capture integration                                                           |
+| Named global, expression, or cell-payload selection | Bridge tests and real-session integration                                                                             |
+| UI variants, quiescence, or restoration             | Success and failure bridge tests plus real-session integration                                                        |
+| Cache identity or `CustomStub` support              | Cold, warm, changed-input, changed-version, changed-options, and stub tests                                           |
+| Unhashable source fallback                          | Exporter success, cache disposition, and publication read tests                                                       |
+| Exact `.bin` receipt                                | File-store cold and warm tests plus another configured store when available                                           |
+| Transfer ticket or virtual-file cleanup             | Bounds, expiry, release, cleanup-failure, and integration tests                                                       |
+| Local publication commit or replacement             | No-replace rename, cache merge, collision, retained-asset, and index-commit tests                                     |
+| Publication schema                                  | Pydantic wire model, generated schema, and strict cross-language decoder tests                                        |
+| Python publication reader                           | Index, asset, closure-limit, integrity, path, POSIX descriptor, Windows stable-path, envelope, read, and verify tests |
+| Browser reader or source                            | Reader, source, cancellation, byte-limit, and public API tests                                                        |
+| CLI args, JSON, stderr, redaction, or exits         | CLI subprocess tests through the installed Python entrypoint                                                          |
+| Loader decoding or mounting                         | Owning loader tests and a real browser mount for interactive formats                                                  |
+| Package exports or dependencies                     | Full build, wheel inspection, npm pack inspection, and import smoke                                                   |
+| Documentation and navigation                        | VitePress build, local-link check, and copied-command review                                                          |
+| marimo dependency or private adapter                | Full Python suite, integration, upstream seam review, and package inspection                                          |
 
-## Focused TypeScript checks
+## Focused Python checks
 
-Run the core package suite:
+```bash
+uv run ruff check packages/python
+uv run ty check packages/python
+uv run pyrefly check
+uv run --all-extras --package marimo-export pytest -q packages/python/tests
+```
+
+Run focused files while iterating:
+
+```bash
+uv run --package marimo-export pytest -q packages/python/tests/test_spec.py
+uv run --package marimo-export pytest -q packages/python/tests/test_projection.py
+uv run --package marimo-export pytest -q packages/python/tests/test_marimo_cache.py
+uv run --package marimo-export pytest -q packages/python/tests/test_client.py
+uv run --package marimo-export pytest -q packages/python/tests/test_reader.py
+uv run --package marimo-export pytest -q packages/python/tests/test_cli.py
+```
+
+Cache tests should prove:
+
+1. Cold projection writes one `BlobAsset` `.bin` object.
+2. Warm projection resolves the same exact object.
+3. Source identity changes invalidate the projection.
+4. Exporter version and normalized options change identity.
+5. Unhashable sources export and report `skipped`.
+6. Registered custom-stub bytes participate in identity.
+7. A durable flush precedes receipt resolution.
+8. The receipt digest matches the configured store bytes.
+
+## Focused browser checks
 
 ```bash
 pnpm --filter @marimo-team/marimo-export typecheck
@@ -57,57 +77,29 @@ pnpm --filter @marimo-team/marimo-export build
 pnpm --filter @marimo-team/marimo-export test:package
 ```
 
-The automated CLI suite calls `runCli()` in-process. The package smoke installs the packed tarball in a temporary project, imports the root, `/remote`, and `/node` entrypoints, and runs the installed binary:
+Run an owning loader package after changing its format contract:
 
 ```bash
-pnpm --filter @marimo-team/marimo-export build
-pnpm --filter @marimo-team/marimo-export test:package
+pnpm --filter @marimo-team/marimo-export-loader-vegalite check
+pnpm --filter @marimo-team/marimo-export-loader-vegalite test
+pnpm --filter @marimo-team/marimo-export-loader-vegalite prepack
 ```
 
-Run one test file while iterating:
+Replace the package name with the changed loader.
+
+The AnyWidget runtime has a focused native Chromium gate:
 
 ```bash
-pnpm --dir packages/client exec vp test tests/reader.test.ts --run
-pnpm --dir packages/client exec vp test tests/session.test.ts --run
+pnpm --filter @marimo-team/marimo-export-loader-anywidget exec \
+  playwright install --only-shell chromium
+pnpm --filter @marimo-team/marimo-export-loader-anywidget test:browser
 ```
 
-Build one loader and its workspace dependencies:
+This gate imports embedded ESM through browser object URLs, mounts a composed model graph, applies model updates, injects styles, and verifies disposal. The package `test` script runs the native Chromium project as part of `make test`.
 
-```bash
-pnpm exec vp run -t @marimo-team/marimo-export-arrow#build
-```
+Browser reader tests should corrupt the envelope bytes, size, digest, MessagePack shape, media type, filename, format ID, and metadata independently. Every corruption must fail before loader code runs.
 
-Replace the package name with the loader under test.
-
-## Focused Python checks
-
-Run static checks and the Python suite:
-
-```bash
-uv run ruff check packages/producer
-uv run ty check packages/producer
-uv run pyrefly check
-uv run --package marimo-export pytest -q packages/producer/tests
-```
-
-Run cache-boundary files while iterating:
-
-```bash
-uv run --package marimo-export pytest -q packages/producer/tests/test_execution_boundary.py
-uv run --package marimo-export pytest -q packages/producer/tests/test_runner.py
-uv run --package marimo-export pytest -q packages/producer/tests/test_projection.py
-uv run --package marimo-export pytest -q packages/producer/tests/test_delivery.py
-```
-
-`test_execution_boundary.py` proves the targeted-runner flush boundary, a complete `Projection` round trip through marimo's `LazyLoader`, and Polars Arrow restoration in a subprocess. `test_projection.py` protects the public `Projection` contract, exporter behavior, and synthetic projection identity. The terminal restoration cases in `test_runner.py` exercise the generated cell through the scenario boundary.
-
-`test_runner.py` protects the full scenario boundary. Its focused cases cover UI defaults that would otherwise fail, recreated UI objects, state pair relinking, setter pre-state, getter-only hits, projection alias deduplication, terminal restoration over an unpicklable source, process-wide serialization, and root and nested notebook arguments.
-
-`test_projection.py` protects the built-in HTML exporter and rejection of runtime-backed fragments. The HTML cases in `test_runner.py` protect virtual-media inlining, exact-length reads, primitive content-token invalidation, targeted producer repair, and warm projection hits.
-
-`test_delivery.py` protects atomic stages, exact expiry fields, active timer cleanup, explicit release, and restart adoption from directory modification time.
-
-## Remote integration proof
+## Live integration proof
 
 Run:
 
@@ -115,121 +107,80 @@ Run:
 make integration
 ```
 
-The test starts a dedicated marimo 0.23.14 server through the local Python distribution. It uses temporary notebook, cache, counter, stage, and checkout directories.
+The integration starts a tokenless loopback marimo edit server from the workspace environment, activates a notebook session, then drives the public Python API and installed CLI entrypoint. Its notebook fixture has no PEP 723 dependencies, so the process uses the host workspace environment.
 
-The proof covers:
+The current automated real-process proof covers:
 
-1. Authenticated notebook-path attachment and an owned upstream-routed session.
-2. Remote capability description and exact runtime versions.
-3. A cold three-scenario build with definition and UI inputs.
-4. A warm build that preserves authored and exporter counters.
-5. Output and format label changes that preserve native projection hits.
-6. Exporter-version invalidation that reruns projection work while preserving authored hits.
-7. Payload-mirror deletion followed by repair from a cached complete `Projection`.
-8. Verified staging and an incremental second pull that skips matching payloads.
-9. Local verification against the original `ExportRef`.
-10. Repeated CLI publication with structured output.
-11. TypeScript scenario resolution and output reads after the marimo server stops.
+1. Explicit session selection and inspection.
+2. Named global, trusted expression, and rendered cell-payload selection.
+3. The starting UI state and one changed finite state.
+4. Starting-control restoration after successful capture.
+5. Six cold projection misses followed by six warm hits in the same process.
+6. Capture of an unsaved executed cell and stable live document digest during each capture.
+7. Transfer and verification of six `.bin` cache assets through the public capture path.
+8. Python publication reads while the server runs.
+9. CLI capture and session inspection while the server runs.
+10. Python plus CLI inspect, read, and verify after the server stops.
 
-Keep this as a real-process integration. A mocked transport cannot prove native cache identity, scratchpad dispatch, stage serving, payload repair, or post-server consumption.
+Focused unit and browser evidence covers the adjacent contracts:
 
-Use focused unit tests for failure paths that the main integration should not destabilize, including edit-scope preflight, primary session lookup, resumed attachment, kiosk rejection, close retries, UI recreation cycles, stage timer failures, symlink rejection, and bounded reads.
+- Bridge tests cover control restoration after exporter failure.
+- Cache tests cover unhashable sources, `skipped`, custom stubs, and exact configured-store receipts.
+- Transfer tests cover ticket bounds, release, expiry, and cleanup failures.
+- Client tests cover new-directory commit and replacement with `index.json` as the commit point.
+- Authentication and remote-client tests cover query parsing, headers, and token redaction.
+- Browser tests cover publication verification and format loading. The browser workflow below supplies post-shutdown runtime evidence.
+
+Keep live capture as a real-process integration. A mocked transport cannot prove code-mode state, marimo cache identity, background flushes, or virtual-file serving. The current integration does not exercise authentication, another host, a sandboxed notebook environment, cross-restart cache reuse, custom stores, or a browser runtime.
 
 ## Publication inspection
 
-For any changed fixture or produced checkout, verify the commit chain:
+For a produced publication:
 
-1. Verify the external `ExportRef` against `index.json`.
-2. Parse the index through both Python and TypeScript decoders when its schema changed.
-3. Verify every unique payload key, size, and digest.
-4. Confirm `index.json` is written after payloads.
-5. Stop the producer and read representative outputs from the durable directory.
+1. Parse `index.json` through Python and browser decoders.
+2. Confirm every asset key resolves beneath `cache`.
+3. Verify each unique envelope size and SHA-256.
+4. Decode each `BlobAsset` and compare its fields with the index.
+5. Confirm a new destination used the no-replace directory commit, or confirm replacement merged cache objects before atomically replacing `index.json`.
+6. Stop the notebook server and read representative formats through the Python and browser readers.
 
-For local filesystem changes, include regular files, missing files, symlink leaves, escaping paths, oversized files, aborts, existing matching payloads, and failed temporary writes. Keep source and destination trees outside concurrent untrusted writes while running these checks. The pathname-based implementation does not protect against every intermediate-directory replacement race.
+Exercise missing files, path traversal, oversized indexes, assets, and declared closures, malformed UTF-8, malformed MessagePack, digest mismatches, duplicate asset references, aborted reads, and loader failures.
 
 ## Package inspection
 
-### TypeScript package
-
-Build and inspect the npm file list:
+Build both distributions:
 
 ```bash
-pnpm --filter @marimo-team/marimo-export build
+make build
+```
+
+Inspect the Python wheel and source distribution. Confirm the package contains `marimo_export`, `py.typed`, CLI metadata, and the license. Confirm optional serializer dependencies stay in their named extras.
+
+The current development wheel must declare the exact `peter-gy/marimo` commit that supplies `BlobAsset`. Python package publication remains gated on an official marimo release with that codec. The release gate replaces the direct commit dependency with the compatible released lower bound and validates installation through normal dependency resolution.
+
+Inspect the npm tarball:
+
+```bash
 pnpm --filter @marimo-team/marimo-export test:package
-pnpm --dir packages/client pack --dry-run --json
+pnpm --dir packages/browser pack --dry-run --json
 ```
 
-Confirm:
+Confirm the package exposes one browser entrypoint, imports no Node built-ins, and declares each runtime dependency it imports. Inspect every changed loader package the same way.
 
-- The tarball contains the root, `/remote`, `/node`, and CLI outputs declared by `publishConfig.exports` and `bin`.
-- The installed entrypoints expose the expected runtime values and `marimo-export --version` matches package metadata.
-- The universal root imports no Node built-ins.
-- The `/node` output contains filesystem transfer support.
-- Package metadata declares version `0.0.0` and `Apache-2.0`.
-- Runtime dependencies match imports from published entrypoints.
-
-Inspect each changed loader package the same way. Its format dependency belongs in that package and its `formatId` matches the Python exporter.
-
-Remove ignored loader `dist` directories before the workspace format, lint, and type gates. Workspace package resolution must use source exports. Rebuild and inspect `dist` only through the owning package build and pack commands.
-
-### Python package
-
-Build through uv:
-
-```bash
-uv build --package marimo-export
-```
-
-Inspect the resulting wheel and source distribution. Confirm:
-
-- Base requirements contain the exact `marimo==0.23.14` pin.
-- Dataframe and PNG dependencies remain in their named extras.
-- Metadata declares version `0.0.0`, the Marimo Team author, and Apache-2.0.
-- The wheel contains `marimo_export`, `py.typed`, and the license.
-- `Projection` imports and pickles through `marimo_export.Projection`.
-- Importing `marimo_export.remote` in a base environment leaves optional serializer packages unloaded.
-
-`make build` must produce both TypeScript packages and these Python artifacts.
-
-## Documentation and examples
-
-Build the documentation with its deployment base path:
+## Documentation and browser proof
 
 ```bash
 BASE_PATH=/marimo-export pnpm --filter @marimo-team/marimo-export-docs build
 pnpm --filter @marimo-team/marimo-export-docs typecheck
-```
-
-Build each consumer example:
-
-```bash
 pnpm --filter @marimo-team/marimo-export-example-browser build
-pnpm --filter @marimo-team/marimo-export-example-next build
-pnpm --filter @marimo-team/marimo-export-example-astro build
 ```
 
-For runtime validation, produce and pull a publication, stop the marimo server, then run the consumer. Inspect the rendered scenario and output through the browser or generated HTML boundary. A build proves module and type integration. Browser behavior, content security policy, mounting, and interaction require runtime evidence.
-
-### AnyWidget codec proof
-
-AnyWidget support requires evidence across the producer, cache, wire, and browser boundaries:
-
-1. Export a raw AnyWidget and an `mo.ui.anywidget(...)` wrapper through the public plan path.
-2. Verify deterministic model IDs, reachable-model closure, binary buffer restoration, CSS, and nested child references in `anywidget.v1`.
-3. Run the same plan warm and prove the complete `Projection` restores from marimo's native cache.
-4. Change synchronized state, ESM, and CSS separately. Verify each produces a new projection when the corresponding notebook state changes.
-5. Pull the publication, stop the marimo server, and mount the widget in a real browser.
-6. Mount through a Next.js or Astro client boundary after the server side reads the publication.
-7. Exercise initialize, render, nested `host.getWidget()`, local model changes, abort, cleanup callbacks, and idempotent disposal.
-8. Confirm that importing the loader and decoding the payload during SSR does not access browser globals.
-9. Confirm malformed model references, buffer paths, base64 data, ESM specs, and format IDs fail before module execution.
+For runtime evidence, capture a publication, stop the marimo server, and serve the browser example. Inspect its JSON and Vega-Lite paths. Run the AnyWidget native browser gate for embedded module import, model interaction, style mounting, and disposal. Add a browser path for each other format changed by the work.
 
 ## Final review
 
-Before handoff:
-
 1. Run `git diff --check`.
 2. Read each changed file once for behavior and once for wording.
-3. Search changed prose for stale schema names, package names, commands, em dash characters, and prose semicolons.
-4. Confirm generated output came from the owning build command.
-5. Confirm the diff stays within the intended plane or updates every crossed contract.
+3. Search for old schema names, old package names, old commands, em dash characters, prose semicolons, and completion residue.
+4. Confirm generated files came from the owning build command.
+5. Confirm the diff updates every crossed contract.

@@ -1,12 +1,9 @@
 # /// script
-# requires-python = ">=3.10"
+# requires-python = ">=3.12"
 # dependencies = [
 #     "altair==6.0.0",
-#     "marimo==0.23.14",
-#     "marimo-export[dataframe,png]==0.0.0",
+#     "marimo",
 # ]
-# [tool.uv.sources]
-# marimo-export = { path = "../../packages/producer", editable = true }
 # ///
 
 import marimo
@@ -26,11 +23,9 @@ def _():
 @app.cell
 def _(mo):
     mo.md("""
-    # Offline market report
+    # Market report
 
-    This notebook uses a small embedded price series so every scenario can be
-    published reproducibly. Change the symbols or lookback window to exercise
-    marimo's reactive graph before exporting the same objects for frontend use.
+    Choose one or more symbols to compare their recent closing prices.
     """)
     return
 
@@ -104,10 +99,11 @@ def _(market_rows, symbol_picker, window_days):
 
 @app.cell
 def _(symbol_picker, visible_rows, window_days):
-    _latest = {
-        _symbol: next(row["close"] for row in reversed(visible_rows) if row["symbol"] == _symbol)
-        for _symbol in symbol_picker.value
-    }
+    _latest = {}
+    for _symbol in symbol_picker.value:
+        _rows = [row for row in visible_rows if row["symbol"] == _symbol]
+        if _rows:
+            _latest[_symbol] = _rows[-1]["close"]
     summary = {
         "symbols": list(symbol_picker.value),
         "window_days": window_days,
@@ -134,14 +130,17 @@ def _(alt, chart_width, visible_rows):
 
 
 @app.cell
-def _(mo, symbol_picker, visible_rows):
-    _start = min(row["date"] for row in visible_rows)
-    _end = max(row["date"] for row in visible_rows)
-    market_note = mo.md(
-        f"Showing **{', '.join(symbol_picker.value)}** from **{_start}** through **{_end}**."
-    )
-    market_note  # noqa: B018
-    return (market_note,)
+def market_note(mo, symbol_picker, visible_rows):
+    if visible_rows:
+        _start = min(row["date"] for row in visible_rows)
+        _end = max(row["date"] for row in visible_rows)
+        _note = (
+            f"Showing **{', '.join(symbol_picker.value)}** from **{_start}** through **{_end}**."
+        )
+    else:
+        _note = "Select at least one symbol to populate the report."
+    mo.md(_note)
+    return
 
 
 @app.cell

@@ -1,6 +1,7 @@
 import type { AnyWidget, Experimental } from "@anywidget/types";
 
 import type { Host } from "@anywidget/types";
+import { abortReason, combineAbortSignals, raceAbort } from "./abort.js";
 import { modelProxy } from "./model-proxy.js";
 import type { ModelState, StaticModel } from "./model.js";
 
@@ -40,6 +41,7 @@ export class WidgetBinding<T extends ModelState = ModelState> {
   readonly #cleanupErrors: unknown[] = [];
   readonly #viewTasks = new Set<Promise<void>>();
   #destroyPromise: Promise<void> | undefined;
+  #destroyed = false;
 
   private constructor(options: {
     controller: AbortController;
@@ -80,11 +82,13 @@ export class WidgetBinding<T extends ModelState = ModelState> {
         signal,
       }),
     );
-    initializeTask
+    void initializeTask
       .then(async (result) => {
         if (signal.aborted && isCleanup(result)) await settleLateInitializeCleanup(result);
       })
-      .catch(() => undefined);
+      .catch((error: unknown) => {
+        if (signal.aborted) reportLateFailure("initialize", error);
+      });
     const initializeResult = await raceAbort(
       initializeTask,
       signal,
@@ -140,7 +144,7 @@ export class WidgetBinding<T extends ModelState = ModelState> {
   }
 
   async #createView(element: HTMLElement, signal: AbortSignal): Promise<void> {
-    const renderSignal = abortSignalAny([signal, this.#controller.signal]);
+    const renderSignal = combineAbortSignals([signal, this.#controller.signal]);
     if (renderSignal.aborted) throw abortReason(renderSignal, "AnyWidget view was disposed.");
     element.replaceChildren();
 
@@ -149,7 +153,7 @@ export class WidgetBinding<T extends ModelState = ModelState> {
       renderCleanupTask ??= this.#trackCleanup(cleanup, "render");
       return renderCleanupTask;
     };
-    const renderTask = Promise.resolve(
+    const renderTask = Promise.resolve().then(() =>
       this.#widget.render?.({
         model: modelProxy(this.#model, renderSignal),
         el: element,
@@ -158,13 +162,16 @@ export class WidgetBinding<T extends ModelState = ModelState> {
         host: this.#createHost(renderSignal),
       }),
     );
-    renderTask
+    void renderTask
       .then((cleanup) => {
         if (renderSignal.aborted && isCleanup(cleanup)) {
-          void settleRenderCleanup(cleanup);
+          return settleRenderCleanup(cleanup);
         }
+        return undefined;
       })
-      .catch(() => undefined);
+      .catch((error: unknown) => {
+        if (renderSignal.aborted) reportLateFailure("render", error);
+      });
 
     let cleanup: unknown;
     try {
@@ -176,7 +183,8 @@ export class WidgetBinding<T extends ModelState = ModelState> {
 
     const clear = () => element.replaceChildren();
     if (!isCleanup(cleanup)) {
-      renderSignal.addEventListener("abort", clear, { once: true });
+      if (renderSignal.aborted) clear();
+      else renderSignal.addEventListener("abort", clear, { once: true });
       return;
     }
     const release = () => {
@@ -192,7 +200,9 @@ export class WidgetBinding<T extends ModelState = ModelState> {
 
   #trackCleanup(cleanup: Cleanup, phase: string): Promise<void> {
     const task = settleCleanup(cleanup).catch((error) => {
-      this.#cleanupErrors.push(new Error(`AnyWidget ${phase} cleanup failed.`, { cause: error }));
+      const failure = new Error(`AnyWidget ${phase} cleanup failed.`, { cause: error });
+      if (this.#destroyed) reportLateFailure(phase, failure);
+      else this.#cleanupErrors.push(failure);
     });
     this.#cleanupTasks.add(task);
     void task.finally(() => this.#cleanupTasks.delete(task));
@@ -205,10 +215,15 @@ export class WidgetBinding<T extends ModelState = ModelState> {
     // Cleanup callbacks can enqueue follow-up cleanup work.
     // oxlint-disable-next-line eslint/no-await-in-loop
     while (this.#cleanupTasks.size > 0) await Promise.all(this.#cleanupTasks);
+    this.#destroyed = true;
     if (this.#cleanupErrors.length > 0) {
       throw new AggregateError(this.#cleanupErrors, "AnyWidget cleanup failed.");
     }
   }
+}
+
+function reportLateFailure(phase: string, error: unknown): void {
+  console.error(`AnyWidget ${phase} settled after its mount was disposed.`, error);
 }
 
 function isAnyWidget(value: unknown): boolean {
@@ -221,8 +236,42 @@ function isAnyWidget(value: unknown): boolean {
 
 function invalidModule(url: string): Error {
   return new Error(
-    `AnyWidget module ${JSON.stringify(url)} must default-export a factory or an object with render or initialize.`,
+    `AnyWidget module ${quoteDiagnostic(url)} must default-export a factory or an object with render or initialize.`,
   );
+}
+
+function quoteDiagnostic(value: string): string {
+  const limit = 128;
+  let body = "";
+  for (let index = 0; index < value.length; index += 1) {
+    const codeUnit = value.charCodeAt(index);
+    let token: string;
+    if (codeUnit === 0x22 || codeUnit === 0x5c) {
+      token = `\\${value[index]}`;
+    } else if (
+      codeUnit <= 0x1f ||
+      (codeUnit >= 0x7f && codeUnit <= 0x9f) ||
+      (codeUnit >= 0xd800 && codeUnit <= 0xdfff)
+    ) {
+      if (
+        codeUnit >= 0xd800 &&
+        codeUnit <= 0xdbff &&
+        index + 1 < value.length &&
+        value.charCodeAt(index + 1) >= 0xdc00 &&
+        value.charCodeAt(index + 1) <= 0xdfff
+      ) {
+        token = value.slice(index, index + 2);
+        index += 1;
+      } else {
+        token = `\\u${codeUnit.toString(16).padStart(4, "0")}`;
+      }
+    } else {
+      token = value[index]!;
+    }
+    if (body.length + token.length > limit - 5) return `"${body}..."`;
+    body += token;
+  }
+  return `"${body}"`;
 }
 
 function isCleanup(value: unknown): value is Cleanup {
@@ -231,39 +280,6 @@ function isCleanup(value: unknown): value is Cleanup {
 
 async function settleCleanup(cleanup: Cleanup): Promise<void> {
   await cleanup();
-}
-
-async function raceAbort<T>(task: Promise<T>, signal: AbortSignal, message: string): Promise<T> {
-  if (signal.aborted) throw abortReason(signal, message);
-  let onAbort: (() => void) | undefined;
-  const aborted = new Promise<never>((_resolve, reject) => {
-    onAbort = () => reject(abortReason(signal, message));
-    signal.addEventListener("abort", onAbort, { once: true });
-  });
-  try {
-    return await Promise.race([task, aborted]);
-  } finally {
-    if (onAbort !== undefined) signal.removeEventListener("abort", onAbort);
-  }
-}
-
-function abortSignalAny(signals: readonly AbortSignal[]): AbortSignal {
-  if (typeof AbortSignal.any === "function") return AbortSignal.any([...signals]);
-  const controller = new AbortController();
-  for (const signal of signals) {
-    if (signal.aborted) {
-      controller.abort(signal.reason);
-      return controller.signal;
-    }
-    signal.addEventListener("abort", () => controller.abort(signal.reason), { once: true });
-  }
-  return controller.signal;
-}
-
-function abortReason(signal: AbortSignal, message: string): Error {
-  return signal.reason instanceof Error
-    ? signal.reason
-    : Object.assign(new Error(message), { name: "AbortError" });
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

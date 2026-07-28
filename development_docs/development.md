@@ -1,57 +1,79 @@
 # Development
 
-The workspace uses pnpm and Vite+ for TypeScript packages, examples, and the documentation site. uv owns the Python producer environment, checks, and package build. The root Makefile composes both toolchains.
+The workspace uses pnpm and Vite+ for browser packages, loaders, examples, and the documentation site. uv owns the Python package, CLI, tests, and build. The root Makefile composes both toolchains.
 
-Read [`architecture.md`](./architecture.md) before changing cache behavior, scenario execution, schemas, remote attachment, staging, or package boundaries.
+Read [`architecture.md`](./architecture.md) before changing schemas, live capture, projection caching, transfer tickets, or package boundaries.
 
 ## Install
 
-Use the repository-pinned versions:
+Use the repository-pinned runtimes:
 
 ```bash
 corepack enable
 pnpm install --frozen-lockfile
-uv sync --all-extras
+pnpm --filter @marimo-team/marimo-export-loader-anywidget exec \
+  playwright install --only-shell chromium
+uv sync --all-extras --locked
 ```
 
-The root uv environment installs every Python projection extra for tests. The published base distribution depends on the exact supported marimo release.
+The package-scoped Playwright version selects the Chromium headless shell used by the AnyWidget browser gate.
+
+The Python package temporarily pins `marimo @ git+https://github.com/peter-gy/marimo.git@0f5fd5d55b4d65d06a814842af3228f57c8ae9c8`. The lock resolves that exact revision, which supplies the `BlobAsset` lazy-cache codec.
+
+For unpublished cross-repository work, overlay the inspected core checkout:
+
+```bash
+uv pip install \
+  --python .venv/bin/python \
+  --editable /Users/petergy/Projects/personal/marimo
+UV_NO_SYNC=1 uv run --package marimo-export \
+  pytest -q packages/python/tests/test_marimo_cache.py
+```
+
+Set `UV_NO_SYNC=1` on each command that should retain the overlay. Run `uv sync --all-extras --locked` to restore the pinned Git revision.
+
+Python package publication is gated on an official marimo release that contains the codec. The release change replaces the exact Git requirement with the released lower bound and validates the wheel through normal dependency resolution.
 
 ## Workspace map
 
-| Path                       | Ownership                                                                                          |
-| -------------------------- | -------------------------------------------------------------------------------------------------- |
-| `packages/producer`        | Plans, scenario execution, projections, indexes, remote dispatcher, and the private marimo adapter |
-| `packages/client`          | Universal reader, remote client, Node transfer APIs, and CLI                                       |
-| `packages/loader-arrow`    | Arrow IPC decoding through Flechette                                                               |
-| `packages/loader-parquet`  | Parquet decoding through hyparquet                                                                 |
-| `packages/loader-vegalite` | Vega-Lite decoding and browser mounting                                                            |
-| `apps/docs`                | VitePress documentation renderer                                                                   |
-| `examples/_notebooks`      | Self-contained PEP 723 notebooks and adjacent export plans                                         |
-| `examples/browser`         | Static HTTP consumer                                                                               |
-| `examples/next-ssr`        | Next.js server-side consumer                                                                       |
-| `examples/astro-ssr`       | Astro server-side consumer                                                                         |
-
-AnyWidget support belongs in `packages/loader-anywidget`, published as `@marimo-team/marimo-export-anywidget`. Keep its AFM runtime and browser dependency out of the root package.
-
-Loader manifests expose `src/index.ts` to the workspace and publish `dist` through `publishConfig.exports`, following the core package pattern. Lint, type checks, and example builds from a clean checkout must not depend on ignored package build output.
+| Path                                        | Ownership                                                                                |
+| ------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `packages/python`                           | Python API, CLI, specifications, exporters, capture, transfer, and static reading        |
+| `packages/python/src/marimo_export/_marimo` | Private marimo compatibility and runtime adapters                                        |
+| `packages/python/src/marimo_export/_remote` | HTTP authentication, session selection, scratchpad transport, and Server-Sent Events     |
+| `packages/browser`                          | Browser publication source, schema, verification, envelope decoding, and loader dispatch |
+| `packages/loader-vegalite`                  | Vega-Lite decoding and mounting                                                          |
+| `packages/loader-anywidget`                 | Static AnyWidget graph decoding and mounting                                             |
+| `schemas`                                   | Generated external specification and publication schemas                                 |
+| `apps/docs`                                 | VitePress renderer for `docs`                                                            |
+| `examples/_notebooks`                       | Ordinary marimo notebooks and adjacent export specifications                             |
+| `examples/browser`                          | Static browser publication consumer                                                      |
 
 ## Commands
 
-The Makefile is the workspace contract:
-
 ```bash
 make format
+make format-check
 make lint
 make typecheck
 make test
 make integration
 make build
+make package-smoke
 make check
 ```
 
-`make build` runs the recursive Vite+ workspace build, then uses `uv build --package marimo-export` to create the Python wheel and source distribution. `make integration` depends on that build. `make check` runs formatting, linting, types, unit tests, builds, the real remote integration, and a packed npm install smoke test.
+Run focused Python checks from the workspace root:
 
-Run one TypeScript package while iterating:
+```bash
+uv run ruff check packages/python
+uv run ty check packages/python
+uv run pyrefly check
+uv run --all-extras --package marimo-export pytest -q packages/python/tests
+uv build --package marimo-export --clear --no-sources
+```
+
+Run the browser package while iterating:
 
 ```bash
 pnpm --filter @marimo-team/marimo-export typecheck
@@ -59,210 +81,158 @@ pnpm --filter @marimo-team/marimo-export test
 pnpm --filter @marimo-team/marimo-export build
 ```
 
-Run focused Python checks from the workspace root:
+Run the native AnyWidget browser gate while changing its loader or runtime:
 
 ```bash
-uv run ruff check packages/producer
-uv run ty check packages/producer
-uv run pyrefly check
-uv run --package marimo-export pytest -q packages/producer/tests
-uv build --package marimo-export
-```
-
-Use Vite+ task selection when a package and its workspace dependencies need to build together:
-
-```bash
-pnpm exec vp run -t @marimo-team/marimo-export#build
+pnpm --filter @marimo-team/marimo-export-loader-anywidget test:browser
 ```
 
 Run [`make check`](../Makefile) before handoff. [`validation.md`](./validation.md) maps each change surface to focused evidence.
 
-## Change the owning plane
+## Change the owning boundary
 
-Keep behavior with its owner:
+- Domain models, Python reading, capture orchestration, and CLI behavior belong in `packages/python` outside adapter packages.
+- Private marimo behavior belongs in `_marimo`.
+- Remote HTTP and scratchpad behavior belongs in `_remote`.
+- Static browser behavior belongs in `packages/browser`.
+- Format dependencies belong in the matching Python extra or browser loader package.
 
-- Producer and Python codec changes belong in `packages/producer`.
-- Remote attachment and universal control transport belong in `packages/client/src/remote`.
-- Filesystem transfer and CLI behavior belong in `packages/client/src/node`.
-- Index validation, integrity verification, and immutable read APIs belong in the universal root entrypoint.
-- Format-specific frontend dependencies belong in one loader package.
+A wire-shape change updates the schema, Python decoder, browser decoder, fixtures, tests, examples, and documentation in one change.
 
-A wire-shape change crosses planes. Update its Python encoder, TypeScript decoder, public types, fixtures, tests, and contributor documentation in one change.
+## Change an export specification
 
-## Change a plan
+`ExportSpec` is strict and Python-owned. When changing it:
 
-The TypeScript plan validator is fast structural preflight. The Python decoder remains authoritative for Python syntax, normalized built-in options, and plan hashing. Syntax validation does not resolve names against a notebook. The scenario runner resolves input targets against the authored graph, then synthetic-cell compilation and execution resolve projection sources, notebook exporters, imports, and optional serializer dependencies.
+1. Update the private Pydantic v2 wire model in `marimo_export.spec`.
+2. Update Python semantic validation and decoding where the behavior changes.
+3. Preserve JSON-safe values and safe integers across Python and TypeScript boundaries.
+4. Keep variant, output, and format labels outside projection cache identity.
+5. Update an adjacent example specification.
+6. Add unknown-field and malformed-input tests.
+7. Run `make schemas`, commit `schemas/spec.v1.json`, and run `make schemas-check`.
+8. Verify the live bridge against a running notebook.
 
-When changing the plan contract:
+Variants target existing marimo UI controls. Sources target live globals, trusted expressions, or rendered cell payloads.
 
-1. Define one normalized Python wire shape.
-2. Keep TypeScript preflight aligned with the JSON-visible portion of that shape.
-3. Include every option that changes bytes in synthetic-cell identity.
-4. Keep scenario labels and output labels outside projection identity.
-5. Update the annotated example at `examples/_notebooks/finance.plan.yaml`.
-6. Add cross-language fixtures for safe numbers, defaults, and unknown fields.
+`_SpecWire` generates the JSON Schema and owns structure and portable lexical constraints. Python `ExportSpec` decoding remains authoritative for Python identifiers and keywords, expression syntax, exporter import references, and built-in exporter option semantics.
 
-Plan inputs target graph definitions or marimo UI elements. Projection sources target definitions or expressions. Expose each publishable result as a notebook definition when later cells need to reference it.
+Publication wire changes start in the private `_PublicationWire` model and its nested Pydantic models in `marimo_export.publication`. Run `make schemas` to regenerate `schemas/publication.v1.json`, then update the browser decoder, shared fixtures, and conformance tests. Do not edit either checked-in schema by hand.
 
-## Add a custom format
+Keep runtime semantic checks outside generated-schema extensions. The 262,144-byte canonical projection-metadata limit is enforced by `Projection` and on raw `BlobAsset.metadata_json` before decoding. It is not represented by a custom JSON Schema keyword.
 
-A custom format pairs one Python exporter with one TypeScript loader through a stable format ID.
+## Add a format
 
-Define the exporter in the notebook or an importable module:
+Define a Python exporter:
 
-```py
-import json
-
+```python
 from marimo_export import Projection
 
 
-def ndjson_projection(rows) -> Projection:
-    payload = b"\n".join(
-        json.dumps(
-            row,
-            allow_nan=False,
-            ensure_ascii=False,
-            separators=(",", ":"),
-            sort_keys=True,
-        ).encode()
-        for row in rows
-    )
+def ndjson(rows) -> Projection:
     return Projection(
-        payload,
+        encode_ndjson(rows),
         format_id="ndjson.v1",
         media_type="application/x-ndjson",
+        filename="rows.ndjson",
     )
 ```
 
-Match the format in TypeScript:
+Add an exporter descriptor with its public name, import reference, version, normalized options, optional extra, and availability probe. Keep serialization in the format module.
+
+Define a browser loader when consumers need typed decoding or mounting:
 
 ```ts
-import type { OutputLoader } from "@marimo-team/marimo-export";
+import type { FormatLoader } from "@marimo-team/marimo-export";
 
-export function ndjson<T>(decodeRow: (input: unknown) => T): OutputLoader<readonly T[]> {
+export function ndjsonLoader<T>(decode: (value: unknown) => T): FormatLoader<readonly T[]> {
   return {
     formatId: "ndjson.v1",
-    async load(output) {
-      const text = await output.text();
+    async load(context) {
+      const text = await context.text();
       if (text.length === 0) return [];
-      return text.split("\n").map((line) => decodeRow(JSON.parse(line)));
+      return text.split("\n").map((line) => decode(JSON.parse(line)));
     },
   };
 }
 ```
 
-The Python exporter owns option validation and serialization. The TypeScript loader owns decoding. A loader that returns a mountable runtime object also owns that object's frontend lifecycle. Keep `metadata` JSON-compatible. Metadata carries small decoding facts. Payload bytes carry data.
+Test the exporter through a complete `Projection` and capture. Test the loader through `PublishedFormat.load()` so verification and `BlobAsset` decoding remain in the exercised path.
 
-An importable exporter plan entry requires an explicit version. Change that version when behavior changes outside notebook lineage. A notebook exporter definition already participates in graph lineage and may add a version for an external resource or protocol revision.
+An interactive loader also defines mount prerequisites, cancellation, teardown, content security policy, and executable-code behavior.
 
-Test the exporter through its complete `Projection`. Test the loader through `ExportOutput.load()` so format matching, verified payload reading, and decoding use the public consumer path.
+## Change cache integration
 
-## Add a built-in format family
+Keep source identity and result persistence separate:
 
-A built-in format earns a Python module, a stable payload contract, and a consumer path. Add serialization under `packages/producer/src/marimo_export/projection/exporters/<contract>.py`. Add only its descriptor to the built-in registry. Keep shared helpers inside that format family unless two independent contracts have the same invariant.
+- `CustomStub` defines deterministic identity and restoration for a source type.
+- A source package can register its stub directly or through marimo's lazy stub registration hook when the optional type is first encountered.
+- A stub's deterministic `to_bytes()` must encode the concrete source type and codec or schema version. Values with different semantics or decoding contracts must produce different identity bytes.
+- `BlobAsset` contains the complete portable projector result.
+- The lazy cache owns lookup, `.bin` persistence, and restoration.
+- `CacheAssetRef` identifies the exact cache object selected for publication.
 
-Use the frontend protocol as the module boundary:
+Stub registration is process-global and remains owned by the source package. Capture reads the active registry through marimo's normal hashing path and does not mutate it per request.
 
-- Arrow and Parquet share dataframe normalization.
-- Vega-Lite JSON and PNG share specification normalization.
-- Altair uses Vega-Lite rather than an Altair-specific wire format.
-- AnyWidget uses the static model graph and its own loader.
-- A future Plotly JSON contract gets its own exporter and loader.
+Every cache change needs cold, warm, changed source, changed exporter version, changed options, unhashable fallback, and registered custom-stub tests.
 
-For an interactive format, implement the Python encoder and frontend loader in one change. Define the payload schema, format ID, media type, trust boundary, mount lifecycle, teardown behavior, SSR import behavior, and missing-backend behavior before adding convenience APIs.
+Resolve the asset from the current callable's cache hash after a durable flush. Avoid session-wide touched-key sets. Read and verify the exact cache object through the configured `Store` for both cold and warm paths.
 
-When adding AnyWidget support:
+## Change live capture
 
-1. Add `_marimo/anywidget.py` for marimo state synchronization, model-reference traversal, buffer extraction, ESM specs, and virtual-file reads.
-2. Add `projection/exporters/anywidget.py` for canonical `anywidget.v1` encoding and `Projection` metadata.
-3. Add the explicit built-in descriptor and an `anywidget` Python extra.
-4. Add `packages/loader-anywidget` with a strict decoder and a static AFM runtime derived from marimo's current model, host, binding, style, and cleanup behavior.
-5. Give every loader a workspace source export and packed `dist` export so clean validation does not require prebuilt artifacts.
-6. Keep loader imports SSR-safe. Parse on load and execute module code only from `mount()`.
-7. Test raw widgets, marimo wrappers, binary state, CSS, nested widgets, module failures, aborts, idempotent disposal, and one real browser mount.
-8. Add a cold and warm producer proof. Change state and ESM independently and verify each invalidates when marimo identity requires it.
+Capture is a transaction over borrowed notebook state:
 
-The AnyWidget codec uses one verified `Projection` payload containing marimo's static notification shape. Its public frontend surface is the `anywidget()` loader, the decoded snapshot, `mount()`, the AFM model, and `dispose()`.
+1. Inspect the current document and controls.
+2. Apply one variant.
+3. Resolve and project selected values.
+4. Restore the starting controls and stale-cell set.
+5. Register exact cache objects for transfer.
+6. Download and verify them.
+7. Commit a new publication directory or replace the existing index at its stable path.
+8. Release temporary files.
 
-## Change cache behavior
+Keep primary failures authoritative during restoration, transfer release, and client close. Add integration evidence for every lifecycle change.
 
-Keep the two cache roles distinct:
-
-- Native marimo cache entries restore authored cells and complete synthetic-cell returns.
-- Content-addressed payload and index objects form the portable publication closure.
-
-marimo owns native identity. Generated projection source encodes the projection ABI, source, exporter specification, normalized options, and any declared exporter version. It must not encode scenario IDs, publication labels, or plan order.
-
-Keep native cache identity in marimo's graph, generated cell source, and hashable dependency values. When marimo intentionally omits content for a value such as `Html`, add the smallest primitive dependency token that represents the portable content. Define portable results with `Projection` and a matching frontend loader. A marimo `CustomStub` is a Python cache codec. It is not a publication format.
-
-Any change to state handling must preserve the guarded cases in `test_runner.py`: getter-only hits, getter and setter identity, transitive setter detection, relinking restored state pairs, and fresh scenario graph state. Avoid claims about arbitrary Python side effects.
-
-Notebook arguments are process state outside marimo's native cache identity. A child runner with user arguments executes with native caching disabled. Preserve this boundary unless upstream cache identity incorporates the argument vector.
-
-Any change to HTML handling must preserve these boundaries:
-
-- A primitive token carries prepared HTML content into native synthetic-cell identity.
-- A targeted live producer repair recreates virtual media bytes when an authored cache restore has lost their registry.
-- `html.v1` produces a static fragment with supported virtual media inlined.
-
-Keep the token derived from graph references, nested paths, concrete types, and prepared HTML text. The terminal synthetic cell must remain eligible for marimo's native cache after any targeted producer repair.
+The scratchpad protocol uses bounded Server-Sent Events and one correlation marker per request. It imports the marimo-export bridge in the running kernel, so the notebook environment must contain the matching package and requested exporter extras. Avoid automatic retries after dispatch. Preserve token redaction in URLs, headers, exceptions, receipts, and CLI output.
 
 ## Change marimo integration
 
-Private marimo imports are confined to `packages/producer/src/marimo_export/_marimo`. An AST boundary test enforces that rule. `Projection` stays at the public pickle path `marimo_export.Projection`. `packages/producer/src/marimo_export/projection` is internal implementation.
+Private imports stay in `packages/python/src/marimo_export/_marimo`. Before updating the marimo dependency:
 
-The adapter pins marimo 0.23.14. Before changing that pin:
+1. Inspect every imported private seam in the target marimo checkout.
+2. Update `_marimo/compat.py` and adapter code together.
+3. Run code-mode, cache, `BlobAsset`, transfer, and document-digest tests.
+4. Run the real integration against a marimo edit server.
+5. Confirm cold and warm capture through the configured store.
+6. Confirm UI restoration on success and failure.
+7. Confirm Python and browser reads after the server stops.
 
-1. Inspect the new upstream implementation for every imported private operation.
-2. Update `_marimo/compat.py`, the Python requirement, and adapter code together.
-3. Run boundary, runner, HTML portability, delivery, projection, and execution tests.
-4. Run the real remote integration.
-5. Confirm warm projection restoration, state guards, runner teardown, payload repair, stage expiry, and post-server reads.
+`make integration` supplies the real-process success path, same-process cold and warm projection, transfer, and detached Python and CLI read evidence. Use focused bridge tests for failure restoration and the browser workflow in [`validation.md`](./validation.md) for post-shutdown browser evidence.
 
-Current upstream dependencies are:
+The first compatible marimo release becomes the package lower bound after the `.bin` `BlobAsset` codec passes the private-seam, live integration, and package-resolution gates.
 
-| Adapter concern               | Upstream area                                                                         |
-| ----------------------------- | ------------------------------------------------------------------------------------- |
-| Saved notebook loading        | `marimo._session.notebook.serializer` and `marimo._ast.load`                          |
-| Managed child execution       | `marimo._runtime.app.kernel_runner` and runtime contexts                              |
-| Producer context boundary     | edit-mode `KernelRuntimeContext.session_mode` and relaxed kernel execution type       |
-| Graph execution and overrides | `marimo._runtime.dataflow` and runner hooks                                           |
-| UI updates                    | `marimo._runtime.commands.UpdateUIElementCommand`                                     |
-| State guards                  | `marimo._runtime.state` and graph transitive references                               |
-| Native projection persistence | `marimo._save.loaders.lazy` and cache configuration                                   |
-| Polars cache restoration      | `marimo._save.stubs.lazy_stub.BLOB_DESERIALIZERS`                                     |
-| HTML preparation              | `marimo._convert.common.dom_traversal`, virtual-file reads, MIME types, and data URLs |
-| Portable object storage       | `marimo._save.stores` through the root cache `Store`                                  |
+## CLI behavior
 
-`describe` reports adapter and runtime versions before a caller builds. Treat a changed server process topology, missing runner finalizer, changed cache lifecycle, changed HTML virtual-file behavior, changed Polars deserialization path, or changed child runtime configuration as an adapter compatibility failure.
+The CLI is the Python package entrypoint. `--json` writes one success or error object to stdout. Human progress goes to stderr. Preserve exit codes `0`, `1`, `2`, `3`, `4`, `5`, `6`, `7`, `130`, and `141` for success, internal errors, input, connection, session selection, capture, publication integrity, filesystem failures, interruption, and a closed output pipe.
 
-## Preserve remote inversion of control
+`session SERVER` lists active session summaries. `session SERVER --session ID` inspects one session. Binary `read` requires `--to FILE`. `capture`, `inspect`, `read`, and `verify` accept the index, per-envelope, and complete-publication byte limits. Capture validates its specification and destination before connecting.
 
-Remote commands attach to a running marimo server. Do not add server launch, environment installation, package synchronization, SSH process management, or GPU provisioning to the TypeScript API or CLI.
+Local Python reads use descriptor-relative no-follow opens on POSIX. The Windows fallback rejects reparse points and requires the publication tree to remain stable until its second file-identity check completes.
 
-The supported control inputs are the server URL, authentication values, and one server-owned target:
+New publication destinations use an atomic no-replace directory rename. Replacement keeps the destination path stable, hard-links verified assets, retains assets for readers of the previous index, rejects same-key content collisions, and atomically replaces `index.json` as the commit point.
 
-- A notebook path lets the existing server create or resume a kernel in its prepared environment.
-- A session ID borrows an existing kernel.
+## Browser package
 
-The remote package owns connection setup, scratchpad protocol requests, stage leases, and cleanup of a session created through that connection. It never owns the marimo server process. Examples may show a separate `marimo edit` command to make the workflow reproducible, but that command remains operator setup outside marimo-export.
+The npm package exposes one browser entrypoint. Keep it free of Node built-ins, session control, local filesystem APIs, and Python capture dependencies.
 
-## Cache integration fixture
+`openPublication()` owns index validation and loader registration. `PublishedFormat` owns verified envelope reads and loader dispatch. Loader packages receive inner bytes through `FormatLoaderContext` and never decode `return.bin` directly.
 
-`examples/_notebooks/cache_matrix.py` and its adjacent plan exercise the real producer path. The notebook records authored computation and custom projection calls with separate counters.
+## Documentation
 
-Run:
+`docs` is the public source rendered by `apps/docs`. `development_docs` owns implementation and validation guidance. Package READMEs ship with their packages.
+
+Build the docs after changing navigation, examples, commands, or API names:
 
 ```bash
-make integration
+BASE_PATH=/marimo-export pnpm --filter @marimo-team/marimo-export-docs build
+pnpm --filter @marimo-team/marimo-export-docs typecheck
 ```
-
-The proof covers a cold scenario matrix, a warm build, output-label reuse, exporter-version invalidation, payload-mirror repair, incremental pull, and frontend reads after the server stops. Keep this fixture deterministic. Add a focused unit test for the local contract and an integration assertion for any cache identity or lifecycle change.
-
-## CLI and package builds
-
-[`architecture.md`](./architecture.md#package-boundaries) defines the public entrypoints and dependency boundaries.
-
-The CLI is built from the same package. Data goes to stdout and diagnostics go to stderr. Plan, build-record, and reference documents are capped at 16 MiB. `build` writes a raw `marimo-export.build.v1` record so it can feed `pull -`. Other structured commands use a `marimo-export.cli.v1` envelope with `--json`. Plain text `read` writes verified UTF-8 payload bytes exactly. JSON output is decoded, and binary output requires `--out`.
-
-Workspace packages remain at version `0.0.0`. Package-local TypeScript `dist/` directories and root `dist/` Python archives are derived files. Inspect package contents from the owning build and pack commands.

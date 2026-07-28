@@ -1,0 +1,257 @@
+{
+  "$defs": {
+    "asset": {
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "$ref": "#/$defs/asset_key"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "size": {
+          "maximum": 9007199254740991,
+          "minimum": 1,
+          "title": "Size",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "key",
+        "sha256",
+        "size"
+      ],
+      "title": "asset",
+      "type": "object"
+    },
+    "asset_key": {
+      "maxLength": 1024,
+      "pattern": "^(?![\\s\\S]*[\\uD800-\\uDFFF])(?=[\\s\\S]+\\.bin(?![\\s\\S]))(?![\\u0009-\\u000d\\u001c-\\u0020\\u0085\\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000])(?![^/]*[\\u0009-\\u000d\\u001c-\\u0020\\u0085\\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000](?:/|(?![\\s\\S])))(?!\\.{1,2}(?:/|(?![\\s\\S])))(?!(?:[Cc][Oo][Nn](?:[Ii][Nn]\\$|[Oo][Uu][Tt]\\$)?|[Pp][Rr][Nn]|[Aa][Uu][Xx]|[Nn][Uu][Ll]|[Cc][Oo][Mm][1-9¹²³]|[Ll][Pp][Tt][1-9¹²³])[ .]*(?:\\.[^/]*)?(?:/|(?![\\s\\S])))(?![^/]*[. ](?:/|(?![\\s\\S])))[^<>:\\\"/\\\\|?*\\u0000-\\u001f\\u007f]{1,255}(?:/(?![\\u0009-\\u000d\\u001c-\\u0020\\u0085\\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000])(?![^/]*[\\u0009-\\u000d\\u001c-\\u0020\\u0085\\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000](?:/|(?![\\s\\S])))(?!\\.{1,2}(?:/|(?![\\s\\S])))(?!(?:[Cc][Oo][Nn](?:[Ii][Nn]\\$|[Oo][Uu][Tt]\\$)?|[Pp][Rr][Nn]|[Aa][Uu][Xx]|[Nn][Uu][Ll]|[Cc][Oo][Mm][1-9¹²³]|[Ll][Pp][Tt][1-9¹²³])[ .]*(?:\\.[^/]*)?(?:/|(?![\\s\\S])))(?![^/]*[. ](?:/|(?![\\s\\S])))[^<>:\\\"/\\\\|?*\\u0000-\\u001f\\u007f]{1,255})*(?![\\s\\S])",
+      "type": "string"
+    },
+    "filename": {
+      "pattern": "^(?![\\s\\S]*[\\uD800-\\uDFFF])(?![\\s\\S]*[\\u0000/])[\\s\\S]+(?![\\s\\S])",
+      "type": "string"
+    },
+    "format": {
+      "additionalProperties": false,
+      "properties": {
+        "asset": {
+          "$ref": "#/$defs/asset"
+        },
+        "format_id": {
+          "$ref": "#/$defs/format_id"
+        },
+        "media_type": {
+          "$ref": "#/$defs/media_type"
+        },
+        "metadata": {
+          "additionalProperties": {
+            "$ref": "#/$defs/json_value"
+          },
+          "propertyNames": {
+            "$ref": "#/$defs/unicode_string"
+          },
+          "title": "Metadata",
+          "type": "object"
+        }
+      },
+      "required": [
+        "format_id",
+        "media_type",
+        "metadata",
+        "asset"
+      ],
+      "title": "format",
+      "type": "object"
+    },
+    "format_id": {
+      "maxLength": 255,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._+-]*(?![\\s\\S])",
+      "type": "string"
+    },
+    "json_value": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "$ref": "#/$defs/unicode_string"
+        },
+        {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "number"
+        },
+        {
+          "items": {
+            "$ref": "#/$defs/json_value"
+          },
+          "type": "array"
+        },
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/json_value"
+          },
+          "propertyNames": {
+            "$ref": "#/$defs/unicode_string"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "media_type": {
+      "maxLength": 1024,
+      "pattern": "^(?![\\s\\S]*[\\uD800-\\uDFFF])(?![\\s\\S]*[^\\u0020-\\u007e])(?![\\u0009-\\u000d\\u001c-\\u0020\\u0085\\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000])(?![\\s\\S]*[\\u0009-\\u000d\\u001c-\\u0020\\u0085\\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000](?![\\s\\S]))[!#$%&'*+.^_`|~0-9A-Za-z-]+/[!#$%&'*+.^_`|~0-9A-Za-z-]+(?:[\\u0009-\\u000d\\u001c-\\u0020\\u0085\\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000]*;[\\s\\S]*)?(?![\\s\\S])",
+      "type": "string"
+    },
+    "notebook": {
+      "additionalProperties": false,
+      "properties": {
+        "document_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "filename": {
+          "$ref": "#/$defs/filename"
+        }
+      },
+      "required": [
+        "filename",
+        "document_sha256"
+      ],
+      "title": "notebook",
+      "type": "object"
+    },
+    "output": {
+      "additionalProperties": false,
+      "properties": {
+        "formats": {
+          "additionalProperties": {
+            "$ref": "#/$defs/format"
+          },
+          "minProperties": 1,
+          "propertyNames": {
+            "$ref": "#/$defs/public_name"
+          },
+          "title": "Formats",
+          "type": "object"
+        }
+      },
+      "required": [
+        "formats"
+      ],
+      "title": "output",
+      "type": "object"
+    },
+    "producer": {
+      "additionalProperties": false,
+      "properties": {
+        "marimo": {
+          "$ref": "#/$defs/public_name"
+        },
+        "marimo_export": {
+          "$ref": "#/$defs/public_name"
+        }
+      },
+      "required": [
+        "marimo",
+        "marimo_export"
+      ],
+      "title": "producer",
+      "type": "object"
+    },
+    "public_name": {
+      "pattern": "^(?![\\s\\S]*[\\uD800-\\uDFFF])(?![\\s\\S]*[\\u0000-\\u001f\\u007f])(?![\\u0009-\\u000d\\u001c-\\u0020\\u0085\\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000])(?![\\s\\S]*[\\u0009-\\u000d\\u001c-\\u0020\\u0085\\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000](?![\\s\\S]))[\\s\\S]+(?![\\s\\S])",
+      "type": "string"
+    },
+    "sha256": {
+      "pattern": "^[0-9a-f]{64}(?![\\s\\S])",
+      "type": "string"
+    },
+    "unicode_string": {
+      "pattern": "^(?![\\s\\S]*[\\uD800-\\uDFFF])[\\s\\S]*(?![\\s\\S])",
+      "type": "string"
+    },
+    "variant": {
+      "additionalProperties": false,
+      "properties": {
+        "controls": {
+          "additionalProperties": {
+            "$ref": "#/$defs/json_value"
+          },
+          "propertyNames": {
+            "$ref": "#/$defs/public_name"
+          },
+          "title": "Controls",
+          "type": "object"
+        },
+        "outputs": {
+          "additionalProperties": {
+            "$ref": "#/$defs/output"
+          },
+          "minProperties": 1,
+          "propertyNames": {
+            "$ref": "#/$defs/public_name"
+          },
+          "title": "Outputs",
+          "type": "object"
+        }
+      },
+      "required": [
+        "controls",
+        "outputs"
+      ],
+      "title": "variant",
+      "type": "object"
+    }
+  },
+  "$id": "https://marimo.io/schemas/marimo-export/publication.v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "asset_codec": {
+      "const": "marimo.blob-asset.msgpack.v1",
+      "title": "Asset Codec",
+      "type": "string"
+    },
+    "notebook": {
+      "$ref": "#/$defs/notebook"
+    },
+    "producer": {
+      "$ref": "#/$defs/producer"
+    },
+    "schema": {
+      "const": "marimo-export.publication.v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "variants": {
+      "additionalProperties": {
+        "$ref": "#/$defs/variant"
+      },
+      "minProperties": 1,
+      "propertyNames": {
+        "$ref": "#/$defs/public_name"
+      },
+      "title": "Variants",
+      "type": "object"
+    }
+  },
+  "required": [
+    "schema",
+    "asset_codec",
+    "notebook",
+    "producer",
+    "variants"
+  ],
+  "title": "marimo-export publication index",
+  "type": "object"
+}

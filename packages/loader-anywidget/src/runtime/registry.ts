@@ -1,6 +1,7 @@
 import type { AnyModel, AnyWidget, ResolvedWidget } from "@anywidget/types";
 
-import { cloneModelState, type AnyWidgetSnapshot, type EsmSpec } from "../payload.js";
+import { cloneModelState, parseDataUrl, type AnyWidgetSnapshot, type EsmSpec } from "../payload.js";
+import { abortError, combineAbortSignals, raceAbort } from "./abort.js";
 import { WidgetBinding, resolveAnyWidgetModule } from "./binding.js";
 import { createHost, type WidgetResolver } from "./host.js";
 import { type ModelResolver, type ModelState, StaticModel } from "./model.js";
@@ -8,6 +9,7 @@ import { type ModelResolver, type ModelState, StaticModel } from "./model.js";
 interface BindingEntry {
   readonly controller: AbortController;
   readonly promise: Promise<WidgetBinding>;
+  readonly state: { binding?: WidgetBinding };
 }
 
 interface StyleMount {
@@ -23,6 +25,8 @@ interface ViewRuntime {
   css: string;
 }
 
+const ACTIVE_MOUNTS = new WeakSet<HTMLElement>();
+
 export interface MountedRuntime<State extends ModelState, Exports> {
   readonly model: AnyModel<State>;
   readonly exports: Exports;
@@ -36,10 +40,14 @@ export async function mountSnapshot<State extends ModelState, Exports>(
 ): Promise<MountedRuntime<State, Exports>> {
   assertBrowserElement(element);
   options.signal?.throwIfAborted();
+  if (ACTIVE_MOUNTS.has(element)) {
+    throw new Error("Dispose the existing AnyWidget mount before reusing its element.");
+  }
   const registry = new StaticRegistry(snapshot);
+  ACTIVE_MOUNTS.add(element);
   let disposePromise: Promise<void> | undefined;
   const dispose = (): Promise<void> => {
-    disposePromise ??= registry.dispose();
+    disposePromise ??= registry.dispose().finally(() => ACTIVE_MOUNTS.delete(element));
     return disposePromise;
   };
   const onAbort = () => {
@@ -53,6 +61,8 @@ export async function mountSnapshot<State extends ModelState, Exports>(
     if (registry.signal.aborted) throw abortError("AnyWidget mount was disposed.");
     options.signal?.throwIfAborted();
     const model = await registry.getModel(snapshot.rootModelId);
+    if (registry.signal.aborted) throw abortError("AnyWidget mount was disposed.");
+    options.signal?.throwIfAborted();
     return Object.freeze({
       model: model as AnyModel<State>,
       exports: binding.exports as Exports,
@@ -78,9 +88,10 @@ export class StaticRegistry implements ModelResolver, WidgetResolver {
   readonly #runtimes = new Map<string, ViewRuntime>();
   readonly #bindings = new Map<string, BindingEntry>();
   readonly #bindingOrder: WidgetBinding[] = [];
-  readonly #modulePromises = new Map<string, Promise<AnyWidget>>();
+  readonly #modulePromises = new Map<string, Map<string, Promise<AnyWidget>>>();
   readonly #objectUrls = new Set<string>();
   #disposePromise: Promise<void> | undefined;
+  #disposing = false;
 
   constructor(snapshot: AnyWidgetSnapshot) {
     this.#snapshot = snapshot;
@@ -124,6 +135,9 @@ export class StaticRegistry implements ModelResolver, WidgetResolver {
   }
 
   getBinding(modelId: string): Promise<WidgetBinding> {
+    if (this.#disposing) {
+      return Promise.reject(abortError("AnyWidget registry was disposed."));
+    }
     const existing = this.#bindings.get(modelId);
     if (existing !== undefined) return existing.promise;
     const runtime = this.#runtime(modelId);
@@ -140,6 +154,7 @@ export class StaticRegistry implements ModelResolver, WidgetResolver {
     // A dynamic import cannot be cancelled once browser module evaluation starts.
     // Race only the binding's interest in that import so disposal can settle while
     // the browser finishes, rejects, or leaves the module pending in the background.
+    const state: BindingEntry["state"] = {};
     const promise = raceAbort(
       this.#loadWidget(runtime.esmSpec),
       controller.signal,
@@ -154,6 +169,7 @@ export class StaticRegistry implements ModelResolver, WidgetResolver {
         }),
       )
       .then((binding) => {
+        state.binding = binding;
         this.#bindingOrder.push(binding);
         return binding;
       })
@@ -163,7 +179,7 @@ export class StaticRegistry implements ModelResolver, WidgetResolver {
         throw error;
       })
       .finally(() => this.#controller.signal.removeEventListener("abort", onDispose));
-    this.#bindings.set(modelId, { controller, promise });
+    this.#bindings.set(modelId, { controller, promise, state });
     return promise;
   }
 
@@ -172,32 +188,53 @@ export class StaticRegistry implements ModelResolver, WidgetResolver {
       throw abortError("AnyWidget view was disposed.");
     }
     const runtime = this.#runtime(modelId);
-    const viewSignal = abortSignalAny([signal, this.#controller.signal]);
-    this.#mountStyle(runtime, element, viewSignal);
-    const binding = await this.getBinding(modelId);
-    await binding.createView(element, viewSignal);
+    const controller = new AbortController();
+    const viewSignal = combineAbortSignals([signal, this.#controller.signal, controller.signal]);
+    try {
+      this.#mountStyle(runtime, element, viewSignal);
+      const binding = await this.getBinding(modelId);
+      await binding.createView(element, viewSignal);
+    } catch (error) {
+      controller.abort(error);
+      throw error;
+    }
   }
 
   dispose(): Promise<void> {
-    this.#disposePromise ??= this.#dispose();
+    if (this.#disposePromise === undefined) {
+      this.#disposing = true;
+      const entries = [...this.#bindings.values()];
+      for (const entry of entries) {
+        if (entry.state.binding === undefined) entry.controller.abort();
+      }
+      this.#disposePromise = this.#dispose(entries);
+    }
     return this.#disposePromise;
   }
 
   async #loadWidget(spec: EsmSpec): Promise<AnyWidget> {
-    const key = `${spec.hash}\0${spec.url}`;
-    const existing = this.#modulePromises.get(key);
+    if (this.#disposing) throw abortError("AnyWidget registry was disposed.");
+    let modulesByUrl = this.#modulePromises.get(spec.hash);
+    const existing = modulesByUrl?.get(spec.url);
     if (existing !== undefined) return existing;
+    modulesByUrl ??= new Map();
+    this.#modulePromises.set(spec.hash, modulesByUrl);
     const promise = this.#importModule(spec)
       .then((module) => resolveAnyWidgetModule(module, spec.url))
       .catch((error) => {
-        this.#modulePromises.delete(key);
+        const current = this.#modulePromises.get(spec.hash);
+        if (current?.get(spec.url) === promise) {
+          current.delete(spec.url);
+          if (current.size === 0) this.#modulePromises.delete(spec.hash);
+        }
         throw error;
       });
-    this.#modulePromises.set(key, promise);
+    modulesByUrl.set(spec.url, promise);
     return promise;
   }
 
   async #importModule(spec: EsmSpec): Promise<unknown> {
+    if (this.#disposing) throw abortError("AnyWidget registry was disposed.");
     const embedded = this.#snapshot.files[spec.url];
     let moduleUrl = spec.url;
     if (embedded !== undefined) {
@@ -246,11 +283,9 @@ export class StaticRegistry implements ModelResolver, WidgetResolver {
     );
   }
 
-  async #dispose(): Promise<void> {
+  async #dispose(entries: readonly BindingEntry[]): Promise<void> {
     const errors: unknown[] = [];
-    this.#controller.abort();
-    for (const entry of this.#bindings.values()) entry.controller.abort();
-    await Promise.allSettled([...this.#bindings.values()].map((entry) => entry.promise));
+    await Promise.allSettled(entries.map((entry) => entry.promise));
     for (const binding of [...this.#bindingOrder].reverse()) {
       try {
         // Child bindings initialize after their parents and settle first during teardown.
@@ -260,6 +295,7 @@ export class StaticRegistry implements ModelResolver, WidgetResolver {
         errors.push(error);
       }
     }
+    this.#controller.abort();
     for (const runtime of this.#runtimes.values()) {
       for (const mount of runtime.styleMounts.values()) mount.dispose();
       runtime.styleMounts.clear();
@@ -274,19 +310,14 @@ export class StaticRegistry implements ModelResolver, WidgetResolver {
 }
 
 function dataUrlToBlob(dataUrl: string): Blob {
-  const comma = dataUrl.indexOf(",");
-  if (comma === -1) throw new TypeError("AnyWidget ESM data URL is malformed.");
-  const metadata = dataUrl.slice(5, comma);
-  const body = dataUrl.slice(comma + 1);
-  const parts = metadata.split(";");
-  const mediaType = parts[0] || "text/plain";
-  const bytes = parts.includes("base64")
-    ? base64Bytes(body)
-    : new TextEncoder().encode(decodeURIComponent(body));
-  return new Blob([Uint8Array.from(bytes).buffer], { type: mediaType });
+  const { body, isBase64, mediaType } = parseDataUrl(dataUrl, "AnyWidget ESM data URL");
+  // Snapshot validation completes before registry construction, so decoding
+  // cannot begin until the embedded data URL has passed payload validation.
+  const bytes = isBase64 ? base64Bytes(body) : new TextEncoder().encode(decodeURIComponent(body));
+  return new Blob([bytes], { type: mediaType });
 }
 
-function base64Bytes(value: string): Uint8Array {
+function base64Bytes(value: string): Uint8Array<ArrayBuffer> {
   const binary = atob(value);
   const bytes = new Uint8Array(binary.length);
   for (let index = 0; index < binary.length; index += 1) {
@@ -331,39 +362,4 @@ function assertBrowserElement(element: HTMLElement): void {
   ) {
     throw new TypeError("AnyWidget mount requires a browser element.");
   }
-}
-
-function abortSignalAny(signals: readonly AbortSignal[]): AbortSignal {
-  if (typeof AbortSignal.any === "function") return AbortSignal.any([...signals]);
-  const controller = new AbortController();
-  for (const signal of signals) {
-    if (signal.aborted) {
-      controller.abort(signal.reason);
-      return controller.signal;
-    }
-    signal.addEventListener("abort", () => controller.abort(signal.reason), { once: true });
-  }
-  return controller.signal;
-}
-
-function abortError(message: string): Error {
-  return Object.assign(new Error(message), { name: "AbortError" });
-}
-
-async function raceAbort<T>(task: Promise<T>, signal: AbortSignal, message: string): Promise<T> {
-  if (signal.aborted) throw abortReason(signal, message);
-  let onAbort: (() => void) | undefined;
-  const aborted = new Promise<never>((_resolve, reject) => {
-    onAbort = () => reject(abortReason(signal, message));
-    signal.addEventListener("abort", onAbort, { once: true });
-  });
-  try {
-    return await Promise.race([task, aborted]);
-  } finally {
-    if (onAbort !== undefined) signal.removeEventListener("abort", onAbort);
-  }
-}
-
-function abortReason(signal: AbortSignal, message: string): Error {
-  return signal.reason instanceof Error ? signal.reason : abortError(message);
 }

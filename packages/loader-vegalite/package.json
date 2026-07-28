@@ -1,5 +1,5 @@
 {
-  "name": "@marimo-team/marimo-export-vegalite",
+  "name": "@marimo-team/marimo-export-loader-vegalite",
   "version": "0.0.0",
   "description": "Vega-Lite loader for marimo exports.",
   "license": "Apache-2.0",
@@ -24,15 +24,22 @@
     "access": "public"
   },
   "scripts": {
+    "build": "vp pack",
+    "check": "vp check",
     "prepack": "vp run -t build",
-    "test": "vp test"
+    "test": "vp test",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@marimo-team/marimo-export": "workspace:*",
     "vega-embed": "catalog:"
   },
   "devDependencies": {
+    "@marimo-team/marimo-export": "workspace:*",
+    "@msgpack/msgpack": "catalog:",
     "typescript": "catalog:",
     "vite-plus": "catalog:"
+  },
+  "peerDependencies": {
+    "@marimo-team/marimo-export": "workspace:*"
   }
 }

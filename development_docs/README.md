@@ -2,8 +2,8 @@
 
 These documents define how to change and validate marimo-export.
 
-- [`architecture.md`](./architecture.md) defines the producer, transfer, consumer, and codec planes. It also specifies cache identity, wire formats, lifecycle boundaries, and upstream integration seams.
-- [`development.md`](./development.md) covers workspace setup, package ownership, custom formats, upstream upgrades, and focused development commands.
-- [`validation.md`](./validation.md) maps each change surface to the checks and runtime evidence required before handoff.
+- [`architecture.md`](./architecture.md) defines the live kernel, cache, transfer, publication, Python reader, browser reader, and loader boundaries.
+- [`development.md`](./development.md) covers workspace setup, package ownership, schema changes, format extensions, and private marimo integration.
+- [`validation.md`](./validation.md) maps each change surface to unit, integration, package, and native browser evidence, including the Chromium AnyWidget gate.
 
-User installation, plan authoring, publishing, and consumption belong in [`docs`](../docs). Start with [`architecture.md`](./architecture.md) before changing private marimo integration, projection identity, remote staging, schemas, or package exports.
+User installation, specification authoring, capture, and reading belong in [`docs`](../docs). Read [`architecture.md`](./architecture.md) before changing private marimo imports, projection identity, transfer tickets, publication schemas, or package exports.

@@ -1,0 +1,241 @@
+{
+  "$defs": {
+    "cell_source": {
+      "additionalProperties": false,
+      "properties": {
+        "cell": {
+          "$ref": "#/$defs/public_name"
+        }
+      },
+      "required": [
+        "cell"
+      ],
+      "title": "cell source",
+      "type": "object"
+    },
+    "controls": {
+      "additionalProperties": {
+        "$ref": "#/$defs/json"
+      },
+      "propertyNames": {
+        "$ref": "#/$defs/python_identifier"
+      },
+      "type": "object"
+    },
+    "exporter": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/public_name"
+        },
+        {
+          "$ref": "#/$defs/import_exporter"
+        },
+        {
+          "$ref": "#/$defs/variable_exporter"
+        }
+      ]
+    },
+    "expression_source": {
+      "additionalProperties": false,
+      "properties": {
+        "expression": {
+          "$ref": "#/$defs/public_name"
+        }
+      },
+      "required": [
+        "expression"
+      ],
+      "title": "expression source",
+      "type": "object"
+    },
+    "format": {
+      "additionalProperties": false,
+      "properties": {
+        "exporter": {
+          "$ref": "#/$defs/exporter"
+        },
+        "options": {
+          "$ref": "#/$defs/json_object"
+        }
+      },
+      "title": "format",
+      "type": "object"
+    },
+    "import_exporter": {
+      "additionalProperties": false,
+      "properties": {
+        "import": {
+          "$ref": "#/$defs/import_reference"
+        },
+        "version": {
+          "$ref": "#/$defs/public_name"
+        }
+      },
+      "required": [
+        "import",
+        "version"
+      ],
+      "title": "import exporter",
+      "type": "object"
+    },
+    "import_reference": {
+      "pattern": "^(?![\\s\\S]*[\\uD800-\\uDFFF])(?![\\s\\S]*[\\u0009-\\u000d\\u001c-\\u0020\\u0085\\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000])(?:[A-Za-z_]|[^\\u0000-\\u007f])(?:[A-Za-z0-9_]|[^\\u0000-\\u007f])*(?:\\.(?:[A-Za-z_]|[^\\u0000-\\u007f])(?:[A-Za-z0-9_]|[^\\u0000-\\u007f])*)*:(?:[A-Za-z_]|[^\\u0000-\\u007f])(?:[A-Za-z0-9_]|[^\\u0000-\\u007f])*(?:\\.(?:[A-Za-z_]|[^\\u0000-\\u007f])(?:[A-Za-z0-9_]|[^\\u0000-\\u007f])*)*(?![\\s\\S])",
+      "type": "string"
+    },
+    "json": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/unicode_string"
+        },
+        {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "number"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "items": {
+            "$ref": "#/$defs/json"
+          },
+          "type": "array"
+        },
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/json"
+          },
+          "propertyNames": {
+            "$ref": "#/$defs/unicode_string"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "json_object": {
+      "additionalProperties": {
+        "$ref": "#/$defs/json"
+      },
+      "propertyNames": {
+        "$ref": "#/$defs/unicode_string"
+      },
+      "type": "object"
+    },
+    "output": {
+      "additionalProperties": false,
+      "properties": {
+        "formats": {
+          "additionalProperties": {
+            "$ref": "#/$defs/format"
+          },
+          "minProperties": 1,
+          "propertyNames": {
+            "$ref": "#/$defs/public_name"
+          },
+          "title": "Formats",
+          "type": "object"
+        },
+        "source": {
+          "$ref": "#/$defs/source"
+        }
+      },
+      "required": [
+        "source",
+        "formats"
+      ],
+      "title": "output",
+      "type": "object"
+    },
+    "public_name": {
+      "pattern": "^(?![\\s\\S]*[\\uD800-\\uDFFF])(?![\\s\\S]*[\\u0000-\\u001f\\u007f])(?![\\u0009-\\u000d\\u001c-\\u0020\\u0085\\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000])(?![\\s\\S]*[\\u0009-\\u000d\\u001c-\\u0020\\u0085\\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000](?![\\s\\S]))[\\s\\S]+(?![\\s\\S])",
+      "type": "string"
+    },
+    "python_identifier": {
+      "pattern": "^(?![\\s\\S]*[\\uD800-\\uDFFF])(?![\\s\\S]*[\\u0009-\\u000d\\u001c-\\u0020\\u0085\\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000])(?:[A-Za-z_]|[^\\u0000-\\u007f])(?:[A-Za-z0-9_]|[^\\u0000-\\u007f])*(?![\\s\\S])",
+      "type": "string"
+    },
+    "source": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/python_identifier"
+        },
+        {
+          "$ref": "#/$defs/expression_source"
+        },
+        {
+          "$ref": "#/$defs/cell_source"
+        }
+      ]
+    },
+    "unicode_string": {
+      "pattern": "^(?![\\s\\S]*[\\uD800-\\uDFFF])[\\s\\S]*(?![\\s\\S])",
+      "type": "string"
+    },
+    "variable_exporter": {
+      "additionalProperties": false,
+      "properties": {
+        "variable": {
+          "$ref": "#/$defs/python_identifier"
+        },
+        "version": {
+          "$ref": "#/$defs/public_name"
+        }
+      },
+      "required": [
+        "variable",
+        "version"
+      ],
+      "title": "variable exporter",
+      "type": "object"
+    }
+  },
+  "$id": "https://marimo.io/schemas/marimo-export/spec.v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "outputs": {
+      "additionalProperties": {
+        "$ref": "#/$defs/output"
+      },
+      "minProperties": 1,
+      "propertyNames": {
+        "$ref": "#/$defs/public_name"
+      },
+      "title": "Outputs",
+      "type": "object"
+    },
+    "schema": {
+      "const": "marimo-export.spec.v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "variants": {
+      "additionalProperties": {
+        "$ref": "#/$defs/controls"
+      },
+      "default": {
+        "current": {}
+      },
+      "minProperties": 1,
+      "propertyNames": {
+        "$ref": "#/$defs/public_name"
+      },
+      "title": "Variants",
+      "type": "object"
+    }
+  },
+  "required": [
+    "schema",
+    "outputs"
+  ],
+  "title": "marimo-export capture specification",
+  "type": "object"
+}

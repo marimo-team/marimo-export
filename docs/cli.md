@@ -1,244 +1,192 @@
 # CLI
 
-The `marimo-export` CLI builds notebook projections on a marimo server, publishes them as ordinary files, and gives agents bounded access to the result. It requires Node 22 or newer.
-
-From the repository checkout, build and run the executable with:
+The Python `marimo-export` CLI captures live notebook results and gives agents structured access to static publications.
 
 ```bash
-pnpm install --frozen-lockfile
-pnpm --filter @marimo-team/marimo-export build
-node packages/client/dist/cli.mjs --help
+uv sync --all-extras --locked
+export MARIMO_EXPORT_TOKEN="<token>"
+uv run marimo-export capture \
+  http://localhost:3456/ \
+  --spec finance.export.yaml \
+  --output dist/finance
 ```
 
-Installed-package examples use `marimo-export`. Replace it with `node packages/client/dist/cli.mjs` when working from the checkout.
+For the current source checkout, run `uv sync --all-extras --locked` and invoke the CLI through `uv run`. The same marimo-export checkout must be importable inside the running notebook environment because capture executes there.
 
-## Publish in one command
+## Commands
+
+| Command                       | Contract                                                     |
+| ----------------------------- | ------------------------------------------------------------ |
+| `session SERVER`              | List active marimo session summaries                         |
+| `session SERVER --session ID` | Inspect one session and its selectable values                |
+| `capture SERVER`              | Project selected live results and commit a local publication |
+| `inspect PUBLICATION`         | List variants, outputs, and formats                          |
+| `read PUBLICATION OUTPUT`     | Read one verified format                                     |
+| `verify PUBLICATION`          | Verify the index and every referenced cache asset            |
+
+Long options require their complete spellings.
+
+`marimo-export --version` prints the installed marimo-export version and exits.
+
+## List and inspect sessions
 
 ```bash
-marimo-export publish \
-  --server http://127.0.0.1:2718/ \
-  --notebook /absolute/path/on/server/notebook.py \
-  --plan export.plan.yaml \
-  --out ./public/notebook-export \
-  --record ./notebook-export.build.json
+uv run marimo-export session http://localhost:3456/ --json
 ```
 
-`publish` validates the plan locally, builds every scenario in the attached kernel, pulls the exact payload closure, and verifies the local publication against the returned `ExportRef`. With `--notebook`, `--record` saves the durable `marimo-export.build.v1` record. Place the record outside `--out`. `publish` writes it after the remote build and before transfer, so a successfully written record remains available to `pull` if transfer or local verification fails.
-
-Target a running session directly when its ID is already known:
+The result lists each active session's ID, filename, and server-side path. Inspect one session explicitly:
 
 ```bash
-marimo-export publish \
-  --server http://127.0.0.1:2718/ \
-  --session s_1234 \
-  --plan export.plan.yaml \
-  --out ./public/notebook-export
-```
-
-Pass exactly one of `--notebook` or `--session`. Supply `--session` with a top-level key from the server's `GET /api/sessions` response. A session target stays attached for the one `publish` command. `build` and `publish --record` require `--notebook` so a later `pull` can open a fresh session.
-
-## Command map
-
-| Command    | Contract                                                   |
-| ---------- | ---------------------------------------------------------- |
-| `publish`  | Build, pull, and verify one publication.                   |
-| `build`    | Execute the plan remotely and emit a durable build record. |
-| `pull`     | Pull the publication named by a build record.              |
-| `describe` | Report producer versions and available exporters.          |
-| `inspect`  | Page through scenarios or one scenario's output contracts. |
-| `read`     | Read one declared output under a byte limit.               |
-| `verify`   | Verify the index and every unique payload.                 |
-| `version`  | Print the CLI package version. `--version` is equivalent.  |
-
-## Build and pull separately
-
-Use separate commands when execution and transfer happen in different jobs:
-
-```bash
-marimo-export build \
-  --server http://127.0.0.1:2718/ \
-  --notebook /absolute/path/on/server/notebook.py \
-  --plan export.plan.yaml \
-  --record notebook-export.build.json
-
-marimo-export pull notebook-export.build.json \
-  --out ./public/notebook-export
-```
-
-`build` always writes the raw `marimo-export.build.v1` record to stdout, so it composes directly with stdin:
-
-```bash
-marimo-export build \
-  --server http://127.0.0.1:2718/ \
-  --notebook /absolute/path/on/server/notebook.py \
-  --plan export.plan.yaml \
-  | marimo-export pull - --out ./public/notebook-export
-```
-
-`--plan -` reads a JSON or YAML plan from stdin. `pull -` reads a JSON build record from stdin. A build record contains the server URL, notebook path, `ExportRef`, and build receipt. It contains no credentials.
-
-## Inspect a publication
-
-`SOURCE` is a local publication directory or an absolute HTTP or HTTPS URL.
-
-List scenarios:
-
-```bash
-marimo-export inspect ./public/notebook-export --json
-```
-
-Inspect one scenario's output formats:
-
-```bash
-marimo-export inspect ./public/notebook-export \
-  --scenario baseline \
-  --offset 0 \
-  --limit 50 \
+uv run marimo-export session http://localhost:3456/ \
+  --session SESSION_ID \
   --json
 ```
 
-Without `--scenario`, each page contains scenario IDs, resolved inputs, and output counts. With `--scenario`, each page contains output names, public format names, format IDs, media types, metadata, and payload references.
+`session` and `capture` accept `--timeout SECONDS`. The default is 300 seconds.
 
-`--offset` defaults to `0`. `--limit` defaults to `50` and accepts values through `500`.
+The inspected result contains the session ID, notebook filename and path, live document SHA-256, `marimo_version`, `marimo_export_version`, global descriptors, frozen cell-output descriptors, UI controls, and the availability and format ID of each built-in exporter in the attached kernel. Each item in `globals` contains `name` and a qualified `python_type` descriptor. A control record contains `name`, `type`, `value`, `sensitive`, and `domain`. A domain can report `options`, `start`, `stop`, `step`, `steps`, `max-selections`, `allow-select-none`, and `precision`. Password values are redacted as `null`. Capture rejects a variant that targets a sensitive control before changing notebook state.
 
-## Read one output
+Set `MARIMO_EXPORT_TOKEN` for marimo access authentication and `MARIMO_EXPORT_SERVER_TOKEN` for the `Marimo-Server-Token` header. A local one-off command may carry one `access_token` query value in the server URL. Prefer the environment variables for shell history, scripts, and shared examples.
 
-`read` takes the source, scenario ID, and output name as positional arguments:
+## Capture
 
 ```bash
-marimo-export read ./public/notebook-export baseline summary \
+uv run marimo-export capture \
+  http://localhost:3456/ \
+  --session SESSION_ID \
+  --spec finance.export.yaml \
+  --output dist/finance \
+  --json
+```
+
+`--session` is optional when the server exposes one active session. Before connecting, capture loads and validates the specification and validates whether the destination can accept the requested operation. For `--replace`, this verifies the existing publication and every referenced asset.
+
+A new destination commits through an atomic no-replace directory rename. `--replace` keeps the destination path stable. It revalidates the existing publication before commit, hard-links verified new cache assets into the existing cache, retains old assets for readers that already loaded the previous index, then atomically replaces `index.json` as the commit point. A cache key that already contains different bytes fails the replacement.
+
+`--max-index-bytes BYTES` defaults to `16777216`. It limits the publication index returned by capture. `--max-asset-bytes BYTES` defaults to `67108864` and limits each outer `BlobAsset` cache envelope. Capture rejects an oversized declared result before download.
+
+`--max-publication-bytes BYTES` defaults to `536870912`. It limits the serialized index plus the declared sizes of every unique outer envelope. Capture checks the complete closure before downloading an asset.
+
+`capture` owns session selection, projection, verified transfer, local commit, and server cleanup. Its result reports the publication path, variants, outputs, asset count, transferred bytes, and projection cache dispositions.
+
+## Inspect a publication
+
+```bash
+uv run marimo-export inspect dist/finance --json
+```
+
+The result exposes every variant's recorded controls, output names, format names, format IDs, media types, and metadata. Cache references stay inside the publication reader.
+
+`--max-index-bytes BYTES` defaults to `16777216` and limits `index.json` before decoding.
+
+`--max-asset-bytes BYTES` defaults to `67108864` and preflights every declared outer cache envelope. Inspection remains metadata-only and does not read the envelope bytes.
+
+`--max-publication-bytes BYTES` defaults to `536870912` and preflights the actual index bytes plus the declared unique asset closure.
+
+## Read one format
+
+```bash
+uv run marimo-export read dist/finance summary \
+  --variant current \
   --format json \
   --json
 ```
 
-The format may be omitted when the output has exactly one format. JSON media types are decoded. For a text media type, plain `read` validates UTF-8 and writes the verified payload bytes to stdout exactly, preserving an existing byte-order mark or missing trailing newline. `read --json` emits the decoded text in its structured envelope. Binary output requires a file:
+`--variant` is required because a valid publication may omit `current`. `--format` selects one published representation.
+
+With `--json`, the result records `variant`, `output`, the selected `format` alias, its stable `format_id`, `media_type`, and decoded `value`. A `--to` result records the same selection identity plus the absolute `path` and written `bytes`.
+
+A missing variant, output, or format returns exit code `2` with error code `not_found`. Its bounded `details` record `kind`, `name`, `name_truncated`, `available`, `available_count`, and `available_truncated` so an agent can select from the reported surface.
+
+`--max-index-bytes BYTES` defaults to `16777216` and limits `index.json`. `--max-asset-bytes BYTES` defaults to `67108864` and limits the outer cache envelope before decoding.
+
+`--max-publication-bytes BYTES` defaults to `536870912` and rejects an oversized index-plus-unique-asset closure before the selected asset is read.
+
+Text and JSON formats can be emitted to stdout. Binary formats require an output path:
 
 ```bash
-marimo-export read ./public/notebook-export baseline chart \
+uv run marimo-export read dist/finance chart \
+  --variant aapl \
   --format png \
-  --out ./chart.png
+  --to chart.png
 ```
 
-`--max-bytes` defaults to `1000000`. The command rejects a larger declared payload before fetching it. Increase the limit deliberately for a known output:
-
-```bash
-marimo-export read ./public/notebook-export baseline table \
-  --format parquet \
-  --max-bytes 20000000 \
-  --out ./table.parquet
-```
-
-When `--out` is present, stdout reports the resolved path and the output provenance. `--out -` is invalid because binary bytes never share stdout with structured command output.
+`--to` creates a new file and fails when that path already exists.
 
 ## Verify a publication
 
 ```bash
-marimo-export verify ./public/notebook-export \
-  --ref notebook-export.build.json \
-  --concurrency 8 \
-  --json
+uv run marimo-export verify dist/finance --json
 ```
 
-`verify` checks the index against `--ref` when supplied, then reads every unique payload and verifies its declared size and SHA-256. It returns `{ok, files, bytes, failures}` and exits with status `1` when `ok` is false.
+Verification reads every unique asset referenced by `index.json`, checks its recorded size and SHA-256, decodes the `BlobAsset` envelope, and checks the envelope fields against the index. Pass `--max-index-bytes BYTES`, `--max-asset-bytes BYTES`, or `--max-publication-bytes BYTES` to set positive read limits. The complete-publication limit defaults to `536870912` and is checked before an asset read. Malformed, missing, corrupt, or oversized publication data returns exit code `6`.
 
-`--ref` accepts a raw `ExportRef`, a `marimo-export.build.v1` record, or `-` for JSON read from stdin. Pass the same option to `inspect` and `read` when the build record is the trust anchor for the publication.
+## Structured output
 
-## Describe the producer
-
-```bash
-marimo-export describe \
-  --server http://127.0.0.1:2718/ \
-  --notebook /absolute/path/on/server/notebook.py \
-  --json
-```
-
-The result identifies the attached session, marimo and marimo-export versions, adapter, and built-in exporter availability. Run it before a build when a plan depends on AnyWidget, Arrow, Parquet, or PNG producer extras.
-
-## Shared options
-
-| Option              | Contract                                                                                                              |
-| ------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| `--json`            | Wraps success data in a `marimo-export.cli.v1` envelope. `build` remains a raw build record for pipeline composition. |
-| `--timeout-ms MS`   | Sets the active command deadline. Default `300000`.                                                                   |
-| `--concurrency N`   | Bounds concurrent payload work for `publish`, `pull`, and `verify`. Default `8`, maximum `64`.                        |
-| `--ref FILE` or `-` | Anchors a static publication to an `ExportRef` or build record.                                                       |
-
-The timeout bounds how long the client waits for active command work. Remote cleanup can continue afterward with a separate 10-second request timeout. A remote notebook operation can continue after the client times out.
-
-## Authentication and build-record trust
-
-The CLI reads credentials from its environment:
-
-| Variable              | Request behavior                                              |
-| --------------------- | ------------------------------------------------------------- |
-| `MARIMO_TOKEN`        | Supplies marimo authentication for HTTP and WebSocket access. |
-| `MARIMO_SERVER_TOKEN` | Supplies marimo's skew-protection request header.             |
-
-`pull` normally reconnects to the server recorded by the build. When either authentication variable is set, pass `--server` as an explicit trust anchor:
-
-```bash
-MARIMO_TOKEN="$MARIMO_TOKEN" \
-  marimo-export pull notebook-export.build.json \
-  --server http://127.0.0.1:2718/ \
-  --out ./public/notebook-export
-```
-
-The normalized `--server` URL must match the build record before credentials are sent.
-
-Static HTTP `inspect`, `read`, and `verify` commands do not read these authentication variables. Serve protected publications through an authenticated application path or use the TypeScript `httpSource()` API with request headers.
-
-## Stdout, stderr, and exits
-
-Success data goes to stdout. Progress and errors go to stderr. This separation keeps build and read pipelines machine-safe.
-
-For commands other than `build`, `--json` emits:
+`--json` writes exactly one JSON object to stdout. Success uses:
 
 ```json
 {
-  "schema": "marimo-export.cli.v1",
-  "command": "inspect",
-  "data": {}
+  "ok": true,
+  "result": {}
 }
 ```
 
-JSON errors use the same schema on stderr and include structured `details` when the underlying error supplies them:
+Failure uses a nonzero exit status and:
 
 ```json
 {
-  "schema": "marimo-export.cli.v1",
-  "command": "read",
+  "ok": false,
   "error": {
-    "code": "missing_output",
-    "message": "Output \"summary\" is missing."
+    "code": "selection_error",
+    "message": "notebook global 'summary' is unavailable"
   }
 }
 ```
 
-| Exit  | Meaning                                                             |
+Diagnostics go to stderr. Query-string credentials plus the configured access-token and server-token environment values are redacted before an error is formatted.
+
+## Exit codes
+
+| Code  | Meaning                                                             |
 | ----- | ------------------------------------------------------------------- |
-| `0`   | Command completed successfully.                                     |
-| `1`   | Runtime, remote, integrity, timeout, or failed-verification result. |
-| `2`   | Invalid command usage.                                              |
-| `130` | Cancelled with `SIGINT`, `SIGTERM`, or an abort signal.             |
+| `0`   | Command completed                                                   |
+| `1`   | Unexpected internal error                                           |
+| `2`   | Invalid arguments, specification, read selector, or request         |
+| `3`   | Connection or authentication failed                                 |
+| `4`   | Session selection failed                                            |
+| `5`   | Capture source or control selection, projection, or transfer failed |
+| `6`   | Publication or asset is malformed, missing, corrupt, or oversized   |
+| `7`   | Filesystem operation failed                                         |
+| `130` | Operation interrupted                                               |
+| `141` | Output pipe closed before the command finished                      |
 
-## Agent workflow
+## Agent flow
 
-An agent can discover and read a notebook result without Python access:
+An agent can discover a live source, capture it, and consume one bounded result:
 
 ```bash
-marimo-export inspect ./public/notebook-export \
-  --limit 20 \
+export MARIMO_EXPORT_TOKEN="<token>"
+export MARIMO_URL="http://localhost:3456/"
+
+uv run marimo-export session "$MARIMO_URL" --json
+
+uv run marimo-export session "$MARIMO_URL" \
+  --session SESSION_ID \
   --json
 
-marimo-export inspect ./public/notebook-export \
-  --scenario baseline \
-  --limit 50 \
+uv run marimo-export capture "$MARIMO_URL" \
+  --session SESSION_ID \
+  --spec finance.export.yaml \
+  --output dist/finance \
   --json
 
-marimo-export read ./public/notebook-export baseline summary \
+uv run marimo-export inspect dist/finance --json
+
+uv run marimo-export read dist/finance summary \
+  --variant current \
   --format json \
-  --max-bytes 1000000 \
   --json
 ```
 
-The responses carry the notebook digest, plan digest, resolved inputs, format ID, media type, payload digest, and byte size needed to ground a result in one published notebook state.
+The selection names identify one published representation. The reader verifies its cache asset before returning a value.

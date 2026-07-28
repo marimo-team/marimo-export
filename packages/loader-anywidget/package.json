@@ -1,5 +1,5 @@
 {
-  "name": "@marimo-team/marimo-export-anywidget",
+  "name": "@marimo-team/marimo-export-loader-anywidget",
   "version": "0.0.0",
   "description": "Pythonless AnyWidget loader for marimo exports.",
   "license": "Apache-2.0",
@@ -24,15 +24,25 @@
     "access": "public"
   },
   "scripts": {
+    "build": "vp pack",
+    "check": "vp check",
     "prepack": "vp run -t build",
-    "test": "vp test"
+    "test": "vp test",
+    "test:browser": "vp test --project browser",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@anywidget/types": "catalog:",
-    "@marimo-team/marimo-export": "workspace:*"
+    "@anywidget/types": "catalog:"
   },
   "devDependencies": {
+    "@marimo-team/marimo-export": "workspace:*",
+    "@msgpack/msgpack": "catalog:",
+    "@vitest/browser-playwright": "catalog:",
+    "playwright": "catalog:",
     "typescript": "catalog:",
     "vite-plus": "catalog:"
+  },
+  "peerDependencies": {
+    "@marimo-team/marimo-export": "workspace:*"
   }
 }

@@ -10,8 +10,7 @@
   },
   "dependencies": {
     "@marimo-team/marimo-export": "workspace:*",
-    "@marimo-team/marimo-export-anywidget": "workspace:*",
-    "@marimo-team/marimo-export-vegalite": "workspace:*"
+    "@marimo-team/marimo-export-loader-vegalite": "workspace:*"
   },
   "devDependencies": {
     "typescript": "catalog:",

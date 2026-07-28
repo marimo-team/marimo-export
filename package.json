@@ -11,8 +11,7 @@
     "@types/node": "catalog:",
     "typescript": "catalog:",
     "vite": "catalog:",
-    "vite-plus": "catalog:",
-    "vue": "catalog:"
+    "vite-plus": "catalog:"
   },
   "engines": {
     "node": ">=22.18.0"

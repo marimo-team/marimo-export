@@ -21,8 +21,12 @@ export interface AnyWidgetSnapshot {
 
 type PathToken = string | number;
 
-const BASE64 = /^(?:[A-Za-z\d+/]{4})*(?:[A-Za-z\d+/]{2}==|[A-Za-z\d+/]{3}=)?$/;
 const UNSAFE_PATH_KEYS = new Set(["__proto__", "constructor", "prototype"]);
+const MAX_DIAGNOSTIC_LENGTH = 2_048;
+const MAX_UNEXPECTED_FIELDS = 8;
+const MAX_DIAGNOSTIC_FIELD_LENGTH = 128;
+const MAX_DATA_URL_MEDIA_TYPE_BYTES = 1_024;
+const MAX_EXTERNAL_ESM_URL_BYTES = 8_192;
 
 export function parseAnyWidgetPayload(value: unknown): AnyWidgetSnapshot {
   const payload = record(value, "AnyWidget payload");
@@ -90,11 +94,17 @@ export function parseAnyWidgetPayload(value: unknown): AnyWidgetSnapshot {
 
   const reachable = collectReachableModels(rootModelId, models);
   if (reachable.size !== models.size) {
-    const unrelated = [...models.keys()].filter((id) => !reachable.has(id));
+    const unrelated: string[] = [];
+    let unrelatedCount = 0;
+    for (const id of models.keys()) {
+      if (reachable.has(id)) continue;
+      unrelatedCount += 1;
+      if (unrelated.length < MAX_UNEXPECTED_FIELDS) unrelated.push(id);
+    }
     throw new TypeError(
-      `AnyWidget payload contains models outside the root closure: ${unrelated
-        .map((id) => JSON.stringify(id))
-        .join(", ")}.`,
+      truncateDiagnostic(
+        `AnyWidget payload contains models outside the root closure: ${renderUnexpectedFields(unrelated, unrelatedCount)}.`,
+      ),
     );
   }
 
@@ -113,6 +123,20 @@ export function readonlyModelState<T extends Record<string, unknown>>(state: T):
   return deepFreeze(cloneModelState(state));
 }
 
+export function parseDataUrl(
+  value: string,
+  path: string,
+): { readonly body: string; readonly isBase64: boolean; readonly mediaType: string } {
+  const comma = value.indexOf(",");
+  if (comma === -1) throw new TypeError(`${path} is a malformed data URL.`);
+  const mediaTypeEnd = dataUrlMediaTypeEnd(value, comma, path);
+  return {
+    body: value.slice(comma + 1),
+    isBase64: hasBase64Parameter(value, mediaTypeEnd + 1, comma),
+    mediaType: value.slice(5, mediaTypeEnd) || "text/plain",
+  };
+}
+
 function parseFiles(value: unknown): Readonly<Record<string, string>> {
   const input = record(value, "files");
   const files: Record<string, string> = Object.create(null) as Record<string, string>;
@@ -120,10 +144,11 @@ function parseFiles(value: unknown): Readonly<Record<string, string>> {
     if (path.length === 0) {
       throw new TypeError("AnyWidget file paths must be non-empty strings.");
     }
+    const fileLabel = `AnyWidget file ${quoteField(path)}`;
     if (typeof dataUrl !== "string" || !dataUrl.startsWith("data:")) {
-      throw new TypeError(`AnyWidget file ${JSON.stringify(path)} must contain a data URL.`);
+      throw new TypeError(`${fileLabel} must contain a data URL.`);
     }
-    validateDataUrl(dataUrl, `AnyWidget file ${JSON.stringify(path)}`);
+    validateDataUrl(dataUrl, fileLabel);
     files[path] = dataUrl;
   }
   return Object.freeze(files);
@@ -140,26 +165,28 @@ function parseEsmSpec(
   const url = nonEmptyString(spec.url, `AnyWidget model ${JSON.stringify(modelId)} ESM URL`);
   const hash = nonEmptyString(spec.hash, `AnyWidget model ${JSON.stringify(modelId)} ESM hash`);
   if (!Object.hasOwn(files, url)) {
+    if (hasDataUrlPrefix(url)) {
+      validateDataUrl(url, `AnyWidget model ${JSON.stringify(modelId)} ESM URL`);
+      return Object.freeze({ url, hash });
+    }
+    if (!hasUtf8ByteLengthAtMost(url, MAX_EXTERNAL_ESM_URL_BYTES)) {
+      throw new TypeError(
+        `AnyWidget model ${JSON.stringify(modelId)} contains an invalid ESM URL ${quoteField(url)}.`,
+      );
+    }
     let parsed: URL;
     try {
       parsed = new URL(url);
     } catch (error) {
       throw new TypeError(
-        `AnyWidget model ${JSON.stringify(modelId)} references missing virtual file ${JSON.stringify(url)}.`,
+        `AnyWidget model ${JSON.stringify(modelId)} references missing virtual file ${quoteField(url)}.`,
         { cause: error },
       );
     }
-    if (
-      parsed.protocol !== "data:" &&
-      parsed.protocol !== "http:" &&
-      parsed.protocol !== "https:"
-    ) {
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
       throw new TypeError(
-        `AnyWidget model ${JSON.stringify(modelId)} uses incompatible ESM URL protocol ${JSON.stringify(parsed.protocol)}.`,
+        `AnyWidget model ${JSON.stringify(modelId)} uses incompatible ESM URL protocol ${quoteField(parsed.protocol)}.`,
       );
-    }
-    if (parsed.protocol === "data:") {
-      validateDataUrl(url, `AnyWidget model ${JSON.stringify(modelId)} ESM URL`);
     }
   }
   return Object.freeze({ url, hash });
@@ -184,7 +211,7 @@ function parseBufferPaths(value: unknown, modelId: string): readonly (readonly P
       const identity = JSON.stringify(parsed);
       if (seen.has(identity)) {
         throw new TypeError(
-          `AnyWidget model ${JSON.stringify(modelId)} repeats buffer path ${identity}.`,
+          `AnyWidget model ${JSON.stringify(modelId)} repeats buffer path ${quoteField(identity)}.`,
         );
       }
       seen.add(identity);
@@ -196,7 +223,7 @@ function parseBufferPaths(value: unknown, modelId: string): readonly (readonly P
 function parseBuffers(value: unknown, modelId: string): readonly DataView[] {
   return Object.freeze(
     array(value, `AnyWidget model ${JSON.stringify(modelId)} buffers`).map((buffer, index) => {
-      if (typeof buffer !== "string" || !BASE64.test(buffer)) {
+      if (typeof buffer !== "string" || !isCanonicalBase64(buffer)) {
         throw new TypeError(
           `AnyWidget model ${JSON.stringify(modelId)} buffer ${index} is not canonical base64.`,
         );
@@ -216,19 +243,172 @@ function base64ToDataView(value: string): DataView {
 }
 
 function validateDataUrl(value: string, path: string): void {
-  const comma = value.indexOf(",");
-  if (comma === -1) throw new TypeError(`${path} is a malformed data URL.`);
-  const metadata = value.slice(5, comma).toLowerCase().split(";");
-  const body = value.slice(comma + 1);
-  if (metadata.includes("base64")) {
-    if (!BASE64.test(body)) throw new TypeError(`${path} contains malformed base64 data.`);
+  const { body, isBase64 } = parseDataUrl(value, path);
+  if (isBase64) {
+    if (!isCanonicalBase64(body)) {
+      throw new TypeError(`${path} contains malformed base64 data.`);
+    }
     return;
   }
-  try {
-    decodeURIComponent(body);
-  } catch (error) {
-    throw new TypeError(`${path} contains malformed percent-encoded data.`, { cause: error });
+  if (!isValidPercentData(body)) {
+    throw new TypeError(`${path} contains malformed percent-encoded data.`);
   }
+}
+
+function dataUrlMediaTypeEnd(value: string, comma: number, path: string): number {
+  let byteLength = 0;
+  for (let index = 5; index < comma; index += 1) {
+    const codePoint = value.codePointAt(index)!;
+    if (codePoint === 0x3b) return index;
+    byteLength += utf8CodePointBytes(codePoint);
+    if (byteLength > MAX_DATA_URL_MEDIA_TYPE_BYTES) {
+      throw new TypeError(
+        `${path} data URL media type exceeds ${MAX_DATA_URL_MEDIA_TYPE_BYTES} UTF-8 bytes.`,
+      );
+    }
+    if (codePoint > 0xffff) index += 1;
+  }
+  return comma;
+}
+
+function hasBase64Parameter(value: string, start: number, end: number): boolean {
+  let segmentStart = start;
+  for (let index = start; index <= end; index += 1) {
+    if (index < end && value.charCodeAt(index) !== 0x3b) continue;
+    if (isBase64Parameter(value, segmentStart, index)) return true;
+    segmentStart = index + 1;
+  }
+  return false;
+}
+
+function isBase64Parameter(value: string, start: number, end: number): boolean {
+  return (
+    end - start === 6 &&
+    (value.charCodeAt(start) | 0x20) === 0x62 &&
+    (value.charCodeAt(start + 1) | 0x20) === 0x61 &&
+    (value.charCodeAt(start + 2) | 0x20) === 0x73 &&
+    (value.charCodeAt(start + 3) | 0x20) === 0x65 &&
+    value.charCodeAt(start + 4) === 0x36 &&
+    value.charCodeAt(start + 5) === 0x34
+  );
+}
+
+function isCanonicalBase64(value: string): boolean {
+  if (value.length % 4 !== 0) return false;
+  let contentEnd = value.length;
+  if (contentEnd > 0 && value.charCodeAt(contentEnd - 1) === 0x3d) {
+    contentEnd -= 1;
+    if (contentEnd > 0 && value.charCodeAt(contentEnd - 1) === 0x3d) contentEnd -= 1;
+  }
+  for (let index = 0; index < contentEnd; index += 1) {
+    const codeUnit = value.charCodeAt(index);
+    if (
+      (codeUnit < 0x41 || codeUnit > 0x5a) &&
+      (codeUnit < 0x61 || codeUnit > 0x7a) &&
+      (codeUnit < 0x30 || codeUnit > 0x39) &&
+      codeUnit !== 0x2b &&
+      codeUnit !== 0x2f
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function isValidPercentData(value: string): boolean {
+  if (value.indexOf("%") === -1) return true;
+  let index = 0;
+  let remaining = 0;
+  let continuationMin = 0x80;
+  let continuationMax = 0xbf;
+  while (index < value.length) {
+    const codePoint = value.codePointAt(index)!;
+    if (codePoint > 0x7f) {
+      if (remaining > 0) return false;
+      index += codePoint > 0xffff ? 2 : 1;
+      continue;
+    }
+
+    let byte: number;
+    if (codePoint === 0x25) {
+      if (index + 2 >= value.length) return false;
+      const high = hexValue(value.charCodeAt(index + 1));
+      const low = hexValue(value.charCodeAt(index + 2));
+      if (high < 0 || low < 0) return false;
+      byte = high * 16 + low;
+      index += 3;
+    } else {
+      byte = codePoint;
+      index += 1;
+    }
+
+    if (remaining > 0) {
+      if (byte < continuationMin || byte > continuationMax) return false;
+      remaining -= 1;
+      continuationMin = 0x80;
+      continuationMax = 0xbf;
+      continue;
+    }
+    if (byte <= 0x7f) continue;
+    if (byte >= 0xc2 && byte <= 0xdf) {
+      remaining = 1;
+    } else if (byte === 0xe0) {
+      remaining = 2;
+      continuationMin = 0xa0;
+    } else if ((byte >= 0xe1 && byte <= 0xec) || (byte >= 0xee && byte <= 0xef)) {
+      remaining = 2;
+    } else if (byte === 0xed) {
+      remaining = 2;
+      continuationMax = 0x9f;
+    } else if (byte === 0xf0) {
+      remaining = 3;
+      continuationMin = 0x90;
+    } else if (byte >= 0xf1 && byte <= 0xf3) {
+      remaining = 3;
+    } else if (byte === 0xf4) {
+      remaining = 3;
+      continuationMax = 0x8f;
+    } else {
+      return false;
+    }
+  }
+  return remaining === 0;
+}
+
+function hexValue(codeUnit: number): number {
+  if (codeUnit >= 0x30 && codeUnit <= 0x39) return codeUnit - 0x30;
+  if (codeUnit >= 0x41 && codeUnit <= 0x46) return codeUnit - 0x37;
+  if (codeUnit >= 0x61 && codeUnit <= 0x66) return codeUnit - 0x57;
+  return -1;
+}
+
+function hasDataUrlPrefix(value: string): boolean {
+  return (
+    value.length >= 5 &&
+    (value.charCodeAt(0) | 0x20) === 0x64 &&
+    (value.charCodeAt(1) | 0x20) === 0x61 &&
+    (value.charCodeAt(2) | 0x20) === 0x74 &&
+    (value.charCodeAt(3) | 0x20) === 0x61 &&
+    value.charCodeAt(4) === 0x3a
+  );
+}
+
+function hasUtf8ByteLengthAtMost(value: string, maximum: number): boolean {
+  let byteLength = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    const codePoint = value.codePointAt(index)!;
+    byteLength += utf8CodePointBytes(codePoint);
+    if (byteLength > maximum) return false;
+    if (codePoint > 0xffff) index += 1;
+  }
+  return true;
+}
+
+function utf8CodePointBytes(codePoint: number): number {
+  if (codePoint <= 0x7f) return 1;
+  if (codePoint <= 0x7ff) return 2;
+  if (codePoint <= 0xffff) return 3;
+  return 4;
 }
 
 function setBuffer(
@@ -265,9 +445,9 @@ function ownChild(
   return target[token];
 }
 
-function invalidBufferPath(modelId: string, path: readonly PathToken[]): never {
+function invalidBufferPath(modelId: string, _path: readonly PathToken[]): never {
   throw new TypeError(
-    `AnyWidget model ${JSON.stringify(modelId)} buffer path ${JSON.stringify(path)} does not target existing state.`,
+    `AnyWidget model ${JSON.stringify(modelId)} has a buffer path that does not target existing state.`,
   );
 }
 
@@ -282,7 +462,7 @@ function collectReachableModels(
     if (reachable.has(id)) continue;
     const model = models.get(id);
     if (model === undefined) {
-      throw new TypeError(`AnyWidget model reference ${JSON.stringify(id)} is unresolved.`);
+      throw new TypeError(`AnyWidget model reference ${quoteField(id)} is unresolved.`);
     }
     reachable.add(id);
     for (const reference of findWidgetReferences(model.state)) pending.push(reference);
@@ -318,28 +498,7 @@ function findWidgetReferences(value: unknown): readonly string[] {
 }
 
 function cloneJsonObject(value: Record<string, unknown>): SnapshotState {
-  assertJsonValue(value, "state");
   return structuredClone(value);
-}
-
-function assertJsonValue(value: unknown, path: string): void {
-  if (
-    value === null ||
-    typeof value === "string" ||
-    typeof value === "boolean" ||
-    (typeof value === "number" && Number.isFinite(value))
-  ) {
-    return;
-  }
-  if (Array.isArray(value)) {
-    value.forEach((child, index) => assertJsonValue(child, `${path}[${index}]`));
-    return;
-  }
-  if (isRecord(value)) {
-    for (const [key, child] of Object.entries(value)) assertJsonValue(child, `${path}.${key}`);
-    return;
-  }
-  throw new TypeError(`${path} must contain JSON values.`);
 }
 
 function deepFreeze<T>(value: T): T {
@@ -361,13 +520,73 @@ function exactKeys(
   path: string,
 ): void {
   const allowed = new Set(expected);
-  const unexpected = Object.keys(value).filter((key) => !allowed.has(key));
+  const unexpected: string[] = [];
+  let unexpectedCount = 0;
+  for (const key of Object.keys(value)) {
+    if (allowed.has(key)) continue;
+    unexpectedCount += 1;
+    if (unexpected.length < MAX_UNEXPECTED_FIELDS) unexpected.push(key);
+  }
   const missing = expected.filter((key) => !Object.hasOwn(value, key));
-  if (unexpected.length > 0 || missing.length > 0) {
+  if (unexpectedCount > 0 || missing.length > 0) {
+    const missingText = missing.length === 0 ? "none" : missing.map(quoteField).join(", ");
+    const unexpectedText = renderUnexpectedFields(unexpected, unexpectedCount);
     throw new TypeError(
-      `${path} fields are invalid. Missing: ${missing.join(", ") || "none"}. Unexpected: ${unexpected.join(", ") || "none"}.`,
+      truncateDiagnostic(
+        `${path} fields are invalid. Missing: ${missingText}. Unexpected: ${unexpectedText}.`,
+      ),
     );
   }
+}
+
+function renderUnexpectedFields(fields: readonly string[], total: number): string {
+  if (total === 0) return "none";
+  const rendered = fields.map(quoteField).join(", ");
+  const omitted = total - fields.length;
+  return omitted === 0 ? rendered : `${rendered}, ... (+${omitted} more)`;
+}
+
+function quoteField(value: string): string {
+  let body = "";
+  const bodyLimit = MAX_DIAGNOSTIC_FIELD_LENGTH - 5;
+  let truncated = false;
+  for (let index = 0; index < value.length; index += 1) {
+    const codeUnit = value.charCodeAt(index);
+    let token: string;
+    if (codeUnit === 0x22 || codeUnit === 0x5c) {
+      token = `\\${value[index]}`;
+    } else if (
+      codeUnit <= 0x1f ||
+      (codeUnit >= 0x7f && codeUnit <= 0x9f) ||
+      (codeUnit >= 0xd800 && codeUnit <= 0xdfff)
+    ) {
+      if (
+        codeUnit >= 0xd800 &&
+        codeUnit <= 0xdbff &&
+        index + 1 < value.length &&
+        value.charCodeAt(index + 1) >= 0xdc00 &&
+        value.charCodeAt(index + 1) <= 0xdfff
+      ) {
+        token = value.slice(index, index + 2);
+        index += 1;
+      } else {
+        token = `\\u${codeUnit.toString(16).padStart(4, "0")}`;
+      }
+    } else {
+      token = value[index]!;
+    }
+    if (body.length + token.length > bodyLimit) {
+      truncated = true;
+      break;
+    }
+    body += token;
+  }
+  return `"${body}${truncated ? "..." : ""}"`;
+}
+
+function truncateDiagnostic(value: string): string {
+  if (value.length <= MAX_DIAGNOSTIC_LENGTH) return value;
+  return `${value.slice(0, MAX_DIAGNOSTIC_LENGTH - 3)}...`;
 }
 
 function nonEmptyString(value: unknown, path: string): string {

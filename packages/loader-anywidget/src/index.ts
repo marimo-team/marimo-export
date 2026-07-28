@@ -1,5 +1,5 @@
 import type { AnyModel } from "@anywidget/types";
-import type { OutputLoader } from "@marimo-team/marimo-export";
+import type { FormatLoader, FormatLoaderContext } from "@marimo-team/marimo-export";
 
 import { parseAnyWidgetPayload, readonlyModelState } from "./payload.js";
 import { mountSnapshot } from "./runtime/registry.js";
@@ -28,34 +28,46 @@ export interface LoadedAnyWidget<State extends StateShape<State> = ModelState, E
 }
 
 /** Decode a static AnyWidget projection and prepare it for browser mounting. */
-export function anywidget<
+export function anyWidgetLoader<
   State extends StateShape<State> = ModelState,
   Exports = unknown,
->(): OutputLoader<LoadedAnyWidget<State, Exports>> {
+>(): FormatLoader<LoadedAnyWidget<State, Exports>> {
   return {
     formatId: FORMAT_ID,
-    async load(output) {
-      if (output.mediaType !== MEDIA_TYPE) {
-        throw new TypeError(`AnyWidget output media type must be ${JSON.stringify(MEDIA_TYPE)}.`);
-      }
-      const snapshot = parseAnyWidgetPayload(await output.json());
-      const root = snapshot.models.get(snapshot.rootModelId)!;
-      const initialState = readonlyModelState(root.state) as Readonly<State>;
-      return Object.freeze({
-        initialState,
-        async mount(
-          element: HTMLElement,
-          options: AnyWidgetMountOptions = {},
-        ): Promise<MountedAnyWidget<State, Exports>> {
-          return (await mountSnapshot<ModelState, Exports>(
-            snapshot,
-            element,
-            options,
-          )) as unknown as MountedAnyWidget<State, Exports>;
-        },
-      });
+    load(output) {
+      return loadWidget<State, Exports>(output);
+    },
+    async mount(output, element) {
+      return (await loadWidget<State, Exports>(output)).mount(
+        element,
+        output.signal === undefined ? {} : { signal: output.signal },
+      );
     },
   };
+}
+
+async function loadWidget<State extends StateShape<State>, Exports>(
+  output: FormatLoaderContext,
+): Promise<LoadedAnyWidget<State, Exports>> {
+  if (output.mediaType !== MEDIA_TYPE) {
+    throw new TypeError(`AnyWidget output media type must be ${JSON.stringify(MEDIA_TYPE)}.`);
+  }
+  const snapshot = parseAnyWidgetPayload(await output.json());
+  const root = snapshot.models.get(snapshot.rootModelId)!;
+  const initialState = readonlyModelState(root.state) as Readonly<State>;
+  return Object.freeze({
+    initialState,
+    async mount(
+      element: HTMLElement,
+      options: AnyWidgetMountOptions = {},
+    ): Promise<MountedAnyWidget<State, Exports>> {
+      return (await mountSnapshot<ModelState, Exports>(
+        snapshot,
+        element,
+        options,
+      )) as unknown as MountedAnyWidget<State, Exports>;
+    },
+  });
 }
 
 export type { AnyModel };

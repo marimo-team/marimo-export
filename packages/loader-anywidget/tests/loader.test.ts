@@ -1,8 +1,8 @@
-import { anywidget } from "@marimo-team/marimo-export-anywidget";
-import type { LoadedAnyWidget } from "@marimo-team/marimo-export-anywidget";
-import type { OutputLoader } from "@marimo-team/marimo-export";
+import { anyWidgetLoader } from "@marimo-team/marimo-export-loader-anywidget";
+import type { LoadedAnyWidget } from "@marimo-team/marimo-export-loader-anywidget";
+import type { FormatLoader } from "@marimo-team/marimo-export";
 import { describe, expect, expectTypeOf, test } from "vite-plus/test";
-import producerPayload from "../../producer/tests/fixtures/anywidget-v1.json";
+import producerPayload from "../../python/tests/fixtures/anywidget-v1.json";
 import { moduleUrl, notification, outputFor, payload } from "./fixture.js";
 
 describe("anywidget", () => {
@@ -12,10 +12,10 @@ describe("anywidget", () => {
       label?: string;
     }
 
-    const loader = anywidget<MapState>();
+    const loader = anyWidgetLoader<MapState>();
 
     expect(loader.formatId).toBe("anywidget.v1");
-    expectTypeOf(loader).toEqualTypeOf<OutputLoader<LoadedAnyWidget<MapState>>>();
+    expectTypeOf(loader).toEqualTypeOf<FormatLoader<LoadedAnyWidget<MapState>>>();
     expectTypeOf<LoadedAnyWidget<MapState>["initialState"]["label"]>().toEqualTypeOf<
       string | undefined
     >();
@@ -24,7 +24,8 @@ describe("anywidget", () => {
   test("loads the producer contract fixture", async () => {
     const output = await outputFor(producerPayload);
 
-    const loaded = await output.load(anywidget<{ child: string; binary: { view: DataView } }>());
+    const loaded =
+      await output.load(anyWidgetLoader<{ child: string; binary: { view: DataView } }>());
 
     expect(loaded.initialState.child).toBe("anywidget:model-1");
     expect([...new Uint8Array(loaded.initialState.binary.view.buffer)]).toEqual([1, 2, 3]);
@@ -48,7 +49,8 @@ describe("anywidget", () => {
       }),
     );
 
-    const loaded = await output.load(anywidget<{ count: number; binary: { view: DataView } }>());
+    const loaded =
+      await output.load(anyWidgetLoader<{ count: number; binary: { view: DataView } }>());
 
     expect(Reflect.has(globalThis, marker)).toBe(false);
     expect(loaded.initialState.count).toBe(2);
@@ -69,7 +71,7 @@ describe("anywidget", () => {
       { mediaType: "application/json" },
     );
 
-    await expect(output.load(anywidget())).rejects.toThrow("output media type must be");
+    await expect(output.load(anyWidgetLoader())).rejects.toThrow("output media type must be");
   });
 
   test("rejects unresolved model references before module execution", async () => {
@@ -87,7 +89,9 @@ describe("anywidget", () => {
       }),
     );
 
-    await expect(output.load(anywidget())).rejects.toThrow('reference "missing" is unresolved');
+    await expect(output.load(anyWidgetLoader())).rejects.toThrow(
+      'reference "missing" is unresolved',
+    );
     expect(Reflect.has(globalThis, marker)).toBe(false);
   });
 
@@ -106,7 +110,7 @@ describe("anywidget", () => {
       }),
     );
 
-    await expect(output.load(anywidget())).rejects.toThrow("not canonical base64");
+    await expect(output.load(anyWidgetLoader())).rejects.toThrow("not canonical base64");
   });
 
   test("requires each buffer path parent to exist", async () => {
@@ -124,7 +128,7 @@ describe("anywidget", () => {
       }),
     );
 
-    await expect(output.load(anywidget())).rejects.toThrow("does not target existing state");
+    await expect(output.load(anyWidgetLoader())).rejects.toThrow("does not target existing state");
   });
 
   test("rejects virtual ESM files that are absent from the payload", async () => {
@@ -136,7 +140,7 @@ describe("anywidget", () => {
       }),
     );
 
-    await expect(output.load(anywidget())).rejects.toThrow("missing virtual file");
+    await expect(output.load(anyWidgetLoader())).rejects.toThrow("missing virtual file");
   });
 
   test("rejects malformed embedded modules while loading", async () => {
@@ -149,7 +153,20 @@ describe("anywidget", () => {
       }),
     );
 
-    await expect(output.load(anywidget())).rejects.toThrow("malformed base64 data");
+    await expect(output.load(anyWidgetLoader())).rejects.toThrow("malformed base64 data");
+  });
+
+  test("treats a base64 media type as percent-encoded data", async () => {
+    const output = await outputFor(
+      payload({
+        files: { "/@file/widget.js": "data:base64,export%20default%20%7B%7D" },
+        modelNotifications: [
+          notification({ id: "model-0", state: {}, moduleUrl: "/@file/widget.js" }),
+        ],
+      }),
+    );
+
+    await expect(output.load(anyWidgetLoader())).resolves.toBeDefined();
   });
 
   test("loads an IPython widget model reference in the root closure", async () => {
@@ -166,7 +183,7 @@ describe("anywidget", () => {
       }),
     );
 
-    const loaded = await output.load(anywidget<{ layout: string }>());
+    const loaded = await output.load(anyWidgetLoader<{ layout: string }>());
 
     expect(loaded.initialState.layout).toBe("IPY_MODEL_model-1");
   });
@@ -185,7 +202,7 @@ describe("anywidget", () => {
       }),
     );
 
-    await expect(output.load(anywidget())).rejects.toThrow('rootModelId must be "model-0"');
+    await expect(output.load(anyWidgetLoader())).rejects.toThrow('rootModelId must be "model-0"');
   });
 
   test("requires model notifications in canonical order", async () => {
@@ -201,8 +218,67 @@ describe("anywidget", () => {
       }),
     );
 
-    await expect(output.load(anywidget())).rejects.toThrow(
+    await expect(output.load(anyWidgetLoader())).rejects.toThrow(
       'modelNotifications[0].model_id must be "model-0"',
     );
+  });
+
+  test("bounds and escapes unexpected payload fields", async () => {
+    const fields = Object.fromEntries(
+      Array.from({ length: 20 }, (_, index) => [
+        `${index === 0 ? "\u009b" : "field"}-${index}-${"x".repeat(4_000)}`,
+        true,
+      ]),
+    );
+    const output = await outputFor({ ...payload({ modelNotifications: [] }), ...fields });
+
+    let message = "";
+    try {
+      await output.load(anyWidgetLoader());
+    } catch (error) {
+      if (error instanceof Error) message = error.message;
+    }
+
+    expect(message).toContain("Unexpected:");
+    expect(message).toContain("\\u009b");
+    expect(message).not.toContain("\u009b");
+    expect(message).toContain("(+12 more)");
+    expect(message.length).toBeLessThanOrEqual(2_048);
+  });
+
+  test("bounds a file-path diagnostic", async () => {
+    const path = `\u009b${"file".repeat(300_000)}`;
+    const output = await outputFor({
+      ...payload({ modelNotifications: [] }),
+      files: { [path]: "not-a-data-url" },
+    });
+
+    let message = "";
+    try {
+      await output.load(anyWidgetLoader());
+    } catch (error) {
+      if (error instanceof Error) message = error.message;
+    }
+
+    expect(message.length).toBeLessThan(256);
+    expect(message).toContain("\\u009b");
+    expect(message).not.toContain("\u009b");
+    expect(message).toContain("...");
+  });
+
+  test("bounds the unrelated-model list", async () => {
+    const notifications = [
+      notification({
+        id: "model-0",
+        state: {},
+        moduleUrl: moduleUrl("export default { render() {} }"),
+      }),
+      ...Array.from({ length: 20 }, (_, index) =>
+        notification({ id: `model-${index + 1}`, state: {} }),
+      ),
+    ];
+    const output = await outputFor(payload({ modelNotifications: notifications }));
+
+    await expect(output.load(anyWidgetLoader())).rejects.toThrow("(+12 more)");
   });
 });

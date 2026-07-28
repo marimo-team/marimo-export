@@ -42,5 +42,31 @@ jobs:
       - name: Install Python workspace
         run: uv sync --all-extras --locked
 
+      - name: Install AnyWidget test browser
+        run: pnpm --filter @marimo-team/marimo-export-loader-anywidget exec playwright install --with-deps --only-shell chromium
+
       - name: Run release gate
         run: make check
+
+  windows-reader:
+    runs-on: windows-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+        with:
+          enable-cache: true
+
+      - name: Install Python workspace
+        run: uv sync --package marimo-export --locked
+
+      - name: Validate native Windows publication reads
+        run: >-
+          uv run --package marimo-export pytest -q
+          packages/python/tests/test_secure_io.py
+          packages/python/tests/test_reader.py

@@ -1,131 +1,71 @@
 # Trust and integrity
 
-marimo-export verifies exact bytes. Trust in who produced those bytes comes from the channel that delivers the build's `ExportRef`.
+marimo-export verifies that a publication's cache objects match `index.json`. The authenticated capture response establishes the index received from the notebook session. The deployment channel and host application protect that index and decide who may execute active output formats.
 
-## Integrity chain
+## Publication integrity
 
-A successful remote build returns:
+Each format entry contains one asset reference:
 
-```ts
-interface ExportRef {
-  readonly key: string;
-  readonly sha256: string;
-  readonly size: number;
+```json
+{
+  "key": "<opaque-marimo-key>/return.bin",
+  "sha256": "<digest>",
+  "size": 184
 }
 ```
 
-The key is `marimo-export/indexes/<sha256>.json`. The index records one content-addressed reference for every portable payload:
+Python and browser readers perform this sequence:
 
-```text
-marimo-export/payloads/sha256/<sha256>
-```
+1. Validate `marimo-export.publication.v1`.
+2. Resolve `cache/<asset.key>` as a portable relative path.
+3. Bound the index and each asset by caller limits. The Python reader also bounds the declared unique-asset closure.
+4. Verify the exact MessagePack bytes against size and SHA-256.
+5. Decode the marimo `BlobAsset` envelope.
+6. Confirm media type, format identifier, and metadata against the index, then validate the optional filename.
+7. Pass the inner `data` bytes to the selected decoder or loader.
 
-Use the build reference when opening a publication:
+Corruption fails before JSON parsing, image decoding, table decoding, or browser mounting.
 
-```ts
-const published = await openExport(directorySource("/tmp/finance-export"), {
-  ref: build.ref,
-});
-```
+`uv run marimo-export verify PUBLICATION` applies the sequence to every unique asset referenced by the index.
 
-The reader bounds an unanchored `index.json` to 16 MiB by default. A trusted reference supplies its exact expected size. The reader verifies the index size and SHA-256 before UTF-8 decoding or schema validation, then validates the strict `marimo-export.index.v1` shape. Payload bytes are source-bounded to their indexed size and verified before any read returns them.
+`index.json` is the trust root for a static read. Asset digests detect corruption or substitution relative to that index. Protect the index through the same authenticated deployment path as the rest of the application.
 
-`openExport()` also exposes `published.ref`, derived from the index bytes it opened. That reference identifies the current bytes. A separately trusted reference anchors those bytes to an earlier authenticated build.
+On Windows, keep the publication directory tree stable until the Python reader completes its second file-identity check. It rejects symbolic links, junctions, and other reparse points, then fails when its validation checks detect a changed path.
 
-## Retain the build record
+## Capture authority
 
-The CLI can save a `marimo-export.build.v1` record while publishing:
+Capture uses an edit-capable marimo session. A specification can evaluate trusted Python expressions and import custom exporters. Treat capture authority as permission to run Python in the notebook environment.
 
-```bash
-marimo-export publish \
-  --server http://127.0.0.1:2718/ \
-  --notebook /absolute/path/on/server/notebook.py \
-  --plan finance.plan.yaml \
-  --out /tmp/finance-export \
-  --record /tmp/finance.build.json
-```
+The running kernel can access the notebook process's packages, files, credentials, network, accelerators, and external services. Apply the marimo server's authentication and network policy to that environment. Use HTTPS across a network or keep the server loopback-bound behind an SSH tunnel.
 
-Use that record to anchor later CLI reads:
+The `access_token` in a marimo URL is removed from the normalized server address. marimo-export keeps credentials out of publication indexes, receipts, stdout, stderr, and exception messages.
 
-```bash
-marimo-export verify /tmp/finance-export --ref /tmp/finance.build.json
-marimo-export inspect /tmp/finance-export --ref /tmp/finance.build.json
-marimo-export read /tmp/finance-export baseline summary \
-  --format json \
-  --ref /tmp/finance.build.json
-```
+## Cache trust
 
-Protect the build record through the same authenticated deployment channel as other release metadata. It contains the server URL, notebook path, reference, and receipt. Credentials stay in environment variables or the calling application.
+marimo's persistent cache can restore Python values and `BlobAsset` objects before marimo-export transfers them. Protect the configured cache store with the same identity that runs the notebook kernel.
 
-## Verification modes
+Asset digests prove that transferred cache objects match the captured index. They cannot prove the origin of a value restored from a cache that another identity could modify. Clear or replace a cache store after untrusted write access.
 
-### Reader verification
+## Variant effects
 
-Concurrent unsignaled `bytes()`, `text()`, `json()`, `blob()`, or loader reads of the same payload share one in-flight verified source read. The reader evicts that entry when it settles. A later read goes through the source and verification again. Signaled reads run independently, and byte arrays are returned as defensive copies.
+Applying a variant sends frontend values to existing marimo UI controls and runs reactive dependents. marimo-export restores the starting UI vector after every variant and after failures.
 
-### Full publication verification
+Restoration cannot reverse writes to databases, files, network services, imported-module state, random generators, native-library globals, or background tasks. Use idempotent notebook effects, transactional resources, or isolated targets when capturing variants.
 
-`verifyExport()` and `marimo-export verify` read every unique payload reference:
+## Active formats
 
-```ts
-const result = await verifyExport({
-  source: directorySource("/tmp/finance-export"),
-  ref: build.ref,
-});
+Integrity verification establishes exact bytes. The host application chooses how those bytes are interpreted.
 
-if (!result.ok) {
-  console.error(result.failures);
-}
-```
+- JSON and text use reader decoders. Arrow, Parquet, PNG, and raw bytes remain verified data for the consuming application. A custom loader may decode a trusted Arrow or Parquet projection.
+- HTML can execute browser behavior after insertion into an active document. Apply the application's sanitization, sandbox, and content security policy.
+- Vega-Lite specifications can request external data or resources. Configure network access through the Vega runtime.
+- AnyWidget mounting executes the notebook-authored frontend module. Allow required module and style sources through content security policy and dispose mounted views when they leave the page.
+- A custom loader defines the parsing and execution semantics of its format ID.
 
-Passing `ref` verifies the index and payload closure. Omitting it checks payloads against the publication's current valid index. Payload failures appear in the returned report, and `bytes` counts successfully verified payload bytes. An unreadable or invalid index, reference mismatch, invalid concurrency, or abort rejects the operation.
+Opening, navigation, integrity verification, and generic byte reads stay separate from format-loader decoding and mounting. Keep `load()` and `mount()` behind an explicit application decision.
 
-### Incremental pull verification
+## HTTP publication sources
 
-`pullExport()` verifies the source index against the supplied reference, verifies each downloaded payload, and skips a local file after its size and digest match. The function writes `index.json` after the payload closure completes.
+Browser publication roots accept HTTP or HTTPS. They reject embedded credentials, query strings, fragments, redirects, path traversal, and bodies that exceed configured limits.
 
-## Producer trust
-
-Plans can contain expression sources. Custom exporter definitions and importable exporter references execute Python in the notebook environment. Accept plans from callers who are permitted to execute code in that environment.
-
-marimo's native cell cache is also part of the producer execution boundary. It can restore serialized Python values before marimo-export creates a projection. Cache signature behavior depends on the prepared environment and marimo configuration, and a lean base producer may run without the optional cryptographic verifier. Keep the producer cache store, `__marimo__/cache` by default, writable only by the trusted producer identity. Rebuild it after an untrusted process or user could have modified it.
-
-Publication hashes verify the resulting index and projection bytes. They do not authenticate a Python value that the producer restored from a tampered native cache.
-
-Keep the notebook's served `public` target and its `public/.marimo-export` namespace under the trusted producer identity during staging and lease cleanup. The stage manager owns that namespace and its randomly named lease directories.
-
-The producer reads the saved notebook file and records its SHA-256 in the index. The plan's canonical SHA-256 is also recorded. A consumer can show both digests as provenance, but a digest alone does not establish who authored the notebook or approved the plan.
-
-Remote control uses the marimo server's authentication. Use HTTPS for network connections or forward a loopback-bound server through SSH. The CLI reads `MARIMO_TOKEN` and `MARIMO_SERVER_TOKEN` from its environment.
-
-Reserve the attached kernel for one remote request at a time across all callers. Keep interactive work and other clients idle until the request settles. Marimo's scratchpad disconnect watcher can interrupt the whole attached session. Fresh scenario child runners reset graph state, while request orchestration and process state still use the attached kernel.
-
-Configure a finite marimo session TTL. A disconnect before `kernel-ready` leaves session ownership unknown, so marimo-export cannot safely issue blind shutdown against a possible kiosk attachment. When both the CLI's lease cleanup and `remote.close()` retry fail, `remote.close()` skips managed-session shutdown, closes the local socket, and rejects. The server TTL bounds the disconnected session lifetime. A transfer stage expires through its separate 30-minute lease.
-
-## Active output formats
-
-Hash verification proves that bytes match the reference. The host application still decides how to interpret them.
-
-- JSON, Arrow, Parquet, text, PNG, and raw bytes are data inputs to their selected decoders.
-- HTML can run browser behavior when a host inserts it into an active document. Apply the host's sanitization, sandbox, and content security policy.
-- Vega-Lite specifications can reference external data or resources. Configure network access through the host application and Vega runtime.
-- AnyWidget mounting executes the notebook-authored frontend module. Embedded files, embedded CSS assets, and `data:` module URLs are anchored by the projection payload. Embedded files mount through `blob:` URLs and need that scheme in `script-src`. Literal HTTP module dependencies plus root-relative, HTTP, or HTTPS resources referenced by widget CSS are runtime network inputs outside the verified payload closure. Apply content security policy, cross-origin resource sharing, origin trust, and availability controls to those inputs.
-- A custom loader defines the semantics of its `formatId`.
-
-Publish active formats from notebooks and exporters that the host application trusts. Keep the caveat beside the code path that inserts HTML, mounts Vega-Lite or AnyWidget, or invokes a custom loader.
-
-## Published data
-
-The index exposes scenario IDs, complete public input vectors, notebook and plan digests, producer versions, output names, format metadata, payload sizes, and payload digests. Payload files contain the projected notebook results.
-
-Serve the publication through the application's normal public or authenticated data path. A remote transfer stage is temporary, but the pulled publication persists until the publishing system removes it.
-
-## Local publication trees
-
-Keep local source and destination trees under the caller's control while a read, pull, or verification is active. The Node entrypoint rejects ordinary symlinks, non-files, and paths outside the anchored root. An untrusted local process that concurrently replaces directory components remains outside the filesystem contract.
-
-## HTTP sources
-
-`httpSource()` accepts custom headers and a custom Fetch implementation. Keep credentials in headers supplied at runtime. The resolved publication root rejects embedded credentials, query strings, and fragments, which keeps path resolution beneath one explicit root. A browser location or explicit `options.base` may contain its own query or fragment before root resolution.
-
-HTTP reads reject redirects. The built-in source enforces byte limits through `Content-Length` when present and while streaming the response body. Use same-origin publication paths in browsers when possible and configure cross-origin resource sharing deliberately when the files live on another origin.
+Use same-origin publication paths where practical. For a protected cross-origin publication, supply request headers through the application and configure cross-origin resource sharing for the reader origin.
