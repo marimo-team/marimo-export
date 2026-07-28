@@ -9,6 +9,7 @@
     "noUncheckedIndexedAccess": true,
     "exactOptionalPropertyTypes": true,
     "resolveJsonModule": true,
+    "types": ["node"],
     "verbatimModuleSyntax": true,
     "skipLibCheck": true
   },

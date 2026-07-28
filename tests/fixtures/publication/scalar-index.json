@@ -1,0 +1,44 @@
+{
+  "inputs": ["choice"],
+  "notebook": {
+    "document_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "filename": "fixture.py"
+  },
+  "outputs": ["answer"],
+  "producer": { "marimo": "0.23.15", "marimo_export": "1.0.0" },
+  "schema": "marimo-export.publication.v1",
+  "states": {
+    "one": {
+      "fingerprint": "8fbedba22667454c97b89d45b65f7e3f1d29b5f5e821adad0fe57c2c74de9f05",
+      "inputs": { "choice": "A" },
+      "outputs": {
+        "answer": {
+          "codec": "marimo.scalar.v1",
+          "media_type": "application/vnd.marimo.scalar.v1+json",
+          "provenance": {
+            "cache_key": "cell_cache/P_answer.json",
+            "python_type": "builtins.int",
+            "return_reference": null
+          },
+          "value": 42
+        }
+      }
+    },
+    "two": {
+      "fingerprint": "7c071c875fae5ac65835de1410465c15c8d6e2e226353990eaf61deb55a4da4c",
+      "inputs": { "choice": "B" },
+      "outputs": {
+        "answer": {
+          "codec": "marimo.scalar.v1",
+          "media_type": "application/vnd.marimo.scalar.v1+json",
+          "provenance": {
+            "cache_key": "cell_cache/P_answer.json",
+            "python_type": "builtins.int",
+            "return_reference": null
+          },
+          "value": { "type": "bigint", "value": "9007199254740992" }
+        }
+      }
+    }
+  }
+}

@@ -1,20 +1,44 @@
+export {
+  defineBlobAssetLoader,
+  defineOutputLoader,
+  imageLoader,
+  resolveOutputLoader,
+  scalarLoader,
+} from "./loader.js";
 export { openPublication } from "./publication.js";
 export { PublicationError } from "./types.js";
 
 export type {
-  NotebookProvenance,
-  OpenPublicationOptions,
-  ProducerProvenance,
-  Publication,
-  PublishedVariant,
-  PublishedFormat,
-  PublishedOutput,
-} from "./publication.js";
-export type { FormatLoader, FormatLoaderContext, JsonDecoder, MountedView } from "./loader.js";
-export type {
+  AnyOutputLoader,
+  ArrowDescriptor,
+  AssetDescriptor,
+  BlobAsset,
+  BlobAssetDescriptor,
+  BlobAssetLoadInput,
+  BlobAssetLoader,
+  DescriptorFor,
   JsonObject,
   JsonPrimitive,
   JsonValue,
+  LoadOptions,
+  MediaType,
+  MountedView,
+  MountableValue,
+  NotebookProvenance,
+  NumpyDescriptor,
+  OpenPublicationOptions,
+  OutputCodec,
+  OutputDescriptor,
+  OutputLoader,
+  OutputPayloadMap,
+  ProducerProvenance,
+  Provenance,
+  Publication,
   PublicationErrorCode,
-  ReadOptions,
+  PublishedOutput,
+  PublishedState,
+  ScalarDescriptor,
+  ScalarValue,
+  VerificationResult,
+  VerifyOptions,
 } from "./types.js";

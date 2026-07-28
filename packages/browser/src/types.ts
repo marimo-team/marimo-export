@@ -6,27 +6,30 @@ export interface JsonObject {
   readonly [key: string]: JsonValue;
 }
 
-export interface ReadOptions {
-  readonly signal?: AbortSignal;
-  /** Maximum decoded projection size in bytes. */
-  readonly maxBytes?: number;
-  /** Maximum containers, scalar values, and object keys in projected JSON. */
-  readonly maxJsonValues?: number;
-}
+export type ScalarValue = null | boolean | string | number | bigint;
 
 export type PublicationErrorCode =
+  | "abort"
   | "asset_invalid"
   | "decode_failed"
   | "integrity_failed"
+  | "loader_ambiguous"
+  | "loader_invalid"
   | "loader_unavailable"
-  | "not_found"
+  | "output_not_found"
+  | "output_representation_changed"
   | "publication_invalid"
+  | "publication_noncanonical"
   | "read_failed"
-  | "read_limit_exceeded";
+  | "read_limit_exceeded"
+  | "state_input_invalid"
+  | "state_not_found"
+  | "state_unavailable";
 
 export class PublicationError extends Error {
   readonly code: PublicationErrorCode;
   readonly details: JsonObject | undefined;
+  override readonly cause: unknown;
 
   constructor(
     code: PublicationErrorCode,
@@ -36,8 +39,189 @@ export class PublicationError extends Error {
     super(message, options.cause === undefined ? undefined : { cause: options.cause });
     this.name = "PublicationError";
     this.code = code;
+    this.cause = options.cause;
     this.details = options.details === undefined ? undefined : freezeJsonObject(options.details);
   }
+}
+
+export interface NotebookProvenance {
+  readonly filename: string | null;
+  readonly documentSha256: string;
+}
+
+export interface ProducerProvenance {
+  readonly marimo: string;
+  readonly marimoExport: string;
+}
+
+export interface Provenance {
+  readonly cacheKey: string;
+  readonly returnReference: string | null;
+  readonly pythonType: string;
+}
+
+export interface AssetDescriptor {
+  readonly sha256: string;
+  readonly size: number;
+}
+
+export interface ScalarDescriptor {
+  readonly codec: "marimo.scalar.v1";
+  readonly mediaType: "application/vnd.marimo.scalar.v1+json";
+  readonly provenance: Provenance;
+  readonly value: ScalarValue;
+}
+
+export interface NumpyDescriptor {
+  readonly codec: "numpy.npy.v1";
+  readonly mediaType: "application/x-npy";
+  readonly provenance: Provenance;
+  readonly asset: AssetDescriptor;
+}
+
+export interface ArrowDescriptor {
+  readonly codec: "apache.arrow.file.v1";
+  readonly mediaType: "application/vnd.apache.arrow.file";
+  readonly provenance: Provenance;
+  readonly asset: AssetDescriptor;
+}
+
+export interface BlobAssetDescriptor {
+  readonly codec: "marimo.blob-asset.msgpack.v1";
+  readonly mediaType: string;
+  readonly filename: string | null;
+  readonly metadata: JsonObject;
+  readonly provenance: Provenance;
+  readonly asset: AssetDescriptor;
+}
+
+export type OutputDescriptor =
+  | ScalarDescriptor
+  | NumpyDescriptor
+  | ArrowDescriptor
+  | BlobAssetDescriptor;
+
+export interface MediaType {
+  readonly raw: string;
+  readonly essence: string;
+  readonly type: string;
+  readonly subtype: string;
+  readonly parameters: ReadonlyMap<string, string>;
+}
+
+export interface BlobAsset {
+  readonly data: Uint8Array;
+  readonly mediaType: MediaType;
+  readonly filename: string | null;
+  readonly metadata: JsonObject;
+}
+
+export interface OutputPayloadMap {
+  readonly "marimo.scalar.v1": ScalarValue;
+  readonly "numpy.npy.v1": Uint8Array;
+  readonly "apache.arrow.file.v1": Uint8Array;
+  readonly "marimo.blob-asset.msgpack.v1": BlobAsset;
+}
+
+export type OutputCodec = keyof OutputPayloadMap;
+
+export type DescriptorFor<C extends OutputCodec> = C extends "marimo.scalar.v1"
+  ? ScalarDescriptor
+  : C extends "numpy.npy.v1"
+    ? NumpyDescriptor
+    : C extends "apache.arrow.file.v1"
+      ? ArrowDescriptor
+      : C extends "marimo.blob-asset.msgpack.v1"
+        ? BlobAssetDescriptor
+        : never;
+
+export interface OutputLoader<C extends OutputCodec, T> {
+  readonly codec: C;
+  accepts(descriptor: DescriptorFor<C>, mediaType: MediaType): boolean;
+  load(input: {
+    readonly descriptor: DescriptorFor<C>;
+    readonly mediaType: MediaType;
+    readonly payload: OutputPayloadMap[C];
+    readonly signal?: AbortSignal;
+  }): T | Promise<T>;
+}
+
+export type AnyOutputLoader = {
+  [C in OutputCodec]: OutputLoader<C, unknown>;
+}[OutputCodec];
+
+export type BlobAssetLoader<T> = OutputLoader<"marimo.blob-asset.msgpack.v1", T>;
+
+export interface BlobAssetLoadInput {
+  readonly descriptor: BlobAssetDescriptor;
+  readonly mediaType: MediaType;
+  readonly payload: BlobAsset;
+  readonly signal?: AbortSignal;
+}
+
+export interface OpenPublicationOptions {
+  readonly fetch?: typeof globalThis.fetch;
+  readonly signal?: AbortSignal;
+}
+
+export interface LoadOptions {
+  readonly signal?: AbortSignal;
+  readonly maxBytes?: number;
+}
+
+export interface VerifyOptions extends LoadOptions {
+  readonly maxTotalBytes?: number;
+}
+
+export interface VerificationResult {
+  readonly states: number;
+  readonly outputs: number;
+  readonly assets: number;
+  readonly bytesVerified: number;
+}
+
+export interface Publication {
+  readonly base: URL;
+  readonly notebook: NotebookProvenance;
+  readonly producer: ProducerProvenance;
+  readonly inputNames: readonly string[];
+  readonly outputNames: readonly string[];
+  states(): readonly PublishedState[];
+  state(name: string): PublishedState;
+  resolve(inputs: JsonObject): PublishedState;
+  verify(options?: VerifyOptions): Promise<VerificationResult>;
+}
+
+export interface PublishedState {
+  readonly publication: Publication;
+  readonly name: string;
+  readonly fingerprint: string;
+  readonly inputs: JsonObject;
+  outputs(): readonly PublishedOutput[];
+  output(name: string): PublishedOutput;
+  resolve(patch: JsonObject): PublishedState;
+}
+
+export interface PublishedOutput {
+  readonly state: PublishedState;
+  readonly name: string;
+  readonly codec: OutputCodec;
+  readonly mediaType: MediaType;
+  readonly descriptor: OutputDescriptor;
+  load<C extends OutputCodec, T>(loader: OutputLoader<C, T>, options?: LoadOptions): Promise<T>;
+}
+
+export interface MountedView {
+  dispose(): void | Promise<void>;
+}
+
+export interface MountableValue {
+  mount(
+    element: HTMLElement,
+    options?: {
+      readonly signal?: AbortSignal;
+    },
+  ): Promise<MountedView>;
 }
 
 export function freezeJsonObject(value: JsonObject): JsonObject {

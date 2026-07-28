@@ -1,207 +1,236 @@
 import { decodeBlobAsset } from "./blob-asset.js";
-import { verifyBytes } from "./integrity.js";
-import type { FormatLoader, FormatLoaderContext, JsonDecoder, MountedView } from "./loader.js";
+import { sha256Hex, validateNativeFile, verifyBytes } from "./integrity.js";
+import { resolveOutputLoader } from "./loader.js";
+import { parseMediaType } from "./media-type.js";
 import {
+  canonicalJson,
   compareUnicodeScalarStrings,
-  isFormatId,
-  parseJsonValue,
-  parsePublicationManifest,
+  parsePublicationIndex,
+  portableJsonObject,
 } from "./schema.js";
-import { jsonValueLimit, parseStrictJson, trimJsonWhitespace } from "./strict-json.js";
+import type { ParsedPublicationIndex, ParsedState } from "./schema.js";
+import { parseStrictJson } from "./strict-json.js";
+import { fetchBytes, normalizeBase } from "./transport.js";
 import type {
-  CacheAssetRef,
-  ManifestFormat,
-  ManifestOutput,
-  ManifestVariant,
-  PublicationManifest,
-} from "./schema.js";
-import { enforceLimit, httpSource, readLimit } from "./source.js";
-import type { HttpSourceOptions, PublicationSource } from "./source.js";
-import type { JsonObject, JsonValue, ReadOptions } from "./types.js";
+  AnyOutputLoader,
+  JsonObject,
+  JsonValue,
+  LoadOptions,
+  OpenPublicationOptions,
+  OutputCodec,
+  OutputDescriptor,
+  OutputLoader,
+  OutputPayloadMap,
+  Publication,
+  PublishedOutput,
+  PublishedState,
+  VerificationResult,
+  VerifyOptions,
+} from "./types.js";
 import { PublicationError } from "./types.js";
-import type { DecodedBlobAsset } from "./blob-asset.js";
 
-const DEFAULT_INDEX_MAX_BYTES = 16 * 1024 * 1024;
-const DEFAULT_ASSET_MAX_BYTES = 64 * 1024 * 1024;
-const MAX_SELECTOR_NAMES = 16;
-const MAX_SELECTOR_UTF8_BYTES = 2_048;
-const MAX_SELECTOR_MESSAGE_CODE_POINTS = 4_096;
-
-export interface OpenPublicationOptions extends HttpSourceOptions {
-  readonly loaders?: readonly FormatLoader[];
-  readonly signal?: AbortSignal;
-  readonly maxIndexBytes?: number;
-  readonly maxAssetBytes?: number;
-}
-
-export interface NotebookProvenance {
-  readonly filename: string;
-  readonly documentSha256: string;
-}
-
-export interface ProducerProvenance {
-  readonly marimo: string;
-  readonly marimoExport: string;
-}
-
-export interface Publication {
-  readonly notebook: NotebookProvenance;
-  readonly producer: ProducerProvenance;
-  variants(): readonly PublishedVariant[];
-  variant(name: string): PublishedVariant;
-}
-
-export interface PublishedVariant {
-  readonly name: string;
-  readonly controls: JsonObject;
-  outputs(): readonly PublishedOutput[];
-  output(name: string): PublishedOutput;
-}
-
-export interface PublishedOutput {
-  readonly name: string;
-  formats(): readonly PublishedFormat[];
-  format(name: string): PublishedFormat;
-}
-
-export interface PublishedFormat {
-  readonly name: string;
-  readonly formatId: string;
-  readonly mediaType: string;
-  readonly metadata: JsonObject;
-  filename(options?: ReadOptions): Promise<string | null>;
-  bytes(options?: ReadOptions): Promise<Uint8Array>;
-  text(options?: ReadOptions): Promise<string>;
-  json(options?: ReadOptions): Promise<JsonValue>;
-  json<T>(decode: JsonDecoder<T>, options?: ReadOptions): Promise<T>;
-  blob(options?: ReadOptions): Promise<Blob>;
-  load<T>(loader: FormatLoader<T>, options?: ReadOptions): Promise<T>;
-  mount(element: HTMLElement, options?: ReadOptions): Promise<MountedView>;
-}
+const INDEX_MAX_BYTES = 16 * 1024 * 1024;
+const INDEX_MAX_VALUES = 2_000_000;
+const DEFAULT_ASSET_MAX_BYTES = 512 * 1024 * 1024;
+const HARD_ASSET_MAX_BYTES = 2_147_483_647;
+const DEFAULT_VERIFY_MAX_BYTES = 2 * 1024 * 1024 * 1024;
+const encoder = new TextEncoder();
+const decoder = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
 
 export async function openPublication(
-  root: string | URL,
+  base: string | URL,
   options: OpenPublicationOptions = {},
 ): Promise<Publication> {
-  options.signal?.throwIfAborted();
-  const indexLimit = openLimit(options.maxIndexBytes, DEFAULT_INDEX_MAX_BYTES, "maxIndexBytes");
-  const assetLimit = openLimit(options.maxAssetBytes, DEFAULT_ASSET_MAX_BYTES, "maxAssetBytes");
-  const source = httpSource(root, {
-    ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
-    ...(options.headers === undefined ? {} : { headers: options.headers }),
-  });
-  return openPublicationFromSource(source, {
-    ...(options.loaders === undefined ? {} : { loaders: options.loaders }),
+  throwIfAborted(options.signal);
+  const normalized = normalizeBase(base);
+  const fetcher = options.fetch ?? globalThis.fetch;
+  if (typeof fetcher !== "function") throw new TypeError("A fetch implementation is required.");
+  const bytes = await fetchBytes(fetcher, new URL("index.json", normalized), "index.json", {
+    maxBytes: INDEX_MAX_BYTES,
     ...(options.signal === undefined ? {} : { signal: options.signal }),
-    indexLimit,
-    assetLimit,
   });
+  const wire = decodeCanonicalIndex(bytes);
+  const parsed = parsePublicationIndex(wire);
+  await validateFingerprints(parsed, options.signal);
+  return new PublicationValue(normalized, parsed, fetcher);
 }
 
-interface SourceOpenOptions {
-  readonly loaders?: readonly FormatLoader[];
-  readonly signal?: AbortSignal;
-  readonly indexLimit?: number;
-  readonly assetLimit?: number;
-}
-
-export async function openPublicationFromSource(
-  source: PublicationSource,
-  options: SourceOpenOptions = {},
-): Promise<Publication> {
-  options.signal?.throwIfAborted();
-  const indexLimit = openLimit(options.indexLimit, DEFAULT_INDEX_MAX_BYTES, "indexLimit");
-  const assetLimit = openLimit(options.assetLimit, DEFAULT_ASSET_MAX_BYTES, "assetLimit");
-  const loaders = loaderRegistry(options.loaders ?? []);
-  const bytes = new Uint8Array(
-    await source.read("index.json", {
-      ...(options.signal === undefined ? {} : { signal: options.signal }),
-      maxBytes: indexLimit,
-    }),
-  );
-  options.signal?.throwIfAborted();
-  let input: unknown;
+function decodeCanonicalIndex(bytes: Uint8Array): unknown {
+  let value: unknown;
   try {
-    input = parseStrictJson(decodeUtf8(trimJsonWhitespace(bytes)));
+    value = parseStrictJson(decoder.decode(bytes), INDEX_MAX_VALUES);
   } catch (error) {
     throw new PublicationError(
       "publication_invalid",
-      "Publication index must contain UTF-8 JSON.",
-      { cause: error },
+      "Publication index must be strict UTF-8 JSON.",
+      {
+        cause: error,
+      },
     );
   }
-  const manifest = parsePublicationManifest(input);
-  const reader = new AssetReader(source, assetLimit);
-  return new PublicationValue(manifest, reader, loaders);
+  let canonical: Uint8Array;
+  try {
+    canonical = encoder.encode(canonicalJson(value as JsonValue));
+  } catch (error) {
+    if (error instanceof PublicationError) throw error;
+    throw new PublicationError("publication_invalid", "Publication index JSON is invalid.", {
+      cause: error,
+    });
+  }
+  if (!equalBytes(bytes, canonical)) {
+    throw new PublicationError(
+      "publication_noncanonical",
+      "Publication index is not canonical JSON.",
+    );
+  }
+  return value;
+}
+
+async function validateFingerprints(
+  index: ParsedPublicationIndex,
+  signal: AbortSignal | undefined,
+): Promise<void> {
+  await Promise.all(
+    Object.entries(index.states).map(async ([name, state]) => {
+      throwIfAborted(signal);
+      const actual = await sha256Hex(encoder.encode(canonicalJson(state.inputs)));
+      throwIfAborted(signal);
+      if (actual !== state.fingerprint) {
+        throw new PublicationError(
+          "publication_invalid",
+          `State ${JSON.stringify(name)} fingerprint does not match its inputs.`,
+          { details: { state: name } },
+        );
+      }
+    }),
+  );
 }
 
 class PublicationValue implements Publication {
-  readonly notebook: NotebookProvenance;
-  readonly producer: ProducerProvenance;
-  readonly #variants: readonly PublishedVariantValue[];
-  readonly #byName: ReadonlyMap<string, PublishedVariantValue>;
+  readonly base: URL;
+  readonly notebook: ParsedPublicationIndex["notebook"];
+  readonly producer: ParsedPublicationIndex["producer"];
+  readonly inputNames: readonly string[];
+  readonly outputNames: readonly string[];
+  readonly #states: readonly PublishedStateValue[];
+  readonly #statesByName: ReadonlyMap<string, PublishedStateValue>;
+  readonly #statesByInputs: ReadonlyMap<string, PublishedStateValue>;
+  readonly #reader: AssetReader;
 
-  constructor(
-    manifest: PublicationManifest,
-    reader: AssetReader,
-    loaders: ReadonlyMap<string, FormatLoader>,
-  ) {
-    this.notebook = Object.freeze({
-      filename: manifest.notebook.filename,
-      documentSha256: manifest.notebook.document_sha256,
-    });
-    this.producer = Object.freeze({
-      marimo: manifest.producer.marimo,
-      marimoExport: manifest.producer.marimo_export,
-    });
-    this.#variants = Object.freeze(
-      sortedEntries(manifest.variants).map(
-        ([name, variant]) => new PublishedVariantValue(name, variant, reader, loaders),
-      ),
+  constructor(base: URL, index: ParsedPublicationIndex, fetcher: typeof globalThis.fetch) {
+    this.base = new URL(base.href);
+    this.notebook = index.notebook;
+    this.producer = index.producer;
+    this.inputNames = index.inputs;
+    this.outputNames = index.outputs;
+    this.#reader = new AssetReader(this.base, fetcher);
+    this.#states = Object.freeze(
+      Object.entries(index.states)
+        .sort(([left], [right]) => compareUnicodeScalarStrings(left, right))
+        .map(([name, state]) => new PublishedStateValue(this, name, state, this.#reader)),
     );
-    this.#byName = new Map(this.#variants.map((variant) => [variant.name, variant]));
+    this.#statesByName = new Map(this.#states.map((state) => [state.name, state]));
+    this.#statesByInputs = new Map(
+      this.#states.map((state) => [canonicalJson(state.inputs), state]),
+    );
+    Object.freeze(this.base);
     Object.freeze(this);
   }
 
-  variants(): readonly PublishedVariant[] {
-    return this.#variants;
+  states(): readonly PublishedState[] {
+    return this.#states;
   }
 
-  variant(name: string): PublishedVariant {
-    const variant = this.#byName.get(name);
-    if (variant === undefined) {
-      throw missing("variant", name, this.#byName.keys());
+  state(name: string): PublishedState {
+    const state = this.#statesByName.get(name);
+    if (state === undefined) {
+      throw new PublicationError(
+        "state_not_found",
+        `State ${JSON.stringify(name)} was not found.`,
+        {
+          details: {
+            requested: String(name).slice(0, 255),
+            available: this.#states.slice(0, 16).map((item) => item.name),
+          },
+        },
+      );
     }
-    return variant;
+    return state;
+  }
+
+  resolve(inputs: JsonObject): PublishedState {
+    const normalized = normalizeResolutionObject(inputs, "inputs");
+    requireCompleteInputs(normalized, this.inputNames);
+    return this.resolveNormalized(normalized);
+  }
+
+  resolveNormalized(inputs: JsonObject): PublishedStateValue {
+    const state = this.#statesByInputs.get(canonicalJson(inputs));
+    if (state === undefined) {
+      throw new PublicationError(
+        "state_unavailable",
+        "The requested input vector is absent from this publication.",
+        { details: { fingerprint: "unavailable" } },
+      );
+    }
+    return state;
+  }
+
+  async verify(options: VerifyOptions = {}): Promise<VerificationResult> {
+    const maxBytes = assetLimit(options.maxBytes);
+    const maxTotalBytes = totalLimit(options.maxTotalBytes);
+    const assets = uniqueAssets(this.#states);
+    const total = assets.reduce((sum, item) => sum + item.descriptor.asset.size, 0);
+    if (total > maxTotalBytes) {
+      throw new PublicationError(
+        "read_limit_exceeded",
+        "Publication assets exceed the verification byte limit.",
+        { details: { declaredBytes: total, maxTotalBytes } },
+      );
+    }
+    for (const item of assets) {
+      throwIfAborted(options.signal);
+      // Verification is sequential so one run does not retain every asset.
+      // oxlint-disable-next-line no-await-in-loop
+      await this.#reader.payload(item.descriptor, {
+        maxBytes,
+        ...(options.signal === undefined ? {} : { signal: options.signal }),
+      });
+    }
+    return Object.freeze({
+      states: this.#states.length,
+      outputs: this.outputNames.length,
+      assets: assets.length,
+      bytesVerified: total,
+    });
   }
 }
 
-function openLimit(input: number | undefined, fallback: number, name: string): number {
-  const limit = readLimit(input) ?? fallback;
-  if (limit === 0) throw new TypeError(`${name} must be a positive safe integer.`);
-  return limit;
-}
-
-class PublishedVariantValue implements PublishedVariant {
+class PublishedStateValue implements PublishedState {
+  readonly publication: PublicationValue;
   readonly name: string;
-  readonly controls: JsonObject;
+  readonly fingerprint: string;
+  readonly inputs: JsonObject;
   readonly #outputs: readonly PublishedOutputValue[];
-  readonly #byName: ReadonlyMap<string, PublishedOutputValue>;
+  readonly #outputsByName: ReadonlyMap<string, PublishedOutputValue>;
 
   constructor(
+    publication: PublicationValue,
     name: string,
-    variant: ManifestVariant,
+    state: ParsedState,
     reader: AssetReader,
-    loaders: ReadonlyMap<string, FormatLoader>,
   ) {
+    this.publication = publication;
     this.name = name;
-    this.controls = variant.controls;
+    this.fingerprint = state.fingerprint;
+    this.inputs = state.inputs;
     this.#outputs = Object.freeze(
-      sortedEntries(variant.outputs).map(
-        ([outputName, output]) => new PublishedOutputValue(outputName, output, reader, loaders),
+      publication.outputNames.map(
+        (outputName) =>
+          new PublishedOutputValue(this, outputName, state.outputs[outputName]!, reader),
       ),
     );
-    this.#byName = new Map(this.#outputs.map((output) => [output.name, output]));
+    this.#outputsByName = new Map(this.#outputs.map((output) => [output.name, output]));
     Object.freeze(this);
   }
 
@@ -210,553 +239,235 @@ class PublishedVariantValue implements PublishedVariant {
   }
 
   output(name: string): PublishedOutput {
-    const output = this.#byName.get(name);
-    if (output === undefined) throw missing("output", name, this.#byName.keys());
+    const output = this.#outputsByName.get(name);
+    if (output === undefined) {
+      throw new PublicationError(
+        "output_not_found",
+        `Output ${JSON.stringify(name)} was not found.`,
+        {
+          details: {
+            requested: String(name).slice(0, 255),
+            available: this.#outputs.slice(0, 16).map((item) => item.name),
+          },
+        },
+      );
+    }
     return output;
+  }
+
+  resolve(patch: JsonObject): PublishedState {
+    const normalized = normalizeResolutionObject(patch, "patch");
+    const keys = Object.keys(normalized);
+    if (keys.length === 0) return this;
+    const allowed = new Set(this.publication.inputNames);
+    if (keys.some((key) => !allowed.has(key))) {
+      throw new PublicationError(
+        "state_input_invalid",
+        "State patch contains an unknown input name.",
+        { details: { keys: keys.slice(0, 16) } },
+      );
+    }
+    const merged = Object.freeze(
+      Object.fromEntries(
+        this.publication.inputNames.map((name) => [
+          name,
+          Object.hasOwn(normalized, name) ? normalized[name]! : this.inputs[name]!,
+        ]),
+      ),
+    ) as JsonObject;
+    return this.publication.resolveNormalized(merged);
   }
 }
 
 class PublishedOutputValue implements PublishedOutput {
+  readonly state: PublishedStateValue;
   readonly name: string;
-  readonly #formats: readonly PublishedFormatValue[];
-  readonly #byName: ReadonlyMap<string, PublishedFormatValue>;
-
-  constructor(
-    name: string,
-    output: ManifestOutput,
-    reader: AssetReader,
-    loaders: ReadonlyMap<string, FormatLoader>,
-  ) {
-    this.name = name;
-    this.#formats = Object.freeze(
-      sortedEntries(output.formats).map(
-        ([formatName, format]) =>
-          new PublishedFormatValue(formatName, format, reader, loaders.get(format.format_id)),
-      ),
-    );
-    this.#byName = new Map(this.#formats.map((format) => [format.name, format]));
-    Object.freeze(this);
-  }
-
-  formats(): readonly PublishedFormat[] {
-    return this.#formats;
-  }
-
-  format(name: string): PublishedFormat {
-    const format = this.#byName.get(name);
-    if (format === undefined) throw missing("format", name, this.#byName.keys());
-    return format;
-  }
-}
-
-class PublishedFormatValue implements PublishedFormat {
-  readonly name: string;
-  readonly formatId: string;
-  readonly mediaType: string;
-  readonly metadata: JsonObject;
-  readonly #manifest: ManifestFormat;
+  readonly codec: OutputCodec;
+  readonly mediaType: ReturnType<typeof parseMediaType>;
+  readonly descriptor: OutputDescriptor;
   readonly #reader: AssetReader;
-  readonly #registeredLoader: FormatLoader | undefined;
 
   constructor(
+    state: PublishedStateValue,
     name: string,
-    manifest: ManifestFormat,
+    descriptor: OutputDescriptor,
     reader: AssetReader,
-    registeredLoader: FormatLoader | undefined,
   ) {
+    this.state = state;
     this.name = name;
-    this.formatId = manifest.format_id;
-    this.mediaType = manifest.media_type;
-    this.metadata = manifest.metadata;
-    this.#manifest = manifest;
+    this.codec = descriptor.codec;
+    this.mediaType = parseMediaType(descriptor.mediaType);
+    this.descriptor = descriptor;
     this.#reader = reader;
-    this.#registeredLoader = registeredLoader;
     Object.freeze(this);
   }
 
-  async bytes(options: ReadOptions = {}): Promise<Uint8Array> {
-    return (await this.#asset(options)).data;
-  }
-
-  async filename(options: ReadOptions = {}): Promise<string | null> {
-    return (await this.#asset(options)).filename;
-  }
-
-  async text(options: ReadOptions = {}): Promise<string> {
-    const bytes = await this.bytes(options);
-    try {
-      return decodeText(bytes, this.mediaType);
-    } catch (error) {
-      options.signal?.throwIfAborted();
-      throw new PublicationError(
-        "decode_failed",
-        `Format ${JSON.stringify(this.name)} cannot be decoded using its media type charset.`,
-        { cause: error },
-      );
-    }
-  }
-
-  json(options?: ReadOptions): Promise<JsonValue>;
-  json<T>(decode: JsonDecoder<T>, options?: ReadOptions): Promise<T>;
-  async json<T>(
-    decodeOrOptions: JsonDecoder<T> | ReadOptions = {},
-    decoderOptions: ReadOptions = {},
-  ): Promise<T | JsonValue> {
-    const options = typeof decodeOrOptions === "function" ? decoderOptions : decodeOrOptions;
-    options.signal?.throwIfAborted();
-    const maximumValues = jsonValueLimit(options.maxJsonValues);
-    const bytes = await this.bytes(options);
-    let input: unknown;
-    try {
-      input = parseStrictJson(decodeUtf8(trimJsonWhitespace(bytes)), maximumValues);
-    } catch (error) {
-      throw new PublicationError(
-        "decode_failed",
-        `Format ${JSON.stringify(this.name)} does not contain valid JSON.`,
-        { cause: error },
-      );
-    }
-    let value: JsonValue;
-    try {
-      value = parseJsonValue(input, `format ${JSON.stringify(this.name)}`);
-    } catch (error) {
-      throw new PublicationError(
-        "decode_failed",
-        `Format ${JSON.stringify(this.name)} contains values outside the JSON contract.`,
-        { cause: error },
-      );
-    }
-    if (typeof decodeOrOptions !== "function") return value;
-    const decoded = decodeOrOptions(value);
-    options.signal?.throwIfAborted();
-    return decoded;
-  }
-
-  async blob(options: ReadOptions = {}): Promise<Blob> {
-    const bytes = await this.bytes(options);
-    return new Blob([bytes.buffer as ArrayBuffer], { type: this.mediaType });
-  }
-
-  async load<T>(loader: FormatLoader<T>, options: ReadOptions = {}): Promise<T> {
-    if (loader.formatId !== this.formatId) {
-      throw new PublicationError(
-        "loader_unavailable",
-        `Loader ${JSON.stringify(loader.formatId)} cannot read ${JSON.stringify(this.formatId)}.`,
-        { details: { loaderFormatId: loader.formatId, formatId: this.formatId } },
-      );
-    }
-    options.signal?.throwIfAborted();
-    jsonValueLimit(options.maxJsonValues);
-    const asset = await this.#asset(options);
-    options.signal?.throwIfAborted();
-    const loading = Promise.resolve().then(() => loader.load(new LoaderContext(asset, options)));
-    const value = await waitForAbort(loading, options.signal);
-    options.signal?.throwIfAborted();
-    return value;
-  }
-
-  async mount(element: HTMLElement, options: ReadOptions = {}): Promise<MountedView> {
-    const loader = this.#registeredLoader;
-    if (loader?.mount === undefined) {
-      throw new PublicationError(
-        "loader_unavailable",
-        `No mounting loader is registered for ${JSON.stringify(this.formatId)}.`,
-        { details: { formatId: this.formatId } },
-      );
-    }
-    options.signal?.throwIfAborted();
-    jsonValueLimit(options.maxJsonValues);
-    const asset = await this.#asset(options);
-    options.signal?.throwIfAborted();
-    const mounting = Promise.resolve().then(() =>
-      loader.mount!(new LoaderContext(asset, options), element),
-    );
-    const mounted = await waitForAbort(mounting, options.signal, disposeLateMount);
-    if (!isMountedView(mounted)) {
-      options.signal?.throwIfAborted();
-      throw new PublicationError(
-        "loader_unavailable",
-        `Loader ${JSON.stringify(loader.formatId)} returned an invalid mounted view.`,
-      );
-    }
-    if (options.signal?.aborted === true) {
-      try {
-        void Promise.resolve(mounted.dispose()).catch(() => undefined);
-      } catch {
-        // Cancellation remains authoritative when mounted cleanup also fails.
-      }
-      options.signal.throwIfAborted();
-    }
-    return mounted;
-  }
-
-  async #asset(options: ReadOptions): Promise<DecodedBlobAsset> {
-    const maxBytes = readLimit(options.maxBytes);
-    const asset = await this.#reader.read(this.#manifest, options.signal);
-    enforceLimit(asset.data.byteLength, maxBytes, this.#manifest.asset.key);
-    return asset;
-  }
-}
-
-async function waitForAbort<T>(
-  task: Promise<T>,
-  signal: AbortSignal | undefined,
-  afterAbort?: (task: Promise<T>) => void,
-): Promise<T> {
-  if (signal === undefined) return task;
-  signal.throwIfAborted();
-  let onAbort: (() => void) | undefined;
-  const aborted = new Promise<never>((_resolve, reject) => {
-    onAbort = () => {
-      try {
-        signal.throwIfAborted();
-      } catch (error) {
-        reject(error);
-      }
-    };
-    signal.addEventListener("abort", onAbort, { once: true });
-  });
-  try {
-    const value = await Promise.race([task, aborted]);
-    signal.throwIfAborted();
-    return value;
-  } catch (error) {
-    if (signal.aborted) afterAbort?.(task);
-    throw error;
-  } finally {
-    if (onAbort !== undefined) signal.removeEventListener("abort", onAbort);
-  }
-}
-
-function disposeLateMount(mounting: Promise<unknown>): void {
-  void mounting.then(
-    async (mounted) => {
-      try {
-        if (!isMountedView(mounted)) return;
-        await mounted.dispose();
-      } catch (error) {
-        console.error("Mounted view cleanup failed after cancellation.", error);
-      }
-    },
-    () => undefined,
-  );
-}
-
-function isMountedView(value: unknown): value is MountedView {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    typeof (value as { readonly dispose?: unknown }).dispose === "function"
-  );
-}
-
-class LoaderContext implements FormatLoaderContext {
-  readonly formatId: string;
-  readonly mediaType: string;
-  readonly metadata: JsonObject;
-  readonly filename: string | null;
-  readonly size: number;
-  readonly signal: AbortSignal | undefined;
-  readonly #data: Uint8Array;
-  readonly #maxJsonValues: number;
-
-  constructor(asset: DecodedBlobAsset, options: ReadOptions) {
-    this.formatId = asset.formatId;
-    this.mediaType = asset.mediaType;
-    this.metadata = asset.metadata;
-    this.filename = asset.filename;
-    this.size = asset.data.byteLength;
-    this.signal = options.signal;
-    this.#data = asset.data;
-    this.#maxJsonValues = jsonValueLimit(options.maxJsonValues);
-    Object.freeze(this);
-  }
-
-  async bytes(): Promise<Uint8Array> {
-    this.signal?.throwIfAborted();
-    return new Uint8Array(this.#data);
-  }
-
-  async text(): Promise<string> {
-    try {
-      return decodeText(await this.bytes(), this.mediaType);
-    } catch (error) {
-      this.signal?.throwIfAborted();
-      throw new PublicationError(
-        "decode_failed",
-        "Projection data cannot be decoded using its media type charset.",
-        { cause: error },
-      );
-    }
-  }
-
-  json(): Promise<JsonValue>;
-  json<T>(decode: JsonDecoder<T>): Promise<T>;
-  async json<T>(decode?: JsonDecoder<T>): Promise<T | JsonValue> {
-    let input: unknown;
-    try {
-      input = parseStrictJson(
-        decodeUtf8(trimJsonWhitespace(await this.bytes())),
-        this.#maxJsonValues,
-      );
-    } catch (error) {
-      if (error instanceof PublicationError) throw error;
-      throw new PublicationError("decode_failed", "Projection data is not valid JSON.", {
-        cause: error,
-      });
-    }
-    let value: JsonValue;
-    try {
-      value = parseJsonValue(input, "projection data");
-    } catch (error) {
-      throw new PublicationError(
-        "decode_failed",
-        "Projection data contains values outside the JSON contract.",
-        { cause: error },
-      );
-    }
-    return decode === undefined ? value : decode(value);
-  }
-
-  async blob(): Promise<Blob> {
-    const bytes = await this.bytes();
-    const buffer = bytes.buffer.slice(
-      bytes.byteOffset,
-      bytes.byteOffset + bytes.byteLength,
-    ) as ArrayBuffer;
-    return new Blob([buffer], { type: this.mediaType });
-  }
-}
-
-class AssetReader {
-  readonly #source: PublicationSource;
-  readonly #maxAssetBytes: number;
-  readonly #pending = new Map<string, PendingAsset>();
-
-  constructor(source: PublicationSource, maxAssetBytes: number) {
-    this.#source = source;
-    this.#maxAssetBytes = maxAssetBytes;
-  }
-
-  async read(format: ManifestFormat, signal?: AbortSignal): Promise<DecodedBlobAsset> {
-    signal?.throwIfAborted();
-    enforceLimit(format.asset.size, this.#maxAssetBytes, format.asset.key);
-    const identity = assetIdentity(format.asset);
-    let pending = this.#pending.get(identity);
-    if (pending === undefined) {
-      const controller = new AbortController();
-      pending = {
-        controller,
-        consumers: 0,
-        settled: false,
-        promise: this.#read(format, controller.signal),
-      };
-      this.#pending.set(identity, pending);
-      const settle = () => {
-        pending!.settled = true;
-        if (this.#pending.get(identity) === pending) this.#pending.delete(identity);
-      };
-      void pending.promise.then(settle, settle);
-    }
-    pending.consumers += 1;
-    try {
-      return cloneAsset(await waitForAbort(pending.promise, signal));
-    } finally {
-      pending.consumers -= 1;
-      if (pending.consumers === 0 && !pending.settled) {
-        if (this.#pending.get(identity) === pending) this.#pending.delete(identity);
-        pending.controller.abort(signal?.reason);
-      }
-    }
-  }
-
-  async #read(format: ManifestFormat, signal?: AbortSignal): Promise<DecodedBlobAsset> {
-    const ref = format.asset;
-    const envelope = await this.#source.read(`cache/${ref.key}`, {
-      ...(signal === undefined ? {} : { signal }),
-      maxBytes: ref.size,
+  async load<C extends OutputCodec, T>(
+    loader: OutputLoader<C, T>,
+    options: LoadOptions = {},
+  ): Promise<T> {
+    const selected = resolveOutputLoader(this, [loader as AnyOutputLoader]);
+    const payload = await this.#reader.payload(this.descriptor, {
+      maxBytes: assetLimit(options.maxBytes),
+      ...(options.signal === undefined ? {} : { signal: options.signal }),
     });
-    signal?.throwIfAborted();
-    await verifyBytes(envelope, ref, `Cache asset ${JSON.stringify(ref.key)}`);
-    signal?.throwIfAborted();
-    return decodeBlobAsset(envelope, format);
-  }
-}
-
-interface PendingAsset {
-  readonly controller: AbortController;
-  readonly promise: Promise<DecodedBlobAsset>;
-  consumers: number;
-  settled: boolean;
-}
-
-function loaderRegistry(loaders: readonly FormatLoader[]): ReadonlyMap<string, FormatLoader> {
-  const registry = new Map<string, FormatLoader>();
-  for (const loader of loaders) {
-    if (
-      typeof loader !== "object" ||
-      loader === null ||
-      !isFormatId(loader.formatId) ||
-      typeof loader.load !== "function" ||
-      (loader.mount !== undefined && typeof loader.mount !== "function")
-    ) {
-      throw new TypeError(
-        "Each format loader must define a formatId, load function, and optional mount function.",
-      );
-    }
-    if (registry.has(loader.formatId)) {
-      throw new TypeError(`A loader is already registered for ${JSON.stringify(loader.formatId)}.`);
-    }
-    registry.set(
-      loader.formatId,
-      Object.freeze({
-        formatId: loader.formatId,
-        load: loader.load.bind(loader),
-        ...(loader.mount === undefined ? {} : { mount: loader.mount.bind(loader) }),
+    throwIfAborted(options.signal);
+    const call = selected as unknown as {
+      load(input: {
+        readonly descriptor: OutputDescriptor;
+        readonly mediaType: ReturnType<typeof parseMediaType>;
+        readonly payload: OutputPayloadMap[OutputCodec];
+        readonly signal?: AbortSignal;
+      }): unknown;
+    };
+    const result = Promise.resolve(
+      call.load({
+        descriptor: this.descriptor,
+        mediaType: this.mediaType,
+        payload,
+        ...(options.signal === undefined ? {} : { signal: options.signal }),
       }),
     );
+    return (await waitForLoader(result, options.signal)) as T;
   }
-  return registry;
 }
 
-function assetIdentity(ref: CacheAssetRef): string {
-  return `${ref.key}\0${ref.sha256}\0${ref.size}`;
-}
+type AssetOutputDescriptor = Exclude<OutputDescriptor, { readonly codec: "marimo.scalar.v1" }>;
 
-function cloneAsset(asset: DecodedBlobAsset): DecodedBlobAsset {
-  return Object.freeze({ ...asset, data: new Uint8Array(asset.data) });
-}
+class AssetReader {
+  readonly #base: URL;
+  readonly #fetch: typeof globalThis.fetch;
 
-function sortedEntries<T>(value: Readonly<Record<string, T>>): [string, T][] {
-  return Object.entries(value).sort(([left], [right]) => compareUnicodeScalarStrings(left, right));
-}
-
-function missing(kind: string, name: string, available: Iterable<string>): PublicationError {
-  const requested = utf8Prefix(name, MAX_SELECTOR_UTF8_BYTES);
-  const summary = summarizeAvailable(available);
-  const renderedNames = summary.names.map(quoteSelectorName).join(", ");
-  const omitted = summary.count - summary.names.length;
-  const renderedAvailable =
-    summary.count === 0
-      ? "none"
-      : `${renderedNames.length === 0 ? "..." : renderedNames}${
-          omitted === 0 ? "" : `, ... (+${omitted} more)`
-        }`;
-  const message = truncateCodePoints(
-    `${title(kind)} ${quoteSelectorName(requested.value)} is missing. Available ${kind}s: ${renderedAvailable}.`,
-    MAX_SELECTOR_MESSAGE_CODE_POINTS,
-  );
-  return new PublicationError("not_found", message, {
-    details: {
-      kind,
-      name: requested.value,
-      name_truncated: requested.truncated,
-      available: summary.names,
-      available_count: summary.count,
-      available_truncated: summary.names.length < summary.count,
-    },
-  });
-}
-
-function summarizeAvailable(available: Iterable<string>): {
-  readonly names: readonly string[];
-  readonly count: number;
-} {
-  const candidates: string[] = [];
-  let count = 0;
-  for (const name of available) {
-    count += 1;
-    candidates.push(name);
-    candidates.sort(compareUnicodeScalarStrings);
-    if (candidates.length > MAX_SELECTOR_NAMES) candidates.pop();
+  constructor(base: URL, fetcher: typeof globalThis.fetch) {
+    this.#base = base;
+    this.#fetch = fetcher;
   }
 
-  const names: string[] = [];
-  let bytes = 0;
-  for (const name of candidates) {
-    const size = utf8ByteLength(name);
-    if (bytes + size > MAX_SELECTOR_UTF8_BYTES) break;
-    names.push(name);
-    bytes += size;
-  }
-  return { names: Object.freeze(names), count };
-}
-
-function utf8Prefix(
-  value: string,
-  maxBytes: number,
-): {
-  readonly value: string;
-  readonly truncated: boolean;
-} {
-  let prefix = "";
-  let bytes = 0;
-  let consumedCodeUnits = 0;
-  for (const scalar of value) {
-    const size = utf8ByteLength(scalar);
-    if (bytes + size > maxBytes) break;
-    prefix += scalar;
-    bytes += size;
-    consumedCodeUnits += scalar.length;
-  }
-  return { value: prefix, truncated: consumedCodeUnits < value.length };
-}
-
-function utf8ByteLength(value: string): number {
-  let bytes = 0;
-  for (const scalar of value) {
-    const codePoint = scalar.codePointAt(0)!;
-    bytes += codePoint <= 0x7f ? 1 : codePoint <= 0x7ff ? 2 : codePoint <= 0xffff ? 3 : 4;
-  }
-  return bytes;
-}
-
-function quoteSelectorName(value: string): string {
-  return JSON.stringify(value).replace(
-    /[\u007f-\u009f]/gu,
-    (character) => `\\u${character.charCodeAt(0).toString(16).padStart(4, "0")}`,
-  );
-}
-
-function truncateCodePoints(value: string, maximum: number): string {
-  let prefix = "";
-  let count = 0;
-  for (const scalar of value) {
-    if (count >= maximum - 3) return `${prefix}...`;
-    prefix += scalar;
-    count += 1;
-  }
-  return prefix;
-}
-
-function title(value: string): string {
-  return `${value[0]!.toUpperCase()}${value.slice(1)}`;
-}
-
-function decodeText(bytes: Uint8Array, mediaType: string): string {
-  const encoding = mediaCharset(mediaType);
-  if (encoding !== undefined && encoding.toLowerCase() !== "utf-8") {
-    throw new TypeError("Portable publication text must use UTF-8.");
-  }
-  return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
-}
-
-function decodeUtf8(bytes: Uint8Array): string {
-  return new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(bytes);
-}
-
-function mediaCharset(mediaType: string): string | undefined {
-  for (const parameter of mediaType.split(";").slice(1)) {
-    const separator = parameter.indexOf("=");
-    if (separator < 0 || parameter.slice(0, separator).trim().toLowerCase() !== "charset") continue;
-    const value = parameter.slice(separator + 1).trim();
-    if (value.length === 0) throw new TypeError("The charset parameter must declare UTF-8.");
-    if (value.startsWith('"') && value.endsWith('"') && value.length >= 2) {
-      const unquoted = value.slice(1, -1);
-      if (unquoted.length === 0) throw new TypeError("The charset parameter must declare UTF-8.");
-      return unquoted;
+  async payload(
+    descriptor: OutputDescriptor,
+    options: { readonly maxBytes: number; readonly signal?: AbortSignal },
+  ): Promise<OutputPayloadMap[OutputCodec]> {
+    throwIfAborted(options.signal);
+    if (descriptor.codec === "marimo.scalar.v1") return descriptor.value;
+    if (descriptor.asset.size > options.maxBytes) {
+      throw new PublicationError(
+        "read_limit_exceeded",
+        "Publication asset exceeds the caller byte limit.",
+        {
+          details: {
+            declaredBytes: descriptor.asset.size,
+            maxBytes: options.maxBytes,
+          },
+        },
+      );
     }
-    return value;
+    const path = assetPath(descriptor.codec, descriptor.asset.sha256);
+    const bytes = await fetchBytes(this.#fetch, new URL(path, this.#base), path, {
+      maxBytes: options.maxBytes,
+      expectedBytes: descriptor.asset.size,
+      ...(options.signal === undefined ? {} : { signal: options.signal }),
+    });
+    throwIfAborted(options.signal);
+    await verifyBytes(bytes, descriptor.asset);
+    throwIfAborted(options.signal);
+    validateNativeFile(descriptor.codec, bytes);
+    if (descriptor.codec === "marimo.blob-asset.msgpack.v1") {
+      return decodeBlobAsset(bytes, descriptor);
+    }
+    return bytes;
   }
-  return undefined;
+}
+
+function assetPath(codec: AssetOutputDescriptor["codec"], digest: string): string {
+  const extension =
+    codec === "numpy.npy.v1" ? "npy" : codec === "apache.arrow.file.v1" ? "arrow" : "bin";
+  return `assets/${digest}.${extension}`;
+}
+
+function uniqueAssets(
+  states: readonly PublishedStateValue[],
+): readonly { readonly descriptor: AssetOutputDescriptor }[] {
+  const values = new Map<string, { readonly descriptor: AssetOutputDescriptor }>();
+  for (const state of states) {
+    for (const output of state.outputs()) {
+      if (output.descriptor.codec === "marimo.scalar.v1") continue;
+      const descriptor = output.descriptor as AssetOutputDescriptor;
+      values.set(`${descriptor.codec}\0${descriptor.asset.sha256}`, { descriptor });
+    }
+  }
+  return Object.freeze([...values.values()]);
+}
+
+function normalizeResolutionObject(input: unknown, label: string): JsonObject {
+  try {
+    return portableJsonObject(input, label);
+  } catch (error) {
+    throw new PublicationError("state_input_invalid", `State ${label} is invalid.`, {
+      cause: error,
+    });
+  }
+}
+
+function requireCompleteInputs(inputs: JsonObject, names: readonly string[]): void {
+  const expected = new Set(names);
+  const keys = Object.keys(inputs);
+  if (
+    keys.length !== names.length ||
+    keys.some((key) => !expected.has(key)) ||
+    names.some((name) => !Object.hasOwn(inputs, name))
+  ) {
+    throw new PublicationError(
+      "state_input_invalid",
+      "State inputs must equal the publication input name set.",
+      { details: { expected: names.slice(0, 16), actual: keys.slice(0, 16) } },
+    );
+  }
+}
+
+function assetLimit(value: number | undefined): number {
+  if (value === undefined) return DEFAULT_ASSET_MAX_BYTES;
+  if (!Number.isSafeInteger(value) || value <= 0 || value > HARD_ASSET_MAX_BYTES) {
+    throw new TypeError(`maxBytes must be an integer from 1 through ${HARD_ASSET_MAX_BYTES}.`);
+  }
+  return value;
+}
+
+function totalLimit(value: number | undefined): number {
+  if (value === undefined) return DEFAULT_VERIFY_MAX_BYTES;
+  if (!Number.isSafeInteger(value) || value < 0) {
+    throw new TypeError("maxTotalBytes must be a non-negative safe integer.");
+  }
+  return value;
+}
+
+async function waitForLoader<T>(promise: Promise<T>, signal: AbortSignal | undefined): Promise<T> {
+  if (signal === undefined) return promise;
+  throwIfAborted(signal);
+  let abort: (() => void) | undefined;
+  const aborted = new Promise<never>((_resolve, reject) => {
+    abort = () =>
+      reject(
+        new PublicationError("abort", "Publication output loading was aborted.", {
+          cause: signal.reason,
+        }),
+      );
+    signal.addEventListener("abort", abort, { once: true });
+  });
+  try {
+    return await Promise.race([promise, aborted]);
+  } finally {
+    if (abort !== undefined) signal.removeEventListener("abort", abort);
+  }
+}
+
+function throwIfAborted(signal: AbortSignal | undefined): void {
+  if (signal?.aborted) {
+    throw new PublicationError("abort", "Publication operation was aborted.", {
+      cause: signal.reason,
+    });
+  }
+}
+
+function equalBytes(left: Uint8Array, right: Uint8Array): boolean {
+  return left.byteLength === right.byteLength && left.every((byte, index) => byte === right[index]);
 }

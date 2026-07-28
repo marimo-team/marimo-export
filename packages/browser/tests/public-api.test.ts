@@ -1,9 +1,15 @@
-import { describe, expect, test } from "vite-plus/test";
+import { expect, test } from "vite-plus/test";
 
 import * as api from "../src/index.js";
 
-describe("browser public API", () => {
-  test("exposes one publication entrypoint and one error class", () => {
-    expect(Object.keys(api).sort()).toEqual(["PublicationError", "openPublication"]);
-  });
+test("exports the browser core contract", () => {
+  expect(Object.keys(api).sort()).toEqual([
+    "PublicationError",
+    "defineBlobAssetLoader",
+    "defineOutputLoader",
+    "imageLoader",
+    "openPublication",
+    "resolveOutputLoader",
+    "scalarLoader",
+  ]);
 });

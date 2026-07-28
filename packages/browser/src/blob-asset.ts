@@ -1,100 +1,58 @@
-import {
-  canonicalJson,
-  containsControlCharacter,
-  containsUnpairedSurrogate,
-  hasPythonBoundaryWhitespace,
-  isPortablePathComponent,
-  nonEmptyString,
-  parseJsonObject,
-} from "./schema.js";
-import type { JsonObject } from "./types.js";
+import { decode } from "@msgpack/msgpack";
+
+import { parseMediaType } from "./media-type.js";
+import { canonicalJson, portableJsonObject } from "./schema.js";
+import { validateCanonicalMessagePack } from "./strict-msgpack.js";
+import type { BlobAsset, BlobAssetDescriptor } from "./types.js";
 import { PublicationError } from "./types.js";
-import type { ManifestFormat } from "./schema.js";
-import { parseStrictJson, trimJsonWhitespace } from "./strict-json.js";
-import { decodeBlobAssetWire } from "./strict-msgpack.js";
 
-export interface DecodedBlobAsset {
-  readonly data: Uint8Array;
-  readonly mediaType: string;
-  readonly filename: string | null;
-  readonly formatId: string;
-  readonly metadata: JsonObject;
-}
+const EXPECTED_FIELDS = ["data", "media_type", "filename", "metadata"];
 
-export function decodeBlobAsset(bytes: Uint8Array, expected: ManifestFormat): DecodedBlobAsset {
-  let asset;
+export function decodeBlobAsset(bytes: Uint8Array, descriptor: BlobAssetDescriptor): BlobAsset {
   try {
-    asset = decodeBlobAssetWire(bytes);
-  } catch (error) {
-    throw new PublicationError("asset_invalid", "Cache asset is not valid MessagePack.", {
-      cause: error,
-    });
-  }
-
-  try {
-    const mediaType = nonEmptyString(asset.mediaType, "BlobAsset.media_type");
-    const filename = parseFilename(asset.filename);
-    const formatId = nonEmptyString(asset.formatId, "BlobAsset.metadata.format_id");
-    const metadata = parseMetadata(asset.metadataJson);
-
-    if (mediaType !== expected.media_type) {
-      throw invalid("BlobAsset.media_type does not match the publication index.");
+    validateCanonicalMessagePack(bytes);
+    const decoded = decode(bytes);
+    if (decoded === null || typeof decoded !== "object" || Array.isArray(decoded)) {
+      throw new TypeError("BlobAsset must be a map.");
     }
-    if (formatId !== expected.format_id) {
-      throw invalid("BlobAsset.metadata.format_id does not match the publication index.");
+    const value = decoded as Record<string, unknown>;
+    const fields = Object.keys(value);
+    if (
+      fields.length !== EXPECTED_FIELDS.length ||
+      fields.some((field, index) => field !== EXPECTED_FIELDS[index])
+    ) {
+      throw new TypeError("BlobAsset must use the native four-field envelope.");
     }
-    if (canonicalJson(metadata) !== canonicalJson(expected.metadata)) {
-      throw invalid("BlobAsset metadata does not match the publication index.");
+    if (!(value.data instanceof Uint8Array)) throw new TypeError("BlobAsset.data must be binary.");
+    if (typeof value.media_type !== "string") {
+      throw new TypeError("BlobAsset.media_type must be a string.");
     }
-
+    const mediaType = parseMediaType(value.media_type);
+    const filename = value.filename;
+    if (filename !== null && typeof filename !== "string") {
+      throw new TypeError("BlobAsset.filename must be a string or null.");
+    }
+    const metadata = portableJsonObject(value.metadata, "BlobAsset.metadata");
+    if (value.media_type !== descriptor.mediaType) {
+      throw new TypeError("BlobAsset.media_type does not match its descriptor.");
+    }
+    if (filename !== descriptor.filename) {
+      throw new TypeError("BlobAsset.filename does not match its descriptor.");
+    }
+    if (canonicalJson(metadata) !== canonicalJson(descriptor.metadata)) {
+      throw new TypeError("BlobAsset.metadata does not match its descriptor.");
+    }
     return Object.freeze({
-      data: asset.data,
+      data: value.data,
       mediaType,
       filename,
-      formatId,
       metadata,
     });
   } catch (error) {
     if (error instanceof PublicationError && error.code === "asset_invalid") throw error;
-    if (error instanceof PublicationError) {
-      throw new PublicationError("asset_invalid", error.message, { cause: error });
-    }
-    throw new PublicationError("asset_invalid", "Cache asset validation failed.", {
+    throw new PublicationError("asset_invalid", "BlobAsset envelope validation failed.", {
       cause: error,
+      details: { outputCodec: descriptor.codec, mediaType: descriptor.mediaType },
     });
   }
-}
-
-function parseMetadata(bytes: Uint8Array): JsonObject {
-  let decoded: unknown;
-  try {
-    const text = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(
-      trimJsonWhitespace(bytes),
-    );
-    decoded = parseStrictJson(text);
-  } catch (error) {
-    throw new PublicationError("asset_invalid", "BlobAsset metadata must be strict UTF-8 JSON.", {
-      cause: error,
-    });
-  }
-  return parseJsonObject(decoded, "BlobAsset.metadata.metadata_json");
-}
-
-function parseFilename(value: unknown): string | null {
-  if (value === null) return null;
-  if (
-    typeof value !== "string" ||
-    value.length === 0 ||
-    hasPythonBoundaryWhitespace(value) ||
-    !isPortablePathComponent(value) ||
-    containsUnpairedSurrogate(value) ||
-    containsControlCharacter(value)
-  ) {
-    throw invalid("BlobAsset.filename must be null or a portable base name.");
-  }
-  return value;
-}
-
-function invalid(message: string): PublicationError {
-  return new PublicationError("asset_invalid", message);
 }
