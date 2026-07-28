@@ -2,6 +2,7 @@ import { defineOutputLoader } from "@marimo-team/marimo-export";
 import type { OutputLoader } from "@marimo-team/marimo-export";
 import { CompressionType, setCompressionCodec, tableFromIPC } from "@uwdata/flechette";
 import type { ExtractionOptions, Table } from "@uwdata/flechette";
+// @ts-expect-error lz4js 0.2.0 does not publish TypeScript declarations.
 import { compress, decompress } from "lz4js";
 
 const MAX_DECOMPRESSED_BUFFER_BYTES = 512 * 1024 * 1024;

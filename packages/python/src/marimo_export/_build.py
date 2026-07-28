@@ -86,8 +86,7 @@ def _capture_owned(
                     primary = cleanup_error
                 else:
                     primary.add_note(
-                        "managed server cleanup also failed: "
-                        f"{type(cleanup_error).__name__}"
+                        f"managed server cleanup also failed: {type(cleanup_error).__name__}"
                     )
         if working_notebook is not None:
             try:
@@ -97,8 +96,7 @@ def _capture_owned(
                     primary = cleanup_error
                 else:
                     primary.add_note(
-                        "managed notebook cleanup also failed: "
-                        f"{type(cleanup_error).__name__}"
+                        f"managed notebook cleanup also failed: {type(cleanup_error).__name__}"
                     )
     if primary is not None:
         raise primary

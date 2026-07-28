@@ -1,9 +1,23 @@
-# Development documentation
+# Contributor documentation
 
-These documents define how to change and validate marimo-export.
+marimo-export is a uv and pnpm workspace for one Python producer, one browser
+core, five representation loaders, a documentation app, and a live finance
+acceptance app.
 
-- [`architecture.md`](./architecture.md) defines the live kernel, cache, transfer, publication, Python reader, browser reader, and loader boundaries.
-- [`development.md`](./development.md) covers workspace setup, package ownership, schema changes, format extensions, and private marimo integration.
-- [`validation.md`](./validation.md) maps each change surface to unit, integration, package, and native browser evidence, including the Chromium AnyWidget gate.
+Read:
 
-User installation, specification authoring, capture, and reading belong in [`docs`](../docs). Read [`architecture.md`](./architecture.md) before changing private marimo imports, projection identity, transfer tickets, publication schemas, or package exports.
+- [Architecture](architecture.md) before changing execution, cache receipts,
+  publication bytes, or package boundaries.
+- [Development](development.md) for setup, focused commands, and extension
+  workflows.
+- [Validation](validation.md) for the release gates and live finance evidence.
+
+The root commands are:
+
+```bash
+make bootstrap
+make format
+make check
+make build
+make acceptance-finance FINANCE_NOTEBOOK=/absolute/path/finance.py
+```

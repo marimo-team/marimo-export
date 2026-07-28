@@ -82,11 +82,23 @@ importers:
         specifier: 'catalog:'
         version: 3.5.39(typescript@6.0.3)
 
-  examples/browser:
+  apps/finance-demo:
     dependencies:
       '@marimo-team/marimo-export':
         specifier: workspace:*
         version: link:../../packages/browser
+      '@marimo-team/marimo-export-loader-anywidget':
+        specifier: workspace:*
+        version: link:../../packages/loader-anywidget
+      '@marimo-team/marimo-export-loader-arrow':
+        specifier: workspace:*
+        version: link:../../packages/loader-arrow
+      '@marimo-team/marimo-export-loader-numpy':
+        specifier: workspace:*
+        version: link:../../packages/loader-numpy
+      '@marimo-team/marimo-export-loader-parquet':
+        specifier: workspace:*
+        version: link:../../packages/loader-parquet
       '@marimo-team/marimo-export-loader-vegalite':
         specifier: workspace:*
         version: link:../../packages/loader-vegalite

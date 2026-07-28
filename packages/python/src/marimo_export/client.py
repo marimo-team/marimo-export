@@ -260,9 +260,7 @@ class Session:
                     item.size,
                 )
                 if len(data) != item.size:
-                    raise IntegrityError(
-                        "a transferred asset length disagrees with its descriptor"
-                    )
+                    raise IntegrityError("a transferred asset length disagrees with its descriptor")
                 assets[(item.codec, item.sha256)] = data
             cache = _cache_summary(response.get("cache"), index)
             self._release(ticket)
@@ -277,8 +275,7 @@ class Session:
                     if primary is None:
                         raise
                     primary.add_note(
-                        "transfer ticket cleanup also failed: "
-                        f"{type(cleanup_error).__name__}"
+                        f"transfer ticket cleanup also failed: {type(cleanup_error).__name__}"
                     )
 
     def _release(self, ticket: str) -> None:
@@ -451,10 +448,7 @@ def _transfer(value: object, index: PublicationIndex) -> _Transfer:
                 url=url,
             )
         )
-    expected = {
-        (codec, asset.sha256, asset.size)
-        for codec, asset in index.assets()
-    }
+    expected = {(codec, asset.sha256, asset.size) for codec, asset in index.assets()}
     actual = {(asset.codec, asset.sha256, asset.size) for asset in assets}
     if actual != expected or len(actual) != len(assets):
         raise TransportError("capture transfer assets do not match the publication")

@@ -196,7 +196,7 @@ describe("publication", () => {
 describe("canonical publication validation", () => {
   test("rejects whitespace, duplicate keys, and a wrong fingerprint", async () => {
     const fixture = await publicationFixture();
-    const variants = [
+    const encodings = [
       encoder.encode(`${new TextDecoder().decode(fixture.indexBytes)}\n`),
       encoder.encode(
         new TextDecoder()
@@ -204,7 +204,7 @@ describe("canonical publication validation", () => {
           .replace('{"inputs":', '{"schema":"duplicate","inputs":'),
       ),
     ];
-    for (const bytes of variants) {
+    for (const bytes of encodings) {
       const fetch: typeof globalThis.fetch = async () => new Response(bytes);
       // Validation cases intentionally execute in order.
       // oxlint-disable-next-line no-await-in-loop

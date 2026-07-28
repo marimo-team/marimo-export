@@ -1,6 +1,11 @@
 import { defineConfig } from "vite-plus";
 
-const generated = ["**/dist/**", "**/node_modules/**", "packages/python/.pytest_cache/**"];
+const generated = [
+  "**/dist/**",
+  "**/node_modules/**",
+  "packages/python/.pytest_cache/**",
+  "tests/fixtures/publication/*.json",
+];
 
 export default defineConfig({
   staged: {
@@ -38,11 +43,7 @@ export default defineConfig({
         },
       },
       {
-        files: [
-          "packages/browser/src/**/*.ts",
-          "packages/loader-vegalite/src/**/*.ts",
-          "packages/loader-anywidget/src/**/*.ts",
-        ],
+        files: ["packages/browser/src/**/*.ts", "packages/loader-*/src/**/*.ts"],
         rules: {
           "no-restricted-imports": [
             "error",

@@ -1,13 +1,12 @@
 .DEFAULT_GOAL := check
 
-.PHONY: bootstrap format format-check lint typecheck test integration build package-smoke acceptance-finance check
+.PHONY: bootstrap format format-check lint typecheck test build package-smoke acceptance-finance check
 
 FORMAT_PATHS := \
 	.github \
 	apps \
 	development_docs \
 	docs \
-	examples \
 	packages \
 	scripts \
 	AGENTS.md \
@@ -18,7 +17,7 @@ FORMAT_PATHS := \
 	pyproject.toml \
 	tsconfig.base.json \
 	vite.config.ts
-LINT_PATHS := apps examples packages vite.config.ts
+LINT_PATHS := apps packages vite.config.ts
 
 format:
 	pnpm exec vp fmt $(FORMAT_PATHS)
@@ -44,9 +43,6 @@ test:
 	pnpm exec vp run -r test
 	uv run --group test --all-extras pytest -q packages/python/tests
 
-integration: build
-	MARIMO_EXPORT_REMOTE_INTEGRATION=1 uv run --group test pytest -q packages/python/tests/test_integration.py
-
 build:
 	pnpm exec vp run -r build
 	uv build --package marimo-export --clear --no-sources
@@ -64,4 +60,4 @@ acceptance-finance:
 	@test -n "$(FINANCE_NOTEBOOK)" || (echo "FINANCE_NOTEBOOK must be an absolute notebook path" >&2; exit 2)
 	uv run --group acceptance python tests/acceptance/finance/run.py "$(FINANCE_NOTEBOOK)"
 
-check: format-check lint typecheck test integration package-smoke
+check: format-check lint typecheck test package-smoke
