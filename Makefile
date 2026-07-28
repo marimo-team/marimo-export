@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := check
 
-.PHONY: format format-check schemas schemas-check lint typecheck test integration build package-smoke check
+.PHONY: bootstrap format format-check lint typecheck test integration build package-smoke acceptance-finance check
 
 FORMAT_PATHS := \
 	.github \
@@ -28,11 +28,9 @@ format-check:
 	pnpm exec vp fmt --check $(FORMAT_PATHS)
 	uv run ruff format --check packages/python scripts
 
-schemas:
-	uv run --package marimo-export python scripts/generate_schemas.py
-
-schemas-check:
-	uv run --package marimo-export python scripts/generate_schemas.py --check
+bootstrap:
+	uv sync --all-groups --all-extras
+	pnpm install --frozen-lockfile
 
 lint:
 	pnpm exec vp lint --deny-warnings $(LINT_PATHS)
@@ -41,14 +39,13 @@ lint:
 typecheck:
 	pnpm exec vp run -r typecheck
 	uv run ty check packages/python
-	uv run pyrefly check
 
 test:
 	pnpm exec vp run -r test
-	uv run --all-extras --package marimo-export pytest -q packages/python/tests
+	uv run --group test --all-extras pytest -q packages/python/tests
 
 integration: build
-	MARIMO_EXPORT_REMOTE_INTEGRATION=1 uv run --package marimo-export pytest -q packages/python/tests/test_integration.py
+	MARIMO_EXPORT_REMOTE_INTEGRATION=1 uv run --group test pytest -q packages/python/tests/test_integration.py
 
 build:
 	pnpm exec vp run -r build
@@ -56,10 +53,15 @@ build:
 
 package-smoke: build
 	pnpm --filter @marimo-team/marimo-export test:package
-	@wheel=$$(printf '%s\n' ./dist/marimo_export-*.whl); \
+	@set -eu; \
+		wheel=$$(printf '%s\n' ./dist/marimo_export-*.whl); \
 		test -f "$$wheel"; \
 		uv run --isolated --no-project --with "$$wheel" python scripts/smoke_python_package.py; \
 		uv run --isolated --no-project --with "$$wheel" marimo-export --help >/dev/null; \
 		uv run --isolated --no-project --with "$$wheel" marimo-export --version >/dev/null
 
-check: format-check schemas-check lint typecheck test integration package-smoke
+acceptance-finance:
+	@test -n "$(FINANCE_NOTEBOOK)" || (echo "FINANCE_NOTEBOOK must be an absolute notebook path" >&2; exit 2)
+	uv run --group acceptance python tests/acceptance/finance/run.py "$(FINANCE_NOTEBOOK)"
+
+check: format-check lint typecheck test integration package-smoke
