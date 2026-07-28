@@ -8,8 +8,9 @@ from typing import Any, cast
 import msgspec
 import pytest
 from marimo._save.stubs import BlobAsset
-from marimo_export import IntegrityError, PublicationError, open_publication
+from marimo_export import open_publication
 from marimo_export._json import sha256_bytes
+from marimo_export.errors import IntegrityError, PublicationError
 from marimo_export.publication import (
     ArrowDescriptor,
     AssetRef,

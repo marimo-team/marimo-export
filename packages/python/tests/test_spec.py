@@ -9,7 +9,8 @@ from typing import Any, cast
 
 import pytest
 from jsonschema import Draft202012Validator
-from marimo_export import ExportSpec, OutputSpec, SpecError
+from marimo_export import ExportSpec, OutputSpec
+from marimo_export.errors import SpecError
 from marimo_export.spec import SPEC_SCHEMA
 
 

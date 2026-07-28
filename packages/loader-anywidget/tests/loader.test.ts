@@ -1,6 +1,6 @@
 import { anyWidgetLoader } from "@marimo-team/marimo-export-loader-anywidget";
 import type { LoadedAnyWidget } from "@marimo-team/marimo-export-loader-anywidget";
-import type { FormatLoader } from "@marimo-team/marimo-export";
+import type { BlobAssetLoader } from "@marimo-team/marimo-export";
 import { describe, expect, expectTypeOf, test } from "vite-plus/test";
 import producerPayload from "../../python/tests/fixtures/anywidget-v1.json";
 import { moduleUrl, notification, outputFor, payload } from "./fixture.js";
@@ -14,8 +14,8 @@ describe("anywidget", () => {
 
     const loader = anyWidgetLoader<MapState>();
 
-    expect(loader.formatId).toBe("anywidget.v1");
-    expectTypeOf(loader).toEqualTypeOf<FormatLoader<LoadedAnyWidget<MapState>>>();
+    expect(loader.codec).toBe("marimo.blob-asset.msgpack.v1");
+    expectTypeOf(loader).toEqualTypeOf<BlobAssetLoader<LoadedAnyWidget<MapState>>>();
     expectTypeOf<LoadedAnyWidget<MapState>["initialState"]["label"]>().toEqualTypeOf<
       string | undefined
     >();
@@ -71,7 +71,7 @@ describe("anywidget", () => {
       { mediaType: "application/json" },
     );
 
-    await expect(output.load(anyWidgetLoader())).rejects.toThrow("output media type must be");
+    await expect(output.load(anyWidgetLoader())).rejects.toThrow("No OutputLoader accepts");
   });
 
   test("rejects unresolved model references before module execution", async () => {

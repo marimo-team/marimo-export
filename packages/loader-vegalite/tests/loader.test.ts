@@ -1,6 +1,6 @@
 import { encode } from "@msgpack/msgpack";
 import { openPublication } from "@marimo-team/marimo-export";
-import type { PublishedFormat } from "@marimo-team/marimo-export";
+import type { PublishedOutput } from "@marimo-team/marimo-export";
 import { beforeEach, describe, expect, test, vi } from "vite-plus/test";
 
 import { vegaLiteLoader } from "../src/index.js";
@@ -51,16 +51,14 @@ describe("vegaLiteLoader", () => {
     expect(host.lastContainer().removeClasses).toHaveBeenCalledWith("vega-embed", "has-actions");
   });
 
-  test("mounts through a loader registered with the publication", async () => {
+  test("mounts a loaded publication value", async () => {
     const spec = { mark: "point", data: { values: [] } };
     embed.mockResolvedValueOnce({ finalize });
-    const format = await fixture(
-      encoder.encode(JSON.stringify(spec)),
-      vegaLiteLoader({ actions: false }),
-    );
+    const format = await fixture(encoder.encode(JSON.stringify(spec)));
     const host = testHost();
 
-    const mounted = await format.mount(host.element);
+    const chart = await format.load(vegaLiteLoader({ actions: false }));
+    const mounted = await chart.mount(host.element);
 
     expect(embed).toHaveBeenCalledWith(host.lastContainer().element, spec, {
       renderer: "canvas",
@@ -163,45 +161,46 @@ describe("vegaLiteLoader", () => {
   test("rejects a mismatched Vega-Lite media type", async () => {
     const format = await fixture(
       encoder.encode(JSON.stringify({ mark: "point" })),
-      undefined,
       "application/json",
     );
 
-    await expect(format.load(vegaLiteLoader())).rejects.toThrow("Vega-Lite JSON media type");
+    await expect(format.load(vegaLiteLoader())).rejects.toThrow("No OutputLoader accepts");
   });
 });
 
 async function fixture(
   data: Uint8Array,
-  loader?: ReturnType<typeof vegaLiteLoader>,
   mediaType = "application/vnd.vegalite.v6+json",
-): Promise<PublishedFormat> {
-  const formatId = "vegalite.v1";
+): Promise<PublishedOutput> {
   const envelope = encode({
     data,
     media_type: mediaType,
     filename: null,
-    metadata: { format_id: formatId, metadata_json: encoder.encode("{}") },
+    metadata: {},
   });
   const sha256 = await digest(envelope);
-  const key = "C_vegalite/return.bin";
+  const fingerprint = await digest(encoder.encode("{}"));
   const index = {
-    schema: "marimo-export.publication.v1",
-    asset_codec: "marimo.blob-asset.msgpack.v1",
+    inputs: [],
     notebook: { filename: "fixture.py", document_sha256: "a".repeat(64) },
+    outputs: ["chart"],
     producer: { marimo: "0.24.0", marimo_export: "0.0.0" },
-    variants: {
+    schema: "marimo-export.publication.v1",
+    states: {
       current: {
-        controls: {},
+        fingerprint,
+        inputs: {},
         outputs: {
           chart: {
-            formats: {
-              vegalite: {
-                format_id: formatId,
-                media_type: mediaType,
-                metadata: {},
-                asset: { key, sha256, size: envelope.byteLength },
-              },
+            asset: { sha256, size: envelope.byteLength },
+            codec: "marimo.blob-asset.msgpack.v1",
+            filename: null,
+            media_type: mediaType,
+            metadata: {},
+            provenance: {
+              cache_key: "cell_cache/P_chart.json",
+              python_type: "marimo._save.cache.BlobAsset",
+              return_reference: "cell_cache/P_chart/return.bin",
             },
           },
         },
@@ -210,15 +209,24 @@ async function fixture(
   };
   const fetch: typeof globalThis.fetch = async (input) => {
     const url = input instanceof Request ? input.url : input.toString();
-    if (url.endsWith("/index.json")) return new Response(JSON.stringify(index));
-    if (url.endsWith(`/cache/${key}`)) return new Response(new Uint8Array(envelope));
+    if (url.endsWith("/index.json")) return new Response(canonicalJson(index));
+    if (url.endsWith(`/assets/${sha256}.bin`)) {
+      return new Response(new Uint8Array(envelope));
+    }
     return new Response(null, { status: 404 });
   };
-  const publication = await openPublication("https://example.test/export/", {
-    fetch,
-    ...(loader === undefined ? {} : { loaders: [loader] }),
-  });
-  return publication.variant("current").output("chart").format("vegalite");
+  const publication = await openPublication("https://example.test/export/", { fetch });
+  return publication.state("current").output("chart");
+}
+
+function canonicalJson(value: unknown): string {
+  if (value === null || typeof value !== "object") return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  const object = value as Record<string, unknown>;
+  return `{${Object.keys(object)
+    .sort()
+    .map((key) => `${JSON.stringify(key)}:${canonicalJson(object[key])}`)
+    .join(",")}}`;
 }
 
 function testHost() {

@@ -8,8 +8,13 @@ def test_attached_marimo_exposes_live_capture_capabilities() -> None:
 
     assert report.version
     assert report.names == (
-        "blob-asset",
-        "code-mode",
-        "lazy-cache-receipt",
-        "virtual-file-transfer",
+        "asset_transfer",
+        "blob_asset",
+        "cache_cells",
+        "cell_cache_receipts",
+        "child_sessions",
+        "child_ui_updates",
+        "code_mode_projection_cells",
+        "definition_overrides",
+        "setup_definition_overrides",
     )

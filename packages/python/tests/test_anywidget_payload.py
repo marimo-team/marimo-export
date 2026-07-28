@@ -10,7 +10,7 @@ from typing import Any
 
 import pytest
 from marimo_export.exporters import _anywidget_payload as payload_validation
-from marimo_export.exporters.anywidget import anywidget_from_payload
+from marimo_export.exporters._anywidget_payload import validate_anywidget_payload
 
 _FIXTURE = Path(__file__).parent / "fixtures" / "anywidget-v1.json"
 _LARGE_DIAGNOSTIC_VALUE = "x" * (1024 * 1024)
@@ -26,7 +26,7 @@ def _payload(document: dict[str, Any]) -> bytes:
 
 def _bounded_error(document: dict[str, Any], expected: str) -> str:
     with pytest.raises((TypeError, ValueError)) as error:
-        anywidget_from_payload(_payload(document))
+        validate_anywidget_payload(_payload(document))
     message = str(error.value)
     assert expected in message
     assert len(message) <= 1024
@@ -50,18 +50,17 @@ def _external_esm_url(byte_length: int, *, suffix: str = "") -> str:
     return prefix + "x" * padding + suffix
 
 
-def test_validated_payload_constructs_projection_metadata() -> None:
-    projection = anywidget_from_payload(_payload(_document()))
+def test_validated_payload_reports_the_model_graph() -> None:
+    validation = validate_anywidget_payload(_payload(_document()))
 
-    assert projection.format_id == "anywidget.v1"
-    assert projection.media_type == "application/vnd.marimo-export.anywidget+json"
-    assert projection.metadata == {"models": 2, "root_model_id": "model-0"}
+    assert validation.root_model_id == "model-0"
+    assert validation.model_count == 2
 
 
-def test_anywidget_payload_source_compiles_for_python_310() -> None:
+def test_anywidget_payload_source_compiles_for_python_311() -> None:
     source_path = Path(payload_validation.__file__)
 
-    ast.parse(source_path.read_text(), filename=str(source_path), feature_version=(3, 10))
+    ast.parse(source_path.read_text(), filename=str(source_path), feature_version=(3, 11))
 
 
 def test_payload_rejects_duplicate_json_keys() -> None:
@@ -72,7 +71,7 @@ def test_payload_rejects_duplicate_json_keys() -> None:
     )
 
     with pytest.raises(ValueError, match="contains duplicate key 'model_id'"):
-        anywidget_from_payload(payload)
+        validate_anywidget_payload(payload)
 
 
 def test_payload_rejects_malformed_model_notification() -> None:
@@ -80,7 +79,7 @@ def test_payload_rejects_malformed_model_notification() -> None:
     document["modelNotifications"] = [{}]
 
     with pytest.raises(TypeError, match=r"modelNotifications\[0\] fields are invalid"):
-        anywidget_from_payload(_payload(document))
+        validate_anywidget_payload(_payload(document))
 
 
 def test_payload_requires_root_esm() -> None:
@@ -88,7 +87,7 @@ def test_payload_requires_root_esm() -> None:
     document["modelNotifications"][0]["message"]["esm_spec"] = None
 
     with pytest.raises(ValueError, match="root model 'model-0' has no ESM spec"):
-        anywidget_from_payload(_payload(document))
+        validate_anywidget_payload(_payload(document))
 
 
 def test_payload_requires_canonical_model_order() -> None:
@@ -96,7 +95,7 @@ def test_payload_requires_canonical_model_order() -> None:
     document["modelNotifications"][1]["model_id"] = "model-3"
 
     with pytest.raises(ValueError, match=r"modelNotifications\[1\].model_id must be 'model-1'"):
-        anywidget_from_payload(_payload(document))
+        validate_anywidget_payload(_payload(document))
 
 
 def test_payload_requires_referenced_models() -> None:
@@ -104,7 +103,7 @@ def test_payload_requires_referenced_models() -> None:
     document["modelNotifications"] = document["modelNotifications"][:1]
 
     with pytest.raises(ValueError, match="model reference 'model-1' is unresolved"):
-        anywidget_from_payload(_payload(document))
+        validate_anywidget_payload(_payload(document))
 
 
 def test_payload_rejects_models_outside_root_closure() -> None:
@@ -112,7 +111,7 @@ def test_payload_rejects_models_outside_root_closure() -> None:
     document["modelNotifications"][0]["message"]["state"] = {"binary": {}}
 
     with pytest.raises(ValueError, match="models outside the root closure: 'model-1'"):
-        anywidget_from_payload(_payload(document))
+        validate_anywidget_payload(_payload(document))
 
 
 def test_payload_validates_buffer_path_parents() -> None:
@@ -120,7 +119,7 @@ def test_payload_validates_buffer_path_parents() -> None:
     document["modelNotifications"][0]["message"]["state"] = {"child": "anywidget:model-1"}
 
     with pytest.raises(ValueError, match="does not target existing state"):
-        anywidget_from_payload(_payload(document))
+        validate_anywidget_payload(_payload(document))
 
 
 def test_payload_requires_ascii_base64() -> None:
@@ -128,7 +127,7 @@ def test_payload_requires_ascii_base64() -> None:
     document["modelNotifications"][0]["message"]["buffers"] = ["AAA\u0661"]
 
     with pytest.raises(ValueError, match="not canonical base64"):
-        anywidget_from_payload(_payload(document))
+        validate_anywidget_payload(_payload(document))
 
 
 def test_payload_base64_validation_has_bounded_auxiliary_allocation() -> None:
@@ -146,9 +145,10 @@ def test_buffer_replacement_removes_a_model_reference_from_the_closure() -> None
     root["message"]["buffer_paths"] = [["child"]]
     document["modelNotifications"] = [root]
 
-    projection = anywidget_from_payload(_payload(document))
+    validation = validate_anywidget_payload(_payload(document))
 
-    assert projection.metadata == {"models": 1, "root_model_id": "model-0"}
+    assert validation.root_model_id == "model-0"
+    assert validation.model_count == 1
 
 
 def test_payload_rejects_malformed_embedded_file() -> None:
@@ -156,16 +156,16 @@ def test_payload_rejects_malformed_embedded_file() -> None:
     document["files"]["./@file/root.js"] = "data:text/javascript;base64,%%%"
 
     with pytest.raises(ValueError, match="malformed base64 data"):
-        anywidget_from_payload(_payload(document))
+        validate_anywidget_payload(_payload(document))
 
 
 def test_payload_treats_base64_media_type_as_percent_encoded_data() -> None:
     document = _document()
     document["files"]["./@file/root.js"] = "data:base64,export%20default%20%7B%7D"
 
-    projection = anywidget_from_payload(_payload(document))
+    validation = validate_anywidget_payload(_payload(document))
 
-    assert projection.format_id == "anywidget.v1"
+    assert validation.root_model_id == "model-0"
 
 
 def test_payload_recognizes_base64_parameter_case_insensitively() -> None:
@@ -173,7 +173,7 @@ def test_payload_recognizes_base64_parameter_case_insensitively() -> None:
     document["files"]["./@file/root.js"] = "data:text/javascript;BASE64,%%%"
 
     with pytest.raises(ValueError, match="malformed base64 data"):
-        anywidget_from_payload(_payload(document))
+        validate_anywidget_payload(_payload(document))
 
 
 def test_payload_data_url_metadata_validation_has_bounded_auxiliary_allocation() -> None:
@@ -192,10 +192,10 @@ def test_payload_accepts_data_url_media_type_at_byte_limit(media_type: str) -> N
     document = _document()
     document["files"]["./@file/root.js"] = f"data:{media_type},x"
 
-    projection = anywidget_from_payload(_payload(document))
+    validation = validate_anywidget_payload(_payload(document))
 
     assert len(media_type.encode()) == 1024
-    assert projection.format_id == "anywidget.v1"
+    assert validation.root_model_id == "model-0"
 
 
 @pytest.mark.parametrize("media_type", ["a" * 1025, "a" * 1023 + "é"])
@@ -234,16 +234,16 @@ def test_payload_rejects_percent_data_that_is_not_utf8(body: str) -> None:
     document["files"]["./@file/root.js"] = f"data:,{body}"
 
     with pytest.raises(ValueError, match="malformed percent-encoded data"):
-        anywidget_from_payload(_payload(document))
+        validate_anywidget_payload(_payload(document))
 
 
 def test_payload_accepts_percent_data_across_literal_unicode_boundaries() -> None:
     document = _document()
     document["files"]["./@file/root.js"] = "data:,é%C3%A9"
 
-    projection = anywidget_from_payload(_payload(document))
+    validation = validate_anywidget_payload(_payload(document))
 
-    assert projection.format_id == "anywidget.v1"
+    assert validation.root_model_id == "model-0"
 
 
 def test_payload_rejects_missing_virtual_esm_file() -> None:
@@ -251,7 +251,7 @@ def test_payload_rejects_missing_virtual_esm_file() -> None:
     document["files"] = {}
 
     with pytest.raises(ValueError, match="references missing virtual file"):
-        anywidget_from_payload(_payload(document))
+        validate_anywidget_payload(_payload(document))
 
 
 @pytest.mark.parametrize("url", [_external_esm_url(8192), _external_esm_url(8192, suffix="é")])
@@ -259,10 +259,10 @@ def test_payload_accepts_external_esm_url_at_byte_limit(url: str) -> None:
     document = _document()
     document["modelNotifications"][0]["message"]["esm_spec"]["url"] = url
 
-    projection = anywidget_from_payload(_payload(document))
+    validation = validate_anywidget_payload(_payload(document))
 
     assert len(url.encode()) == 8192
-    assert projection.format_id == "anywidget.v1"
+    assert validation.root_model_id == "model-0"
 
 
 @pytest.mark.parametrize("url", [_external_esm_url(8193), _external_esm_url(8193, suffix="é")])
@@ -291,9 +291,9 @@ def test_payload_inline_data_esm_bypasses_url_parser(
 
     monkeypatch.setattr(payload_validation, "urlsplit", reject_urlsplit)
 
-    projection = anywidget_from_payload(_payload(document))
+    validation = validate_anywidget_payload(_payload(document))
 
-    assert projection.format_id == "anywidget.v1"
+    assert validation.root_model_id == "model-0"
 
 
 @pytest.mark.parametrize(
@@ -308,7 +308,7 @@ def test_payload_rejects_invalid_http_esm_url(url: str) -> None:
     document["modelNotifications"][0]["message"]["esm_spec"]["url"] = url
 
     with pytest.raises(ValueError, match="contains an invalid ESM URL"):
-        anywidget_from_payload(_payload(document))
+        validate_anywidget_payload(_payload(document))
 
 
 def test_payload_bounds_file_path_diagnostics() -> None:

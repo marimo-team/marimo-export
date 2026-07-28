@@ -65,30 +65,6 @@ class SessionError(MarimoExportError):
     code = "session_error"
 
 
-class CaptureError(MarimoExportError):
-    """The running notebook could not be captured."""
-
-    code = "capture_error"
-
-
-class SelectionError(CaptureError):
-    """A requested global, expression, cell, or UI control is unavailable."""
-
-    code = "selection_failed"
-
-
-class ProjectionError(CaptureError):
-    """An exporter could not produce the requested representation."""
-
-    code = "output_execution_failed"
-
-
-class TransferError(CaptureError):
-    """A captured cache asset could not be transferred."""
-
-    code = "integrity_failed"
-
-
 class PublicationError(MarimoExportError):
     """A static publication is missing, malformed, or cannot be read."""
 

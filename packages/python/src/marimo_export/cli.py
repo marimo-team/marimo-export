@@ -2,40 +2,47 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
+import math
+import secrets
 import sys
-import tempfile
 from collections.abc import Mapping, Sequence
 from contextlib import suppress
+from dataclasses import dataclass
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
-from typing import Any, NoReturn, TextIO
+from typing import Any, NoReturn, cast
 
-from marimo_export._diagnostics import safe_diagnostic
-from marimo_export.client import Client, _prepare_destination
+from marimo_export._build import build
+from marimo_export.client import Client, capture
 from marimo_export.errors import (
-    CaptureError,
+    CodecError,
+    CompatibilityError,
+    ExecutionError,
     IntegrityError,
+    MarimoExportError,
+    OutputError,
     PublicationError,
     SessionError,
     SpecError,
     TransportError,
 )
-from marimo_export.reader import open_publication
+from marimo_export.publication import ScalarDescriptor
+from marimo_export.reader import Publication, VerificationResult, open_publication
 from marimo_export.spec import ExportSpec
 
 EXIT_INPUT = 2
 EXIT_TRANSPORT = 3
 EXIT_SESSION = 4
-EXIT_CAPTURE = 5
+EXIT_EXECUTION = 5
 EXIT_INTEGRITY = 6
 EXIT_FILESYSTEM = 7
 EXIT_BROKEN_PIPE = 141
-_MAX_SAFE_INTEGER = 2**53 - 1
 
 
-class _CliInputError(Exception):
-    pass
+@dataclass(frozen=True, slots=True)
+class _CommandResult:
+    value: object
+    human: str
 
 
 class _ArgumentParser(argparse.ArgumentParser):
@@ -43,92 +50,29 @@ class _ArgumentParser(argparse.ArgumentParser):
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         kwargs.setdefault("allow_abbrev", False)
+        kwargs.setdefault("formatter_class", argparse.RawDescriptionHelpFormatter)
         super().__init__(*args, **kwargs)
 
     def error(self, message: str) -> NoReturn:
-        message = _redact_cli_message(message)
         if self.json_errors:
             _write_json(
-                sys.stdout,
                 {
+                    "error": {
+                        "code": "invalid_arguments",
+                        "message": _bounded(message),
+                    },
                     "ok": False,
-                    "error": {"code": "invalid_arguments", "message": message},
-                },
+                }
             )
         else:
             self.print_usage(sys.stderr)
-            self._print_message(f"{self.prog}: error: {message}\n", sys.stderr)
+            self._print_message(f"{self.prog}: error: {_bounded(message)}\n", sys.stderr)
         raise SystemExit(EXIT_INPUT)
 
 
-def _build_parser() -> argparse.ArgumentParser:
-    parser = _ArgumentParser(
-        prog="marimo-export",
-        description="Capture and read static publications from a running marimo notebook.",
-    )
-    parser.add_argument(
-        "--version",
-        action="version",
-        version=f"%(prog)s {_package_version()}",
-    )
-    commands = parser.add_subparsers(dest="command", required=True)
-
-    session = commands.add_parser("session", help="list sessions or inspect one session")
-    session.add_argument("server", help="marimo server URL")
-    session.add_argument(
-        "--session",
-        dest="session_id",
-        type=_session_id,
-        help="session identifier",
-    )
-    _add_connection_options(session)
-    _add_json_option(session)
-
-    capture = commands.add_parser("capture", help="capture selected notebook results")
-    capture.add_argument("server", help="marimo server URL")
-    capture.add_argument("--spec", required=True, help="export specification file")
-    capture.add_argument("--output", required=True, help="destination publication directory")
-    capture.add_argument(
-        "--session",
-        dest="session_id",
-        type=_session_id,
-        help="session identifier",
-    )
-    capture.add_argument("--replace", action="store_true", help="replace an existing publication")
-    _add_index_limit(capture)
-    _add_asset_limit(capture)
-    _add_publication_limit(capture)
-    _add_connection_options(capture)
-    _add_json_option(capture)
-
-    inspect = commands.add_parser("inspect", help="inspect a local publication")
-    inspect.add_argument("publication", help="publication directory")
-    _add_index_limit(inspect)
-    _add_asset_limit(inspect)
-    _add_publication_limit(inspect)
-    _add_json_option(inspect)
-
-    read = commands.add_parser("read", help="read one published format")
-    read.add_argument("publication", help="publication directory")
-    read.add_argument("output_name", metavar="OUTPUT", help="published output name")
-    read.add_argument("--variant", required=True, help="variant name")
-    read.add_argument("--format", dest="format_name", required=True, help="format name")
-    read.add_argument("--to", dest="output_file", help="write bytes to this file")
-    _add_index_limit(read)
-    _add_asset_limit(read)
-    _add_publication_limit(read)
-    _add_json_option(read)
-
-    verify = commands.add_parser("verify", help="verify every publication asset")
-    verify.add_argument("publication", help="publication directory")
-    _add_index_limit(verify)
-    _add_asset_limit(verify)
-    _add_publication_limit(verify)
-    _add_json_option(verify)
-    return parser
-
-
 def main(argv: Sequence[str] | None = None) -> int:
+    """Run the marimo-export command-line interface."""
+
     try:
         return _parse_and_execute(argv)
     except BrokenPipeError:
@@ -138,449 +82,473 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 
 def _parse_and_execute(argv: Sequence[str] | None) -> int:
-    raw_arguments = list(sys.argv[1:] if argv is None else argv)
-    _ArgumentParser.json_errors = "--json" in raw_arguments
-    parser = _build_parser()
-    arguments = parser.parse_args(raw_arguments)
+    raw = list(sys.argv[1:] if argv is None else argv)
+    _ArgumentParser.json_errors = "--json" in raw
+    arguments = _parser().parse_args(raw)
+    return _execute(arguments)
+
+
+def _parser() -> _ArgumentParser:
+    parser = _ArgumentParser(
+        prog="marimo-export",
+        description="Publish finite marimo state matrices for Python-free clients.",
+    )
+    parser.add_argument("--version", action="version", version=f"%(prog)s {_package_version()}")
+    commands = parser.add_subparsers(dest="command", required=True)
+
+    build_parser = commands.add_parser(
+        "build",
+        help="publish a notebook through an owned loopback server",
+        description=(
+            "Start a loopback marimo server, execute every state, and publish every output."
+        ),
+        epilog=(
+            "Example:\n"
+            "  marimo-export build stocks.py --spec stocks.export.yaml "
+            "--output dist/stocks\n\n"
+            "Exit categories: 2 input, 4 server, 5 execution, 7 filesystem."
+        ),
+    )
+    build_parser.add_argument("notebook", metavar="NOTEBOOK", help="marimo Python notebook")
+    _add_publication_options(build_parser)
+    _add_timeout(build_parser, "server readiness and network inactivity timeout")
+
+    capture_parser = commands.add_parser(
+        "capture",
+        help="publish from an existing marimo session",
+        description="Execute every state in a borrowed live session and publish every output.",
+        epilog=(
+            "Example:\n"
+            "  marimo-export capture http://127.0.0.1:2718 --session s_01 "
+            "--spec stocks.export.yaml --output dist/stocks\n\n"
+            "Credentials also use MARIMO_EXPORT_ACCESS_TOKEN and "
+            "MARIMO_EXPORT_SERVER_TOKEN.\n"
+            "Exit categories: 2 input, 3 transport, 4 session, 5 execution, 7 filesystem."
+        ),
+    )
+    capture_parser.add_argument("server", metavar="SERVER", help="absolute marimo server URL")
+    _add_publication_options(capture_parser)
+    _add_session_selection(capture_parser)
+    _add_connection_options(capture_parser)
+
+    session_parser = commands.add_parser(
+        "session",
+        help="list sessions or inspect one session",
+        description="Discover live sessions and the notebook definitions available as inputs.",
+        epilog=(
+            "Example:\n"
+            "  marimo-export session http://127.0.0.1:2718 --session s_01\n\n"
+            "Credentials also use MARIMO_EXPORT_ACCESS_TOKEN and "
+            "MARIMO_EXPORT_SERVER_TOKEN.\n"
+            "Exit categories: 2 input, 3 transport, 4 session."
+        ),
+    )
+    session_parser.add_argument("server", metavar="SERVER", help="absolute marimo server URL")
+    _add_session_selection(session_parser)
+    _add_connection_options(session_parser)
+    _add_json(session_parser)
+
+    inspect_parser = commands.add_parser(
+        "inspect",
+        help="inspect publication metadata",
+        description="Validate index.json and summarize states, inputs, outputs, and assets.",
+        epilog=(
+            "Example:\n"
+            "  marimo-export inspect dist/stocks\n\n"
+            "Exit categories: 2 input, 6 publication, 7 filesystem."
+        ),
+    )
+    inspect_parser.add_argument("publication", metavar="PUBLICATION", help="publication directory")
+    _add_json(inspect_parser)
+
+    verify_parser = commands.add_parser(
+        "verify",
+        help="verify every publication asset",
+        description="Read every asset and verify hashes, lengths, codecs, and BlobAsset envelopes.",
+        epilog=(
+            "Example:\n"
+            "  marimo-export verify dist/stocks\n\n"
+            "Exit categories: 2 input, 6 integrity, 7 filesystem."
+        ),
+    )
+    verify_parser.add_argument("publication", metavar="PUBLICATION", help="publication directory")
+    _add_json(verify_parser)
+    return parser
+
+
+def _add_publication_options(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--spec", required=True, metavar="FILE", help="JSON or YAML ExportSpec")
+    parser.add_argument("--output", required=True, metavar="DIR", help="publication destination")
+    parser.add_argument(
+        "--replace",
+        action="store_true",
+        help="atomically replace an existing real directory",
+    )
+    _add_json(parser)
+
+
+def _add_session_selection(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--session", dest="session_id", metavar="ID", help="live session ID")
+
+
+def _add_connection_options(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--access-token", metavar="TOKEN", help="browser access token")
+    parser.add_argument("--server-token", metavar="TOKEN", help="server authentication token")
+    _add_timeout(parser, "connection and network inactivity timeout")
+
+
+def _add_timeout(parser: argparse.ArgumentParser, help_text: str) -> None:
+    parser.add_argument(
+        "--timeout",
+        type=_positive_timeout,
+        default=30.0,
+        metavar="SECONDS",
+        help=f"{help_text}; progress resets it (default: 30)",
+    )
+
+
+def _add_json(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--json", action="store_true", help="emit one machine-readable result")
+
+
+def _execute(arguments: argparse.Namespace) -> int:
     json_mode = bool(arguments.json)
-    return _execute(arguments, json_mode=json_mode)
-
-
-def _execute(arguments: argparse.Namespace, *, json_mode: bool) -> int:
     try:
-        result = _run(arguments, json_mode=json_mode)
+        result = _run(arguments)
         if json_mode:
-            _write_json(sys.stdout, {"ok": True, "result": _json_value(result)})
-        elif result is not None:
-            _write_human_result(result)
+            _write_json({"ok": True, "result": _json_value(result.value)})
+        else:
+            sys.stdout.write(result.human)
+            if result.human and not result.human.endswith("\n"):
+                sys.stdout.write("\n")
+        return 0
     except BrokenPipeError:
         raise
     except KeyboardInterrupt:
-        return _fail(
-            json_mode,
-            130,
-            "interrupted",
-            "operation interrupted",
-        )
+        return _failure(json_mode, 130, "interrupted", "operation interrupted")
     except Exception as error:
         exit_code = _exit_code(error)
         if exit_code is None:
-            return _fail(
+            request_id = secrets.token_hex(6)
+            return _failure(
                 json_mode,
                 1,
                 "internal_error",
-                "marimo-export encountered an unexpected internal error",
+                f"internal failure; request ID {request_id}",
             )
-        return _fail(
-            json_mode,
-            exit_code,
-            _error_code(error),
-            _error_message(error),
-            _error_details(error),
+        code = error.code if isinstance(error, MarimoExportError) else "invalid_arguments"
+        details = error.details if isinstance(error, MarimoExportError) else None
+        return _failure(json_mode, exit_code, code, _bounded(str(error)), details)
+
+
+def _run(arguments: argparse.Namespace) -> _CommandResult:
+    if arguments.command == "build":
+        result = build(
+            arguments.notebook,
+            spec=ExportSpec.from_file(arguments.spec),
+            output=arguments.output,
+            timeout=arguments.timeout,
+            replace=arguments.replace,
         )
-    return 0
+        return _CommandResult(result.to_dict(), _publication_human(result, "Published"))
 
-
-def _run(arguments: argparse.Namespace, *, json_mode: bool) -> object:
-    if arguments.command == "session":
-        with _client(
+    if arguments.command == "capture":
+        result = capture(
             arguments.server,
-            access_token=os.environ.get("MARIMO_EXPORT_TOKEN") or None,
-            server_token=os.environ.get("MARIMO_EXPORT_SERVER_TOKEN") or None,
+            spec=ExportSpec.from_file(arguments.spec),
+            output=arguments.output,
+            session=arguments.session_id,
+            access_token=arguments.access_token,
+            server_token=arguments.server_token,
+            timeout=arguments.timeout,
+            replace=arguments.replace,
+        )
+        lead = f"Captured session {result.session_id}\n" if result.session_id is not None else ""
+        return _CommandResult(
+            result.to_dict(),
+            lead + _publication_human(result, "Published"),
+        )
+
+    if arguments.command == "session":
+        with Client(
+            arguments.server,
+            access_token=arguments.access_token,
+            server_token=arguments.server_token,
             timeout=arguments.timeout,
         ) as client:
             if arguments.session_id is None:
-                return {
+                sessions = client.sessions()
+                value = {
                     "sessions": [
-                        {
-                            "id": session.id,
-                            "filename": session.filename,
-                            "path": session.path,
-                        }
-                        for session in client.sessions()
+                        {"id": item.id, "filename": item.filename, "path": item.path}
+                        for item in sessions
                     ]
                 }
-            return client.session(arguments.session_id).inspect().to_dict()
+                return _CommandResult(value, _sessions_human(value["sessions"]))
+            description = client.session(arguments.session_id).inspect()
+            return _CommandResult(description.to_dict(), _session_human(description.to_dict()))
 
-    if arguments.command == "capture":
-        spec = ExportSpec.from_file(Path(arguments.spec))
-        try:
-            destination = _prepare_destination(
-                arguments.output,
-                replace=arguments.replace,
-                max_index_bytes=arguments.max_index_bytes,
-                max_asset_bytes=arguments.max_asset_bytes,
-                max_publication_bytes=arguments.max_publication_bytes,
-            )
-        except (TypeError, ValueError) as error:
-            raise _CliInputError(str(error)) from error
-        with _client(
-            arguments.server,
-            access_token=os.environ.get("MARIMO_EXPORT_TOKEN") or None,
-            server_token=os.environ.get("MARIMO_EXPORT_SERVER_TOKEN") or None,
-            timeout=arguments.timeout,
-            max_index_bytes=arguments.max_index_bytes,
-            max_asset_bytes=arguments.max_asset_bytes,
-            max_publication_bytes=arguments.max_publication_bytes,
-        ) as client:
-            result = client.session(arguments.session_id).capture(
-                spec=spec,
-                into=destination,
-                replace=arguments.replace,
-            )
-        return result.to_dict()
-
+    publication = open_publication(arguments.publication)
     if arguments.command == "inspect":
-        publication = open_publication(
-            arguments.publication,
-            max_index_bytes=arguments.max_index_bytes,
-            max_asset_bytes=arguments.max_asset_bytes,
-            max_publication_bytes=arguments.max_publication_bytes,
-        )
-        return publication.describe()
-
+        summary = _publication_summary(publication)
+        return _CommandResult(summary, _inspect_human(summary))
     if arguments.command == "verify":
-        publication = open_publication(
-            arguments.publication,
-            max_index_bytes=arguments.max_index_bytes,
-            max_asset_bytes=arguments.max_asset_bytes,
-            max_publication_bytes=arguments.max_publication_bytes,
-        )
         verified = publication.verify()
-        return {
-            "path": str(Path(arguments.publication).expanduser().absolute()),
-            "verified": True,
-            "assets": verified,
-        }
-
-    if arguments.command == "read":
-        publication = open_publication(
-            arguments.publication,
-            max_index_bytes=arguments.max_index_bytes,
-            max_asset_bytes=arguments.max_asset_bytes,
-            max_publication_bytes=arguments.max_publication_bytes,
+        return _CommandResult(
+            verified.to_dict(),
+            _verify_human(verified, len(publication.states())),
         )
-        variant = publication.variant(arguments.variant)
-        output = variant.output(arguments.output_name)
-        published_format = output.format(arguments.format_name)
-        media_type = published_format.media_type
-        if arguments.output_file is not None:
-            payload = published_format.bytes()
-            output_path = _write_output(Path(arguments.output_file), payload)
-            return {
-                "path": str(output_path.absolute()),
-                "variant": arguments.variant,
-                "output": arguments.output_name,
-                "format": arguments.format_name,
-                "format_id": published_format.format_id,
-                "media_type": media_type,
-                "bytes": len(payload),
+    raise AssertionError(f"unknown command {arguments.command!r}")
+
+
+def _publication_summary(publication: Publication) -> dict[str, object]:
+    states = publication.states()
+    first = states[0]
+    representations = {
+        output.name: {"codec": output.codec, "media_type": output.media_type}
+        for output in first.outputs()
+    }
+    unique_assets: dict[tuple[str, str], int] = {}
+    for state in states:
+        for output in state.outputs():
+            descriptor = output.descriptor
+            if isinstance(descriptor, ScalarDescriptor):
+                continue
+            unique_assets[(descriptor.codec, descriptor.asset.sha256)] = descriptor.asset.size
+    return {
+        "asset_bytes": sum(unique_assets.values()),
+        "assets": len(unique_assets),
+        "inputs": list(publication.input_names),
+        "notebook": publication.notebook.to_value(),
+        "outputs": list(publication.output_names),
+        "path": str(publication.path),
+        "producer": publication.producer.to_value(),
+        "representations": representations,
+        "schema": "marimo-export.publication.v1",
+        "states": [
+            {
+                "fingerprint": state.fingerprint,
+                "inputs": _json_value(state.inputs),
+                "name": state.name,
             }
-        if not _is_textual(media_type):
-            raise _CliInputError("binary output requires --to FILE")
-        if json_mode:
-            value: object = (
-                published_format.json() if _is_json(media_type) else published_format.text()
-            )
-            return {
-                "variant": arguments.variant,
-                "output": arguments.output_name,
-                "format": arguments.format_name,
-                "format_id": published_format.format_id,
-                "media_type": media_type,
-                "value": value,
-            }
-        return _RawText(published_format.text())
-
-    raise AssertionError(f"unknown command: {arguments.command}")
+            for state in states
+        ],
+    }
 
 
-class _RawText(str):
-    pass
+def _publication_human(result: object, verb: str) -> str:
+    from marimo_export.publication import PublicationResult
+
+    assert isinstance(result, PublicationResult)
+    lines = [
+        f"{verb} {len(result.states)} states and {len(result.outputs)} outputs to {result.path}",
+        f"Assets: {result.assets} files, {_bytes(result.asset_bytes)}",
+        f"Cache: {result.cache.hits} hits, {result.cache.misses} misses",
+    ]
+    lines.extend(f"warning: {warning.message}" for warning in result.warnings)
+    return "\n".join(lines)
 
 
-def _client(
-    server: str,
-    *,
-    access_token: str | None = None,
-    server_token: str | None = None,
-    timeout: float = 300.0,
-    max_index_bytes: int = 16 * 1024 * 1024,
-    max_asset_bytes: int = 64 * 1024 * 1024,
-    max_publication_bytes: int = 512 * 1024 * 1024,
-) -> Client:
-    try:
-        return Client(
-            server,
-            access_token=access_token,
-            server_token=server_token,
-            timeout=timeout,
-            max_index_bytes=max_index_bytes,
-            max_asset_bytes=max_asset_bytes,
-            max_publication_bytes=max_publication_bytes,
+def _sessions_human(sessions: object) -> str:
+    assert isinstance(sessions, list)
+    lines = ["ID\tNotebook\tPath"]
+    for value in sessions:
+        assert isinstance(value, Mapping)
+        lines.append(
+            f"{value.get('id', '')}\t{value.get('filename') or ''}\t{value.get('path') or ''}"
         )
-    except (TypeError, ValueError) as error:
-        raise _CliInputError(str(error)) from error
+    return "\n".join(lines)
 
 
-def _write_output(path: Path, payload: bytes) -> Path:
-    path = path.expanduser().absolute()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    descriptor, staging_name = tempfile.mkstemp(
-        prefix=f".{path.name}.tmp-",
-        dir=path.parent,
+def _session_human(value: Mapping[str, object]) -> str:
+    capabilities = _strings(value["capabilities"], "capabilities")
+    lines = [
+        f"Session: {value['session_id']}",
+        f"Notebook: {value.get('filename') or '(unknown)'}",
+        f"Document: {value['document_sha256']}",
+        f"Runtime: marimo {value['marimo_version']}, marimo-export "
+        f"{value['marimo_export_version']}",
+        "Capabilities: " + ", ".join(capabilities),
+        "Definitions:",
+    ]
+    definitions = _list(value["definitions"], "definitions")
+    for definition in definitions:
+        item = _object(definition, "definition")
+        status = "portable" if item["portable_input"] else "producer-only"
+        lines.append(f"  {item['name']}  {item['kind']}  {item['python_type']}  {status}")
+    return "\n".join(lines)
+
+
+def _inspect_human(value: Mapping[str, object]) -> str:
+    notebook = _object(value["notebook"], "notebook")
+    producer = _object(value["producer"], "producer")
+    inputs = _strings(value["inputs"], "inputs")
+    outputs = _strings(value["outputs"], "outputs")
+    lines = [
+        f"Notebook: {notebook.get('filename') or '(unknown)'}",
+        f"Document: {notebook['document_sha256']}",
+        f"Producer: marimo {producer['marimo']}, marimo-export {producer['marimo_export']}",
+        "Inputs: " + ", ".join(inputs),
+        "Outputs: " + ", ".join(outputs),
+        "Representations:",
+    ]
+    representations = _object(value["representations"], "representations")
+    for name, representation in representations.items():
+        item = _object(representation, "representation")
+        lines.append(f"  {name}  {item['codec']}  {item['media_type']}")
+    lines.append("States:")
+    states = _list(value["states"], "states")
+    for state in states:
+        item = _object(state, "state")
+        lines.append(f"  {item['name']}  {item['fingerprint']}")
+    lines.extend(
+        [
+            f"Assets declared: {value['assets']}",
+            f"Bytes declared: {_bytes(_integer(value['asset_bytes'], 'asset_bytes'))}",
+        ]
     )
-    staging = Path(staging_name)
-    try:
-        with os.fdopen(descriptor, "wb") as file:
-            file.write(payload)
-            file.flush()
-            os.fsync(file.fileno())
-        os.link(staging, path)
-        _sync_directory_best_effort(path.parent)
-    finally:
-        with suppress(OSError):
-            staging.unlink()
-    return path
+    return "\n".join(lines)
 
 
-def _write_human_result(result: object) -> None:
-    if isinstance(result, _RawText):
-        sys.stdout.write(result)
-        return
-    if isinstance(result, Mapping):
-        encoded = json.dumps(_json_value(result), allow_nan=False, ensure_ascii=False, indent=2)
-        sys.stdout.write(encoded + "\n")
-        return
-    print(result)
+def _verify_human(result: VerificationResult, states: int) -> str:
+    return (
+        f"Verified {result.assets} assets and {_bytes(result.bytes_verified)} for {states} states"
+    )
 
 
-def _fail(
+def _failure(
     json_mode: bool,
     exit_code: int,
     code: str,
     message: str,
     details: object | None = None,
 ) -> int:
-    message = _redact_cli_message(message)
-    details = _redact_cli_value(details)
     error: dict[str, object] = {"code": code, "message": message}
-    if details is not None:
+    if details:
         error["details"] = _json_value(details)
     if json_mode:
-        _write_json(sys.stdout, {"ok": False, "error": error})
+        _write_json({"error": error, "ok": False})
     else:
         print(f"error: {message}", file=sys.stderr)
     return exit_code
 
 
 def _exit_code(error: BaseException) -> int | None:
-    if isinstance(error, (SpecError, _CliInputError)):
-        return EXIT_INPUT
-    if isinstance(error, PublicationError) and error.code == "not_found":
+    if isinstance(error, (SpecError, TypeError, ValueError)):
         return EXIT_INPUT
     if isinstance(error, TransportError):
         return EXIT_TRANSPORT
-    if isinstance(error, SessionError):
+    if isinstance(error, (SessionError, CompatibilityError)):
         return EXIT_SESSION
-    if isinstance(error, CaptureError):
-        return EXIT_CAPTURE
-    if isinstance(error, (IntegrityError, PublicationError)):
+    if isinstance(error, IntegrityError):
         return EXIT_INTEGRITY
+    if isinstance(error, PublicationError):
+        if error.code.startswith("destination_") or error.code in {
+            "publication_commit_failed",
+            "replacement_unavailable",
+        }:
+            return EXIT_FILESYSTEM
+        return EXIT_INTEGRITY
+    if isinstance(error, (ExecutionError, OutputError, CodecError)):
+        if error.code.startswith("server_"):
+            return EXIT_SESSION
+        return EXIT_EXECUTION
     if isinstance(error, OSError):
         return EXIT_FILESYSTEM
     return None
 
 
-def _error_code(error: BaseException) -> str:
-    code = getattr(error, "code", None)
-    if isinstance(code, str) and code:
-        return code
-    if isinstance(error, FileExistsError):
-        return "destination_exists"
-    if isinstance(error, OSError):
-        return "filesystem_error"
-    return "invalid_input"
+def _positive_timeout(value: str) -> float:
+    try:
+        timeout = float(value)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError("timeout must be a positive finite number") from error
+    if not math.isfinite(timeout) or timeout <= 0:
+        raise argparse.ArgumentTypeError("timeout must be a positive finite number")
+    return timeout
 
 
-def _error_message(error: BaseException) -> str:
-    message = str(error)
-    return _redact_cli_message(message if message else type(error).__name__)
-
-
-def _error_details(error: BaseException) -> object | None:
-    details = getattr(error, "details", None)
-    return _redact_cli_value(details) if isinstance(details, Mapping) and details else None
+def _write_json(value: Mapping[str, object]) -> None:
+    sys.stdout.write(
+        json.dumps(
+            _json_value(value),
+            allow_nan=False,
+            ensure_ascii=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        )
+        + "\n"
+    )
 
 
 def _json_value(value: object) -> object:
-    if value is None or isinstance(value, (str, int, float, bool)):
+    if value is None or isinstance(value, (bool, int, float, str)):
         return value
     if isinstance(value, Path):
         return str(value)
     if isinstance(value, Mapping):
-        result: dict[str, object] = {}
-        for key, item in value.items():
-            if not isinstance(key, str):
-                raise TypeError("result object keys must be strings")
-            result[key] = _json_value(item)
-        return result
+        return {str(key): _json_value(item) for key, item in value.items()}
     if isinstance(value, (list, tuple)):
         return [_json_value(item) for item in value]
-    raise TypeError(f"result contains unsupported {type(value).__name__}")
+    raise TypeError(f"CLI result contains unsupported {type(value).__name__}")
 
 
-def _write_json(stream: TextIO, value: object) -> None:
-    encoded = json.dumps(
-        _json_value(value),
-        allow_nan=False,
-        ensure_ascii=False,
-        separators=(",", ":"),
-        sort_keys=True,
-    )
-    stream.write(encoded + "\n")
+def _object(value: object, label: str) -> Mapping[str, object]:
+    if not isinstance(value, Mapping) or any(not isinstance(key, str) for key in value):
+        raise TypeError(f"{label} must be an object")
+    return cast(Mapping[str, object], value)
 
 
-def _redact_cli_message(message: str) -> str:
-    return safe_diagnostic(message, secrets=_cli_secrets())
+def _list(value: object, label: str) -> list[object]:
+    if not isinstance(value, list):
+        raise TypeError(f"{label} must be an array")
+    return cast(list[object], value)
 
 
-def _redact_cli_value(value: object) -> object:
-    if isinstance(value, str):
-        return _redact_cli_message(value)
-    if isinstance(value, Mapping):
-        result: dict[str, object] = {}
-        for key, item in value.items():
-            redacted_key = _redact_cli_message(str(key))
-            suffix = 2
-            unique_key = redacted_key
-            while unique_key in result:
-                unique_key = f"{redacted_key}#{suffix}"
-                suffix += 1
-            result[unique_key] = _redact_cli_value(item)
-        return result
-    if isinstance(value, (list, tuple)):
-        return [_redact_cli_value(item) for item in value]
+def _strings(value: object, label: str) -> list[str]:
+    items = _list(value, label)
+    if any(not isinstance(item, str) for item in items):
+        raise TypeError(f"{label} must contain strings")
+    return cast(list[str], items)
+
+
+def _integer(value: object, label: str) -> int:
+    if not isinstance(value, int) or isinstance(value, bool):
+        raise TypeError(f"{label} must be an integer")
     return value
 
 
-def _cli_secrets() -> tuple[str, ...]:
-    return tuple(
-        value
-        for name in ("MARIMO_EXPORT_TOKEN", "MARIMO_EXPORT_SERVER_TOKEN")
-        if (value := os.environ.get(name))
-    )
+def _bytes(value: int) -> str:
+    if value < 1024:
+        return f"{value} B"
+    amount = float(value)
+    for unit in ("KiB", "MiB", "GiB"):
+        amount /= 1024
+        if amount < 1024 or unit == "GiB":
+            return f"{amount:.1f} {unit}"
+    raise AssertionError
 
 
-def _sync_directory_best_effort(path: Path) -> None:
-    if os.name != "posix":
-        return
-    try:
-        descriptor = os.open(path, os.O_RDONLY)
-        try:
-            os.fsync(descriptor)
-        finally:
-            os.close(descriptor)
-    except OSError:
-        pass
-
-
-def _is_json(media_type: str) -> bool:
-    base = media_type.partition(";")[0].strip().lower()
-    return base == "application/json" or base.endswith("+json")
-
-
-def _is_textual(media_type: str) -> bool:
-    base = media_type.partition(";")[0].strip().lower()
-    return base.startswith("text/") or _is_json(base) or base.endswith("+xml")
-
-
-def _add_connection_options(parser: argparse.ArgumentParser) -> None:
-    parser.epilog = (
-        "Authentication uses MARIMO_EXPORT_TOKEN and MARIMO_EXPORT_SERVER_TOKEN when set."
-    )
-    parser.add_argument(
-        "--timeout",
-        type=_positive_float,
-        default=300.0,
-        help="request timeout in seconds (default: 300)",
-    )
-
-
-def _add_index_limit(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument(
-        "--max-index-bytes",
-        type=_positive_integer,
-        default=16 * 1024 * 1024,
-        help="maximum bytes accepted for index.json (default: 16777216)",
-    )
-
-
-def _add_asset_limit(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument(
-        "--max-asset-bytes",
-        type=_positive_integer,
-        default=64 * 1024 * 1024,
-        help="maximum bytes accepted for one cache asset (default: 67108864)",
-    )
-
-
-def _add_publication_limit(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument(
-        "--max-publication-bytes",
-        type=_positive_integer,
-        default=512 * 1024 * 1024,
-        help="maximum bytes accepted for one publication (default: 536870912)",
-    )
-
-
-def _add_json_option(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument(
-        "--json", action="store_true", help="emit one machine-readable result object"
-    )
-
-
-def _positive_float(value: str) -> float:
-    try:
-        parsed = float(value)
-    except ValueError as error:
-        raise argparse.ArgumentTypeError("must be a number") from error
-    if parsed <= 0:
-        raise argparse.ArgumentTypeError("must be greater than zero")
-    return parsed
-
-
-def _positive_integer(value: str) -> int:
-    try:
-        parsed = int(value)
-    except ValueError as error:
-        raise argparse.ArgumentTypeError("must be an integer") from error
-    if parsed <= 0:
-        raise argparse.ArgumentTypeError("must be greater than zero")
-    if parsed > _MAX_SAFE_INTEGER:
-        raise argparse.ArgumentTypeError(f"must be at most {_MAX_SAFE_INTEGER}")
-    return parsed
-
-
-def _session_id(value: str) -> str:
-    if (
-        not value
-        or len(value) > 1024
-        or any(ord(character) < 32 or ord(character) == 127 for character in value)
-    ):
-        raise argparse.ArgumentTypeError("must be a non-empty marimo session ID")
-    return value
+def _bounded(value: str) -> str:
+    if len(value) <= 2_048:
+        return value
+    return value[:2_045] + "..."
 
 
 def _package_version() -> str:
     try:
         return version("marimo-export")
     except PackageNotFoundError:
-        return "0+unknown"
+        return "0.0.0"
 
 
-if __name__ == "__main__":
-    raise SystemExit(main())
-
-
-__all__ = ["main"]
+__all__ = [
+    "EXIT_BROKEN_PIPE",
+    "EXIT_EXECUTION",
+    "EXIT_FILESYSTEM",
+    "EXIT_INPUT",
+    "EXIT_INTEGRITY",
+    "EXIT_SESSION",
+    "EXIT_TRANSPORT",
+    "main",
+]

@@ -27,9 +27,9 @@ from marimo._utils.code import hash_code
 from marimo._utils.data_uri import build_data_url
 
 from marimo_export._json import json_value
-from marimo_export.errors import ProjectionError
+from marimo_export.errors import OutputError
 
-from ._anywidget_assets import portable_css, validate_embedded_esm
+from .anywidget_assets import portable_css, validate_embedded_esm
 
 ANYWIDGET_PAYLOAD_SCHEMA = "marimo-export.anywidget.v1"
 
@@ -92,11 +92,11 @@ def _widget_value(value: object) -> Any:
     try:
         import ipywidgets
     except ImportError as error:
-        raise ProjectionError(
+        raise OutputError(
             "AnyWidget export requires the anywidget and ipywidgets packages"
         ) from error
     if not isinstance(candidate, ipywidgets.Widget):
-        raise ProjectionError(
+        raise OutputError(
             "AnyWidget export requires an anywidget.AnyWidget or mo.ui.anywidget value"
         )
     return candidate
@@ -111,10 +111,10 @@ def _live_model_graph(
 
     registry = getattr(widget_module, "_instances", None)
     if not isinstance(registry, Mapping):
-        raise ProjectionError("AnyWidget export could not inspect active widget models")
+        raise OutputError("AnyWidget export could not inspect active widget models")
     models = cast(Mapping[str, Any], registry)
     if models.get(root_id) is not root:
-        raise ProjectionError(
+        raise OutputError(
             "AnyWidget export requires a model already active in the running marimo session"
         )
 
@@ -128,14 +128,14 @@ def _live_model_graph(
         seen.add(model_id)
         widget = models.get(model_id)
         if not isinstance(widget, ipywidgets.Widget):
-            raise ProjectionError(
+            raise OutputError(
                 f"AnyWidget state references model {model_id!r} outside the live model graph"
             )
         notification = _model_open(widget)
         if str(notification.model_id) != model_id:
-            raise ProjectionError(f"AnyWidget model {model_id!r} changed identity during capture")
+            raise OutputError(f"AnyWidget model {model_id!r} changed identity during capture")
         if not isinstance(notification.message, ModelOpen):
-            raise ProjectionError("AnyWidget snapshot contains a non-open model")
+            raise OutputError("AnyWidget snapshot contains a non-open model")
         ordered.append(notification)
         queue.extend(_model_refs(notification.message.state))
     return ordered
@@ -145,9 +145,9 @@ def _model_id(widget: Any) -> str:
     try:
         model_id = get_anywidget_model_id(widget)
     except RuntimeError as error:
-        raise ProjectionError("AnyWidget export could not resolve a model ID") from error
+        raise OutputError("AnyWidget export could not resolve a model ID") from error
     except Exception as error:
-        raise ProjectionError("AnyWidget export could not resolve a model ID") from error
+        raise OutputError("AnyWidget export could not resolve a model ID") from error
     return str(model_id)
 
 
@@ -155,7 +155,7 @@ def _model_open(widget: Any) -> ModelLifecycleNotification:
     comm = _active_marimo_comm(widget)
     state, buffer_paths, buffers = extract_buffer_paths(widget.get_state())
     if _active_marimo_comm(widget) is not comm:
-        raise ProjectionError("AnyWidget model changed comm during capture")
+        raise OutputError("AnyWidget model changed comm during capture")
     state = dict(state)
     state.pop("_esm", None)
     return ModelLifecycleNotification(
@@ -176,7 +176,7 @@ def _active_marimo_comm(widget: Any) -> MarimoComm:
         or comm._closed
         or comm.comm_manager.comms.get(comm.comm_id) is not comm
     ):
-        raise ProjectionError(
+        raise OutputError(
             "AnyWidget export requires a model already active in the running marimo session"
         )
     return comm
@@ -211,7 +211,7 @@ def _canonical_notification(
 ) -> ModelLifecycleNotification:
     message = notification.message
     if not isinstance(message, ModelOpen):
-        raise ProjectionError("AnyWidget snapshot contains a non-open model")
+        raise OutputError("AnyWidget snapshot contains a non-open model")
     state = cast(
         dict[str, Any],
         _rewrite_model_refs(message.state, canonical_ids),
@@ -219,7 +219,7 @@ def _canonical_notification(
     css = state.get("_css")
     if css is not None:
         if not isinstance(css, str):
-            raise ProjectionError("AnyWidget _css state must be a string")
+            raise OutputError("AnyWidget _css state must be a string")
         state["_css"] = portable_css(css)
     pairs = sorted(
         zip(message.buffer_paths, message.buffers, strict=True),
@@ -246,20 +246,20 @@ def _canonical_esm_spec(
         return spec
     match = _VIRTUAL_FILE.fullmatch(spec.url)
     if match is None:
-        raise ProjectionError(f"AnyWidget ESM uses an unsupported URL: {spec.url!r}")
+        raise OutputError(f"AnyWidget ESM uses an unsupported URL: {spec.url!r}")
     expected_size = int(match.group("size"))
     contents = read_virtual_file(match.group("name"), expected_size)
     if len(contents) != expected_size:
-        raise ProjectionError(
+        raise OutputError(
             f"AnyWidget ESM {spec.url!r} declared {expected_size} bytes but "
             f"returned {len(contents)}"
         )
     try:
         source = contents.decode("utf-8")
     except UnicodeDecodeError as error:
-        raise ProjectionError("AnyWidget ESM must contain UTF-8 JavaScript") from error
+        raise OutputError("AnyWidget ESM must contain UTF-8 JavaScript") from error
     if hash_code(source) != spec.hash:
-        raise ProjectionError("AnyWidget ESM contents do not match marimo's model code hash")
+        raise OutputError("AnyWidget ESM contents do not match marimo's model code hash")
     validate_embedded_esm(source)
     digest = hashlib.sha256(contents).hexdigest()
     url = f"./@file/{len(contents)}-anywidget-{digest}.js"
@@ -291,7 +291,7 @@ def _canonical_id(runtime_id: str, canonical_ids: dict[str, str]) -> str:
     try:
         return canonical_ids[runtime_id]
     except KeyError as error:
-        raise ProjectionError(
+        raise OutputError(
             f"AnyWidget state references model {runtime_id!r} outside its graph"
         ) from error
 

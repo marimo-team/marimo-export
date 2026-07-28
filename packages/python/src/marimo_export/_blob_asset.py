@@ -5,8 +5,8 @@ from typing import cast
 
 import msgspec
 
-from marimo_export._format import MAX_FORMAT_METADATA_JSON_BYTES, validate_media_type
 from marimo_export._json import JsonObject, canonical_bytes, portable_json_object
+from marimo_export._media_type import MAX_BLOB_METADATA_JSON_BYTES, validate_media_type
 from marimo_export._portable import validate_portable_basename
 
 _FIELDS = ("data", "media_type", "filename", "metadata")
@@ -67,9 +67,9 @@ def decode_blob_asset(
         metadata_object = portable_json_object(metadata, "BlobAsset metadata")
     except (TypeError, ValueError) as error:
         raise ValueError("BlobAsset metadata must be portable JSON") from error
-    if len(canonical_bytes(metadata_object)) > MAX_FORMAT_METADATA_JSON_BYTES:
+    if len(canonical_bytes(metadata_object)) > MAX_BLOB_METADATA_JSON_BYTES:
         raise ValueError(
-            f"BlobAsset metadata exceeds {MAX_FORMAT_METADATA_JSON_BYTES} canonical JSON bytes"
+            f"BlobAsset metadata exceeds {MAX_BLOB_METADATA_JSON_BYTES} canonical JSON bytes"
         )
 
     return BlobAssetEnvelope(

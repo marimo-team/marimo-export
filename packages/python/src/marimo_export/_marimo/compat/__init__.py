@@ -109,6 +109,14 @@ def runtime_path() -> str | None:
     return value if isinstance(value, str) and value else None
 
 
+def capture_anywidget_bundle(value: object) -> bytes:
+    """Capture a live AnyWidget graph through the compatibility boundary."""
+
+    from marimo_export._marimo.compat.anywidget import capture_anywidget_payload
+
+    return capture_anywidget_payload(value)
+
+
 def new_transfer_virtual_file(data: bytes) -> object:
     """Create one marimo virtual file for exact transfer bytes."""
 

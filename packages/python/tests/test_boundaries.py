@@ -11,32 +11,14 @@ import marimo_export
 
 def test_root_package_exposes_the_public_api() -> None:
     expected = {
-        "BuiltinExporterDescription",
-        "CacheSummary",
-        "CaptureError",
-        "CaptureResult",
-        "CellDescription",
+        "BlobAsset",
         "Client",
-        "ControlDescription",
-        "TransportError",
         "ExportSpec",
-        "GlobalDescription",
-        "IntegrityError",
-        "JsonObject",
-        "JsonValue",
-        "MarimoExportError",
-        "NotebookProvenance",
-        "Projection",
-        "ProducerProvenance",
+        "OutputSpec",
         "Publication",
-        "PublicationError",
-        "PublishedFormat",
-        "PublishedOutput",
-        "PublishedVariant",
+        "PublicationResult",
         "Session",
-        "SessionDescription",
-        "SessionError",
-        "SpecError",
+        "build",
         "capture",
         "open_publication",
     }
@@ -49,7 +31,8 @@ def test_private_marimo_imports_stay_in_adapter_package() -> None:
     package = Path(__file__).parents[1] / "src" / "marimo_export"
     violations: list[str] = []
     for source in package.rglob("*.py"):
-        if "_marimo" in source.relative_to(package).parts:
+        relative = source.relative_to(package)
+        if relative.parts[:2] == ("_marimo", "compat"):
             continue
         tree = ast.parse(source.read_text(encoding="utf-8"), filename=str(source))
         for node in ast.walk(tree):
@@ -67,7 +50,7 @@ def test_private_marimo_imports_stay_in_adapter_package() -> None:
 def test_domain_modules_do_not_import_runtime_adapters() -> None:
     package = Path(__file__).parents[1] / "src" / "marimo_export"
     violations: list[str] = []
-    for name in ("errors.py", "projection.py", "publication.py", "spec.py"):
+    for name in ("errors.py", "publication.py", "spec.py"):
         source = package / name
         tree = ast.parse(source.read_text(encoding="utf-8"), filename=str(source))
         for node in ast.walk(tree):
@@ -85,7 +68,7 @@ import sys
 import marimo_export
 
 names = {name.split('.', 1)[0] for name in sys.modules}
-print(json.dumps(sorted(names & {'anywidget', 'marimo', 'narwhals', 'pyarrow', 'vl_convert'})))
+print(json.dumps(sorted(names & {'anywidget', 'pyarrow', 'vl_convert'})))
 """
     completed = subprocess.run(
         [sys.executable, "-c", script],

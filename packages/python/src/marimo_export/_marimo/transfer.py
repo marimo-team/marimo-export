@@ -17,7 +17,7 @@ from marimo_export._marimo.compat import (
     new_transfer_virtual_file,
     transfer_runtime_context,
 )
-from marimo_export.errors import TransferError
+from marimo_export.errors import IntegrityError
 from marimo_export.publication import OutputCodec, ScalarDescriptor
 
 _DEFAULT_TTL_SECONDS = 5 * 60.0
@@ -105,7 +105,7 @@ def create_ticket(
     unique = _payloads(receipts)
     context = cast(_RuntimeContext, transfer_runtime_context())
     if not context.virtual_files_supported:
-        raise TransferError("the attached marimo runtime cannot serve virtual files")
+        raise IntegrityError("the attached marimo runtime cannot serve virtual files")
     registry = context.virtual_file_registry
 
     with _LOCK:
@@ -150,9 +150,9 @@ def create_ticket(
             if _TICKETS:
                 with suppress(Exception):
                     _schedule_locked()
-            if isinstance(error, TransferError) and not cleanup_errors:
+            if isinstance(error, IntegrityError) and not cleanup_errors:
                 raise
-            raise TransferError("failed to register publication assets") from error
+            raise IntegrityError("failed to register publication assets") from error
 
 
 def release(ticket_id: str) -> bool:
@@ -171,7 +171,7 @@ def release(ticket_id: str) -> bool:
             lease.deadline = _monotonic() + _CLEANUP_RETRY_SECONDS
             _TICKETS[ticket_id] = lease
             _schedule_locked()
-            raise TransferError(
+            raise IntegrityError(
                 f"failed to release {len(errors)} virtual file resource(s)"
             ) from errors[0][1]
         _schedule_locked()
@@ -195,7 +195,7 @@ def _payloads(
     except TypeError as error:
         raise TypeError("receipts must be iterable") from error
     if len(materialized) > _MAX_ASSETS_PER_TICKET:
-        raise TransferError(
+        raise IntegrityError(
             f"a transfer ticket may contain at most {_MAX_ASSETS_PER_TICKET} receipts"
         )
     unique: dict[tuple[OutputCodec, str], bytes] = {}
@@ -204,19 +204,19 @@ def _payloads(
             raise TypeError("receipts must contain NativeReceipt values")
         if isinstance(receipt.descriptor, ScalarDescriptor):
             if receipt.payload is not None:
-                raise TransferError("a scalar receipt cannot carry transfer bytes")
+                raise IntegrityError("a scalar receipt cannot carry transfer bytes")
             continue
         payload = receipt.payload
         if not isinstance(payload, bytes) or not payload:
-            raise TransferError("an asset receipt must carry nonempty bytes")
+            raise IntegrityError("an asset receipt must carry nonempty bytes")
         identity = (receipt.descriptor.codec, receipt.descriptor.asset.sha256)
         if len(payload) != receipt.descriptor.asset.size:
-            raise TransferError("an asset receipt size disagrees with its descriptor")
+            raise IntegrityError("an asset receipt size disagrees with its descriptor")
         if hashlib.sha256(payload).hexdigest() != identity[1]:
-            raise TransferError("an asset receipt digest disagrees with its descriptor")
+            raise IntegrityError("an asset receipt digest disagrees with its descriptor")
         previous = unique.setdefault(identity, payload)
         if previous != payload:
-            raise TransferError(f"asset identity {identity!r} has conflicting bytes")
+            raise IntegrityError(f"asset identity {identity!r} has conflicting bytes")
     return tuple((codec, digest, payload) for (codec, digest), payload in sorted(unique.items()))
 
 
@@ -241,12 +241,12 @@ def _register(
         if not registry.has(virtual_file.filename):
             break
     else:
-        raise TransferError("failed to allocate a unique virtual file name")
+        raise IntegrityError("failed to allocate a unique virtual file name")
     _validate_virtual_file(virtual_file, payload)
     owned_files.append(virtual_file)
     registry.add(virtual_file, context)
     if not registry.has(virtual_file.filename):
-        raise TransferError("marimo did not register the transfer virtual file")
+        raise IntegrityError("marimo did not register the transfer virtual file")
     return virtual_file
 
 
@@ -254,7 +254,7 @@ def _validate_virtual_file(virtual_file: _VirtualFile, payload: bytes) -> None:
     filename = virtual_file.filename
     url = virtual_file.url
     if virtual_file.buffer != payload:
-        raise TransferError("marimo changed the transfer virtual-file bytes")
+        raise IntegrityError("marimo changed the transfer virtual-file bytes")
     if (
         not isinstance(filename, str)
         or not filename
@@ -262,9 +262,9 @@ def _validate_virtual_file(virtual_file: _VirtualFile, payload: bytes) -> None:
         or not filename.endswith(".bin")
         or any(character in filename for character in ("/", "\\", "\x00"))
     ):
-        raise TransferError("marimo produced an invalid transfer filename")
+        raise IntegrityError("marimo produced an invalid transfer filename")
     if not isinstance(url, str) or not url or len(url) > _MAX_VIRTUAL_FILE_URL_LENGTH:
-        raise TransferError("marimo produced an invalid transfer URL")
+        raise IntegrityError("marimo produced an invalid transfer URL")
     parsed = urlsplit(url)
     prefix = f"./@file/{len(payload)}-"
     if (
@@ -274,7 +274,7 @@ def _validate_virtual_file(virtual_file: _VirtualFile, payload: bytes) -> None:
         or parsed.fragment
         or parsed.path != f"{prefix}{filename}"
     ):
-        raise TransferError("marimo virtual-file transfer requires a relative @file URL")
+        raise IntegrityError("marimo virtual-file transfer requires a relative @file URL")
 
 
 def _remove_files(
@@ -342,12 +342,12 @@ def _allocate_ticket_id_locked() -> str:
         ticket_id = uuid4().hex
         if ticket_id not in _TICKETS and _TICKET_ID.fullmatch(ticket_id):
             return ticket_id
-    raise TransferError("failed to allocate a unique transfer ticket identifier")
+    raise IntegrityError("failed to allocate a unique transfer ticket identifier")
 
 
 def _validate_ticket_id(ticket_id: str) -> None:
     if not isinstance(ticket_id, str) or _TICKET_ID.fullmatch(ticket_id) is None:
-        raise TransferError("transfer ticket must be 32 lowercase hexadecimal characters")
+        raise IntegrityError("transfer ticket must be 32 lowercase hexadecimal characters")
 
 
 def _make_timer(

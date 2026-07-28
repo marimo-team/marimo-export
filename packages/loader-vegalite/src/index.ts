@@ -1,13 +1,13 @@
+import { defineBlobAssetLoader } from "@marimo-team/marimo-export";
 import type {
-  FormatLoader,
-  FormatLoaderContext,
+  BlobAssetLoadInput,
+  BlobAssetLoader,
   JsonObject,
   MountedView,
 } from "@marimo-team/marimo-export";
 import type { EmbedOptions, Result as VegaEmbedResult, VisualizationSpec } from "vega-embed";
 
-const FORMAT_ID = "vegalite.v1";
-const MEDIA_TYPE = /^application\/vnd\.vegalite(?:\.v[1-9]\d*)?\+json$/u;
+const MEDIA_TYPE = /^application\/vnd\.vegalite\.v[1-9]\d*\+json$/u;
 const OWNED_CLASSES = ["vega-embed", "has-actions"] as const;
 
 export type VegaLiteSpec = Readonly<JsonObject>;
@@ -23,33 +23,28 @@ export interface VegaLiteChart {
 }
 
 /** Load a Vega-Lite projection and prepare it for browser mounting. */
-export function vegaLiteLoader(defaults: EmbedOptions = {}): FormatLoader<VegaLiteChart> {
+export function vegaLiteLoader(defaults: EmbedOptions = {}): BlobAssetLoader<VegaLiteChart> {
   const defaultOptions = { ...defaults };
-  return {
-    formatId: FORMAT_ID,
-    load(output) {
-      return loadChart(output, defaultOptions);
+  return defineBlobAssetLoader({
+    mediaTypes: (mediaType) => MEDIA_TYPE.test(mediaType.essence),
+    load(input) {
+      return loadChart(input, defaultOptions);
     },
-    async mount(output, element) {
-      return (await loadChart(output, defaultOptions)).mount(
-        element,
-        output.signal === undefined ? {} : { signal: output.signal },
-      );
-    },
-  };
+  });
 }
 
 async function loadChart(
-  output: FormatLoaderContext,
+  input: BlobAssetLoadInput,
   defaults: VegaLiteMountOptions,
 ): Promise<VegaLiteChart> {
-  if (!MEDIA_TYPE.test(output.mediaType)) {
-    throw new TypeError("Vega-Lite output must use a Vega-Lite JSON media type.");
-  }
-  const value = await output.json();
+  input.signal?.throwIfAborted();
+  const value: unknown = JSON.parse(
+    new TextDecoder("utf-8", { fatal: true }).decode(input.payload.data),
+  );
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
     throw new TypeError("Vega-Lite output must contain a JSON object.");
   }
+  input.signal?.throwIfAborted();
   const template = value as JsonObject;
   const spec = freezeJson(structuredClone(template));
   return Object.freeze({

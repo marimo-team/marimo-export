@@ -10,12 +10,11 @@ from marimo_export import (
     Client,
     ExportSpec,
     OutputSpec,
-    PublicationError,
-    SessionError,
     open_publication,
 )
 from marimo_export._json import JsonObject, sha256_bytes
 from marimo_export._remote import BridgeError, SessionInfo
+from marimo_export.errors import PublicationError, SessionError
 from marimo_export.publication import (
     AssetRef,
     NotebookProvenance,

@@ -103,22 +103,21 @@ describe("AnyWidget browser runtime", () => {
     expect(off).toHaveBeenCalledTimes(2);
   });
 
-  test("mounts through a registered publication loader", async () => {
+  test("mounts a loaded publication value", async () => {
     const url = moduleUrl(`
       export default {
         render({ el }) { el.dataset.registered = "true"; },
       };
     `);
-    const loader = anyWidgetLoader();
     const output = await outputFor(
       payload({
         modelNotifications: [notification({ id: "model-0", state: {}, moduleUrl: url })],
       }),
-      { loaders: [loader] },
     );
     const element = documentValue.createElement("div");
 
-    const mounted = await output.mount(element as unknown as HTMLElement);
+    const loaded = await output.load(anyWidgetLoader());
+    const mounted = await loaded.mount(element as unknown as HTMLElement);
 
     expect(element.dataset.registered).toBe("true");
     await mounted.dispose();

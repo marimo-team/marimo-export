@@ -3,9 +3,10 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from marimo_export import PublicationError, open_publication
+from marimo_export import open_publication
 from marimo_export._json import sha256_bytes
 from marimo_export._writer import write_publication
+from marimo_export.errors import PublicationError
 from marimo_export.publication import (
     AssetRef,
     NotebookProvenance,

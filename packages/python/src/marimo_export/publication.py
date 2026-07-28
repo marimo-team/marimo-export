@@ -8,7 +8,6 @@ from pathlib import Path, PurePosixPath, PureWindowsPath
 from types import MappingProxyType
 from typing import Literal, TypeAlias, cast
 
-from marimo_export._format import MAX_FORMAT_METADATA_JSON_BYTES, validate_media_type
 from marimo_export._json import (
     JsonObject,
     JsonValue,
@@ -19,6 +18,7 @@ from marimo_export._json import (
     portable_json_object,
     sha256_bytes,
 )
+from marimo_export._media_type import MAX_BLOB_METADATA_JSON_BYTES, validate_media_type
 from marimo_export._portable import validate_portable_basename
 from marimo_export.errors import PublicationError
 
@@ -233,9 +233,9 @@ class BlobAssetDescriptor:
                     "BlobAsset filename must be a portable basename or null"
                 ) from error
         metadata_bytes = canonical_bytes(portable_json_object(metadata, "BlobAsset metadata"))
-        if len(metadata_bytes) > MAX_FORMAT_METADATA_JSON_BYTES:
+        if len(metadata_bytes) > MAX_BLOB_METADATA_JSON_BYTES:
             raise ValueError(
-                f"BlobAsset metadata exceeds {MAX_FORMAT_METADATA_JSON_BYTES} canonical JSON bytes"
+                f"BlobAsset metadata exceeds {MAX_BLOB_METADATA_JSON_BYTES} canonical JSON bytes"
             )
         object.__setattr__(self, "asset", asset)
         object.__setattr__(self, "provenance", provenance)

@@ -1,45 +1,47 @@
 import { encode } from "@msgpack/msgpack";
 import { openPublication } from "@marimo-team/marimo-export";
-import type { FormatLoader, PublishedFormat } from "@marimo-team/marimo-export";
+import type { PublishedOutput } from "@marimo-team/marimo-export";
 
 const encoder = new TextEncoder();
 
 export async function outputFor(
   payload: unknown,
   options: {
-    readonly formatId?: string;
     readonly mediaType?: string;
-    readonly loaders?: readonly FormatLoader[];
   } = {},
-): Promise<PublishedFormat> {
+): Promise<PublishedOutput> {
   const data = encoder.encode(JSON.stringify(payload));
-  const formatId = options.formatId ?? "anywidget.v1";
-  const mediaType = options.mediaType ?? "application/vnd.marimo-export.anywidget+json";
+  const mediaType = options.mediaType ?? "application/vnd.marimo-export.anywidget.v1+json";
   const envelope = encode({
     data,
     media_type: mediaType,
     filename: null,
-    metadata: { format_id: formatId, metadata_json: encoder.encode("{}") },
+    metadata: {},
   });
   const sha256 = await digest(envelope);
-  const key = "C_anywidget/return.bin";
+  const inputs = {};
+  const fingerprint = await digest(encoder.encode("{}"));
   const index = {
-    schema: "marimo-export.publication.v1",
-    asset_codec: "marimo.blob-asset.msgpack.v1",
-    notebook: { filename: "widget.py", document_sha256: "a".repeat(64) },
+    inputs: [],
+    notebook: { document_sha256: "a".repeat(64), filename: "widget.py" },
+    outputs: ["widget"],
     producer: { marimo: "0.24.0", marimo_export: "0.0.0" },
-    variants: {
+    schema: "marimo-export.publication.v1",
+    states: {
       current: {
-        controls: {},
+        fingerprint,
+        inputs,
         outputs: {
           widget: {
-            formats: {
-              anywidget: {
-                format_id: formatId,
-                media_type: mediaType,
-                metadata: {},
-                asset: { key, sha256, size: envelope.byteLength },
-              },
+            asset: { sha256, size: envelope.byteLength },
+            codec: "marimo.blob-asset.msgpack.v1",
+            filename: null,
+            media_type: mediaType,
+            metadata: {},
+            provenance: {
+              cache_key: "cell_cache/P_widget.json",
+              python_type: "marimo._save.cache.BlobAsset",
+              return_reference: "cell_cache/P_widget/return.bin",
             },
           },
         },
@@ -48,20 +50,29 @@ export async function outputFor(
   };
   const fetch: typeof globalThis.fetch = async (input) => {
     const url = input instanceof Request ? input.url : input.toString();
-    if (url.endsWith("/index.json")) return new Response(JSON.stringify(index));
-    if (url.endsWith(`/cache/${key}`)) return new Response(new Uint8Array(envelope));
+    if (url.endsWith("/index.json")) return new Response(canonicalJson(index));
+    if (url.endsWith(`/assets/${sha256}.bin`)) {
+      return new Response(new Uint8Array(envelope));
+    }
     return new Response(null, { status: 404 });
   };
-  const publication = await openPublication("https://example.test/export/", {
-    fetch,
-    ...(options.loaders === undefined ? {} : { loaders: options.loaders }),
-  });
-  return publication.variant("current").output("widget").format("anywidget");
+  const publication = await openPublication("https://example.test/export/", { fetch });
+  return publication.state("current").output("widget");
 }
 
 async function digest(bytes: Uint8Array): Promise<string> {
   const value = await crypto.subtle.digest("SHA-256", bytes as Uint8Array<ArrayBuffer>);
   return [...new Uint8Array(value)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function canonicalJson(value: unknown): string {
+  if (value === null || typeof value !== "object") return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  const object = value as Record<string, unknown>;
+  return `{${Object.keys(object)
+    .sort()
+    .map((key) => `${JSON.stringify(key)}:${canonicalJson(object[key])}`)
+    .join(",")}}`;
 }
 
 export function moduleUrl(source: string): string {

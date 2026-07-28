@@ -5,9 +5,9 @@ import json
 from pathlib import Path
 from typing import Any
 
-import marimo_export._marimo._anywidget_assets as portable_assets
+import marimo_export._marimo.compat.anywidget_assets as portable_assets
 import pytest
-from marimo_export.exporters.anywidget import anywidget_from_payload
+from marimo_export.exporters._anywidget_payload import validate_anywidget_payload
 
 _FIXTURE = Path(__file__).parent / "fixtures" / "anywidget-v1.json"
 
@@ -163,9 +163,9 @@ def test_anywidget_payload_accepts_self_contained_and_remote_modules(url: str) -
     document = _document()
     document["modelNotifications"][0]["message"]["esm_spec"]["url"] = url
 
-    projection = anywidget_from_payload(_payload(document))
+    validation = validate_anywidget_payload(_payload(document))
 
-    assert projection.data
+    assert validation.root_model_id == "model-0"
 
 
 @pytest.mark.parametrize(
@@ -181,7 +181,7 @@ def test_anywidget_payload_rejects_unpublished_modules(url: str) -> None:
     document["modelNotifications"][0]["message"]["esm_spec"]["url"] = url
 
     with pytest.raises(ValueError, match=r"missing virtual file|incompatible ESM URL protocol"):
-        anywidget_from_payload(_payload(document))
+        validate_anywidget_payload(_payload(document))
 
 
 def test_anywidget_payload_requires_embedded_files_to_be_data_urls() -> None:
@@ -189,10 +189,13 @@ def test_anywidget_payload_requires_embedded_files_to_be_data_urls() -> None:
     document["files"]["./@file/root.js"] = "https://cdn.example.test/root.js"
 
     with pytest.raises(ValueError, match="must contain a data URL"):
-        anywidget_from_payload(_payload(document))
+        validate_anywidget_payload(_payload(document))
 
 
-def test_anywidget_payload_preserves_validated_bytes() -> None:
+def test_anywidget_payload_validation_does_not_mutate_bytes() -> None:
     payload = _payload(_document())
+    before = bytes(payload)
 
-    assert anywidget_from_payload(payload).data == payload
+    validate_anywidget_payload(payload)
+
+    assert payload == before

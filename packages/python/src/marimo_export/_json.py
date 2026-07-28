@@ -375,11 +375,17 @@ def decode_json(
             raise ValueError(f"{path} contains an invalid JSON number") from error
         if not exact.is_finite():
             raise ValueError(f"{path} must not contain a non-finite number")
-        if _decimal_lexeme_is_integral(value):
-            return float(exact)
-        converted = float(exact)
+        try:
+            converted = float(exact)
+        except (OverflowError, ValueError) as error:
+            raise ValueError(f"{path} must not contain a non-finite number") from error
         if not math.isfinite(converted):
             raise ValueError(f"{path} must not contain a non-finite number")
+        lexeme_is_integral = _decimal_lexeme_is_integral(value)
+        if not lexeme_is_integral and converted.is_integer():
+            raise ValueError(f"{path} contains a JSON number that loses its fractional component")
+        if converted.is_integer() and abs(converted) > _MAX_SAFE_INTEGER:
+            raise ValueError(f"{path} integer must be within the JavaScript safe range")
         return converted
 
     def parse_int(value: str) -> int | float:

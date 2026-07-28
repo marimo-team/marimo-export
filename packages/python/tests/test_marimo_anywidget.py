@@ -12,9 +12,9 @@ import pytest
 import traitlets
 from marimo._plugins.ui._impl.anywidget.init import init_marimo_widget
 from marimo._plugins.ui._impl.comm import MarimoComm
-from marimo_export._marimo.anywidget import anywidget_payload
-from marimo_export.errors import ProjectionError
-from marimo_export.exporters.anywidget import anywidget_from_payload
+from marimo_export._marimo.compat.anywidget import anywidget_payload
+from marimo_export.errors import OutputError
+from marimo_export.exporters.anywidget import bundle
 
 
 class _Child(anywidget.AnyWidget):
@@ -60,14 +60,15 @@ def _active_graph() -> Iterator[tuple[_Child, _Parent]]:
 def test_snapshot_follows_trait_serialized_model_references() -> None:
     with _active_graph() as (_, parent):
         snapshot = anywidget_payload(parent)
+        asset = bundle(parent)
 
-    projection = anywidget_from_payload(snapshot.payload)
     document = cast(dict[str, Any], json.loads(snapshot.payload))
     notifications = cast(list[dict[str, Any]], document["modelNotifications"])
     root_state = cast(dict[str, Any], notifications[0]["message"])["state"]
     child_id = cast(str, root_state["child"]).removeprefix("anywidget:")
 
-    assert projection.metadata["models"] == snapshot.model_count
+    assert asset.metadata["models"] == snapshot.model_count
+    assert asset.media_type == "application/vnd.marimo-export.anywidget.v1+json"
     assert any(
         notification["model_id"] == child_id
         and cast(dict[str, Any], notification["message"])["state"]["value"] == 7
@@ -78,10 +79,9 @@ def test_snapshot_follows_trait_serialized_model_references() -> None:
 def test_snapshot_reads_current_state_and_css() -> None:
     with _active_graph() as (child, _):
         child.value = 19
-        snapshot = anywidget_payload(child)
+        asset = bundle(child)
 
-    projection = anywidget_from_payload(snapshot.payload)
-    document = cast(dict[str, Any], json.loads(projection.data))
+    document = cast(dict[str, Any], json.loads(asset.data))
     notifications = cast(list[dict[str, Any]], document["modelNotifications"])
     root_state = cast(dict[str, Any], notifications[0]["message"])["state"]
 
@@ -96,7 +96,7 @@ def test_snapshot_rejects_closed_reachable_model() -> None:
         comm.close()
 
         with pytest.raises(
-            ProjectionError,
+            OutputError,
             match="requires a model already active",
         ):
             anywidget_payload(parent)
