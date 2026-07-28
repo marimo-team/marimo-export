@@ -114,6 +114,12 @@ def test_duplicate_normalized_vectors_fail_before_execution() -> None:
 
 
 def test_projection_body_is_deterministic_and_definition_free() -> None:
-    assert projection_code('chart "main"', "symbols_chart") == (
-        '# marimo-export projection: "chart \\"main\\""\nsymbols_chart'
+    assert projection_code(
+        'chart "main"',
+        "symbols_chart",
+        "marimo_export_state_0123456789abcdef",
+    ) == (
+        '# marimo-export projection: "chart \\"main\\""\n'
+        "marimo_export_state_0123456789abcdef\n"
+        "symbols_chart"
     )

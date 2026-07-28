@@ -58,12 +58,21 @@ class MarimoCapabilities:
 
 @dataclass(frozen=True, slots=True)
 class ProjectionLease:
-    """Operation-local projection cells installed in the parent document."""
+    """Operation-local state token and output leaves installed in the parent."""
 
+    state_cell: str
+    state_name: str
+    state_code: str
     cells: Mapping[str, str]
     codes: Mapping[str, str]
 
     def __post_init__(self) -> None:
+        if not isinstance(self.state_cell, str) or not self.state_cell:
+            raise TypeError("state_cell must be a non-empty string")
+        if not isinstance(self.state_name, str) or not self.state_name.isidentifier():
+            raise TypeError("state_name must be a Python identifier")
+        if not isinstance(self.state_code, str) or not self.state_code:
+            raise TypeError("state_code must be a non-empty string")
         object.__setattr__(self, "cells", MappingProxyType(dict(self.cells)))
         object.__setattr__(self, "codes", MappingProxyType(dict(self.codes)))
 
@@ -277,33 +286,89 @@ async def declared_ui_values(names: tuple[str, ...]) -> JsonObject:
 
 
 async def install_projections(plan: MatrixPlan) -> ProjectionLease:
-    """Append one visible, unexecuted projection leaf per output."""
+    """Append one state token and one unexecuted leaf per output."""
 
+    state_name = _projection_state_name(plan)
+    state_code = f"{state_name} = {plan.states[0].fingerprint!r}"
     cells: dict[str, str] = {}
     codes = {
-        output: projection_code(output, source) for output, source in plan.output_sources.items()
+        output: projection_code(output, source, state_name)
+        for output, source in plan.output_sources.items()
     }
     async with _ephemeral_code_context() as context:
-        after = str(context.cells[-1].id) if len(context.cells) else None
-        for output, code in codes.items():
-            cell_id = context.create_cell(
-                code,
-                after=after,
-                hide_code=True,
-                disabled=False,
+        if state_name in context._kernel.graph.definitions:
+            raise ExecutionError(
+                f"temporary projection state name {state_name!r} collides with the notebook",
+                code="projection_invalid",
+                details={"definition": state_name},
             )
-            cells[output] = str(cell_id)
-            after = str(cell_id)
-    return ProjectionLease(cells=cells, codes=codes)
+        after = str(context.cells[-1].id) if len(context.cells) else None
+        created: list[str] = []
+        try:
+            state_cell = str(
+                context.create_cell(
+                    state_code,
+                    after=after,
+                    hide_code=True,
+                    disabled=False,
+                )
+            )
+            created.append(state_cell)
+            after = state_cell
+            for output, code in codes.items():
+                cell_id = context.create_cell(
+                    code,
+                    after=after,
+                    hide_code=True,
+                    disabled=False,
+                )
+                cells[output] = str(cell_id)
+                created.append(str(cell_id))
+                after = str(cell_id)
+        except BaseException:
+            cleanup_errors: list[BaseException] = []
+            for cell_id in reversed(created):
+                try:
+                    context.delete_cell(cell_id)
+                except BaseException as error:
+                    cleanup_errors.append(error)
+            if cleanup_errors:
+                raise ExecutionError(
+                    "temporary projection installation could not be rolled back",
+                    code="projection_cleanup_failed",
+                    details={"cell_ids": created},
+                ) from cleanup_errors[0]
+            raise
+    return ProjectionLease(
+        state_cell=state_cell,
+        state_name=state_name,
+        state_code=state_code,
+        cells=cells,
+        codes=codes,
+    )
+
+
+def _projection_state_name(plan: MatrixPlan) -> str:
+    payload = json_object(
+        {
+            "inputs": plan.inputs,
+            "outputs": plan.outputs,
+            "output_sources": plan.output_sources,
+        },
+        "projection plan",
+    )
+    suffix = hashlib.sha256(canonical_bytes(payload)).hexdigest()[:16]
+    return f"marimo_export_state_{suffix}"
 
 
 async def delete_projections(lease: ProjectionLease) -> None:
-    """Delete every still-live projection cell in one code-mode transaction."""
+    """Delete every still-live lease cell in one code-mode transaction."""
 
+    cell_ids = [*lease.cells.values(), lease.state_cell]
     errors: list[BaseException] = []
     async with _ephemeral_code_context() as context:
         existing = {str(cell.id) for cell in context.cells}
-        for cell_id in lease.cells.values():
+        for cell_id in cell_ids:
             if cell_id not in existing:
                 errors.append(RuntimeError(f"projection cell {cell_id!r} is missing"))
                 continue
@@ -315,7 +380,7 @@ async def delete_projections(lease: ProjectionLease) -> None:
         raise ExecutionError(
             "one or more projection cells could not be deleted",
             code="projection_cleanup_failed",
-            details={"cell_ids": list(lease.cells.values())},
+            details={"cell_ids": cell_ids},
         ) from errors[0]
 
 
@@ -396,13 +461,15 @@ async def execute_state(
         runtime_config["cache_cells"] = True
         cast(Any, child._kernel).user_config = config
         child._kernel.reactive_execution_mode = "autorun"
-        child._kernel.globals.update(state.ordinary_overrides)
+        overrides = dict(state.ordinary_overrides)
+        overrides[lease.state_name] = state.fingerprint
+        child._kernel.globals.update(overrides)
 
         projection_ids = _projection_ids(internal, lease)
         execution_order = prune_cells_for_overrides(
             internal.graph,
             internal.execution_order,
-            dict(state.ordinary_overrides),
+            overrides,
         )
         cells_to_run = {
             cell_id
@@ -687,11 +754,12 @@ def _raise_child_errors(
 
 
 def _document_sha256(cells: Any) -> str:
+    from marimo._ast.names import is_internal_cell_name
+
     value = [
         {
-            "id": str(cell.id),
-            "code": cell.code,
-            "name": cell.name or None,
+            "code": cell.code.rstrip(),
+            "name": (None if not cell.name or is_internal_cell_name(cell.name) else cell.name),
             "config": json_object(cell.config.asdict(), f"cell {cell.id!s} config"),
         }
         for cell in cells

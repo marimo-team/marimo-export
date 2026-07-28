@@ -236,12 +236,14 @@ def _ordinary_packet(
     return packet
 
 
-def projection_code(output_name: str, source: str) -> str:
+def projection_code(output_name: str, source: str, state_name: str) -> str:
     """Return the deterministic definition-selecting projection cell body."""
 
     if not isinstance(output_name, str) or not output_name:
         raise TypeError("output_name must be a non-empty string")
     if not isinstance(source, str) or not source.isidentifier():
         raise TypeError("source must be a Python identifier")
+    if not isinstance(state_name, str) or not state_name.isidentifier():
+        raise TypeError("state_name must be a Python identifier")
     label = json.dumps(output_name, ensure_ascii=False)
-    return f"# marimo-export projection: {label}\n{source}"
+    return f"# marimo-export projection: {label}\n{state_name}\n{source}"
