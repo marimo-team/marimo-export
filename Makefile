@@ -9,6 +9,7 @@ FORMAT_PATHS := \
 	docs \
 	packages \
 	scripts \
+	tests \
 	AGENTS.md \
 	CLAUDE.md \
 	README.md \
@@ -21,11 +22,11 @@ LINT_PATHS := apps packages vite.config.ts
 
 format:
 	pnpm exec vp fmt $(FORMAT_PATHS)
-	uv run ruff format packages/python scripts
+	uv run ruff format packages/python scripts tests
 
 format-check:
 	pnpm exec vp fmt --check $(FORMAT_PATHS)
-	uv run ruff format --check packages/python scripts
+	uv run ruff format --check packages/python scripts tests
 
 bootstrap:
 	uv sync --all-groups --all-extras
@@ -33,7 +34,7 @@ bootstrap:
 
 lint:
 	pnpm exec vp lint --deny-warnings $(LINT_PATHS)
-	uv run ruff check packages/python scripts
+	uv run ruff check packages/python scripts tests
 
 typecheck:
 	pnpm exec vp run -r typecheck
@@ -58,6 +59,10 @@ package-smoke: build
 
 acceptance-finance:
 	@test -n "$(FINANCE_NOTEBOOK)" || (echo "FINANCE_NOTEBOOK must be an absolute notebook path" >&2; exit 2)
-	uv run --group acceptance python tests/acceptance/finance/run.py "$(FINANCE_NOTEBOOK)"
+	uv run --group acceptance python tests/acceptance/finance/run.py "$(FINANCE_NOTEBOOK)" \
+		--workdir "$(if $(FINANCE_WORKDIR),$(FINANCE_WORKDIR),$(CURDIR)/.acceptance/finance)" \
+		--replace
+	pnpm --filter @marimo-team/marimo-export-finance-demo acceptance -- \
+		--workdir "$(if $(FINANCE_WORKDIR),$(FINANCE_WORKDIR),$(CURDIR)/.acceptance/finance)"
 
 check: format-check lint typecheck test package-smoke

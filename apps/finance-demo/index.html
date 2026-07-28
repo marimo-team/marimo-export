@@ -19,6 +19,27 @@
         </p>
       </header>
 
+      <section class="publication-bar" aria-labelledby="publication-heading">
+        <div>
+          <p class="eyebrow" id="publication-heading">Publication source</p>
+          <p id="publication-path" class="publication-path">Selecting static assets…</p>
+        </div>
+        <label for="ownership-select">
+          Ownership
+          <select id="ownership-select">
+            <option value="capture">Borrowed capture</option>
+            <option value="build">Managed build</option>
+          </select>
+        </label>
+        <label for="run-select">
+          Cache run
+          <select id="run-select">
+            <option value="cold">Cold</option>
+            <option value="warm">Warm</option>
+          </select>
+        </label>
+      </section>
+
       <section class="state-bar" aria-labelledby="state-heading">
         <div>
           <p class="eyebrow" id="state-heading">Published state</p>
@@ -29,7 +50,11 @@
             </select>
           </label>
         </div>
-        <div id="state-buttons" class="state-buttons" aria-label="Published states"></div>
+        <div>
+          <div id="state-buttons" class="state-buttons" aria-label="Sparse state patches"></div>
+          <p class="patch-label">Sparse patch applied from baseline</p>
+          <pre id="sparse-patch">{}</pre>
+        </div>
         <button id="unavailable-state" class="secondary" type="button" disabled>
           Try an unpublished vector
         </button>
@@ -73,6 +98,21 @@
         </article>
       </section>
 
+      <section class="metadata" aria-label="Publication provenance">
+        <article>
+          <p class="eyebrow">Producer</p>
+          <p id="producer">Reading producer versions…</p>
+        </article>
+        <article>
+          <p class="eyebrow">State fingerprint</p>
+          <code id="fingerprint">Reading state identity…</code>
+        </article>
+        <article class="metadata-outputs">
+          <p class="eyebrow">Output relation</p>
+          <div id="output-metadata" class="metadata-table"></div>
+        </article>
+      </section>
+
       <section class="output-grid">
         <article class="output output-wide">
           <div class="output-heading">
@@ -91,7 +131,10 @@
               <p class="eyebrow">Vega-Lite BlobAsset</p>
               <h2>Relative close prices</h2>
             </div>
-            <code>application/vnd.vegalite.v6+json</code>
+            <div class="output-actions">
+              <code>application/vnd.vegalite.v6+json</code>
+              <button id="vega-signal" type="button" disabled>Pulse local view</button>
+            </div>
           </div>
           <div id="chart-vegalite" class="mount chart" aria-live="polite"></div>
         </article>

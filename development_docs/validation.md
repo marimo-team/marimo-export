@@ -54,13 +54,16 @@ dependencies. It proves:
 
 - the source notebook remains byte-identical
 - a running kernel accepts a hash-pinned wheel over loopback HTTP
-- code mode authors visible Exporter cells into the acceptance copy
+- code mode authors eight visible cells into the acceptance copy
+- six conversion cells produce the seven declared representations
+- an output-anchor cell keeps every authored representation live
 - borrowed capture completes cold and warm
 - managed build completes cold and warm
 - each warm run restores native marimo cache entries
 - six states produce seven outputs
 - Python and browser verify every representation
-- a static server supports relocation, interactions, cancellation, and disposal
+- a static server supports relocation, interactions, cancellation, disposal,
+  and an integrity-negative publication
 - browser network traffic reaches static application and publication files
 - owned Python processes and sockets exit
 

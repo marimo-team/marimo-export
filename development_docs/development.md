@@ -29,6 +29,16 @@ pnpm --filter @marimo-team/marimo-export-finance-demo build
 
 Run `make format` before `make check`.
 
+Run the live product gate with:
+
+```bash
+make acceptance-finance \
+  FINANCE_NOTEBOOK=/Users/petergy/Downloads/finance.py
+```
+
+Set `FINANCE_WORKDIR` to retain the wheel, publications, browser evidence, and
+structured result in a specific private workspace.
+
 ## Python organization
 
 Public modules use stable marimo APIs and local domain types. Private marimo

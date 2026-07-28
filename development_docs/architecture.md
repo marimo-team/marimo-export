@@ -50,14 +50,24 @@ Setup definitions receive their override through the compatibility adapter.
 
 ## Temporary output leaves
 
-Each output becomes one deterministic leaf cell that returns its source
-definition. Code mode creates these leaves in the live document so marimo sees
-ordinary graph nodes. The lease records the cell IDs and deletes every leaf in
-`finally`.
+Each operation creates one deterministic state-token cell and one deterministic
+leaf per output. The token starts with the first normalized state fingerprint.
+Each leaf references the token before returning its source definition. Every
+child overrides the token with its own state fingerprint and prunes the token's
+defining cell.
+
+Code mode creates the token and leaves in the live document so marimo sees
+ordinary graph nodes. The token makes each projection cache key state-specific,
+including when the selected source is a `BlobAsset`. The lease records every
+created cell ID and deletes the complete set in `finally`.
 
 The parent document digest and public UI values are checked around capture.
 Borrowed sessions remain active. Managed build uses an operation-local sibling
 copy and checks the original source digest before and after execution.
+
+Document identity covers ordered authored code, normalized authored cell names,
+and complete cell configuration. Runtime cell IDs and terminal whitespace are
+excluded so a saved notebook and its reloaded session keep the same identity.
 
 ## Native execution and caching
 

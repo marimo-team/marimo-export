@@ -99,6 +99,37 @@ h2 {
   color: #fff;
 }
 
+.publication-bar {
+  display: grid;
+  grid-template-columns: minmax(18rem, 1fr) auto auto;
+  gap: 1rem;
+  align-items: end;
+  margin-bottom: 0.75rem;
+  padding: 1rem;
+  border: 1px solid #c8cfc9;
+  background: #fff;
+}
+
+.publication-bar label {
+  display: grid;
+  gap: 0.35rem;
+  color: #526158;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.publication-path {
+  margin: 0;
+  color: #526158;
+  font:
+    0.75rem/1.4 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Consolas,
+    monospace;
+  overflow-wrap: anywhere;
+}
+
 .state-bar .eyebrow {
   color: #aebbb2;
 }
@@ -136,6 +167,20 @@ select {
 .state-buttons button[data-active="true"] {
   border-color: #b9d6c2;
   background: #cce5d4;
+}
+
+.patch-label {
+  margin: 0.55rem 0 0.25rem;
+  color: #aebbb2;
+  font-size: 0.68rem;
+}
+
+#sparse-patch {
+  max-height: 5rem;
+  padding: 0.4rem 0.55rem;
+  background: #26372d;
+  color: #eef3ef;
+  font-size: 0.65rem;
 }
 
 .secondary {
@@ -192,6 +237,57 @@ select {
   padding: 1rem;
   border-right: 1px solid #c8cfc9;
   border-bottom: 1px solid #c8cfc9;
+}
+
+.metadata {
+  display: grid;
+  grid-template-columns: minmax(13rem, 0.8fr) minmax(18rem, 1fr);
+  margin-top: 1rem;
+  border-top: 1px solid #c8cfc9;
+  border-left: 1px solid #c8cfc9;
+  background: #fff;
+}
+
+.metadata > article {
+  min-width: 0;
+  padding: 1rem;
+  border-right: 1px solid #c8cfc9;
+  border-bottom: 1px solid #c8cfc9;
+}
+
+.metadata p:last-child {
+  margin-bottom: 0;
+}
+
+#fingerprint {
+  color: #425048;
+  overflow-wrap: anywhere;
+  font-size: 0.72rem;
+}
+
+.metadata-outputs {
+  grid-column: 1 / -1;
+}
+
+.metadata-table {
+  display: grid;
+  gap: 0;
+  border-top: 1px solid #e1e5e1;
+}
+
+.metadata-row {
+  display: grid;
+  grid-template-columns: minmax(9rem, 0.5fr) minmax(18rem, 1fr) minmax(22rem, 1fr);
+  gap: 1rem;
+  align-items: baseline;
+  padding: 0.55rem 0;
+  border-bottom: 1px solid #e1e5e1;
+  font-size: 0.72rem;
+}
+
+.metadata-row span,
+.metadata-row code {
+  overflow-wrap: anywhere;
 }
 
 .overview p:last-child {
@@ -252,6 +348,17 @@ pre {
   font-size: 0.65rem;
 }
 
+.output-actions {
+  display: grid;
+  justify-items: end;
+  gap: 0.5rem;
+}
+
+.output-actions button {
+  padding: 0.35rem 0.55rem;
+  font-size: 0.72rem;
+}
+
 .mount {
   min-height: 18rem;
   padding-top: 1rem;
@@ -289,13 +396,24 @@ pre {
 
 @media (max-width: 960px) {
   .masthead,
+  .publication-bar,
   .state-bar,
-  .overview {
+  .overview,
+  .metadata {
     grid-template-columns: 1fr;
   }
 
   .overview {
     border-bottom: 0;
+  }
+
+  .metadata-outputs {
+    grid-column: auto;
+  }
+
+  .metadata-row {
+    grid-template-columns: 1fr;
+    gap: 0.25rem;
   }
 }
 
@@ -324,5 +442,9 @@ pre {
 
   .output-heading code {
     max-width: 100%;
+  }
+
+  .output-actions {
+    justify-items: start;
   }
 }
