@@ -556,17 +556,25 @@ def test_prepared_exporters_reloads_explicit_source_parent_of_native_root() -> N
     assert sys.modules[native_name] is native
 
 
-def test_prepared_exporters_refreshes_loaded_source_parent(
+def test_prepared_exporters_refreshes_source_ancestors_shared_with_native_exporter(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     package_name = "marimo_export_test_source_parent"
     exporter_name = f"{package_name}.exporter"
-    native_name = f"{package_name}._native"
+    native_parent_name = f"{package_name}.native_parent"
+    native_name = f"{native_parent_name}._native"
     package = tmp_path / package_name
     package.mkdir()
     source = package / "__init__.py"
-    source.write_text("config = 'first'\n", encoding="utf-8")
+    source.write_text(
+        "from .native_parent import CONFIG as config\n",
+        encoding="utf-8",
+    )
+    native_parent_package = package / "native_parent"
+    native_parent_package.mkdir()
+    native_parent_source = native_parent_package / "__init__.py"
+    native_parent_source.write_text("CONFIG = 'first'\n", encoding="utf-8")
     (package / "exporter.py").write_text(
         "from . import config\n\ndef encode(value):\n    return config, value\n",
         encoding="utf-8",
@@ -574,6 +582,7 @@ def test_prepared_exporters_refreshes_loaded_source_parent(
     monkeypatch.syspath_prepend(str(tmp_path))
     original_exporter = importlib.import_module(exporter_name)
     original_package = sys.modules[package_name]
+    original_native_parent = sys.modules[native_parent_name]
     native_file = tmp_path / "source_parent_native.so"
     native_file.write_bytes(b"native")
     native = ModuleType(native_name)
@@ -586,7 +595,7 @@ def test_prepared_exporters_refreshes_loaded_source_parent(
     native_encode.__module__ = native_name
     cast(Any, native).encode = native_encode
     monkeypatch.setitem(sys.modules, native_name, native)
-    monkeypatch.setattr(original_package, "_native", native, raising=False)
+    monkeypatch.setattr(original_native_parent, "_native", native, raising=False)
     projections = {
         "summary": OutputProjection(
             name="summary",
@@ -614,18 +623,22 @@ def test_prepared_exporters_refreshes_loaded_source_parent(
         assert sys.modules[exporter_name].encode(None) == ("first", None)
         assert sys.modules[native_name].encode(None) == ("native", None)
 
-    source.write_text("config = 'other'\n", encoding="utf-8")
+    native_parent_source.write_text("CONFIG = 'other'\n", encoding="utf-8")
     with prepared_exporters(plan) as second_identities:
         fresh_package = sys.modules[package_name]
+        fresh_native_parent = sys.modules[native_parent_name]
         fresh_exporter = sys.modules[exporter_name]
         assert fresh_package is not original_package
+        assert fresh_native_parent is not original_native_parent
         assert fresh_package.config == "other"
+        assert fresh_native_parent.CONFIG == "other"
         assert fresh_exporter.encode(None) == ("other", None)
         assert sys.modules[native_name] is native
         assert sys.modules[native_name].encode(None) == ("native", None)
 
     assert first_identities["summary"] != second_identities["summary"]
     assert sys.modules[package_name] is original_package
+    assert sys.modules[native_parent_name] is original_native_parent
     assert sys.modules[exporter_name] is original_exporter
     assert sys.modules[native_name] is native
 
