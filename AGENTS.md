@@ -5,14 +5,13 @@ static marimo publications. Read this file before changing the repository.
 
 ## Build, test, and lint commands
 
-| Purpose      | Command                                                              | Expected on success                                        |
-| ------------ | -------------------------------------------------------------------- | ---------------------------------------------------------- |
-| Install      | `make bootstrap`                                                     | locked Python and TypeScript workspaces install            |
-| Format       | `make format`                                                        | tracked source is formatted                                |
-| Check        | `make check`                                                         | format, lint, types, tests, builds, and package smoke pass |
-| Test         | `make test`                                                          | Python, browser core, and loader tests pass                |
-| Build        | `make build`                                                         | Python distribution, packages, docs, and app build         |
-| Finance gate | `make acceptance-finance FINANCE_NOTEBOOK=/absolute/path/finance.py` | live capture, build, and browser evidence pass             |
+| Purpose | Command          | Expected on success                                        |
+| ------- | ---------------- | ---------------------------------------------------------- |
+| Install | `make bootstrap` | locked Python and TypeScript workspaces install            |
+| Format  | `make format`    | tracked source is formatted                                |
+| Check   | `make check`     | format, lint, types, tests, builds, and package smoke pass |
+| Test    | `make test`      | Python, browser core, and loader tests pass                |
+| Build   | `make build`     | Python distribution, packages, docs, and app build         |
 
 Use Python 3.11 or newer, Node 22.18, pnpm 11.15.1, uv, and Vite+.
 Run focused package commands during development, then run `make format` and
@@ -29,8 +28,8 @@ Run focused package commands during development, then run `make format` and
   asset integrity, native payload decoding, and the `OutputLoader` contract.
 - `packages/loader-*` each own one representation dependency family, decoder,
   result type, cancellation behavior, and mount disposal.
-- `apps/finance-demo` is a vanilla TypeScript client that exercises every
-  codec after Python stops. `apps/docs` builds the public documentation.
+- `apps/finance-demo` is a vanilla TypeScript example that loads every codec.
+  `apps/docs` builds the public documentation.
 
 See [`development_docs/architecture.md`](development_docs/architecture.md).
 
@@ -164,8 +163,6 @@ Protect supported behavior through the nearest public or adapter boundary:
 - exact state lookup and unavailable vectors
 - loader matching, malformed bytes, cancellation, and disposal
 - packed Python and npm entry points
-- live Yahoo Finance capture, build, static loading, relocation, and network
-  assertions
 
 Keep each test focused on one contract. Assert public outputs, files, protocol
 records, or runtime behavior. Use browser evidence for visual and interaction
@@ -193,7 +190,3 @@ requirements.
    and narration comments.
 6. Commit the coherent unit with a short contract-focused title.
 7. Run `make check` before final handoff.
-
-The live finance gate uses the exact user-supplied notebook and provider
-request. Preserve the source digest and retain bounded evidence when an
-external provider blocks the run.

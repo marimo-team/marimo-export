@@ -4,7 +4,6 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "acceptance": "node tests/acceptance.mjs",
     "build": "vp build",
     "check": "vp check",
     "dev": "vp dev --host 127.0.0.1",
@@ -19,7 +18,6 @@
     "@marimo-team/marimo-export-loader-vegalite": "workspace:*"
   },
   "devDependencies": {
-    "playwright": "catalog:",
     "typescript": "catalog:",
     "vite-plus": "catalog:"
   }

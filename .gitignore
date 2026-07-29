@@ -16,7 +16,6 @@ packages/*/src/**/*.d.ts.map
 __pycache__/
 **/__pycache__/
 .pytest_cache/
-.acceptance/
 *.py[cod]
 *.tsbuildinfo
 **/__marimo__/
