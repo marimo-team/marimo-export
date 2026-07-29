@@ -336,6 +336,35 @@ def test_exporter_preflight_checks_only_the_imported_local_member(
     assert len(identity["summary"]) == 64
 
 
+def test_exporter_preflight_checks_literal_getattr_on_a_local_module(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    helper_name = "marimo_export_test_getattr_helper"
+    exporter_name = "marimo_export_test_getattr_exporter"
+    (tmp_path / f"{helper_name}.py").write_text(
+        "def transform(value, seen=[]):\n    seen.append(value)\n    return len(seen)\n",
+        encoding="utf-8",
+    )
+    (tmp_path / f"{exporter_name}.py").write_text(
+        f"import {helper_name} as helper\n"
+        "\n"
+        "def encode(value):\n"
+        '    return getattr(helper, "transform")(value)\n',
+        encoding="utf-8",
+    )
+    monkeypatch.syspath_prepend(str(tmp_path))
+    importlib.invalidate_caches()
+
+    with pytest.raises(OutputError) as raised:
+        preflight_exporters(_custom_exporter_plan(exporter_name))
+
+    assert raised.value.code == "exporter_invalid"
+    assert str(raised.value) == (
+        f"output 'summary' exporter '{exporter_name}:encode' is not stateless"
+    )
+
+
 @pytest.mark.parametrize(
     ("first", "second"),
     [(1, 1.0), (0.0, -0.0)],
@@ -416,6 +445,58 @@ def test_exporter_preflight_preserves_python_scalar_identity(
             "    global count\n"
             "    count += 1\n"
             "    return value, count\n",
+        ),
+        (
+            "globals-alias-write",
+            "count = 0\n"
+            "\n"
+            "def encode(value):\n"
+            "    namespace = globals()\n"
+            "    namespace['count'] += 1\n"
+            "    return value, namespace['count']\n",
+        ),
+        (
+            "function-local-import-write",
+            "def encode(value):\n"
+            "    import helper as state\n"
+            "    state.count += 1\n"
+            "    return value, state.count\n",
+        ),
+        (
+            "parameter-write",
+            "class State:\n"
+            "    count = 0\n"
+            "\n"
+            "def increment(state):\n"
+            "    state.count += 1\n"
+            "    return state.count\n"
+            "\n"
+            "def encode(value):\n"
+            "    return value, increment(State)\n",
+        ),
+        (
+            "derived-class-write",
+            "class State:\n"
+            "    count = 0\n"
+            "\n"
+            "def increment(state):\n"
+            "    type(state).count += 1\n"
+            "    return type(state).count\n"
+            "\n"
+            "def encode(value):\n"
+            "    return value, increment(State())\n",
+        ),
+        (
+            "scalar-subclass",
+            "from enum import IntEnum\n"
+            "\n"
+            "class Marker(IntEnum):\n"
+            "    ONE = 1\n"
+            "\n"
+            "marker = Marker.ONE\n"
+            "\n"
+            "def encode(value):\n"
+            "    return type(marker).__name__, marker, value\n",
         ),
         (
             "class-state",

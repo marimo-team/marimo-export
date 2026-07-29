@@ -131,6 +131,40 @@ def encode(value):
     )
 
 
+def _write_globals_alias_exporter(path: Path) -> None:
+    path.write_text(
+        """
+count = 0
+
+
+def encode(value):
+    namespace = globals()
+    namespace["count"] += 1
+    return value, namespace["count"]
+""".lstrip(),
+        encoding="utf-8",
+    )
+
+
+def _write_parameter_state_exporter(path: Path) -> None:
+    path.write_text(
+        """
+class State:
+    count = 0
+
+
+def increment(state):
+    type(state).count += 1
+    return type(state).count
+
+
+def encode(value):
+    return value, increment(State())
+""".lstrip(),
+        encoding="utf-8",
+    )
+
+
 def _write_module_exporter(path: Path) -> None:
     path.write_text(
         """
@@ -326,13 +360,23 @@ def test_custom_exporter_cache_identity_tracks_transitive_reexports(
     )
 
 
+@pytest.mark.parametrize(
+    "write_exporter",
+    [
+        _write_stateful_exporter,
+        _write_globals_alias_exporter,
+        _write_parameter_state_exporter,
+    ],
+    ids=["class-state", "globals-alias", "derived-class"],
+)
 def test_stateful_exporter_is_rejected_before_two_state_execution(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    write_exporter: Callable[[Path], None],
 ) -> None:
     notebook = tmp_path / "notebook.py"
     _write_notebook(notebook)
-    _write_stateful_exporter(tmp_path / "publication_exports.py")
+    write_exporter(tmp_path / "publication_exports.py")
     monkeypatch.setenv("PYTHONPATH", str(tmp_path))
     spec = ExportSpec(
         inputs=("answer",),

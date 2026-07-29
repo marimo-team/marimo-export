@@ -76,19 +76,19 @@ class _StatefulExporterError(ValueError):
 def _immutable_exporter_constant(value: Any, label: str) -> JsonValue:
     if value is None:
         return {"type": "none"}
-    if isinstance(value, bool):
+    if type(value) is bool:
         return {"type": "bool", "value": value}
-    if isinstance(value, int):
+    if type(value) is int:
         return {"type": "int", "value": str(value)}
-    if isinstance(value, float):
+    if type(value) is float:
         return {"type": "float64", "hex": struct.pack(">d", value).hex()}
-    if isinstance(value, str):
+    if type(value) is str:
         return {"type": "str", "value": value}
-    if isinstance(value, bytes):
+    if type(value) is bytes:
         return {"type": "bytes", "hex": value.hex()}
     if type(value) is object:
         return {"type": "sentinel"}
-    if isinstance(value, tuple):
+    if type(value) is tuple:
         return {
             "type": "tuple",
             "items": [
@@ -96,7 +96,7 @@ def _immutable_exporter_constant(value: Any, label: str) -> JsonValue:
                 for index, item in enumerate(value)
             ],
         }
-    if isinstance(value, frozenset):
+    if type(value) is frozenset:
         items = [_immutable_exporter_constant(item, f"{label} item") for item in value]
         items.sort(key=canonical_bytes)
         return {"type": "frozenset", "items": items}
@@ -132,11 +132,45 @@ def _reject_exporter_state_writes(
         declared_globals = {
             name for node in ast.walk(tree) if isinstance(node, ast.Global) for name in node.names
         }
+        protected_names = set(protected_locals)
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
+                arguments = node.args
+                protected_names.update(
+                    argument.arg
+                    for argument in (
+                        *arguments.posonlyargs,
+                        *arguments.args,
+                        *arguments.kwonlyargs,
+                    )
+                )
+                if arguments.vararg is not None:
+                    protected_names.add(arguments.vararg.arg)
+                if arguments.kwarg is not None:
+                    protected_names.add(arguments.kwarg.arg)
+            elif isinstance(node, ast.Import):
+                protected_names.update(
+                    alias.asname or alias.name.partition(".")[0] for alias in node.names
+                )
+            elif isinstance(node, ast.ImportFrom):
+                protected_names.update(
+                    alias.asname or alias.name for alias in node.names if alias.name != "*"
+                )
 
-        def root_name(node: ast.AST) -> str | None:
-            while isinstance(node, (ast.Attribute, ast.Subscript)):
-                node = node.value
-            return node.id if isinstance(node, ast.Name) else None
+        def persistent_namespace(node: ast.AST) -> bool:
+            if isinstance(node, ast.Name):
+                return node.id in global_names or node.id in protected_names
+            if isinstance(node, (ast.Attribute, ast.Subscript)):
+                return persistent_namespace(node.value)
+            if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Name):
+                return False
+            if node.func.id == "globals" and not node.args and not node.keywords:
+                return True
+            if node.func.id in {"getattr", "vars"} and node.args:
+                return persistent_namespace(node.args[0])
+            if node.func.id == "type" and len(node.args) == 1:
+                return persistent_namespace(node.args[0])
+            return False
 
         def targets(node: ast.AST) -> Iterator[ast.AST]:
             if isinstance(node, (ast.Tuple, ast.List)):
@@ -145,39 +179,116 @@ def _reject_exporter_state_writes(
                 return
             yield node
 
-        assigned: list[ast.AST] = []
+        changed = True
+        while changed:
+            changed = False
+            for node in ast.walk(tree):
+                assignments: list[tuple[ast.AST, ast.AST | None]] = []
+                if isinstance(node, ast.Assign):
+                    assignments.extend((target, node.value) for target in node.targets)
+                elif isinstance(node, (ast.AnnAssign, ast.NamedExpr)):
+                    assignments.append((node.target, node.value))
+                for target, expression in assignments:
+                    if (
+                        isinstance(target, ast.Name)
+                        and expression is not None
+                        and persistent_namespace(expression)
+                        and target.id not in protected_names
+                    ):
+                        protected_names.add(target.id)
+                        changed = True
+
+        mutation_targets: list[ast.AST] = []
         for node in ast.walk(tree):
             if isinstance(node, ast.Assign):
                 for target in node.targets:
-                    assigned.extend(targets(target))
+                    mutation_targets.extend(targets(target))
             elif isinstance(node, (ast.AnnAssign, ast.AugAssign, ast.NamedExpr)):
-                assigned.extend(targets(node.target))
+                mutation_targets.extend(targets(node.target))
             elif isinstance(node, ast.Delete):
                 for target in node.targets:
-                    assigned.extend(targets(target))
+                    mutation_targets.extend(targets(target))
             elif (
                 isinstance(node, ast.Call)
                 and isinstance(node.func, ast.Name)
                 and node.func.id in {"setattr", "delattr"}
                 and node.args
             ):
-                assigned.append(node.args[0])
-        for target in assigned:
-            name = root_name(target)
-            if name is None:
-                continue
+                mutation_targets.append(node.args[0])
+        for target in mutation_targets:
             if isinstance(target, ast.Name):
-                if name not in declared_globals:
+                if target.id not in declared_globals:
                     continue
-            elif name not in global_names and name not in protected_locals:
-                continue
+                label = target.id
+            elif isinstance(target, (ast.Attribute, ast.Subscript)):
+                if not persistent_namespace(target.value):
+                    continue
+                label = ast.unparse(target.value)
+            else:
+                if not persistent_namespace(target):
+                    continue
+                label = ast.unparse(target)
             raise _StatefulExporterError(
-                f"namespace-write:{value.__module__}:{value.__qualname__}:{name}",
+                f"namespace-write:{value.__module__}:{value.__qualname__}:{label}",
                 value,
             )
         return
 
     instructions = tuple(dis.get_instructions(code))
+    parameter_count = code.co_argcount + code.co_kwonlyargcount
+    protected_names = set(protected_locals)
+    protected_names.update(code.co_varnames[:parameter_count])
+    if code.co_flags & inspect.CO_VARARGS:
+        protected_names.add(code.co_varnames[parameter_count])
+        parameter_count += 1
+    if code.co_flags & inspect.CO_VARKEYWORDS:
+        protected_names.add(code.co_varnames[parameter_count])
+    for index, instruction in enumerate(instructions):
+        if instruction.opname not in {"IMPORT_NAME", "IMPORT_FROM"}:
+            continue
+        for following in instructions[index + 1 : index + 8]:
+            if following.opname in {"STORE_FAST", "STORE_NAME"} and isinstance(
+                following.argval, str
+            ):
+                protected_names.add(following.argval)
+                if instruction.opname == "IMPORT_NAME":
+                    break
+            if following.opname in {
+                "IMPORT_NAME",
+                "POP_TOP",
+                "RETURN_VALUE",
+                "RETURN_CONST",
+            }:
+                break
+    changed = True
+    while changed:
+        changed = False
+        for index, instruction in enumerate(instructions):
+            if instruction.opname not in {"STORE_FAST", "STORE_NAME"} or not isinstance(
+                instruction.argval, str
+            ):
+                continue
+            window = instructions[max(0, index - 8) : index]
+            calls_persistent_namespace = any(
+                candidate.opname in {"LOAD_GLOBAL", "LOAD_NAME"} and candidate.argval == "globals"
+                for candidate in window
+            )
+            calls_persistent_type = any(
+                candidate.opname in {"LOAD_GLOBAL", "LOAD_NAME"}
+                and candidate.argval in {"getattr", "type", "vars"}
+                for candidate in window
+            ) and any(
+                candidate.opname in {"LOAD_FAST", "LOAD_DEREF", "LOAD_GLOBAL", "LOAD_NAME"}
+                and candidate.argval in protected_names
+                for candidate in window
+            )
+            if (
+                any(candidate.opname == "CALL" for candidate in window)
+                and (calls_persistent_namespace or calls_persistent_type)
+                and instruction.argval not in protected_names
+            ):
+                protected_names.add(instruction.argval)
+                changed = True
     namespace_loads = {"LOAD_GLOBAL", "LOAD_NAME", "LOAD_DEREF", "LOAD_FAST"}
     namespace_stores = {
         "STORE_ATTR",
@@ -198,12 +309,17 @@ def _reject_exporter_state_writes(
             if candidate.opname not in namespace_loads or not isinstance(candidate.argval, str):
                 continue
             name = candidate.argval
-            if name not in global_names and name not in protected_locals:
+            if name not in global_names and name not in protected_names:
                 continue
             intervening = instructions[candidate_index + 1 : index]
             is_direct = index - candidate_index <= 3
-            is_augmented = bool(intervening) and intervening[0].opname == "COPY"
-            if not is_direct and not is_augmented:
+            is_augmented = any(candidate.opname == "COPY" for candidate in intervening[:4])
+            is_derived = any(instruction.opname == "CALL" for instruction in intervening) and any(
+                instruction.opname in {"LOAD_GLOBAL", "LOAD_NAME"}
+                and instruction.argval in {"getattr", "type", "vars"}
+                for instruction in instructions[max(0, candidate_index - 2) : index]
+            )
+            if not is_direct and not is_augmented and not is_derived:
                 continue
             raise _StatefulExporterError(
                 f"namespace-write:{value.__module__}:{value.__qualname__}:{name}",
@@ -215,7 +331,7 @@ def _reject_exporter_state_writes(
                 value,
                 constant,
                 global_names,
-                protected_locals=protected_locals,
+                protected_locals=frozenset(protected_names),
             )
 
 
@@ -798,6 +914,8 @@ def _exporter_dependencies(value: Any, module: Any) -> tuple[JsonObject, frozens
     def referenced_attributes(code: Any, name: str) -> frozenset[str]:
         attributes: set[str] = set()
         instructions = tuple(dis.get_instructions(code))
+        saw_reference = False
+        saw_dynamic_reference = False
         for index, instruction in enumerate(instructions[:-1]):
             if (
                 instruction.opname
@@ -810,11 +928,25 @@ def _exporter_dependencies(value: Any, module: Any) -> tuple[JsonObject, frozens
                 or instruction.argval != name
             ):
                 continue
+            saw_reference = True
             following = instructions[index + 1]
             if following.opname in {"LOAD_ATTR", "LOAD_METHOD"} and isinstance(
                 following.argval, str
             ):
                 attributes.add(following.argval)
+                continue
+            if (
+                following.opname == "LOAD_CONST"
+                and isinstance(following.argval, str)
+                and index > 0
+                and instructions[index - 1].opname in {"LOAD_GLOBAL", "LOAD_NAME"}
+                and instructions[index - 1].argval == "getattr"
+            ):
+                attributes.add(following.argval)
+                continue
+            saw_dynamic_reference = True
+        if saw_reference and saw_dynamic_reference:
+            attributes.add("*")
         return frozenset(attributes)
 
     def visit_module_members(
@@ -896,11 +1028,28 @@ def _exporter_dependencies(value: Any, module: Any) -> tuple[JsonObject, frozens
             if fromlist:
                 members = frozenset(member for member in fromlist if isinstance(member, str))
             else:
-                members = frozenset(
+                aliases: set[str] = set()
+                for following in instructions[index + 1 : index + 8]:
+                    if following.opname in {"STORE_FAST", "STORE_NAME"} and isinstance(
+                        following.argval, str
+                    ):
+                        aliases.add(following.argval)
+                        break
+                    if following.opname in {
+                        "IMPORT_NAME",
+                        "POP_TOP",
+                        "RETURN_VALUE",
+                        "RETURN_CONST",
+                    }:
+                        break
+                direct_members = {
                     name
                     for name in code.co_names
                     if isinstance(name, str) and name in vars(imported)
-                )
+                }
+                for alias in aliases:
+                    direct_members.update(referenced_attributes(code, alias))
+                members = frozenset(direct_members)
             visit_module_members(
                 imported,
                 members,
