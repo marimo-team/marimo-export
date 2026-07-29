@@ -12,7 +12,7 @@ credentials, network, and libraries as the notebook.
 
 Capture borrows a live session. State execution and transient output leaves
 exist in child runtimes. Destroying a child removes its leaves. The parent input
-values and source document are checked across the operation.
+controls and source document are checked across the operation.
 
 Custom exporter references resolve installed kernel modules. Review and pin
 those packages like notebook dependencies. The spec carries the import

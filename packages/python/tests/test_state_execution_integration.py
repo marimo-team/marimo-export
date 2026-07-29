@@ -24,7 +24,7 @@ def _capture(notebook: Path, spec: ExportSpec, output: Path) -> None:
         server.stop()
 
 
-def test_ordinary_input_siblings_are_isolated_from_every_state_and_parent(
+def test_ordinary_input_cell_executes_fresh_in_every_state(
     tmp_path: Path,
 ) -> None:
     notebook = tmp_path / "notebook.py"
@@ -84,9 +84,107 @@ if __name__ == "__main__":
 
     for result in (first, second):
         publication = open_publication(result.path)
-        assert publication.state("one").output("snapshot").scalar() == "0,1"
-        assert publication.state("two").output("snapshot").scalar() == "0,2"
+        assert publication.state("one").output("snapshot").scalar() == "1"
+        assert publication.state("two").output("snapshot").scalar() == "2"
     assert notebook.read_bytes() == source
+
+
+def test_callable_and_class_siblings_are_owned_by_each_state_child(
+    tmp_path: Path,
+) -> None:
+    notebook = tmp_path / "notebook.py"
+    notebook.write_text(
+        """
+import marimo
+
+app = marimo.App()
+
+
+@app.cell
+def _():
+    values = []
+
+    def record(value):
+        values.append(value)
+        record.calls.append(value)
+
+    record.calls = []
+
+    class Bucket:
+        values = []
+
+    x = 0
+    return Bucket, record, values, x
+
+
+@app.cell
+def _(Bucket, record, values, x):
+    record(x)
+    Bucket.values.append(x)
+    snapshot = f"{values}:{record.calls}:{Bucket.values}"
+    return (snapshot,)
+
+
+if __name__ == "__main__":
+    app.run()
+""".lstrip(),
+        encoding="utf-8",
+    )
+    spec = ExportSpec(
+        inputs=("x",),
+        states={"one": {"x": 1}, "two": {"x": 2}},
+        outputs={"snapshot": OutputSpec(source="snapshot")},
+    )
+
+    _capture(notebook, spec, tmp_path / "publication")
+    publication = open_publication(tmp_path / "publication")
+
+    assert publication.state("one").output("snapshot").scalar() == "[1]:[1]:[1]"
+    assert publication.state("two").output("snapshot").scalar() == "[2]:[2]:[2]"
+
+
+def test_ordinary_input_can_share_its_authored_cell_with_a_ui_element(
+    tmp_path: Path,
+) -> None:
+    notebook = tmp_path / "notebook.py"
+    notebook.write_text(
+        """
+import marimo
+
+app = marimo.App()
+
+
+@app.cell
+def _():
+    import marimo as mo
+
+    selector = mo.ui.slider(0, 2, value=1)
+    x = 0
+    return selector, x
+
+
+@app.cell
+def _(selector, x):
+    result = f"{x}:{selector.value}"
+    return (result,)
+
+
+if __name__ == "__main__":
+    app.run()
+""".lstrip(),
+        encoding="utf-8",
+    )
+    spec = ExportSpec(
+        inputs=("x",),
+        states={"one": {"x": 1}, "two": {"x": 2}},
+        outputs={"result": OutputSpec(source="result")},
+    )
+
+    _capture(notebook, spec, tmp_path / "publication")
+    publication = open_publication(tmp_path / "publication")
+
+    assert publication.state("one").output("result").scalar() == "1:1"
+    assert publication.state("two").output("result").scalar() == "2:1"
 
 
 def test_ui_dependent_cell_failure_rejects_the_state(tmp_path: Path) -> None:

@@ -24,6 +24,7 @@ from marimo_export._execution.matrix import (
     Definition,
     MatrixPlan,
     NormalizedState,
+    ordinary_cell_code,
     projection_code,
 )
 from marimo_export._json import JsonObject, JsonValue, canonical_bytes, json_object, json_value
@@ -488,7 +489,9 @@ def _exporter_identity(
 def _exporter_dependencies(value: Any, module: Any) -> tuple[JsonObject, frozenset[str]]:
     records: JsonObject = {}
     module_names: set[str] = set()
-    visited: set[int] = set()
+    recorded_modules: set[int] = set()
+    expanded_modules: set[int] = set()
+    visited_callables: set[int] = set()
     local_root = _module_tree_root(module)
 
     def is_local_module(dependency: Any) -> bool:
@@ -512,34 +515,38 @@ def _exporter_dependencies(value: Any, module: Any) -> tuple[JsonObject, frozens
 
     def visit_module(dependency: Any, *, expand: bool) -> None:
         identifier = id(dependency)
-        if identifier in visited:
-            return
-        visited.add(identifier)
         name = str(getattr(dependency, "__name__", ""))
-        if name:
-            module_names.add(name)
-        origin = _module_origin(dependency)
-        if origin is not None:
-            digest = _file_digest(origin)
-            if digest is not None:
-                record(f"module:{name}", digest)
-        if not expand or not is_local_module(dependency):
+        if identifier not in recorded_modules:
+            recorded_modules.add(identifier)
+            if name:
+                module_names.add(name)
+            origin = _module_origin(dependency)
+            if origin is not None:
+                digest = _file_digest(origin)
+                if digest is not None:
+                    record(f"module:{name}", digest)
+        if not expand or identifier in expanded_modules or not is_local_module(dependency):
             return
+        expanded_modules.add(identifier)
         namespace = getattr(dependency, "__dict__", {})
         for attribute in sorted(namespace):
             member = namespace[attribute]
-            if getattr(member, "__module__", None) != name:
+            if inspect.ismodule(member):
+                if is_local_module(member):
+                    visit_module(member, expand=True)
                 continue
             if inspect.isfunction(member) or inspect.isclass(member):
-                visit_callable(member)
+                owner = sys.modules.get(str(getattr(member, "__module__", "")))
+                if owner is dependency or (owner is not None and is_local_module(owner)):
+                    visit_callable(member)
 
     def visit_callable(dependency: Any) -> None:
         if inspect.ismethod(dependency):
             dependency = dependency.__func__
         identifier = id(dependency)
-        if identifier in visited:
+        if identifier in visited_callables:
             return
-        visited.add(identifier)
+        visited_callables.add(identifier)
         module_name = str(getattr(dependency, "__module__", ""))
         qualname = str(
             getattr(
@@ -570,6 +577,20 @@ def _exporter_dependencies(value: Any, module: Any) -> tuple[JsonObject, frozens
         from marimo._save.hash import hash_module
 
         record(f"callable:{module_name}:{qualname}", hash_module(code).hex())
+        defaults = getattr(dependency, "__defaults__", None)
+        if isinstance(defaults, tuple):
+            for index, default in enumerate(defaults):
+                visit_reference(
+                    default,
+                    f"default:{module_name}:{qualname}:{index}",
+                )
+        keyword_defaults = getattr(dependency, "__kwdefaults__", None)
+        if isinstance(keyword_defaults, dict):
+            for default_name, default in sorted(keyword_defaults.items()):
+                visit_reference(
+                    default,
+                    f"keyword-default:{module_name}:{qualname}:{default_name}",
+                )
         try:
             closure = inspect.getclosurevars(dependency)
         except TypeError:
@@ -682,7 +703,11 @@ async def execute_state(
         app=AppInstantiation(options=runtime.app_config.asdict()),
         cells=[
             CellDef(
-                code=cell.code,
+                code=ordinary_cell_code(
+                    cell.code,
+                    plan.ordinary_cells.get(str(cell.id), ()),
+                    state.ordinary_values,
+                ),
                 name=cell.name,
                 options=cell.config.asdict(),
             )
@@ -726,8 +751,7 @@ async def execute_state(
         runtime_config["cache_cells"] = True
         cast(Any, child._kernel).user_config = config
         child._kernel.reactive_execution_mode = "autorun"
-        overrides = _isolated_overrides(state)
-        overrides[plan.state_name] = state.fingerprint
+        overrides = {plan.state_name: state.fingerprint}
         child._kernel.globals.update(overrides)
 
         projection_ids = _projection_ids(internal, projection_codes)
@@ -890,31 +914,6 @@ async def execute_state(
             cleanup_seconds=cleanup_seconds,
         ),
     )
-
-
-def _isolated_overrides(state: NormalizedState) -> dict[str, object]:
-    values = dict(state.ordinary_overrides)
-    shared = {
-        id(value): value
-        for value in values.values()
-        if inspect.ismodule(value)
-        or inspect.isfunction(value)
-        or inspect.isbuiltin(value)
-        or inspect.isclass(value)
-    }
-    try:
-        isolated = copy.deepcopy(values, shared)
-    except Exception as error:
-        raise ExecutionError(
-            f"state {state.name!r} ordinary input siblings could not be isolated",
-            code="input_isolation_failed",
-            details={
-                "state": state.name,
-                "definitions": sorted(values),
-                "exception_type": type(error).__name__,
-            },
-        ) from error
-    return isolated
 
 
 @contextmanager

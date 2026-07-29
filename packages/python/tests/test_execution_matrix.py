@@ -10,6 +10,7 @@ from marimo_export._execution import (
     Definition,
     OutputProjection,
     normalize_matrix,
+    ordinary_cell_code,
     projection_code,
 )
 from marimo_export.errors import SpecError
@@ -93,15 +94,27 @@ def test_sparse_rows_normalize_in_canonical_state_order() -> None:
     assert plan.states[0].fingerprint != plan.states[1].fingerprint
 
 
-def test_ordinary_override_supplies_complete_sibling_packet() -> None:
-    state = normalize_matrix(_spec(), _baseline()).states[-1]
+def test_ordinary_overrides_target_the_authored_definition_cell() -> None:
+    plan = normalize_matrix(_spec(), _baseline())
+    state = plan.states[-1]
 
-    assert dict(state.ordinary_overrides) == {
-        "chart_width": 800,
-        "interval": "1d",
+    assert dict(state.ordinary_values) == {
         "symbols": ["AAPL", "MSFT", "GOOGL"],
     }
+    assert dict(plan.ordinary_cells) == {"cell-inputs": ("symbols",)}
     assert dict(state.ui_values) == {"selector": ["AAPL"]}
+
+
+def test_ordinary_override_is_appended_to_the_transient_cell_copy() -> None:
+    code = ordinary_cell_code(
+        "shared = []\nsymbols = ('AAPL',)\nshared",
+        ("symbols",),
+        {"symbols": ["MSFT", "GOOGL"]},
+    )
+    cell = compile_cell(code, cell_id=CellId_t("inputs"))
+
+    assert code.endswith("symbols = ['MSFT', 'GOOGL']\n")
+    assert cell.defs == {"shared", "symbols"}
 
 
 def test_duplicate_normalized_vectors_fail_before_execution() -> None:

@@ -5,6 +5,7 @@ from .matrix import (
     NormalizedState,
     OutputProjection,
     normalize_matrix,
+    ordinary_cell_code,
     projection_code,
 )
 
@@ -15,5 +16,6 @@ __all__ = [
     "NormalizedState",
     "OutputProjection",
     "normalize_matrix",
+    "ordinary_cell_code",
     "projection_code",
 ]

@@ -47,8 +47,11 @@ inputs:
   - symbols_selector
 ```
 
-Definitions returned by one cell form a sibling packet. Overriding one sibling
-keeps the other baseline siblings available to downstream cells.
+For an ordinary definition, marimo-export appends the state assignment to that
+cell in the transient child document. The authored cell still creates its
+siblings, including functions, classes, and UI elements. marimo then executes
+the resulting graph normally. The source notebook remains byte-for-byte
+unchanged.
 
 ## States
 

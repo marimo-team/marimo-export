@@ -129,6 +129,7 @@ def test_exporter_preflight_fingerprints_sideloaded_callable_code(
         inputs=(),
         outputs=("summary",),
         projections={"summary": projection},
+        ordinary_cells={},
         state_name="marimo_export_state_0123456789abcdef",
         state_code="marimo_export_state_0123456789abcdef = 'state'",
     )

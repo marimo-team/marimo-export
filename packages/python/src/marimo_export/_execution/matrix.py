@@ -16,7 +16,7 @@ from marimo_export._json import (
 )
 from marimo_export.errors import SpecError
 from marimo_export.exporters._definitions import runtime_reference
-from marimo_export.exporters._spec import ExporterSpec, FrozenOption
+from marimo_export.exporters._spec import ExporterSpec
 from marimo_export.spec import ExportSpec
 
 
@@ -87,12 +87,12 @@ class Baseline:
 
 @dataclass(frozen=True, slots=True)
 class NormalizedState:
-    """One complete public vector plus native child execution packets."""
+    """One complete public vector plus values applied inside its child."""
 
     name: str
     inputs: Mapping[str, JsonValue]
     fingerprint: str
-    ordinary_overrides: Mapping[str, object]
+    ordinary_values: Mapping[str, JsonValue]
     ui_values: Mapping[str, JsonValue]
 
     def __post_init__(self) -> None:
@@ -103,8 +103,13 @@ class NormalizedState:
         )
         object.__setattr__(
             self,
-            "ordinary_overrides",
-            MappingProxyType(dict(self.ordinary_overrides)),
+            "ordinary_values",
+            MappingProxyType(
+                json_object(
+                    self.ordinary_values,
+                    f"state {self.name!r} ordinary values",
+                )
+            ),
         )
         object.__setattr__(
             self,
@@ -130,15 +135,21 @@ class MatrixPlan:
     inputs: tuple[str, ...]
     outputs: tuple[str, ...]
     projections: Mapping[str, OutputProjection]
+    ordinary_cells: Mapping[str, tuple[str, ...]]
     state_name: str
     state_code: str
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "projections", MappingProxyType(dict(self.projections)))
+        object.__setattr__(
+            self,
+            "ordinary_cells",
+            MappingProxyType(dict(self.ordinary_cells)),
+        )
 
 
 def normalize_matrix(spec: ExportSpec, baseline: Baseline) -> MatrixPlan:
-    """Complete sparse rows and form marimo definition override packets."""
+    """Complete sparse rows and map ordinary inputs to their authored cells."""
 
     if not isinstance(spec, ExportSpec):
         raise TypeError("spec must be an ExportSpec")
@@ -195,7 +206,11 @@ def normalize_matrix(spec: ExportSpec, baseline: Baseline) -> MatrixPlan:
                 details={"states": [previous, state_name]},
             )
 
-        ordinary = _ordinary_packet(spec, baseline, inputs)
+        ordinary = {
+            name: inputs[name]
+            for name in spec.inputs
+            if baseline.definitions[name].kind == "ordinary"
+        }
         ui_values = {
             name: inputs[name] for name in spec.inputs if baseline.definitions[name].kind == "ui"
         }
@@ -204,7 +219,7 @@ def normalize_matrix(spec: ExportSpec, baseline: Baseline) -> MatrixPlan:
                 name=state_name,
                 inputs=inputs,
                 fingerprint=sha256_bytes(vector),
-                ordinary_overrides=ordinary,
+                ordinary_values=ordinary,
                 ui_values=ui_values,
             )
         )
@@ -216,6 +231,21 @@ def normalize_matrix(spec: ExportSpec, baseline: Baseline) -> MatrixPlan:
             exporter=output.exporter,
         )
         for name, output in spec.outputs.items()
+    }
+    ordinary_cells = {
+        cell_id: tuple(
+            name
+            for name in spec.inputs
+            if baseline.definitions[name].kind == "ordinary"
+            and baseline.definitions[name].cell_id == cell_id
+        )
+        for cell_id in sorted(
+            {
+                baseline.definitions[name].cell_id
+                for name in spec.inputs
+                if baseline.definitions[name].kind == "ordinary"
+            }
+        )
     }
     state_name = _projection_state_name(spec.inputs, projections)
     if state_name in baseline.definitions:
@@ -229,41 +259,34 @@ def normalize_matrix(spec: ExportSpec, baseline: Baseline) -> MatrixPlan:
         inputs=spec.inputs,
         outputs=tuple(spec.outputs),
         projections=projections,
+        ordinary_cells=ordinary_cells,
         state_name=state_name,
         state_code=f"{state_name} = {normalized[0].fingerprint!r}",
     )
 
 
-def _ordinary_packet(
-    spec: ExportSpec,
-    baseline: Baseline,
-    inputs: Mapping[str, JsonValue],
-) -> dict[str, object]:
-    owners = {
-        baseline.definitions[name].cell_id
-        for name in spec.inputs
-        if baseline.definitions[name].kind == "ordinary"
-    }
-    packet: dict[str, object] = {}
-    for owner in owners:
-        representative = next(
-            definition
-            for definition in baseline.definitions.values()
-            if definition.cell_id == owner
-        )
-        for sibling in representative.siblings:
-            try:
-                packet[sibling] = baseline.definitions[sibling].value
-            except KeyError as error:
-                raise SpecError(
-                    f"ordinary input cell {owner!r} has unavailable sibling {sibling!r}",
-                    code="spec_input_sibling_missing",
-                    details={"cell_id": owner, "definition": sibling},
-                ) from error
-    for name in spec.inputs:
-        if baseline.definitions[name].kind == "ordinary":
-            packet[name] = inputs[name]
-    return packet
+def ordinary_cell_code(
+    code: str,
+    names: tuple[str, ...],
+    values: Mapping[str, JsonValue],
+) -> str:
+    """Apply portable state values at the end of one transient cell copy."""
+
+    if not isinstance(code, str):
+        raise TypeError("cell code must be a string")
+    if not names:
+        return code
+    lines = ["", "# marimo-export transient state inputs"]
+    for name in names:
+        if not isinstance(name, str) or not name.isidentifier():
+            raise TypeError("ordinary input names must be Python identifiers")
+        try:
+            value = values[name]
+        except KeyError as error:
+            raise ValueError(f"ordinary input {name!r} has no state value") from error
+        lines.append(f"{name} = {_python_literal(value)}")
+    separator = "" if code.endswith("\n") else "\n"
+    return code + separator + "\n".join(lines) + "\n"
 
 
 def projection_code(
@@ -332,11 +355,13 @@ def _render_options(exporter: ExporterSpec) -> str:
     )
 
 
-def _python_literal(value: FrozenOption) -> str:
+def _python_literal(value: object) -> str:
     if value is None or isinstance(value, (bool, int, float, str)):
         return repr(value)
-    if isinstance(value, tuple):
+    if isinstance(value, (list, tuple)):
         return "[" + ", ".join(_python_literal(item) for item in value) + "]"
+    if not isinstance(value, Mapping):
+        raise TypeError(f"portable value has unsupported type {type(value).__name__}")
     return (
         "{"
         + ", ".join(f"{key!r}: {_python_literal(item)}" for key, item in sorted(value.items()))
