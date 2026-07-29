@@ -421,7 +421,24 @@ def _is_canonical_base64(value: str, start: int = 0) -> bool:
         padding = 1
         if size > 1 and value[-2] == "=":
             padding = 2
-    return _BASE64_BODY.fullmatch(value, start, len(value) - padding) is not None
+    content_end = len(value) - padding
+    if _BASE64_BODY.fullmatch(value, start, content_end) is None:
+        return False
+    if padding == 0:
+        return True
+    final_value = _base64_value(value[content_end - 1])
+    return final_value & (0x0F if padding == 2 else 0x03) == 0
+
+
+def _base64_value(value: str) -> int:
+    codepoint = ord(value)
+    if 0x41 <= codepoint <= 0x5A:
+        return codepoint - 0x41
+    if 0x61 <= codepoint <= 0x7A:
+        return codepoint - 0x61 + 26
+    if 0x30 <= codepoint <= 0x39:
+        return codepoint - 0x30 + 52
+    return 62 if value == "+" else 63
 
 
 def _is_valid_percent_data(value: str, start: int) -> bool:

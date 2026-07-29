@@ -24,13 +24,14 @@ try {
 } from "@marimo-team/marimo-export";
 
 const root = document.querySelector("#app");
-if (root === null) throw new PublicationError("not_found", "Missing application root.");
+if (root === null) throw new PublicationError("publication_invalid", "Missing application root.");
 root.textContent = scalarLoader().codec;
 void openPublication;
 `,
   });
   await run(pnpm, ["install", "--ignore-scripts"], coreRoot);
   await assertOptionalPeersAbsent(coreRoot);
+  await run(pnpm, ["run", "typecheck"], coreRoot);
   await run(pnpm, ["run", "build"], coreRoot);
 
   await createProject(loadersRoot, {
@@ -51,13 +52,15 @@ const loaders = [
   vegaLiteLoader(),
 ];
 const root = document.querySelector("#app");
-if (root === null) throw new PublicationError("not_found", "Missing application root.");
-void openPublication("/publication/", { loaders }).then((publication) => {
+if (root === null) throw new PublicationError("publication_invalid", "Missing application root.");
+void loaders;
+void openPublication("/publication/").then((publication) => {
   root.textContent = publication.notebook.filename;
 });
 `,
   });
   await run(pnpm, ["install", "--ignore-scripts"], loadersRoot);
+  await run(pnpm, ["run", "typecheck"], loadersRoot);
   await run(pnpm, ["run", "build"], loadersRoot);
 
   process.stdout.write("Packed browser core and loader contracts passed.\n");
@@ -91,12 +94,35 @@ async function createProject(root, options) {
           version: "0.0.0",
           private: true,
           type: "module",
-          scripts: { build: "vp build" },
+          scripts: { build: "vp build", typecheck: "tsc --noEmit" },
           dependencies: {
             "@marimo-team/marimo-export": `file:${tarball}`,
             ...options.dependencies,
+            typescript: "6.0.3",
             "vite-plus": "0.2.4",
           },
+        },
+        null,
+        2,
+      )}\n`,
+    ),
+    writeFile(
+      join(root, "tsconfig.json"),
+      `${JSON.stringify(
+        {
+          compilerOptions: {
+            target: "ES2022",
+            module: "ESNext",
+            moduleResolution: "Bundler",
+            lib: ["ES2022", "DOM", "DOM.Iterable"],
+            strict: true,
+            noEmit: true,
+            skipLibCheck: true,
+            exactOptionalPropertyTypes: true,
+            noUncheckedIndexedAccess: true,
+            verbatimModuleSyntax: true,
+          },
+          include: ["src.ts"],
         },
         null,
         2,

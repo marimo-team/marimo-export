@@ -87,6 +87,27 @@ describe("publication", () => {
     expect(fixture.requests).toEqual(["https://example.test/stocks/index.json"]);
   });
 
+  test("returns detached base URLs that cannot redirect asset reads", async () => {
+    const fixture = await publicationFixture();
+    const publication = await openPublication("https://example.test/stocks", {
+      fetch: fixture.fetch,
+    });
+    const leaked = publication.base;
+    leaked.pathname = "/elsewhere/";
+    const loader = defineOutputLoader({
+      codec: "numpy.npy.v1",
+      accepts: () => true,
+      load: ({ payload }) => payload,
+    });
+
+    await publication.state("alpha").output("array").load(loader);
+
+    expect(publication.base.href).toBe("https://example.test/stocks/");
+    expect(fixture.requests[1]).toMatch(
+      /^https:\/\/example\.test\/stocks\/assets\/[0-9a-f]{64}\.npy$/u,
+    );
+  });
+
   test("loads verified native bytes and decoded BlobAssets through explicit loaders", async () => {
     const fixture = await publicationFixture();
     const publication = await openPublication("https://example.test/stocks", {
@@ -124,7 +145,7 @@ describe("publication", () => {
 
     await expect(publication.verify()).resolves.toEqual({
       states: 2,
-      outputs: 4,
+      outputs: 8,
       assets: 3,
       bytesVerified: [...fixture.assets.values()].reduce((sum, value) => sum + value.byteLength, 0),
     });
@@ -190,6 +211,14 @@ describe("publication", () => {
         signal: controller.signal,
       }),
     ).rejects.toMatchObject({ code: "abort" });
+  });
+
+  test("rejects a successful response without a readable body", async () => {
+    await expect(
+      openPublication("https://example.test/stocks", {
+        fetch: async () => new Response(null, { status: 200 }),
+      }),
+    ).rejects.toMatchObject({ code: "read_failed" });
   });
 });
 

@@ -90,24 +90,24 @@ async function validateFingerprints(
   index: ParsedPublicationIndex,
   signal: AbortSignal | undefined,
 ): Promise<void> {
-  await Promise.all(
-    Object.entries(index.states).map(async ([name, state]) => {
-      throwIfAborted(signal);
-      const actual = await sha256Hex(encoder.encode(canonicalJson(state.inputs)));
-      throwIfAborted(signal);
-      if (actual !== state.fingerprint) {
-        throw new PublicationError(
-          "publication_invalid",
-          `State ${JSON.stringify(name)} fingerprint does not match its inputs.`,
-          { details: { state: name } },
-        );
-      }
-    }),
-  );
+  for (const [name, state] of Object.entries(index.states)) {
+    throwIfAborted(signal);
+    // Keep hashing bounded when publications contain many states.
+    // oxlint-disable-next-line no-await-in-loop
+    const actual = await sha256Hex(encoder.encode(canonicalJson(state.inputs)));
+    throwIfAborted(signal);
+    if (actual !== state.fingerprint) {
+      throw new PublicationError(
+        "publication_invalid",
+        `State ${JSON.stringify(name)} fingerprint does not match its inputs.`,
+        { details: { state: name } },
+      );
+    }
+  }
 }
 
 class PublicationValue implements Publication {
-  readonly base: URL;
+  readonly #baseHref: string;
   readonly notebook: ParsedPublicationIndex["notebook"];
   readonly producer: ParsedPublicationIndex["producer"];
   readonly inputNames: readonly string[];
@@ -118,12 +118,12 @@ class PublicationValue implements Publication {
   readonly #reader: AssetReader;
 
   constructor(base: URL, index: ParsedPublicationIndex, fetcher: typeof globalThis.fetch) {
-    this.base = new URL(base.href);
+    this.#baseHref = base.href;
     this.notebook = index.notebook;
     this.producer = index.producer;
     this.inputNames = index.inputs;
     this.outputNames = index.outputs;
-    this.#reader = new AssetReader(this.base, fetcher);
+    this.#reader = new AssetReader(this.#baseHref, fetcher);
     this.#states = Object.freeze(
       Object.entries(index.states)
         .sort(([left], [right]) => compareUnicodeScalarStrings(left, right))
@@ -133,8 +133,11 @@ class PublicationValue implements Publication {
     this.#statesByInputs = new Map(
       this.#states.map((state) => [canonicalJson(state.inputs), state]),
     );
-    Object.freeze(this.base);
     Object.freeze(this);
+  }
+
+  get base(): URL {
+    return new URL(this.#baseHref);
   }
 
   states(): readonly PublishedState[] {
@@ -199,7 +202,7 @@ class PublicationValue implements Publication {
     }
     return Object.freeze({
       states: this.#states.length,
-      outputs: this.outputNames.length,
+      outputs: this.#states.length * this.outputNames.length,
       assets: assets.length,
       bytesVerified: total,
     });
@@ -335,11 +338,11 @@ class PublishedOutputValue implements PublishedOutput {
 type AssetOutputDescriptor = Exclude<OutputDescriptor, { readonly codec: "marimo.scalar.v1" }>;
 
 class AssetReader {
-  readonly #base: URL;
+  readonly #baseHref: string;
   readonly #fetch: typeof globalThis.fetch;
 
-  constructor(base: URL, fetcher: typeof globalThis.fetch) {
-    this.#base = base;
+  constructor(baseHref: string, fetcher: typeof globalThis.fetch) {
+    this.#baseHref = baseHref;
     this.#fetch = fetcher;
   }
 
@@ -362,7 +365,7 @@ class AssetReader {
       );
     }
     const path = assetPath(descriptor.codec, descriptor.asset.sha256);
-    const bytes = await fetchBytes(this.#fetch, new URL(path, this.#base), path, {
+    const bytes = await fetchBytes(this.#fetch, new URL(path, this.#baseHref), path, {
       maxBytes: options.maxBytes,
       expectedBytes: descriptor.asset.size,
       ...(options.signal === undefined ? {} : { signal: options.signal }),

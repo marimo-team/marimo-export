@@ -20,9 +20,12 @@ describe("AnyWidget payload resources", () => {
     expect(parseBuffer(encoded).byteLength).toBe(expectedSize);
   });
 
-  test.each(["A", "AAAA=", "A===", "AA=A", "AA/!"])("rejects noncanonical base64 %s", (encoded) => {
-    expect(() => parseBuffer(encoded)).toThrow("not canonical base64");
-  });
+  test.each(["A", "AAAA=", "A===", "AA=A", "AA/!", "AB==", "AAB="])(
+    "rejects noncanonical base64 %s",
+    (encoded) => {
+      expect(() => parseBuffer(encoded)).toThrow("not canonical base64");
+    },
+  );
 
   test("validates a large base64 buffer before decoding", () => {
     const decode = vi.spyOn(globalThis, "atob");

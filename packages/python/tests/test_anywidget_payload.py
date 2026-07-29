@@ -123,6 +123,15 @@ def test_payload_requires_ascii_base64() -> None:
         validate_anywidget_payload(_payload(document))
 
 
+@pytest.mark.parametrize("encoded", ["AB==", "AAB="])
+def test_payload_requires_zero_base64_padding_bits(encoded: str) -> None:
+    document = _document()
+    document["modelNotifications"][0]["message"]["buffers"] = [encoded]
+
+    with pytest.raises(ValueError, match="not canonical base64"):
+        validate_anywidget_payload(_payload(document))
+
+
 def test_payload_base64_validation_has_bounded_auxiliary_allocation() -> None:
     encoded = "A" * (32 * 1024 * 1024)
 

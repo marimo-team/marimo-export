@@ -112,10 +112,11 @@ async function readBody(
   signal: AbortSignal | undefined,
 ): Promise<Uint8Array> {
   if (response.body === null) {
-    const bytes = new Uint8Array(await response.arrayBuffer());
-    throwIfAborted(signal);
-    if (bytes.byteLength > maxBytes) throw limitError(path, maxBytes, bytes.byteLength);
-    return bytes;
+    throw new PublicationError(
+      "read_failed",
+      `Publication object ${quotePath(path)} has no readable response body.`,
+      { details: { path: boundedPath(path) } },
+    );
   }
   const reader = response.body.getReader();
   let buffer = new Uint8Array(Math.min(64 * 1024, maxBytes));

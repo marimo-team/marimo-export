@@ -312,7 +312,19 @@ function isCanonicalBase64(value: string): boolean {
       return false;
     }
   }
+  const padding = value.length - contentEnd;
+  if (padding > 0) {
+    const finalValue = base64Value(value.charCodeAt(contentEnd - 1));
+    if ((finalValue & (padding === 2 ? 0x0f : 0x03)) !== 0) return false;
+  }
   return true;
+}
+
+function base64Value(codeUnit: number): number {
+  if (codeUnit >= 0x41 && codeUnit <= 0x5a) return codeUnit - 0x41;
+  if (codeUnit >= 0x61 && codeUnit <= 0x7a) return codeUnit - 0x61 + 26;
+  if (codeUnit >= 0x30 && codeUnit <= 0x39) return codeUnit - 0x30 + 52;
+  return codeUnit === 0x2b ? 62 : 63;
 }
 
 function isValidPercentData(value: string): boolean {

@@ -4,7 +4,7 @@ from marimo_export.exporters._spec import ExporterSpec, builtin
 
 
 def bundle() -> ExporterSpec:
-    """Select a self-contained browser bundle for an AnyWidget."""
+    """Select a browser-loadable AnyWidget model snapshot."""
 
     return builtin("anywidget.bundle")
 
