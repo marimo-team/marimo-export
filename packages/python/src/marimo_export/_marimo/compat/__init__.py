@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import copy
 import dis
 import gc
@@ -9,7 +10,9 @@ import importlib.metadata
 import importlib.util
 import inspect
 import re
+import struct
 import sys
+import textwrap
 import threading
 import time
 import types
@@ -71,11 +74,16 @@ class _StatefulExporterError(ValueError):
 
 
 def _immutable_exporter_constant(value: Any, label: str) -> JsonValue:
-    if value is None or isinstance(value, (bool, int, float, str)):
-        try:
-            return json_value(value, label)
-        except (TypeError, ValueError) as error:
-            raise _StatefulExporterError(label, value) from error
+    if value is None:
+        return {"type": "none"}
+    if isinstance(value, bool):
+        return {"type": "bool", "value": value}
+    if isinstance(value, int):
+        return {"type": "int", "value": str(value)}
+    if isinstance(value, float):
+        return {"type": "float64", "hex": struct.pack(">d", value).hex()}
+    if isinstance(value, str):
+        return {"type": "str", "value": value}
     if isinstance(value, bytes):
         return {"type": "bytes", "hex": value.hex()}
     if type(value) is object:
@@ -102,9 +110,113 @@ def _immutable_exporter_constant(value: Any, label: str) -> JsonValue:
         isinstance(value, types.UnionType)
         or typing.get_origin(value) is not None
         or type(value).__module__ == "typing"
+        or type(value).__module__ == "__future__"
     ):
         return {"type": "type-expression", "value": repr(value)}
     raise _StatefulExporterError(label, value)
+
+
+def _reject_exporter_state_writes(
+    value: Any,
+    code: types.CodeType,
+    global_names: frozenset[str],
+    *,
+    protected_locals: frozenset[str] = frozenset(),
+) -> None:
+    try:
+        source = textwrap.dedent(inspect.getsource(value))
+        tree = ast.parse(source)
+    except (IndentationError, OSError, SyntaxError, TypeError):
+        tree = None
+    if tree is not None:
+        declared_globals = {
+            name for node in ast.walk(tree) if isinstance(node, ast.Global) for name in node.names
+        }
+
+        def root_name(node: ast.AST) -> str | None:
+            while isinstance(node, (ast.Attribute, ast.Subscript)):
+                node = node.value
+            return node.id if isinstance(node, ast.Name) else None
+
+        def targets(node: ast.AST) -> Iterator[ast.AST]:
+            if isinstance(node, (ast.Tuple, ast.List)):
+                for item in node.elts:
+                    yield from targets(item)
+                return
+            yield node
+
+        assigned: list[ast.AST] = []
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Assign):
+                for target in node.targets:
+                    assigned.extend(targets(target))
+            elif isinstance(node, (ast.AnnAssign, ast.AugAssign, ast.NamedExpr)):
+                assigned.extend(targets(node.target))
+            elif isinstance(node, ast.Delete):
+                for target in node.targets:
+                    assigned.extend(targets(target))
+            elif (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id in {"setattr", "delattr"}
+                and node.args
+            ):
+                assigned.append(node.args[0])
+        for target in assigned:
+            name = root_name(target)
+            if name is None:
+                continue
+            if isinstance(target, ast.Name):
+                if name not in declared_globals:
+                    continue
+            elif name not in global_names and name not in protected_locals:
+                continue
+            raise _StatefulExporterError(
+                f"namespace-write:{value.__module__}:{value.__qualname__}:{name}",
+                value,
+            )
+        return
+
+    instructions = tuple(dis.get_instructions(code))
+    namespace_loads = {"LOAD_GLOBAL", "LOAD_NAME", "LOAD_DEREF", "LOAD_FAST"}
+    namespace_stores = {
+        "STORE_ATTR",
+        "DELETE_ATTR",
+        "STORE_SUBSCR",
+        "DELETE_SUBSCR",
+    }
+    for index, instruction in enumerate(instructions):
+        if instruction.opname in {"STORE_GLOBAL", "DELETE_GLOBAL"}:
+            raise _StatefulExporterError(
+                f"global-write:{value.__module__}:{value.__qualname__}:{instruction.argval}",
+                value,
+            )
+        if instruction.opname not in namespace_stores:
+            continue
+        for candidate_index in range(index - 1, max(-1, index - 32), -1):
+            candidate = instructions[candidate_index]
+            if candidate.opname not in namespace_loads or not isinstance(candidate.argval, str):
+                continue
+            name = candidate.argval
+            if name not in global_names and name not in protected_locals:
+                continue
+            intervening = instructions[candidate_index + 1 : index]
+            is_direct = index - candidate_index <= 3
+            is_augmented = bool(intervening) and intervening[0].opname == "COPY"
+            if not is_direct and not is_augmented:
+                continue
+            raise _StatefulExporterError(
+                f"namespace-write:{value.__module__}:{value.__qualname__}:{name}",
+                value,
+            )
+    for constant in code.co_consts:
+        if inspect.iscode(constant):
+            _reject_exporter_state_writes(
+                value,
+                constant,
+                global_names,
+                protected_locals=protected_locals,
+            )
 
 
 @dataclass(frozen=True, slots=True)
@@ -276,6 +388,47 @@ def flush_native_caches() -> None:
     from marimo._save.loaders import flush_active_caches
 
     flush_active_caches()
+
+
+def _cleanup_state_child(
+    *,
+    teardown: Callable[[], None],
+    release: Callable[[], None],
+    primary: BaseException | None,
+    state_name: str,
+) -> None:
+    cleanup_failures: list[BaseException] = []
+    for operation in (teardown, release):
+        try:
+            operation()
+        except BaseException as error:
+            cleanup_failures.append(error)
+    if not cleanup_failures:
+        return
+    if primary is not None:
+        for cleanup_error in cleanup_failures:
+            primary.add_note(f"state child cleanup also failed: {type(cleanup_error).__name__}")
+        return
+    cancellation = next(
+        (failure for failure in cleanup_failures if not isinstance(failure, Exception)),
+        None,
+    )
+    if cancellation is not None:
+        for cleanup_error in cleanup_failures:
+            if cleanup_error is not cancellation:
+                cancellation.add_note(
+                    f"state child cleanup also failed: {type(cleanup_error).__name__}"
+                )
+        raise cancellation
+    cleanup_error = cleanup_failures[0]
+    raise ExecutionError(
+        f"state {state_name!r} child cache cleanup failed",
+        code="state_cleanup_failed",
+        details={
+            "state": state_name,
+            "exception_type": type(cleanup_error).__name__,
+        },
+    ) from cleanup_error
 
 
 def require_capabilities() -> MarimoCapabilities:
@@ -620,10 +773,74 @@ def _exporter_dependencies(value: Any, module: Any) -> tuple[JsonObject, frozens
                 if owner is dependency or (owner is not None and is_local_module(owner)):
                     visit_callable(member, enforce_state=check_members)
                 continue
-            if expand_members and inspect.isclass(member):
+            if inspect.isclass(member):
                 owner = sys.modules.get(str(getattr(member, "__module__", "")))
                 if owner is dependency or (owner is not None and is_local_module(owner)):
-                    visit_callable(member, enforce_state=False)
+                    visit_callable(member, enforce_state=check_members)
+                continue
+            if check_members and not attribute.startswith("__"):
+                visit_reference(
+                    member,
+                    f"module-state:{name}:{attribute}",
+                    strict=True,
+                )
+
+    def referenced_attributes(code: Any, name: str) -> frozenset[str]:
+        attributes: set[str] = set()
+        instructions = tuple(dis.get_instructions(code))
+        for index, instruction in enumerate(instructions[:-1]):
+            if (
+                instruction.opname
+                not in {
+                    "LOAD_GLOBAL",
+                    "LOAD_NAME",
+                    "LOAD_DEREF",
+                    "LOAD_FAST",
+                }
+                or instruction.argval != name
+            ):
+                continue
+            following = instructions[index + 1]
+            if following.opname in {"LOAD_ATTR", "LOAD_METHOD"} and isinstance(
+                following.argval, str
+            ):
+                attributes.add(following.argval)
+        return frozenset(attributes)
+
+    def visit_module_members(
+        dependency: Any,
+        members: frozenset[str],
+        *,
+        strict: bool,
+        label: str,
+    ) -> None:
+        visit_module(dependency, expand=False)
+        if "*" in members:
+            visit_module(
+                dependency,
+                expand=True,
+                enforce_functions=strict,
+            )
+            return
+        module_name = str(getattr(dependency, "__name__", ""))
+        namespace = getattr(dependency, "__dict__", {})
+        for member_name in sorted(members):
+            member = namespace.get(member_name)
+            if member is None and module_name:
+                candidate = f"{module_name}.{member_name}"
+                if candidate not in resolved_imports:
+                    try:
+                        resolved_imports[candidate] = importlib.import_module(candidate)
+                    except Exception:
+                        resolved_imports[candidate] = None
+                member = resolved_imports[candidate]
+            if member is None:
+                continue
+            visit_reference(
+                member,
+                f"{label}:{member_name}",
+                strict=strict,
+            )
 
     def visit_imports(dependency: Any, code: Any, *, strict: bool) -> None:
         module_name = str(getattr(dependency, "__module__", ""))
@@ -655,45 +872,58 @@ def _exporter_dependencies(value: Any, module: Any) -> tuple[JsonObject, frozens
                     )
                 except (ImportError, ValueError):
                     continue
-            candidates = [imported_name]
-            candidates.extend(
-                f"{imported_name}.{member}"
-                for member in fromlist
-                if member != "*" and imported_name
-            )
-            for candidate in candidates:
-                if not candidate:
-                    continue
-                if candidate not in resolved_imports:
-                    try:
-                        resolved_imports[candidate] = importlib.import_module(candidate)
-                    except Exception:
-                        resolved_imports[candidate] = None
-                imported = resolved_imports[candidate]
-                if imported is None:
-                    continue
-                visit_module(
-                    imported,
-                    expand=True,
-                    enforce_functions=strict,
+            if not imported_name:
+                continue
+            if imported_name not in resolved_imports:
+                try:
+                    resolved_imports[imported_name] = importlib.import_module(imported_name)
+                except Exception:
+                    resolved_imports[imported_name] = None
+            imported = resolved_imports[imported_name]
+            if imported is None:
+                continue
+            members: frozenset[str]
+            if fromlist:
+                members = frozenset(member for member in fromlist if isinstance(member, str))
+            else:
+                members = frozenset(
+                    name
+                    for name in code.co_names
+                    if isinstance(name, str) and name in vars(imported)
                 )
+            visit_module_members(
+                imported,
+                members,
+                strict=strict,
+                label=f"import:{module_name}:{imported_name}",
+            )
         for constant in code.co_consts:
             if inspect.iscode(constant):
                 visit_imports(dependency, constant, strict=strict)
 
-    def visit_callable(dependency: Any, *, enforce_state: bool) -> None:
+    def visit_callable(
+        dependency: Any,
+        *,
+        enforce_state: bool,
+        force_state: bool = False,
+        protected_locals: frozenset[str] = frozenset(),
+    ) -> None:
         if inspect.ismethod(dependency):
             dependency = dependency.__func__
         identifier = id(dependency)
         record_callable = identifier not in visited_callables
-        check_callable = enforce_state and identifier not in checked_callables
+        module_name = str(getattr(dependency, "__module__", ""))
+        owner = sys.modules.get(module_name)
+        should_check = enforce_state and (
+            force_state or owner is module or (owner is not None and is_local_module(owner))
+        )
+        check_callable = should_check and identifier not in checked_callables
         if not record_callable and not check_callable:
             return
         if record_callable:
             visited_callables.add(identifier)
         if check_callable:
             checked_callables.add(identifier)
-        module_name = str(getattr(dependency, "__module__", ""))
         qualname = str(
             getattr(
                 dependency,
@@ -701,10 +931,7 @@ def _exporter_dependencies(value: Any, module: Any) -> tuple[JsonObject, frozens
                 getattr(dependency, "__name__", type(dependency).__qualname__),
             )
         )
-        owner = sys.modules.get(module_name)
-        strict = check_callable and (
-            owner is module or (owner is not None and is_local_module(owner))
-        )
+        strict = check_callable
         if owner is not None:
             visit_module(owner, expand=False)
         if strict and inspect.isfunction(dependency) and vars(dependency):
@@ -714,14 +941,60 @@ def _exporter_dependencies(value: Any, module: Any) -> tuple[JsonObject, frozens
             )
         code = getattr(dependency, "__code__", None)
         if code is None and inspect.isclass(dependency):
-            if owner is None or not is_local_module(owner):
+            if owner is None or (owner is not module and not is_local_module(owner)):
                 return
             for attribute in sorted(vars(dependency)):
+                if attribute.startswith("__"):
+                    continue
                 member = inspect.getattr_static(dependency, attribute)
-                if isinstance(member, (classmethod, staticmethod)):
-                    member = member.__func__
+                if isinstance(member, classmethod):
+                    function = member.__func__
+                    parameters = tuple(inspect.signature(function).parameters)
+                    class_parameter = frozenset({parameters[0]}) if parameters else frozenset()
+                    visit_callable(
+                        function,
+                        enforce_state=strict,
+                        protected_locals=class_parameter,
+                    )
+                    continue
+                if isinstance(member, staticmethod):
+                    visit_callable(member.__func__, enforce_state=strict)
+                    continue
                 if inspect.isfunction(member):
                     visit_callable(member, enforce_state=False)
+                    if strict:
+                        _reject_exporter_state_writes(
+                            member,
+                            member.__code__,
+                            frozenset(
+                                name
+                                for name, referenced in inspect.getclosurevars(
+                                    member
+                                ).globals.items()
+                                if (
+                                    inspect.ismodule(referenced)
+                                    or inspect.isclass(referenced)
+                                    or inspect.isfunction(referenced)
+                                    or inspect.ismethod(referenced)
+                                    or inspect.isbuiltin(referenced)
+                                )
+                            ),
+                        )
+                    continue
+                if inspect.isclass(member):
+                    visit_callable(member, enforce_state=strict)
+                    continue
+                if inspect.isdatadescriptor(member) or inspect.ismethoddescriptor(member):
+                    continue
+                if strict:
+                    portable = _immutable_exporter_constant(
+                        member,
+                        f"class-state:{module_name}:{qualname}:{attribute}",
+                    )
+                    record(
+                        f"class-state:{module_name}:{qualname}:{attribute}",
+                        hashlib.sha256(canonical_bytes(portable)).hexdigest(),
+                    )
             return
         if code is None:
             call = inspect.getattr_static(type(dependency), "__call__", None)
@@ -732,6 +1005,8 @@ def _exporter_dependencies(value: Any, module: Any) -> tuple[JsonObject, frozens
 
         if record_callable:
             record(f"callable:{module_name}:{qualname}", hash_module(code).hex())
+        if not strict and owner is not None and owner is not module and not is_local_module(owner):
+            return
         visit_imports(dependency, code, strict=strict)
         defaults = getattr(dependency, "__defaults__", None)
         if isinstance(defaults, tuple):
@@ -753,6 +1028,23 @@ def _exporter_dependencies(value: Any, module: Any) -> tuple[JsonObject, frozens
             closure = inspect.getclosurevars(dependency)
         except TypeError:
             return
+        if strict:
+            _reject_exporter_state_writes(
+                dependency,
+                code,
+                frozenset(
+                    name
+                    for name, referenced in closure.globals.items()
+                    if (
+                        inspect.ismodule(referenced)
+                        or inspect.isclass(referenced)
+                        or inspect.isfunction(referenced)
+                        or inspect.ismethod(referenced)
+                        or inspect.isbuiltin(referenced)
+                    )
+                ),
+                protected_locals=protected_locals,
+            )
         if strict and closure.nonlocals:
             raise _StatefulExporterError(
                 f"closure:{module_name}:{qualname}",
@@ -764,15 +1056,34 @@ def _exporter_dependencies(value: Any, module: Any) -> tuple[JsonObject, frozens
                 referenced,
                 f"value:{module_name}:{qualname}:{dependency_name}",
                 strict=strict,
+                module_members=(
+                    referenced_attributes(code, dependency_name)
+                    if inspect.ismodule(referenced)
+                    else None
+                ),
             )
 
-    def visit_reference(dependency: Any, label: str, *, strict: bool) -> None:
+    def visit_reference(
+        dependency: Any,
+        label: str,
+        *,
+        strict: bool,
+        module_members: frozenset[str] | None = None,
+    ) -> None:
         if inspect.ismodule(dependency):
-            visit_module(
-                dependency,
-                expand=True,
-                enforce_functions=strict,
-            )
+            if module_members is None:
+                visit_module(
+                    dependency,
+                    expand=True,
+                    enforce_functions=strict,
+                )
+            else:
+                visit_module_members(
+                    dependency,
+                    module_members,
+                    strict=strict,
+                    label=label,
+                )
             return
         if inspect.ismethod(dependency):
             bound_to = getattr(dependency, "__self__", None)
@@ -789,7 +1100,7 @@ def _exporter_dependencies(value: Any, module: Any) -> tuple[JsonObject, frozens
             visit_callable(dependency, enforce_state=strict)
             return
         if inspect.isclass(dependency):
-            visit_callable(dependency, enforce_state=False)
+            visit_callable(dependency, enforce_state=strict)
             return
         if inspect.isbuiltin(dependency):
             bound_to = getattr(dependency, "__self__", None)
@@ -814,6 +1125,27 @@ def _exporter_dependencies(value: Any, module: Any) -> tuple[JsonObject, frozens
                         getattr(dependency, "__name__", ""),
                     )
                 ),
+            }
+            record(label, hashlib.sha256(canonical_bytes(portable)).hexdigest())
+            return
+        wrapped = getattr(dependency, "__wrapped__", None)
+        if callable(dependency) and inspect.isfunction(wrapped):
+            owner = sys.modules.get(str(getattr(dependency, "__module__", "")))
+            if owner is None or owner is module or is_local_module(owner):
+                raise _StatefulExporterError(label, dependency)
+            visit_module(owner, expand=False)
+            visit_callable(wrapped, enforce_state=False)
+            portable = {
+                "type": "external-wrapped-callable",
+                "module": str(getattr(dependency, "__module__", "")),
+                "name": str(
+                    getattr(
+                        dependency,
+                        "__qualname__",
+                        getattr(dependency, "__name__", ""),
+                    )
+                ),
+                "wrapper": (f"{type(dependency).__module__}.{type(dependency).__qualname__}"),
             }
             record(label, hashlib.sha256(canonical_bytes(portable)).hexdigest())
             return
@@ -850,7 +1182,7 @@ def _exporter_dependencies(value: Any, module: Any) -> tuple[JsonObject, frozens
         record(label, hashlib.sha256(canonical_bytes(portable)).hexdigest())
 
     visit_module(module, expand=False)
-    visit_callable(value, enforce_state=True)
+    visit_callable(value, enforce_state=True, force_state=True)
     return records, frozenset(module_names)
 
 
@@ -1101,27 +1433,25 @@ async def execute_state(
     finally:
         cleanup_started = time.monotonic()
         primary = sys.exception()
-        cleanup_error: Exception | None = None
-        try:
+
+        def teardown() -> None:
             with child_context.install():
                 child._kernel.cache_callbacks.teardown()
-        except Exception as error:
-            cleanup_error = error
-        del child
-        gc.collect()
-        cleanup_seconds = time.monotonic() - cleanup_started
-        if cleanup_error is not None:
-            failure = ExecutionError(
-                f"state {state.name!r} child cache cleanup failed",
-                code="state_cleanup_failed",
-                details={
-                    "state": state.name,
-                    "exception_type": type(cleanup_error).__name__,
-                },
+
+        def release() -> None:
+            nonlocal child
+            del child
+            gc.collect()
+
+        try:
+            _cleanup_state_child(
+                teardown=teardown,
+                release=release,
+                primary=primary,
+                state_name=state.name,
             )
-            if primary is None:
-                raise failure from cleanup_error
-            primary.add_note(str(failure))
+        finally:
+            cleanup_seconds = time.monotonic() - cleanup_started
     if receipts is None:
         raise RuntimeError("fresh child produced no projection receipts")
     return StateExecution(

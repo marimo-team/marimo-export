@@ -5,8 +5,11 @@ An ExportSpec has exactly four top-level fields:
 ```yaml
 schema: marimo-export.spec.v1
 inputs: []
-states: {}
-outputs: {}
+states:
+  baseline: {}
+outputs:
+  answer:
+    source: answer
 ```
 
 ## For Papermill users

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import importlib
 import sys
+from pathlib import Path
 from types import ModuleType, SimpleNamespace
 from typing import Any, cast
 
@@ -9,6 +11,7 @@ import marimo._save.loaders as native_loaders
 import pytest
 from marimo_export._execution import MatrixPlan, OutputProjection
 from marimo_export._marimo.compat import (
+    _cleanup_state_child,
     _document_sha256,
     _track_upstream_cache,
     flush_native_caches,
@@ -80,6 +83,49 @@ def test_native_cache_flush_uses_marimo_loader_lifecycle(
     flush_native_caches()
 
     assert calls == ["flushed"]
+
+
+def test_state_child_cleanup_releases_after_teardown_cancellation() -> None:
+    events: list[str] = []
+
+    def teardown() -> None:
+        events.append("teardown")
+        raise KeyboardInterrupt("cancelled")
+
+    def release() -> None:
+        events.append("release")
+
+    with pytest.raises(KeyboardInterrupt, match="cancelled"):
+        _cleanup_state_child(
+            teardown=teardown,
+            release=release,
+            primary=None,
+            state_name="baseline",
+        )
+
+    assert events == ["teardown", "release"]
+
+
+def test_state_child_cleanup_preserves_the_execution_error() -> None:
+    primary = ValueError("execution failed")
+
+    def teardown() -> None:
+        raise KeyboardInterrupt("cancelled")
+
+    def release() -> None:
+        raise RuntimeError("release failed")
+
+    _cleanup_state_child(
+        teardown=teardown,
+        release=release,
+        primary=primary,
+        state_name="baseline",
+    )
+
+    assert primary.__notes__ == [
+        "state child cleanup also failed: KeyboardInterrupt",
+        "state child cleanup also failed: RuntimeError",
+    ]
 
 
 def test_upstream_cache_trackers_restore_native_binding_out_of_order(
@@ -177,6 +223,111 @@ def test_exporter_preflight_rejects_callable_instances(
     )
 
 
+def test_exporter_preflight_checks_a_reexported_selected_function(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    implementation_name = "marimo_export_test_reexport_implementation"
+    implementation = ModuleType(implementation_name)
+    exec(
+        "def encode(value, seen=[]):\n    seen.append(value)\n    return len(seen)\n",
+        implementation.__dict__,
+    )
+    api_name = "marimo_export_test_reexport_api"
+    api = ModuleType(api_name)
+    vars(api)["encode"] = vars(implementation)["encode"]
+    monkeypatch.setitem(sys.modules, implementation_name, implementation)
+    monkeypatch.setitem(sys.modules, api_name, api)
+
+    with pytest.raises(OutputError) as raised:
+        preflight_exporters(_custom_exporter_plan(api_name))
+
+    assert raised.value.code == "exporter_invalid"
+    assert str(raised.value) == (f"output 'summary' exporter '{api_name}:encode' is not stateless")
+
+
+def test_exporter_preflight_rejects_mutable_local_module_state(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    state_name = "marimo_export_test_module_state"
+    exporter_name = "marimo_export_test_module_exporter"
+    (tmp_path / f"{state_name}.py").write_text("seen = []\n", encoding="utf-8")
+    (tmp_path / f"{exporter_name}.py").write_text(
+        f"import {state_name} as state\n"
+        "\n"
+        "def encode(value):\n"
+        "    state.seen.append(value)\n"
+        "    return len(state.seen)\n",
+        encoding="utf-8",
+    )
+    monkeypatch.syspath_prepend(str(tmp_path))
+    importlib.invalidate_caches()
+
+    with pytest.raises(OutputError) as raised:
+        preflight_exporters(_custom_exporter_plan(exporter_name))
+
+    assert raised.value.code == "exporter_invalid"
+    assert str(raised.value) == (
+        f"output 'summary' exporter '{exporter_name}:encode' is not stateless"
+    )
+
+
+def test_exporter_preflight_checks_only_the_imported_local_member(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    helper_name = "marimo_export_test_imported_member_helper"
+    exporter_name = "marimo_export_test_imported_member_exporter"
+    (tmp_path / f"{helper_name}.py").write_text(
+        "def transform(value):\n"
+        "    return value\n"
+        "\n"
+        "def unrelated(value, seen=[]):\n"
+        "    seen.append(value)\n"
+        "    return len(seen)\n",
+        encoding="utf-8",
+    )
+    (tmp_path / f"{exporter_name}.py").write_text(
+        "def encode(value):\n"
+        f"    from {helper_name} import transform\n"
+        "\n"
+        "    return transform(value)\n",
+        encoding="utf-8",
+    )
+    monkeypatch.syspath_prepend(str(tmp_path))
+    importlib.invalidate_caches()
+
+    identity = preflight_exporters(_custom_exporter_plan(exporter_name))
+
+    assert len(identity["summary"]) == 64
+
+
+@pytest.mark.parametrize(
+    ("first", "second"),
+    [(1, 1.0), (0.0, -0.0)],
+    ids=["integer-versus-float", "float-sign-zero"],
+)
+def test_exporter_preflight_preserves_python_scalar_identity(
+    monkeypatch: pytest.MonkeyPatch,
+    first: int | float,
+    second: int | float,
+) -> None:
+    module_name = "marimo_export_test_scalar_identity"
+    plan = _custom_exporter_plan(module_name)
+
+    def identity(value: int | float) -> str:
+        module = ModuleType(module_name)
+        vars(module)["marker"] = value
+        exec(
+            "def encode(value, marker=marker):\n    return type(marker).__name__, marker, value\n",
+            module.__dict__,
+        )
+        monkeypatch.setitem(sys.modules, module_name, module)
+        return preflight_exporters(plan)["summary"]
+
+    assert identity(first) != identity(second)
+
+
 @pytest.mark.parametrize(
     ("case", "source"),
     [
@@ -222,6 +373,24 @@ def test_exporter_preflight_rejects_callable_instances(
             "def encode(value):\n"
             "    append(value)\n"
             "    return len(seen)\n",
+        ),
+        (
+            "global-write",
+            "count = 0\n"
+            "\n"
+            "def encode(value):\n"
+            "    global count\n"
+            "    count += 1\n"
+            "    return value, count\n",
+        ),
+        (
+            "class-state",
+            "class State:\n"
+            "    seen = []\n"
+            "\n"
+            "def encode(value):\n"
+            "    State.seen.append(value)\n"
+            "    return len(State.seen)\n",
         ),
     ],
 )

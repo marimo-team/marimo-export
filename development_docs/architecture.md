@@ -45,9 +45,11 @@ The selected live session supplies the baseline. Inspection records:
 - portable baseline or frontend value
 - UI domain and sensitivity
 
-Normalization fills every sparse row into a complete input vector. Ordinary
-siblings travel as one override packet. UI overrides remain child-local.
-Setup definitions receive their override through the compatibility adapter.
+Normalization fills every sparse row into a complete input vector. Each
+ordinary assignment is appended to a transient copy of its authored defining
+cell, which preserves the cell's sibling definitions. UI overrides remain
+child-local. Setup definitions receive their override through the compatibility
+adapter.
 
 ## Synthetic output leaves
 

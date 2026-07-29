@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 from marimo_export import ExportSpec, OutputSpec, capture, open_publication
 from marimo_export._remote.managed import ManagedServer
+from marimo_export.errors import OutputError
 from marimo_export.exporters import importable
 
 
@@ -113,6 +114,21 @@ def encode(value, prefix=PREFIX):
 
 def _write_prefix(path: Path, label: str) -> None:
     path.write_text(f'PREFIX = "{label}"\n', encoding="utf-8")
+
+
+def _write_stateful_exporter(path: Path) -> None:
+    path.write_text(
+        """
+class State:
+    seen = []
+
+
+def encode(value):
+    State.seen.append(value)
+    return len(State.seen)
+""".lstrip(),
+        encoding="utf-8",
+    )
 
 
 def _write_module_exporter(path: Path) -> None:
@@ -308,3 +324,30 @@ def test_custom_exporter_cache_identity_tracks_transitive_reexports(
         open_publication(tmp_path / "changed").state("baseline").output("summary").blob_asset().data
         == b"changed-transitive:41"
     )
+
+
+def test_stateful_exporter_is_rejected_before_two_state_execution(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    notebook = tmp_path / "notebook.py"
+    _write_notebook(notebook)
+    _write_stateful_exporter(tmp_path / "publication_exports.py")
+    monkeypatch.setenv("PYTHONPATH", str(tmp_path))
+    spec = ExportSpec(
+        inputs=("answer",),
+        states={"one": {"answer": 1}, "two": {"answer": 2}},
+        outputs={
+            "summary": OutputSpec(
+                source="answer",
+                exporter=importable("publication_exports:encode"),
+            )
+        },
+    )
+    output = tmp_path / "publication"
+
+    with pytest.raises(OutputError) as raised:
+        _capture(notebook, spec, output)
+
+    assert raised.value.code == "exporter_invalid"
+    assert not output.exists()
