@@ -108,6 +108,10 @@ declare its external runtime dependencies as optional peers of
 `@marimo-team/marimo-export`. The packed-package test builds the root entry
 alone and every loader subpath with its peers installed.
 
+Workspace Vite applications mirror `#loaders/*` in `resolve.alias` so the
+development server transforms the facade and private source together. Published
+loader subpaths resolve to the bundled browser package files.
+
 ## Protocol changes
 
 Publication wire changes update Python production, browser parsing,
