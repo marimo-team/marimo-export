@@ -29,7 +29,7 @@ Python tests cover:
 - managed autorun caching, process ownership, and SSE shutdown ordering
 - child-local execution, upstream cache activity, and projection receipts
 - run-local phase and fresh-child timing records
-- projection cleanup and parent preservation
+- child teardown, source-byte identity, and parent preservation
 - transfer integrity and atomic writes
 - local publication filesystem safety
 - CLI results, errors, and exit categories

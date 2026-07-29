@@ -20,7 +20,7 @@ Run focused package commands during development, then run `make format` and
 ## Architecture
 
 - `packages/python` owns ExportSpec, build, capture, the CLI, publication
-  writing and reading, and authored Exporter functions.
+  writing and reading, exporter descriptors, and exporter runtimes.
 - `_execution` owns baseline and matrix records. `_marimo/compat` owns every
   private marimo import. `_remote` owns HTTP, SSE, authentication, kernel
   invocation, and managed server lifecycle.
@@ -39,8 +39,8 @@ See [`development_docs/architecture.md`](development_docs/architecture.md).
 ## Dependency rule
 
 Keep marimo graph and cache behavior inside marimo. marimo-export constructs
-complete inputs, creates temporary output leaves, invokes normal execution,
-reads native receipts, and publishes verified bytes.
+complete inputs, appends synthetic output leaves to in-memory state children,
+invokes normal execution, reads native receipts, and publishes verified bytes.
 
 Stable domain modules depend on stable types. Private marimo imports stay below
 `packages/python/src/marimo_export/_marimo/compat`. Browser core imports no
@@ -62,13 +62,15 @@ An ExportSpec contains:
 schema
 inputs: notebook definition names
 states: sparse authored overrides
-outputs: public name -> source definition
+outputs: public name -> source definition + optional exporter descriptor
 ```
 
 The producer captures a baseline and normalizes every state into a complete
-input vector. Every output runs through one temporary leaf for every state.
-The publication contains one canonical `index.json` and content-addressed
-assets.
+input vector. Every output runs through one synthetic child leaf for every
+state. Omitting an exporter preserves the native cache representation.
+Selecting an exporter invokes one built-in ID or explicit
+`module:function` callable. The publication contains one canonical
+`index.json` and content-addressed assets.
 
 Publication v1 accepts:
 
@@ -89,12 +91,13 @@ codec-aware `OutputLoader` explicitly.
 - `capture` borrows one active edit session and leaves the session and server
   running.
 - The client and attached kernel import the same marimo-export version.
-- Capability preflight runs before document mutation.
+- Capability and exporter preflight runs before state execution.
 - Sparse states use notebook definition names. Complete sibling packets
   preserve definitions returned by the same cell.
 - Ordinary overrides and UI frontend values remain child-local. Parent UI
   values stay unchanged.
-- Each output is a visible code-mode leaf. Every leaf is deleted in `finally`.
+- The authored notebook contains no marimo-export imports or publication
+  cells. Each output leaf exists only in an in-memory state child.
 - Each state uses marimo child execution with native caching enabled. marimo
   owns dependency pruning, cache identity, serializer choice, persistence, and
   hit or miss status.
@@ -138,9 +141,10 @@ boundaries and preserve a stable code plus bounded JSON details. Use Pydantic
 for the ExportSpec boundary and on-demand schema generation. Use structured
 data construction for JSON, YAML, and manifests.
 
-Exporter functions return the exact native `BlobAsset`. They have explicit
-options and no registration side effect. The authored marimo cell owns their
-cache identity.
+Built-in exporter factories return immutable `ExporterSpec` values. Custom
+exporters use explicit `module:function` references with portable keyword
+options. Runtime callables return a value supported by marimo's native cache
+codecs. Synthetic leaf code owns conversion cache identity.
 
 ## TypeScript conventions
 

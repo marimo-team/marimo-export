@@ -3,22 +3,22 @@
 marimo-export turns a finite set of notebook inputs into verified static
 outputs while leaving graph execution and cache identity with marimo.
 
-```text
-ExportSpec
-  -> baseline inspection
-  -> complete state normalization
-  -> temporary output leaves
-  -> isolated marimo child execution
-  -> native cache receipts
-  -> canonical publication
-  -> explicit browser loaders
+```mermaid
+flowchart LR
+    Spec[ExportSpec] --> Baseline[baseline inspection]
+    Baseline --> Matrix[complete state matrix]
+    Matrix --> Leaves[synthetic child leaves]
+    Leaves --> Execution[marimo child execution]
+    Execution --> Receipts[native cache receipts]
+    Receipts --> Publication[canonical publication]
+    Publication --> Loaders[explicit browser loaders]
 ```
 
 ## Package boundaries
 
 | Path                                               | Responsibility                                                                           |
 | -------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| `packages/python`                                  | ExportSpec, build, capture, publication writer and reader, CLI, authored Exporters       |
+| `packages/python`                                  | ExportSpec, exporter descriptors and runtimes, build, capture, publication I/O, CLI      |
 | `packages/python/src/marimo_export/_execution`     | Baseline, normalized states, projection code, matrix records                             |
 | `packages/python/src/marimo_export/_marimo/compat` | Every private marimo import and capability probe                                         |
 | `packages/python/src/marimo_export/_remote`        | HTTP, SSE, credentials, bridge invocation, managed server lifecycle                      |
@@ -33,7 +33,8 @@ contract. The Python public roots are `build`, `capture`, `Client`, and
 ## ExportSpec and baseline
 
 An ExportSpec declares definition names under `inputs`, sparse rows under
-`states`, and source definition names under `outputs`.
+`states`, and source definitions with optional exporter descriptors under
+`outputs`.
 
 The selected live session supplies the baseline. Inspection records:
 
@@ -48,18 +49,22 @@ Normalization fills every sparse row into a complete input vector. Ordinary
 siblings travel as one override packet. UI overrides remain child-local.
 Setup definitions receive their override through the compatibility adapter.
 
-## Temporary output leaves
+## Synthetic output leaves
 
-Each operation creates one deterministic state-token cell and one deterministic
-leaf per output. The token starts with the first normalized state fingerprint.
-Each leaf references the token before returning its source definition. Every
-child overrides the token with its own state fingerprint and prunes the token's
-defining cell.
+Each state child receives one deterministic state-token cell and one
+deterministic leaf per output. The token starts with the first normalized state
+fingerprint. Each child overrides it with the current fingerprint and prunes
+the token's defining cell.
 
-Code mode creates the token and leaves in the live document so marimo sees
-ordinary graph nodes. The token makes each projection cache key state-specific,
-including when the selected source is a `BlobAsset`. The lease records every
-created cell ID and deletes the complete set in `finally`.
+A native leaf references the token before returning its source definition. An
+exporter leaf also imports the resolved callable and invokes it with the source
+plus normalized keyword options. The token makes every projection cache key
+state-specific, including when the selected source or result is a `BlobAsset`.
+
+The compatibility layer appends these cells directly to the in-memory
+`NotebookSerializationV1` used to construct the child. They never enter the
+parent document, editor, or source file. Child teardown owns their complete
+lifecycle.
 
 The parent document digest and public UI values are checked around capture.
 Borrowed sessions remain active. Managed build uses an operation-local sibling
@@ -160,7 +165,13 @@ renderer finalizers.
 
 ## Extension path
 
-A custom Python representation returns native `BlobAsset` with a versioned
-media type. A paired `BlobAssetLoader` validates the inner bytes and returns the
-application value. This path keeps the stable cache codec closed while media
-representations remain extensible.
+Built-in exporter IDs resolve through one closed catalog. A custom
+`module:function` reference resolves a top-level callable already available in
+the kernel environment. Preflight checks importability and callability before
+state execution. Portable options become explicit keyword arguments.
+
+A custom exporter can return any value supported by the native cache codecs. A
+custom `BlobAsset` representation uses a versioned media type. Its paired
+`BlobAssetLoader` validates the inner bytes and returns the application value.
+This path keeps the stable cache codec closed while media representations
+remain extensible.

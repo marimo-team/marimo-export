@@ -33,6 +33,7 @@ build(
 Starts an authenticated loopback server through the current interpreter,
 activates one notebook session, publishes the matrix, and stops owned
 processes. The source notebook digest is checked before and after execution.
+Projection cells exist only in the in-memory state children.
 
 ## `capture`
 
@@ -70,6 +71,40 @@ with Client(
 `Session.inspect()` returns definition names, cell ownership, sibling names,
 Python types, UI or ordinary kind, portable-input status, sensitivity, public
 baseline values, and UI domains.
+
+## `OutputSpec` and `ExporterSpec`
+
+```python
+from marimo_export import OutputSpec
+from marimo_export.exporters import ExporterSpec, altair, importable
+
+interactive = OutputSpec(
+    source="performance",
+    exporter=altair.vegalite(),
+)
+snapshot = OutputSpec(
+    source="performance",
+    exporter=altair.png(scale=2),
+)
+custom = OutputSpec(
+    source="report",
+    exporter=importable("acme_exports:summary", compact=True),
+)
+native = OutputSpec(source="ohlc_matrix")
+```
+
+`OutputSpec(source, exporter=None)` selects one notebook definition.
+`exporter=None` keeps marimo's native cache representation.
+
+Built-in factories return an `ExporterSpec`. They do not convert a Python
+object in the calling process. `importable(name, **options)` accepts a
+`module:function` reference to a top-level callable in the notebook
+environment. Exporter options are portable JSON values and become keyword
+arguments in the transient projection cell.
+
+`ExporterSpec.name` is the normalized built-in ID or import reference.
+`ExporterSpec.options` is immutable. `to_value()` returns the normalized wire
+value, and `from_value()` accepts the string shorthand or exact object form.
 
 ## `PublicationResult`
 

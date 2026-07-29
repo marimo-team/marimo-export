@@ -147,11 +147,13 @@ the app:
 - `inputs` names notebook definitions that the publication can vary.
 - `states` lists sparse overrides such as a symbol selection, date range, or
   chart width.
-- `outputs` gives public names to notebook definitions that the client can load.
+- `outputs` gives public names to notebook definitions and selects an optional
+  browser representation.
 
 marimo-export reads the current notebook values as the baseline, completes each
 sparse state, and executes every state through normal marimo execution. Matching
-cells can restore from marimo's cache on later publication runs.
+cells can restore from marimo's cache on later publication runs. Export-specific
+cells and imports never enter the notebook source.
 
 At runtime, the browser selects one of these published states and runs the
 loaded output's browser behavior. Vega-Lite interactions, AnyWidget controls,
@@ -163,18 +165,30 @@ programmatic construction.
 
 ## Publish rich notebook outputs
 
-Authored Exporter functions turn Python objects into browser representations
-inside ordinary marimo cells:
+Choose representations beside the source definitions in the ExportSpec:
 
-```python
-from marimo_export.exporters.altair import png, vegalite
-from marimo_export.exporters.anywidget import bundle
-from marimo_export.exporters.parquet import table
-
-chart_spec = vegalite(chart)
-chart_image = png(chart, scale=2)
-prices_file = table(prices, filename="prices.parquet")
-dashboard = bundle(widget)
+```yaml
+outputs:
+  dashboard:
+    source: widget
+    exporter: anywidget.bundle
+  chart:
+    source: performance
+    exporter: altair.vegalite
+  chart_image:
+    source: performance
+    exporter:
+      name: altair.png
+      options:
+        scale: 2
+  prices:
+    source: selected_prices
+    exporter:
+      name: parquet.table
+      options:
+        filename: prices.parquet
+  matrix:
+    source: ohlc_matrix
 ```
 
 Choose the representation that fits the client:
@@ -189,9 +203,27 @@ Choose the representation that fits the client:
 | Altair chart       | PNG                      | `@marimo-team/marimo-export`                  |
 | AnyWidget          | AnyWidget bundle         | `@marimo-team/marimo-export/loader/anywidget` |
 
-Exporter calls participate in marimo execution and caching like other notebook
-code. Custom exporters can publish another media type through
-`BlobAsset`, and a matching browser loader can decode or mount it.
+Omitting `exporter` publishes the source through marimo's native cache codec.
+When an exporter is present, marimo-export adds a transient leaf to each state
+child. marimo executes and caches that leaf, then marimo-export reads its native
+cache receipt. The leaf disappears with the child.
+
+Programmatic specs use typed descriptor factories:
+
+```python
+from marimo_export import OutputSpec
+from marimo_export.exporters import altair
+
+output = OutputSpec(
+    source="performance",
+    exporter=altair.png(scale=2),
+)
+```
+
+Custom exporters use an explicit `module:function` reference. The callable
+must be importable in the notebook kernel and return a supported native cache
+value. A `BlobAsset` with a versioned media type can pair with a custom browser
+loader.
 
 [Read the representations guide](docs/representations.md) for loader peer
 dependencies, media types, and the custom loader contract.
@@ -218,8 +250,10 @@ marimo-export capture http://127.0.0.1:2718 \
 ```
 
 The live kernel and the calling environment must import the same
-marimo-export version. Pass credentials with `MARIMO_EXPORT_ACCESS_TOKEN` and
-`MARIMO_EXPORT_SERVER_TOKEN` to keep them out of command history.
+marimo-export version. It must also contain the dependencies and custom
+callables selected by the spec. Pass credentials with
+`MARIMO_EXPORT_ACCESS_TOKEN` and `MARIMO_EXPORT_SERVER_TOKEN` to keep them out
+of command history.
 
 [Read the CLI guide](docs/cli.md) for session discovery, machine-readable
 output, replacement behavior, and exit categories.

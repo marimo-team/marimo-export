@@ -11,6 +11,7 @@ uv add marimo-export
 
 ```python
 from marimo_export import ExportSpec, OutputSpec, build
+from marimo_export.exporters import altair, parquet
 
 spec = ExportSpec(
     inputs=("symbols", "chart_width"),
@@ -20,8 +21,15 @@ spec = ExportSpec(
         "focus": {"symbols": ["AAPL", "MSFT"]},
     },
     outputs={
-        "chart": OutputSpec(source="chart_asset"),
-        "prices": OutputSpec(source="prices"),
+        "chart": OutputSpec(
+            source="performance",
+            exporter=altair.vegalite(),
+        ),
+        "prices": OutputSpec(
+            source="selected_prices",
+            exporter=parquet.table(filename="prices.parquet"),
+        ),
+        "matrix": OutputSpec(source="correlation_matrix"),
     },
 )
 
@@ -40,7 +48,8 @@ print(result.timings.total_seconds)
 interpreter. The initial autorun and state children use marimo's native cell
 cache. Pending parent writes are flushed before the first state child starts.
 `build` activates one session, delegates publication to the capture engine,
-stops the server, and returns `PublicationResult`.
+stops the server, and returns `PublicationResult`. Exporter leaves exist only
+in the in-memory state children. The source notebook stays unchanged.
 
 ## Capture
 
@@ -75,9 +84,12 @@ Authentication uses explicit `access_token` and `server_token` arguments or
 ## ExportSpec
 
 `ExportSpec` accepts `inputs`, sparse `states`, and `outputs`. `OutputSpec`
-contains one notebook definition name:
+selects one notebook definition and an optional exporter descriptor:
 
 ```python
+from marimo_export import ExportSpec, OutputSpec
+from marimo_export.exporters import anywidget
+
 spec = ExportSpec(
     inputs=("symbols_selector",),
     states={
@@ -85,7 +97,11 @@ spec = ExportSpec(
         "focus": {"symbols_selector": ["MSFT", "GOOGL"]},
     },
     outputs={
-        "dashboard": OutputSpec(source="dashboard"),
+        "dashboard": OutputSpec(
+            source="quote_detail",
+            exporter=anywidget.bundle(),
+        ),
+        "row_count": OutputSpec(source="row_count"),
     },
 )
 ```
@@ -117,13 +133,16 @@ returning data. `Publication.resolve` accepts a complete vector.
 
 ## Exporters
 
-Authored Exporter functions return marimo's native `BlobAsset`:
+Built-in factories construct typed exporter descriptors:
 
 ```python
-from marimo_export.exporters.altair import png, vegalite
-from marimo_export.exporters.anywidget import bundle
-from marimo_export.exporters.blob import html, json, text
-from marimo_export.exporters.parquet import table
+from marimo_export.exporters import altair, anywidget, blob, parquet
+
+chart = altair.vegalite()
+snapshot = altair.png(scale=2)
+widget = anywidget.bundle()
+prices = parquet.table(compression="snappy")
+document = blob.json(media_type="application/vnd.example.v1+json")
 ```
 
 Install the dependency family used by the notebook:
@@ -132,8 +151,26 @@ Install the dependency family used by the notebook:
 uv add "marimo-export[charts,parquet,anywidget]"
 ```
 
-Exporter functions are pure conversion calls with explicit options. Their
-marimo cell owns dependency hashing and cache persistence.
+Descriptor construction performs no conversion. marimo-export invokes the
+selected runtime in a synthetic child leaf. marimo owns dependency hashing,
+cache persistence, and native result serialization.
+
+Custom exporters use an installed or sideloaded top-level callable:
+
+```python
+from marimo_export import OutputSpec
+from marimo_export.exporters import importable
+
+summary = OutputSpec(
+    source="report",
+    exporter=importable("acme_exports:summary", compact=True),
+)
+```
+
+The callable receives the source value followed by the descriptor options as
+keyword arguments. It returns a scalar, numeric NumPy array, supported table,
+or `BlobAsset` accepted by marimo's native cache. The spec contains the import
+reference and portable options.
 
 ## Public package root
 

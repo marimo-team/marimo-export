@@ -30,24 +30,14 @@ make bootstrap
 `make bootstrap` installs every uv workspace member and pnpm workspace package
 from the root lockfiles.
 
-## Read the notebook contract
+## Read the publication contract
 
 `examples/vite-vanilla/finance.py` fetches the price history, filters the
-selected watchlist, and creates four browser representations:
+selected watchlist, creates an Altair chart, and mounts an AnyWidget. It
+contains no marimo-export import.
 
-```python
-market_explorer = bundle(quote_detail)
-performance_chart = vegalite(performance)
-performance_snapshot = png(performance, scale=2)
-price_history = table(
-    selected_prices,
-    compression="snappy",
-    filename="price-history.parquet",
-)
-```
-
-`examples/vite-vanilla/finance.export.yaml` declares five sparse states and
-four outputs:
+`examples/vite-vanilla/finance.export.yaml` declares five sparse states, names
+the notebook definitions to publish, and chooses four representations:
 
 <<< ../examples/vite-vanilla/finance.export.yaml
 
@@ -60,6 +50,11 @@ The input names address definitions in the marimo graph:
 
 Every omitted value comes from the notebook baseline. marimo-export records the
 complete normalized vector for each published state.
+
+The output mapping selects two representations of `performance`, a Parquet
+representation of `selected_prices`, and an AnyWidget bundle for
+`quote_detail`. These conversions run as transient marimo cells inside each
+state child. The notebook file stays unchanged.
 
 ## Build and verify the publication
 
@@ -98,6 +93,26 @@ fingerprints, producer versions, cache codecs, media types, asset lengths, and
 SHA-256 digests. Its adjacent `assets` directory contains the payloads
 referenced by the state and output relation.
 
+## Capture an existing session
+
+Open the example notebook in one terminal:
+
+```bash
+pnpm --filter @marimo-team/marimo-export-example-vite-vanilla run notebook
+```
+
+After its Yahoo Finance request completes, pass the printed server URL to the
+capture script from another terminal:
+
+```bash
+pnpm --filter @marimo-team/marimo-export-example-vite-vanilla run capture -- \
+  http://127.0.0.1:2718
+```
+
+Add the session ID and access token when the server requires them. Capture uses
+the same ExportSpec, keeps the server running, and preserves the notebook
+source and current controls.
+
 ## Run the market dashboard
 
 Start the Vite application:
@@ -124,4 +139,4 @@ import { vegaLiteLoader } from "@marimo-team/marimo-export/loader/vegalite";
 ```
 
 Continue with [ExportSpec](export-spec.md) to define another state matrix or
-[representations](representations.md) to add an exporter and browser loader.
+[representations](representations.md) to select an exporter and browser loader.

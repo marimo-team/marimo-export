@@ -6,13 +6,18 @@ execution.
 ## Producer boundary
 
 Build and capture execute notebook code with the notebook environment's normal
-authority. Input overrides run through marimo's dependency graph. Authored
-Exporter cells can access the same files, credentials, network, and libraries
-as the notebook.
+authority. Input overrides run through marimo's dependency graph. Exporter
+callables selected by the sidecar spec execute with the same access to files,
+credentials, network, and libraries as the notebook.
 
-Capture borrows a live session. Temporary output leaves are removed in
-`finally`. State execution happens in child runtimes. The parent input values
-and source document are checked across the operation.
+Capture borrows a live session. State execution and transient output leaves
+exist in child runtimes. Destroying a child removes its leaves. The parent input
+values and source document are checked across the operation.
+
+Custom exporter references resolve installed kernel modules. Review and pin
+those packages like notebook dependencies. The spec carries the import
+reference and portable options, never executable source or serialized
+closures.
 
 ## Publication boundary
 

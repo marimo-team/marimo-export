@@ -74,31 +74,91 @@ JavaScript safe integer range.
 
 ## Outputs
 
-Each public output names one notebook definition:
+Each public output names one notebook definition and an optional exporter:
 
 ```yaml
 outputs:
   chart:
-    source: chart_asset
+    source: performance
+    exporter: altair.vegalite
+  chart_image:
+    source: performance
+    exporter:
+      name: altair.png
+      options:
+        scale: 2
   prices:
-    source: df
+    source: selected_prices
+    exporter:
+      name: parquet.table
+      options:
+        compression: snappy
+        filename: prices.parquet
   row_count:
     source: row_count
 ```
 
-The source returns one supported native cache value:
+Omit `exporter` when the source already returns one supported native cache
+value:
 
 - scalar
 - numeric NumPy array
 - pandas, Polars, or Arrow table accepted by marimo's Arrow codec
 - marimo `BlobAsset`
 
-Use an authored Exporter cell to convert another object family.
+An exporter string selects a built-in with default options. The object form has
+exactly `name` and `options`. Options use the same portable value grammar as
+state overrides.
+
+marimo-export generates a transient leaf that reads the state token and source,
+imports the selected callable, and returns its result. marimo executes and
+caches that leaf through its normal graph. The source notebook receives no
+imports or publication cells.
+
+Built-in names are:
+
+- `altair.vegalite`
+- `altair.png`
+- `anywidget.bundle`
+- `parquet.table`
+- `blob.json`
+- `blob.text`
+- `blob.html`
+
+### Custom exporter
+
+Use `module:function` for an installed top-level callable:
+
+```yaml
+outputs:
+  summary:
+    source: report
+    exporter:
+      name: acme_exports:summary
+      options:
+        compact: true
+```
+
+The callable receives the source value as its first argument and exporter
+options as keyword arguments:
+
+```python
+from marimo_export import BlobAsset
+
+
+def summary(value: object, *, compact: bool) -> BlobAsset:
+    ...
+```
+
+The module must be importable in the selected kernel. Capture can use a package
+that was installed into the running environment before capture starts. Missing
+modules, missing symbols, and non-callable symbols fail the publication.
 
 ## Programmatic construction
 
 ```python
 from marimo_export import ExportSpec, OutputSpec
+from marimo_export.exporters import altair, importable, parquet
 
 spec = ExportSpec(
     inputs=("chart_width",),
@@ -107,10 +167,28 @@ spec = ExportSpec(
         "compact": {"chart_width": 480},
     },
     outputs={
-        "chart": OutputSpec(source="chart_asset"),
+        "chart": OutputSpec(
+            source="performance",
+            exporter=altair.vegalite(),
+        ),
+        "snapshot": OutputSpec(
+            source="performance",
+            exporter=altair.png(scale=2),
+        ),
+        "prices": OutputSpec(
+            source="selected_prices",
+            exporter=parquet.table(filename="prices.parquet"),
+        ),
+        "summary": OutputSpec(
+            source="report",
+            exporter=importable("acme_exports:summary", compact=True),
+        ),
     },
 )
 ```
+
+Descriptor factories build spec values. Conversion runs later in the marimo
+child.
 
 `ExportSpec.to_value()` returns the wire object.
 `ExportSpec.from_value()` validates a wire object.

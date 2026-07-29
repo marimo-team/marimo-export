@@ -52,12 +52,24 @@ open_publication
 
 Typed failures live in `marimo_export.errors`.
 
-## Add an Exporter
+## Add an exporter
 
-An Exporter is an authored pure function:
+An exporter is an importable top-level callable:
 
 ```python
-def summary(value: object) -> BlobAsset:
+import json
+from collections.abc import Mapping
+
+from marimo_export import BlobAsset
+
+
+def summary(value: Mapping[str, object]) -> BlobAsset:
+    payload = json.dumps(
+        value,
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
     return BlobAsset(
         data=payload,
         media_type="application/vnd.example.summary.v1+json",
@@ -66,12 +78,28 @@ def summary(value: object) -> BlobAsset:
     )
 ```
 
-The function validates its inputs and returned bytes. It has no registration
-side effect. The notebook cell that calls it owns marimo caching.
+Reference the callable from an ExportSpec with `module:function`:
+
+```yaml
+outputs:
+  summary:
+    source: report
+    exporter: acme_exports:summary
+```
+
+The callable validates its input and returned value. marimo-export imports it
+inside a synthetic child leaf, then marimo executes and caches the conversion.
+The module must be importable in the selected kernel.
 
 Add optional dependencies under a focused package extra. Keep source object
-libraries in the notebook environment when the Exporter can accept them
+libraries in the notebook environment when the exporter can accept them
 through a narrow conversion protocol.
+
+Add a built-in exporter ID to
+`packages/python/src/marimo_export/exporters/_definitions.py`, expose a typed
+descriptor factory, and put its callable under
+`packages/python/src/marimo_export/exporters/_runtime`. Built-in IDs have
+closed option schemas and deterministic defaults.
 
 ## Add a browser loader
 

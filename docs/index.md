@@ -77,14 +77,28 @@ uv run marimo-export capture http://127.0.0.1:2718 \
 ```
 
 Both commands execute each state through marimo and read the resulting native
-cache receipts. See the [command-line interface](cli.md) for session discovery,
-credentials, replacement behavior, JSON output, and exit categories.
+cache receipts. The notebook source stays unchanged in both modes. See the
+[command-line interface](cli.md) for session discovery, credentials,
+replacement behavior, JSON output, and exit categories.
 
-## Publish native values or authored representations
+## Publish native values or selected representations
 
 Scalar values, numeric NumPy arrays, and supported tables use marimo's native
-cache codecs. Exporter functions convert object families such as Altair charts
-and AnyWidgets into a versioned `BlobAsset` inside an ordinary notebook cell.
+cache codecs. An output can also name an exporter in the sidecar spec:
+
+```yaml
+outputs:
+  chart:
+    source: performance
+    exporter: altair.vegalite
+  dashboard:
+    source: quote_detail
+    exporter: anywidget.bundle
+```
+
+marimo-export creates these conversions as transient child leaves. They use
+normal marimo execution and caching without adding imports or cells to the
+notebook.
 
 | Notebook value   | Browser entry point                           |
 | ---------------- | --------------------------------------------- |

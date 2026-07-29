@@ -23,6 +23,8 @@ marimo-export build notebook.py \
 
 `build` owns an authenticated loopback server and its notebook process tree.
 Its initial notebook autorun uses marimo's native cell cache.
+Exporter leaves are added to in-memory state children. The notebook file stays
+unchanged.
 `--replace` atomically replaces an existing real directory.
 
 ## `capture`
@@ -36,6 +38,10 @@ marimo-export capture http://127.0.0.1:2718 \
 
 Credentials use `--access-token`, `--server-token`,
 `MARIMO_EXPORT_ACCESS_TOKEN`, or `MARIMO_EXPORT_SERVER_TOKEN`.
+
+The selected kernel must import the same marimo-export version as the CLI. It
+must also import every custom exporter and contain the optional dependencies
+needed by selected built-ins.
 
 ## Publication diagnostics
 
