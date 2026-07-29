@@ -58,6 +58,30 @@ def test_managed_server_stops_process_before_joining_session_stream() -> None:
     ]
 
 
+def test_managed_server_finishes_cleanup_when_process_stop_is_cancelled() -> None:
+    events: list[str] = []
+
+    class _CancellingHarness(_ManagedServerHarness):
+        def _stop_process(self, owned_groups: set[int] | None = None) -> None:
+            assert owned_groups == {100}
+            self.events.append("process-stop-cancelled")
+            raise KeyboardInterrupt("cancelled")
+
+    server = _CancellingHarness(events)
+
+    with pytest.raises(KeyboardInterrupt, match="cancelled"):
+        server.stop()
+
+    assert server._stream is None
+    assert events == [
+        "stream-closing",
+        "server-shutdown-requested",
+        "process-stop-cancelled",
+        "stream-closed",
+        "files-closed",
+    ]
+
+
 def test_startup_preserves_primary_error_and_closes_files(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,

@@ -136,27 +136,48 @@ class ManagedServer:
     def stop(self) -> None:
         """Stop the edit stream and owned process within the build timeout."""
 
-        failures: list[Exception] = []
+        failures: list[BaseException] = []
         stream = self._stream
         self._stream = None
         if stream is not None:
-            stream.request_close()
-        owned_groups = self._owned_process_groups()
-        self._request_server_shutdown()
+            try:
+                stream.request_close()
+            except BaseException as error:
+                failures.append(error)
+        owned_groups: set[int] = set()
+        try:
+            owned_groups = self._owned_process_groups()
+        except BaseException as error:
+            failures.append(error)
+        try:
+            self._request_server_shutdown()
+        except BaseException as error:
+            failures.append(error)
         try:
             self._stop_process(owned_groups)
-        except Exception as error:
+        except BaseException as error:
             failures.append(error)
         if stream is not None:
             try:
                 stream.close()
-            except Exception as error:
+            except BaseException as error:
                 failures.append(error)
         try:
             self._close_files()
-        except Exception as error:
+        except BaseException as error:
             failures.append(error)
         if failures:
+            cancellation = next(
+                (failure for failure in failures if not isinstance(failure, Exception)),
+                None,
+            )
+            if cancellation is not None:
+                for failure in failures:
+                    if failure is not cancellation:
+                        cancellation.add_note(
+                            f"managed cleanup also failed: {type(failure).__name__}"
+                        )
+                raise cancellation
             first_failure = failures[0]
             raise TransportError(
                 "the managed marimo server could not be stopped",
