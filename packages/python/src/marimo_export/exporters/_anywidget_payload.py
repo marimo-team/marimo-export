@@ -5,8 +5,10 @@ import ipaddress
 import re
 from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import NoReturn, TypeAlias, cast
-from urllib.parse import SplitResult, urlsplit
+from typing import TYPE_CHECKING, NoReturn, TypeAlias, cast
+
+if TYPE_CHECKING:
+    from urllib.parse import SplitResult
 
 from marimo_export._json import JsonObject, JsonValue, decode_json_object
 
@@ -303,6 +305,8 @@ def _invalid_buffer_path(model_id: str, path: BufferPath) -> NoReturn:
 
 
 def _validate_esm_spec(value: object, files: dict[str, str], model_id: str) -> bool:
+    from urllib.parse import urlsplit
+
     if value is None:
         return False
     model_path = _diagnostic_path("AnyWidget model ", _quoted(model_id))

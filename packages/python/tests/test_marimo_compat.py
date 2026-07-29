@@ -175,3 +175,72 @@ def test_exporter_preflight_rejects_callable_instances(
     assert str(raised.value) == (
         f"output 'summary' exporter '{module_name}:encode' is not a top-level function"
     )
+
+
+@pytest.mark.parametrize(
+    ("case", "source"),
+    [
+        (
+            "mutable-default",
+            "def encode(value, seen=[]):\n    seen.append(value)\n    return len(seen)\n",
+        ),
+        (
+            "mutable-global",
+            "seen = []\n\ndef encode(value):\n    seen.append(value)\n    return len(seen)\n",
+        ),
+        (
+            "partial-dependency",
+            "from functools import partial\n"
+            "\n"
+            "def helper(value, *, prefix):\n"
+            "    return prefix, value\n"
+            "\n"
+            "bound = partial(helper, prefix='summary')\n"
+            "\n"
+            "def encode(value):\n"
+            "    return bound(value)\n",
+        ),
+        (
+            "wrapped-closure",
+            "from functools import wraps\n"
+            "\n"
+            "def decorate(function):\n"
+            "    @wraps(function)\n"
+            "    def wrapper(value):\n"
+            "        return function(value)\n"
+            "    return wrapper\n"
+            "\n"
+            "@decorate\n"
+            "def encode(value):\n"
+            "    return value\n",
+        ),
+        (
+            "bound-builtin",
+            "seen = []\n"
+            "append = seen.append\n"
+            "\n"
+            "def encode(value):\n"
+            "    append(value)\n"
+            "    return len(seen)\n",
+        ),
+    ],
+)
+def test_exporter_preflight_rejects_hidden_function_state(
+    monkeypatch: pytest.MonkeyPatch,
+    case: str,
+    source: str,
+) -> None:
+    module_name = f"marimo_export_test_{case.replace('-', '_')}"
+    module = ModuleType(module_name)
+    exec(source, module.__dict__)
+    monkeypatch.setitem(sys.modules, module_name, module)
+
+    with pytest.raises(OutputError) as raised:
+        preflight_exporters(_custom_exporter_plan(module_name))
+
+    assert raised.value.code == "exporter_invalid"
+    assert str(raised.value) == (
+        f"output 'summary' exporter '{module_name}:encode' is not stateless"
+    )
+    assert isinstance(raised.value.details["dependency"], str)
+    assert isinstance(raised.value.details["python_type"], str)

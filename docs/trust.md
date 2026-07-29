@@ -19,9 +19,10 @@ those packages like notebook dependencies. The spec carries the import
 reference and portable options, never executable source or serialized
 closures. The projection cache includes the resolved module, function,
 statically reachable Python modules, package version when available, and
-declared built-in runtime dependency versions. Network responses, files read by
-the function, and other external state require the same explicit invalidation
-discipline as notebook code.
+declared built-in runtime dependency versions. Preflight rejects mutable
+defaults, closure state, mutable globals, partials, and callable instances.
+Network responses, files read by the function, and other external state require
+the same explicit invalidation discipline as notebook code.
 
 ## Publication boundary
 

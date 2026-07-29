@@ -172,8 +172,8 @@ renderer finalizers.
 Built-in exporter IDs resolve through one closed catalog. A custom
 `module:function` reference resolves a top-level function already available in
 the kernel environment. Preflight confirms the symbol is a top-level function
-before state execution and computes its cache identity. Portable options
-become explicit keyword arguments.
+with no mutable or closure-owned state before state execution, then computes
+its cache identity. Portable options become explicit keyword arguments.
 
 A custom exporter can return any value supported by the native cache codecs. A
 custom `BlobAsset` representation uses a versioned media type. Its paired

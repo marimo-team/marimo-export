@@ -172,6 +172,10 @@ keyword arguments. It returns a scalar, numeric NumPy array, supported table,
 or `BlobAsset` accepted by marimo's native cache. The spec contains the import
 reference and portable options.
 
+Custom exporter functions must be stateless. Use immutable constants and pass
+configuration through descriptor options. Preflight rejects mutable defaults,
+closure state, mutable globals, partials, and callable instances.
+
 ## Public package root
 
 The package root exports:

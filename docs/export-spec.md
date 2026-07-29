@@ -153,6 +153,10 @@ def summary(value: object, *, compact: bool) -> BlobAsset:
     ...
 ```
 
+The exporter must be stateless. Use immutable constants and pass configuration
+through `options`. Preflight rejects mutable defaults, closure state, mutable
+globals, partials, and callable instances.
+
 The module must be importable in the selected kernel. Capture can use a package
 that was installed into the running environment before capture starts. Missing
 modules, missing symbols, and symbols that are not top-level functions fail the

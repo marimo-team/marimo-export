@@ -8,9 +8,12 @@ import importlib
 import importlib.metadata
 import importlib.util
 import inspect
+import re
 import sys
 import threading
 import time
+import types
+import typing
 import unicodedata
 from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager, suppress
@@ -58,6 +61,50 @@ _CAPABILITIES = (
 )
 _MAX_PYTHON_TYPE_BYTES = 512
 _MAX_EXPORTER_DEPENDENCIES = 256
+
+
+class _StatefulExporterError(ValueError):
+    def __init__(self, label: str, value: object) -> None:
+        super().__init__(label)
+        self.label = label
+        self.python_type = f"{type(value).__module__}.{type(value).__qualname__}"
+
+
+def _immutable_exporter_constant(value: Any, label: str) -> JsonValue:
+    if value is None or isinstance(value, (bool, int, float, str)):
+        try:
+            return json_value(value, label)
+        except (TypeError, ValueError) as error:
+            raise _StatefulExporterError(label, value) from error
+    if isinstance(value, bytes):
+        return {"type": "bytes", "hex": value.hex()}
+    if type(value) is object:
+        return {"type": "sentinel"}
+    if isinstance(value, tuple):
+        return {
+            "type": "tuple",
+            "items": [
+                _immutable_exporter_constant(item, f"{label}[{index}]")
+                for index, item in enumerate(value)
+            ],
+        }
+    if isinstance(value, frozenset):
+        items = [_immutable_exporter_constant(item, f"{label} item") for item in value]
+        items.sort(key=canonical_bytes)
+        return {"type": "frozenset", "items": items}
+    if isinstance(value, re.Pattern):
+        return {
+            "type": "regex",
+            "pattern": _immutable_exporter_constant(value.pattern, f"{label} pattern"),
+            "flags": value.flags,
+        }
+    if (
+        isinstance(value, types.UnionType)
+        or typing.get_origin(value) is not None
+        or type(value).__module__ == "typing"
+    ):
+        return {"type": "type-expression", "value": repr(value)}
+    raise _StatefulExporterError(label, value)
 
 
 @dataclass(frozen=True, slots=True)
@@ -424,13 +471,25 @@ def preflight_exporters(plan: MatrixPlan) -> Mapping[str, str]:
                     "exporter": exporter.name,
                 },
             )
-        identity = _exporter_identity(
-            name=exporter.name,
-            module=module,
-            value=value,
-            distributions=reference.distributions,
-            package_distributions=package_distributions,
-        )
+        try:
+            identity = _exporter_identity(
+                name=exporter.name,
+                module=module,
+                value=value,
+                distributions=reference.distributions,
+                package_distributions=package_distributions,
+            )
+        except _StatefulExporterError as error:
+            raise OutputError(
+                f"output {output!r} exporter {exporter.name!r} is not stateless",
+                code="exporter_invalid",
+                details={
+                    "output": output,
+                    "exporter": exporter.name,
+                    "dependency": error.label,
+                    "python_type": error.python_type,
+                },
+            ) from error
         resolved[exporter.name] = identity
         identities[output] = identity
     return identities
@@ -494,7 +553,9 @@ def _exporter_dependencies(value: Any, module: Any) -> tuple[JsonObject, frozens
     recorded_modules: set[int] = set()
     expanded_modules: set[int] = set()
     visited_callables: set[int] = set()
-    attempted_imports: set[str] = set()
+    checked_modules: set[int] = set()
+    checked_callables: set[int] = set()
+    resolved_imports: dict[str, Any | None] = {}
     local_root = _module_tree_root(module)
 
     def is_local_module(dependency: Any) -> bool:
@@ -516,7 +577,12 @@ def _exporter_dependencies(value: Any, module: Any) -> tuple[JsonObject, frozens
             )
         records[name] = digest
 
-    def visit_module(dependency: Any, *, expand: bool) -> None:
+    def visit_module(
+        dependency: Any,
+        *,
+        expand: bool,
+        enforce_functions: bool = False,
+    ) -> None:
         identifier = id(dependency)
         name = str(getattr(dependency, "__name__", ""))
         if identifier not in recorded_modules:
@@ -528,22 +594,38 @@ def _exporter_dependencies(value: Any, module: Any) -> tuple[JsonObject, frozens
                 digest = _file_digest(origin)
                 if digest is not None:
                     record(f"module:{name}", digest)
-        if not expand or identifier in expanded_modules or not is_local_module(dependency):
+        if not is_local_module(dependency):
             return
-        expanded_modules.add(identifier)
+        expand_members = expand and identifier not in expanded_modules
+        check_members = enforce_functions and identifier not in checked_modules
+        if not expand_members and not check_members:
+            return
+        if expand_members:
+            expanded_modules.add(identifier)
+        if check_members:
+            checked_modules.add(identifier)
         namespace = getattr(dependency, "__dict__", {})
         for attribute in sorted(namespace):
             member = namespace[attribute]
             if inspect.ismodule(member):
                 if is_local_module(member):
-                    visit_module(member, expand=True)
+                    visit_module(
+                        member,
+                        expand=expand_members,
+                        enforce_functions=check_members,
+                    )
                 continue
-            if inspect.isfunction(member) or inspect.isclass(member):
+            if inspect.isfunction(member):
                 owner = sys.modules.get(str(getattr(member, "__module__", "")))
                 if owner is dependency or (owner is not None and is_local_module(owner)):
-                    visit_callable(member)
+                    visit_callable(member, enforce_state=check_members)
+                continue
+            if expand_members and inspect.isclass(member):
+                owner = sys.modules.get(str(getattr(member, "__module__", "")))
+                if owner is dependency or (owner is not None and is_local_module(owner)):
+                    visit_callable(member, enforce_state=False)
 
-    def visit_imports(dependency: Any, code: Any) -> None:
+    def visit_imports(dependency: Any, code: Any, *, strict: bool) -> None:
         module_name = str(getattr(dependency, "__module__", ""))
         owner = sys.modules.get(module_name)
         package = str(getattr(owner, "__package__", "")) if owner is not None else ""
@@ -580,25 +662,37 @@ def _exporter_dependencies(value: Any, module: Any) -> tuple[JsonObject, frozens
                 if member != "*" and imported_name
             )
             for candidate in candidates:
-                if not candidate or candidate in attempted_imports:
+                if not candidate:
                     continue
-                attempted_imports.add(candidate)
-                try:
-                    imported = importlib.import_module(candidate)
-                except Exception:
+                if candidate not in resolved_imports:
+                    try:
+                        resolved_imports[candidate] = importlib.import_module(candidate)
+                    except Exception:
+                        resolved_imports[candidate] = None
+                imported = resolved_imports[candidate]
+                if imported is None:
                     continue
-                visit_module(imported, expand=True)
+                visit_module(
+                    imported,
+                    expand=True,
+                    enforce_functions=strict,
+                )
         for constant in code.co_consts:
             if inspect.iscode(constant):
-                visit_imports(dependency, constant)
+                visit_imports(dependency, constant, strict=strict)
 
-    def visit_callable(dependency: Any) -> None:
+    def visit_callable(dependency: Any, *, enforce_state: bool) -> None:
         if inspect.ismethod(dependency):
             dependency = dependency.__func__
         identifier = id(dependency)
-        if identifier in visited_callables:
+        record_callable = identifier not in visited_callables
+        check_callable = enforce_state and identifier not in checked_callables
+        if not record_callable and not check_callable:
             return
-        visited_callables.add(identifier)
+        if record_callable:
+            visited_callables.add(identifier)
+        if check_callable:
+            checked_callables.add(identifier)
         module_name = str(getattr(dependency, "__module__", ""))
         qualname = str(
             getattr(
@@ -608,8 +702,16 @@ def _exporter_dependencies(value: Any, module: Any) -> tuple[JsonObject, frozens
             )
         )
         owner = sys.modules.get(module_name)
+        strict = check_callable and (
+            owner is module or (owner is not None and is_local_module(owner))
+        )
         if owner is not None:
             visit_module(owner, expand=False)
+        if strict and inspect.isfunction(dependency) and vars(dependency):
+            raise _StatefulExporterError(
+                f"function-state:{module_name}:{qualname}",
+                vars(dependency),
+            )
         code = getattr(dependency, "__code__", None)
         if code is None and inspect.isclass(dependency):
             if owner is None or not is_local_module(owner):
@@ -619,23 +721,25 @@ def _exporter_dependencies(value: Any, module: Any) -> tuple[JsonObject, frozens
                 if isinstance(member, (classmethod, staticmethod)):
                     member = member.__func__
                 if inspect.isfunction(member):
-                    visit_callable(member)
+                    visit_callable(member, enforce_state=False)
             return
         if code is None:
             call = inspect.getattr_static(type(dependency), "__call__", None)
             if inspect.isfunction(call):
-                visit_callable(call)
+                visit_callable(call, enforce_state=False)
             return
         from marimo._save.hash import hash_module
 
-        record(f"callable:{module_name}:{qualname}", hash_module(code).hex())
-        visit_imports(dependency, code)
+        if record_callable:
+            record(f"callable:{module_name}:{qualname}", hash_module(code).hex())
+        visit_imports(dependency, code, strict=strict)
         defaults = getattr(dependency, "__defaults__", None)
         if isinstance(defaults, tuple):
             for index, default in enumerate(defaults):
                 visit_reference(
                     default,
                     f"default:{module_name}:{qualname}:{index}",
+                    strict=strict,
                 )
         keyword_defaults = getattr(dependency, "__kwdefaults__", None)
         if isinstance(keyword_defaults, dict):
@@ -643,27 +747,95 @@ def _exporter_dependencies(value: Any, module: Any) -> tuple[JsonObject, frozens
                 visit_reference(
                     default,
                     f"keyword-default:{module_name}:{qualname}:{default_name}",
+                    strict=strict,
                 )
         try:
             closure = inspect.getclosurevars(dependency)
         except TypeError:
             return
-        for dependency_name, referenced in sorted({**closure.globals, **closure.nonlocals}.items()):
+        if strict and closure.nonlocals:
+            raise _StatefulExporterError(
+                f"closure:{module_name}:{qualname}",
+                closure.nonlocals,
+            )
+        references = closure.globals if strict else {**closure.globals, **closure.nonlocals}
+        for dependency_name, referenced in sorted(references.items()):
             visit_reference(
                 referenced,
                 f"value:{module_name}:{qualname}:{dependency_name}",
+                strict=strict,
             )
 
-    def visit_reference(dependency: Any, label: str) -> None:
+    def visit_reference(dependency: Any, label: str, *, strict: bool) -> None:
         if inspect.ismodule(dependency):
-            visit_module(dependency, expand=True)
+            visit_module(
+                dependency,
+                expand=True,
+                enforce_functions=strict,
+            )
             return
-        if (
-            inspect.isfunction(dependency)
-            or inspect.ismethod(dependency)
-            or inspect.isclass(dependency)
-        ):
-            visit_callable(dependency)
+        if inspect.ismethod(dependency):
+            bound_to = getattr(dependency, "__self__", None)
+            if (
+                strict
+                and bound_to is not None
+                and not inspect.isclass(bound_to)
+                and not inspect.ismodule(bound_to)
+            ):
+                raise _StatefulExporterError(label, dependency)
+            visit_callable(dependency, enforce_state=strict)
+            return
+        if inspect.isfunction(dependency):
+            visit_callable(dependency, enforce_state=strict)
+            return
+        if inspect.isclass(dependency):
+            visit_callable(dependency, enforce_state=False)
+            return
+        if inspect.isbuiltin(dependency):
+            bound_to = getattr(dependency, "__self__", None)
+            if (
+                strict
+                and bound_to is not None
+                and not inspect.isclass(bound_to)
+                and not inspect.ismodule(bound_to)
+            ):
+                raise _StatefulExporterError(label, dependency)
+            module_name = str(getattr(dependency, "__module__", ""))
+            owner = sys.modules.get(module_name)
+            if owner is not None:
+                visit_module(owner, expand=False)
+            portable: JsonValue = {
+                "type": "builtin-function",
+                "module": module_name,
+                "name": str(
+                    getattr(
+                        dependency,
+                        "__qualname__",
+                        getattr(dependency, "__name__", ""),
+                    )
+                ),
+            }
+            record(label, hashlib.sha256(canonical_bytes(portable)).hexdigest())
+            return
+        if strict:
+            if isinstance(dependency, typing.NewType):
+                owner = sys.modules.get(str(getattr(dependency, "__module__", "")))
+                if owner is not None:
+                    visit_module(owner, expand=False)
+                supertype = dependency.__supertype__
+                portable: JsonValue = {
+                    "type": "newtype",
+                    "module": str(getattr(dependency, "__module__", "")),
+                    "name": dependency.__name__,
+                    "supertype": (
+                        f"{getattr(supertype, '__module__', '')}."
+                        f"{getattr(supertype, '__qualname__', type(supertype).__qualname__)}"
+                    ),
+                }
+                record(label, hashlib.sha256(canonical_bytes(portable)).hexdigest())
+                return
+            portable = _immutable_exporter_constant(dependency, label)
+            record(label, hashlib.sha256(canonical_bytes(portable)).hexdigest())
             return
         try:
             portable = json_value(dependency, label)
@@ -673,12 +845,12 @@ def _exporter_dependencies(value: Any, module: Any) -> tuple[JsonObject, frozens
                 visit_module(owner, expand=False)
             call = inspect.getattr_static(type(dependency), "__call__", None)
             if inspect.isfunction(call):
-                visit_callable(call)
+                visit_callable(call, enforce_state=False)
             return
         record(label, hashlib.sha256(canonical_bytes(portable)).hexdigest())
 
     visit_module(module, expand=False)
-    visit_callable(value)
+    visit_callable(value, enforce_state=True)
     return records, frozenset(module_names)
 
 

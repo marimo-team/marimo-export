@@ -143,8 +143,9 @@ data construction for JSON, YAML, and manifests.
 
 Built-in exporter factories return immutable `ExporterSpec` values. Custom
 exporters use explicit `module:function` references with portable keyword
-options. Runtime functions return a value supported by marimo's native cache
-codecs. Synthetic leaf code owns conversion cache identity.
+options and resolve to stateless top-level functions. Runtime functions return
+a value supported by marimo's native cache codecs. Synthetic leaf code owns
+conversion cache identity.
 
 ## TypeScript conventions
 

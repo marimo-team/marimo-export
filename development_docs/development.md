@@ -91,6 +91,10 @@ The function validates its input and returned value. marimo-export imports it
 inside a synthetic child leaf, then marimo executes and caches the conversion.
 The module must be importable in the selected kernel.
 
+Keep exporter functions stateless. Use immutable constants and pass
+configuration through exporter options. Preflight rejects mutable defaults,
+closure state, mutable globals, partials, and callable instances.
+
 Add optional dependencies under a focused package extra. Keep source object
 libraries in the notebook environment when the exporter can accept them
 through a narrow conversion protocol.

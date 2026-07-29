@@ -75,6 +75,10 @@ its dependencies must be available in the selected kernel. The function
 receives one source value plus portable keyword options. No Python source or
 serialized closure enters the spec.
 
+Exporter functions are stateless. Immutable constants may be scalars, bytes,
+tuples, frozensets, or regular expressions. Pass other configuration through
+exporter options.
+
 Preflight fingerprints the resolved module, function code, statically reachable
 Python modules, available owning package version, and declared built-in runtime
 dependencies. Changing one of those inputs invalidates the projection cache.
