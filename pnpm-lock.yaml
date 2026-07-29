@@ -82,7 +82,7 @@ importers:
         specifier: 'catalog:'
         version: 3.5.39(typescript@6.0.3)
 
-  apps/finance-demo:
+  examples/finance:
     dependencies:
       '@anywidget/types':
         specifier: 'catalog:'

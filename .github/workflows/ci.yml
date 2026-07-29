@@ -40,7 +40,7 @@ jobs:
           enable-cache: true
 
       - name: Install Python workspace
-        run: uv sync --all-extras --locked
+        run: uv sync --all-packages --all-extras --locked
 
       - name: Install AnyWidget test browser
         run: pnpm --filter @marimo-export/internal-loader-anywidget exec playwright install --with-deps --only-shell chromium

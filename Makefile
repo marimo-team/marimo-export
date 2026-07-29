@@ -7,6 +7,7 @@ FORMAT_PATHS := \
 	apps \
 	development_docs \
 	docs \
+	examples \
 	packages \
 	scripts \
 	AGENTS.md \
@@ -17,14 +18,14 @@ FORMAT_PATHS := \
 	pyproject.toml \
 	tsconfig.base.json \
 	vite.config.ts
-LINT_PATHS := apps packages vite.config.ts
+LINT_PATHS := apps examples packages vite.config.ts
 
 format:
 	pnpm exec vp fmt $(FORMAT_PATHS)
 	uv run ruff format packages/python scripts
 
 bootstrap:
-	uv sync --all-groups --all-extras
+	uv sync --all-packages --all-groups --all-extras
 	pnpm install --frozen-lockfile
 
 lint:

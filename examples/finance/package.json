@@ -1,5 +1,5 @@
 {
-  "name": "@marimo-team/marimo-export-finance-demo",
+  "name": "@marimo-team/marimo-export-example-finance",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -7,6 +7,9 @@
     "build": "vp build",
     "check": "vp check",
     "dev": "vp dev --host 127.0.0.1",
+    "preview": "vp preview --host 127.0.0.1",
+    "publish": "uv run --locked --package marimo-export-finance-example marimo-export build finance.py --spec finance.export.yaml --output public/publication --replace",
+    "verify:publication": "uv run --locked --package marimo-export-finance-example marimo-export verify public/publication",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

@@ -135,8 +135,9 @@ document.querySelector("#app")!.textContent = String(message);
 The page renders `Hello, browser!` from static files. Switch to the `welcome`
 state to load `Welcome, browser!`.
 
-See the [finance demo](apps/finance-demo) for a vanilla Vite and TypeScript app
-that loads scalar, NumPy, Arrow, Parquet, PNG, Vega-Lite, and AnyWidget outputs.
+See the [finance example](examples/finance) for a live Yahoo Finance notebook
+and vanilla Vite application that loads scalar, NumPy, Arrow, Parquet, PNG,
+Vega-Lite, and AnyWidget outputs.
 
 ## Choose what users can interact with
 

@@ -19,8 +19,5 @@ __pycache__/
 *.py[cod]
 *.tsbuildinfo
 **/__marimo__/
-apps/finance-demo/public/publication/
-docs/examples/*.tgz
-docs/examples/client/
-docs/examples/publication/
 examples/*/dist/
+examples/finance/public/publication/

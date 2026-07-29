@@ -30,54 +30,28 @@ static publication containing the declared finite state matrix.
 
 [Compare Papermill and ExportSpec](export-spec.md#for-papermill-users)
 
-## A real notebook and a concrete ExportSpec
+## A live notebook and a complete browser app
 
-The getting-started guide runs a pinned snapshot of the public
-[`02_linear_program.py`](https://github.com/marimo-team/learn/blob/477e2cbf7c31fc05dcf307b1e9c92c36514a32f3/optimization/02_linear_program.py)
-notebook from the marimo learn repository. The notebook defines:
+The checked-in
+[finance example](https://github.com/marimo-team/marimo-export/tree/main/examples/finance)
+queries Yahoo Finance, executes six input states, and publishes seven outputs.
+Its ExportSpec varies ordinary definitions and a marimo UI definition:
 
-| Definition | Role in the publication                                    |
-| ---------- | ---------------------------------------------------------- |
-| `c_widget` | Matrix AnyWidget whose frontend value selects an objective |
-| `c`        | NumPy objective vector derived from the widget             |
-| `x_star`   | NumPy solution computed by CVXPY                           |
+<<< ../examples/finance/finance.export.yaml
 
-This complete ExportSpec publishes three widget states and two outputs:
-
-<<< ./examples/linear-program.export.yaml
-
-`inputs` names the notebook definition that may vary. Each row under `states`
-provides a sparse frontend-value override. `outputs` gives a public name to
-each notebook definition that the client can load.
-
-Run the checked-in example from its locked uv project. The build leaves the
-source notebook unchanged:
+Run the notebook through the uv workspace:
 
 ```bash
-cd marimo-export/docs/examples
-
-uv run marimo-export build 02_linear_program.py \
-  --spec linear-program.export.yaml \
-  --output publication
+pnpm --filter @marimo-team/marimo-export-example-finance run publish
 ```
 
-The resulting directory contains one canonical `index.json` plus
-content-addressed NPY assets. A plain TypeScript client loads them with the
-public NumPy loader:
+The resulting `public/publication` directory contains one canonical
+`index.json` plus content-addressed assets for scalar, NumPy, Arrow, Parquet,
+PNG, Vega-Lite, and AnyWidget values. The adjacent Vite app verifies those
+assets and mounts every representation from TypeScript.
 
-```ts
-import { openPublication } from "@marimo-team/marimo-export";
-import { numpyLoader } from "@marimo-team/marimo-export/loader/numpy";
-
-const publication = await openPublication("/linear-program/");
-const state = publication.state("balanced");
-const solution = await state.output("solution").load(numpyLoader());
-
-console.log(solution.shape, solution.data);
-```
-
-The [getting-started guide](getting-started.md) provides the exact environment,
-build, verification, Vite client, and expected browser result.
+The [getting-started guide](getting-started.md) covers the live build,
+verification command, browser application, and state transitions.
 
 ## Build from a file or capture a live kernel
 
@@ -85,9 +59,10 @@ Use `build` when marimo-export should start the notebook, execute the declared
 matrix, and stop its loopback server:
 
 ```bash
-uv run marimo-export build 02_linear_program.py \
-  --spec linear-program.export.yaml \
-  --output publication
+uv run --package marimo-export-finance-example marimo-export build \
+  examples/finance/finance.py \
+  --spec examples/finance/finance.export.yaml \
+  --output examples/finance/public/publication
 ```
 
 Use `capture` when a live kernel already holds credentials, configured
@@ -96,7 +71,7 @@ services, or expensive results:
 ```bash
 uv run marimo-export capture http://127.0.0.1:2718 \
   --session SESSION_ID \
-  --spec linear-program.export.yaml \
+  --spec examples/finance/finance.export.yaml \
   --output publication
 ```
 

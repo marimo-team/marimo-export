@@ -77,8 +77,6 @@ declare global {
 const search = new URLSearchParams(location.search);
 const explicitRoot = search.get("publication");
 const app = required<HTMLElement>("#app");
-const ownershipSelect = required<HTMLSelectElement>("#ownership-select");
-const runSelect = required<HTMLSelectElement>("#run-select");
 const publicationPath = required<HTMLElement>("#publication-path");
 const stateSelect = required<HTMLSelectElement>("#state-select");
 const stateButtons = required<HTMLElement>("#state-buttons");
@@ -152,17 +150,6 @@ const diagnostics = Object.freeze({
 });
 window.__MARIMO_EXPORT_DEMO__ = diagnostics;
 
-if (explicitRoot !== null) {
-  ownershipSelect.disabled = true;
-  runSelect.disabled = true;
-  publicationPath.textContent = explicitRoot;
-} else {
-  ownershipSelect.disabled = false;
-  runSelect.disabled = false;
-}
-
-ownershipSelect.addEventListener("change", requestPublication);
-runSelect.addEventListener("change", requestPublication);
 stateSelect.addEventListener("change", () => requestState(stateSelect.value));
 unavailableButton.addEventListener("click", showUnavailableState);
 vegaSignalButton.addEventListener("click", () => {
@@ -179,8 +166,7 @@ requestPublication();
 
 function requestPublication(): void {
   const root = publicationRoot();
-  const key =
-    explicitRoot === null ? `${ownershipSelect.value}-${runSelect.value}` : "custom-publication";
+  const key = explicitRoot === null ? "finance-publication" : "custom-publication";
   const nextRevision = ++revision;
   transitions += 1;
   active?.abort();
@@ -194,6 +180,7 @@ function requestPublication(): void {
   unavailableButton.disabled = true;
   errorPanel.hidden = true;
   unavailablePanel.hidden = true;
+  document.body.dataset.status = "loading";
   app.dataset.status = "loading";
   delete app.dataset.currentState;
   delete app.dataset.currentPublication;
@@ -256,6 +243,7 @@ function requestState(name: string): void {
   stateSelect.disabled = true;
   unavailablePanel.hidden = true;
   errorPanel.hidden = true;
+  document.body.dataset.status = "loading";
   app.dataset.status = "loading";
   status.textContent = `Loading ${name}…`;
   updateStateButtons(name);
@@ -324,7 +312,9 @@ async function renderState(
     parquetSummary.textContent = `${parquet.length} row objects`;
     parquetFields.textContent = Object.keys(parquet[0] ?? {}).join(", ");
     renderStateMetadata(state);
+    updateStateButtons(state.name);
     app.dataset.currentState = state.name;
+    document.body.dataset.status = "ready";
     app.dataset.status = "ready";
     app.dataset.facts = JSON.stringify(facts);
     stateSelect.disabled = false;
@@ -489,7 +479,7 @@ function validateRepresentations(
 }
 
 function publicationRoot(): string {
-  return explicitRoot ?? `./publications/${ownershipSelect.value}-${runSelect.value}/`;
+  return explicitRoot ?? "./publication/";
 }
 
 function inputPatch(baseline: JsonObject, target: JsonObject): JsonObject {
@@ -612,6 +602,7 @@ async function pulseVegaSignal(): Promise<void> {
 function showError(error: unknown): void {
   errors += 1;
   facts = null;
+  document.body.dataset.status = "error";
   app.dataset.status = "error";
   delete app.dataset.facts;
   errorPanel.hidden = false;
