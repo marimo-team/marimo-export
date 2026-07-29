@@ -579,13 +579,40 @@ def test_prepared_exporters_refreshes_loaded_source_parent(
     native = ModuleType(native_name)
     native.__file__ = str(native_file)
     native.__spec__ = ModuleSpec(native_name, loader=None, origin=str(native_file))
+
+    def native_encode(value: Any) -> tuple[str, Any]:
+        return "native", value
+
+    native_encode.__module__ = native_name
+    cast(Any, native).encode = native_encode
     monkeypatch.setitem(sys.modules, native_name, native)
     monkeypatch.setattr(original_package, "_native", native, raising=False)
-    plan = _custom_exporter_plan(exporter_name)
+    projections = {
+        "summary": OutputProjection(
+            name="summary",
+            source="value",
+            exporter=importable(f"{exporter_name}:encode"),
+        ),
+        "native": OutputProjection(
+            name="native",
+            source="value",
+            exporter=importable(f"{native_name}:encode"),
+        ),
+    }
+    plan = MatrixPlan(
+        states=(),
+        inputs=(),
+        outputs=("summary", "native"),
+        projections=projections,
+        ordinary_cells={},
+        state_name="marimo_export_state_0123456789abcdef",
+        state_code="marimo_export_state_0123456789abcdef = 'state'",
+    )
 
     with prepared_exporters(plan) as first_identities:
         assert sys.modules[package_name] is not original_package
         assert sys.modules[exporter_name].encode(None) == ("first", None)
+        assert sys.modules[native_name].encode(None) == ("native", None)
 
     source.write_text("config = 'other'\n", encoding="utf-8")
     with prepared_exporters(plan) as second_identities:
@@ -595,6 +622,7 @@ def test_prepared_exporters_refreshes_loaded_source_parent(
         assert fresh_package.config == "other"
         assert fresh_exporter.encode(None) == ("other", None)
         assert sys.modules[native_name] is native
+        assert sys.modules[native_name].encode(None) == ("native", None)
 
     assert first_identities["summary"] != second_identities["summary"]
     assert sys.modules[package_name] is original_package
