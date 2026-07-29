@@ -7,16 +7,15 @@ stores their outputs in a static publication, and lets a TypeScript app load
 them later. Deploy the app and publication to any static host. Notebook
 execution finishes before deployment.
 
-```text
-marimo notebook + chosen input states
-                  │
-           build or capture
-                  ▼
-       static index.json + outputs
-                  │
-          typed browser loaders
-                  ▼
-       your HTML, CSS, and TypeScript app
+```mermaid
+flowchart TD
+    Notebook["marimo notebook<br/>and chosen input states"]
+    Publish["build or capture"]
+    Publication["static index.json<br/>and output assets"]
+    Loaders["typed browser loaders"]
+    App["your HTML, CSS,<br/>and TypeScript app"]
+
+    Notebook --> Publish --> Publication --> Loaders --> App
 ```
 
 Use it to:
