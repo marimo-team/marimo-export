@@ -207,6 +207,57 @@ def test_windows_tree_failure_falls_back_to_direct_process_kill(
     assert server._process is None
 
 
+def test_process_stop_reaps_after_soft_signal_cancellation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    events: list[str] = []
+
+    class _Process:
+        pid = 123
+        stopped = False
+
+        def poll(self) -> int | None:
+            return 1 if self.stopped else None
+
+        def wait(self, *, timeout: float) -> int:
+            assert timeout > 0
+            events.append("wait")
+            if not self.stopped:
+                raise subprocess.TimeoutExpired("managed", timeout)
+            return 1
+
+    process = _Process()
+    server = ManagedServer.__new__(ManagedServer)
+    server._process = cast(Any, process)
+    server.timeout = 1
+
+    def signal_process(process: _Process, *, force: bool) -> None:
+        events.append("force-signal" if force else "soft-signal")
+        if not force:
+            raise KeyboardInterrupt("cancelled")
+        process.stopped = True
+
+    monkeypatch.setattr(sys, "platform", "linux")
+    monkeypatch.setattr(server, "_signal_process", signal_process)
+    monkeypatch.setattr(
+        server,
+        "_kill_owned_process_groups",
+        lambda groups: events.append(f"groups:{sorted(groups)}"),
+    )
+
+    with pytest.raises(KeyboardInterrupt, match="cancelled"):
+        server._stop_process({123})
+
+    assert server._process is None
+    assert events == [
+        "soft-signal",
+        "wait",
+        "force-signal",
+        "wait",
+        "groups:[123]",
+    ]
+
+
 @pytest.mark.timeout(30)
 def test_managed_initial_autorun_restores_native_cell_cache(tmp_path: Path) -> None:
     marker = tmp_path / "autorun-count.txt"

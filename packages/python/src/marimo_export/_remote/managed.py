@@ -291,35 +291,53 @@ class ManagedServer:
         process = self._process
         if process is None:
             return
-        failures: list[Exception] = []
-        groups = self._owned_process_groups() if owned_groups is None else owned_groups
+        failures: list[BaseException] = []
+        groups = owned_groups
+        if groups is None:
+            try:
+                groups = self._owned_process_groups()
+            except BaseException as error:
+                failures.append(error)
+                groups = {process.pid} if sys.platform != "win32" else set()
         if sys.platform == "win32" and process.poll() is None:
             try:
                 self._terminate_windows_tree(process)
-            except Exception as error:
+            except BaseException as error:
                 failures.append(error)
         if process.poll() is None:
             try:
                 self._signal_process(process, force=False)
-            except Exception as error:
+            except BaseException as error:
                 failures.append(error)
-            with suppress(subprocess.TimeoutExpired):
+            try:
                 process.wait(timeout=self.timeout)
+            except subprocess.TimeoutExpired:
+                pass
+            except BaseException as error:
+                failures.append(error)
         if process.poll() is None:
             try:
                 self._signal_process(process, force=True)
-            except Exception as error:
+            except BaseException as error:
                 failures.append(error)
-            with suppress(subprocess.TimeoutExpired):
+            try:
                 process.wait(timeout=min(self.timeout, 5.0))
+            except subprocess.TimeoutExpired:
+                pass
+            except BaseException as error:
+                failures.append(error)
         if sys.platform != "win32":
             try:
                 self._kill_owned_process_groups(groups)
-            except Exception as error:
+            except BaseException as error:
                 failures.append(error)
             if process.poll() is None:
-                with suppress(subprocess.TimeoutExpired):
+                try:
                     process.wait(timeout=min(self.timeout, 1.0))
+                except subprocess.TimeoutExpired:
+                    pass
+                except BaseException as error:
+                    failures.append(error)
         if process.poll() is None:
             failures.append(
                 TransportError(
@@ -330,6 +348,17 @@ class ManagedServer:
         else:
             self._process = None
         if failures:
+            cancellation = next(
+                (failure for failure in failures if not isinstance(failure, Exception)),
+                None,
+            )
+            if cancellation is not None:
+                for failure in failures:
+                    if failure is not cancellation:
+                        cancellation.add_note(
+                            f"managed process cleanup also failed: {type(failure).__name__}"
+                        )
+                raise cancellation
             first_failure = failures[0]
             raise TransportError(
                 "the managed marimo process tree did not stop cleanly",
