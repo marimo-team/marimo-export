@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from importlib import metadata
 
-_MARIMO_REQUIREMENT = "marimo>=0.23.15"
+_MARIMO_REQUIREMENT = "marimo>=0.23.15,<0.24"
 
 
 def main() -> None:
     requirements = metadata.requires("marimo-export") or []
     if _MARIMO_REQUIREMENT not in requirements:
-        raise RuntimeError("marimo-export wheel must require marimo>=0.23.15")
+        raise RuntimeError(f"marimo-export wheel must require {_MARIMO_REQUIREMENT}")
 
     from marimo._save.stubs import BlobAsset
 
