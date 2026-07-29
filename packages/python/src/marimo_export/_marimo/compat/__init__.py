@@ -914,7 +914,7 @@ def _isolated_overrides(state: NormalizedState) -> dict[str, object]:
                 "exception_type": type(error).__name__,
             },
         ) from error
-    return cast(dict[str, object], isolated)
+    return isolated
 
 
 @contextmanager

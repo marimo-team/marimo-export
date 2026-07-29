@@ -31,6 +31,7 @@ def _install_runtime_filename() -> None:
     source_path = str(Path(source).resolve(strict=True))
     snapshot_path = str(Path(snapshot).resolve(strict=True))
 
+    from marimo._runtime.commands import AppMetadata
     from marimo._session.session import SessionImpl
 
     native = SessionImpl.create
@@ -38,8 +39,10 @@ def _install_runtime_filename() -> None:
     def create(cls: type, **kwargs: Any) -> Any:
         del cls
         metadata = kwargs.get("app_metadata")
-        filename = getattr(metadata, "filename", None)
-        if filename is not None and str(Path(filename).resolve(strict=True)) == snapshot_path:
+        if (
+            isinstance(metadata, AppMetadata)
+            and str(Path(metadata.filename).resolve(strict=True)) == snapshot_path
+        ):
             kwargs["app_metadata"] = msgspec.structs.replace(
                 metadata,
                 filename=source_path,
