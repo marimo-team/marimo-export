@@ -1,8 +1,8 @@
 [project]
-name = "marimo-export-finance-example"
+name = "marimo-export-vite-vanilla-example"
 version = "0.0.0"
-description = "Live finance notebook publication example for marimo-export."
-requires-python = ">=3.12"
+description = "Vanilla Vite market dashboard example for marimo-export."
+requires-python = ">=3.11"
 dependencies = [
   "altair==6.0.0",
   "anywidget==0.11.0",

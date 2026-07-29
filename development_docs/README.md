@@ -2,7 +2,7 @@
 
 marimo-export is a uv and pnpm workspace for one Python producer, one published
 browser package, five private loader workspaces, a documentation app, and a
-finance example.
+vanilla Vite market dashboard.
 
 Read:
 

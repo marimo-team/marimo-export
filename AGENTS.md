@@ -30,9 +30,9 @@ Run focused package commands during development, then run `make format` and
 - `packages/loader-*` are private workspace packages. Each owns one
   representation dependency family, decoder, result type, cancellation
   behavior, and mount disposal.
-- `examples/finance` is a uv and pnpm workspace member with a live notebook,
-  ExportSpec, and vanilla TypeScript client that loads every codec. `apps/docs`
-  builds the public documentation.
+- `examples/vite-vanilla` is a uv and pnpm workspace member with a live market
+  notebook, ExportSpec, and vanilla TypeScript dashboard. `apps/docs` builds
+  the public documentation.
 
 See [`development_docs/architecture.md`](development_docs/architecture.md).
 
@@ -157,7 +157,7 @@ Expose each public subpath through a `packages/browser/src/loader` facade that
 uses the `#loaders/*` TypeScript path. Consumers import the public package
 subpath.
 
-The finance app uses DOM APIs, TypeScript, HTML, CSS, and Vite+. Keep it
+The vanilla Vite app uses DOM APIs, TypeScript, HTML, CSS, and Vite+. Keep it
 framework-free and inspectable.
 
 ## Tests

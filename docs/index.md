@@ -33,22 +33,23 @@ static publication containing the declared finite state matrix.
 ## A live notebook and a complete browser app
 
 The checked-in
-[finance example](https://github.com/marimo-team/marimo-export/tree/main/examples/finance)
-queries Yahoo Finance, executes six input states, and publishes seven outputs.
-Its ExportSpec varies ordinary definitions and a marimo UI definition:
+[vanilla Vite example](https://github.com/marimo-team/marimo-export/tree/main/examples/vite-vanilla)
+queries Yahoo Finance, executes five saved market views, and publishes four
+outputs. Its ExportSpec varies an interval definition and a marimo UI
+definition:
 
-<<< ../examples/finance/finance.export.yaml
+<<< ../examples/vite-vanilla/finance.export.yaml
 
 Run the notebook through the uv workspace:
 
 ```bash
-pnpm --filter @marimo-team/marimo-export-example-finance run publish
+pnpm --filter @marimo-team/marimo-export-example-vite-vanilla run publish
 ```
 
 The resulting `public/publication` directory contains one canonical
-`index.json` plus content-addressed assets for scalar, NumPy, Arrow, Parquet,
-PNG, Vega-Lite, and AnyWidget values. The adjacent Vite app verifies those
-assets and mounts every representation from TypeScript.
+`index.json` plus content-addressed Parquet, PNG, Vega-Lite, and AnyWidget
+assets. The adjacent Vite app turns them into a comparison chart, latest-close
+table, quote explorer, and chart snapshot.
 
 The [getting-started guide](getting-started.md) covers the live build,
 verification command, browser application, and state transitions.
@@ -59,10 +60,10 @@ Use `build` when marimo-export should start the notebook, execute the declared
 matrix, and stop its loopback server:
 
 ```bash
-uv run --package marimo-export-finance-example marimo-export build \
-  examples/finance/finance.py \
-  --spec examples/finance/finance.export.yaml \
-  --output examples/finance/public/publication
+uv run --package marimo-export-vite-vanilla-example marimo-export build \
+  examples/vite-vanilla/finance.py \
+  --spec examples/vite-vanilla/finance.export.yaml \
+  --output examples/vite-vanilla/public/publication
 ```
 
 Use `capture` when a live kernel already holds credentials, configured
@@ -71,7 +72,7 @@ services, or expensive results:
 ```bash
 uv run marimo-export capture http://127.0.0.1:2718 \
   --session SESSION_ID \
-  --spec examples/finance/finance.export.yaml \
+  --spec examples/vite-vanilla/finance.export.yaml \
   --output publication
 ```
 

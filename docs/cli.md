@@ -39,13 +39,13 @@ Credentials use `--access-token`, `--server-token`,
 
 ## Publication diagnostics
 
-A finance build reports these fields:
+A managed build reports these fields:
 
 ```text
-Projection cache: 42 hits, 0 misses
-Upstream cache activity: 138 hits, 12 misses
-Phase timings: server start 0.689s, initial autorun 0.783s, capture 4.245s, server shutdown 0.230s, publication write 0.094s, total 6.055s
-Fresh-child timings (6 states): construction 0.104s, upstream execution 1.345s, UI application 0.504s, projection execution 1.699s, cleanup 0.200s
+Projection cache: 20 hits, 0 misses
+Upstream cache activity: 75 hits, 40 misses
+Phase timings: server start 0.766s, initial autorun 2.249s, capture 2.618s, server shutdown 0.210s, publication write 0.061s, total 5.919s
+Fresh-child timings (5 states): construction 0.115s, upstream execution 0.713s, UI application 0.889s, projection execution 0.481s, cleanup 0.161s
 ```
 
 Durations and cache counts reflect the current run.

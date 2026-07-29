@@ -1,27 +1,25 @@
 # Getting started
 
-Build a real Yahoo Finance notebook across six input states, then switch among
-its static results from a vanilla Vite and TypeScript application. The browser
-mounts an AnyWidget, an interactive Vega-Lite chart, a PNG, and decoded table
-and array values after the notebook process exits.
+Build a Yahoo Finance notebook across five saved market views, then open its
+results in a vanilla Vite dashboard. The dashboard changes its chart, table,
+quote explorer, and shareable snapshot from published files.
 
 The checked-in
-[finance example](https://github.com/marimo-team/marimo-export/tree/main/examples/finance)
-is both a uv workspace member and a pnpm workspace package. Its Python
-dependencies include the local `marimo-export` package. Its browser
-dependencies include the public npm package and the peers required by the
-specialized loaders.
+[vanilla Vite example](https://github.com/marimo-team/marimo-export/tree/main/examples/vite-vanilla)
+is a uv workspace member and a pnpm workspace package. Its Python environment
+includes the local `marimo-export` package. Its browser package uses the public
+npm entry points and the peer dependencies required by each loader.
 
 ::: warning Live data
-The build executes notebook-authored Python and requests market data from Yahoo
-Finance. Review `examples/finance/finance.py` before running it. Yahoo Finance
-availability and response data affect the build.
+The build executes notebook-authored Python and requests historical prices from
+Yahoo Finance. Review `examples/vite-vanilla/finance.py` before running it.
+Yahoo Finance availability and response data affect the build.
 :::
 
 ## Install the workspaces
 
-Install Git, uv, Node 22.18 or newer, and pnpm 11.15.1. Clone the repository and
-install both workspaces:
+Install Git, uv, Node 22.18 or newer, and pnpm 11.15.1. Clone the repository
+and install both workspaces:
 
 ```bash
 git clone https://github.com/marimo-team/marimo-export.git
@@ -29,117 +27,101 @@ cd marimo-export
 make bootstrap
 ```
 
-`make bootstrap` installs every uv workspace member and every pnpm workspace
-package from the root lockfiles.
+`make bootstrap` installs every uv workspace member and pnpm workspace package
+from the root lockfiles.
 
 ## Read the notebook contract
 
-`examples/finance/finance.py` contains the finance notebook and ordinary
-Exporter cells. The Exporter cells produce four browser representations:
+`examples/vite-vanilla/finance.py` fetches the price history, filters the
+selected watchlist, and creates four browser representations:
 
 ```python
-from marimo_export.exporters.altair import png, vegalite
-from marimo_export.exporters.anywidget import bundle
-from marimo_export.exporters.parquet import table
-
-dashboard = bundle(widget)
-chart_vegalite = vegalite(symbols_chart)
-chart_png = png(symbols_chart, scale=2)
-prices_parquet = table(df, compression="snappy", filename="prices.parquet")
+market_explorer = bundle(quote_detail)
+performance_chart = vegalite(performance)
+performance_snapshot = png(performance, scale=2)
+price_history = table(
+    selected_prices,
+    compression="snappy",
+    filename="price-history.parquet",
+)
 ```
 
-The notebook also exposes `df`, `ohlc_matrix`, and `row_count` through marimo's
-native Arrow, NumPy, and scalar cache codecs.
+`examples/vite-vanilla/finance.export.yaml` declares five sparse states and
+four outputs:
 
-`examples/finance/finance.export.yaml` declares six sparse states and seven
-outputs:
-
-<<< ../examples/finance/finance.export.yaml
+<<< ../examples/vite-vanilla/finance.export.yaml
 
 The input names address definitions in the marimo graph:
 
-| Input              | Effect                                              |
-| ------------------ | --------------------------------------------------- |
-| `symbols`          | Yahoo Finance ticker universe                       |
-| `interval`         | requested market interval                           |
-| `start` and `end`  | requested date window                               |
-| `chart_width`      | Altair chart width                                  |
-| `symbols_selector` | frontend value of the marimo multiselect definition |
+| Input              | Effect                                      |
+| ------------------ | ------------------------------------------- |
+| `interval`         | daily or weekly market interval             |
+| `symbols_selector` | watchlist value from the marimo multiselect |
 
 Every omitted value comes from the notebook baseline. marimo-export records the
 complete normalized vector for each published state.
 
 ## Build and verify the publication
 
-Run the package-level publication command from the repository root:
+Run the package-level command from the repository root:
 
 ```bash
-pnpm --filter @marimo-team/marimo-export-example-finance run publish
+pnpm --filter @marimo-team/marimo-export-example-vite-vanilla run publish
 ```
 
-The command executes:
+The script executes:
 
 ```bash
-uv run --locked --package marimo-export-finance-example \
+uv run --locked --package marimo-export-vite-vanilla-example \
   marimo-export build finance.py \
   --spec finance.export.yaml \
   --output public/publication \
   --replace
 ```
 
-The command runs from `examples/finance`, so the paths resolve inside the
-example package. A successful build reports:
+The script runs from `examples/vite-vanilla`, so the relative paths resolve
+inside the example package. A successful build reports:
 
 ```text
-Published 6 states and 7 outputs to .../examples/finance/public/publication
+Published 5 states and 4 outputs to .../examples/vite-vanilla/public/publication
 ```
 
-Verify the static directory:
+Verify the generated directory:
 
 ```bash
-pnpm --filter @marimo-team/marimo-export-example-finance \
+pnpm --filter @marimo-team/marimo-export-example-vite-vanilla \
   run verify:publication
 ```
 
-`public/publication/index.json` contains complete input vectors, state
+`public/publication/index.json` contains the complete input vectors, state
 fingerprints, producer versions, cache codecs, media types, asset lengths, and
-SHA-256 digests. The adjacent `assets` directory contains the unique payloads
+SHA-256 digests. Its adjacent `assets` directory contains the payloads
 referenced by the state and output relation.
 
-## Run the Vite application
+## Run the market dashboard
 
-Start the browser app:
+Start the Vite application:
 
 ```bash
-pnpm --filter @marimo-team/marimo-export-example-finance dev
+pnpm --filter @marimo-team/marimo-export-example-vite-vanilla dev
 ```
 
-Open the local URL printed by Vite. The application:
+Open the local URL printed by Vite. The application opens and verifies the
+publication, loads the `baseline` state, and renders the **Leaders** view.
 
-1. opens `public/publication/index.json`
-2. verifies every referenced asset
-3. loads the `baseline` state
-4. decodes the scalar, NumPy, Arrow, and Parquet outputs
-5. mounts the AnyWidget, Vega-Lite, and PNG representations
+Choose **Cloud**, **AI buildout**, **All names**, or **Weekly** to load another
+complete state. Each transition aborts stale work, disposes the current chart
+and widget, mounts the selected outputs, and derives the headline metrics and
+latest-close table from the Parquet rows.
 
-Choose `focus`, `compact`, `narrow universe`, `short window`, or `weekly` to
-load another complete state. Each transition aborts stale work, disposes the
-current mounts, and mounts the newly selected outputs.
-
-The app imports specialized loaders from the single public npm package:
+The application imports each specialized loader from the public npm package:
 
 ```ts
-import { imageLoader, openPublication, scalarLoader } from "@marimo-team/marimo-export";
+import { imageLoader, openPublication } from "@marimo-team/marimo-export";
 import { anyWidgetLoader } from "@marimo-team/marimo-export/loader/anywidget";
-import { arrowTableLoader } from "@marimo-team/marimo-export/loader/arrow";
-import { numpyLoader } from "@marimo-team/marimo-export/loader/numpy";
 import { parquetRowsLoader } from "@marimo-team/marimo-export/loader/parquet";
 import { vegaLiteLoader } from "@marimo-team/marimo-export/loader/vegalite";
 ```
 
-Open the publication internals disclosure to inspect the complete input vector,
-state fingerprint, codec, media type, and asset digest for every output.
-
 Continue with [ExportSpec](export-spec.md) to define another state matrix or
-[representations](representations.md) to add another exporter and browser
-loader.
+[representations](representations.md) to add an exporter and browser loader.

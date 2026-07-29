@@ -1,5 +1,5 @@
 [tool.uv.workspace]
-members = ["examples/finance", "packages/python"]
+members = ["examples/vite-vanilla", "packages/python"]
 
 [dependency-groups]
 dev = ["ruff>=0.15", "ty>=0.0.39"]

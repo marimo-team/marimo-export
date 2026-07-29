@@ -1,0 +1,24 @@
+schema: marimo-export.spec.v1
+inputs:
+  - interval
+  - symbols_selector
+states:
+  baseline: {}
+  cloud_platforms:
+    symbols_selector: [MSFT, GOOGL, AMZN]
+  ai_buildout:
+    symbols_selector: [CRWV, MSFT, GOOGL]
+  full_watchlist:
+    symbols_selector: [AAPL, CRWV, MSFT, GOOGL, AMZN]
+  weekly_view:
+    interval: 1wk
+    symbols_selector: [AAPL, CRWV, MSFT, GOOGL, AMZN]
+outputs:
+  market_explorer:
+    source: market_explorer
+  performance_chart:
+    source: performance_chart
+  performance_snapshot:
+    source: performance_snapshot
+  price_history:
+    source: price_history

@@ -24,7 +24,7 @@ uv run ty check
 
 pnpm --filter @marimo-team/marimo-export test
 pnpm --filter @marimo-export/internal-loader-arrow test
-pnpm --filter @marimo-team/marimo-export-example-finance build
+pnpm --filter @marimo-team/marimo-export-example-vite-vanilla build
 ```
 
 Run `make format` before `make check`.

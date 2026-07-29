@@ -1,5 +1,5 @@
 {
-  "name": "@marimo-team/marimo-export-example-finance",
+  "name": "@marimo-team/marimo-export-example-vite-vanilla",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -8,17 +8,14 @@
     "check": "vp check",
     "dev": "vp dev --host 127.0.0.1",
     "preview": "vp preview --host 127.0.0.1",
-    "publish": "uv run --locked --package marimo-export-finance-example marimo-export build finance.py --spec finance.export.yaml --output public/publication --replace",
+    "publish": "uv run --locked --package marimo-export-vite-vanilla-example marimo-export build finance.py --spec finance.export.yaml --output public/publication --replace",
     "test": "node --test tests/dev-server.test.mjs",
-    "verify:publication": "uv run --locked --package marimo-export-finance-example marimo-export verify public/publication",
+    "verify:publication": "uv run --locked --package marimo-export-vite-vanilla-example marimo-export verify public/publication",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@anywidget/types": "catalog:",
     "@marimo-team/marimo-export": "workspace:*",
-    "@uwdata/flechette": "catalog:",
     "hyparquet": "catalog:",
-    "lz4js": "catalog:",
     "vega-embed": "catalog:"
   },
   "devDependencies": {

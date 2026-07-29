@@ -6,9 +6,9 @@ import { createServer } from "vite-plus";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 const browserRoot = new URL("../../../packages/browser/", import.meta.url);
-const loaders = ["anywidget", "arrow", "numpy", "parquet", "vegalite"];
+const loaders = ["anywidget", "parquet", "vegalite"];
 
-await test("development server resolves every public loader facade", async () => {
+await test("development server resolves the dashboard loader facades", async () => {
   const server = await createServer({
     root,
     logLevel: "silent",

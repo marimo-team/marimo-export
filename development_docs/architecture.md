@@ -24,7 +24,7 @@ ExportSpec
 | `packages/python/src/marimo_export/_remote`        | HTTP, SSE, credentials, bridge invocation, managed server lifecycle                      |
 | `packages/browser`                                 | Published npm entry points, index parsing, immutable states, integrity, loader contracts |
 | `packages/loader-*`                                | Private workspace implementations for one representation dependency family each          |
-| `examples/finance`                                 | Live finance notebook, ExportSpec, and vanilla TypeScript client over all codecs         |
+| `examples/vite-vanilla`                            | Live market notebook, ExportSpec, and vanilla TypeScript dashboard                       |
 
 Stable domain modules depend on stable types. Adapters depend on the domain
 contract. The Python public roots are `build`, `capture`, `Client`, and
