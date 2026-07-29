@@ -424,25 +424,48 @@ class ManagedServer:
 
     @staticmethod
     def _kill_owned_process_groups(groups: set[int]) -> None:
-        failures: list[JsonObject] = []
-        for group_id in ManagedServer._live_process_groups(groups):
+        failures: list[BaseException] = []
+        try:
+            live_groups = ManagedServer._live_process_groups(groups)
+        except BaseException as error:
+            failures.append(error)
+            live_groups = {
+                group_id for group_id in groups if group_id > 0 and group_id != os.getpgrp()
+            }
+        for group_id in sorted(live_groups):
             try:
                 os.killpg(group_id, signal.SIGKILL)
             except ProcessLookupError:
                 continue
-            except OSError as error:
-                failures.append(
-                    {
-                        "process_group": group_id,
-                        "errno": error.errno,
-                    }
-                )
+            except BaseException as error:
+                failures.append(error)
+                if isinstance(error, Exception):
+                    continue
+                try:
+                    os.killpg(group_id, signal.SIGKILL)
+                except ProcessLookupError:
+                    continue
+                except BaseException as retry_error:
+                    failures.append(retry_error)
         if failures:
+            cancellation = next(
+                (failure for failure in failures if not isinstance(failure, Exception)),
+                None,
+            )
+            if cancellation is not None:
+                for failure in failures:
+                    if failure is not cancellation:
+                        cancellation.add_note(
+                            f"managed process group cleanup also failed: {type(failure).__name__}"
+                        )
+                raise cancellation
             raise TransportError(
                 "the managed marimo process groups could not be stopped",
                 code="server_shutdown_failed",
-                details={"failures": failures},
-            )
+                details={
+                    "failures": [safe_diagnostic(type(failure).__name__) for failure in failures]
+                },
+            ) from failures[0]
 
     @staticmethod
     def _live_process_groups(groups: set[int]) -> set[int]:

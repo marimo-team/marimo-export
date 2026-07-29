@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import signal
 import subprocess
 import sys
 import threading
@@ -302,6 +303,33 @@ def test_process_stop_reaps_after_status_check_cancellation(
         "wait",
         "groups:[123]",
     ]
+
+
+def test_process_group_cleanup_finishes_after_cancellation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[int] = []
+    interrupted = False
+
+    def kill_group(group_id: int, signal_number: int) -> None:
+        nonlocal interrupted
+        assert signal_number == signal.SIGKILL
+        calls.append(group_id)
+        if not interrupted:
+            interrupted = True
+            raise KeyboardInterrupt("cancelled")
+
+    monkeypatch.setattr(
+        ManagedServer,
+        "_live_process_groups",
+        staticmethod(lambda groups: groups),
+    )
+    monkeypatch.setattr(os, "killpg", kill_group)
+
+    with pytest.raises(KeyboardInterrupt, match="cancelled"):
+        ManagedServer._kill_owned_process_groups({123, 456})
+
+    assert calls == [123, 123, 456]
 
 
 @pytest.mark.timeout(30)
