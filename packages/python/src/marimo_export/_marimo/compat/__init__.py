@@ -20,7 +20,7 @@ from _thread import LockType
 from collections.abc import Callable, Iterable, Iterator, Mapping
 from contextlib import contextmanager, suppress
 from dataclasses import dataclass, field
-from importlib.machinery import SourceFileLoader
+from importlib.machinery import PathFinder, SourceFileLoader
 from pathlib import Path
 from typing import Any, Literal, cast
 
@@ -580,7 +580,11 @@ async def declared_ui_values(names: tuple[str, ...]) -> JsonObject:
     return result
 
 
-def preflight_exporters(plan: MatrixPlan) -> Mapping[str, str]:
+def preflight_exporters(
+    plan: MatrixPlan,
+    *,
+    source_modules: frozenset[str] = frozenset(),
+) -> Mapping[str, str]:
     """Resolve selected exporters and return their cache identities."""
 
     selected = {
@@ -604,7 +608,7 @@ def preflight_exporters(plan: MatrixPlan) -> Mapping[str, str]:
         reference = runtime_reference(exporter.name)
         try:
             parent = reference.module.rpartition(".")[0]
-            if parent:
+            if parent in source_modules:
                 importlib.import_module(parent)
             module = importlib.import_module(reference.module)
             value = getattr(module, reference.symbol)
@@ -685,8 +689,11 @@ def prepared_exporters(plan: MatrixPlan) -> Iterator[Mapping[str, str]]:
                 candidates,
                 original_modules,
                 roots=set(custom.values()),
-            ):
-                identities = preflight_exporters(plan)
+            ) as source_modules:
+                identities = preflight_exporters(
+                    plan,
+                    source_modules=source_modules,
+                )
                 discovered = _recorded_exporter_modules(custom)
                 if discovered <= candidates:
                     yield identities
@@ -748,13 +755,14 @@ def _include_loaded_source_dependencies(
             continue
         visited.add(name)
         module = modules.get(name)
-        if not _is_development_source_module(module):
+        location = _source_location(name, module)
+        if location is None or _is_installed_source(location[0]):
             continue
         for dependency in _source_imports(name, module):
             dependency_module = modules.get(dependency)
-            if not _is_local_source_module(
+            dependency_location = _source_location(dependency, dependency_module)
+            if dependency_location is None or not _is_local_source_name(
                 dependency,
-                dependency_module,
                 selected_distributions=selected_distributions,
                 package_distributions=package_distributions,
             ):
@@ -768,9 +776,10 @@ def _include_loaded_source_dependencies(
 
 
 def _source_imports(name: str, module: Any) -> set[str]:
-    origin = _module_origin(module)
-    if origin is None:
+    location = _source_location(name, module)
+    if location is None:
         return set()
+    origin, package = location
     try:
         source = SourceFileLoader(name, str(origin)).get_source(name)
         if source is None:
@@ -778,7 +787,6 @@ def _source_imports(name: str, module: Any) -> set[str]:
         tree = ast.parse(source, filename=str(origin))
     except (OSError, SyntaxError, UnicodeError):
         return set()
-    package = str(getattr(module, "__package__", ""))
     imports: set[str] = set()
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
@@ -802,13 +810,49 @@ def _source_imports(name: str, module: Any) -> set[str]:
     return imports
 
 
-def _is_development_source_module(module: Any) -> bool:
+def _source_location(name: str, module: Any) -> tuple[Path, str] | None:
     origin = _module_origin(module)
-    return (
-        origin is not None
-        and origin.suffix == ".py"
-        and not any(part in {"site-packages", "dist-packages"} for part in origin.parts)
-    )
+    if origin is not None:
+        package = str(getattr(module, "__package__", ""))
+        return (origin, package) if origin.suffix == ".py" else None
+    spec = _find_module_spec(name)
+    if spec is None or not isinstance(spec.origin, str):
+        return None
+    origin = Path(spec.origin)
+    if origin.suffix != ".py":
+        return None
+    package = name if spec.submodule_search_locations is not None else name.rpartition(".")[0]
+    return origin, package
+
+
+def _find_module_spec(name: str) -> Any:
+    parent_name = name.rpartition(".")[0]
+    if not parent_name:
+        return PathFinder.find_spec(name)
+    parent = sys.modules.get(parent_name)
+    parent_spec = getattr(parent, "__spec__", None)
+    if parent_spec is None:
+        parent_spec = _find_module_spec(parent_name)
+    if parent_spec is None or parent_spec.submodule_search_locations is None:
+        return None
+    return PathFinder.find_spec(name, parent_spec.submodule_search_locations)
+
+
+def _is_installed_source(origin: Path) -> bool:
+    return any(part in {"site-packages", "dist-packages"} for part in origin.parts)
+
+
+def _is_local_source_name(
+    name: str,
+    *,
+    selected_distributions: set[str],
+    package_distributions: Mapping[str, list[str]],
+) -> bool:
+    top_level = name.partition(".")[0]
+    if top_level == "marimo_export" or top_level in sys.stdlib_module_names:
+        return False
+    distributions = set(package_distributions.get(top_level, ()))
+    return not distributions or bool(distributions & selected_distributions)
 
 
 @contextmanager
@@ -817,7 +861,7 @@ def _isolated_modules(
     original_modules: Mapping[str, Any],
     *,
     roots: set[str],
-) -> Iterator[None]:
+) -> Iterator[frozenset[str]]:
     missing = object()
     try:
         package_distributions = importlib.metadata.packages_distributions()
@@ -867,7 +911,7 @@ def _isolated_modules(
                 {name: original_modules[name] for name in shadow_names}
             )
             sys.meta_path.insert(0, source_finder)
-        yield
+        yield frozenset(shadow_names)
     finally:
         if source_finder is not None:
             with suppress(ValueError):

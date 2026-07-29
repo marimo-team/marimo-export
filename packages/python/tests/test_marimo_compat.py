@@ -562,6 +562,7 @@ def test_prepared_exporters_refreshes_loaded_source_dependencies(
 ) -> None:
     package_name = "marimo_export_test_source_parent"
     exporter_name = f"{package_name}.exporter"
+    bridge_name = f"{package_name}.bridge"
     config_name = f"{package_name}.config"
     native_parent_name = f"{package_name}.native_parent"
     native_name = f"{native_parent_name}._native"
@@ -574,12 +575,16 @@ def test_prepared_exporters_refreshes_loaded_source_dependencies(
     )
     config_source = package / "config.py"
     config_source.write_text("CONFIG = 'first'\n", encoding="utf-8")
+    (package / "bridge.py").write_text(
+        "from .config import CONFIG\n",
+        encoding="utf-8",
+    )
     native_parent_package = package / "native_parent"
     native_parent_package.mkdir()
     native_parent_source = native_parent_package / "__init__.py"
     native_parent_source.write_text("", encoding="utf-8")
     (package / "exporter.py").write_text(
-        "from . import config\n\ndef encode(value):\n    return config, value\n",
+        "def encode(value):\n    from .bridge import CONFIG\n    return CONFIG, value\n",
         encoding="utf-8",
     )
     monkeypatch.syspath_prepend(str(tmp_path))
@@ -588,6 +593,7 @@ def test_prepared_exporters_refreshes_loaded_source_dependencies(
     original_package = sys.modules[package_name]
     original_config = sys.modules[config_name]
     original_native_parent = sys.modules[native_parent_name]
+    assert bridge_name not in sys.modules
     native_file = tmp_path / "source_parent_native.so"
     native_file.write_bytes(b"native")
     native = ModuleType(native_name)
@@ -626,11 +632,14 @@ def test_prepared_exporters_refreshes_loaded_source_dependencies(
     with prepared_exporters(plan) as first_identities:
         assert sys.modules[package_name] is not original_package
         assert sys.modules[exporter_name].encode(None) == ("first", None)
+        assert sys.modules[bridge_name].CONFIG == "first"
         assert sys.modules[native_name].encode(None) == ("native", None)
 
+    assert bridge_name not in sys.modules
     config_source.write_text("CONFIG = 'other'\n", encoding="utf-8")
     with prepared_exporters(plan) as second_identities:
         fresh_package = sys.modules[package_name]
+        fresh_bridge = sys.modules[bridge_name]
         fresh_config = sys.modules[config_name]
         fresh_native_parent = sys.modules[native_parent_name]
         fresh_exporter = sys.modules[exporter_name]
@@ -638,6 +647,7 @@ def test_prepared_exporters_refreshes_loaded_source_dependencies(
         assert fresh_config is not original_config
         assert fresh_native_parent is not original_native_parent
         assert fresh_package.config == "other"
+        assert fresh_bridge.CONFIG == "other"
         assert fresh_config.CONFIG == "other"
         assert fresh_exporter.encode(None) == ("other", None)
         assert sys.modules[native_name] is native
@@ -649,6 +659,7 @@ def test_prepared_exporters_refreshes_loaded_source_dependencies(
     assert sys.modules[native_parent_name] is original_native_parent
     assert sys.modules[exporter_name] is original_exporter
     assert sys.modules[native_name] is native
+    assert bridge_name not in sys.modules
 
 
 def test_exporter_preflight_restores_modules_imported_before_failure(
