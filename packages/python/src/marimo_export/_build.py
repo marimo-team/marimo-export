@@ -6,8 +6,10 @@ import os
 import stat
 import tempfile
 import time
+from contextlib import suppress
 from dataclasses import replace
 from pathlib import Path
+from typing import BinaryIO
 
 from marimo_export._remote.managed import ManagedServer
 from marimo_export._writer import preflight_publication, write_publication
@@ -163,23 +165,44 @@ def _remove_working_notebook(notebook: Path) -> None:
 
 
 def _copy_notebook(notebook: Path) -> Path:
+    descriptor: int | None = None
+    stream: BinaryIO | None = None
+    working_notebook: Path | None = None
     try:
         source = notebook.read_bytes()
-        with tempfile.NamedTemporaryFile(
-            mode="xb",
+        descriptor, filename = tempfile.mkstemp(
             prefix=f".{notebook.stem}.marimo-export-",
             suffix=notebook.suffix,
             dir=notebook.parent,
-            delete=False,
-        ) as stream:
+        )
+        working_notebook = Path(filename)
+        stream = os.fdopen(descriptor, "wb")
+        descriptor = None
+        with stream:
             stream.write(source)
             stream.flush()
             os.fsync(stream.fileno())
-            return Path(stream.name)
+        return working_notebook
     except OSError as error:
+        if stream is not None:
+            with suppress(OSError):
+                stream.close()
+        if descriptor is not None:
+            with suppress(OSError):
+                os.close(descriptor)
+        cleanup_error: OSError | None = None
+        if working_notebook is not None:
+            try:
+                working_notebook.unlink()
+            except OSError as failure:
+                cleanup_error = failure
+        details = {"exception_type": type(error).__name__}
+        if cleanup_error is not None:
+            details["cleanup_exception_type"] = type(cleanup_error).__name__
         raise ExecutionError(
             "the managed notebook copy could not be created",
             code="server_start_failed",
+            details=details,
         ) from error
 
 

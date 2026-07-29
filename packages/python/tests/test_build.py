@@ -186,6 +186,27 @@ def test_managed_copy_cleanup_has_a_bounded_shutdown_error(
     assert raised.value.details == {"exception_type": "PermissionError"}
 
 
+def test_managed_copy_creation_removes_partial_snapshot(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    notebook = tmp_path / "notebook.py"
+    notebook.write_text("import marimo\n", encoding="utf-8")
+
+    def fail_fsync(descriptor: int) -> None:
+        del descriptor
+        raise OSError("sync failed")
+
+    monkeypatch.setattr(build_module.os, "fsync", fail_fsync)
+
+    with pytest.raises(ExecutionError) as raised:
+        build_module._copy_notebook(notebook)
+
+    assert raised.value.code == "server_start_failed"
+    assert raised.value.details == {"exception_type": "OSError"}
+    assert not tuple(tmp_path.glob(".notebook.marimo-export-*.py"))
+
+
 @pytest.mark.parametrize("timeout", [0, -1, float("nan"), float("inf")])
 def test_build_rejects_invalid_timeout(tmp_path: Path, timeout: float) -> None:
     notebook = tmp_path / "notebook.py"
