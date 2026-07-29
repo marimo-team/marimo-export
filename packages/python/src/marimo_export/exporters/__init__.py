@@ -1,10 +1,5 @@
 from __future__ import annotations
 
-from collections.abc import Callable
-from typing import TypeAlias, TypeVar
+from marimo_export.exporters._spec import ExporterSpec, importable
 
-SourceT = TypeVar("SourceT")
-NativeT = TypeVar("NativeT")
-Exporter: TypeAlias = Callable[[SourceT], NativeT]
-
-__all__ = ["Exporter"]
+__all__ = ["ExporterSpec", "importable"]

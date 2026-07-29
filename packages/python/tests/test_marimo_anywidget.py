@@ -14,7 +14,7 @@ from marimo._plugins.ui._impl.anywidget.init import init_marimo_widget
 from marimo._plugins.ui._impl.comm import MarimoComm
 from marimo_export._marimo.compat.anywidget import anywidget_payload
 from marimo_export.errors import OutputError
-from marimo_export.exporters.anywidget import bundle
+from marimo_export.exporters._runtime.anywidget import bundle
 
 
 class _Child(anywidget.AnyWidget):

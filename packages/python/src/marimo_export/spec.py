@@ -34,6 +34,7 @@ from marimo_export._json import (
     json_object,
 )
 from marimo_export.errors import SpecError
+from marimo_export.exporters._spec import ExporterSpec
 
 SPEC_SCHEMA = "marimo-export.spec.v1"
 
@@ -147,10 +148,18 @@ class _WireModel(BaseModel):
     )
 
 
+class _ExporterWire(_WireModel):
+    model_config = ConfigDict(title="exporter")
+
+    name: _UnicodeStringWire
+    options: dict[_IdentifierWire, _PortableValueWire]
+
+
 class _OutputWire(_WireModel):
     model_config = ConfigDict(title="output")
 
     source: _IdentifierWire
+    exporter: _UnicodeStringWire | _ExporterWire | None = None
 
 
 class _SpecWire(_WireModel):
@@ -197,6 +206,7 @@ class _SpecSchemaGenerator(GenerateJsonSchema):
         "_IdentifierWire": "python_identifier",
         "_PortableValueWire": "portable_input_value",
         "_OutputWire": "output",
+        "_ExporterWire": "exporter",
     }
 
     def normalize_name(self, name: str) -> str:
@@ -206,9 +216,10 @@ class _SpecSchemaGenerator(GenerateJsonSchema):
 
 @dataclass(frozen=True, slots=True)
 class OutputSpec:
-    """Select one notebook definition as a public output."""
+    """Select one notebook definition and its optional representation."""
 
     source: str
+    exporter: ExporterSpec | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.source, str):
@@ -220,6 +231,8 @@ class OutputSpec:
                 f"invalid output source {self.source!r}: {error}",
                 code="spec_output_invalid",
             ) from error
+        if self.exporter is not None and not isinstance(self.exporter, ExporterSpec):
+            raise TypeError("exporter must be an ExporterSpec or None")
 
 
 @dataclass(frozen=True, slots=True, init=False)
@@ -250,7 +263,10 @@ class ExportSpec:
                 raise TypeError("output names must be strings")
             if not isinstance(output, OutputSpec):
                 raise TypeError(f"outputs[{name!r}] must be an OutputSpec")
-            output_values[name] = {"source": output.source}
+            output_value: JsonObject = {"source": output.source}
+            if output.exporter is not None:
+                output_value["exporter"] = output.exporter.to_value()
+            output_values[name] = output_value
         state_values: JsonObject = {}
         for name, row in states.items():
             if not isinstance(name, str):
@@ -273,11 +289,29 @@ class ExportSpec:
 
     @classmethod
     def _create(cls, wire: _SpecWire) -> ExportSpec:
+        outputs: JsonObject = {}
+        parsed_outputs: dict[str, OutputSpec] = {}
+        for name, output in wire.outputs.items():
+            exporter = (
+                None
+                if output.exporter is None
+                else ExporterSpec.from_value(
+                    output.exporter.model_dump()
+                    if isinstance(output.exporter, _ExporterWire)
+                    else output.exporter
+                )
+            )
+            parsed = OutputSpec(source=output.source, exporter=exporter)
+            parsed_outputs[name] = parsed
+            output_value: JsonObject = {"source": parsed.source}
+            if parsed.exporter is not None:
+                output_value["exporter"] = parsed.exporter.to_value()
+            outputs[name] = output_value
         value: JsonObject = {
             "schema": SPEC_SCHEMA,
             "inputs": list(wire.inputs),
             "states": {name: cast(JsonValue, dict(row)) for name, row in wire.states.items()},
-            "outputs": {name: {"source": output.source} for name, output in wire.outputs.items()},
+            "outputs": outputs,
         }
         instance = object.__new__(cls)
         object.__setattr__(instance, "inputs", tuple(wire.inputs))
@@ -294,9 +328,7 @@ class ExportSpec:
         object.__setattr__(
             instance,
             "outputs",
-            MappingProxyType(
-                {name: OutputSpec(source=output.source) for name, output in wire.outputs.items()}
-            ),
+            MappingProxyType(parsed_outputs),
         )
         object.__setattr__(instance, "_wire_bytes", canonical_bytes(value))
         return instance
@@ -512,6 +544,8 @@ def _spec_error_code(error: ValidationError) -> str:
     if any("undeclared inputs" in str(item.get("msg", "")) for item in items):
         return "spec_state_input_unknown"
     locations = [tuple(item.get("loc", ())) for item in items]
+    if any("exporter" in location for location in locations):
+        return "spec_exporter_invalid"
     if any("states" in location for location in locations):
         return "spec_value_invalid"
     if any("outputs" in location for location in locations):

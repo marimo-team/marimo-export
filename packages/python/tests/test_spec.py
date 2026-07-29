@@ -11,6 +11,7 @@ import pytest
 from jsonschema import Draft202012Validator
 from marimo_export import ExportSpec, OutputSpec
 from marimo_export.errors import SpecError
+from marimo_export.exporters import altair, importable, parquet
 from marimo_export.spec import SPEC_SCHEMA
 
 
@@ -24,8 +25,20 @@ def _value() -> dict[str, object]:
             "compact": {"chart_width": 480},
         },
         "outputs": {
-            "prices": {"source": "df"},
-            "chart": {"source": "symbols_chart"},
+            "prices": {
+                "source": "df",
+                "exporter": {
+                    "name": "parquet.table",
+                    "options": {
+                        "compression": "snappy",
+                        "filename": "prices.parquet",
+                    },
+                },
+            },
+            "chart": {
+                "source": "symbols_chart",
+                "exporter": "altair.vegalite",
+            },
         },
     }
 
@@ -39,8 +52,14 @@ def test_programmatic_and_wire_construction_have_one_contract() -> None:
             "compact": {"chart_width": 480},
         },
         outputs={
-            "prices": OutputSpec(source="df"),
-            "chart": OutputSpec(source="symbols_chart"),
+            "prices": OutputSpec(
+                source="df",
+                exporter=parquet.table(filename="prices.parquet"),
+            ),
+            "chart": OutputSpec(
+                source="symbols_chart",
+                exporter=altair.vegalite(),
+            ),
         },
     )
     decoded = ExportSpec.from_value(_value())
@@ -49,7 +68,10 @@ def test_programmatic_and_wire_construction_have_one_contract() -> None:
     assert programmatic.inputs == ("chart_width", "symbols_selector")
     assert tuple(programmatic.states) == ("baseline", "msft", "compact")
     assert tuple(programmatic.outputs) == ("prices", "chart")
-    assert programmatic.outputs["prices"] == OutputSpec(source="df")
+    assert programmatic.outputs["prices"] == OutputSpec(
+        source="df",
+        exporter=parquet.table(filename="prices.parquet"),
+    )
     assert programmatic.to_value() == _value()
     assert ExportSpec.from_value(programmatic) is programmatic
 
@@ -135,6 +157,52 @@ def test_output_source_requires_a_string() -> None:
         OutputSpec(source=cast(Any, 42))
 
 
+def test_output_exporter_requires_a_descriptor() -> None:
+    with pytest.raises(TypeError):
+        OutputSpec(source="chart", exporter=cast(Any, "altair.vegalite"))
+
+
+@pytest.mark.parametrize(
+    "exporter",
+    [
+        "unknown",
+        {"name": "altair.vegalite", "options": {"unexpected": True}},
+        {"name": "acme.exports:encode", "options": {"bad-option": 1}},
+    ],
+)
+def test_wire_exporters_are_validated_and_normalized(exporter: object) -> None:
+    value = _value()
+    cast(dict[str, Any], cast(dict[str, Any], value["outputs"])["chart"])["exporter"] = exporter
+
+    with pytest.raises(SpecError) as raised:
+        ExportSpec.from_value(value)
+
+    assert raised.value.code == "spec_exporter_invalid"
+
+
+def test_custom_importable_exporter_uses_the_same_wire_contract() -> None:
+    spec = ExportSpec(
+        inputs=(),
+        states={"baseline": {}},
+        outputs={
+            "summary": OutputSpec(
+                source="result",
+                exporter=importable("acme.exports:encode", level=3),
+            )
+        },
+    )
+
+    assert spec.to_value()["outputs"] == {
+        "summary": {
+            "exporter": {
+                "name": "acme.exports:encode",
+                "options": {"level": 3},
+            },
+            "source": "result",
+        }
+    }
+
+
 @pytest.mark.parametrize(
     "name",
     ["", " state", "state ", "state\n", "\x00state", "x" * 256],
@@ -195,6 +263,10 @@ states:
 outputs:
   chart:
     source: chart
+    exporter:
+      name: altair.png
+      options:
+        scale: 2
 """.lstrip(),
         encoding="utf-8",
     )
@@ -204,6 +276,7 @@ outputs:
     assert spec.inputs == ("chart_width",)
     assert spec.states["compact"]["chart_width"] == 480
     assert spec.outputs["chart"].source == "chart"
+    assert spec.outputs["chart"].exporter == altair.png(scale=2)
 
 
 @pytest.mark.parametrize(
