@@ -19,6 +19,7 @@ from _thread import LockType
 from collections.abc import Callable, Iterable, Iterator, Mapping
 from contextlib import contextmanager, suppress
 from dataclasses import dataclass, field
+from importlib.machinery import SourceFileLoader
 from pathlib import Path
 from typing import Any, Literal, cast
 
@@ -670,6 +671,7 @@ def prepared_exporters(plan: MatrixPlan) -> Iterator[Mapping[str, str]]:
         original_modules = dict(sys.modules)
         candidates = set(custom.values())
         candidates.update(_recorded_exporter_modules(custom))
+        _include_new_package_parents(candidates, original_modules)
         while True:
             with _isolated_modules(candidates, original_modules):
                 identities = preflight_exporters(plan)
@@ -678,6 +680,7 @@ def prepared_exporters(plan: MatrixPlan) -> Iterator[Mapping[str, str]]:
                     yield identities
                     return
                 candidates.update(discovered)
+                _include_new_package_parents(candidates, original_modules)
             if len(candidates) > _MAX_EXPORTER_DEPENDENCIES + len(custom):
                 name = next(iter(custom))
                 raise OutputError(
@@ -697,12 +700,29 @@ def _recorded_exporter_modules(exporters: Mapping[str, str]) -> set[str]:
         }
 
 
+def _include_new_package_parents(
+    names: set[str],
+    original_modules: Mapping[str, Any],
+) -> None:
+    for name in tuple(names):
+        parent = name.rpartition(".")[0]
+        while parent:
+            if parent not in original_modules:
+                names.add(parent)
+            parent = parent.rpartition(".")[0]
+
+
 @contextmanager
 def _isolated_modules(
     names: set[str],
     original_modules: Mapping[str, Any],
 ) -> Iterator[None]:
     missing = object()
+    package_attributes = {
+        name: dict(vars(module))
+        for name, module in original_modules.items()
+        if module is not None and hasattr(module, "__path__")
+    }
     for name in sorted(names, key=lambda value: value.count("."), reverse=True):
         sys.modules.pop(name, None)
         parent_name, separator, attribute = name.rpartition(".")
@@ -711,23 +731,37 @@ def _isolated_modules(
             with suppress(AttributeError):
                 delattr(parent, attribute)
     importlib.invalidate_caches()
+    native_get_code = SourceFileLoader.get_code
+
+    def get_code(loader: SourceFileLoader, fullname: str) -> Any:
+        filename = loader.get_filename(fullname)
+        return loader.source_to_code(loader.get_data(filename), filename)
+
+    cast(Any, SourceFileLoader).get_code = get_code
     try:
         yield
     finally:
-        for name in sorted(names, key=lambda value: value.count("."), reverse=True):
+        cast(Any, SourceFileLoader).get_code = native_get_code
+        changed_names = {
+            name
+            for name in set(original_modules) | set(sys.modules)
+            if sys.modules.get(name, missing) is not original_modules.get(name, missing)
+        }
+        for name in sorted(
+            set(sys.modules) - set(original_modules),
+            key=lambda value: value.count("."),
+            reverse=True,
+        ):
             sys.modules.pop(name, None)
-        for name in sorted(names, key=lambda value: value.count(".")):
-            original = original_modules.get(name, missing)
-            if original is not missing:
-                sys.modules[name] = original
-        for name in sorted(names):
+        sys.modules.update(original_modules)
+        for name in sorted(changed_names):
             parent_name, separator, attribute = name.rpartition(".")
             if not separator:
                 continue
             parent = original_modules.get(parent_name)
-            original = original_modules.get(name, missing)
             if parent is None:
                 continue
+            original = package_attributes.get(parent_name, {}).get(attribute, missing)
             if original is missing:
                 with suppress(AttributeError):
                     delattr(parent, attribute)

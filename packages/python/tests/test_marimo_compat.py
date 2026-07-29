@@ -4,6 +4,7 @@ import hashlib
 import importlib
 import sys
 import weakref
+from contextlib import nullcontext
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
 from typing import Any, cast
@@ -18,12 +19,15 @@ from marimo_export._execution import MatrixPlan, OutputProjection
 from marimo_export._marimo.compat import (
     _cleanup_state_child,
     _document_sha256,
+    _include_new_package_parents,
+    _isolated_modules,
     _native_receipt,
     _ReadSnapshotStore,
     _release_state_child,
     _track_upstream_cache,
     flush_native_caches,
     preflight_exporters,
+    prepared_exporters,
     require_capabilities,
 )
 from marimo_export.errors import OutputError
@@ -76,6 +80,66 @@ def test_document_digest_uses_portable_cell_content() -> None:
 
     assert _document_sha256(live) == _document_sha256(reloaded)
     assert _document_sha256(reloaded) != _document_sha256(named)
+
+
+@pytest.mark.parametrize("fail", [False, True], ids=["success", "error"])
+def test_exporter_module_overlay_restores_new_package_bindings(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    fail: bool,
+) -> None:
+    package_name = f"marimo_export_test_overlay_{'error' if fail else 'success'}"
+    module_name = f"{package_name}.exporter"
+    package = tmp_path / package_name
+    package.mkdir()
+    (package / "__init__.py").write_text("", encoding="utf-8")
+    (package / "exporter.py").write_text("value = 1\n", encoding="utf-8")
+    monkeypatch.syspath_prepend(str(tmp_path))
+    importlib.invalidate_caches()
+    original_modules = dict(sys.modules)
+    names: set[str] = {module_name}
+    _include_new_package_parents(names, original_modules)
+
+    with (
+        pytest.raises(RuntimeError) if fail else nullcontext(),
+        _isolated_modules(names, original_modules),
+    ):
+        imported = importlib.import_module(module_name)
+        imported_package = sys.modules[package_name]
+        assert imported_package.exporter is imported
+        if fail:
+            raise RuntimeError("stop")
+
+    assert package_name not in sys.modules
+    assert module_name not in sys.modules
+
+
+def test_exporter_module_overlay_restores_existing_package_identities(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    package_name = "marimo_export_test_overlay_existing"
+    module_name = f"{package_name}.exporter"
+    package = tmp_path / package_name
+    package.mkdir()
+    (package / "__init__.py").write_text("", encoding="utf-8")
+    (package / "exporter.py").write_text("value = 1\n", encoding="utf-8")
+    monkeypatch.syspath_prepend(str(tmp_path))
+    importlib.invalidate_caches()
+    original_module = importlib.import_module(module_name)
+    original_package = sys.modules[package_name]
+    original_modules = dict(sys.modules)
+    names = {module_name}
+    _include_new_package_parents(names, original_modules)
+
+    with _isolated_modules(names, original_modules):
+        imported = importlib.import_module(module_name)
+        assert imported is not original_module
+        assert original_package.exporter is imported
+
+    assert sys.modules[package_name] is original_package
+    assert sys.modules[module_name] is original_module
+    assert original_package.exporter is original_module
 
 
 def test_native_cache_flush_uses_marimo_loader_lifecycle(
@@ -238,6 +302,31 @@ def _custom_exporter_plan(module_name: str) -> MatrixPlan:
         state_name="marimo_export_state_0123456789abcdef",
         state_code="marimo_export_state_0123456789abcdef = 'state'",
     )
+
+
+def test_exporter_preflight_restores_modules_imported_before_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    helper_name = "marimo_export_test_failed_import_helper"
+    exporter_name = "marimo_export_test_failed_import_exporter"
+    (tmp_path / f"{helper_name}.py").write_text("value = 1\n", encoding="utf-8")
+    (tmp_path / f"{exporter_name}.py").write_text(
+        f"import {helper_name}\nraise RuntimeError('failed import')\n",
+        encoding="utf-8",
+    )
+    monkeypatch.syspath_prepend(str(tmp_path))
+    importlib.invalidate_caches()
+
+    with (
+        pytest.raises(OutputError) as raised,
+        prepared_exporters(_custom_exporter_plan(exporter_name)),
+    ):
+        pass
+
+    assert raised.value.code == "exporter_unavailable"
+    assert helper_name not in sys.modules
+    assert exporter_name not in sys.modules
 
 
 def test_exporter_preflight_fingerprints_sideloaded_function_code(

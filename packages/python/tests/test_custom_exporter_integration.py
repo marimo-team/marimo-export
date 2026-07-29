@@ -267,7 +267,12 @@ def test_live_capture_refreshes_exporter_modules_with_reload_disabled(
             output=tmp_path / "warm",
             timeout=30,
         )
-        _write_exporter(exporter, "changed")
+        exporter_stat = exporter.stat()
+        _write_exporter(exporter, "other")
+        os.utime(
+            exporter,
+            ns=(exporter_stat.st_atime_ns, exporter_stat.st_mtime_ns),
+        )
         changed = capture(
             server.base_url,
             session=server.session_id,
@@ -278,7 +283,7 @@ def test_live_capture_refreshes_exporter_modules_with_reload_disabled(
         )
         _write_dependent_exporter(exporter)
         helper = tmp_path / "helper.py"
-        _write_helper(helper, "helper")
+        _write_helper(helper, "helper-a")
         dependent = capture(
             server.base_url,
             session=server.session_id,
@@ -287,7 +292,12 @@ def test_live_capture_refreshes_exporter_modules_with_reload_disabled(
             output=tmp_path / "dependent",
             timeout=30,
         )
-        _write_helper(helper, "refreshed-helper")
+        helper_stat = helper.stat()
+        _write_helper(helper, "helper-b")
+        os.utime(
+            helper,
+            ns=(helper_stat.st_atime_ns, helper_stat.st_mtime_ns),
+        )
         refreshed = capture(
             server.base_url,
             session=server.session_id,
@@ -306,15 +316,15 @@ def test_live_capture_refreshes_exporter_modules_with_reload_disabled(
     assert (refreshed.projection_cache.hits, refreshed.projection_cache.misses) == (0, 1)
     assert (
         open_publication(changed.path).state("baseline").output("summary").blob_asset().data
-        == b"changed:42"
+        == b"other:42"
     )
     assert (
         open_publication(dependent.path).state("baseline").output("summary").blob_asset().data
-        == b"helper:42"
+        == b"helper-a:42"
     )
     assert (
         open_publication(refreshed.path).state("baseline").output("summary").blob_asset().data
-        == b"refreshed-helper:42"
+        == b"helper-b:42"
     )
     assert notebook.read_bytes() == source
 
