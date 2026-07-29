@@ -1,5 +1,5 @@
 import { openPublication } from "@marimo-team/marimo-export";
-import { arrowTableLoader } from "@marimo-team/marimo-export-loader-arrow";
+import { arrowTableLoader } from "@marimo-team/marimo-export/loader/arrow";
 
 const status = document.querySelector<HTMLElement>("#arrow-only-status");
 if (status === null) throw new Error("#arrow-only-status is missing.");

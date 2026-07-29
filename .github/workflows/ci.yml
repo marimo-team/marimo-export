@@ -43,7 +43,7 @@ jobs:
         run: uv sync --all-extras --locked
 
       - name: Install AnyWidget test browser
-        run: pnpm --filter @marimo-team/marimo-export-loader-anywidget exec playwright install --with-deps --only-shell chromium
+        run: pnpm --filter @marimo-export/internal-loader-anywidget exec playwright install --with-deps --only-shell chromium
 
       - name: Run release gate
         run: make check

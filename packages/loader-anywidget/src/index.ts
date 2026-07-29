@@ -3,8 +3,8 @@ import { defineBlobAssetLoader } from "@marimo-team/marimo-export";
 import type { BlobAssetLoadInput, BlobAssetLoader } from "@marimo-team/marimo-export";
 
 import { parseAnyWidgetPayload, readonlyModelState } from "./payload.js";
-import { mountSnapshot } from "./runtime/registry.js";
 import type { ModelState } from "./runtime/model.js";
+import { mountSnapshot } from "./runtime/registry.js";
 
 const MEDIA_TYPE = "application/vnd.marimo-export.anywidget.v1+json";
 type StateShape<State> = Partial<Record<keyof State, unknown>>;

@@ -5,7 +5,14 @@ export default defineConfig({
     printWidth: 100,
   },
   pack: {
-    entry: ["src/index.ts"],
+    entry: [
+      "src/index.ts",
+      "src/loader/anywidget.ts",
+      "src/loader/arrow.ts",
+      "src/loader/numpy.ts",
+      "src/loader/parquet.ts",
+      "src/loader/vegalite.ts",
+    ],
     dts: true,
     fixedExtension: true,
     format: ["esm"],

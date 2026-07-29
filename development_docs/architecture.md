@@ -16,15 +16,15 @@ ExportSpec
 
 ## Package boundaries
 
-| Path                                               | Responsibility                                                                          |
-| -------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| `packages/python`                                  | ExportSpec, build, capture, publication writer and reader, CLI, authored Exporters      |
-| `packages/python/src/marimo_export/_execution`     | Baseline, normalized states, projection code, matrix records                            |
-| `packages/python/src/marimo_export/_marimo/compat` | Every private marimo import and capability probe                                        |
-| `packages/python/src/marimo_export/_remote`        | HTTP, SSE, credentials, bridge invocation, managed server lifecycle                     |
-| `packages/browser`                                 | Canonical index parsing, immutable states, integrity, native payloads, loader contracts |
-| `packages/loader-*`                                | One representation dependency family and result contract                                |
-| `apps/finance-demo`                                | Vanilla TypeScript example client over all codecs                                       |
+| Path                                               | Responsibility                                                                           |
+| -------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `packages/python`                                  | ExportSpec, build, capture, publication writer and reader, CLI, authored Exporters       |
+| `packages/python/src/marimo_export/_execution`     | Baseline, normalized states, projection code, matrix records                             |
+| `packages/python/src/marimo_export/_marimo/compat` | Every private marimo import and capability probe                                         |
+| `packages/python/src/marimo_export/_remote`        | HTTP, SSE, credentials, bridge invocation, managed server lifecycle                      |
+| `packages/browser`                                 | Published npm entry points, index parsing, immutable states, integrity, loader contracts |
+| `packages/loader-*`                                | Private workspace implementations for one representation dependency family each          |
+| `apps/finance-demo`                                | Vanilla TypeScript example client over all codecs                                        |
 
 Stable domain modules depend on stable types. Adapters depend on the domain
 contract. The Python public roots are `build`, `capture`, `Client`, and
@@ -127,8 +127,14 @@ framing, and descriptor agreement.
 ## OutputLoader
 
 Browser core decodes the stable codec envelope. An application supplies one
-`OutputLoader` for the expected codec and media type. Specialized packages own
-NPY, Arrow, Parquet, AnyWidget, and Vega-Lite dependencies.
+`OutputLoader` for the expected codec and media type.
+
+Each specialized loader remains a private workspace package with its own
+dependencies, tests, and result contract. The browser package maps
+`#loaders/*` to those sources and publishes them as
+`@marimo-team/marimo-export/loader/*`. Specialized runtimes remain external
+optional peers, so each application installs the peers for the subpaths it
+imports.
 
 Interactive loaders return a value with `mount()`. Each mount returns a
 disposable view that owns DOM, listeners, object URLs, module state, and

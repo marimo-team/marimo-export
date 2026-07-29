@@ -84,24 +84,24 @@ importers:
 
   apps/finance-demo:
     dependencies:
+      '@anywidget/types':
+        specifier: 'catalog:'
+        version: 0.4.0
       '@marimo-team/marimo-export':
         specifier: workspace:*
         version: link:../../packages/browser
-      '@marimo-team/marimo-export-loader-anywidget':
-        specifier: workspace:*
-        version: link:../../packages/loader-anywidget
-      '@marimo-team/marimo-export-loader-arrow':
-        specifier: workspace:*
-        version: link:../../packages/loader-arrow
-      '@marimo-team/marimo-export-loader-numpy':
-        specifier: workspace:*
-        version: link:../../packages/loader-numpy
-      '@marimo-team/marimo-export-loader-parquet':
-        specifier: workspace:*
-        version: link:../../packages/loader-parquet
-      '@marimo-team/marimo-export-loader-vegalite':
-        specifier: workspace:*
-        version: link:../../packages/loader-vegalite
+      '@uwdata/flechette':
+        specifier: 'catalog:'
+        version: 2.5.0
+      hyparquet:
+        specifier: 'catalog:'
+        version: 1.26.2
+      lz4js:
+        specifier: 'catalog:'
+        version: 0.2.0
+      vega-embed:
+        specifier: 'catalog:'
+        version: 7.1.0(vega-lite@6.4.3(vega@6.2.0))(vega@6.2.0)
     devDependencies:
       typescript:
         specifier: 'catalog:'
@@ -116,12 +116,27 @@ importers:
         specifier: 'catalog:'
         version: 3.1.3
     devDependencies:
+      '@anywidget/types':
+        specifier: 'catalog:'
+        version: 0.4.0
       '@types/node':
         specifier: 'catalog:'
         version: 24.13.3
+      '@uwdata/flechette':
+        specifier: 'catalog:'
+        version: 2.5.0
+      hyparquet:
+        specifier: 'catalog:'
+        version: 1.26.2
+      lz4js:
+        specifier: 'catalog:'
+        version: 0.2.0
       typescript:
         specifier: 'catalog:'
         version: 6.0.3
+      vega-embed:
+        specifier: 'catalog:'
+        version: 7.1.0(vega-lite@6.4.3(vega@6.2.0))(vega@6.2.0)
       vite-plus:
         specifier: 'catalog:'
         version: 0.2.4(@types/node@24.13.3)(@vitest/browser-playwright@4.1.10)(@voidzero-dev/vite-plus-core@0.2.4(@types/node@24.13.3)(esbuild@0.28.1)(typescript@6.0.3)(yaml@2.9.0))(esbuild@0.28.1)(typescript@6.0.3)(yaml@2.9.0)
@@ -131,10 +146,10 @@ importers:
       '@anywidget/types':
         specifier: 'catalog:'
         version: 0.4.0
-    devDependencies:
       '@marimo-team/marimo-export':
         specifier: workspace:*
         version: link:../browser
+    devDependencies:
       '@msgpack/msgpack':
         specifier: 'catalog:'
         version: 3.1.3
@@ -153,6 +168,9 @@ importers:
 
   packages/loader-arrow:
     dependencies:
+      '@marimo-team/marimo-export':
+        specifier: workspace:*
+        version: link:../browser
       '@uwdata/flechette':
         specifier: 'catalog:'
         version: 2.5.0
@@ -160,9 +178,6 @@ importers:
         specifier: 'catalog:'
         version: 0.2.0
     devDependencies:
-      '@marimo-team/marimo-export':
-        specifier: workspace:*
-        version: link:../browser
       typescript:
         specifier: 'catalog:'
         version: 6.0.3
@@ -171,10 +186,11 @@ importers:
         version: 0.2.4(@types/node@24.13.3)(@vitest/browser-playwright@4.1.10)(@voidzero-dev/vite-plus-core@0.2.4(@types/node@24.13.3)(esbuild@0.28.1)(typescript@6.0.3)(yaml@2.9.0))(esbuild@0.28.1)(typescript@6.0.3)(yaml@2.9.0)
 
   packages/loader-numpy:
-    devDependencies:
+    dependencies:
       '@marimo-team/marimo-export':
         specifier: workspace:*
         version: link:../browser
+    devDependencies:
       typescript:
         specifier: 'catalog:'
         version: 6.0.3
@@ -184,13 +200,13 @@ importers:
 
   packages/loader-parquet:
     dependencies:
+      '@marimo-team/marimo-export':
+        specifier: workspace:*
+        version: link:../browser
       hyparquet:
         specifier: 'catalog:'
         version: 1.26.2
     devDependencies:
-      '@marimo-team/marimo-export':
-        specifier: workspace:*
-        version: link:../browser
       typescript:
         specifier: 'catalog:'
         version: 6.0.3
@@ -200,13 +216,13 @@ importers:
 
   packages/loader-vegalite:
     dependencies:
+      '@marimo-team/marimo-export':
+        specifier: workspace:*
+        version: link:../browser
       vega-embed:
         specifier: 'catalog:'
         version: 7.1.0(vega-lite@6.4.3(vega@6.2.0))(vega@6.2.0)
     devDependencies:
-      '@marimo-team/marimo-export':
-        specifier: workspace:*
-        version: link:../browser
       '@msgpack/msgpack':
         specifier: 'catalog:'
         version: 3.1.3

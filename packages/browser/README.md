@@ -1,8 +1,7 @@
 # @marimo-team/marimo-export
 
-The browser package opens a canonical marimo publication over HTTP, resolves
-finite states, verifies content-addressed assets, and hands each native payload
-to an explicit `OutputLoader`.
+Open a static marimo publication, select a precomputed state, and load its
+outputs in a browser application.
 
 ```bash
 pnpm add @marimo-team/marimo-export
@@ -13,12 +12,50 @@ import { openPublication, scalarLoader } from "@marimo-team/marimo-export";
 
 const publication = await openPublication("/publications/finance/");
 const state = publication.state("baseline");
-const rows = await state.output("row_count").load(scalarLoader());
+const count = await state.output("row_count").load(scalarLoader());
 ```
 
 `openPublication(base, options?)` fetches `index.json` and validates canonical
-JSON, the publication schema, complete input vectors, and state fingerprints.
-It fetches assets when `load()` or `verify()` requests them.
+JSON, publication structure, complete input vectors, and state fingerprints.
+Output assets remain lazy until `load()` or `verify()` reads them.
+
+## Load published representations
+
+The package root provides publication APIs, `scalarLoader()`, and
+`imageLoader()`. Rich representations use explicit loader subpaths:
+
+| Loader              | Import subpath     | Install with the package     |
+| ------------------- | ------------------ | ---------------------------- |
+| `anyWidgetLoader`   | `loader/anywidget` | `@anywidget/types`           |
+| `arrowTableLoader`  | `loader/arrow`     | `@uwdata/flechette`, `lz4js` |
+| `numpyLoader`       | `loader/numpy`     | no additional peer           |
+| `parquetRowsLoader` | `loader/parquet`   | `hyparquet`                  |
+| `vegaLiteLoader`    | `loader/vegalite`  | `vega-embed`                 |
+
+For example, a client that loads Parquet rows and Vega-Lite charts installs:
+
+```bash
+pnpm add @marimo-team/marimo-export hyparquet vega-embed
+```
+
+```ts
+import { openPublication } from "@marimo-team/marimo-export";
+import { parquetRowsLoader } from "@marimo-team/marimo-export/loader/parquet";
+import { vegaLiteLoader } from "@marimo-team/marimo-export/loader/vegalite";
+
+const publication = await openPublication("/publications/finance/");
+const state = publication.state("baseline");
+
+const rows = await state.output("prices").load(parquetRowsLoader());
+const chart = await state.output("chart").load(vegaLiteLoader());
+const mounted = await chart.mount(document.querySelector("#chart")!);
+```
+
+Loader runtimes are optional peer dependencies. Importing the package root
+keeps them out of the application dependency graph. Importing a loader subpath
+requires the peers listed for that loader.
+
+## Resolve a published state
 
 ```ts
 const next = state.resolve({ chart_width: 480 });
@@ -28,24 +65,15 @@ const exact = publication.resolve({
 });
 ```
 
-`Publication.resolve()` requires the complete input vector.
+`Publication.resolve()` requires a complete input vector.
 `PublishedState.resolve()` merges a sparse patch with that state's vector.
 Both return an existing published state or raise `PublicationError` with
 `code === "state_unavailable"`.
 
-## OutputLoader
+## Define a custom loader
 
-Each output declares one stable codec and one media type. The core package
-supports:
-
-```text
-marimo.scalar.v1
-numpy.npy.v1
-apache.arrow.file.v1
-marimo.blob-asset.msgpack.v1
-```
-
-Loaders declare the codec at the type level and inspect the parsed media type:
+Each output declares one stable codec and one media type. Use
+`defineBlobAssetLoader()` to decode a custom `BlobAsset` representation:
 
 ```ts
 import { defineBlobAssetLoader } from "@marimo-team/marimo-export";
@@ -61,14 +89,11 @@ const geoJsonLoader = defineBlobAssetLoader({
 const regions = await state.output("regions").load(geoJsonLoader);
 ```
 
-The publication reader selects exactly one supplied loader, verifies the asset,
-decodes the native codec envelope, and calls that loader. Media-specific
-allocation and execution behavior belongs to the loader package.
+The publication reader selects the supplied loader, verifies the asset,
+decodes the native codec envelope, and calls the loader. Media-specific
+allocation and execution behavior belongs to the loader.
 
-Core includes `scalarLoader()` and `imageLoader()`. Specialized packages
-provide NumPy, Arrow, Parquet, AnyWidget, and Vega-Lite values.
-
-## Cancellation and verification
+## Cancel and verify
 
 ```ts
 const controller = new AbortController();

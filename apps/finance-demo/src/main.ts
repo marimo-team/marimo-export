@@ -13,11 +13,11 @@ import type {
   PublishedState,
   ScalarValue,
 } from "@marimo-team/marimo-export";
-import { anyWidgetLoader } from "@marimo-team/marimo-export-loader-anywidget";
-import { arrowTableLoader } from "@marimo-team/marimo-export-loader-arrow";
-import { numpyLoader } from "@marimo-team/marimo-export-loader-numpy";
-import { parquetRowsLoader } from "@marimo-team/marimo-export-loader-parquet";
-import { vegaLiteLoader } from "@marimo-team/marimo-export-loader-vegalite";
+import { anyWidgetLoader } from "@marimo-team/marimo-export/loader/anywidget";
+import { arrowTableLoader } from "@marimo-team/marimo-export/loader/arrow";
+import { numpyLoader } from "@marimo-team/marimo-export/loader/numpy";
+import { parquetRowsLoader } from "@marimo-team/marimo-export/loader/parquet";
+import { vegaLiteLoader } from "@marimo-team/marimo-export/loader/vegalite";
 
 import "./style.css";
 

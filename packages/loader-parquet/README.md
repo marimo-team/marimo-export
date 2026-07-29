@@ -1,15 +1,13 @@
-# @marimo-team/marimo-export-loader-parquet
+# Parquet loader workspace
 
-`parquetRowsLoader()` reads verified Parquet `BlobAsset` bytes into row objects
-with Hyparquet.
+This private workspace package owns verified Parquet decoding through
+Hyparquet.
 
-```bash
-pnpm add @marimo-team/marimo-export \
-  @marimo-team/marimo-export-loader-parquet
-```
+Consumers install `@marimo-team/marimo-export` with `hyparquet`, then import
+the public loader subpath:
 
 ```ts
-import { parquetRowsLoader } from "@marimo-team/marimo-export-loader-parquet";
+import { parquetRowsLoader } from "@marimo-team/marimo-export/loader/parquet";
 
 const rows = await output.load(
   parquetRowsLoader({

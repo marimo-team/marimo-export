@@ -1,15 +1,13 @@
-# @marimo-team/marimo-export-loader-vegalite
+# Vega-Lite loader workspace
 
-`vegaLiteLoader()` validates a versioned Vega-Lite `BlobAsset` and returns a
-mountable chart.
+This private workspace package owns versioned Vega-Lite validation, mounting,
+and view disposal through `vega-embed`.
 
-```bash
-pnpm add @marimo-team/marimo-export \
-  @marimo-team/marimo-export-loader-vegalite
-```
+Consumers install `@marimo-team/marimo-export` with `vega-embed`, then import
+the public loader subpath:
 
 ```ts
-import { vegaLiteLoader } from "@marimo-team/marimo-export-loader-vegalite";
+import { vegaLiteLoader } from "@marimo-team/marimo-export/loader/vegalite";
 
 const chart = await output.load(vegaLiteLoader({ actions: false }));
 const mounted = await chart.mount(host, { renderer: "svg" });

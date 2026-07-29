@@ -1,48 +1,27 @@
 {
-  "name": "@marimo-team/marimo-export-loader-anywidget",
+  "name": "@marimo-export/internal-loader-anywidget",
   "version": "0.0.0",
-  "description": "Pythonless AnyWidget loader for marimo exports.",
+  "private": true,
+  "description": "Workspace implementation of the marimo-export AnyWidget loader",
   "license": "Apache-2.0",
-  "files": [
-    "dist",
-    "README.md"
-  ],
   "type": "module",
   "sideEffects": false,
-  "exports": {
-    ".": "./src/index.ts",
-    "./package.json": "./package.json"
-  },
-  "publishConfig": {
-    "exports": {
-      ".": {
-        "types": "./dist/index.d.ts",
-        "import": "./dist/index.js"
-      },
-      "./package.json": "./package.json"
-    },
-    "access": "public"
-  },
   "scripts": {
     "build": "vp pack",
     "check": "vp check",
-    "prepack": "vp run -t build",
     "test": "vp test",
     "test:browser": "vp test --project browser",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@anywidget/types": "catalog:"
+    "@anywidget/types": "catalog:",
+    "@marimo-team/marimo-export": "workspace:*"
   },
   "devDependencies": {
-    "@marimo-team/marimo-export": "workspace:*",
     "@msgpack/msgpack": "catalog:",
     "@vitest/browser-playwright": "catalog:",
     "playwright": "catalog:",
     "typescript": "catalog:",
     "vite-plus": "catalog:"
-  },
-  "peerDependencies": {
-    "@marimo-team/marimo-export": "workspace:*"
   }
 }

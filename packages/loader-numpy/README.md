@@ -1,15 +1,13 @@
-# @marimo-team/marimo-export-loader-numpy
+# NumPy loader workspace
 
-`numpyLoader()` decodes verified `numpy.npy.v1` outputs into a typed numeric
-array plus shape, dtype, and memory order.
+This private workspace package owns verified NPY decoding and its typed browser
+result.
 
-```bash
-pnpm add @marimo-team/marimo-export \
-  @marimo-team/marimo-export-loader-numpy
-```
+Consumers import the public loader subpath from
+`@marimo-team/marimo-export`:
 
 ```ts
-import { numpyLoader } from "@marimo-team/marimo-export-loader-numpy";
+import { numpyLoader } from "@marimo-team/marimo-export/loader/numpy";
 
 const array = await output.load(numpyLoader());
 console.log(array.shape, array.dtype, array.data);

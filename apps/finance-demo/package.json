@@ -10,12 +10,12 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@anywidget/types": "catalog:",
     "@marimo-team/marimo-export": "workspace:*",
-    "@marimo-team/marimo-export-loader-anywidget": "workspace:*",
-    "@marimo-team/marimo-export-loader-arrow": "workspace:*",
-    "@marimo-team/marimo-export-loader-numpy": "workspace:*",
-    "@marimo-team/marimo-export-loader-parquet": "workspace:*",
-    "@marimo-team/marimo-export-loader-vegalite": "workspace:*"
+    "@uwdata/flechette": "catalog:",
+    "hyparquet": "catalog:",
+    "lz4js": "catalog:",
+    "vega-embed": "catalog:"
   },
   "devDependencies": {
     "typescript": "catalog:",

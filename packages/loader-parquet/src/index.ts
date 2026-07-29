@@ -1,7 +1,7 @@
-import { defineBlobAssetLoader } from "@marimo-team/marimo-export";
-import type { BlobAssetLoader } from "@marimo-team/marimo-export";
 import { parquetReadObjects } from "hyparquet";
 import type { Compressors, ParquetReadOptions } from "hyparquet";
+import { defineBlobAssetLoader } from "@marimo-team/marimo-export";
+import type { BlobAssetLoader } from "@marimo-team/marimo-export";
 
 export interface ParquetRowsLoaderOptions extends Omit<
   ParquetReadOptions,

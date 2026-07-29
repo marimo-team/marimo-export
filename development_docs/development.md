@@ -8,7 +8,7 @@ Vite+.
 ```bash
 corepack enable
 make bootstrap
-pnpm --filter @marimo-team/marimo-export-loader-anywidget exec \
+pnpm --filter @marimo-export/internal-loader-anywidget exec \
   playwright install --only-shell chromium
 ```
 
@@ -23,7 +23,7 @@ uv run ruff check packages/python
 uv run ty check
 
 pnpm --filter @marimo-team/marimo-export test
-pnpm --filter @marimo-team/marimo-export-loader-arrow test
+pnpm --filter @marimo-export/internal-loader-arrow test
 pnpm --filter @marimo-team/marimo-export-finance-demo build
 ```
 
@@ -90,9 +90,23 @@ export function summaryLoader() {
 }
 ```
 
-The owning loader package declares its runtime decoder directly. Add malformed
-byte tests, allocation bounds, cancellation checks, and disposal tests when it
-creates browser resources.
+Create the implementation in a private `packages/loader-<name>` workspace.
+That package owns its runtime dependencies, focused tests, and result type. Add
+malformed byte tests, allocation bounds, cancellation checks, and disposal
+tests when it creates browser resources.
+
+Expose the implementation through
+`packages/browser/src/loader/<name>.ts`:
+
+```ts
+export * from "#loaders/<name>";
+```
+
+The `#loaders/*` TypeScript path maps the facade to the private workspace
+source. Add the facade to the browser package build entries and export map, then
+declare its external runtime dependencies as optional peers of
+`@marimo-team/marimo-export`. The packed-package test builds the root entry
+alone and every loader subpath with its peers installed.
 
 ## Protocol changes
 

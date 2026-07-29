@@ -25,9 +25,11 @@ Run focused package commands during development, then run `make format` and
   private marimo import. `_remote` owns HTTP, SSE, authentication, kernel
   invocation, and managed server lifecycle.
 - `packages/browser` owns canonical index parsing, immutable finite states,
-  asset integrity, native payload decoding, and the `OutputLoader` contract.
-- `packages/loader-*` each own one representation dependency family, decoder,
-  result type, cancellation behavior, and mount disposal.
+  asset integrity, native payload decoding, the `OutputLoader` contract, and
+  every published npm entry point.
+- `packages/loader-*` are private workspace packages. Each owns one
+  representation dependency family, decoder, result type, cancellation
+  behavior, and mount disposal.
 - `apps/finance-demo` is a vanilla TypeScript example that loads every codec.
   `apps/docs` builds the public documentation.
 
@@ -42,7 +44,9 @@ reads native receipts, and publishes verified bytes.
 Stable domain modules depend on stable types. Private marimo imports stay below
 `packages/python/src/marimo_export/_marimo/compat`. Browser core imports no
 table, array, chart, or widget runtime. Each specialized loader declares the
-runtime it imports.
+runtime it imports. The browser package publishes loader facades through
+`@marimo-team/marimo-export/loader/*` and declares specialized runtimes as
+optional peers.
 
 Add dependencies to the smallest workspace member that uses them. Every
 directly imported Python package belongs in `packages/python/pyproject.toml`.
@@ -146,6 +150,11 @@ immutable `Publication`, `PublishedState`, and `PublishedOutput` values.
 A loader validates its inner representation, bounds allocation, checks the
 abort signal, and owns every runtime dependency it imports. A mount returns an
 idempotent disposable view.
+
+Keep loader implementations in their private `packages/loader-*` workspace.
+Expose each public subpath through a `packages/browser/src/loader` facade that
+uses the `#loaders/*` TypeScript path. Consumers import the public package
+subpath.
 
 The finance app uses DOM APIs, TypeScript, HTML, CSS, and Vite+. Keep it
 framework-free and inspectable.

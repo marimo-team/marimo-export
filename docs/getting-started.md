@@ -52,10 +52,14 @@ marimo-export verify dist/notebook
 Serve the directory through any static HTTP host. The URL passed to the browser
 client is the directory that contains `index.json`:
 
+```bash
+pnpm add @marimo-team/marimo-export hyparquet vega-embed
+```
+
 ```ts
 import { openPublication } from "@marimo-team/marimo-export";
-import { parquetRowsLoader } from "@marimo-team/marimo-export-loader-parquet";
-import { vegaLiteLoader } from "@marimo-team/marimo-export-loader-vegalite";
+import { parquetRowsLoader } from "@marimo-team/marimo-export/loader/parquet";
+import { vegaLiteLoader } from "@marimo-team/marimo-export/loader/vegalite";
 
 const publication = await openPublication("/notebook/");
 const state = publication.state("baseline");

@@ -1,3 +1,4 @@
+import type { EmbedOptions, Result as VegaEmbedResult, VisualizationSpec } from "vega-embed";
 import { defineBlobAssetLoader } from "@marimo-team/marimo-export";
 import type {
   BlobAssetLoadInput,
@@ -5,7 +6,6 @@ import type {
   JsonObject,
   MountedView,
 } from "@marimo-team/marimo-export";
-import type { EmbedOptions, Result as VegaEmbedResult, VisualizationSpec } from "vega-embed";
 
 const MEDIA_TYPE = /^application\/vnd\.vegalite\.v[1-9]\d*\+json$/u;
 const OWNED_CLASSES = ["vega-embed", "has-actions"] as const;

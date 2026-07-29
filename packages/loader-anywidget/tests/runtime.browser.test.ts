@@ -1,6 +1,6 @@
-import { anyWidgetLoader } from "@marimo-team/marimo-export-loader-anywidget";
 import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 
+import { anyWidgetLoader } from "../src/index.js";
 import { moduleUrl, notification, outputFor, payload } from "./fixture.js";
 
 interface RuntimeCounters {

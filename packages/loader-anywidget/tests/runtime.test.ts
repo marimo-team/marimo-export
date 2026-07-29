@@ -1,5 +1,5 @@
-import { anyWidgetLoader } from "@marimo-team/marimo-export-loader-anywidget";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
+import { anyWidgetLoader } from "../src/index.js";
 import { combineAbortSignals } from "../src/runtime/abort.js";
 import { resolveAnyWidgetModule } from "../src/runtime/binding.js";
 import { modelProxy } from "../src/runtime/model-proxy.js";

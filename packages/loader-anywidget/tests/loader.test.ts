@@ -1,8 +1,7 @@
-import { anyWidgetLoader } from "@marimo-team/marimo-export-loader-anywidget";
-import type { LoadedAnyWidget } from "@marimo-team/marimo-export-loader-anywidget";
 import type { BlobAssetLoader } from "@marimo-team/marimo-export";
 import { describe, expect, expectTypeOf, test } from "vite-plus/test";
 import producerPayload from "../../python/tests/fixtures/anywidget-v1.json";
+import { anyWidgetLoader, type LoadedAnyWidget } from "../src/index.js";
 import { moduleUrl, notification, outputFor, payload } from "./fixture.js";
 
 describe("anywidget", () => {

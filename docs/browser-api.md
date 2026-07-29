@@ -1,16 +1,39 @@
 # Browser API
 
-Install core plus the loader families used by the application:
+Install the browser package and the peer dependencies for the loaders used by
+the application:
 
 ```bash
 pnpm add \
   @marimo-team/marimo-export \
-  @marimo-team/marimo-export-loader-arrow \
-  @marimo-team/marimo-export-loader-numpy \
-  @marimo-team/marimo-export-loader-parquet \
-  @marimo-team/marimo-export-loader-anywidget \
-  @marimo-team/marimo-export-loader-vegalite
+  @anywidget/types \
+  @uwdata/flechette \
+  hyparquet \
+  lz4js \
+  vega-embed
 ```
+
+Each loader has a dedicated package subpath:
+
+```ts
+import { imageLoader, openPublication, scalarLoader } from "@marimo-team/marimo-export";
+import { anyWidgetLoader } from "@marimo-team/marimo-export/loader/anywidget";
+import { arrowTableLoader } from "@marimo-team/marimo-export/loader/arrow";
+import { numpyLoader } from "@marimo-team/marimo-export/loader/numpy";
+import { parquetRowsLoader } from "@marimo-team/marimo-export/loader/parquet";
+import { vegaLiteLoader } from "@marimo-team/marimo-export/loader/vegalite";
+```
+
+The specialized peers are optional at the package root. Install the peers for
+the subpaths imported by the application:
+
+| Loader subpath     | Peer dependencies            |
+| ------------------ | ---------------------------- |
+| `loader/anywidget` | `@anywidget/types`           |
+| `loader/arrow`     | `@uwdata/flechette`, `lz4js` |
+| `loader/numpy`     | none                         |
+| `loader/parquet`   | `hyparquet`                  |
+| `loader/vegalite`  | `vega-embed`                 |
 
 ## Open and resolve
 

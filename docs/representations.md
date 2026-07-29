@@ -30,15 +30,20 @@ validates its result.
 
 ## Browser loaders
 
-| Package                                       | Result                        |
-| --------------------------------------------- | ----------------------------- |
-| `@marimo-team/marimo-export-loader-numpy`     | typed array plus NPY metadata |
-| `@marimo-team/marimo-export-loader-arrow`     | Flechette table               |
-| `@marimo-team/marimo-export-loader-parquet`   | Hyparquet row objects         |
-| `@marimo-team/marimo-export-loader-anywidget` | mountable local model graph   |
-| `@marimo-team/marimo-export-loader-vegalite`  | mountable Vega-Lite chart     |
+All browser loaders are entry points of `@marimo-team/marimo-export`.
 
-Core supplies scalar and image loaders.
+| Import subpath     | Peer dependencies            | Result                        |
+| ------------------ | ---------------------------- | ----------------------------- |
+| `loader/numpy`     | none                         | typed array plus NPY metadata |
+| `loader/arrow`     | `@uwdata/flechette`, `lz4js` | Flechette table               |
+| `loader/parquet`   | `hyparquet`                  | Hyparquet row objects         |
+| `loader/anywidget` | `@anywidget/types`           | mountable local model graph   |
+| `loader/vegalite`  | `vega-embed`                 | mountable Vega-Lite chart     |
+
+Import each row from
+`@marimo-team/marimo-export/<subpath>`. The package root supplies scalar and
+image loaders. Loader peers are optional at the root, so an application
+installs the runtimes for the subpaths it imports.
 
 ## Custom representation
 

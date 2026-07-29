@@ -1,15 +1,13 @@
-# @marimo-team/marimo-export-loader-anywidget
+# AnyWidget loader workspace
 
-`anyWidgetLoader()` validates an AnyWidget `BlobAsset` snapshot and returns an
-isolated browser model graph.
+This private workspace package owns AnyWidget snapshot validation, the local
+browser model graph, module resolution, mounting, cancellation, and disposal.
 
-```bash
-pnpm add @marimo-team/marimo-export \
-  @marimo-team/marimo-export-loader-anywidget
-```
+Consumers install `@marimo-team/marimo-export` with `@anywidget/types`, then
+import the public loader subpath:
 
 ```ts
-import { anyWidgetLoader } from "@marimo-team/marimo-export-loader-anywidget";
+import { anyWidgetLoader } from "@marimo-team/marimo-export/loader/anywidget";
 
 const widget = await output.load(anyWidgetLoader());
 const mounted = await widget.mount(host);

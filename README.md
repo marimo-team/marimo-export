@@ -164,22 +164,22 @@ dashboard = bundle(widget)
 
 Choose the representation that fits the client:
 
-| Notebook result    | Published representation | Browser loader        |
-| ------------------ | ------------------------ | --------------------- |
-| Scalar value       | marimo scalar            | `scalarLoader()`      |
-| NumPy array        | NPY                      | `numpyLoader()`       |
-| Arrow table        | Arrow IPC file           | `arrowTableLoader()`  |
-| DataFrame or table | Parquet                  | `parquetRowsLoader()` |
-| Altair chart       | Vega-Lite spec           | `vegaLiteLoader()`    |
-| Altair chart       | PNG                      | `imageLoader()`       |
-| AnyWidget          | AnyWidget bundle         | `anyWidgetLoader()`   |
+| Notebook result    | Published representation | Browser import                                |
+| ------------------ | ------------------------ | --------------------------------------------- |
+| Scalar value       | marimo scalar            | `@marimo-team/marimo-export`                  |
+| NumPy array        | NPY                      | `@marimo-team/marimo-export/loader/numpy`     |
+| Arrow table        | Arrow IPC file           | `@marimo-team/marimo-export/loader/arrow`     |
+| DataFrame or table | Parquet                  | `@marimo-team/marimo-export/loader/parquet`   |
+| Altair chart       | Vega-Lite spec           | `@marimo-team/marimo-export/loader/vegalite`  |
+| Altair chart       | PNG                      | `@marimo-team/marimo-export`                  |
+| AnyWidget          | AnyWidget bundle         | `@marimo-team/marimo-export/loader/anywidget` |
 
 Exporter calls participate in marimo execution and caching like other notebook
 code. Custom exporters can publish another media type through
 `BlobAsset`, and a matching browser loader can decode or mount it.
 
-[Read the representations guide](docs/representations.md) for package names,
-media types, and the custom loader contract.
+[Read the representations guide](docs/representations.md) for loader peer
+dependencies, media types, and the custom loader contract.
 
 ## Build from a file or capture a live session
 

@@ -11,6 +11,11 @@
   "sideEffects": false,
   "exports": {
     ".": "./src/index.ts",
+    "./loader/anywidget": "./src/loader/anywidget.ts",
+    "./loader/arrow": "./src/loader/arrow.ts",
+    "./loader/numpy": "./src/loader/numpy.ts",
+    "./loader/parquet": "./src/loader/parquet.ts",
+    "./loader/vegalite": "./src/loader/vegalite.ts",
     "./package.json": "./package.json"
   },
   "publishConfig": {
@@ -18,6 +23,26 @@
       ".": {
         "types": "./dist/index.d.mts",
         "import": "./dist/index.mjs"
+      },
+      "./loader/anywidget": {
+        "types": "./dist/loader/anywidget.d.mts",
+        "import": "./dist/loader/anywidget.mjs"
+      },
+      "./loader/arrow": {
+        "types": "./dist/loader/arrow.d.mts",
+        "import": "./dist/loader/arrow.mjs"
+      },
+      "./loader/numpy": {
+        "types": "./dist/loader/numpy.d.mts",
+        "import": "./dist/loader/numpy.mjs"
+      },
+      "./loader/parquet": {
+        "types": "./dist/loader/parquet.d.mts",
+        "import": "./dist/loader/parquet.mjs"
+      },
+      "./loader/vegalite": {
+        "types": "./dist/loader/vegalite.d.mts",
+        "import": "./dist/loader/vegalite.mjs"
       },
       "./package.json": "./package.json"
     },
@@ -35,8 +60,37 @@
     "@msgpack/msgpack": "catalog:"
   },
   "devDependencies": {
+    "@anywidget/types": "catalog:",
     "@types/node": "catalog:",
+    "@uwdata/flechette": "catalog:",
+    "hyparquet": "catalog:",
+    "lz4js": "catalog:",
     "typescript": "catalog:",
+    "vega-embed": "catalog:",
     "vite-plus": "catalog:"
+  },
+  "peerDependencies": {
+    "@anywidget/types": "^0.4.0",
+    "@uwdata/flechette": "^2.5.0",
+    "hyparquet": "^1.26.2",
+    "lz4js": "0.2.0",
+    "vega-embed": "^7.1.0"
+  },
+  "peerDependenciesMeta": {
+    "@anywidget/types": {
+      "optional": true
+    },
+    "@uwdata/flechette": {
+      "optional": true
+    },
+    "hyparquet": {
+      "optional": true
+    },
+    "lz4js": {
+      "optional": true
+    },
+    "vega-embed": {
+      "optional": true
+    }
   }
 }
