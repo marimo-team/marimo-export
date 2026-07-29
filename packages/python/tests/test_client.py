@@ -14,7 +14,7 @@ from marimo_export import (
 )
 from marimo_export._json import JsonObject, sha256_bytes
 from marimo_export._remote import BridgeError, SessionInfo
-from marimo_export.errors import PublicationError, SessionError, TransportError
+from marimo_export.errors import ExecutionError, PublicationError, SessionError, TransportError
 from marimo_export.publication import (
     AssetRef,
     NotebookProvenance,
@@ -240,9 +240,48 @@ def test_capture_releases_transfer_before_committing(
         "sessions",
         "capture",
         "download",
+        "inspect",
         "release",
     ]
     assert open_publication(output).state("baseline").output("answer").asset_bytes() == payload
+
+
+def test_capture_rejects_a_live_document_change_before_commit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _ChangedDocumentTransport(_Transport):
+        def invoke(
+            self,
+            session_id: str,
+            operation: str,
+            params: Mapping[str, object],
+        ) -> dict[str, object]:
+            response = super().invoke(session_id, operation, params)
+            if operation == "inspect":
+                response["document_sha256"] = "b" * 64
+            return response
+
+    transport = _ChangedDocumentTransport()
+    output = tmp_path / "publication"
+    with (
+        _client(monkeypatch, transport) as client,
+        pytest.raises(ExecutionError) as raised,
+    ):
+        client.session().capture(spec=_spec(), output=output)
+
+    assert raised.value.code == "parent_document_changed"
+    assert raised.value.details == {
+        "before": "a" * 64,
+        "after": "b" * 64,
+    }
+    assert [call[0] for call in transport.calls] == [
+        "sessions",
+        "capture",
+        "inspect",
+        "release",
+    ]
+    assert not output.exists()
 
 
 def test_capture_release_failure_leaves_destination_absent(

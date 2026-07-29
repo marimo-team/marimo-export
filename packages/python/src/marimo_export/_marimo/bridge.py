@@ -7,7 +7,6 @@ from marimo_export._diagnostics import safe_diagnostic
 from marimo_export._execution import normalize_matrix
 from marimo_export._json import JsonObject, canonical_bytes, decode_json_object
 from marimo_export._marimo.compat import (
-    current_document_sha256,
     declared_ui_values,
     execute_state,
     flush_native_caches,
@@ -183,17 +182,7 @@ async def _capture(spec: ExportSpec) -> JsonObject:
     finally:
         consistency_error: BaseException | None = None
         try:
-            after_digest = await current_document_sha256()
             after_ui = await declared_ui_values(ui_names)
-            if after_digest != baseline.document_sha256:
-                raise ExecutionError(
-                    "the parent notebook document changed during capture",
-                    code="parent_document_changed",
-                    details={
-                        "before": baseline.document_sha256,
-                        "after": after_digest,
-                    },
-                )
             if after_ui != parent_ui:
                 raise ExecutionError(
                     "the parent UI state changed during capture",

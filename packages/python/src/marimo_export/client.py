@@ -299,6 +299,16 @@ class Session:
                 response.get("fresh_child_timings"),
                 states=len(index.states),
             )
+            live_document_sha256 = self.inspect().document_sha256
+            if live_document_sha256 != index.notebook.document_sha256:
+                raise ExecutionError(
+                    "the parent notebook document changed during capture",
+                    code="parent_document_changed",
+                    details={
+                        "before": index.notebook.document_sha256,
+                        "after": live_document_sha256,
+                    },
+                )
             self._release(ticket)
             ticket = None
             return _CaptureData(

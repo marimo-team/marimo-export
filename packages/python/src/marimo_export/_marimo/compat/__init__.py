@@ -364,13 +364,6 @@ async def inspect_baseline() -> Baseline:
         )
 
 
-async def current_document_sha256() -> str:
-    from marimo._code_mode import get_context
-
-    async with get_context() as context:
-        return _document_sha256(context.cells)
-
-
 async def declared_ui_values(names: tuple[str, ...]) -> JsonObject:
     from marimo._code_mode import get_context
     from marimo._plugins.ui._core.ui_element import UIElement
@@ -1293,7 +1286,6 @@ __all__ = [
     "NativeReceipt",
     "StateExecution",
     "blob_asset_type",
-    "current_document_sha256",
     "declared_ui_values",
     "execute_state",
     "flush_native_caches",
