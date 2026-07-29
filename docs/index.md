@@ -13,7 +13,7 @@ AnyWidget.
 
 ## A real notebook and a concrete ExportSpec
 
-The getting-started guide downloads the public
+The getting-started guide runs a pinned snapshot of the public
 [`02_linear_program.py`](https://github.com/marimo-team/learn/blob/477e2cbf7c31fc05dcf307b1e9c92c36514a32f3/optimization/02_linear_program.py)
 notebook from the marimo learn repository. The notebook defines:
 
@@ -31,10 +31,13 @@ This complete ExportSpec publishes three widget states and two outputs:
 provides a sparse frontend-value override. `outputs` gives a public name to
 each notebook definition that the client can load.
 
-The build leaves the source notebook unchanged:
+Run the checked-in example from its locked uv project. The build leaves the
+source notebook unchanged:
 
 ```bash
-marimo-export build 02_linear_program.py \
+cd marimo-export/docs/examples
+
+uv run marimo-export build 02_linear_program.py \
   --spec linear-program.export.yaml \
   --output publication
 ```
@@ -54,8 +57,8 @@ const solution = await state.output("solution").load(numpyLoader());
 console.log(solution.shape, solution.data);
 ```
 
-The [getting-started guide](getting-started.md) provides the exact download,
-environment, build, verification, Vite client, and expected browser result.
+The [getting-started guide](getting-started.md) provides the exact environment,
+build, verification, Vite client, and expected browser result.
 
 ## Build from a file or capture a live kernel
 
@@ -63,7 +66,7 @@ Use `build` when marimo-export should start the notebook, execute the declared
 matrix, and stop its loopback server:
 
 ```bash
-marimo-export build 02_linear_program.py \
+uv run marimo-export build 02_linear_program.py \
   --spec linear-program.export.yaml \
   --output publication
 ```
@@ -72,7 +75,7 @@ Use `capture` when a live kernel already holds credentials, configured
 services, or expensive results:
 
 ```bash
-marimo-export capture http://127.0.0.1:2718 \
+uv run marimo-export capture http://127.0.0.1:2718 \
   --session SESSION_ID \
   --spec linear-program.export.yaml \
   --output publication
