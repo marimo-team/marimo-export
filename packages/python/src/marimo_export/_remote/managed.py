@@ -292,6 +292,17 @@ class ManagedServer:
         if process is None:
             return
         failures: list[BaseException] = []
+        reaped = False
+
+        def is_running() -> bool:
+            if reaped:
+                return False
+            try:
+                return process.poll() is None
+            except BaseException as error:
+                failures.append(error)
+                return True
+
         groups = owned_groups
         if groups is None:
             try:
@@ -299,29 +310,31 @@ class ManagedServer:
             except BaseException as error:
                 failures.append(error)
                 groups = {process.pid} if sys.platform != "win32" else set()
-        if sys.platform == "win32" and process.poll() is None:
+        if sys.platform == "win32" and is_running():
             try:
                 self._terminate_windows_tree(process)
             except BaseException as error:
                 failures.append(error)
-        if process.poll() is None:
+        if is_running():
             try:
                 self._signal_process(process, force=False)
             except BaseException as error:
                 failures.append(error)
             try:
                 process.wait(timeout=self.timeout)
+                reaped = True
             except subprocess.TimeoutExpired:
                 pass
             except BaseException as error:
                 failures.append(error)
-        if process.poll() is None:
+        if is_running():
             try:
                 self._signal_process(process, force=True)
             except BaseException as error:
                 failures.append(error)
             try:
                 process.wait(timeout=min(self.timeout, 5.0))
+                reaped = True
             except subprocess.TimeoutExpired:
                 pass
             except BaseException as error:
@@ -331,14 +344,15 @@ class ManagedServer:
                 self._kill_owned_process_groups(groups)
             except BaseException as error:
                 failures.append(error)
-            if process.poll() is None:
+            if is_running():
                 try:
                     process.wait(timeout=min(self.timeout, 1.0))
+                    reaped = True
                 except subprocess.TimeoutExpired:
                     pass
                 except BaseException as error:
                     failures.append(error)
-        if process.poll() is None:
+        if is_running():
             failures.append(
                 TransportError(
                     "the managed marimo process did not stop",
