@@ -27,6 +27,33 @@ def encode(value, *, increment):
     )
 
 
+def _write_dependent_exporter(path: Path) -> None:
+    path.write_text(
+        """
+from helper import transform
+from marimo_export import BlobAsset
+
+
+def encode(value):
+    return BlobAsset(
+        data=transform(value).encode("utf-8"),
+        media_type="application/vnd.example.summary.v1+text",
+    )
+""".lstrip(),
+        encoding="utf-8",
+    )
+
+
+def _write_helper(path: Path, label: str) -> None:
+    path.write_text(
+        f"""
+def transform(value):
+    return "{label}:" + str(value)
+""".lstrip(),
+        encoding="utf-8",
+    )
+
+
 def _capture(
     notebook: Path,
     spec: ExportSpec,
@@ -108,3 +135,59 @@ if __name__ == "__main__":
         == b"second:42"
     )
     assert notebook.read_bytes() == source
+
+
+def test_custom_exporter_cache_identity_tracks_local_helpers(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    notebook = tmp_path / "notebook.py"
+    notebook.write_text(
+        """
+import marimo
+
+app = marimo.App()
+
+
+@app.cell
+def _():
+    answer = 41
+    return (answer,)
+
+
+if __name__ == "__main__":
+    app.run()
+""".lstrip(),
+        encoding="utf-8",
+    )
+    _write_dependent_exporter(tmp_path / "publication_exports.py")
+    helper = tmp_path / "helper.py"
+    _write_helper(helper, "first")
+    existing_pythonpath = os.environ.get("PYTHONPATH")
+    pythonpath = str(tmp_path)
+    if existing_pythonpath:
+        pythonpath = f"{pythonpath}{os.pathsep}{existing_pythonpath}"
+    monkeypatch.setenv("PYTHONPATH", pythonpath)
+    spec = ExportSpec(
+        inputs=(),
+        states={"baseline": {}},
+        outputs={
+            "summary": OutputSpec(
+                source="answer",
+                exporter=importable("publication_exports:encode"),
+            )
+        },
+    )
+
+    first_cache = _capture(notebook, spec, tmp_path / "first")
+    warm_cache = _capture(notebook, spec, tmp_path / "warm")
+    _write_helper(helper, "changed-helper")
+    changed_cache = _capture(notebook, spec, tmp_path / "changed")
+
+    assert first_cache == (0, 1)
+    assert warm_cache == (1, 0)
+    assert changed_cache == (0, 1)
+    assert (
+        open_publication(tmp_path / "changed").state("baseline").output("summary").blob_asset().data
+        == b"changed-helper:41"
+    )

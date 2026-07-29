@@ -6,6 +6,7 @@ import hashlib
 import importlib
 import importlib.metadata
 import inspect
+import sys
 import threading
 import time
 import unicodedata
@@ -53,6 +54,7 @@ _CAPABILITIES = (
     "synthetic_projection_cells",
 )
 _MAX_PYTHON_TYPE_BYTES = 512
+_MAX_EXPORTER_DEPENDENCIES = 256
 
 
 @dataclass(frozen=True, slots=True)
@@ -443,7 +445,9 @@ def _exporter_identity(
     distributions: tuple[str, ...],
     package_distributions: Mapping[str, list[str]],
 ) -> str:
+    dependencies, dependency_modules = _exporter_dependencies(value, module)
     payload: JsonObject = {
+        "dependencies": dependencies,
         "name": name,
         "module": str(getattr(module, "__name__", "")),
         "symbol_type": f"{type(value).__module__}.{type(value).__qualname__}",
@@ -472,6 +476,10 @@ def _exporter_identity(
     top_level = str(getattr(module, "__name__", "")).partition(".")[0]
     if top_level:
         package_names.update(package_distributions.get(top_level, ()))
+    for dependency_module in dependency_modules:
+        dependency_top_level = dependency_module.partition(".")[0]
+        if dependency_top_level:
+            package_names.update(package_distributions.get(dependency_top_level, ()))
     versions: JsonObject = {}
     for distribution in sorted(package_names):
         with suppress(importlib.metadata.PackageNotFoundError):
@@ -479,6 +487,154 @@ def _exporter_identity(
     if versions:
         payload["distributions"] = versions
     return hashlib.sha256(canonical_bytes(payload)).hexdigest()
+
+
+def _exporter_dependencies(value: Any, module: Any) -> tuple[JsonObject, frozenset[str]]:
+    records: JsonObject = {}
+    module_names: set[str] = set()
+    visited: set[int] = set()
+    local_root = _module_tree_root(module)
+
+    def is_local_module(dependency: Any) -> bool:
+        origin = _module_origin(dependency)
+        if origin is None or local_root is None:
+            return False
+        try:
+            origin.relative_to(local_root)
+        except ValueError:
+            return False
+        return True
+
+    def record(name: str, digest: str) -> None:
+        if name in records:
+            return
+        if len(records) >= _MAX_EXPORTER_DEPENDENCIES:
+            raise ValueError(
+                f"exporter dependency graph exceeds {_MAX_EXPORTER_DEPENDENCIES} entries"
+            )
+        records[name] = digest
+
+    def visit_module(dependency: Any, *, expand: bool) -> None:
+        identifier = id(dependency)
+        if identifier in visited:
+            return
+        visited.add(identifier)
+        name = str(getattr(dependency, "__name__", ""))
+        if name:
+            module_names.add(name)
+        origin = _module_origin(dependency)
+        if origin is not None:
+            digest = _file_digest(origin)
+            if digest is not None:
+                record(f"module:{name}", digest)
+        if not expand or not is_local_module(dependency):
+            return
+        namespace = getattr(dependency, "__dict__", {})
+        for attribute in sorted(namespace):
+            member = namespace[attribute]
+            if getattr(member, "__module__", None) != name:
+                continue
+            if inspect.isfunction(member) or inspect.isclass(member):
+                visit_callable(member)
+
+    def visit_callable(dependency: Any) -> None:
+        if inspect.ismethod(dependency):
+            dependency = dependency.__func__
+        identifier = id(dependency)
+        if identifier in visited:
+            return
+        visited.add(identifier)
+        module_name = str(getattr(dependency, "__module__", ""))
+        qualname = str(
+            getattr(
+                dependency,
+                "__qualname__",
+                getattr(dependency, "__name__", type(dependency).__qualname__),
+            )
+        )
+        owner = sys.modules.get(module_name)
+        if owner is not None:
+            visit_module(owner, expand=False)
+        code = getattr(dependency, "__code__", None)
+        if code is None and inspect.isclass(dependency):
+            if owner is None or not is_local_module(owner):
+                return
+            for attribute in sorted(vars(dependency)):
+                member = inspect.getattr_static(dependency, attribute)
+                if isinstance(member, (classmethod, staticmethod)):
+                    member = member.__func__
+                if inspect.isfunction(member):
+                    visit_callable(member)
+            return
+        if code is None:
+            call = inspect.getattr_static(type(dependency), "__call__", None)
+            if inspect.isfunction(call):
+                visit_callable(call)
+            return
+        from marimo._save.hash import hash_module
+
+        record(f"callable:{module_name}:{qualname}", hash_module(code).hex())
+        try:
+            closure = inspect.getclosurevars(dependency)
+        except TypeError:
+            return
+        for dependency_name, referenced in sorted({**closure.globals, **closure.nonlocals}.items()):
+            visit_reference(
+                referenced,
+                f"value:{module_name}:{qualname}:{dependency_name}",
+            )
+
+    def visit_reference(dependency: Any, label: str) -> None:
+        if inspect.ismodule(dependency):
+            visit_module(dependency, expand=True)
+            return
+        if (
+            inspect.isfunction(dependency)
+            or inspect.ismethod(dependency)
+            or inspect.isclass(dependency)
+        ):
+            visit_callable(dependency)
+            return
+        try:
+            portable = json_value(dependency, label)
+        except (TypeError, ValueError):
+            owner = sys.modules.get(str(getattr(type(dependency), "__module__", "")))
+            if owner is not None:
+                visit_module(owner, expand=False)
+            call = inspect.getattr_static(type(dependency), "__call__", None)
+            if inspect.isfunction(call):
+                visit_callable(call)
+            return
+        record(label, hashlib.sha256(canonical_bytes(portable)).hexdigest())
+
+    visit_module(module, expand=False)
+    visit_callable(value)
+    return records, frozenset(module_names)
+
+
+def _module_origin(module: Any) -> Path | None:
+    origin = getattr(getattr(module, "__spec__", None), "origin", None)
+    if not isinstance(origin, str) or origin in {"built-in", "frozen"}:
+        origin = getattr(module, "__file__", None)
+    if not isinstance(origin, str):
+        return None
+    try:
+        path = Path(origin).resolve(strict=True)
+    except (OSError, RuntimeError):
+        return None
+    return path if path.is_file() else None
+
+
+def _module_tree_root(module: Any) -> Path | None:
+    origin = _module_origin(module)
+    if origin is None:
+        return None
+    parts = str(getattr(module, "__name__", "")).split(".")
+    levels = max(0, len(parts) - (1 if origin.name == "__init__.py" else 2))
+    root = origin.parent
+    for _ in range(levels):
+        root = root.parent
+    return root
 
 
 def _file_digest(path: Path) -> str | None:
