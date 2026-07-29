@@ -1,0 +1,110 @@
+from __future__ import annotations
+
+import os
+from pathlib import Path
+
+import pytest
+from marimo_export import ExportSpec, OutputSpec, capture, open_publication
+from marimo_export._remote.managed import ManagedServer
+from marimo_export.exporters import importable
+
+
+def _write_exporter(path: Path, label: str) -> None:
+    path.write_text(
+        f"""
+from marimo_export import BlobAsset
+
+
+def encode(value, *, increment):
+    return BlobAsset(
+        data=f"{label}:{{value + increment}}".encode("utf-8"),
+        media_type="application/vnd.example.summary.v1+text",
+        filename="summary.txt",
+        metadata={{"label": "{label}"}},
+    )
+""".lstrip(),
+        encoding="utf-8",
+    )
+
+
+def _capture(
+    notebook: Path,
+    spec: ExportSpec,
+    output: Path,
+) -> tuple[int, int]:
+    server = ManagedServer(notebook, timeout=30)
+    try:
+        server.activate()
+        result = capture(
+            server.base_url,
+            session=server.session_id,
+            access_token=server.access_token,
+            spec=spec,
+            output=output,
+            timeout=30,
+        )
+        return result.projection_cache.hits, result.projection_cache.misses
+    finally:
+        server.stop()
+
+
+def test_capture_sideloads_an_importable_exporter_and_invalidates_changed_code(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    notebook = tmp_path / "notebook.py"
+    notebook.write_text(
+        """
+import marimo
+
+app = marimo.App()
+
+
+@app.cell
+def _():
+    answer = 41
+    return (answer,)
+
+
+if __name__ == "__main__":
+    app.run()
+""".lstrip(),
+        encoding="utf-8",
+    )
+    source = notebook.read_bytes()
+    exporter = tmp_path / "publication_exports.py"
+    _write_exporter(exporter, "first")
+    existing_pythonpath = os.environ.get("PYTHONPATH")
+    pythonpath = str(tmp_path)
+    if existing_pythonpath:
+        pythonpath = f"{pythonpath}{os.pathsep}{existing_pythonpath}"
+    monkeypatch.setenv("PYTHONPATH", pythonpath)
+
+    spec = ExportSpec(
+        inputs=(),
+        states={"baseline": {}},
+        outputs={
+            "summary": OutputSpec(
+                source="answer",
+                exporter=importable("publication_exports:encode", increment=1),
+            )
+        },
+    )
+
+    first_cache = _capture(notebook, spec, tmp_path / "first")
+    warm_cache = _capture(notebook, spec, tmp_path / "warm")
+    _write_exporter(exporter, "second")
+    changed_cache = _capture(notebook, spec, tmp_path / "changed")
+
+    assert first_cache == (0, 1)
+    assert warm_cache == (1, 0)
+    assert changed_cache == (0, 1)
+    assert (
+        open_publication(tmp_path / "first").state("baseline").output("summary").blob_asset().data
+        == b"first:42"
+    )
+    assert (
+        open_publication(tmp_path / "changed").state("baseline").output("summary").blob_asset().data
+        == b"second:42"
+    )
+    assert notebook.read_bytes() == source

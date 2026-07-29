@@ -74,3 +74,7 @@ Reference the callable as `module:function` in the ExportSpec. The module and
 its dependencies must be available in the selected kernel. The callable
 receives one source value plus portable keyword options. No Python source or
 serialized closure enters the spec.
+
+Preflight fingerprints the resolved module, callable code, available owning
+package version, and declared built-in runtime dependencies. Changing one of
+those inputs invalidates the projection cache.

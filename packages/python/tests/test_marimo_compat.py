@@ -1,17 +1,21 @@
 from __future__ import annotations
 
-from types import SimpleNamespace
+import sys
+from types import ModuleType, SimpleNamespace
 from typing import Any, cast
 
 import marimo._runtime.executor.lifecycles.cached as cached_lifecycle
 import marimo._save.loaders as native_loaders
 import pytest
+from marimo_export._execution import MatrixPlan, OutputProjection
 from marimo_export._marimo.compat import (
     _document_sha256,
     _track_upstream_cache,
     flush_native_caches,
+    preflight_exporters,
     require_capabilities,
 )
+from marimo_export.exporters import importable
 
 
 def test_attached_marimo_exposes_live_capture_capabilities() -> None:
@@ -109,3 +113,35 @@ def test_upstream_cache_trackers_restore_native_binding_out_of_order(
         if cached_lifecycle.cache_attempt_from_hash is not native:
             second.__exit__(None, None, None)
             first.__exit__(None, None, None)
+
+
+def test_exporter_preflight_fingerprints_sideloaded_callable_code(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module_name = "marimo_export_test_sideload"
+    projection = OutputProjection(
+        name="summary",
+        source="value",
+        exporter=importable(f"{module_name}:encode"),
+    )
+    plan = MatrixPlan(
+        states=(),
+        inputs=(),
+        outputs=("summary",),
+        projections={"summary": projection},
+        state_name="marimo_export_state_0123456789abcdef",
+        state_code="marimo_export_state_0123456789abcdef = 'state'",
+    )
+
+    first = ModuleType(module_name)
+    exec("def encode(value):\n    return value + 1\n", first.__dict__)
+    monkeypatch.setitem(sys.modules, module_name, first)
+    first_identity = preflight_exporters(plan)["summary"]
+
+    second = ModuleType(module_name)
+    exec("def encode(value):\n    return value + 2\n", second.__dict__)
+    monkeypatch.setitem(sys.modules, module_name, second)
+    second_identity = preflight_exporters(plan)["summary"]
+
+    assert len(first_identity) == 64
+    assert first_identity != second_identity

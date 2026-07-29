@@ -156,7 +156,7 @@ async def _capture(spec: ExportSpec) -> JsonObject:
     plan = normalize_matrix(spec, baseline)
     ui_names = tuple(name for name in plan.inputs if baseline.definitions[name].kind == "ui")
     parent_ui = await declared_ui_values(ui_names)
-    preflight_exporters(plan)
+    exporter_identities = preflight_exporters(plan)
     flush_native_caches()
     primary: BaseException | None = None
     receipts = []
@@ -169,7 +169,7 @@ async def _capture(spec: ExportSpec) -> JsonObject:
     child_cleanup_seconds = 0.0
     try:
         for state in plan.states:
-            executed = await execute_state(state, plan)
+            executed = await execute_state(state, plan, exporter_identities)
             receipts.extend(executed.receipts)
             upstream_hits += executed.upstream_cache.hits
             upstream_misses += executed.upstream_cache.misses

@@ -145,6 +145,7 @@ def test_exporter_projection_is_a_deterministic_marimo_leaf() -> None:
             exporter=altair.png(scale=2),
         ),
         "marimo_export_state_0123456789abcdef",
+        exporter_identity="b" * 64,
     )
     tree = ast.parse(code)
     cell = compile_cell(code, cell_id=CellId_t("projection"))
@@ -154,10 +155,13 @@ def test_exporter_projection_is_a_deterministic_marimo_leaf() -> None:
         "marimo_export_state_0123456789abcdef",
         "performance",
     }
-    imported = tree.body[1]
+    identity = tree.body[1]
+    assert isinstance(identity, ast.Assign)
+    assert ast.unparse(identity) == (f"_marimo_export_exporter_identity = 'sha256:{'b' * 64}'")
+    imported = tree.body[2]
     assert isinstance(imported, ast.ImportFrom)
     assert imported.module == "marimo_export.exporters._runtime.altair"
-    call = tree.body[2]
+    call = tree.body[3]
     assert isinstance(call, ast.Expr)
     assert isinstance(call.value, ast.Call)
     assert ast.unparse(call.value) == "_marimo_export_exporter(performance, scale=2)"
@@ -175,6 +179,7 @@ def test_custom_exporter_projection_uses_an_explicit_importable_callable() -> No
             ),
         ),
         "marimo_export_state_0123456789abcdef",
+        exporter_identity="c" * 64,
     )
 
     assert "from acme.exports import encode as _marimo_export_exporter" in code

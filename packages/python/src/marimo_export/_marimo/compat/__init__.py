@@ -4,6 +4,8 @@ import copy
 import gc
 import hashlib
 import importlib
+import importlib.metadata
+import inspect
 import threading
 import time
 import unicodedata
@@ -240,6 +242,9 @@ def require_capabilities() -> MarimoCapabilities:
         from marimo._save.hash import (
             cache_attempt_from_hash as direct_cache_attempt,
         )
+        from marimo._save.hash import (
+            hash_module,
+        )
         from marimo._save.loaders import flush_active_caches
         from marimo._save.loaders.lazy import LazyLoader
         from marimo._save.stubs import BlobAsset as NativeBlobAsset
@@ -258,6 +263,7 @@ def require_capabilities() -> MarimoCapabilities:
         (prune_cells_for_overrides, "definition_overrides"),
         (lifecycle_cache_attempt, "cell_cache_receipts"),
         (direct_cache_attempt, "cell_cache_receipts"),
+        (hash_module, "cell_cache_receipts"),
         (flush_active_caches, "cell_cache_receipts"),
         (LazyLoader, "cell_cache_receipts"),
         (CellDef, "synthetic_projection_cells"),
@@ -373,40 +379,123 @@ async def declared_ui_values(names: tuple[str, ...]) -> JsonObject:
     return result
 
 
-def preflight_exporters(plan: MatrixPlan) -> None:
-    """Resolve every selected exporter in the attached kernel environment."""
+def preflight_exporters(plan: MatrixPlan) -> Mapping[str, str]:
+    """Resolve selected exporters and return their cache identities."""
 
-    for output, projection in plan.projections.items():
-        if projection.exporter is None:
+    selected = {
+        output: projection.exporter
+        for output, projection in plan.projections.items()
+        if projection.exporter is not None
+    }
+    if not selected:
+        return {}
+    identities: dict[str, str] = {}
+    resolved: dict[str, str] = {}
+    try:
+        package_distributions = importlib.metadata.packages_distributions()
+    except Exception:
+        package_distributions = {}
+    for output, exporter in selected.items():
+        identity = resolved.get(exporter.name)
+        if identity is not None:
+            identities[output] = identity
             continue
-        reference = runtime_reference(projection.exporter.name)
+        reference = runtime_reference(exporter.name)
         try:
             module = importlib.import_module(reference.module)
             value = getattr(module, reference.symbol)
         except Exception as error:
             raise OutputError(
-                f"output {output!r} exporter {projection.exporter.name!r} is unavailable",
+                f"output {output!r} exporter {exporter.name!r} is unavailable",
                 code="exporter_unavailable",
                 details={
                     "output": output,
-                    "exporter": projection.exporter.name,
+                    "exporter": exporter.name,
                     "exception_type": type(error).__name__,
                 },
             ) from error
         if not callable(value):
             raise OutputError(
-                f"output {output!r} exporter {projection.exporter.name!r} is not callable",
+                f"output {output!r} exporter {exporter.name!r} is not callable",
                 code="exporter_invalid",
                 details={
                     "output": output,
-                    "exporter": projection.exporter.name,
+                    "exporter": exporter.name,
                 },
             )
+        identity = _exporter_identity(
+            name=exporter.name,
+            module=module,
+            value=value,
+            distributions=reference.distributions,
+            package_distributions=package_distributions,
+        )
+        resolved[exporter.name] = identity
+        identities[output] = identity
+    return identities
+
+
+def _exporter_identity(
+    *,
+    name: str,
+    module: Any,
+    value: Any,
+    distributions: tuple[str, ...],
+    package_distributions: Mapping[str, list[str]],
+) -> str:
+    payload: JsonObject = {
+        "name": name,
+        "module": str(getattr(module, "__name__", "")),
+        "symbol_type": f"{type(value).__module__}.{type(value).__qualname__}",
+    }
+    origin = getattr(getattr(module, "__spec__", None), "origin", None)
+    if isinstance(origin, str) and origin not in {"built-in", "frozen"}:
+        module_digest = _file_digest(Path(origin))
+        if module_digest is not None:
+            payload["module_sha256"] = module_digest
+    code = getattr(value, "__code__", None)
+    if code is None:
+        code = getattr(inspect.getattr_static(type(value), "__call__", None), "__code__", None)
+    if code is not None:
+        from marimo._save.hash import hash_module
+
+        with suppress(TypeError, ValueError):
+            payload["callable_sha256"] = hash_module(code).hex()
+    try:
+        source = inspect.getsource(value)
+    except (OSError, TypeError):
+        source = None
+    if source is not None:
+        payload["source_sha256"] = hashlib.sha256(source.encode("utf-8")).hexdigest()
+
+    package_names = set(distributions)
+    top_level = str(getattr(module, "__name__", "")).partition(".")[0]
+    if top_level:
+        package_names.update(package_distributions.get(top_level, ()))
+    versions: JsonObject = {}
+    for distribution in sorted(package_names):
+        with suppress(importlib.metadata.PackageNotFoundError):
+            versions[distribution] = importlib.metadata.version(distribution)
+    if versions:
+        payload["distributions"] = versions
+    return hashlib.sha256(canonical_bytes(payload)).hexdigest()
+
+
+def _file_digest(path: Path) -> str | None:
+    digest = hashlib.sha256()
+    try:
+        with path.open("rb") as stream:
+            while chunk := stream.read(64 * 1024):
+                digest.update(chunk)
+    except OSError:
+        return None
+    return digest.hexdigest()
 
 
 async def execute_state(
     state: NormalizedState,
     plan: MatrixPlan,
+    exporter_identities: Mapping[str, str],
 ) -> StateExecution:
     """Execute one fresh child through marimo's graph and cell cache."""
 
@@ -427,7 +516,11 @@ async def execute_state(
     runtime = get_runtime_context()
     cells = tuple(code_context.cells)
     projection_codes = {
-        output: projection_code(projection, plan.state_name)
+        output: projection_code(
+            projection,
+            plan.state_name,
+            exporter_identity=exporter_identities.get(output),
+        )
         for output, projection in plan.projections.items()
     }
     notebook = NotebookSerializationV1(

@@ -266,7 +266,12 @@ def _ordinary_packet(
     return packet
 
 
-def projection_code(projection: OutputProjection, state_name: str) -> str:
+def projection_code(
+    projection: OutputProjection,
+    state_name: str,
+    *,
+    exporter_identity: str | None = None,
+) -> str:
     """Return one deterministic transient projection cell body."""
 
     if not isinstance(projection, OutputProjection):
@@ -276,11 +281,21 @@ def projection_code(projection: OutputProjection, state_name: str) -> str:
     label = json.dumps(projection.name, ensure_ascii=False)
     lines = [f"# marimo-export projection: {label}", state_name]
     if projection.exporter is None:
+        if exporter_identity is not None:
+            raise ValueError("native projections cannot have an exporter identity")
         lines.append(projection.source)
         return "\n".join(lines)
+    if (
+        not isinstance(exporter_identity, str)
+        or len(exporter_identity) != 64
+        or any(character not in "0123456789abcdef" for character in exporter_identity)
+    ):
+        raise ValueError("exporter_identity must be a lowercase SHA-256 digest")
     reference = runtime_reference(projection.exporter.name)
+    identity_literal = repr(f"sha256:{exporter_identity}")
     lines.extend(
         [
+            f"_marimo_export_exporter_identity = {identity_literal}",
             "",
             f"from {reference.module} import {reference.symbol} as _marimo_export_exporter",
             "",

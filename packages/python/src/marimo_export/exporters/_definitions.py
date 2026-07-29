@@ -12,20 +12,24 @@ from marimo_export._json import JsonObject, JsonValue, portable_json_object
 class ExporterDefinition:
     module: str
     symbol: str
+    distributions: tuple[str, ...] = ()
 
 
 _BUILTINS = {
     "altair.png": ExporterDefinition(
         module="marimo_export.exporters._runtime.altair",
         symbol="png",
+        distributions=("altair", "vl-convert-python"),
     ),
     "altair.vegalite": ExporterDefinition(
         module="marimo_export.exporters._runtime.altair",
         symbol="vegalite",
+        distributions=("altair",),
     ),
     "anywidget.bundle": ExporterDefinition(
         module="marimo_export.exporters._runtime.anywidget",
         symbol="bundle",
+        distributions=("anywidget",),
     ),
     "blob.html": ExporterDefinition(
         module="marimo_export.exporters._runtime.blob",
@@ -42,6 +46,7 @@ _BUILTINS = {
     "parquet.table": ExporterDefinition(
         module="marimo_export.exporters._runtime.parquet",
         symbol="table",
+        distributions=("pyarrow",),
     ),
 }
 _COMPRESSIONS = frozenset({"snappy", "none", "gzip", "brotli", "lz4", "zstd"})
