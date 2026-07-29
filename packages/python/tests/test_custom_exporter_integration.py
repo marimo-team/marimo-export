@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
@@ -56,6 +57,24 @@ from marimo_export import BlobAsset
 
 
 def encode(value):
+    return BlobAsset(
+        data=transform(value).encode("utf-8"),
+        media_type="application/vnd.example.summary.v1+text",
+    )
+""".lstrip(),
+        encoding="utf-8",
+    )
+
+
+def _write_local_import_exporter(path: Path) -> None:
+    path.write_text(
+        """
+from marimo_export import BlobAsset
+
+
+def encode(value):
+    from helper import transform
+
     return BlobAsset(
         data=transform(value).encode("utf-8"),
         media_type="application/vnd.example.summary.v1+text",
@@ -183,13 +202,19 @@ def test_capture_sideloads_an_importable_exporter_and_invalidates_changed_code(
     assert notebook.read_bytes() == source
 
 
+@pytest.mark.parametrize(
+    "write_exporter",
+    [_write_dependent_exporter, _write_local_import_exporter],
+    ids=["module-import", "function-local-import"],
+)
 def test_custom_exporter_cache_identity_tracks_local_helpers(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    write_exporter: Callable[[Path], None],
 ) -> None:
     notebook = tmp_path / "notebook.py"
     _write_notebook(notebook)
-    _write_dependent_exporter(tmp_path / "publication_exports.py")
+    write_exporter(tmp_path / "publication_exports.py")
     helper = tmp_path / "helper.py"
     _write_helper(helper, "first")
     existing_pythonpath = os.environ.get("PYTHONPATH")

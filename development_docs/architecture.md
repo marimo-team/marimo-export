@@ -60,9 +60,10 @@ A native leaf references the token before returning its source definition. An
 exporter leaf also imports the resolved function and invokes it with the source
 plus normalized keyword options. The token makes every projection cache key
 state-specific, including when the selected source or result is a `BlobAsset`.
-Exporter preflight fingerprints the resolved module, function code, owning
-distribution versions, and built-in runtime dependencies. A private local in
-the leaf places that digest in marimo's cell hash.
+Exporter preflight fingerprints the resolved module, function code, statically
+reachable Python modules, owning distribution versions, and built-in runtime
+dependencies. A private local in the leaf places that digest in marimo's cell
+hash.
 
 The compatibility layer appends these cells directly to the in-memory
 `NotebookSerializationV1` used to construct the child. They never enter the

@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import copy
+import dis
 import gc
 import hashlib
 import importlib
 import importlib.metadata
+import importlib.util
 import inspect
 import sys
 import threading
@@ -492,6 +494,7 @@ def _exporter_dependencies(value: Any, module: Any) -> tuple[JsonObject, frozens
     recorded_modules: set[int] = set()
     expanded_modules: set[int] = set()
     visited_callables: set[int] = set()
+    attempted_imports: set[str] = set()
     local_root = _module_tree_root(module)
 
     def is_local_module(dependency: Any) -> bool:
@@ -540,6 +543,55 @@ def _exporter_dependencies(value: Any, module: Any) -> tuple[JsonObject, frozens
                 if owner is dependency or (owner is not None and is_local_module(owner)):
                     visit_callable(member)
 
+    def visit_imports(dependency: Any, code: Any) -> None:
+        module_name = str(getattr(dependency, "__module__", ""))
+        owner = sys.modules.get(module_name)
+        package = str(getattr(owner, "__package__", "")) if owner is not None else ""
+        instructions = tuple(dis.get_instructions(code))
+        for index, instruction in enumerate(instructions):
+            if instruction.opname != "IMPORT_NAME" or not isinstance(instruction.argval, str):
+                continue
+            level = 0
+            fromlist: tuple[str, ...] = ()
+            if index >= 2:
+                level_value = instructions[index - 2].argval
+                fromlist_value = instructions[index - 1].argval
+                if isinstance(level_value, int):
+                    level = level_value
+                if isinstance(fromlist_value, tuple) and all(
+                    isinstance(item, str) for item in fromlist_value
+                ):
+                    fromlist = fromlist_value
+            imported_name = instruction.argval
+            if level:
+                if not package:
+                    continue
+                try:
+                    imported_name = importlib.util.resolve_name(
+                        f"{'.' * level}{imported_name}",
+                        package,
+                    )
+                except (ImportError, ValueError):
+                    continue
+            candidates = [imported_name]
+            candidates.extend(
+                f"{imported_name}.{member}"
+                for member in fromlist
+                if member != "*" and imported_name
+            )
+            for candidate in candidates:
+                if not candidate or candidate in attempted_imports:
+                    continue
+                attempted_imports.add(candidate)
+                try:
+                    imported = importlib.import_module(candidate)
+                except Exception:
+                    continue
+                visit_module(imported, expand=True)
+        for constant in code.co_consts:
+            if inspect.iscode(constant):
+                visit_imports(dependency, constant)
+
     def visit_callable(dependency: Any) -> None:
         if inspect.ismethod(dependency):
             dependency = dependency.__func__
@@ -577,6 +629,7 @@ def _exporter_dependencies(value: Any, module: Any) -> tuple[JsonObject, frozens
         from marimo._save.hash import hash_module
 
         record(f"callable:{module_name}:{qualname}", hash_module(code).hex())
+        visit_imports(dependency, code)
         defaults = getattr(dependency, "__defaults__", None)
         if isinstance(defaults, tuple):
             for index, default in enumerate(defaults):

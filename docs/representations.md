@@ -75,6 +75,6 @@ its dependencies must be available in the selected kernel. The function
 receives one source value plus portable keyword options. No Python source or
 serialized closure enters the spec.
 
-Preflight fingerprints the resolved module, function code, available owning
-package version, and declared built-in runtime dependencies. Changing one of
-those inputs invalidates the projection cache.
+Preflight fingerprints the resolved module, function code, statically reachable
+Python modules, available owning package version, and declared built-in runtime
+dependencies. Changing one of those inputs invalidates the projection cache.

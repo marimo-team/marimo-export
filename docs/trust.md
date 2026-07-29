@@ -17,10 +17,11 @@ controls and source document are checked across the operation.
 Custom exporter references resolve installed kernel modules. Review and pin
 those packages like notebook dependencies. The spec carries the import
 reference and portable options, never executable source or serialized
-closures. The projection cache includes the resolved module, function, package
-version when available, and declared built-in runtime dependency versions.
-Network responses, files read by the function, and other external state require
-the same explicit invalidation discipline as notebook code.
+closures. The projection cache includes the resolved module, function,
+statically reachable Python modules, package version when available, and
+declared built-in runtime dependency versions. Network responses, files read by
+the function, and other external state require the same explicit invalidation
+discipline as notebook code.
 
 ## Publication boundary
 
