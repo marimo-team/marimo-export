@@ -6,7 +6,6 @@ import os
 import stat
 import tempfile
 import time
-from contextlib import suppress
 from dataclasses import replace
 from pathlib import Path
 from typing import BinaryIO
@@ -183,22 +182,32 @@ def _copy_notebook(notebook: Path) -> Path:
             stream.flush()
             os.fsync(stream.fileno())
         return working_notebook
-    except OSError as error:
+    except BaseException as error:
+        cleanup_errors: list[BaseException] = []
         if stream is not None:
-            with suppress(OSError):
+            try:
                 stream.close()
+            except BaseException as cleanup_error:
+                cleanup_errors.append(cleanup_error)
         if descriptor is not None:
-            with suppress(OSError):
+            try:
                 os.close(descriptor)
-        cleanup_error: OSError | None = None
+            except BaseException as cleanup_error:
+                cleanup_errors.append(cleanup_error)
         if working_notebook is not None:
             try:
                 working_notebook.unlink()
-            except OSError as failure:
-                cleanup_error = failure
+            except BaseException as failure:
+                cleanup_errors.append(failure)
+        if not isinstance(error, OSError):
+            for cleanup_error in cleanup_errors:
+                error.add_note(
+                    f"managed notebook cleanup also failed: {type(cleanup_error).__name__}"
+                )
+            raise
         details = {"exception_type": type(error).__name__}
-        if cleanup_error is not None:
-            details["cleanup_exception_type"] = type(cleanup_error).__name__
+        if cleanup_errors:
+            details["cleanup_exception_type"] = type(cleanup_errors[0]).__name__
         raise ExecutionError(
             "the managed notebook copy could not be created",
             code="server_start_failed",

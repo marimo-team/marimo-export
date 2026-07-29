@@ -207,6 +207,25 @@ def test_managed_copy_creation_removes_partial_snapshot(
     assert not tuple(tmp_path.glob(".notebook.marimo-export-*.py"))
 
 
+def test_managed_copy_creation_removes_snapshot_on_cancellation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    notebook = tmp_path / "notebook.py"
+    notebook.write_text("import marimo\n", encoding="utf-8")
+
+    def cancel_fsync(descriptor: int) -> None:
+        del descriptor
+        raise KeyboardInterrupt("cancelled")
+
+    monkeypatch.setattr(build_module.os, "fsync", cancel_fsync)
+
+    with pytest.raises(KeyboardInterrupt, match="cancelled"):
+        build_module._copy_notebook(notebook)
+
+    assert not tuple(tmp_path.glob(".notebook.marimo-export-*.py"))
+
+
 @pytest.mark.parametrize("timeout", [0, -1, float("nan"), float("inf")])
 def test_build_rejects_invalid_timeout(tmp_path: Path, timeout: float) -> None:
     notebook = tmp_path / "notebook.py"
