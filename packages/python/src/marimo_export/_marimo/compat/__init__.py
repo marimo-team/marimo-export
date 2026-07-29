@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import ast
 import copy
 import dis
 import gc
@@ -12,11 +11,8 @@ import inspect
 import re
 import struct
 import sys
-import textwrap
 import threading
 import time
-import types
-import typing
 import unicodedata
 from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager, suppress
@@ -66,412 +62,66 @@ _MAX_PYTHON_TYPE_BYTES = 512
 _MAX_EXPORTER_DEPENDENCIES = 256
 
 
-class _StatefulExporterError(ValueError):
-    def __init__(self, label: str, value: object) -> None:
-        super().__init__(label)
-        self.label = label
-        self.python_type = f"{type(value).__module__}.{type(value).__qualname__}"
+def _exporter_value_identity(value: Any, label: str) -> JsonValue:
+    active: set[int] = set()
 
-
-def _immutable_exporter_constant(value: Any, label: str) -> JsonValue:
-    if value is None:
-        return {"type": "none"}
-    if type(value) is bool:
-        return {"type": "bool", "value": value}
-    if type(value) is int:
-        return {"type": "int", "value": str(value)}
-    if type(value) is float:
-        return {"type": "float64", "hex": struct.pack(">d", value).hex()}
-    if type(value) is str:
-        return {"type": "str", "value": value}
-    if type(value) is bytes:
-        return {"type": "bytes", "hex": value.hex()}
-    if type(value) is object:
-        return {"type": "sentinel"}
-    if type(value) is tuple:
-        return {
-            "type": "tuple",
-            "items": [
-                _immutable_exporter_constant(item, f"{label}[{index}]")
-                for index, item in enumerate(value)
-            ],
-        }
-    if type(value) is frozenset:
-        items = [_immutable_exporter_constant(item, f"{label} item") for item in value]
-        items.sort(key=canonical_bytes)
-        return {"type": "frozenset", "items": items}
-    if isinstance(value, re.Pattern):
-        return {
-            "type": "regex",
-            "pattern": _immutable_exporter_constant(value.pattern, f"{label} pattern"),
-            "flags": value.flags,
-        }
-    raise _StatefulExporterError(label, value)
-
-
-def _reject_exporter_state_writes(
-    value: Any,
-    code: types.CodeType,
-    global_names: frozenset[str],
-    *,
-    protected_locals: frozenset[str] = frozenset(),
-) -> None:
-    instructions = tuple(dis.get_instructions(code))
-    namespace = getattr(value, "__globals__", {})
-    global_names = global_names | frozenset(
-        instruction.argval
-        for instruction in instructions
-        if instruction.opname in {"LOAD_GLOBAL", "LOAD_NAME"}
-        and isinstance(instruction.argval, str)
-        and instruction.argval in namespace
-        and (
-            inspect.ismodule(namespace[instruction.argval])
-            or inspect.isclass(namespace[instruction.argval])
-            or inspect.isfunction(namespace[instruction.argval])
-            or inspect.ismethod(namespace[instruction.argval])
-            or inspect.isbuiltin(namespace[instruction.argval])
-        )
-    )
-    scope: ast.FunctionDef | ast.AsyncFunctionDef | ast.Lambda | None = None
-    try:
-        source_lines, source_start = inspect.getsourcelines(value)
-        source = textwrap.dedent("".join(source_lines))
-        tree = ast.parse(source)
-    except (IndentationError, OSError, SyntaxError, TypeError):
-        tree = None
-    if tree is not None:
-        relative_line = code.co_firstlineno - source_start + 1
-        scopes = [
-            node
-            for node in ast.walk(tree)
-            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda))
-            and (isinstance(node, ast.Lambda) or node.name == code.co_name)
-        ]
-        scope = next(
-            (
-                node
-                for node in scopes
-                if node.lineno == relative_line
-                or (
-                    isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
-                    and any(decorator.lineno == relative_line for decorator in node.decorator_list)
-                )
-            ),
-            None,
-        )
-        if scope is None and code is getattr(value, "__code__", None):
-            scope = next(
-                (
-                    node
-                    for node in scopes
-                    if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
-                    and node.name == getattr(value, "__name__", "")
-                ),
-                None,
-            )
-        if scope is None:
-            tree = None
-    if tree is not None and scope is not None:
-        nodes: list[ast.AST] = []
-
-        class ScopeVisitor(ast.NodeVisitor):
-            def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
-                return
-
-            def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
-                return
-
-            def visit_Lambda(self, node: ast.Lambda) -> None:
-                return
-
-            def visit_ClassDef(self, node: ast.ClassDef) -> None:
-                return
-
-            def generic_visit(self, node: ast.AST) -> None:
-                nodes.append(node)
-                super().generic_visit(node)
-
-        visitor = ScopeVisitor()
-        if isinstance(scope, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            for statement in scope.body:
-                visitor.visit(statement)
-            arguments = scope.args
-        else:
-            visitor.visit(scope.body)
-            arguments = scope.args
-        declared_globals = {
-            name for node in nodes if isinstance(node, ast.Global) for name in node.names
-        }
-        protected_names = set(protected_locals)
-        protected_names.update(
-            argument.arg
-            for argument in (
-                *arguments.posonlyargs,
-                *arguments.args,
-                *arguments.kwonlyargs,
-            )
-        )
-        if arguments.vararg is not None:
-            protected_names.add(arguments.vararg.arg)
-        if arguments.kwarg is not None:
-            protected_names.add(arguments.kwarg.arg)
-        for node in nodes:
-            if isinstance(node, ast.Import):
-                protected_names.update(
-                    alias.asname or alias.name.partition(".")[0] for alias in node.names
-                )
-            elif isinstance(node, ast.ImportFrom):
-                protected_names.update(
-                    alias.asname or alias.name for alias in node.names if alias.name != "*"
-                )
-            elif (
-                isinstance(node, ast.Call)
-                and isinstance(node.func, ast.Name)
-                and node.func.id == "globals"
-            ):
-                raise _StatefulExporterError(
-                    f"global-namespace-access:{value.__module__}:{value.__qualname__}",
-                    value,
-                )
-            elif (
-                (
-                    isinstance(node, ast.Name)
-                    and isinstance(node.ctx, ast.Load)
-                    and node.id in {"setattr", "delattr"}
-                )
-                or (
-                    isinstance(node, ast.Attribute)
-                    and isinstance(node.ctx, ast.Load)
-                    and node.attr in {"setattr", "delattr"}
-                )
-                or (
-                    isinstance(node, ast.Call)
-                    and isinstance(node.func, ast.Name)
-                    and (
-                        namespace.get(node.func.id) is setattr
-                        or namespace.get(node.func.id) is delattr
-                    )
-                )
-            ):
-                raise _StatefulExporterError(
-                    f"reflective-write:{value.__module__}:{value.__qualname__}",
-                    value,
-                )
-
-        def persistent_namespace(node: ast.AST) -> bool:
-            if isinstance(node, ast.Name):
-                return node.id in global_names or node.id in protected_names
-            if isinstance(node, (ast.Attribute, ast.Subscript)):
-                return persistent_namespace(node.value)
-            if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Name):
-                return False
-            if node.func.id == "globals" and not node.args and not node.keywords:
-                return True
-            if node.func.id in {"getattr", "vars"} and node.args:
-                return persistent_namespace(node.args[0])
-            if node.func.id == "type" and len(node.args) == 1:
-                return persistent_namespace(node.args[0])
-            return False
-
-        def targets(node: ast.AST) -> Iterator[ast.AST]:
-            if isinstance(node, (ast.Tuple, ast.List)):
-                for item in node.elts:
-                    yield from targets(item)
-                return
-            yield node
-
-        changed = True
-        while changed:
-            changed = False
-            for node in nodes:
-                assignments: list[tuple[ast.AST, ast.AST | None]] = []
-                if isinstance(node, ast.Assign):
-                    assignments.extend((target, node.value) for target in node.targets)
-                elif isinstance(node, (ast.AnnAssign, ast.NamedExpr)):
-                    assignments.append((node.target, node.value))
-                for target, expression in assignments:
-                    if (
-                        isinstance(target, ast.Name)
-                        and expression is not None
-                        and persistent_namespace(expression)
-                        and target.id not in protected_names
-                    ):
-                        protected_names.add(target.id)
-                        changed = True
-
-        mutation_targets: list[ast.AST] = []
-        for node in nodes:
-            if isinstance(node, ast.Assign):
-                for target in node.targets:
-                    mutation_targets.extend(targets(target))
-            elif isinstance(node, (ast.AnnAssign, ast.AugAssign, ast.NamedExpr)):
-                mutation_targets.extend(targets(node.target))
-            elif isinstance(node, ast.Delete):
-                for target in node.targets:
-                    mutation_targets.extend(targets(target))
-            elif (
-                isinstance(node, ast.Call)
-                and isinstance(node.func, ast.Name)
-                and node.func.id in {"setattr", "delattr"}
-                and node.args
-            ):
-                mutation_targets.append(node.args[0])
-        for target in mutation_targets:
-            if isinstance(target, ast.Name):
-                if target.id not in declared_globals:
-                    continue
-                label = target.id
-            elif isinstance(target, (ast.Attribute, ast.Subscript)):
-                if not persistent_namespace(target.value):
-                    continue
-                label = ast.unparse(target.value)
-            else:
-                if not persistent_namespace(target):
-                    continue
-                label = ast.unparse(target)
-            raise _StatefulExporterError(
-                f"namespace-write:{value.__module__}:{value.__qualname__}:{label}",
-                value,
-            )
-        return
-
-    if any(
-        instruction.opname in {"LOAD_GLOBAL", "LOAD_NAME"} and instruction.argval == "globals"
-        for instruction in instructions
-    ):
-        raise _StatefulExporterError(
-            f"global-namespace-access:{value.__module__}:{value.__qualname__}",
-            value,
-        )
-    if any(
-        (
-            instruction.opname
-            in {
-                "LOAD_GLOBAL",
-                "LOAD_NAME",
-                "IMPORT_FROM",
-                "LOAD_ATTR",
-                "LOAD_METHOD",
+    def encode(item: Any, item_label: str) -> JsonValue:
+        if item is None:
+            return {"type": "none"}
+        if type(item) is bool:
+            return {"type": "bool", "value": item}
+        if type(item) is int:
+            return {"type": "int", "value": str(item)}
+        if type(item) is float:
+            return {"type": "float64", "hex": struct.pack(">d", item).hex()}
+        if type(item) is str:
+            return {"type": "str", "value": item}
+        if type(item) is bytes:
+            return {"type": "bytes", "hex": item.hex()}
+        if type(item) is object:
+            return {"type": "sentinel"}
+        if isinstance(item, re.Pattern):
+            return {
+                "type": "regex",
+                "pattern": encode(item.pattern, f"{item_label} pattern"),
+                "flags": item.flags,
             }
-            and instruction.argval in {"setattr", "delattr"}
+        if type(item) in {tuple, list, set, frozenset}:
+            identifier = id(item)
+            if identifier in active:
+                raise TypeError(f"{item_label} contains a cycle")
+            active.add(identifier)
+            try:
+                items = [
+                    encode(member, f"{item_label}[{index}]") for index, member in enumerate(item)
+                ]
+            finally:
+                active.remove(identifier)
+            if type(item) in {set, frozenset}:
+                items.sort(key=canonical_bytes)
+            return {"type": type(item).__name__, "items": items}
+        if type(item) is dict:
+            identifier = id(item)
+            if identifier in active:
+                raise TypeError(f"{item_label} contains a cycle")
+            active.add(identifier)
+            try:
+                entries = [
+                    {
+                        "key": encode(key, f"{item_label} key"),
+                        "value": encode(member, f"{item_label}[{key!r}]"),
+                    }
+                    for key, member in item.items()
+                ]
+            finally:
+                active.remove(identifier)
+            entries.sort(key=canonical_bytes)
+            return {"type": "dict", "entries": entries}
+        raise TypeError(
+            f"{item_label} has unsupported type {type(item).__module__}.{type(item).__qualname__}"
         )
-        for instruction in instructions
-    ):
-        raise _StatefulExporterError(
-            f"reflective-write:{value.__module__}:{value.__qualname__}",
-            value,
-        )
-    if any(
-        instruction.opname in {"LOAD_GLOBAL", "LOAD_NAME"}
-        and isinstance(instruction.argval, str)
-        and (
-            namespace.get(instruction.argval) is setattr
-            or namespace.get(instruction.argval) is delattr
-        )
-        for instruction in instructions
-    ):
-        raise _StatefulExporterError(
-            f"reflective-write:{value.__module__}:{value.__qualname__}",
-            value,
-        )
-    parameter_count = code.co_argcount + code.co_kwonlyargcount
-    protected_names = set(protected_locals)
-    protected_names.update(code.co_varnames[:parameter_count])
-    if code.co_flags & inspect.CO_VARARGS:
-        protected_names.add(code.co_varnames[parameter_count])
-        parameter_count += 1
-    if code.co_flags & inspect.CO_VARKEYWORDS:
-        protected_names.add(code.co_varnames[parameter_count])
-    for index, instruction in enumerate(instructions):
-        if instruction.opname not in {"IMPORT_NAME", "IMPORT_FROM"}:
-            continue
-        for following in instructions[index + 1 : index + 8]:
-            if following.opname in {"STORE_FAST", "STORE_NAME"} and isinstance(
-                following.argval, str
-            ):
-                protected_names.add(following.argval)
-                if instruction.opname == "IMPORT_NAME":
-                    break
-            if following.opname in {
-                "IMPORT_NAME",
-                "POP_TOP",
-                "RETURN_VALUE",
-                "RETURN_CONST",
-            }:
-                break
-    changed = True
-    while changed:
-        changed = False
-        for index, instruction in enumerate(instructions):
-            if instruction.opname not in {"STORE_FAST", "STORE_NAME"} or not isinstance(
-                instruction.argval, str
-            ):
-                continue
-            window = instructions[max(0, index - 8) : index]
-            calls_persistent_namespace = any(
-                candidate.opname in {"LOAD_GLOBAL", "LOAD_NAME"} and candidate.argval == "globals"
-                for candidate in window
-            )
-            calls_persistent_type = any(
-                candidate.opname in {"LOAD_GLOBAL", "LOAD_NAME"}
-                and candidate.argval in {"getattr", "type", "vars"}
-                for candidate in window
-            ) and any(
-                candidate.opname in {"LOAD_FAST", "LOAD_DEREF", "LOAD_GLOBAL", "LOAD_NAME"}
-                and candidate.argval in protected_names
-                for candidate in window
-            )
-            if (
-                any(candidate.opname == "CALL" for candidate in window)
-                and (calls_persistent_namespace or calls_persistent_type)
-                and instruction.argval not in protected_names
-            ):
-                protected_names.add(instruction.argval)
-                changed = True
-    namespace_loads = {"LOAD_GLOBAL", "LOAD_NAME", "LOAD_DEREF", "LOAD_FAST"}
-    namespace_stores = {
-        "STORE_ATTR",
-        "DELETE_ATTR",
-        "STORE_SUBSCR",
-        "DELETE_SUBSCR",
-    }
-    for index, instruction in enumerate(instructions):
-        if instruction.opname in {"STORE_GLOBAL", "DELETE_GLOBAL"}:
-            raise _StatefulExporterError(
-                f"global-write:{value.__module__}:{value.__qualname__}:{instruction.argval}",
-                value,
-            )
-        if instruction.opname not in namespace_stores:
-            continue
-        for candidate_index in range(index - 1, max(-1, index - 32), -1):
-            candidate = instructions[candidate_index]
-            if candidate.opname not in namespace_loads or not isinstance(candidate.argval, str):
-                continue
-            name = candidate.argval
-            if name not in global_names and name not in protected_names:
-                continue
-            intervening = instructions[candidate_index + 1 : index]
-            is_direct = index - candidate_index <= 3
-            is_augmented = any(candidate.opname == "COPY" for candidate in intervening[:4])
-            is_derived = any(instruction.opname == "CALL" for instruction in intervening) and any(
-                instruction.opname in {"LOAD_GLOBAL", "LOAD_NAME"}
-                and instruction.argval in {"getattr", "type", "vars"}
-                for instruction in instructions[max(0, candidate_index - 2) : index]
-            )
-            if not is_direct and not is_augmented and not is_derived:
-                continue
-            raise _StatefulExporterError(
-                f"namespace-write:{value.__module__}:{value.__qualname__}:{name}",
-                value,
-            )
-    for constant in code.co_consts:
-        if inspect.iscode(constant):
-            _reject_exporter_state_writes(
-                value,
-                constant,
-                global_names,
-                protected_locals=frozenset(protected_names),
-            )
+
+    return encode(value, label)
 
 
 @dataclass(frozen=True, slots=True)
@@ -870,35 +520,22 @@ def preflight_exporters(plan: MatrixPlan) -> Mapping[str, str]:
                     "exception_type": type(error).__name__,
                 },
             ) from error
-        if not inspect.isfunction(value) or "<locals>" in value.__qualname__:
+        if not callable(value):
             raise OutputError(
-                f"output {output!r} exporter {exporter.name!r} is not a top-level function",
+                f"output {output!r} exporter {exporter.name!r} is not callable",
                 code="exporter_invalid",
                 details={
                     "output": output,
                     "exporter": exporter.name,
                 },
             )
-        try:
-            identity = _exporter_identity(
-                name=exporter.name,
-                module=module,
-                value=value,
-                enforce_state=":" in exporter.name,
-                distributions=reference.distributions,
-                package_distributions=package_distributions,
-            )
-        except _StatefulExporterError as error:
-            raise OutputError(
-                f"output {output!r} exporter {exporter.name!r} is not stateless",
-                code="exporter_invalid",
-                details={
-                    "output": output,
-                    "exporter": exporter.name,
-                    "dependency": error.label,
-                    "python_type": error.python_type,
-                },
-            ) from error
+        identity = _exporter_identity(
+            name=exporter.name,
+            module=module,
+            value=value,
+            distributions=reference.distributions,
+            package_distributions=package_distributions,
+        )
         resolved[exporter.name] = identity
         identities[output] = identity
     return identities
@@ -909,14 +546,12 @@ def _exporter_identity(
     name: str,
     module: Any,
     value: Any,
-    enforce_state: bool,
     distributions: tuple[str, ...],
     package_distributions: Mapping[str, list[str]],
 ) -> str:
     dependencies, dependency_modules = _exporter_dependencies(
         value,
         module,
-        enforce_state=enforce_state,
         package_distributions=package_distributions,
     )
     payload: JsonObject = {
@@ -966,7 +601,6 @@ def _exporter_dependencies(
     value: Any,
     module: Any,
     *,
-    enforce_state: bool,
     package_distributions: Mapping[str, list[str]],
 ) -> tuple[JsonObject, frozenset[str]]:
     records: JsonObject = {}
@@ -974,33 +608,17 @@ def _exporter_dependencies(
     recorded_modules: set[int] = set()
     expanded_modules: set[int] = set()
     visited_callables: set[int] = set()
-    checked_modules: set[int] = set()
-    checked_callables: set[int] = set()
     resolved_imports: dict[str, Any | None] = {}
     selected_owner = sys.modules.get(str(getattr(value, "__module__", "")))
     selected_distributions: set[str] = set()
     for selected_module in (module, selected_owner):
         selected_top_level = str(getattr(selected_module, "__name__", "")).partition(".")[0]
         selected_distributions.update(package_distributions.get(selected_top_level, ()))
-    local_roots = tuple(
-        root
-        for root in {
-            _module_tree_root(module),
-            _module_tree_root(selected_owner) if selected_owner is not None else None,
-        }
-        if root is not None
-    )
 
     def is_local_module(dependency: Any) -> bool:
         origin = _module_origin(dependency)
         if origin is None:
             return False
-        for root in local_roots:
-            try:
-                origin.relative_to(root)
-            except ValueError:
-                continue
-            return True
         top_level = str(getattr(dependency, "__name__", "")).partition(".")[0]
         if not top_level or top_level == "marimo_export" or top_level in sys.stdlib_module_names:
             return False
@@ -1022,7 +640,6 @@ def _exporter_dependencies(
         dependency: Any,
         *,
         expand: bool,
-        enforce_functions: bool = False,
     ) -> None:
         identifier = id(dependency)
         name = str(getattr(dependency, "__name__", ""))
@@ -1037,14 +654,9 @@ def _exporter_dependencies(
                     record(f"module:{name}", digest)
         if not is_local_module(dependency):
             return
-        expand_members = expand and identifier not in expanded_modules
-        check_members = enforce_functions and identifier not in checked_modules
-        if not expand_members and not check_members:
+        if not expand or identifier in expanded_modules:
             return
-        if expand_members:
-            expanded_modules.add(identifier)
-        if check_members:
-            checked_modules.add(identifier)
+        expanded_modules.add(identifier)
         namespace = getattr(dependency, "__dict__", {})
         for attribute in sorted(namespace):
             member = namespace[attribute]
@@ -1052,26 +664,18 @@ def _exporter_dependencies(
                 if is_local_module(member):
                     visit_module(
                         member,
-                        expand=expand_members,
-                        enforce_functions=check_members,
+                        expand=True,
                     )
                 continue
             if inspect.isfunction(member):
                 owner = sys.modules.get(str(getattr(member, "__module__", "")))
                 if owner is dependency or (owner is not None and is_local_module(owner)):
-                    visit_callable(member, enforce_state=check_members)
+                    visit_callable(member)
                 continue
             if inspect.isclass(member):
                 owner = sys.modules.get(str(getattr(member, "__module__", "")))
                 if owner is dependency or (owner is not None and is_local_module(owner)):
-                    visit_callable(member, enforce_state=check_members)
-                continue
-            if check_members and not attribute.startswith("__"):
-                visit_reference(
-                    member,
-                    f"module-state:{name}:{attribute}",
-                    strict=True,
-                )
+                    visit_callable(member)
 
     def referenced_attributes(code: Any, name: str) -> frozenset[str]:
         attributes: set[str] = set()
@@ -1111,7 +715,7 @@ def _exporter_dependencies(
             attributes.add("*")
         return frozenset(attributes)
 
-    def visit_code_globals(dependency: Any, code: Any, *, strict: bool) -> None:
+    def visit_code_globals(dependency: Any, code: Any) -> None:
         owner = sys.modules.get(str(getattr(dependency, "__module__", "")))
         namespace = getattr(owner, "__dict__", {}) if owner is not None else {}
         names = {
@@ -1135,29 +739,23 @@ def _exporter_dependencies(
             visit_reference(
                 referenced,
                 f"code-value:{module_name}:{qualname}:{code.co_name}:{name}",
-                strict=strict,
                 module_members=(
                     referenced_attributes(code, name) if inspect.ismodule(referenced) else None
                 ),
             )
         for constant in code.co_consts:
             if inspect.iscode(constant):
-                visit_code_globals(dependency, constant, strict=strict)
+                visit_code_globals(dependency, constant)
 
     def visit_module_members(
         dependency: Any,
         members: frozenset[str],
         *,
-        strict: bool,
         label: str,
     ) -> None:
         visit_module(dependency, expand=False)
         if "*" in members:
-            visit_module(
-                dependency,
-                expand=True,
-                enforce_functions=strict,
-            )
+            visit_module(dependency, expand=True)
             return
         module_name = str(getattr(dependency, "__name__", ""))
         namespace = getattr(dependency, "__dict__", {})
@@ -1176,10 +774,9 @@ def _exporter_dependencies(
             visit_reference(
                 member,
                 f"{label}:{member_name}",
-                strict=strict,
             )
 
-    def visit_imports(dependency: Any, code: Any, *, strict: bool) -> None:
+    def visit_imports(dependency: Any, code: Any) -> None:
         module_name = str(getattr(dependency, "__module__", ""))
         owner = sys.modules.get(module_name)
         package = str(getattr(owner, "__package__", "")) if owner is not None else ""
@@ -1248,36 +845,21 @@ def _exporter_dependencies(
             visit_module_members(
                 imported,
                 members,
-                strict=strict,
                 label=f"import:{module_name}:{imported_name}",
             )
         for constant in code.co_consts:
             if inspect.iscode(constant):
-                visit_imports(dependency, constant, strict=strict)
+                visit_imports(dependency, constant)
 
-    def visit_callable(
-        dependency: Any,
-        *,
-        enforce_state: bool,
-        force_state: bool = False,
-        protected_locals: frozenset[str] = frozenset(),
-    ) -> None:
+    def visit_callable(dependency: Any) -> None:
         if inspect.ismethod(dependency):
             dependency = dependency.__func__
         identifier = id(dependency)
-        record_callable = identifier not in visited_callables
+        if identifier in visited_callables:
+            return
+        visited_callables.add(identifier)
         module_name = str(getattr(dependency, "__module__", ""))
         owner = sys.modules.get(module_name)
-        should_check = enforce_state and (
-            force_state or owner is module or (owner is not None and is_local_module(owner))
-        )
-        check_callable = should_check and identifier not in checked_callables
-        if not record_callable and not check_callable:
-            return
-        if record_callable:
-            visited_callables.add(identifier)
-        if check_callable:
-            checked_callables.add(identifier)
         qualname = str(
             getattr(
                 dependency,
@@ -1285,14 +867,8 @@ def _exporter_dependencies(
                 getattr(dependency, "__name__", type(dependency).__qualname__),
             )
         )
-        strict = check_callable
         if owner is not None:
             visit_module(owner, expand=False)
-        if strict and inspect.isfunction(dependency) and vars(dependency):
-            raise _StatefulExporterError(
-                f"function-state:{module_name}:{qualname}",
-                vars(dependency),
-            )
         code = getattr(dependency, "__code__", None)
         if code is None and inspect.isclass(dependency):
             if owner is None or (owner is not module and not is_local_module(owner)):
@@ -1301,75 +877,61 @@ def _exporter_dependencies(
                 if attribute.startswith("__"):
                     continue
                 member = inspect.getattr_static(dependency, attribute)
-                if isinstance(member, classmethod):
-                    function = member.__func__
-                    parameters = tuple(inspect.signature(function).parameters)
-                    class_parameter = frozenset({parameters[0]}) if parameters else frozenset()
-                    visit_callable(
-                        function,
-                        enforce_state=strict,
-                        protected_locals=class_parameter,
-                    )
-                    continue
-                if isinstance(member, staticmethod):
-                    visit_callable(member.__func__, enforce_state=strict)
-                    continue
-                if inspect.isfunction(member):
-                    visit_callable(member, enforce_state=False)
-                    if strict:
-                        _reject_exporter_state_writes(
-                            member,
-                            member.__code__,
-                            frozenset(
-                                name
-                                for name, referenced in inspect.getclosurevars(
-                                    member
-                                ).globals.items()
-                                if (
-                                    inspect.ismodule(referenced)
-                                    or inspect.isclass(referenced)
-                                    or inspect.isfunction(referenced)
-                                    or inspect.ismethod(referenced)
-                                    or inspect.isbuiltin(referenced)
-                                )
-                            ),
-                        )
-                    continue
-                if inspect.isclass(member):
-                    visit_callable(member, enforce_state=strict)
+                if isinstance(member, (classmethod, staticmethod)):
+                    member = member.__func__
+                if callable(member):
+                    visit_callable(member)
                     continue
                 if inspect.isdatadescriptor(member) or inspect.ismethoddescriptor(member):
                     continue
-                if strict:
-                    portable = _immutable_exporter_constant(
+                try:
+                    portable = _exporter_value_identity(
                         member,
-                        f"class-state:{module_name}:{qualname}:{attribute}",
+                        f"class-value:{module_name}:{qualname}:{attribute}",
                     )
-                    record(
-                        f"class-state:{module_name}:{qualname}:{attribute}",
-                        hashlib.sha256(canonical_bytes(portable)).hexdigest(),
-                    )
+                except TypeError:
+                    continue
+                record(
+                    f"class-value:{module_name}:{qualname}:{attribute}",
+                    hashlib.sha256(canonical_bytes(portable)).hexdigest(),
+                )
             return
         if code is None:
+            instance_state = getattr(dependency, "__dict__", None)
+            if isinstance(instance_state, dict) and instance_state:
+                try:
+                    portable = _exporter_value_identity(
+                        instance_state,
+                        f"callable-state:{module_name}:{qualname}",
+                    )
+                except TypeError:
+                    for attribute, member in sorted(instance_state.items()):
+                        visit_reference(
+                            member,
+                            f"callable-value:{module_name}:{qualname}:{attribute}",
+                        )
+                else:
+                    record(
+                        f"callable-state:{module_name}:{qualname}",
+                        hashlib.sha256(canonical_bytes(portable)).hexdigest(),
+                    )
             call = inspect.getattr_static(type(dependency), "__call__", None)
             if inspect.isfunction(call):
-                visit_callable(call, enforce_state=False)
+                visit_callable(call)
             return
         from marimo._save.hash import hash_module
 
-        if record_callable:
-            record(f"callable:{module_name}:{qualname}", hash_module(code).hex())
-        if not strict and owner is not None and owner is not module and not is_local_module(owner):
+        record(f"callable:{module_name}:{qualname}", hash_module(code).hex())
+        if owner is not None and owner is not module and not is_local_module(owner):
             return
-        visit_imports(dependency, code, strict=strict)
-        visit_code_globals(dependency, code, strict=strict)
+        visit_imports(dependency, code)
+        visit_code_globals(dependency, code)
         defaults = getattr(dependency, "__defaults__", None)
         if isinstance(defaults, tuple):
             for index, default in enumerate(defaults):
                 visit_reference(
                     default,
                     f"default:{module_name}:{qualname}:{index}",
-                    strict=strict,
                 )
         keyword_defaults = getattr(dependency, "__kwdefaults__", None)
         if isinstance(keyword_defaults, dict):
@@ -1377,40 +939,16 @@ def _exporter_dependencies(
                 visit_reference(
                     default,
                     f"keyword-default:{module_name}:{qualname}:{default_name}",
-                    strict=strict,
                 )
         try:
             closure = inspect.getclosurevars(dependency)
         except TypeError:
             return
-        if strict:
-            _reject_exporter_state_writes(
-                dependency,
-                code,
-                frozenset(
-                    name
-                    for name, referenced in closure.globals.items()
-                    if (
-                        inspect.ismodule(referenced)
-                        or inspect.isclass(referenced)
-                        or inspect.isfunction(referenced)
-                        or inspect.ismethod(referenced)
-                        or inspect.isbuiltin(referenced)
-                    )
-                ),
-                protected_locals=protected_locals,
-            )
-        if strict and closure.nonlocals:
-            raise _StatefulExporterError(
-                f"closure:{module_name}:{qualname}",
-                closure.nonlocals,
-            )
-        references = closure.globals if strict else {**closure.globals, **closure.nonlocals}
+        references = {**closure.globals, **closure.nonlocals}
         for dependency_name, referenced in sorted(references.items()):
             visit_reference(
                 referenced,
                 f"value:{module_name}:{qualname}:{dependency_name}",
-                strict=strict,
                 module_members=(
                     referenced_attributes(code, dependency_name)
                     if inspect.ismodule(referenced)
@@ -1422,50 +960,26 @@ def _exporter_dependencies(
         dependency: Any,
         label: str,
         *,
-        strict: bool,
         module_members: frozenset[str] | None = None,
     ) -> None:
         if inspect.ismodule(dependency):
             if module_members is None:
-                visit_module(
-                    dependency,
-                    expand=True,
-                    enforce_functions=strict,
-                )
+                visit_module(dependency, expand=True)
             else:
                 visit_module_members(
                     dependency,
                     module_members,
-                    strict=strict,
                     label=label,
                 )
             return
-        if inspect.ismethod(dependency):
-            bound_to = getattr(dependency, "__self__", None)
-            if (
-                strict
-                and bound_to is not None
-                and not inspect.isclass(bound_to)
-                and not inspect.ismodule(bound_to)
-            ):
-                raise _StatefulExporterError(label, dependency)
-            visit_callable(dependency, enforce_state=strict)
-            return
-        if inspect.isfunction(dependency):
-            visit_callable(dependency, enforce_state=strict)
-            return
-        if inspect.isclass(dependency):
-            visit_callable(dependency, enforce_state=strict)
+        if (
+            inspect.isfunction(dependency)
+            or inspect.ismethod(dependency)
+            or inspect.isclass(dependency)
+        ):
+            visit_callable(dependency)
             return
         if inspect.isbuiltin(dependency):
-            bound_to = getattr(dependency, "__self__", None)
-            if (
-                strict
-                and bound_to is not None
-                and not inspect.isclass(bound_to)
-                and not inspect.ismodule(bound_to)
-            ):
-                raise _StatefulExporterError(label, dependency)
             module_name = str(getattr(dependency, "__module__", ""))
             owner = sys.modules.get(module_name)
             if owner is not None:
@@ -1483,65 +997,23 @@ def _exporter_dependencies(
             }
             record(label, hashlib.sha256(canonical_bytes(portable)).hexdigest())
             return
-        wrapped = getattr(dependency, "__wrapped__", None)
-        if callable(dependency) and inspect.isfunction(wrapped):
-            owner = sys.modules.get(str(getattr(dependency, "__module__", "")))
-            if owner is None or owner is module or is_local_module(owner):
-                raise _StatefulExporterError(label, dependency)
-            visit_module(owner, expand=False)
-            visit_callable(wrapped, enforce_state=False)
-            portable = {
-                "type": "external-wrapped-callable",
-                "module": str(getattr(dependency, "__module__", "")),
-                "name": str(
-                    getattr(
-                        dependency,
-                        "__qualname__",
-                        getattr(dependency, "__name__", ""),
-                    )
-                ),
-                "wrapper": (f"{type(dependency).__module__}.{type(dependency).__qualname__}"),
-            }
-            record(label, hashlib.sha256(canonical_bytes(portable)).hexdigest())
-            return
-        if strict:
-            if isinstance(dependency, typing.NewType):
-                owner = sys.modules.get(str(getattr(dependency, "__module__", "")))
-                if owner is not None:
-                    visit_module(owner, expand=False)
-                supertype = dependency.__supertype__
-                portable: JsonValue = {
-                    "type": "newtype",
-                    "module": str(getattr(dependency, "__module__", "")),
-                    "name": dependency.__name__,
-                    "supertype": (
-                        f"{getattr(supertype, '__module__', '')}."
-                        f"{getattr(supertype, '__qualname__', type(supertype).__qualname__)}"
-                    ),
-                }
-                record(label, hashlib.sha256(canonical_bytes(portable)).hexdigest())
-                return
-            portable = _immutable_exporter_constant(dependency, label)
-            record(label, hashlib.sha256(canonical_bytes(portable)).hexdigest())
+        if callable(dependency):
+            visit_callable(dependency)
             return
         try:
-            portable = json_value(dependency, label)
-        except (TypeError, ValueError):
+            portable = _exporter_value_identity(dependency, label)
+        except TypeError:
             owner = sys.modules.get(str(getattr(type(dependency), "__module__", "")))
             if owner is not None:
                 visit_module(owner, expand=False)
             call = inspect.getattr_static(type(dependency), "__call__", None)
             if inspect.isfunction(call):
-                visit_callable(call, enforce_state=False)
+                visit_callable(call)
             return
         record(label, hashlib.sha256(canonical_bytes(portable)).hexdigest())
 
     visit_module(module, expand=False)
-    visit_callable(
-        value,
-        enforce_state=enforce_state,
-        force_state=enforce_state,
-    )
+    visit_callable(value)
     return records, frozenset(module_names)
 
 
@@ -1556,18 +1028,6 @@ def _module_origin(module: Any) -> Path | None:
     except (OSError, RuntimeError):
         return None
     return path if path.is_file() else None
-
-
-def _module_tree_root(module: Any) -> Path | None:
-    origin = _module_origin(module)
-    if origin is None:
-        return None
-    parts = str(getattr(module, "__name__", "")).split(".")
-    levels = max(0, len(parts) - (1 if origin.name == "__init__.py" else 2))
-    root = origin.parent
-    for _ in range(levels):
-        root = root.parent
-    return root
 
 
 def _file_digest(path: Path) -> str | None:

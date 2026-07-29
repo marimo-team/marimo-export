@@ -87,7 +87,7 @@ class ExporterSpec:
 
 
 def importable(name: str, **options: JsonValue) -> ExporterSpec:
-    """Select an installed top-level function using ``module:function`` syntax."""
+    """Select an importable callable using ``module:symbol`` syntax."""
 
     return ExporterSpec(name, options=options)
 

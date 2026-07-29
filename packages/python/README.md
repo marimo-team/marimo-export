@@ -155,7 +155,7 @@ Descriptor construction performs no conversion. marimo-export invokes the
 selected runtime in a synthetic child leaf. marimo owns dependency hashing,
 cache persistence, and native result serialization.
 
-Custom exporters use an installed or sideloaded top-level function:
+Custom exporters use an installed or sideloaded callable:
 
 ```python
 from marimo_export import OutputSpec
@@ -167,14 +167,15 @@ summary = OutputSpec(
 )
 ```
 
-The function receives the source value followed by the descriptor options as
+The callable receives the source value followed by the descriptor options as
 keyword arguments. It returns a scalar, numeric NumPy array, supported table,
 or `BlobAsset` accepted by marimo's native cache. The spec contains the import
 reference and portable options.
 
-Custom exporter functions must be stateless. Use immutable constants and pass
-configuration through descriptor options. Preflight rejects mutable defaults,
-closure state, mutable globals, partials, and callable instances.
+Preflight fingerprints the callable implementation and its referenced local
+code for projection-cache invalidation. Files, network responses, mutable
+module state, and other external inputs follow the same invalidation discipline
+as cached notebook code.
 
 ## Public package root
 

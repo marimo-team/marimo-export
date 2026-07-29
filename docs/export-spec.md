@@ -133,7 +133,7 @@ Built-in names are:
 
 ### Custom exporter
 
-Use `module:function` for an installed top-level function:
+Use `module:symbol` for an installed or sideloaded callable:
 
 ```yaml
 outputs:
@@ -145,7 +145,7 @@ outputs:
         compact: true
 ```
 
-The function receives the source value as its first argument and exporter
+The callable receives the source value as its first argument and exporter
 options as keyword arguments:
 
 ```python
@@ -156,14 +156,11 @@ def summary(value: object, *, compact: bool) -> BlobAsset:
     ...
 ```
 
-The exporter must be stateless. Use immutable constants and pass configuration
-through `options`. Preflight rejects mutable defaults, closure state, mutable
-globals, partials, and callable instances.
-
 The module must be importable in the selected kernel. Capture can use a package
 that was installed into the running environment before capture starts. Missing
-modules, missing symbols, and symbols that are not top-level functions fail the
-publication.
+modules, missing symbols, and symbols that are not callable fail the
+publication. Files, network responses, mutable module state, and other external
+inputs follow the same invalidation discipline as cached notebook code.
 
 ## Programmatic construction
 

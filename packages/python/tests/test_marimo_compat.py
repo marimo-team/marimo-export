@@ -220,19 +220,37 @@ def test_exporter_preflight_accepts_package_owned_builtin_exporters() -> None:
     assert len(identity) == 64
 
 
-def test_exporter_preflight_rejects_callable_instances(
+def test_exporter_preflight_accepts_importable_callable_instances(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    module_name = "marimo_export_test_stateful_exporter"
+    module_name = "marimo_export_test_callable_instance"
+
+    def identity(label: str) -> str:
+        module = ModuleType(module_name)
+        module.__dict__["label"] = label
+        exec(
+            "class Encoder:\n"
+            "    def __init__(self, label):\n"
+            "        self.label = label\n"
+            "\n"
+            "    def __call__(self, value):\n"
+            "        return self.label, value\n"
+            "\n"
+            "encode = Encoder(label)\n",
+            module.__dict__,
+        )
+        monkeypatch.setitem(sys.modules, module_name, module)
+        return preflight_exporters(_custom_exporter_plan(module_name))["summary"]
+
+    assert identity("first") != identity("second")
+
+
+def test_exporter_preflight_rejects_non_callable_symbols(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module_name = "marimo_export_test_non_callable"
     module = ModuleType(module_name)
-    exec(
-        "class Encoder:\n"
-        "    def __call__(self, value):\n"
-        "        return value\n"
-        "\n"
-        "encode = Encoder()\n",
-        module.__dict__,
-    )
+    module.__dict__["encode"] = 42
     monkeypatch.setitem(sys.modules, module_name, module)
 
     with pytest.raises(OutputError) as raised:
@@ -240,7 +258,7 @@ def test_exporter_preflight_rejects_callable_instances(
 
     assert raised.value.code == "exporter_invalid"
     assert str(raised.value) == (
-        f"output 'summary' exporter '{module_name}:encode' is not a top-level function"
+        f"output 'summary' exporter '{module_name}:encode' is not callable"
     )
 
 
@@ -249,82 +267,16 @@ def test_exporter_preflight_checks_a_reexported_selected_function(
 ) -> None:
     implementation_name = "marimo_export_test_reexport_implementation"
     implementation = ModuleType(implementation_name)
-    exec(
-        "def encode(value, seen=[]):\n    seen.append(value)\n    return len(seen)\n",
-        implementation.__dict__,
-    )
+    exec("def encode(value):\n    return value\n", implementation.__dict__)
     api_name = "marimo_export_test_reexport_api"
     api = ModuleType(api_name)
     vars(api)["encode"] = vars(implementation)["encode"]
     monkeypatch.setitem(sys.modules, implementation_name, implementation)
     monkeypatch.setitem(sys.modules, api_name, api)
 
-    with pytest.raises(OutputError) as raised:
-        preflight_exporters(_custom_exporter_plan(api_name))
+    identity = preflight_exporters(_custom_exporter_plan(api_name))
 
-    assert raised.value.code == "exporter_invalid"
-    assert str(raised.value) == (f"output 'summary' exporter '{api_name}:encode' is not stateless")
-
-
-def test_exporter_preflight_checks_reexported_function_dependencies(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    api_root = tmp_path / "api"
-    implementation_root = tmp_path / "implementation"
-    api_root.mkdir()
-    implementation_root.mkdir()
-    api_name = "marimo_export_test_reexport_dependency_api"
-    implementation_name = "marimo_export_test_reexport_dependency_implementation"
-    (api_root / f"{api_name}.py").write_text(
-        f"from {implementation_name} import encode\n",
-        encoding="utf-8",
-    )
-    (implementation_root / f"{implementation_name}.py").write_text(
-        "class State:\n"
-        "    seen = []\n"
-        "\n"
-        "def encode(value):\n"
-        "    State.seen.append(value)\n"
-        "    return len(State.seen)\n",
-        encoding="utf-8",
-    )
-    monkeypatch.syspath_prepend(str(api_root))
-    monkeypatch.syspath_prepend(str(implementation_root))
-    importlib.invalidate_caches()
-
-    with pytest.raises(OutputError) as raised:
-        preflight_exporters(_custom_exporter_plan(api_name))
-
-    assert raised.value.code == "exporter_invalid"
-    assert str(raised.value) == (f"output 'summary' exporter '{api_name}:encode' is not stateless")
-
-
-def test_exporter_preflight_rejects_mutable_local_module_state(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    state_name = "marimo_export_test_module_state"
-    exporter_name = "marimo_export_test_module_exporter"
-    (tmp_path / f"{state_name}.py").write_text("seen = []\n", encoding="utf-8")
-    (tmp_path / f"{exporter_name}.py").write_text(
-        f"import {state_name} as state\n"
-        "\n"
-        "def encode(value):\n"
-        "    state.seen.append(value)\n"
-        "    return len(state.seen)\n",
-        encoding="utf-8",
-    )
-    monkeypatch.syspath_prepend(str(tmp_path))
-    importlib.invalidate_caches()
-
-    with pytest.raises(OutputError) as raised:
-        preflight_exporters(_custom_exporter_plan(exporter_name))
-
-    assert raised.value.code == "exporter_invalid"
-    assert str(raised.value) == (
-        f"output 'summary' exporter '{exporter_name}:encode' is not stateless"
-    )
+    assert len(identity["summary"]) == 64
 
 
 def test_exporter_preflight_checks_only_the_imported_local_member(
@@ -357,7 +309,7 @@ def test_exporter_preflight_checks_only_the_imported_local_member(
     assert len(identity["summary"]) == 64
 
 
-def test_exporter_preflight_allows_scope_local_construction(
+def test_exporter_preflight_allows_local_construction(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -386,8 +338,9 @@ def test_exporter_preflight_checks_literal_getattr_on_a_local_module(
 ) -> None:
     helper_name = "marimo_export_test_getattr_helper"
     exporter_name = "marimo_export_test_getattr_exporter"
-    (tmp_path / f"{helper_name}.py").write_text(
-        "def transform(value, seen=[]):\n    seen.append(value)\n    return len(seen)\n",
+    helper_path = tmp_path / f"{helper_name}.py"
+    helper_path.write_text(
+        "def transform(value):\n    return 'first', value\n",
         encoding="utf-8",
     )
     (tmp_path / f"{exporter_name}.py").write_text(
@@ -400,13 +353,17 @@ def test_exporter_preflight_checks_literal_getattr_on_a_local_module(
     monkeypatch.syspath_prepend(str(tmp_path))
     importlib.invalidate_caches()
 
-    with pytest.raises(OutputError) as raised:
-        preflight_exporters(_custom_exporter_plan(exporter_name))
-
-    assert raised.value.code == "exporter_invalid"
-    assert str(raised.value) == (
-        f"output 'summary' exporter '{exporter_name}:encode' is not stateless"
+    first = preflight_exporters(_custom_exporter_plan(exporter_name))["summary"]
+    helper_path.write_text(
+        "def transform(value):\n    return 'changed-and-longer', value\n",
+        encoding="utf-8",
     )
+    monkeypatch.delitem(sys.modules, exporter_name, raising=False)
+    monkeypatch.delitem(sys.modules, helper_name, raising=False)
+    importlib.invalidate_caches()
+    second = preflight_exporters(_custom_exporter_plan(exporter_name))["summary"]
+
+    assert first != second
 
 
 def test_exporter_preflight_tracks_unversioned_transitive_module_roots(
@@ -487,38 +444,6 @@ def test_exporter_preflight_tracks_globals_used_only_by_nested_code(
     assert first != second
 
 
-def test_exporter_preflight_checks_unversioned_transitive_module_state(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    api_name = "marimo_export_test_state_root_api"
-    implementation_name = "marimo_export_test_state_root_implementation"
-    helper_name = "marimo_export_test_state_root_helper"
-    roots = [tmp_path / f"root-{index}" for index in range(3)]
-    for root in roots:
-        root.mkdir()
-        monkeypatch.syspath_prepend(str(root))
-    (roots[0] / f"{api_name}.py").write_text(
-        f"from {implementation_name} import encode\n",
-        encoding="utf-8",
-    )
-    (roots[1] / f"{implementation_name}.py").write_text(
-        f"from {helper_name} import transform\n\ndef encode(value):\n    return transform(value)\n",
-        encoding="utf-8",
-    )
-    (roots[2] / f"{helper_name}.py").write_text(
-        "def transform(value, seen=[]):\n    seen.append(value)\n    return len(seen)\n",
-        encoding="utf-8",
-    )
-    importlib.invalidate_caches()
-
-    with pytest.raises(OutputError) as raised:
-        preflight_exporters(_custom_exporter_plan(api_name))
-
-    assert raised.value.code == "exporter_invalid"
-    assert str(raised.value) == (f"output 'summary' exporter '{api_name}:encode' is not stateless")
-
-
 @pytest.mark.parametrize(
     ("first", "second"),
     [(1, 1.0), (0.0, -0.0)],
@@ -543,177 +468,3 @@ def test_exporter_preflight_preserves_python_scalar_identity(
         return preflight_exporters(plan)["summary"]
 
     assert identity(first) != identity(second)
-
-
-@pytest.mark.parametrize(
-    ("case", "source"),
-    [
-        (
-            "mutable-default",
-            "def encode(value, seen=[]):\n    seen.append(value)\n    return len(seen)\n",
-        ),
-        (
-            "mutable-global",
-            "seen = []\n\ndef encode(value):\n    seen.append(value)\n    return len(seen)\n",
-        ),
-        (
-            "partial-dependency",
-            "from functools import partial\n"
-            "\n"
-            "def helper(value, *, prefix):\n"
-            "    return prefix, value\n"
-            "\n"
-            "bound = partial(helper, prefix='summary')\n"
-            "\n"
-            "def encode(value):\n"
-            "    return bound(value)\n",
-        ),
-        (
-            "wrapped-closure",
-            "from functools import wraps\n"
-            "\n"
-            "def decorate(function):\n"
-            "    @wraps(function)\n"
-            "    def wrapper(value):\n"
-            "        return function(value)\n"
-            "    return wrapper\n"
-            "\n"
-            "@decorate\n"
-            "def encode(value):\n"
-            "    return value\n",
-        ),
-        (
-            "bound-builtin",
-            "seen = []\n"
-            "append = seen.append\n"
-            "\n"
-            "def encode(value):\n"
-            "    append(value)\n"
-            "    return len(seen)\n",
-        ),
-        (
-            "global-write",
-            "count = 0\n"
-            "\n"
-            "def encode(value):\n"
-            "    global count\n"
-            "    count += 1\n"
-            "    return value, count\n",
-        ),
-        (
-            "globals-alias-write",
-            "count = 0\n"
-            "\n"
-            "def encode(value):\n"
-            "    namespace = globals()\n"
-            "    namespace['count'] += 1\n"
-            "    return value, namespace['count']\n",
-        ),
-        (
-            "globals-mutating-call",
-            "seen = []\n"
-            "\n"
-            "def encode(value):\n"
-            "    globals()['seen'].append(value)\n"
-            "    return len(seen)\n",
-        ),
-        (
-            "function-local-import-write",
-            "def encode(value):\n"
-            "    import helper as state\n"
-            "    state.count += 1\n"
-            "    return value, state.count\n",
-        ),
-        (
-            "reflective-write-alias",
-            "class State:\n"
-            "    count = 0\n"
-            "\n"
-            "mutate = setattr\n"
-            "\n"
-            "def encode(value):\n"
-            "    mutate(State, 'count', State.count + 1)\n"
-            "    return value, State.count\n",
-        ),
-        (
-            "parameter-write",
-            "class State:\n"
-            "    count = 0\n"
-            "\n"
-            "def increment(state):\n"
-            "    state.count += 1\n"
-            "    return state.count\n"
-            "\n"
-            "def encode(value):\n"
-            "    return value, increment(State)\n",
-        ),
-        (
-            "derived-class-write",
-            "class State:\n"
-            "    count = 0\n"
-            "\n"
-            "def increment(state):\n"
-            "    type(state).count += 1\n"
-            "    return type(state).count\n"
-            "\n"
-            "def encode(value):\n"
-            "    return value, increment(State())\n",
-        ),
-        (
-            "scalar-subclass",
-            "from enum import IntEnum\n"
-            "\n"
-            "class Marker(IntEnum):\n"
-            "    ONE = 1\n"
-            "\n"
-            "marker = Marker.ONE\n"
-            "\n"
-            "def encode(value):\n"
-            "    return type(marker).__name__, marker, value\n",
-        ),
-        (
-            "typing-metadata-state",
-            "from typing import Annotated\n"
-            "\n"
-            "class Box:\n"
-            "    def __init__(self):\n"
-            "        self.count = 0\n"
-            "\n"
-            "box = Box()\n"
-            "Value = Annotated[int, box]\n"
-            "\n"
-            "def encode(value):\n"
-            "    metadata = Value.__metadata__[0]\n"
-            "    metadata.count += 1\n"
-            "    return value, metadata.count\n",
-        ),
-        (
-            "class-state",
-            "class State:\n"
-            "    seen = []\n"
-            "\n"
-            "def encode(value):\n"
-            "    State.seen.append(value)\n"
-            "    return len(State.seen)\n",
-        ),
-    ],
-)
-def test_exporter_preflight_rejects_hidden_function_state(
-    monkeypatch: pytest.MonkeyPatch,
-    case: str,
-    source: str,
-) -> None:
-    module_name = f"marimo_export_test_{case.replace('-', '_')}"
-    module = ModuleType(module_name)
-    exec(source, module.__dict__)
-    monkeypatch.setitem(sys.modules, module_name, module)
-
-    with pytest.raises(OutputError) as raised:
-        preflight_exporters(_custom_exporter_plan(module_name))
-
-    assert raised.value.code == "exporter_invalid"
-    assert str(raised.value) == (
-        f"output 'summary' exporter '{module_name}:encode' is not stateless"
-    )
-    assert isinstance(raised.value.details["dependency"], str)
-    assert isinstance(raised.value.details["python_type"], str)

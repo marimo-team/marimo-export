@@ -36,7 +36,7 @@ table = parquet.table(compression="snappy", filename="prices.parquet")
 document = blob.json(media_type="application/vnd.example.v1+json")
 ```
 
-These calls construct immutable descriptors. The selected runtime function
+These calls construct immutable descriptors. The selected runtime callable
 receives the notebook source value later, inside a transient marimo child cell.
 Its return enters the normal marimo cache before publication.
 
@@ -62,7 +62,7 @@ installs the runtimes for the subpaths it imports.
 A custom representation needs:
 
 1. A versioned media type.
-2. An importable top-level Python function that returns a validated
+2. An importable Python callable that returns a validated
    `BlobAsset`.
 3. Bounded public metadata.
 4. An `OutputLoader` that matches the codec and media type.
@@ -70,15 +70,14 @@ A custom representation needs:
 6. Disposal when browser resources are created.
 7. A producer-to-browser test over exact bytes.
 
-Reference the function as `module:function` in the ExportSpec. The module and
-its dependencies must be available in the selected kernel. The function
+Reference the callable as `module:symbol` in the ExportSpec. The module and
+its dependencies must be available in the selected kernel. The callable
 receives one source value plus portable keyword options. No Python source or
 serialized closure enters the spec.
 
-Exporter functions are stateless. Immutable constants may be scalars, bytes,
-tuples, frozensets, or regular expressions. Pass other configuration through
-exporter options.
-
-Preflight fingerprints the resolved module, function code, statically reachable
-Python modules, available owning package version, and declared built-in runtime
-dependencies. Changing one of those inputs invalidates the projection cache.
+Preflight fingerprints the resolved module, callable implementation,
+statically reachable Python modules, available owning package version, and
+declared built-in runtime dependencies. Changing one of those inputs
+invalidates the projection cache. Files, network responses, mutable module
+state, and other external inputs follow the same invalidation discipline as
+cached notebook code.

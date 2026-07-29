@@ -7,7 +7,6 @@ from pathlib import Path
 import pytest
 from marimo_export import ExportSpec, OutputSpec, capture, open_publication
 from marimo_export._remote.managed import ManagedServer
-from marimo_export.errors import OutputError
 from marimo_export.exporters import importable
 
 
@@ -116,82 +115,24 @@ def _write_prefix(path: Path, label: str) -> None:
     path.write_text(f'PREFIX = "{label}"\n', encoding="utf-8")
 
 
-def _write_stateful_exporter(path: Path) -> None:
+def _write_callable_exporter(path: Path) -> None:
     path.write_text(
         """
-class State:
-    seen = []
+from marimo_export import BlobAsset
 
 
-def encode(value):
-    State.seen.append(value)
-    return len(State.seen)
-""".lstrip(),
-        encoding="utf-8",
-    )
+class Encoder:
+    def __init__(self, label):
+        self.label = label
+
+    def __call__(self, value, *, increment):
+        return BlobAsset(
+            data=f"{self.label}:{value + increment}".encode("utf-8"),
+            media_type="application/vnd.example.summary.v1+text",
+        )
 
 
-def _write_globals_alias_exporter(path: Path) -> None:
-    path.write_text(
-        """
-count = 0
-
-
-def encode(value):
-    namespace = globals()
-    namespace["count"] += 1
-    return value, namespace["count"]
-""".lstrip(),
-        encoding="utf-8",
-    )
-
-
-def _write_globals_method_exporter(path: Path) -> None:
-    path.write_text(
-        """
-seen = []
-
-
-def encode(value):
-    globals()["seen"].append(value)
-    return len(seen)
-""".lstrip(),
-        encoding="utf-8",
-    )
-
-
-def _write_reflective_alias_exporter(path: Path) -> None:
-    path.write_text(
-        """
-class State:
-    count = 0
-
-
-mutate = setattr
-
-
-def encode(value):
-    mutate(State, "count", State.count + 1)
-    return value, State.count
-""".lstrip(),
-        encoding="utf-8",
-    )
-
-
-def _write_parameter_state_exporter(path: Path) -> None:
-    path.write_text(
-        """
-class State:
-    count = 0
-
-
-def increment(state):
-    type(state).count += 1
-    return type(state).count
-
-
-def encode(value):
-    return value, increment(State())
+encode = Encoder("callable")
 """.lstrip(),
         encoding="utf-8",
     )
@@ -280,6 +221,38 @@ def test_capture_sideloads_an_importable_exporter_and_invalidates_changed_code(
     assert (
         open_publication(tmp_path / "changed").state("baseline").output("summary").blob_asset().data
         == b"second:42"
+    )
+    assert notebook.read_bytes() == source
+
+
+def test_capture_sideloads_an_importable_callable(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    notebook = tmp_path / "notebook.py"
+    _write_notebook(notebook)
+    source = notebook.read_bytes()
+    _write_callable_exporter(tmp_path / "publication_exports.py")
+    monkeypatch.setenv("PYTHONPATH", str(tmp_path))
+    spec = ExportSpec(
+        inputs=(),
+        states={"baseline": {}},
+        outputs={
+            "summary": OutputSpec(
+                source="answer",
+                exporter=importable("publication_exports:encode", increment=1),
+            )
+        },
+    )
+
+    assert _capture(notebook, spec, tmp_path / "publication") == (0, 1)
+    assert (
+        open_publication(tmp_path / "publication")
+        .state("baseline")
+        .output("summary")
+        .blob_asset()
+        .data
+        == b"callable:42"
     )
     assert notebook.read_bytes() == source
 
@@ -390,48 +363,3 @@ def test_custom_exporter_cache_identity_tracks_transitive_reexports(
         open_publication(tmp_path / "changed").state("baseline").output("summary").blob_asset().data
         == b"changed-transitive:41"
     )
-
-
-@pytest.mark.parametrize(
-    "write_exporter",
-    [
-        _write_stateful_exporter,
-        _write_globals_alias_exporter,
-        _write_globals_method_exporter,
-        _write_reflective_alias_exporter,
-        _write_parameter_state_exporter,
-    ],
-    ids=[
-        "class-state",
-        "globals-alias",
-        "globals-method",
-        "reflective-alias",
-        "derived-class",
-    ],
-)
-def test_stateful_exporter_is_rejected_before_two_state_execution(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    write_exporter: Callable[[Path], None],
-) -> None:
-    notebook = tmp_path / "notebook.py"
-    _write_notebook(notebook)
-    write_exporter(tmp_path / "publication_exports.py")
-    monkeypatch.setenv("PYTHONPATH", str(tmp_path))
-    spec = ExportSpec(
-        inputs=("answer",),
-        states={"one": {"answer": 1}, "two": {"answer": 2}},
-        outputs={
-            "summary": OutputSpec(
-                source="answer",
-                exporter=importable("publication_exports:encode"),
-            )
-        },
-    )
-    output = tmp_path / "publication"
-
-    with pytest.raises(OutputError) as raised:
-        _capture(notebook, spec, output)
-
-    assert raised.value.code == "exporter_invalid"
-    assert not output.exists()

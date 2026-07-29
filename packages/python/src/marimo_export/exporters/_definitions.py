@@ -167,7 +167,7 @@ def _exact_options(name: str, options: Mapping[str, JsonValue], accepted: set[st
 
 def _parse_import_reference(value: str) -> tuple[str, str]:
     if value.count(":") != 1:
-        raise ValueError(f"unknown exporter {value!r}; custom exporters use 'module:function'")
+        raise ValueError(f"unknown exporter {value!r}; custom exporters use 'module:symbol'")
     module, symbol = value.split(":", maxsplit=1)
     parts = module.split(".")
     if (
@@ -176,7 +176,7 @@ def _parse_import_reference(value: str) -> tuple[str, str]:
         or not symbol.isidentifier()
         or keyword.iskeyword(symbol)
     ):
-        raise ValueError(f"custom exporter {value!r} must name an importable top-level function")
+        raise ValueError(f"custom exporter {value!r} must name an importable symbol")
     return module, symbol
 
 

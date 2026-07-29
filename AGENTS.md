@@ -69,7 +69,7 @@ The producer captures a baseline and normalizes every state into a complete
 input vector. Every output runs through one synthetic child leaf for every
 state. Omitting an exporter preserves the native cache representation.
 Selecting an exporter invokes one built-in ID or explicit
-`module:function` reference. The publication contains one canonical
+`module:symbol` reference. The publication contains one canonical
 `index.json` and content-addressed assets.
 
 Publication v1 accepts:
@@ -142,10 +142,10 @@ for the ExportSpec boundary and on-demand schema generation. Use structured
 data construction for JSON, YAML, and manifests.
 
 Built-in exporter factories return immutable `ExporterSpec` values. Custom
-exporters use explicit `module:function` references with portable keyword
-options and resolve to stateless top-level functions. Runtime functions return
-a value supported by marimo's native cache codecs. Synthetic leaf code owns
-conversion cache identity.
+exporters use explicit `module:symbol` references with portable keyword
+options. The resolved symbol is callable and returns a value supported by
+marimo's native cache codecs. Synthetic leaf code owns conversion cache
+identity.
 
 ## TypeScript conventions
 

@@ -220,14 +220,16 @@ output = OutputSpec(
 )
 ```
 
-Custom exporters use an explicit `module:function` reference. The function
-must be importable in the notebook kernel and return a supported native cache
-value. A `BlobAsset` with a versioned media type can pair with a custom browser
-loader.
+Custom exporters use an explicit `module:symbol` reference. The selected
+kernel imports the module, resolves the callable symbol, and passes the source
+value plus portable exporter options. The callable returns a supported native
+cache value. A `BlobAsset` with a versioned media type can pair with a custom
+browser loader.
 
-Write custom exporters as stateless top-level functions. Pass configuration
-through exporter options. Preflight rejects mutable defaults, closure state,
-mutable globals, partials, and callable instances before state execution.
+Preflight fingerprints the callable implementation and its referenced local
+code for projection-cache invalidation. Files, network responses, mutable
+module state, and other external inputs follow the same invalidation discipline
+as cached notebook code.
 
 [Read the representations guide](docs/representations.md) for loader peer
 dependencies, media types, and the custom loader contract.

@@ -62,10 +62,10 @@ A native leaf references the token before returning its source definition. An
 exporter leaf also imports the resolved function and invokes it with the source
 plus normalized keyword options. The token makes every projection cache key
 state-specific, including when the selected source or result is a `BlobAsset`.
-Exporter preflight fingerprints the resolved module, function code, statically
-reachable Python modules, owning distribution versions, and built-in runtime
-dependencies. A private local in the leaf places that digest in marimo's cell
-hash.
+Exporter preflight fingerprints the resolved module, callable implementation,
+statically reachable Python modules, owning distribution versions, and
+built-in runtime dependencies. A private local in the leaf places that digest
+in marimo's cell hash.
 
 The compatibility layer appends these cells directly to the in-memory
 `NotebookSerializationV1` used to construct the child. They never enter the
@@ -172,10 +172,10 @@ renderer finalizers.
 ## Extension path
 
 Built-in exporter IDs resolve through one closed catalog. A custom
-`module:function` reference resolves a top-level function already available in
-the kernel environment. Preflight confirms the symbol is a top-level function
-with no mutable or closure-owned state before state execution, then computes
-its cache identity. Portable options become explicit keyword arguments.
+`module:symbol` reference resolves a callable already available in the kernel
+environment. Preflight computes its cache identity from the resolved module,
+callable implementation, referenced local code, and available distribution
+versions. Portable options become explicit keyword arguments.
 
 A custom exporter can return any value supported by the native cache codecs. A
 custom `BlobAsset` representation uses a versioned media type. Its paired

@@ -54,7 +54,7 @@ Typed failures live in `marimo_export.errors`.
 
 ## Add an exporter
 
-An exporter is an importable top-level function:
+An exporter is an importable callable:
 
 ```python
 import json
@@ -78,7 +78,7 @@ def summary(value: Mapping[str, object]) -> BlobAsset:
     )
 ```
 
-Reference the function from an ExportSpec with `module:function`:
+Reference the callable from an ExportSpec with `module:symbol`:
 
 ```yaml
 outputs:
@@ -87,13 +87,13 @@ outputs:
     exporter: acme_exports:summary
 ```
 
-The function validates its input and returned value. marimo-export imports it
+The callable validates its input and returned value. marimo-export imports it
 inside a synthetic child leaf, then marimo executes and caches the conversion.
 The module must be importable in the selected kernel.
 
-Keep exporter functions stateless. Use immutable constants and pass
-configuration through exporter options. Preflight rejects mutable defaults,
-closure state, mutable globals, partials, and callable instances.
+Pass publication configuration through exporter options. Files, network
+responses, mutable module state, and other external inputs follow the same
+invalidation discipline as cached notebook code.
 
 Add optional dependencies under a focused package extra. Keep source object
 libraries in the notebook environment when the exporter can accept them
