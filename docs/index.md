@@ -11,6 +11,25 @@ AnyWidget.
 
 [Publish a notebook from the wild](getting-started.md)
 
+## Parameterize, execute, publish
+
+[Papermill](https://github.com/nteract/papermill) describes a familiar Jupyter
+workflow: parameterize a notebook, execute it, and save the executed notebook.
+marimo-export follows that sequence for marimo and adds a publication step for
+client applications:
+
+1. **Parameterize:** `inputs` names marimo definitions and `states` supplies
+   sparse override rows.
+2. **Execute:** `build` starts the notebook, or `capture` attaches to a live
+   kernel, and each state runs through marimo.
+3. **Publish:** the chosen `outputs` become `index.json` entries and
+   content-addressed assets.
+
+Papermill writes an executed notebook for each run. marimo-export writes one
+static publication containing the declared finite state matrix.
+
+[Compare Papermill and ExportSpec](export-spec.md#for-papermill-users)
+
 ## A real notebook and a concrete ExportSpec
 
 The getting-started guide runs a pinned snapshot of the public

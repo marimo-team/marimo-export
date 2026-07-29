@@ -33,6 +33,20 @@ Use it to:
 > currently versioned `0.0.0`, so the quickstart runs from a repository
 > checkout.
 
+## If you know Papermill
+
+[Papermill](https://github.com/nteract/papermill) gives Jupyter users a
+familiar workflow: supply parameters, execute a notebook, and save the executed
+notebook. marimo-export applies that workflow shape to a finite matrix of
+marimo definition values. marimo executes each named state through its reactive
+graph and cache, and marimo-export collects selected definitions into a static
+publication for a browser app.
+
+The analogy is closest to `build`, which owns notebook startup, execution, and
+shutdown. `capture` applies the same ExportSpec to an already-running kernel.
+
+[Map Papermill concepts to ExportSpec](docs/export-spec.md#for-papermill-users).
+
 ## Publish your first notebook
 
 Clone the repository and install the locked workspace:

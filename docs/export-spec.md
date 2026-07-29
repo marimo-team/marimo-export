@@ -9,6 +9,28 @@ states: {}
 outputs: {}
 ```
 
+## For Papermill users
+
+[Papermill](https://papermill.readthedocs.io/en/latest/usage-parameterize.html)
+treats values in a tagged `parameters` cell as defaults, injects overrides for
+one execution, and writes the executed Jupyter notebook. marimo-export
+addresses marimo definitions by name, normalizes multiple sparse state rows
+against the live baseline, and publishes selected definitions.
+
+| Workflow concept | Papermill                        | marimo-export                             |
+| ---------------- | -------------------------------- | ----------------------------------------- |
+| Defaults         | Tagged `parameters` cell         | Live value of each input definition       |
+| Overrides        | Parameter dictionary or YAML     | Sparse map under each name in `states`    |
+| Execution        | One notebook per API or CLI call | Every declared state per build or capture |
+| Result           | Executed Jupyter notebook        | Static publication with named outputs     |
+
+`build` is the closest lifecycle match. It starts the notebook, executes the
+matrix, and shuts down its loopback server. `capture` keeps the same state and
+output contract while attaching to a kernel that is already running.
+
+Each normalized state follows normal marimo execution, so reactive dependency
+ordering and cache restoration remain owned by marimo.
+
 ## Inputs
 
 `inputs` lists notebook definition names. Any definition in the marimo graph
