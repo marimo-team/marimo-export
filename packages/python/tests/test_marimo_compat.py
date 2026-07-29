@@ -6,7 +6,7 @@ import subprocess
 import sys
 import weakref
 from contextlib import nullcontext
-from importlib.machinery import SourceFileLoader
+from importlib.machinery import ModuleSpec, SourceFileLoader
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
 from typing import Any, cast
@@ -142,6 +142,39 @@ def test_exporter_module_overlay_restores_existing_package_identities(
     assert sys.modules[package_name] is original_package
     assert sys.modules[module_name] is original_module
     assert original_package.exporter is original_module
+
+
+def test_exporter_module_overlay_shadows_source_parent_of_native_module(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    package_name = "marimo_export_test_native_parent"
+    native_name = f"{package_name}._native"
+    package = tmp_path / package_name
+    package.mkdir()
+    source = package / "__init__.py"
+    source.write_text("value = 'first'\n", encoding="utf-8")
+    monkeypatch.syspath_prepend(str(tmp_path))
+    original = importlib.import_module(package_name)
+    native_file = tmp_path / "_native.so"
+    native_file.write_bytes(b"native")
+    native = ModuleType(native_name)
+    native.__file__ = str(native_file)
+    native.__spec__ = ModuleSpec(native_name, loader=None, origin=str(native_file))
+    monkeypatch.setitem(sys.modules, native_name, native)
+    monkeypatch.setattr(original, "_native", native, raising=False)
+    source.write_text("value = 'other'\n", encoding="utf-8")
+    original_modules = dict(sys.modules)
+    names: set[str] = {package_name, native_name}
+
+    with _isolated_modules(names, original_modules, roots={package_name}):
+        fresh = sys.modules[package_name]
+        assert fresh is not original
+        assert fresh.value == "other"
+        assert sys.modules[native_name] is native
+
+    assert sys.modules[package_name] is original
+    assert sys.modules[native_name] is native
 
 
 @pytest.mark.parametrize("preexisting", [False, True], ids=["new", "existing"])
@@ -428,10 +461,15 @@ plan = MatrixPlan(
     state_name="marimo_export_state_0123456789abcdef",
     state_code="marimo_export_state_0123456789abcdef = 'state'",
 )
-for _ in range(2):
+original = None
+for index in range(2):
     with prepared_exporters(plan):
-        assert "numpy" in sys.modules
-    assert "numpy" in sys.modules
+        current = sys.modules["numpy"]
+        if index == 0:
+            original = current
+        else:
+            assert current is not original
+    assert sys.modules["numpy"] is original
     assert "numpy._core._multiarray_umath" in sys.modules
 """
     completed = subprocess.run(

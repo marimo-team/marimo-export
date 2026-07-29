@@ -226,7 +226,6 @@ _EXPORTER_SNAPSHOT_LOCK = threading.Lock()
 _EXPORTER_SNAPSHOTS: dict[str, _ExporterSnapshot] = {}
 _EXPORTER_SNAPSHOT_STATE_ATTRIBUTE = "_marimo_export_exporter_snapshot_state"
 _EXPORTER_IMPORT_LOCK = threading.RLock()
-_RETAINED_EXPORTER_PACKAGES: dict[str, weakref.ReferenceType[Any]] = {}
 
 
 @contextmanager
@@ -735,7 +734,7 @@ def _isolated_modules(
         if module is not None and hasattr(module, "__path__")
     }
     native_get_code = SourceFileLoader.get_code
-    retained_packages = _retained_exporter_package_roots(original_modules)
+    new_retained_packages: set[str] = set()
 
     def get_code(loader: SourceFileLoader, fullname: str) -> Any:
         filename = loader.get_filename(fullname)
@@ -747,9 +746,12 @@ def _isolated_modules(
             original_modules,
             roots=roots,
         )
-        eviction_names = {
-            name for name in eviction_names if name.partition(".")[0] not in retained_packages
+        native_ancestors = _native_module_ancestors(original_modules)
+        protected_names = {name for name in eviction_names if name in native_ancestors}
+        shadow_names = {
+            name for name in protected_names if _is_python_source_module(original_modules.get(name))
         }
+        eviction_names.difference_update(protected_names)
         for name in sorted(
             eviction_names,
             key=lambda value: value.count("."),
@@ -763,6 +765,8 @@ def _isolated_modules(
                     delattr(parent, attribute)
         importlib.invalidate_caches()
         cast(Any, SourceFileLoader).get_code = get_code
+        for name in sorted(shadow_names):
+            sys.modules[name] = _shadow_source_module(name, original_modules[name])
         yield
     finally:
         cast(Any, SourceFileLoader).get_code = native_get_code
@@ -772,14 +776,11 @@ def _isolated_modules(
             if _is_reloadable_module(sys.modules.get(name))
             for distribution in package_distributions.get(name.partition(".")[0], ())
         }
-        retained_packages.update(
-            _new_native_package_roots(
-                roots=roots,
-                original_modules=original_modules,
-                modules=sys.modules,
-            )
+        new_retained_packages = _new_native_package_roots(
+            roots=roots,
+            original_modules=original_modules,
+            modules=sys.modules,
         )
-        _record_retained_exporter_packages(retained_packages, sys.modules)
         rollback_names = _reloadable_module_names(
             names,
             sys.modules,
@@ -796,7 +797,7 @@ def _isolated_modules(
             )
         )
         rollback_names = {
-            name for name in rollback_names if name.partition(".")[0] not in retained_packages
+            name for name in rollback_names if name.partition(".")[0] not in new_retained_packages
         }
         for name in sorted(
             rollback_names,
@@ -871,24 +872,34 @@ def _new_native_package_roots(
     }
 
 
-def _retained_exporter_package_roots(modules: Mapping[str, Any]) -> set[str]:
-    retained: set[str] = set()
-    for name, reference in tuple(_RETAINED_EXPORTER_PACKAGES.items()):
-        if modules.get(name) is reference():
-            retained.add(name)
-        else:
-            _RETAINED_EXPORTER_PACKAGES.pop(name, None)
-    return retained
+def _native_module_ancestors(modules: Mapping[str, Any]) -> set[str]:
+    ancestors: set[str] = set()
+    for name, module in modules.items():
+        if _is_reloadable_module(module):
+            continue
+        parent = name.rpartition(".")[0]
+        while parent:
+            ancestors.add(parent)
+            parent = parent.rpartition(".")[0]
+    return ancestors
 
 
-def _record_retained_exporter_packages(
-    names: set[str],
-    modules: Mapping[str, Any],
-) -> None:
-    for name in names:
-        module = modules.get(name)
-        if module is not None:
-            _RETAINED_EXPORTER_PACKAGES[name] = weakref.ref(module)
+def _shadow_source_module(name: str, module: Any) -> Any:
+    origin = _module_origin(module)
+    native_spec = getattr(module, "__spec__", None)
+    if origin is None or native_spec is None:
+        return module
+    locations = native_spec.submodule_search_locations
+    spec = importlib.util.spec_from_file_location(
+        name,
+        origin,
+        submodule_search_locations=list(locations) if locations is not None else None,
+    )
+    if spec is None or spec.loader is None:
+        return module
+    fresh = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(fresh)
+    return fresh
 
 
 def _is_python_source_module(module: Any) -> bool:
