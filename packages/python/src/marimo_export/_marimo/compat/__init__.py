@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import copy
 import dis
 import gc
@@ -602,6 +603,9 @@ def preflight_exporters(plan: MatrixPlan) -> Mapping[str, str]:
             continue
         reference = runtime_reference(exporter.name)
         try:
+            parent = reference.module.rpartition(".")[0]
+            if parent:
+                importlib.import_module(parent)
             module = importlib.import_module(reference.module)
             value = getattr(module, reference.symbol)
         except Exception as error:
@@ -671,7 +675,11 @@ def prepared_exporters(plan: MatrixPlan) -> Iterator[Mapping[str, str]]:
         original_modules = dict(sys.modules)
         candidates = set(custom.values())
         candidates.update(_recorded_exporter_modules(custom))
-        _include_package_parents(candidates)
+        _include_loaded_source_dependencies(
+            candidates,
+            original_modules,
+            roots=set(custom.values()),
+        )
         while True:
             with _isolated_modules(
                 candidates,
@@ -684,7 +692,11 @@ def prepared_exporters(plan: MatrixPlan) -> Iterator[Mapping[str, str]]:
                     yield identities
                     return
                 candidates.update(discovered)
-                _include_package_parents(candidates)
+                _include_loaded_source_dependencies(
+                    candidates,
+                    original_modules,
+                    roots=set(custom.values()),
+                )
             if len(candidates) > _MAX_EXPORTER_DEPENDENCIES + len(custom):
                 name = next(iter(custom))
                 raise OutputError(
@@ -710,6 +722,93 @@ def _include_package_parents(names: set[str]) -> None:
         while parent:
             names.add(parent)
             parent = parent.rpartition(".")[0]
+
+
+def _include_loaded_source_dependencies(
+    names: set[str],
+    modules: Mapping[str, Any],
+    *,
+    roots: set[str],
+) -> None:
+    try:
+        package_distributions = importlib.metadata.packages_distributions()
+    except Exception:
+        package_distributions = {}
+    selected_distributions = {
+        distribution
+        for root in roots
+        for distribution in package_distributions.get(root.partition(".")[0], ())
+    }
+    _include_package_parents(names)
+    pending = list(names)
+    visited: set[str] = set()
+    while pending:
+        name = pending.pop()
+        if name in visited:
+            continue
+        visited.add(name)
+        module = modules.get(name)
+        if not _is_development_source_module(module):
+            continue
+        for dependency in _source_imports(name, module):
+            dependency_module = modules.get(dependency)
+            if not _is_local_source_module(
+                dependency,
+                dependency_module,
+                selected_distributions=selected_distributions,
+                package_distributions=package_distributions,
+            ):
+                continue
+            candidate = dependency
+            while candidate:
+                if candidate not in names:
+                    names.add(candidate)
+                    pending.append(candidate)
+                candidate = candidate.rpartition(".")[0]
+
+
+def _source_imports(name: str, module: Any) -> set[str]:
+    origin = _module_origin(module)
+    if origin is None:
+        return set()
+    try:
+        source = SourceFileLoader(name, str(origin)).get_source(name)
+        if source is None:
+            return set()
+        tree = ast.parse(source, filename=str(origin))
+    except (OSError, SyntaxError, UnicodeError):
+        return set()
+    package = str(getattr(module, "__package__", ""))
+    imports: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            imports.update(alias.name for alias in node.names)
+            continue
+        if not isinstance(node, ast.ImportFrom):
+            continue
+        imported = node.module or ""
+        if node.level:
+            if not package:
+                continue
+            with suppress(ImportError):
+                imported = importlib.util.resolve_name(
+                    f"{'.' * node.level}{imported}",
+                    package,
+                )
+        if not imported or imported.startswith("."):
+            continue
+        imports.add(imported)
+        imports.update(f"{imported}.{alias.name}" for alias in node.names if alias.name != "*")
+    return imports
+
+
+def _is_development_source_module(module: Any) -> bool:
+    origin = _module_origin(module)
+    return (
+        origin is not None
+        and origin.suffix == ".py"
+        and not any(part in {"site-packages", "dist-packages"} for part in origin.parts)
+    )
 
 
 @contextmanager
