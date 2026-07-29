@@ -1567,14 +1567,26 @@ def _projection_receipt(
         flush_active_caches()
         cell = child._kernel.graph.cells[cell_id]
         native_loader = LazyLoader(name="cell_cache", store=context.cache.store)
-        attempt = cache_attempt_from_hash(
-            cell.mod,
-            child._kernel.graph,
-            cell_id,
-            child.globals,
-            loader=native_loader,
-            pin_modules=bool(child._kernel.user_config.get("runtime", {}).get("pin_modules", True)),
-        )
+        effective_mode = native_loader._effective_mode()
+        store = _ReadSnapshotStore(native_loader.store)
+        native_store = native_loader.store
+        configured_mode = native_loader.mode
+        try:
+            native_loader.store = store
+            native_loader.mode = effective_mode
+            attempt = cache_attempt_from_hash(
+                cell.mod,
+                child._kernel.graph,
+                cell_id,
+                child.globals,
+                loader=native_loader,
+                pin_modules=bool(
+                    child._kernel.user_config.get("runtime", {}).get("pin_modules", True)
+                ),
+            )
+        finally:
+            native_loader.store = native_store
+            native_loader.mode = configured_mode
         cache_key = str(native_loader.build_path(attempt.key))
         if not attempt.hit:
             raise OutputError(
@@ -1582,34 +1594,6 @@ def _projection_receipt(
                 code="cache_receipt_missing",
                 details={"output": output},
             )
-        effective_mode = native_loader._effective_mode()
-        store = _ReadSnapshotStore(native_loader.store)
-        encoded = store.get(cache_key)
-        if not encoded:
-            raise OutputError(
-                f"output {output!r} has no native cache receipt",
-                code="cache_receipt_missing",
-                details={"output": output},
-            )
-        native_store = native_loader.store
-        configured_mode = native_loader.mode
-        try:
-            native_loader.store = store
-            native_loader.mode = effective_mode
-            native_loader.restore_cache(attempt.key, encoded)
-        except Exception as error:
-            raise OutputError(
-                f"output {output!r} native cache receipt could not be verified",
-                code="cache_receipt_invalid",
-                details={
-                    "output": output,
-                    "cache_key": cache_key,
-                    "exception_type": type(error).__name__,
-                },
-            ) from error
-        finally:
-            native_loader.store = native_store
-            native_loader.mode = configured_mode
         payload = child.outputs.get(cell_id)
         return _native_receipt(
             store=store,
