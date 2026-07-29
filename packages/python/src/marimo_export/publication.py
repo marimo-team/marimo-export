@@ -576,18 +576,27 @@ class PhaseTimings:
 
 @dataclass(frozen=True, slots=True, init=False)
 class PublicationWarning:
-    code: Literal["retired_destination_cleanup_failed"]
+    code: Literal[
+        "publication_parent_sync_failed",
+        "retired_destination_cleanup_failed",
+    ]
     message: str
     _details_bytes: bytes = field(repr=False)
 
     def __init__(
         self,
         *,
-        code: Literal["retired_destination_cleanup_failed"],
+        code: Literal[
+            "publication_parent_sync_failed",
+            "retired_destination_cleanup_failed",
+        ],
         message: str,
         details: Mapping[str, JsonValue],
     ) -> None:
-        if code != "retired_destination_cleanup_failed":
+        if code not in {
+            "publication_parent_sync_failed",
+            "retired_destination_cleanup_failed",
+        }:
             raise ValueError("publication warning code is invalid")
         _bounded_printable(message, "publication warning message", _MAX_PROVENANCE_BYTES)
         object.__setattr__(self, "code", code)

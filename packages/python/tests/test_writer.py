@@ -118,6 +118,27 @@ def test_writer_atomically_replaces_a_verified_publication(tmp_path: Path) -> No
     assert not tuple(tmp_path.glob(".publication.staging-*"))
 
 
+def test_writer_reports_parent_sync_failure_after_a_visible_commit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    index, assets = _publication()
+    target = tmp_path / "publication"
+    native_sync = writer_module._sync_directory
+
+    def fail_parent_sync(path: Path) -> None:
+        if path == tmp_path:
+            raise OSError("sync failed")
+        native_sync(path)
+
+    monkeypatch.setattr(writer_module, "_sync_directory", fail_parent_sync)
+
+    result = write_publication(index, assets, target, replace=False)
+
+    assert open_publication(target).verify().assets == 1
+    assert [warning.code for warning in result.warnings] == ["publication_parent_sync_failed"]
+
+
 def test_writer_rejects_missing_extra_and_mismatched_assets(tmp_path: Path) -> None:
     index, assets = _publication()
     identity, payload = next(iter(assets.items()))

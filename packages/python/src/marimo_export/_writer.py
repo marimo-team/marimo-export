@@ -109,8 +109,16 @@ def write_publication(
 
         retired = _commit(staging, target, replace=replace)
         committed = True
-        _sync_directory(parent)
-        open_publication(target).verify()
+        try:
+            _sync_directory(parent)
+        except OSError:
+            warnings.append(
+                PublicationWarning(
+                    code="publication_parent_sync_failed",
+                    message="The publication is visible, but its directory entry was not synced.",
+                    details={"path": str(target)},
+                )
+            )
 
         if retired is not None:
             try:
