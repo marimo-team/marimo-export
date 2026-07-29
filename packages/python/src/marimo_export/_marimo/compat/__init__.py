@@ -12,7 +12,7 @@ import time
 import unicodedata
 from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager, suppress
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal, cast
 
@@ -94,6 +94,7 @@ class StateExecution:
 class _CacheActivity:
     hits: int = 0
     misses: int = 0
+    projections: dict[Any, Literal["hit", "miss"]] = field(default_factory=dict)
 
 
 _CACHE_TRACKER_LOCK = threading.Lock()
@@ -141,11 +142,13 @@ def _track_upstream_cache(
                     tracker = _CACHE_TRACKERS.get(id(graph))
                     if tracker is not None and tracker[0] is graph:
                         _, excluded, current = tracker
-                        if cell_id not in excluded:
-                            if attempt.hit:
-                                current.hits += 1
-                            else:
-                                current.misses += 1
+                        disposition: Literal["hit", "miss"] = "hit" if attempt.hit else "miss"
+                        if cell_id in excluded:
+                            current.projections[cell_id] = disposition
+                        elif attempt.hit:
+                            current.hits += 1
+                        else:
+                            current.misses += 1
                 return attempt
 
             _NATIVE_CACHE_FUNCTION = native
@@ -661,6 +664,9 @@ async def execute_state(
     from marimo._runtime.app.kernel_runner import AppKernelRunner
     from marimo._runtime.context import get_context as get_runtime_context
     from marimo._runtime.dataflow import prune_cells_for_overrides
+    from marimo._runtime.runner.hooks_post_execution import (
+        _set_run_result_status,
+    )
     from marimo._schemas.serialization import (
         AppInstantiation,
         CellDef,
@@ -709,6 +715,7 @@ async def execute_state(
     app = load_notebook_ir(notebook, filepath=runtime.filename)
     internal = InternalApp(app)
     child = AppKernelRunner(internal)
+    child._kernel._hooks.add_post_execution(_set_run_result_status)
     child_context = child._runtime_context
     receipts: tuple[NativeReceipt, ...] | None = None
     upstream_cache = _CacheActivity()
@@ -758,8 +765,13 @@ async def execute_state(
                 from marimo._plugins.ui._core.ui_element import UIElement
                 from marimo._runtime.commands import UpdateUIElementCommand
 
-                elements: list[UIElement[Any, Any]] = []
+                elements: list[tuple[str, UIElement[Any, Any]]] = []
                 values: list[JsonValue] = []
+                with child_context.install():
+                    child_context.ui_element_registry.register_scope(
+                        child.globals,
+                        defs=set(state.ui_values),
+                    )
                 for name, value in state.ui_values.items():
                     element = child.globals.get(name)
                     if not isinstance(element, UIElement):
@@ -768,15 +780,33 @@ async def execute_state(
                             code="input_value_invalid",
                             details={"state": state.name, "input": name},
                         )
-                    elements.append(element)
+                    elements.append((name, element))
                     values.append(value)
-                updated = await child.set_ui_element_value(
-                    UpdateUIElementCommand(
-                        object_ids=[element._id for element in elements],
-                        values=values,
-                    ),
-                    notify_frontend=False,
-                )
+                callback_errors: list[tuple[str, Exception]] = []
+                execution_mode = child._kernel.reactive_execution_mode
+                try:
+                    child._kernel.reactive_execution_mode = "lazy"
+                    with _capture_ui_callback_errors(elements, callback_errors):
+                        updated = await child.set_ui_element_value(
+                            UpdateUIElementCommand(
+                                object_ids=[element._id for _, element in elements],
+                                values=values,
+                            ),
+                            notify_frontend=False,
+                        )
+                finally:
+                    child._kernel.reactive_execution_mode = execution_mode
+                if callback_errors:
+                    input_name, callback_error = callback_errors[0]
+                    raise ExecutionError(
+                        f"state {state.name!r} input {input_name!r} callback failed",
+                        code="input_value_invalid",
+                        details={
+                            "state": state.name,
+                            "input": input_name,
+                            "exception_type": type(callback_error).__name__,
+                        },
+                    ) from callback_error
                 if not updated:
                     raise ExecutionError(
                         f"state {state.name!r} UI values were not applied",
@@ -797,26 +827,59 @@ async def execute_state(
                 ui_application_seconds = time.monotonic() - ui_started
 
             projection_started = time.monotonic()
+            reactive_cells = {
+                cell_id
+                for cell_id, cell in child._kernel.graph.cells.items()
+                if cell.stale and cell_id not in projection_id_set
+            }
+            await child.run(reactive_cells | set(projection_id_set))
+            _raise_child_errors(child, reactive_cells, state.name)
+            for output, cell_id in projection_ids.items():
+                _raise_child_errors(child, {cell_id}, state.name, output=output)
             receipt_items: list[NativeReceipt] = []
             for output in plan.outputs:
                 cell_id = projection_ids[output]
+                disposition = upstream_cache.projections.get(cell_id)
+                if disposition is None:
+                    raise OutputError(
+                        f"output {output!r} did not execute through marimo's cell cache",
+                        code="cache_receipt_missing",
+                        details={"state": state.name, "output": output},
+                    )
                 receipt_items.append(
-                    await _execute_projection(
+                    _projection_receipt(
                         child,
                         cell_id,
                         output,
-                        state.name,
+                        disposition,
                     )
                 )
             receipts = tuple(receipt_items)
             projection_execution_seconds = time.monotonic() - projection_started
     finally:
         cleanup_started = time.monotonic()
-        with child_context.install(), suppress(Exception):
-            child._kernel.cache_callbacks.teardown()
+        primary = sys.exception()
+        cleanup_error: Exception | None = None
+        try:
+            with child_context.install():
+                child._kernel.cache_callbacks.teardown()
+        except Exception as error:
+            cleanup_error = error
         del child
         gc.collect()
         cleanup_seconds = time.monotonic() - cleanup_started
+        if cleanup_error is not None:
+            failure = ExecutionError(
+                f"state {state.name!r} child cache cleanup failed",
+                code="state_cleanup_failed",
+                details={
+                    "state": state.name,
+                    "exception_type": type(cleanup_error).__name__,
+                },
+            )
+            if primary is None:
+                raise failure from cleanup_error
+            primary.add_note(str(failure))
     if receipts is None:
         raise RuntimeError("fresh child produced no projection receipts")
     return StateExecution(
@@ -861,6 +924,33 @@ def _isolated_overrides(state: NormalizedState) -> dict[str, object]:
     return cast(dict[str, object], isolated)
 
 
+@contextmanager
+def _capture_ui_callback_errors(
+    elements: list[tuple[str, Any]],
+    errors: list[tuple[str, Exception]],
+) -> Iterator[None]:
+    originals: list[tuple[Any, Any]] = []
+    try:
+        for name, element in elements:
+            callback = getattr(element, "_on_change", None)
+            if callback is None:
+                continue
+
+            def wrapped(value: object, *, _name: str = name, _callback: Any = callback) -> Any:
+                try:
+                    return _callback(value)
+                except Exception as error:
+                    errors.append((_name, error))
+                    raise
+
+            originals.append((element, callback))
+            element._on_change = wrapped
+        yield
+    finally:
+        for element, callback in originals:
+            element._on_change = callback
+
+
 def _projection_ids(
     internal: Any,
     projection_codes: Mapping[str, str],
@@ -885,11 +975,11 @@ def _projection_ids(
     return result
 
 
-async def _execute_projection(
+def _projection_receipt(
     child: Any,
     cell_id: Any,
     output: str,
-    state_name: str,
+    disposition: Literal["hit", "miss"],
 ) -> NativeReceipt:
     from marimo._runtime.context import get_context
     from marimo._save.hash import cache_attempt_from_hash
@@ -898,6 +988,7 @@ async def _execute_projection(
 
     with child._runtime_context.install():
         context = get_context()
+        flush_active_caches()
         cell = child._kernel.graph.cells[cell_id]
         loader = LazyLoader(name="cell_cache", store=context.cache.store)
         attempt = cache_attempt_from_hash(
@@ -909,12 +1000,12 @@ async def _execute_projection(
             pin_modules=bool(child._kernel.user_config.get("runtime", {}).get("pin_modules", True)),
         )
         cache_key = str(loader.build_path(attempt.key))
-        disposition: Literal["hit", "miss"] = "hit" if attempt.hit else "miss"
-
-    await child.run({cell_id})
-    _raise_child_errors(child, {cell_id}, state_name, output=output)
-    with child._runtime_context.install():
-        flush_active_caches()
+        if not attempt.hit:
+            raise OutputError(
+                f"output {output!r} did not persist its native cache receipt",
+                code="cache_receipt_missing",
+                details={"output": output},
+            )
         payload = child.outputs.get(cell_id)
         return _native_receipt(
             loader=loader,

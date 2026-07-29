@@ -141,11 +141,13 @@ in the fresh state children. A hit records a matching entry. marimo can still
 run the cell when restoration fails or the cell defines session-local UI
 elements.
 
-`timings.fresh_children.ui_application_seconds` includes marimo reactive work
-triggered by applying child-local UI values. `server_start_seconds` includes
-session connection and kernel readiness. `initial_autorun_seconds` measures the
-instantiate request through the corresponding completed run. Managed server
-fields are floats for `build` and `None` for `capture`.
+`timings.fresh_children.ui_application_seconds` measures child-local UI value
+application. `projection_execution_seconds` includes the marimo reactive work
+needed to materialize those values and execute the projection cells in one
+cache-aware run. `server_start_seconds` includes session connection and kernel
+readiness. `initial_autorun_seconds` measures the instantiate request through
+the corresponding completed run. Managed server fields are floats for `build`
+and `None` for `capture`.
 
 `to_dict()` returns a detached JSON value.
 
