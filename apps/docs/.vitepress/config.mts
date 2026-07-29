@@ -44,7 +44,7 @@ export default defineConfig({
       text: "Edit this page on GitHub",
     },
     nav: [
-      { text: "Guide", link: "/getting-started" },
+      { text: "Getting started", link: "/getting-started" },
       { text: "ExportSpec", link: "/export-spec" },
       { text: "Browser", link: "/browser-api" },
       { text: "CLI", link: "/cli" },

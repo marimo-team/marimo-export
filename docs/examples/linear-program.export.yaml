@@ -1,0 +1,21 @@
+schema: marimo-export.spec.v1
+inputs:
+  - c_widget
+states:
+  balanced:
+    c_widget:
+      matrix:
+        - [0.1, -0.2]
+  favor-first-variable:
+    c_widget:
+      matrix:
+        - [-0.6, -0.2]
+  favor-second-variable:
+    c_widget:
+      matrix:
+        - [0.1, -0.8]
+outputs:
+  objective:
+    source: c
+  solution:
+    source: x_star
