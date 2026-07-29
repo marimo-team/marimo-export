@@ -673,7 +673,11 @@ def prepared_exporters(plan: MatrixPlan) -> Iterator[Mapping[str, str]]:
         candidates.update(_recorded_exporter_modules(custom))
         _include_new_package_parents(candidates, original_modules)
         while True:
-            with _isolated_modules(candidates, original_modules):
+            with _isolated_modules(
+                candidates,
+                original_modules,
+                roots=set(custom.values()),
+            ):
                 identities = preflight_exporters(plan)
                 discovered = _recorded_exporter_modules(custom)
                 if discovered <= candidates:
@@ -716,17 +720,14 @@ def _include_new_package_parents(
 def _isolated_modules(
     names: set[str],
     original_modules: Mapping[str, Any],
+    *,
+    roots: set[str],
 ) -> Iterator[None]:
     missing = object()
     try:
         package_distributions = importlib.metadata.packages_distributions()
     except Exception:
         package_distributions = {}
-    selected_distributions = {
-        distribution
-        for name in names
-        for distribution in package_distributions.get(name.partition(".")[0], ())
-    }
     package_attributes = {
         name: dict(vars(module))
         for name, module in original_modules.items()
@@ -739,7 +740,12 @@ def _isolated_modules(
         return loader.source_to_code(loader.get_data(filename), filename)
 
     try:
-        for name in sorted(names, key=lambda value: value.count("."), reverse=True):
+        eviction_names = _reloadable_module_names(names, original_modules)
+        for name in sorted(
+            eviction_names,
+            key=lambda value: value.count("."),
+            reverse=True,
+        ):
             sys.modules.pop(name, None)
             parent_name, separator, attribute = name.rpartition(".")
             parent = sys.modules.get(parent_name) if separator else None
@@ -751,7 +757,14 @@ def _isolated_modules(
         yield
     finally:
         cast(Any, SourceFileLoader).get_code = native_get_code
-        rollback_names = set(names)
+        selected_distributions = {
+            distribution
+            for name in roots
+            if _is_python_source_module(sys.modules.get(name))
+            or (name not in sys.modules and not _is_non_source_module(original_modules.get(name)))
+            for distribution in package_distributions.get(name.partition(".")[0], ())
+        }
+        rollback_names = _reloadable_module_names(names, sys.modules)
         rollback_names.update(
             name
             for name in set(sys.modules) - set(original_modules)
@@ -788,6 +801,30 @@ def _isolated_modules(
         importlib.invalidate_caches()
 
 
+def _reloadable_module_names(
+    names: set[str],
+    modules: Mapping[str, Any],
+) -> set[str]:
+    protected: set[str] = set()
+    for name in names:
+        if not _is_non_source_module(modules.get(name)):
+            continue
+        candidate = name
+        while candidate:
+            protected.add(candidate)
+            candidate = candidate.rpartition(".")[0]
+    return names - protected
+
+
+def _is_non_source_module(module: Any) -> bool:
+    return module is not None and not _is_python_source_module(module)
+
+
+def _is_python_source_module(module: Any) -> bool:
+    origin = _module_origin(module)
+    return origin is not None and origin.suffix == ".py"
+
+
 def _is_local_source_module(
     name: str,
     module: Any,
@@ -795,8 +832,7 @@ def _is_local_source_module(
     selected_distributions: set[str],
     package_distributions: Mapping[str, list[str]],
 ) -> bool:
-    origin = _module_origin(module)
-    if origin is None or origin.suffix != ".py":
+    if not _is_python_source_module(module):
         return False
     top_level = name.partition(".")[0]
     if top_level == "marimo_export" or top_level in sys.stdlib_module_names:

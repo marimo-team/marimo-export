@@ -103,7 +103,7 @@ def test_exporter_module_overlay_restores_new_package_bindings(
 
     with (
         pytest.raises(RuntimeError) if fail else nullcontext(),
-        _isolated_modules(names, original_modules),
+        _isolated_modules(names, original_modules, roots={module_name}),
     ):
         imported = importlib.import_module(module_name)
         imported_package = sys.modules[package_name]
@@ -133,7 +133,7 @@ def test_exporter_module_overlay_restores_existing_package_identities(
     names = {module_name}
     _include_new_package_parents(names, original_modules)
 
-    with _isolated_modules(names, original_modules):
+    with _isolated_modules(names, original_modules, roots={module_name}):
         imported = importlib.import_module(module_name)
         assert imported is not original_module
         assert original_package.exporter is imported
@@ -172,7 +172,14 @@ def test_exporter_module_overlay_restores_setup_after_cancellation(
 
     monkeypatch.setattr(marimo_compat.importlib, "invalidate_caches", cancel_once)
 
-    with pytest.raises(KeyboardInterrupt), _isolated_modules(names, original_modules):
+    with (
+        pytest.raises(KeyboardInterrupt),
+        _isolated_modules(
+            names,
+            original_modules,
+            roots={module_name},
+        ),
+    ):
         pass
 
     assert sys.modules[package_name] is original_package
@@ -326,11 +333,11 @@ def test_upstream_cache_trackers_restore_native_binding_out_of_order(
             first.__exit__(None, None, None)
 
 
-def _custom_exporter_plan(module_name: str) -> MatrixPlan:
+def _custom_exporter_plan(module_name: str, symbol: str = "encode") -> MatrixPlan:
     projection = OutputProjection(
         name="summary",
         source="value",
-        exporter=importable(f"{module_name}:encode"),
+        exporter=importable(f"{module_name}:{symbol}"),
     )
     return MatrixPlan(
         states=(),
@@ -341,6 +348,21 @@ def _custom_exporter_plan(module_name: str) -> MatrixPlan:
         state_name="marimo_export_state_0123456789abcdef",
         state_code="marimo_export_state_0123456789abcdef = 'state'",
     )
+
+
+def test_prepared_exporters_preserves_native_extension_modules() -> None:
+    module_name = "numpy._core._multiarray_umath"
+    plan = _custom_exporter_plan(module_name, "array")
+
+    with prepared_exporters(plan):
+        imported = importlib.import_module(module_name)
+
+    assert sys.modules[module_name] is imported
+
+    with prepared_exporters(plan):
+        assert importlib.import_module(module_name) is imported
+
+    assert sys.modules[module_name] is imported
 
 
 def test_exporter_preflight_restores_modules_imported_before_failure(
