@@ -4,6 +4,8 @@ import { anyWidgetLoader } from "@marimo-team/marimo-export/loader/anywidget";
 import { parquetRowsLoader } from "@marimo-team/marimo-export/loader/parquet";
 import { vegaLiteLoader } from "@marimo-team/marimo-export/loader/vegalite";
 
+import { marketSummaryLoader } from "./market-summary";
+import type { MarketSummary } from "./market-summary";
 import "./style.css";
 
 interface ViewCopy {
@@ -143,8 +145,9 @@ async function renderView(
 ): Promise<void> {
   const { signal } = controller;
   try {
-    const [rowsValue, chart, image, widget] = await Promise.all([
+    const [rowsValue, summary, chart, image, widget] = await Promise.all([
       state.output("price_history").load(parquetRowsLoader(), { signal }),
+      state.output("market_summary").load(marketSummaryLoader(), { signal }),
       state
         .output("performance_chart")
         .load(vegaLiteLoader({ actions: false, renderer: "svg" }), { signal }),
@@ -178,7 +181,7 @@ async function renderView(
     }
 
     mounted = nextMounted;
-    renderMarketView(rows, copy);
+    renderMarketView(rows, summary, copy);
     setBusy(state.name, false);
     errorPanel.hidden = true;
   } catch (error) {
@@ -188,41 +191,35 @@ async function renderView(
   }
 }
 
-function renderMarketView(rows: readonly PriceRow[], copy: ViewCopy): void {
+function renderMarketView(rows: readonly PriceRow[], summary: MarketSummary, copy: ViewCopy): void {
   const series = groupBySymbol(rows);
-  const returns = [...series.entries()].map(([symbol, values]) => {
-    const first = values[0]!;
-    const latest = values.at(-1)!;
-    return { latest, return: latest.Close / first.Close - 1, symbol };
+  const returns = summary.periodReturns.map(({ return: periodReturn, symbol }) => {
+    const latest = series.get(symbol)?.at(-1);
+    if (latest === undefined) throw new Error(`${symbol} has no published prices.`);
+    return { latest, return: periodReturn, symbol };
   });
-  const leader = returns.reduce((best, item) => (item.return > best.return ? item : best));
-  const average = returns.reduce((sum, item) => sum + item.return, 0) / returns.length;
-  const dates = rows.map((row) => epochMilliseconds(row.Date));
-  const firstDate = Math.min(...dates);
-  const lastDate = Math.max(...dates);
-  const sessions = new Set(dates).size;
 
-  viewWindow.textContent = `${formatDate(firstDate, "short")} to ${formatDate(
-    lastDate,
+  viewWindow.textContent = `${formatDate(summary.firstSession, "short")} to ${formatDate(
+    summary.lastSession,
     "long",
   )} · ${copy.cadence}`;
   viewTitle.textContent = copy.title;
   viewDescription.textContent = copy.description;
-  leaderSymbol.textContent = leader.symbol;
-  leaderReturn.textContent = formatPercent(leader.return);
-  averageReturn.textContent = formatPercent(average);
-  sessionCount.textContent = String(sessions);
-  latestDate.textContent = formatDate(lastDate, "short");
-  latestSummary.textContent = `${returns.length} companies · ${rows.length} observations`;
+  leaderSymbol.textContent = summary.leader.symbol;
+  leaderReturn.textContent = formatPercent(summary.leader.return);
+  averageReturn.textContent = formatPercent(summary.averageReturn);
+  sessionCount.textContent = String(summary.sessionCount);
+  latestDate.textContent = formatDate(summary.lastSession, "short");
+  latestSummary.textContent = `${summary.companyCount} companies · ${summary.observationCount} observations`;
   changePeriod.textContent = copy.cadence === "Weekly close" ? "Week" : "Day";
   latestRows.replaceChildren(
     ...returns
       .sort((left, right) => right.return - left.return)
-      .map(({ latest, return: periodReturn }) => marketRow(latest, periodReturn)),
+      .map(({ latest, return: periodReturn }) => marketRow(latest, periodReturn, summary.currency)),
   );
 }
 
-function marketRow(row: PriceRow, periodReturn: number): HTMLTableRowElement {
+function marketRow(row: PriceRow, periodReturn: number, currency: string): HTMLTableRowElement {
   const result = document.createElement("tr");
   result.dataset.symbol = row.Symbol;
   const company = document.createElement("td");
@@ -233,10 +230,13 @@ function marketRow(row: PriceRow, periodReturn: number): HTMLTableRowElement {
   company.append(name, ticker);
   result.append(
     company,
-    cell(formatCurrency(row.Close), "numeric"),
+    cell(formatCurrency(row.Close, currency), "numeric"),
     cell(formatPercent(row["Close Change"]), percentClass(row["Close Change"])),
     cell(formatPercent(periodReturn), percentClass(periodReturn)),
-    cell(`${formatCurrency(row.Low)} to ${formatCurrency(row.High)}`, "numeric"),
+    cell(
+      `${formatCurrency(row.Low, currency)} to ${formatCurrency(row.High, currency)}`,
+      "numeric",
+    ),
   );
   return result;
 }
@@ -320,9 +320,9 @@ function formatPercent(value: number): string {
   return `${value >= 0 ? "+" : ""}${(value * 100).toFixed(1)}%`;
 }
 
-function formatCurrency(value: number): string {
+function formatCurrency(value: number, currency: string): string {
   return new Intl.NumberFormat("en-US", {
-    currency: "USD",
+    currency,
     maximumFractionDigits: 2,
     style: "currency",
   }).format(value);

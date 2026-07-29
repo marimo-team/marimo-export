@@ -17,6 +17,12 @@ outputs:
   market_explorer:
     source: quote_detail
     exporter: anywidget.bundle
+  market_summary:
+    source: selected_prices
+    exporter:
+      name: market_summary:encode
+      options:
+        currency: USD
   performance_chart:
     source: performance
     exporter: altair.vegalite

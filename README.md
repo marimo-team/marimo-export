@@ -136,8 +136,8 @@ The page renders `Hello, browser!` from static files. Switch to the `welcome`
 state to load `Welcome, browser!`.
 
 See the [vanilla Vite example](examples/vite-vanilla) for a live Yahoo Finance
-notebook and market dashboard built from Parquet, PNG, Vega-Lite, and AnyWidget
-outputs.
+notebook and market dashboard built from Parquet, PNG, Vega-Lite, AnyWidget,
+and a custom market-summary representation.
 
 ## Choose what users can interact with
 

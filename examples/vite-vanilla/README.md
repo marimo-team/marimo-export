@@ -1,12 +1,15 @@
 # Market dashboard with vanilla Vite
 
 This example publishes a live Yahoo Finance notebook as a market dashboard
-built with HTML, CSS, and TypeScript. Five saved views update the comparison
-chart, latest-session table, quote explorer, and chart snapshot together.
+built with HTML, CSS, and TypeScript. Five saved views update the market
+summary, comparison chart, latest-session table, quote explorer, and chart
+snapshot together.
 
-The notebook contains the analysis and interactive controls. It does not import
-marimo-export. [`finance.export.yaml`](finance.export.yaml) selects the source
+The notebook remains ordinary marimo source with its analysis and interactive
+controls. [`finance.export.yaml`](finance.export.yaml) selects the source
 definitions and their browser representations.
+[`market_summary.py`](market_summary.py) provides the dashboard-specific
+summary representation as a companion module.
 
 ## Build from the notebook file
 
@@ -27,7 +30,7 @@ publication to `examples/vite-vanilla/public/publication`. A successful run
 reports:
 
 ```text
-Published 5 states and 4 outputs to .../examples/vite-vanilla/public/publication
+Published 5 states and 5 outputs to .../examples/vite-vanilla/public/publication
 ```
 
 Verify the generated publication:
@@ -71,12 +74,14 @@ among the companies in the current view.
 
 ## Example structure
 
-| Path                  | Role                                                   |
-| --------------------- | ------------------------------------------------------ |
-| `finance.py`          | Yahoo Finance notebook                                 |
-| `finance.export.yaml` | saved views, source definitions, and representations   |
-| `pyproject.toml`      | notebook dependencies from the local uv workspace      |
-| `index.html`          | dashboard structure                                    |
-| `src/main.ts`         | publication loading, view changes, and table rendering |
-| `src/style.css`       | marimo-aligned dashboard layout                        |
-| `public/publication`  | generated files served by Vite                         |
+| Path                    | Role                                                   |
+| ----------------------- | ------------------------------------------------------ |
+| `finance.py`            | Yahoo Finance notebook                                 |
+| `finance.export.yaml`   | saved views, source definitions, and representations   |
+| `market_summary.py`     | market summary representation for the browser          |
+| `pyproject.toml`        | notebook dependencies from the local uv workspace      |
+| `index.html`            | dashboard structure                                    |
+| `src/main.ts`           | publication loading, view changes, and table rendering |
+| `src/market-summary.ts` | validation and loading for the market summary          |
+| `src/style.css`         | marimo-aligned dashboard layout                        |
+| `public/publication`    | generated files served by Vite                         |
