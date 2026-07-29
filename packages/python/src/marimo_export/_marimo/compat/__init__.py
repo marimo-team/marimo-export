@@ -718,43 +718,61 @@ def _isolated_modules(
     original_modules: Mapping[str, Any],
 ) -> Iterator[None]:
     missing = object()
+    try:
+        package_distributions = importlib.metadata.packages_distributions()
+    except Exception:
+        package_distributions = {}
+    selected_distributions = {
+        distribution
+        for name in names
+        for distribution in package_distributions.get(name.partition(".")[0], ())
+    }
     package_attributes = {
         name: dict(vars(module))
         for name, module in original_modules.items()
         if module is not None and hasattr(module, "__path__")
     }
-    for name in sorted(names, key=lambda value: value.count("."), reverse=True):
-        sys.modules.pop(name, None)
-        parent_name, separator, attribute = name.rpartition(".")
-        parent = sys.modules.get(parent_name) if separator else None
-        if parent is not None:
-            with suppress(AttributeError):
-                delattr(parent, attribute)
-    importlib.invalidate_caches()
     native_get_code = SourceFileLoader.get_code
 
     def get_code(loader: SourceFileLoader, fullname: str) -> Any:
         filename = loader.get_filename(fullname)
         return loader.source_to_code(loader.get_data(filename), filename)
 
-    cast(Any, SourceFileLoader).get_code = get_code
     try:
+        for name in sorted(names, key=lambda value: value.count("."), reverse=True):
+            sys.modules.pop(name, None)
+            parent_name, separator, attribute = name.rpartition(".")
+            parent = sys.modules.get(parent_name) if separator else None
+            if parent is not None:
+                with suppress(AttributeError):
+                    delattr(parent, attribute)
+        importlib.invalidate_caches()
+        cast(Any, SourceFileLoader).get_code = get_code
         yield
     finally:
         cast(Any, SourceFileLoader).get_code = native_get_code
-        changed_names = {
+        rollback_names = set(names)
+        rollback_names.update(
             name
-            for name in set(original_modules) | set(sys.modules)
-            if sys.modules.get(name, missing) is not original_modules.get(name, missing)
-        }
+            for name in set(sys.modules) - set(original_modules)
+            if _is_local_source_module(
+                name,
+                sys.modules[name],
+                selected_distributions=selected_distributions,
+                package_distributions=package_distributions,
+            )
+        )
         for name in sorted(
-            set(sys.modules) - set(original_modules),
+            rollback_names,
             key=lambda value: value.count("."),
             reverse=True,
         ):
             sys.modules.pop(name, None)
-        sys.modules.update(original_modules)
-        for name in sorted(changed_names):
+        for name in sorted(rollback_names, key=lambda value: value.count(".")):
+            original = original_modules.get(name, missing)
+            if original is not missing:
+                sys.modules[name] = original
+        for name in sorted(rollback_names):
             parent_name, separator, attribute = name.rpartition(".")
             if not separator:
                 continue
@@ -768,6 +786,25 @@ def _isolated_modules(
             else:
                 setattr(parent, attribute, original)
         importlib.invalidate_caches()
+
+
+def _is_local_source_module(
+    name: str,
+    module: Any,
+    *,
+    selected_distributions: set[str],
+    package_distributions: Mapping[str, list[str]],
+) -> bool:
+    origin = _module_origin(module)
+    if origin is None or origin.suffix != ".py":
+        return False
+    top_level = name.partition(".")[0]
+    if top_level == "marimo_export" or top_level in sys.stdlib_module_names:
+        return False
+    distributions = set(package_distributions.get(top_level, ()))
+    if not distributions:
+        return True
+    return bool(distributions & selected_distributions)
 
 
 def _record_exporter_snapshot(

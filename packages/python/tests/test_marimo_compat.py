@@ -5,6 +5,7 @@ import importlib
 import sys
 import weakref
 from contextlib import nullcontext
+from importlib.machinery import SourceFileLoader
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
 from typing import Any, cast
@@ -140,6 +141,44 @@ def test_exporter_module_overlay_restores_existing_package_identities(
     assert sys.modules[package_name] is original_package
     assert sys.modules[module_name] is original_module
     assert original_package.exporter is original_module
+
+
+def test_exporter_module_overlay_restores_setup_after_cancellation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    package_name = "marimo_export_test_overlay_cancelled"
+    module_name = f"{package_name}.exporter"
+    package = tmp_path / package_name
+    package.mkdir()
+    (package / "__init__.py").write_text("", encoding="utf-8")
+    (package / "exporter.py").write_text("value = 1\n", encoding="utf-8")
+    monkeypatch.syspath_prepend(str(tmp_path))
+    importlib.invalidate_caches()
+    original_module = importlib.import_module(module_name)
+    original_package = sys.modules[package_name]
+    original_get_code = SourceFileLoader.get_code
+    original_modules = dict(sys.modules)
+    names = {module_name}
+    native_invalidate = importlib.invalidate_caches
+    calls = 0
+
+    def cancel_once() -> None:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise KeyboardInterrupt
+        native_invalidate()
+
+    monkeypatch.setattr(marimo_compat.importlib, "invalidate_caches", cancel_once)
+
+    with pytest.raises(KeyboardInterrupt), _isolated_modules(names, original_modules):
+        pass
+
+    assert sys.modules[package_name] is original_package
+    assert sys.modules[module_name] is original_module
+    assert original_package.exporter is original_module
+    assert SourceFileLoader.get_code is original_get_code
 
 
 def test_native_cache_flush_uses_marimo_loader_lifecycle(

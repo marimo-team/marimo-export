@@ -35,11 +35,12 @@ def _write_exporter(path: Path, label: str) -> None:
     path.write_text(
         f"""
 from marimo_export import BlobAsset
+import numpy as np
 
 
 def encode(value, *, increment):
     return BlobAsset(
-        data=f"{label}:{{value + increment}}".encode("utf-8"),
+        data=f"{label}:{{int(np.int64(value + increment))}}".encode("utf-8"),
         media_type="application/vnd.example.summary.v1+text",
         filename="summary.txt",
         metadata={{"label": "{label}"}},
