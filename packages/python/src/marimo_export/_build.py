@@ -90,7 +90,11 @@ def _capture_owned(
     try:
         working_notebook = _copy_notebook(notebook)
         server_started = time.monotonic()
-        server = ManagedServer(working_notebook, timeout=timeout)
+        server = ManagedServer(
+            working_notebook,
+            timeout=timeout,
+            runtime_notebook=notebook,
+        )
         server_start_seconds = time.monotonic() - server_started
         activation = server.activate()
         server_start_seconds += activation.session_start_seconds

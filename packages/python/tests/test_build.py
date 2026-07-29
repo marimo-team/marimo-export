@@ -126,6 +126,45 @@ def test_build_rejects_source_change_before_commit(
     assert not output.exists()
 
 
+def test_build_preserves_the_authored_runtime_filename(tmp_path: Path) -> None:
+    notebook = tmp_path / "notebook.py"
+    notebook.write_text(
+        """
+import marimo
+
+app = marimo.App()
+
+
+@app.cell
+def _():
+    runtime_file = __file__
+    return (runtime_file,)
+
+
+if __name__ == "__main__":
+    app.run()
+""".lstrip(),
+        encoding="utf-8",
+    )
+    source = notebook.read_bytes()
+
+    result = build(
+        notebook,
+        spec=ExportSpec(
+            inputs=(),
+            states={"baseline": {}},
+            outputs={"runtime_file": OutputSpec(source="runtime_file")},
+        ),
+        output=tmp_path / "publication",
+        timeout=30,
+    )
+
+    assert open_publication(result.path).state("baseline").output("runtime_file").scalar() == str(
+        notebook
+    )
+    assert notebook.read_bytes() == source
+
+
 @pytest.mark.parametrize("timeout", [0, -1, float("nan"), float("inf")])
 def test_build_rejects_invalid_timeout(tmp_path: Path, timeout: float) -> None:
     notebook = tmp_path / "notebook.py"

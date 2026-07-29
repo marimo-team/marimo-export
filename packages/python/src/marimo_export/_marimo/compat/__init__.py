@@ -570,7 +570,7 @@ async def execute_state(
         runtime_config["cache_cells"] = True
         cast(Any, child._kernel).user_config = config
         child._kernel.reactive_execution_mode = "autorun"
-        overrides = dict(state.ordinary_overrides)
+        overrides = _isolated_overrides(state)
         overrides[plan.state_name] = state.fingerprint
         child._kernel.globals.update(overrides)
 
@@ -678,6 +678,31 @@ async def execute_state(
             cleanup_seconds=cleanup_seconds,
         ),
     )
+
+
+def _isolated_overrides(state: NormalizedState) -> dict[str, object]:
+    values = dict(state.ordinary_overrides)
+    shared = {
+        id(value): value
+        for value in values.values()
+        if inspect.ismodule(value)
+        or inspect.isfunction(value)
+        or inspect.isbuiltin(value)
+        or inspect.isclass(value)
+    }
+    try:
+        isolated = copy.deepcopy(values, shared)
+    except Exception as error:
+        raise ExecutionError(
+            f"state {state.name!r} ordinary input siblings could not be isolated",
+            code="input_isolation_failed",
+            details={
+                "state": state.name,
+                "definitions": sorted(values),
+                "exception_type": type(error).__name__,
+            },
+        ) from error
+    return cast(dict[str, object], isolated)
 
 
 def _projection_ids(

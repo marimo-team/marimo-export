@@ -27,6 +27,8 @@ from marimo_export.errors import TransportError
 _EVENT_LIMIT = 40 * 1024 * 1024
 _HTTP_RESPONSE_LIMIT = 1024 * 1024
 _LOG_LIMIT = 8192
+_MANAGED_SOURCE_ENV = "MARIMO_EXPORT_MANAGED_SOURCE"
+_MANAGED_SNAPSHOT_ENV = "MARIMO_EXPORT_MANAGED_SNAPSHOT"
 
 
 @dataclass(frozen=True, slots=True)
@@ -38,7 +40,13 @@ class _ActivationTimings:
 class ManagedServer:
     """One authenticated loopback marimo server owned by a build."""
 
-    def __init__(self, notebook: Path, *, timeout: float) -> None:
+    def __init__(
+        self,
+        notebook: Path,
+        *,
+        timeout: float,
+        runtime_notebook: Path | None = None,
+    ) -> None:
         self.notebook = notebook
         self.timeout = timeout
         self.access_token = secrets.token_urlsafe(32)
@@ -54,6 +62,8 @@ class ManagedServer:
         environment = dict(os.environ)
         environment.update(
             {
+                _MANAGED_SNAPSHOT_ENV: str(notebook),
+                _MANAGED_SOURCE_ENV: str(runtime_notebook or notebook),
                 "MARIMO_SKIP_UPDATE_CHECK": "1",
                 "NO_COLOR": "1",
             }
@@ -350,20 +360,55 @@ class ManagedServer:
 
     @staticmethod
     def _kill_owned_process_groups(groups: set[int]) -> None:
-        failures: list[int] = []
-        for group_id in groups:
+        failures: list[JsonObject] = []
+        for group_id in ManagedServer._live_process_groups(groups):
             try:
                 os.killpg(group_id, signal.SIGKILL)
             except ProcessLookupError:
                 continue
-            except OSError:
-                failures.append(group_id)
+            except OSError as error:
+                failures.append(
+                    {
+                        "process_group": group_id,
+                        "errno": error.errno,
+                    }
+                )
         if failures:
             raise TransportError(
                 "the managed marimo process groups could not be stopped",
                 code="server_shutdown_failed",
-                details={"process_groups": sorted(failures)},
+                details={"failures": failures},
             )
+
+    @staticmethod
+    def _live_process_groups(groups: set[int]) -> set[int]:
+        candidates = {group for group in groups if group > 0 and group != os.getpgrp()}
+        if not candidates:
+            return set()
+        try:
+            listed = subprocess.run(
+                ["ps", "-axo", "pgid=,stat="],
+                capture_output=True,
+                check=False,
+                text=True,
+                timeout=2.0,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            return candidates
+        if listed.returncode != 0:
+            return candidates
+        live: set[int] = set()
+        for line in listed.stdout.splitlines():
+            parts = line.split()
+            if len(parts) != 2:
+                continue
+            try:
+                group_id = int(parts[0])
+            except ValueError:
+                continue
+            if group_id in candidates and not parts[1].startswith("Z"):
+                live.add(group_id)
+        return live
 
     def _terminate_windows_tree(
         self,
