@@ -735,6 +735,7 @@ def _isolated_modules(
     }
     native_get_code = SourceFileLoader.get_code
     new_retained_packages: set[str] = set()
+    source_finder: _IsolatedSourceFinder | None = None
 
     def get_code(loader: SourceFileLoader, fullname: str) -> Any:
         filename = loader.get_filename(fullname)
@@ -752,6 +753,7 @@ def _isolated_modules(
             name for name in protected_names if _is_python_source_module(original_modules.get(name))
         }
         eviction_names.difference_update(protected_names)
+        eviction_names.update(shadow_names)
         for name in sorted(
             eviction_names,
             key=lambda value: value.count("."),
@@ -765,10 +767,16 @@ def _isolated_modules(
                     delattr(parent, attribute)
         importlib.invalidate_caches()
         cast(Any, SourceFileLoader).get_code = get_code
-        for name in sorted(shadow_names, key=lambda value: value.count(".")):
-            _shadow_source_module(name, original_modules[name])
+        if shadow_names:
+            source_finder = _IsolatedSourceFinder(
+                {name: original_modules[name] for name in shadow_names}
+            )
+            sys.meta_path.insert(0, source_finder)
         yield
     finally:
+        if source_finder is not None:
+            with suppress(ValueError):
+                sys.meta_path.remove(source_finder)
         cast(Any, SourceFileLoader).get_code = native_get_code
         selected_distributions = {
             distribution
@@ -884,44 +892,41 @@ def _native_module_ancestors(modules: Mapping[str, Any]) -> set[str]:
     return ancestors
 
 
-def _shadow_source_module(name: str, module: Any) -> Any:
-    origin = _module_origin(module)
-    native_spec = getattr(module, "__spec__", None)
-    if origin is None or native_spec is None:
-        return module
-    locations = native_spec.submodule_search_locations
-    spec = importlib.util.spec_from_file_location(
-        name,
-        origin,
-        submodule_search_locations=list(locations) if locations is not None else None,
-    )
-    if spec is None or spec.loader is None:
-        return module
-    fresh = importlib.util.module_from_spec(spec)
-    prefix = f"{name}."
-    for child_name, child in tuple(sys.modules.items()):
-        if not child_name.startswith(prefix):
-            continue
-        attribute = child_name[len(prefix) :]
-        if "." not in attribute:
-            setattr(fresh, attribute, child)
-    sys.modules[name] = fresh
-    parent_name, separator, attribute = name.rpartition(".")
-    parent = sys.modules.get(parent_name) if separator else None
-    if parent is not None:
-        setattr(parent, attribute, fresh)
-    try:
-        spec.loader.exec_module(fresh)
-    except Exception as error:
-        raise OutputError(
-            f"exporter module {name!r} is unavailable",
-            code="exporter_unavailable",
-            details={
-                "module": name,
-                "exception_type": type(error).__name__,
-            },
-        ) from error
-    return fresh
+class _IsolatedSourceLoader(SourceFileLoader):
+    def exec_module(self, module: Any) -> None:
+        prefix = f"{module.__name__}."
+        for child_name, child in tuple(sys.modules.items()):
+            if not child_name.startswith(prefix):
+                continue
+            attribute = child_name[len(prefix) :]
+            if "." not in attribute:
+                setattr(module, attribute, child)
+        super().exec_module(module)
+
+
+class _IsolatedSourceFinder:
+    def __init__(self, modules: Mapping[str, Any]) -> None:
+        self._modules = modules
+
+    def find_spec(
+        self,
+        fullname: str,
+        path: Any = None,
+        target: Any = None,
+    ) -> Any:
+        del path, target
+        module = self._modules.get(fullname)
+        origin = _module_origin(module)
+        native_spec = getattr(module, "__spec__", None)
+        if origin is None or native_spec is None:
+            return None
+        locations = native_spec.submodule_search_locations
+        return importlib.util.spec_from_file_location(
+            fullname,
+            origin,
+            loader=_IsolatedSourceLoader(fullname, str(origin)),
+            submodule_search_locations=list(locations) if locations is not None else None,
+        )
 
 
 def _is_python_source_module(module: Any) -> bool:

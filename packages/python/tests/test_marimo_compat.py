@@ -149,39 +149,52 @@ def test_exporter_module_overlay_shadows_source_parent_of_native_module(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     package_name = "marimo_export_test_native_parent"
-    native_name = f"{package_name}._native"
     package = tmp_path / package_name
     package.mkdir()
     source = package / "__init__.py"
     source.write_text(
-        "import sys\nvalue = 'first'\nself_ref = sys.modules[__name__]\n",
+        "import sys\nfrom .child import encode\nself_ref = sys.modules[__name__]\n",
         encoding="utf-8",
     )
+    child_name = f"{package_name}.child"
+    child_package = package / "child"
+    child_package.mkdir()
+    child_source = child_package / "__init__.py"
+    child_source.write_text(
+        "def encode():\n    return 'first'\n",
+        encoding="utf-8",
+    )
+    native_name = f"{child_name}._native"
     monkeypatch.syspath_prepend(str(tmp_path))
     original = importlib.import_module(package_name)
+    original_child = sys.modules[child_name]
     native_file = tmp_path / "_native.so"
     native_file.write_bytes(b"native")
     native = ModuleType(native_name)
     native.__file__ = str(native_file)
     native.__spec__ = ModuleSpec(native_name, loader=None, origin=str(native_file))
     monkeypatch.setitem(sys.modules, native_name, native)
-    monkeypatch.setattr(original, "_native", native, raising=False)
-    source.write_text(
-        "import sys\nvalue = 'other'\nself_ref = sys.modules[__name__]\n",
+    monkeypatch.setattr(original_child, "_native", native, raising=False)
+    child_source.write_text(
+        "def encode():\n    return 'other'\n",
         encoding="utf-8",
     )
     original_modules = dict(sys.modules)
-    names: set[str] = {package_name, native_name}
+    names: set[str] = {package_name, child_name, native_name}
 
     with _isolated_modules(names, original_modules, roots={package_name}):
-        fresh = sys.modules[package_name]
+        fresh = importlib.import_module(package_name)
+        fresh_child = sys.modules[child_name]
         assert fresh is not original
-        assert fresh.value == "other"
         assert fresh.self_ref is fresh
+        assert fresh.encode() == "other"
+        assert fresh.encode is fresh_child.encode
+        assert fresh.child is fresh_child
         assert sys.modules[native_name] is native
-        assert fresh._native is native
+        assert fresh_child._native is native
 
     assert sys.modules[package_name] is original
+    assert sys.modules[child_name] is original_child
     assert sys.modules[native_name] is native
 
 
@@ -598,7 +611,8 @@ def test_prepared_exporters_reports_shadow_initialization_failure(
 
     assert raised.value.code == "exporter_unavailable"
     assert raised.value.details == {
-        "module": package_name,
+        "output": "summary",
+        "exporter": f"{package_name}:encode",
         "exception_type": "RuntimeError",
     }
     assert sys.modules[package_name] is original
