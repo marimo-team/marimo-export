@@ -54,7 +54,7 @@ Typed failures live in `marimo_export.errors`.
 
 ## Add an exporter
 
-An exporter is an importable top-level callable:
+An exporter is an importable top-level function:
 
 ```python
 import json
@@ -78,7 +78,7 @@ def summary(value: Mapping[str, object]) -> BlobAsset:
     )
 ```
 
-Reference the callable from an ExportSpec with `module:function`:
+Reference the function from an ExportSpec with `module:function`:
 
 ```yaml
 outputs:
@@ -87,7 +87,7 @@ outputs:
     exporter: acme_exports:summary
 ```
 
-The callable validates its input and returned value. marimo-export imports it
+The function validates its input and returned value. marimo-export imports it
 inside a synthetic child leaf, then marimo executes and caches the conversion.
 The module must be importable in the selected kernel.
 
@@ -97,7 +97,7 @@ through a narrow conversion protocol.
 
 Add a built-in exporter ID to
 `packages/python/src/marimo_export/exporters/_definitions.py`, expose a typed
-descriptor factory, and put its callable under
+descriptor factory, and put its function under
 `packages/python/src/marimo_export/exporters/_runtime`. Built-in IDs have
 closed option schemas and deterministic defaults.
 

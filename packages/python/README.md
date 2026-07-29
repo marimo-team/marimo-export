@@ -155,7 +155,7 @@ Descriptor construction performs no conversion. marimo-export invokes the
 selected runtime in a synthetic child leaf. marimo owns dependency hashing,
 cache persistence, and native result serialization.
 
-Custom exporters use an installed or sideloaded top-level callable:
+Custom exporters use an installed or sideloaded top-level function:
 
 ```python
 from marimo_export import OutputSpec
@@ -167,7 +167,7 @@ summary = OutputSpec(
 )
 ```
 
-The callable receives the source value followed by the descriptor options as
+The function receives the source value followed by the descriptor options as
 keyword arguments. It returns a scalar, numeric NumPy array, supported table,
 or `BlobAsset` accepted by marimo's native cache. The spec contains the import
 reference and portable options.
