@@ -745,6 +745,7 @@ def preflight_exporters(plan: MatrixPlan) -> Mapping[str, str]:
                 name=exporter.name,
                 module=module,
                 value=value,
+                enforce_state=":" in exporter.name,
                 distributions=reference.distributions,
                 package_distributions=package_distributions,
             )
@@ -769,10 +770,15 @@ def _exporter_identity(
     name: str,
     module: Any,
     value: Any,
+    enforce_state: bool,
     distributions: tuple[str, ...],
     package_distributions: Mapping[str, list[str]],
 ) -> str:
-    dependencies, dependency_modules = _exporter_dependencies(value, module)
+    dependencies, dependency_modules = _exporter_dependencies(
+        value,
+        module,
+        enforce_state=enforce_state,
+    )
     payload: JsonObject = {
         "dependencies": dependencies,
         "name": name,
@@ -816,7 +822,12 @@ def _exporter_identity(
     return hashlib.sha256(canonical_bytes(payload)).hexdigest()
 
 
-def _exporter_dependencies(value: Any, module: Any) -> tuple[JsonObject, frozenset[str]]:
+def _exporter_dependencies(
+    value: Any,
+    module: Any,
+    *,
+    enforce_state: bool,
+) -> tuple[JsonObject, frozenset[str]]:
     records: JsonObject = {}
     module_names: set[str] = set()
     recorded_modules: set[int] = set()
@@ -1341,7 +1352,11 @@ def _exporter_dependencies(value: Any, module: Any) -> tuple[JsonObject, frozens
         record(label, hashlib.sha256(canonical_bytes(portable)).hexdigest())
 
     visit_module(module, expand=False)
-    visit_callable(value, enforce_state=True, force_state=True)
+    visit_callable(
+        value,
+        enforce_state=enforce_state,
+        force_state=enforce_state,
+    )
     return records, frozenset(module_names)
 
 

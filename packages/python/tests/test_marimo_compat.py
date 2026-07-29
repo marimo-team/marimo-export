@@ -19,7 +19,7 @@ from marimo_export._marimo.compat import (
     require_capabilities,
 )
 from marimo_export.errors import OutputError
-from marimo_export.exporters import importable
+from marimo_export.exporters import anywidget, importable
 
 
 def test_attached_marimo_exposes_live_capture_capabilities() -> None:
@@ -197,6 +197,27 @@ def test_exporter_preflight_fingerprints_sideloaded_function_code(
 
     assert len(first_identity) == 64
     assert first_identity != second_identity
+
+
+def test_exporter_preflight_accepts_package_owned_builtin_exporters() -> None:
+    projection = OutputProjection(
+        name="summary",
+        source="value",
+        exporter=anywidget.bundle(),
+    )
+    plan = MatrixPlan(
+        states=(),
+        inputs=(),
+        outputs=("summary",),
+        projections={"summary": projection},
+        ordinary_cells={},
+        state_name="marimo_export_state_0123456789abcdef",
+        state_code="marimo_export_state_0123456789abcdef = 'state'",
+    )
+
+    identity = preflight_exporters(plan)["summary"]
+
+    assert len(identity) == 64
 
 
 def test_exporter_preflight_rejects_callable_instances(
