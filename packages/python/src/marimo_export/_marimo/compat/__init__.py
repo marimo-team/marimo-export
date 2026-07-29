@@ -172,6 +172,7 @@ class _ExporterIdentity:
     cache: str
     runtime: str
     environment: str
+    modules: tuple[str, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -179,6 +180,7 @@ class _ExporterSnapshot:
     module: weakref.ReferenceType[Any]
     runtime: str
     environment: str
+    modules: tuple[str, ...]
 
 
 class _ReadSnapshotStore(Store):
@@ -222,6 +224,7 @@ _NATIVE_CACHE_FUNCTION: Callable[..., Any] | None = None
 _EXPORTER_SNAPSHOT_LOCK = threading.Lock()
 _EXPORTER_SNAPSHOTS: dict[str, _ExporterSnapshot] = {}
 _EXPORTER_SNAPSHOT_STATE_ATTRIBUTE = "_marimo_export_exporter_snapshot_state"
+_EXPORTER_IMPORT_LOCK = threading.RLock()
 
 
 @contextmanager
@@ -650,6 +653,89 @@ def preflight_exporters(plan: MatrixPlan) -> Mapping[str, str]:
     return identities
 
 
+@contextmanager
+def prepared_exporters(plan: MatrixPlan) -> Iterator[Mapping[str, str]]:
+    """Resolve custom exporters in a capture-scoped module overlay."""
+
+    custom = {
+        projection.exporter.name: runtime_reference(projection.exporter.name).module
+        for projection in plan.projections.values()
+        if projection.exporter is not None and ":" in projection.exporter.name
+    }
+    if not custom:
+        yield preflight_exporters(plan)
+        return
+
+    with _EXPORTER_IMPORT_LOCK:
+        original_modules = dict(sys.modules)
+        candidates = set(custom.values())
+        candidates.update(_recorded_exporter_modules(custom))
+        while True:
+            with _isolated_modules(candidates, original_modules):
+                identities = preflight_exporters(plan)
+                discovered = _recorded_exporter_modules(custom)
+                if discovered <= candidates:
+                    yield identities
+                    return
+                candidates.update(discovered)
+            if len(candidates) > _MAX_EXPORTER_DEPENDENCIES + len(custom):
+                name = next(iter(custom))
+                raise OutputError(
+                    f"exporter {name!r} has too many local modules to isolate",
+                    code="exporter_identity_failed",
+                    details={"exporter": name},
+                )
+
+
+def _recorded_exporter_modules(exporters: Mapping[str, str]) -> set[str]:
+    lock, snapshots = _exporter_snapshot_state()
+    with lock:
+        return {
+            module_name
+            for name, root in exporters.items()
+            for module_name in (snapshots[name].modules if name in snapshots else (root,))
+        }
+
+
+@contextmanager
+def _isolated_modules(
+    names: set[str],
+    original_modules: Mapping[str, Any],
+) -> Iterator[None]:
+    missing = object()
+    for name in sorted(names, key=lambda value: value.count("."), reverse=True):
+        sys.modules.pop(name, None)
+        parent_name, separator, attribute = name.rpartition(".")
+        parent = sys.modules.get(parent_name) if separator else None
+        if parent is not None:
+            with suppress(AttributeError):
+                delattr(parent, attribute)
+    importlib.invalidate_caches()
+    try:
+        yield
+    finally:
+        for name in sorted(names, key=lambda value: value.count("."), reverse=True):
+            sys.modules.pop(name, None)
+        for name in sorted(names, key=lambda value: value.count(".")):
+            original = original_modules.get(name, missing)
+            if original is not missing:
+                sys.modules[name] = original
+        for name in sorted(names):
+            parent_name, separator, attribute = name.rpartition(".")
+            if not separator:
+                continue
+            parent = original_modules.get(parent_name)
+            original = original_modules.get(name, missing)
+            if parent is None:
+                continue
+            if original is missing:
+                with suppress(AttributeError):
+                    delattr(parent, attribute)
+            else:
+                setattr(parent, attribute, original)
+        importlib.invalidate_caches()
+
+
 def _record_exporter_snapshot(
     *,
     output: str,
@@ -675,6 +761,7 @@ def _record_exporter_snapshot(
             module=weakref.ref(module),
             runtime=identity.runtime,
             environment=identity.environment,
+            modules=identity.modules,
         )
 
 
@@ -732,7 +819,7 @@ def _exporter_identity(
     distributions: tuple[str, ...],
     package_distributions: Mapping[str, list[str]],
 ) -> _ExporterIdentity:
-    dependencies, dependency_modules = _exporter_dependencies(
+    dependencies, dependency_modules, isolation_modules = _exporter_dependencies(
         value,
         module,
         package_distributions=package_distributions,
@@ -799,6 +886,7 @@ def _exporter_identity(
         cache=hashlib.sha256(canonical_bytes(payload)).hexdigest(),
         runtime=hashlib.sha256(canonical_bytes(runtime_payload)).hexdigest(),
         environment=hashlib.sha256(canonical_bytes(environment_payload)).hexdigest(),
+        modules=tuple(sorted(isolation_modules)),
     )
 
 
@@ -807,9 +895,10 @@ def _exporter_dependencies(
     module: Any,
     *,
     package_distributions: Mapping[str, list[str]],
-) -> tuple[JsonObject, frozenset[str]]:
+) -> tuple[JsonObject, frozenset[str], frozenset[str]]:
     records: JsonObject = {}
     module_names: set[str] = set()
+    isolation_module_names: set[str] = set()
     recorded_modules: set[int] = set()
     expanded_modules: set[int] = set()
     visited_callables: set[int] = set()
@@ -852,6 +941,8 @@ def _exporter_dependencies(
             recorded_modules.add(identifier)
             if name:
                 module_names.add(name)
+                if dependency is module or is_local_module(dependency):
+                    isolation_module_names.add(name)
             origin = _module_origin(dependency)
             if origin is not None:
                 digest = _file_digest(origin)
@@ -1219,7 +1310,11 @@ def _exporter_dependencies(
 
     visit_module(module, expand=False)
     visit_callable(value)
-    return records, frozenset(module_names)
+    return (
+        records,
+        frozenset(module_names),
+        frozenset(isolation_module_names),
+    )
 
 
 def _module_origin(module: Any) -> Path | None:
@@ -1887,6 +1982,7 @@ __all__ = [
     "inspect_baseline",
     "new_transfer_virtual_file",
     "preflight_exporters",
+    "prepared_exporters",
     "require_capabilities",
     "transfer_runtime_context",
 ]

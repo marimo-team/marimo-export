@@ -11,7 +11,7 @@ from marimo_export._marimo.compat import (
     execute_state,
     flush_native_caches,
     inspect_baseline,
-    preflight_exporters,
+    prepared_exporters,
     require_capabilities,
     runtime_path,
 )
@@ -155,9 +155,6 @@ async def _capture(spec: ExportSpec) -> JsonObject:
     plan = normalize_matrix(spec, baseline)
     ui_names = tuple(name for name in plan.inputs if baseline.definitions[name].kind == "ui")
     parent_ui = await declared_ui_values(ui_names)
-    exporter_identities = preflight_exporters(plan)
-    flush_native_caches()
-    primary: BaseException | None = None
     receipts = []
     upstream_hits = 0
     upstream_misses = 0
@@ -166,50 +163,53 @@ async def _capture(spec: ExportSpec) -> JsonObject:
     ui_application_seconds = 0.0
     projection_execution_seconds = 0.0
     child_cleanup_seconds = 0.0
-    try:
-        for state in plan.states:
-            executed = await execute_state(state, plan, exporter_identities)
-            receipts.extend(executed.receipts)
-            upstream_hits += executed.upstream_cache.hits
-            upstream_misses += executed.upstream_cache.misses
-            child_construction_seconds += executed.timings.construction_seconds
-            upstream_execution_seconds += executed.timings.upstream_execution_seconds
-            ui_application_seconds += executed.timings.ui_application_seconds
-            projection_execution_seconds += executed.timings.projection_execution_seconds
-            child_cleanup_seconds += executed.timings.cleanup_seconds
-    except BaseException as error:
-        primary = error
-    finally:
-        consistency_error: BaseException | None = None
+    with prepared_exporters(plan) as exporter_identities:
+        flush_native_caches()
+        primary: BaseException | None = None
         try:
-            after_ui = await declared_ui_values(ui_names)
-            if after_ui != parent_ui:
-                raise ExecutionError(
-                    "the parent UI state changed during capture",
-                    code="parent_state_changed",
-                    details={"inputs": list(ui_names)},
-                )
+            for state in plan.states:
+                executed = await execute_state(state, plan, exporter_identities)
+                receipts.extend(executed.receipts)
+                upstream_hits += executed.upstream_cache.hits
+                upstream_misses += executed.upstream_cache.misses
+                child_construction_seconds += executed.timings.construction_seconds
+                upstream_execution_seconds += executed.timings.upstream_execution_seconds
+                ui_application_seconds += executed.timings.ui_application_seconds
+                projection_execution_seconds += executed.timings.projection_execution_seconds
+                child_cleanup_seconds += executed.timings.cleanup_seconds
         except BaseException as error:
-            consistency_error = error
-        if primary is not None:
-            if consistency_error is not None and isinstance(primary, MarimoExportError):
-                primary._merge_details(
-                    {
-                        "parent_consistency": [
-                            {
-                                "code": getattr(
-                                    consistency_error,
-                                    "code",
-                                    "parent_consistency_failed",
-                                ),
-                                "message": str(consistency_error),
-                            }
-                        ]
-                    }
-                )
-            raise primary
-        if consistency_error is not None:
-            raise consistency_error
+            primary = error
+        finally:
+            consistency_error: BaseException | None = None
+            try:
+                after_ui = await declared_ui_values(ui_names)
+                if after_ui != parent_ui:
+                    raise ExecutionError(
+                        "the parent UI state changed during capture",
+                        code="parent_state_changed",
+                        details={"inputs": list(ui_names)},
+                    )
+            except BaseException as error:
+                consistency_error = error
+            if primary is not None:
+                if consistency_error is not None and isinstance(primary, MarimoExportError):
+                    primary._merge_details(
+                        {
+                            "parent_consistency": [
+                                {
+                                    "code": getattr(
+                                        consistency_error,
+                                        "code",
+                                        "parent_consistency_failed",
+                                    ),
+                                    "message": str(consistency_error),
+                                }
+                            ]
+                        }
+                    )
+                raise primary
+            if consistency_error is not None:
+                raise consistency_error
 
     expected_receipts = len(plan.states) * len(plan.outputs)
     if len(receipts) != expected_receipts:

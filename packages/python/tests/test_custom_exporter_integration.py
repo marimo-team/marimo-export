@@ -56,9 +56,9 @@ from helper import transform
 from marimo_export import BlobAsset
 
 
-def encode(value):
+def encode(value, *, increment=0):
     return BlobAsset(
-        data=transform(value).encode("utf-8"),
+        data=transform(value + increment).encode("utf-8"),
         media_type="application/vnd.example.summary.v1+text",
     )
 """.lstrip(),
@@ -225,7 +225,7 @@ def test_capture_sideloads_an_importable_exporter_and_invalidates_changed_code(
     assert notebook.read_bytes() == source
 
 
-def test_live_capture_reimports_a_changed_exporter_before_fingerprinting(
+def test_live_capture_refreshes_exporter_modules_with_reload_disabled(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -235,6 +235,9 @@ def test_live_capture_reimports_a_changed_exporter_before_fingerprinting(
     exporter = tmp_path / "publication_exports.py"
     _write_exporter(exporter, "first")
     monkeypatch.setenv("PYTHONPATH", str(tmp_path))
+    config_home = tmp_path / "config"
+    config_home.mkdir()
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(config_home))
     spec = ExportSpec(
         inputs=(),
         states={"baseline": {}},
@@ -256,6 +259,14 @@ def test_live_capture_reimports_a_changed_exporter_before_fingerprinting(
             output=tmp_path / "first",
             timeout=30,
         )
+        warm = capture(
+            server.base_url,
+            session=server.session_id,
+            access_token=server.access_token,
+            spec=spec,
+            output=tmp_path / "warm",
+            timeout=30,
+        )
         _write_exporter(exporter, "changed")
         changed = capture(
             server.base_url,
@@ -265,14 +276,45 @@ def test_live_capture_reimports_a_changed_exporter_before_fingerprinting(
             output=tmp_path / "changed",
             timeout=30,
         )
+        _write_dependent_exporter(exporter)
+        helper = tmp_path / "helper.py"
+        _write_helper(helper, "helper")
+        dependent = capture(
+            server.base_url,
+            session=server.session_id,
+            access_token=server.access_token,
+            spec=spec,
+            output=tmp_path / "dependent",
+            timeout=30,
+        )
+        _write_helper(helper, "refreshed-helper")
+        refreshed = capture(
+            server.base_url,
+            session=server.session_id,
+            access_token=server.access_token,
+            spec=spec,
+            output=tmp_path / "refreshed",
+            timeout=30,
+        )
     finally:
         server.stop()
 
     assert (first.projection_cache.hits, first.projection_cache.misses) == (0, 1)
+    assert (warm.projection_cache.hits, warm.projection_cache.misses) == (1, 0)
     assert (changed.projection_cache.hits, changed.projection_cache.misses) == (0, 1)
+    assert (dependent.projection_cache.hits, dependent.projection_cache.misses) == (0, 1)
+    assert (refreshed.projection_cache.hits, refreshed.projection_cache.misses) == (0, 1)
     assert (
         open_publication(changed.path).state("baseline").output("summary").blob_asset().data
         == b"changed:42"
+    )
+    assert (
+        open_publication(dependent.path).state("baseline").output("summary").blob_asset().data
+        == b"helper:42"
+    )
+    assert (
+        open_publication(refreshed.path).state("baseline").output("summary").blob_asset().data
+        == b"refreshed-helper:42"
     )
     assert notebook.read_bytes() == source
 
