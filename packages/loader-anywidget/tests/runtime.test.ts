@@ -5,18 +5,6 @@ import { resolveAnyWidgetModule } from "../src/runtime/binding.js";
 import { modelProxy } from "../src/runtime/model-proxy.js";
 import { base64ModuleUrl, moduleUrl, notification, outputFor, payload } from "./fixture.js";
 
-interface Counters {
-  rootInitialize: number;
-  rootRender: number;
-  rootRenderCleanup: number;
-  rootAbort: number;
-  childInitialize: number;
-  childInitializeCleanup: number;
-  childRender: number;
-  childRenderCleanup: number;
-  sendCallback: number;
-}
-
 let documentValue: FakeDocument;
 
 beforeEach(() => {
@@ -101,26 +89,6 @@ describe("AnyWidget browser runtime", () => {
     expect(off).toHaveBeenCalledTimes(2);
     controller.abort();
     expect(off).toHaveBeenCalledTimes(2);
-  });
-
-  test("mounts a loaded publication value", async () => {
-    const url = moduleUrl(`
-      export default {
-        render({ el }) { el.dataset.registered = "true"; },
-      };
-    `);
-    const output = await outputFor(
-      payload({
-        modelNotifications: [notification({ id: "model-0", state: {}, moduleUrl: url })],
-      }),
-    );
-    const element = documentValue.createElement("div");
-
-    const loaded = await output.load(anyWidgetLoader());
-    const mounted = await loaded.mount(element as unknown as HTMLElement);
-
-    expect(element.dataset.registered).toBe("true");
-    await mounted.dispose();
   });
 
   test("keeps parent disposal authoritative over a child render signal", async () => {
@@ -281,119 +249,6 @@ describe("AnyWidget browser runtime", () => {
         expect.objectContaining({ message: "AnyWidget render cleanup failed." }),
       ),
     );
-  });
-
-  test("mounts a composed model graph and releases its browser resources", async () => {
-    const counters: Counters = {
-      rootInitialize: 0,
-      rootRender: 0,
-      rootRenderCleanup: 0,
-      rootAbort: 0,
-      childInitialize: 0,
-      childInitializeCleanup: 0,
-      childRender: 0,
-      childRenderCleanup: 0,
-      sendCallback: 0,
-    };
-    vi.stubGlobal("__anywidgetRuntimeCounters", counters);
-    const rootUrl = moduleUrl(`
-      export default {
-        initialize({ model, signal }) {
-          const counters = globalThis.__anywidgetRuntimeCounters;
-          counters.rootInitialize += 1;
-          signal.addEventListener("abort", () => counters.rootAbort += 1, { once: true });
-          return { read: () => model.get("count") };
-        },
-        async render({ model, el, host }) {
-          const counters = globalThis.__anywidgetRuntimeCounters;
-          counters.rootRender += 1;
-          const draw = () => el.dataset.count = String(model.get("count"));
-          model.on("change:count", draw);
-          draw();
-          const childModel = await host.getModel(model.get("child"));
-          el.dataset.childLabel = childModel.get("label");
-          const child = await host.getWidget(model.get("child"));
-          const childElement = document.createElement("section");
-          el.append(childElement);
-          await child.render({ el: childElement });
-          return () => counters.rootRenderCleanup += 1;
-        },
-      };
-    `);
-    const childUrl = moduleUrl(`
-      export default {
-        initialize() {
-          const counters = globalThis.__anywidgetRuntimeCounters;
-          counters.childInitialize += 1;
-          return () => counters.childInitializeCleanup += 1;
-        },
-        render({ model, el }) {
-          const counters = globalThis.__anywidgetRuntimeCounters;
-          counters.childRender += 1;
-          el.dataset.label = model.get("label");
-          return () => counters.childRenderCleanup += 1;
-        },
-      };
-    `);
-    const output = await outputFor(
-      payload({
-        modelNotifications: [
-          notification({
-            id: "model-0",
-            state: { count: 1, child: "anywidget:model-1", _css: ".root { color: red; }" },
-            moduleUrl: rootUrl,
-          }),
-          notification({
-            id: "model-1",
-            state: { label: "nested", _css: ".child { color: blue; }" },
-            moduleUrl: childUrl,
-          }),
-        ],
-      }),
-    );
-    const loaded =
-      await output.load(
-        anyWidgetLoader<{ count: number; child: string; _css: string }, { read(): number }>(),
-      );
-    const root = documentValue.createElement("main");
-
-    const mounted = await loaded.mount(root as unknown as HTMLElement);
-
-    expect(counters.rootInitialize).toBe(1);
-    expect(counters.rootRender).toBe(1);
-    expect(counters.childInitialize).toBe(1);
-    expect(counters.childRender).toBe(1);
-    expect(mounted.exports.read()).toBe(1);
-    expect(root.dataset.count).toBe("1");
-    expect(root.dataset.childLabel).toBe("nested");
-    expect((root.children[0] as FakeElement).dataset.label).toBe("nested");
-    expect(documentValue.head.children.map((style) => style.textContent)).toEqual([
-      ".root { color: red; }",
-      ".child { color: blue; }",
-    ]);
-
-    mounted.model.set("count", 4);
-    mounted.model.save_changes();
-    expect(root.dataset.count).toBe("4");
-    mounted.model.set("_css", ".root { color: green; }");
-    expect(documentValue.head.children[0]?.textContent).toBe(".root { color: green; }");
-    const childModel = await mounted.model.widget_manager.get_model<{ label: string }>("model-1");
-    expect(childModel.get("label")).toBe("nested");
-    mounted.model.send({}, () => {
-      counters.sendCallback += 1;
-    });
-    await Promise.resolve();
-    expect(counters.sendCallback).toBe(1);
-
-    await mounted.dispose();
-    await mounted.dispose();
-
-    expect(counters.rootAbort).toBe(1);
-    expect(counters.rootRenderCleanup).toBe(1);
-    expect(counters.childInitializeCleanup).toBe(1);
-    expect(counters.childRenderCleanup).toBe(1);
-    expect(documentValue.head.children).toHaveLength(0);
-    expect(root.children).toHaveLength(0);
   });
 
   test("destroys child bindings before their parent", async () => {

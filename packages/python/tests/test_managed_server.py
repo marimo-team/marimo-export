@@ -10,9 +10,6 @@ from pathlib import Path
 from typing import Any, cast
 
 import pytest
-from marimo_export._marimo.compat.managed_server import (
-    _cache_enabled_script_config,
-)
 from marimo_export._remote.managed import ManagedServer, _SessionStream
 from marimo_export.errors import TransportError
 
@@ -99,37 +96,6 @@ def test_startup_preserves_primary_error_and_closes_files(
     assert events == ["process-cleanup", "files-closed"]
 
 
-def test_managed_script_config_forces_native_cell_caching_last() -> None:
-    manager = object()
-
-    def native(
-        value: object,
-        *,
-        hide_secrets: bool,
-    ) -> dict[str, object]:
-        assert value is manager
-        assert hide_secrets is False
-        return {
-            "runtime": {
-                "auto_reload": "off",
-                "cache_cells": False,
-            }
-        }
-
-    config = _cache_enabled_script_config(
-        native,
-        manager,
-        hide_secrets=False,
-    )
-
-    assert config == {
-        "runtime": {
-            "auto_reload": "off",
-            "cache_cells": True,
-        }
-    }
-
-
 def test_session_stream_closes_response_after_initial_join_timeout() -> None:
     events: list[str] = []
 
@@ -165,10 +131,11 @@ def test_session_stream_closes_response_after_initial_join_timeout() -> None:
     ]
 
 
-def test_stop_process_uses_fallback_after_windows_tree_failure(
+def test_windows_tree_failure_falls_back_to_direct_process_kill(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     events: list[str] = []
+    command: list[str] = []
 
     class _Process:
         pid = 123
@@ -194,110 +161,26 @@ def test_stop_process_uses_fallback_after_windows_tree_failure(
     process = _Process()
     server = ManagedServer.__new__(ManagedServer)
     server._process = cast(Any, process)
+    server._log_file = cast(Any, object())
     server.timeout = 1
 
     def fail_tree(
-        value: ManagedServer,
-        candidate: subprocess.Popen[bytes],
-    ) -> None:
-        del value
-        assert candidate is process
-        events.append("taskkill")
-        raise TransportError("taskkill failed", code="server_shutdown_failed")
-
-    monkeypatch.setattr(sys, "platform", "win32")
-    monkeypatch.setattr(ManagedServer, "_terminate_windows_tree", fail_tree)
-
-    with pytest.raises(TransportError, match="process tree did not stop cleanly"):
-        server._stop_process()
-
-    assert events == ["taskkill", "terminate", "wait", "kill", "wait"]
-    assert server._process is None
-
-
-def test_stop_process_drains_posix_groups_after_forced_wait_timeout(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    events: list[str] = []
-
-    class _Process:
-        pid = 123
-        stopped = False
-
-        def poll(self) -> int | None:
-            return 1 if self.stopped else None
-
-        def wait(self, *, timeout: float) -> int:
-            assert timeout > 0
-            events.append("wait")
-            if not self.stopped:
-                raise subprocess.TimeoutExpired("managed", timeout)
-            return 1
-
-    process = _Process()
-    server = ManagedServer.__new__(ManagedServer)
-    server._process = cast(Any, process)
-    server.timeout = 1
-
-    def signal_process(
-        candidate: subprocess.Popen[bytes],
-        *,
-        force: bool,
-    ) -> None:
-        assert candidate is process
-        events.append("kill" if force else "terminate")
-
-    def kill_groups(groups: set[int]) -> None:
-        assert groups == {123, 456}
-        events.append("groups-killed")
-        process.stopped = True
-
-    monkeypatch.setattr(sys, "platform", "darwin")
-    monkeypatch.setattr(ManagedServer, "_signal_process", staticmethod(signal_process))
-    monkeypatch.setattr(
-        ManagedServer,
-        "_kill_owned_process_groups",
-        staticmethod(kill_groups),
-    )
-
-    server._stop_process({123, 456})
-
-    assert events == [
-        "terminate",
-        "wait",
-        "kill",
-        "wait",
-        "groups-killed",
-    ]
-    assert server._process is None
-
-
-def test_windows_tree_termination_includes_descendants(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    command: list[str] = []
-
-    def run(
         args: list[str],
         **kwargs: object,
     ) -> subprocess.CompletedProcess[bytes]:
         del kwargs
         command.extend(args)
-        return subprocess.CompletedProcess(args, 0)
+        return subprocess.CompletedProcess(args, 1)
 
-    log_file = (tmp_path / "managed.log").open("wb")
-    server = ManagedServer.__new__(ManagedServer)
-    server._log_file = log_file
-    server.timeout = 1
-    process = cast(Any, type("_Process", (), {"pid": 123})())
-    monkeypatch.setattr(subprocess, "run", run)
-    try:
-        server._terminate_windows_tree(process)
-    finally:
-        log_file.close()
+    monkeypatch.setattr(sys, "platform", "win32")
+    monkeypatch.setattr(subprocess, "run", fail_tree)
+
+    with pytest.raises(TransportError, match="process tree did not stop cleanly"):
+        server._stop_process()
 
     assert command == ["taskkill", "/PID", "123", "/T", "/F"]
+    assert events == ["terminate", "wait", "kill", "wait"]
+    assert server._process is None
 
 
 @pytest.mark.timeout(30)

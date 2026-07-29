@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import ast
+
 from marimo_export import ExportSpec, OutputSpec
 from marimo_export._execution import (
     Baseline,
@@ -113,13 +115,17 @@ def test_duplicate_normalized_vectors_fail_before_execution() -> None:
         raise AssertionError("duplicate normalized states were accepted")
 
 
-def test_projection_body_is_deterministic_and_definition_free() -> None:
-    assert projection_code(
+def test_projection_body_reads_state_and_source_without_definitions() -> None:
+    code = projection_code(
         'chart "main"',
         "symbols_chart",
         "marimo_export_state_0123456789abcdef",
-    ) == (
-        '# marimo-export projection: "chart \\"main\\""\n'
-        "marimo_export_state_0123456789abcdef\n"
-        "symbols_chart"
     )
+    tree = ast.parse(code)
+
+    assert len(tree.body) == 2
+    assert [
+        node.value.id
+        for node in tree.body
+        if isinstance(node, ast.Expr) and isinstance(node.value, ast.Name)
+    ] == ["marimo_export_state_0123456789abcdef", "symbols_chart"]

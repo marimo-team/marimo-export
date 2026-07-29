@@ -16,6 +16,7 @@ interface RuntimeCounters {
 
 const COUNTERS = "__marimoExportAnyWidgetBrowserCounters";
 const ROOT_CSS = '[data-anywidget-root="true"] { color: rgb(17, 34, 51); }';
+const UPDATED_ROOT_CSS = '[data-anywidget-root="true"] { color: rgb(85, 102, 119); }';
 const CHILD_CSS = '[data-anywidget-child="true"] { color: rgb(51, 68, 85); }';
 
 let host: HTMLElement | undefined;
@@ -169,7 +170,22 @@ describe("AnyWidget native browser runtime", () => {
     });
     expect(mounted.model.get("count")).toBe(2);
     expect(mounted.exports.read()).toBe(2);
+    mounted.model.save_changes();
 
+    mounted.model.set("_css", UPDATED_ROOT_CSS);
+    await vi.waitFor(() => {
+      expect(getComputedStyle(host!).color).toBe("rgb(85, 102, 119)");
+    });
+
+    let sendCallbacks = 0;
+    mounted.model.send({}, () => {
+      sendCallbacks += 1;
+    });
+    await vi.waitFor(() => {
+      expect(sendCallbacks).toBe(1);
+    });
+
+    await mounted.dispose();
     await mounted.dispose();
     disposeMount = undefined;
 
@@ -186,5 +202,5 @@ describe("AnyWidget native browser runtime", () => {
 function widgetStyles(): string[] {
   return [...document.head.querySelectorAll("style")]
     .map((style) => style.textContent ?? "")
-    .filter((css) => css === ROOT_CSS || css === CHILD_CSS);
+    .filter((css) => css === ROOT_CSS || css === UPDATED_ROOT_CSS || css === CHILD_CSS);
 }

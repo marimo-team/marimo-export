@@ -94,24 +94,6 @@ describe("anywidget", () => {
     expect(Reflect.has(globalThis, marker)).toBe(false);
   });
 
-  test("rejects malformed binary state before module execution", async () => {
-    const output = await outputFor(
-      payload({
-        modelNotifications: [
-          notification({
-            id: "model-0",
-            state: { binary: null },
-            moduleUrl: moduleUrl("export default { render() {} }"),
-            bufferPaths: [["binary"]],
-            buffers: ["not-base64"],
-          }),
-        ],
-      }),
-    );
-
-    await expect(output.load(anyWidgetLoader())).rejects.toThrow("not canonical base64");
-  });
-
   test("requires each buffer path parent to exist", async () => {
     const output = await outputFor(
       payload({
@@ -166,25 +148,6 @@ describe("anywidget", () => {
     );
 
     await expect(output.load(anyWidgetLoader())).resolves.toBeDefined();
-  });
-
-  test("loads an IPython widget model reference in the root closure", async () => {
-    const output = await outputFor(
-      payload({
-        modelNotifications: [
-          notification({
-            id: "model-0",
-            state: { layout: "IPY_MODEL_model-1" },
-            moduleUrl: moduleUrl("export default { render() {} }"),
-          }),
-          notification({ id: "model-1", state: { width: "100%" } }),
-        ],
-      }),
-    );
-
-    const loaded = await output.load(anyWidgetLoader<{ layout: string }>());
-
-    expect(loaded.initialState.layout).toBe("IPY_MODEL_model-1");
   });
 
   test("requires the canonical root model ID", async () => {

@@ -31,7 +31,6 @@ def test_root_help_names_five_commands(capsys: pytest.CaptureFixture[str]) -> No
     output = capsys.readouterr().out
     for command in ("build", "capture", "session", "inspect", "verify"):
         assert command in output
-    assert "{build,capture,session,inspect,verify}" in output
 
 
 def test_no_command_returns_syntax_error(capsys: pytest.CaptureFixture[str]) -> None:

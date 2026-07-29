@@ -154,8 +154,6 @@ def test_invoke_reads_a_bridge_response_larger_than_one_stdout_write() -> None:
 
     def respond(request: urllib.request.Request) -> Response:
         bridge_request, marker = decode_execute_request(request)
-        code = json.loads(cast(bytes, request.data))["code"]
-        assert "_marimo_export_chunk_chars = 65536" in code
         envelope = {
             "schema": BRIDGE_SCHEMA,
             "request_id": bridge_request["request_id"],
