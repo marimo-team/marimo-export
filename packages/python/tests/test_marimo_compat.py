@@ -1,18 +1,26 @@
 from __future__ import annotations
 
+import hashlib
 import importlib
 import sys
+import weakref
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
 from typing import Any, cast
 
 import marimo._runtime.executor.lifecycles.cached as cached_lifecycle
 import marimo._save.loaders as native_loaders
+import marimo_export._marimo.compat as marimo_compat
+import msgspec
 import pytest
+from marimo._save.stubs.lazy_stub import Cache, CacheType, Item, Meta
 from marimo_export._execution import MatrixPlan, OutputProjection
 from marimo_export._marimo.compat import (
     _cleanup_state_child,
     _document_sha256,
+    _native_receipt,
+    _ReadSnapshotStore,
+    _release_state_child,
     _track_upstream_cache,
     flush_native_caches,
     preflight_exporters,
@@ -88,12 +96,33 @@ def test_native_cache_flush_uses_marimo_loader_lifecycle(
 def test_state_child_cleanup_releases_after_teardown_cancellation() -> None:
     events: list[str] = []
 
+    class Runner:
+        pass
+
+    class Parent:
+        def __init__(self, child_context: object) -> None:
+            self.children = [child_context]
+
+        def remove_child(self, child_context: object) -> None:
+            self.children.remove(child_context)
+
+    runner = Runner()
+    child_context = object()
+    parent = Parent(child_context)
+    finalizer = weakref.finalize(runner, parent.remove_child, child_context)
+    finalizer.atexit = False
+
     def teardown() -> None:
         events.append("teardown")
         raise KeyboardInterrupt("cancelled")
 
     def release() -> None:
         events.append("release")
+        _release_state_child(
+            child=runner,
+            parent_context=parent,
+            child_context=child_context,
+        )
 
     with pytest.raises(KeyboardInterrupt, match="cancelled"):
         _cleanup_state_child(
@@ -104,6 +133,38 @@ def test_state_child_cleanup_releases_after_teardown_cancellation() -> None:
         )
 
     assert events == ["teardown", "release"]
+    assert parent.children == []
+    assert not finalizer.alive
+
+
+def test_state_child_release_runs_the_registered_marimo_finalizer() -> None:
+    class Runner:
+        pass
+
+    class Parent:
+        def __init__(self, child_context: object) -> None:
+            self.children = [child_context]
+            self.released: list[object] = []
+
+        def remove_child(self, child_context: object) -> None:
+            self.children.remove(child_context)
+            self.released.append(child_context)
+
+    runner = Runner()
+    child_context = object()
+    parent = Parent(child_context)
+    finalizer = weakref.finalize(runner, parent.remove_child, child_context)
+    finalizer.atexit = False
+
+    _release_state_child(
+        child=runner,
+        parent_context=parent,
+        child_context=child_context,
+    )
+
+    assert parent.children == []
+    assert parent.released == [child_context]
+    assert not finalizer.alive
 
 
 def test_state_child_cleanup_preserves_the_execution_error() -> None:
@@ -197,6 +258,102 @@ def test_exporter_preflight_fingerprints_sideloaded_function_code(
 
     assert len(first_identity) == 64
     assert first_identity != second_identity
+
+
+def test_exporter_preflight_rejects_a_stale_loaded_module(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module_name = "marimo_export_test_stale_exporter"
+    exporter = tmp_path / f"{module_name}.py"
+    exporter.write_text("def encode(value):\n    return 'first', value\n", encoding="utf-8")
+    monkeypatch.syspath_prepend(str(tmp_path))
+    importlib.invalidate_caches()
+
+    preflight_exporters(_custom_exporter_plan(module_name))
+    exporter.write_text(
+        "def encode(value):\n    return 'changed-and-longer', value\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(OutputError) as raised:
+        preflight_exporters(_custom_exporter_plan(module_name))
+
+    assert raised.value.code == "exporter_stale"
+
+
+def test_exporter_identity_failures_are_output_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module_name = "marimo_export_test_identity_failure"
+    module = ModuleType(module_name)
+    exec("def encode(value):\n    return value\n", module.__dict__)
+    monkeypatch.setitem(sys.modules, module_name, module)
+
+    def fail(*args: object, **kwargs: object) -> object:
+        del args, kwargs
+        raise ValueError("dependency graph failed")
+
+    monkeypatch.setattr(marimo_compat, "_exporter_dependencies", fail)
+
+    with pytest.raises(OutputError) as raised:
+        preflight_exporters(_custom_exporter_plan(module_name))
+
+    assert raised.value.code == "exporter_identity_failed"
+    assert raised.value.details == {
+        "exception_type": "ValueError",
+        "exporter": f"{module_name}:encode",
+        "output": "summary",
+    }
+
+
+def test_native_receipt_uses_the_bytes_seen_by_the_snapshot() -> None:
+    cache_key = "cell_cache/H_expected.jsonl"
+    reference = "cell_cache/expected/return.npy"
+    payload = b"verified payload"
+    manifest = msgspec.json.encode(
+        Cache(
+            hash="expected",
+            cache_type=CacheType.CONTENT_ADDRESSED,
+            defs={},
+            stateful_refs=[],
+            meta=Meta(
+                version=1,
+                return_value=Item(reference=reference),
+                blob_hashes={reference: hashlib.sha256(payload).hexdigest()},
+            ),
+        )
+    )
+
+    class MutatingStore:
+        def __init__(self) -> None:
+            self.calls: dict[str, int] = {}
+
+        def get(self, key: str) -> bytes | None:
+            call = self.calls.get(key, 0)
+            self.calls[key] = call + 1
+            if key == cache_key:
+                return manifest if call == 0 else b'{"hash":"substituted"}'
+            if key == reference:
+                return payload if call == 0 else b"substituted payload"
+            return None
+
+    source = MutatingStore()
+    snapshot = _ReadSnapshotStore(source)
+    assert snapshot.get(cache_key) == manifest
+    assert snapshot.get(reference) == payload
+
+    receipt = _native_receipt(
+        store=snapshot,
+        cache_key=cache_key,
+        expected_hash="expected",
+        output="array",
+        value=object(),
+        disposition="hit",
+    )
+
+    assert receipt.payload == payload
+    assert source.calls == {cache_key: 1, reference: 1}
 
 
 def test_exporter_preflight_accepts_package_owned_builtin_exporters() -> None:

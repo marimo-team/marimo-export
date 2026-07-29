@@ -225,6 +225,58 @@ def test_capture_sideloads_an_importable_exporter_and_invalidates_changed_code(
     assert notebook.read_bytes() == source
 
 
+def test_live_capture_reimports_a_changed_exporter_before_fingerprinting(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    notebook = tmp_path / "notebook.py"
+    _write_notebook(notebook)
+    source = notebook.read_bytes()
+    exporter = tmp_path / "publication_exports.py"
+    _write_exporter(exporter, "first")
+    monkeypatch.setenv("PYTHONPATH", str(tmp_path))
+    spec = ExportSpec(
+        inputs=(),
+        states={"baseline": {}},
+        outputs={
+            "summary": OutputSpec(
+                source="answer",
+                exporter=importable("publication_exports:encode", increment=1),
+            )
+        },
+    )
+    server = ManagedServer(notebook, timeout=30)
+    try:
+        server.activate()
+        first = capture(
+            server.base_url,
+            session=server.session_id,
+            access_token=server.access_token,
+            spec=spec,
+            output=tmp_path / "first",
+            timeout=30,
+        )
+        _write_exporter(exporter, "changed")
+        changed = capture(
+            server.base_url,
+            session=server.session_id,
+            access_token=server.access_token,
+            spec=spec,
+            output=tmp_path / "changed",
+            timeout=30,
+        )
+    finally:
+        server.stop()
+
+    assert (first.projection_cache.hits, first.projection_cache.misses) == (0, 1)
+    assert (changed.projection_cache.hits, changed.projection_cache.misses) == (0, 1)
+    assert (
+        open_publication(changed.path).state("baseline").output("summary").blob_asset().data
+        == b"changed:42"
+    )
+    assert notebook.read_bytes() == source
+
+
 def test_capture_sideloads_an_importable_callable(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

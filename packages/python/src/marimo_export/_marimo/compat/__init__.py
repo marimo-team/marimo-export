@@ -14,13 +14,16 @@ import sys
 import threading
 import time
 import unicodedata
-from collections.abc import Callable, Iterator, Mapping
+import weakref
+from _thread import LockType
+from collections.abc import Callable, Iterable, Iterator, Mapping
 from contextlib import contextmanager, suppress
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal, cast
 
 import msgspec
+from marimo._save.stores.store import Store
 from marimo._save.stubs import BlobAsset
 
 from marimo_export._execution.matrix import (
@@ -164,10 +167,61 @@ class _CacheActivity:
     projections: dict[Any, Literal["hit", "miss"]] = field(default_factory=dict)
 
 
+@dataclass(frozen=True, slots=True)
+class _ExporterIdentity:
+    cache: str
+    runtime: str
+    environment: str
+
+
+@dataclass(frozen=True, slots=True)
+class _ExporterSnapshot:
+    module: weakref.ReferenceType[Any]
+    runtime: str
+    environment: str
+
+
+class _ReadSnapshotStore(Store):
+    """Hold each native cache byte string stable for one receipt."""
+
+    def __init__(self, store: Any) -> None:
+        self._store = store
+        self._values: dict[str, bytes | None] = {}
+        self._lock = threading.Lock()
+
+    def get(self, key: str) -> bytes | None:
+        with self._lock:
+            if key not in self._values:
+                self._values[key] = self._store.get(key)
+            return self._values[key]
+
+    def put(self, key: str, value: bytes) -> bool:
+        del key, value
+        return False
+
+    def hit(self, key: str) -> bool:
+        return self.get(key) is not None
+
+    def clear(self, key: str) -> bool:
+        del key
+        return False
+
+    def get_batch(self, keys: Iterable[str]) -> Iterator[tuple[str, bytes | None]]:
+        for key in keys:
+            yield key, self.get(key)
+
+    def export_keys(self) -> list[str]:
+        with self._lock:
+            return sorted(key for key, value in self._values.items() if value is not None)
+
+
 _CACHE_TRACKER_LOCK = threading.Lock()
 _CACHE_TRACKERS: dict[int, tuple[Any, frozenset[Any], _CacheActivity]] = {}
 _TRACKED_CACHE_FUNCTION: Callable[..., Any] | None = None
 _NATIVE_CACHE_FUNCTION: Callable[..., Any] | None = None
+_EXPORTER_SNAPSHOT_LOCK = threading.Lock()
+_EXPORTER_SNAPSHOTS: dict[str, _ExporterSnapshot] = {}
+_EXPORTER_SNAPSHOT_STATE_ATTRIBUTE = "_marimo_export_exporter_snapshot_state"
 
 
 @contextmanager
@@ -334,6 +388,42 @@ def _cleanup_state_child(
             "exception_type": type(cleanup_error).__name__,
         },
     ) from cleanup_error
+
+
+def _release_state_child(
+    *,
+    child: Any,
+    parent_context: Any,
+    child_context: Any,
+) -> None:
+    """Run AppKernelRunner's registered child-context finalizer now."""
+
+    for reference in weakref.getweakrefs(child):
+        finalizer = reference.__callback__
+        if not isinstance(finalizer, weakref.finalize):
+            continue
+        pending = finalizer.peek()
+        if pending is None:
+            continue
+        target, callback, args, kwargs = pending
+        if (
+            target is not child
+            or getattr(callback, "__self__", None) is not parent_context
+            or getattr(callback, "__name__", None) != "remove_child"
+            or len(args) != 1
+            or args[0] is not child_context
+            or kwargs
+        ):
+            continue
+        detached = finalizer.detach()
+        if detached is None:
+            break
+        _, callback, args, kwargs = detached
+        callback(*args, **kwargs)
+        if child_context in parent_context.children:
+            raise RuntimeError("marimo retained the released state child")
+        return
+    raise RuntimeError("marimo state child finalizer is unavailable")
 
 
 def require_capabilities() -> MarimoCapabilities:
@@ -529,16 +619,87 @@ def preflight_exporters(plan: MatrixPlan) -> Mapping[str, str]:
                     "exporter": exporter.name,
                 },
             )
-        identity = _exporter_identity(
-            name=exporter.name,
-            module=module,
-            value=value,
-            distributions=reference.distributions,
-            package_distributions=package_distributions,
-        )
-        resolved[exporter.name] = identity
-        identities[output] = identity
+        try:
+            identity = _exporter_identity(
+                name=exporter.name,
+                module=module,
+                value=value,
+                distributions=reference.distributions,
+                package_distributions=package_distributions,
+            )
+            _record_exporter_snapshot(
+                output=output,
+                name=exporter.name,
+                module=module,
+                identity=identity,
+            )
+        except OutputError:
+            raise
+        except Exception as error:
+            raise OutputError(
+                f"output {output!r} exporter {exporter.name!r} could not be fingerprinted",
+                code="exporter_identity_failed",
+                details={
+                    "output": output,
+                    "exporter": exporter.name,
+                    "exception_type": type(error).__name__,
+                },
+            ) from error
+        resolved[exporter.name] = identity.cache
+        identities[output] = identity.cache
     return identities
+
+
+def _record_exporter_snapshot(
+    *,
+    output: str,
+    name: str,
+    module: Any,
+    identity: _ExporterIdentity,
+) -> None:
+    lock, snapshots = _exporter_snapshot_state()
+    with lock:
+        previous = snapshots.get(name)
+        if (
+            previous is not None
+            and previous.module() is module
+            and previous.environment != identity.environment
+            and previous.runtime == identity.runtime
+        ):
+            raise OutputError(
+                f"output {output!r} exporter {name!r} changed while its loaded module stayed stale",
+                code="exporter_stale",
+                details={"output": output, "exporter": name},
+            )
+        snapshots[name] = _ExporterSnapshot(
+            module=weakref.ref(module),
+            runtime=identity.runtime,
+            environment=identity.environment,
+        )
+
+
+def _exporter_snapshot_state() -> tuple[LockType, dict[str, _ExporterSnapshot]]:
+    try:
+        from marimo._runtime.context import get_context
+
+        context = get_context()
+    except Exception:
+        return _EXPORTER_SNAPSHOT_LOCK, _EXPORTER_SNAPSHOTS
+    owner = context.app_kernel_runner_registry
+    state = getattr(owner, _EXPORTER_SNAPSHOT_STATE_ATTRIBUTE, None)
+    if (
+        isinstance(state, tuple)
+        and len(state) == 2
+        and isinstance(state[0], LockType)
+        and isinstance(state[1], dict)
+    ):
+        return cast(tuple[LockType, dict[str, _ExporterSnapshot]], state)
+    created: tuple[LockType, dict[str, _ExporterSnapshot]] = (
+        threading.Lock(),
+        {},
+    )
+    setattr(owner, _EXPORTER_SNAPSHOT_STATE_ATTRIBUTE, created)
+    return created
 
 
 def _direct_callable_code(value: Any) -> Any | None:
@@ -570,35 +731,54 @@ def _exporter_identity(
     value: Any,
     distributions: tuple[str, ...],
     package_distributions: Mapping[str, list[str]],
-) -> str:
+) -> _ExporterIdentity:
     dependencies, dependency_modules = _exporter_dependencies(
         value,
         module,
         package_distributions=package_distributions,
     )
-    payload: JsonObject = {
-        "dependencies": dependencies,
+    common: JsonObject = {
         "name": name,
         "module": str(getattr(module, "__name__", "")),
         "symbol_type": f"{type(value).__module__}.{type(value).__qualname__}",
+    }
+    runtime_dependencies = {
+        key: value for key, value in dependencies.items() if not key.startswith("module:")
+    }
+    environment_dependencies = {
+        key: value for key, value in dependencies.items() if key.startswith("module:")
+    }
+    payload: JsonObject = {**common, "dependencies": dependencies}
+    runtime_payload: JsonObject = {
+        **common,
+        "dependencies": runtime_dependencies,
+    }
+    environment_payload: JsonObject = {
+        **common,
+        "dependencies": environment_dependencies,
     }
     origin = getattr(getattr(module, "__spec__", None), "origin", None)
     if isinstance(origin, str) and origin not in {"built-in", "frozen"}:
         module_digest = _file_digest(Path(origin))
         if module_digest is not None:
             payload["module_sha256"] = module_digest
+            environment_payload["module_sha256"] = module_digest
     code = _callable_code(value)
     if code is not None:
         from marimo._save.hash import hash_module
 
         with suppress(TypeError, ValueError):
-            payload["callable_sha256"] = hash_module(code).hex()
+            callable_digest = hash_module(code).hex()
+            payload["callable_sha256"] = callable_digest
+            runtime_payload["callable_sha256"] = callable_digest
     try:
         source = inspect.getsource(value)
     except (OSError, TypeError):
         source = None
     if source is not None:
-        payload["source_sha256"] = hashlib.sha256(source.encode("utf-8")).hexdigest()
+        source_digest = hashlib.sha256(source.encode("utf-8")).hexdigest()
+        payload["source_sha256"] = source_digest
+        environment_payload["source_sha256"] = source_digest
 
     package_names = set(distributions)
     top_level = str(getattr(module, "__name__", "")).partition(".")[0]
@@ -614,7 +794,12 @@ def _exporter_identity(
             versions[distribution] = importlib.metadata.version(distribution)
     if versions:
         payload["distributions"] = versions
-    return hashlib.sha256(canonical_bytes(payload)).hexdigest()
+        environment_payload["distributions"] = versions
+    return _ExporterIdentity(
+        cache=hashlib.sha256(canonical_bytes(payload)).hexdigest(),
+        runtime=hashlib.sha256(canonical_bytes(runtime_payload)).hexdigest(),
+        environment=hashlib.sha256(canonical_bytes(environment_payload)).hexdigest(),
+    )
 
 
 def _exporter_dependencies(
@@ -1279,6 +1464,11 @@ async def execute_state(
 
         def release() -> None:
             nonlocal child
+            _release_state_child(
+                child=child,
+                parent_context=runtime,
+                child_context=child_context,
+            )
             del child
             gc.collect()
 
@@ -1376,25 +1566,53 @@ def _projection_receipt(
         context = get_context()
         flush_active_caches()
         cell = child._kernel.graph.cells[cell_id]
-        loader = LazyLoader(name="cell_cache", store=context.cache.store)
+        native_loader = LazyLoader(name="cell_cache", store=context.cache.store)
         attempt = cache_attempt_from_hash(
             cell.mod,
             child._kernel.graph,
             cell_id,
             child.globals,
-            loader=loader,
+            loader=native_loader,
             pin_modules=bool(child._kernel.user_config.get("runtime", {}).get("pin_modules", True)),
         )
-        cache_key = str(loader.build_path(attempt.key))
+        cache_key = str(native_loader.build_path(attempt.key))
         if not attempt.hit:
             raise OutputError(
                 f"output {output!r} did not persist its native cache receipt",
                 code="cache_receipt_missing",
                 details={"output": output},
             )
+        effective_mode = native_loader._effective_mode()
+        store = _ReadSnapshotStore(native_loader.store)
+        encoded = store.get(cache_key)
+        if not encoded:
+            raise OutputError(
+                f"output {output!r} has no native cache receipt",
+                code="cache_receipt_missing",
+                details={"output": output},
+            )
+        native_store = native_loader.store
+        configured_mode = native_loader.mode
+        try:
+            native_loader.store = store
+            native_loader.mode = effective_mode
+            native_loader.restore_cache(attempt.key, encoded)
+        except Exception as error:
+            raise OutputError(
+                f"output {output!r} native cache receipt could not be verified",
+                code="cache_receipt_invalid",
+                details={
+                    "output": output,
+                    "cache_key": cache_key,
+                    "exception_type": type(error).__name__,
+                },
+            ) from error
+        finally:
+            native_loader.store = native_store
+            native_loader.mode = configured_mode
         payload = child.outputs.get(cell_id)
         return _native_receipt(
-            loader=loader,
+            store=store,
             cache_key=cache_key,
             expected_hash=attempt.hash,
             output=output,
@@ -1405,7 +1623,7 @@ def _projection_receipt(
 
 def _native_receipt(
     *,
-    loader: Any,
+    store: _ReadSnapshotStore,
     cache_key: str,
     expected_hash: str,
     output: str,
@@ -1415,7 +1633,7 @@ def _native_receipt(
     from marimo._save.stubs import BlobAsset as NativeBlobAsset
     from marimo._save.stubs.lazy_stub import Cache as CacheSchema
 
-    encoded = loader.store.get(cache_key)
+    encoded = store.get(cache_key)
     if not encoded:
         raise OutputError(
             f"output {output!r} has no native cache receipt",
@@ -1457,7 +1675,7 @@ def _native_receipt(
         )
 
     reference = returned.reference
-    payload = loader.store.get(reference)
+    payload = store.get(reference)
     if payload is None:
         raise OutputError(
             f"output {output!r} native return asset is missing",

@@ -6,6 +6,7 @@ import pytest
 from marimo_export import ExportSpec, OutputSpec, capture, open_publication
 from marimo_export._remote.managed import ManagedServer
 from marimo_export.errors import ExecutionError
+from marimo_export.exporters import importable
 
 
 def _capture(notebook: Path, spec: ExportSpec, output: Path) -> None:
@@ -87,6 +88,107 @@ if __name__ == "__main__":
         assert publication.state("one").output("snapshot").scalar() == "1"
         assert publication.state("two").output("snapshot").scalar() == "2"
     assert notebook.read_bytes() == source
+
+
+def test_state_children_leave_the_parent_after_success_and_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    notebook = tmp_path / "notebook.py"
+    notebook.write_text(
+        """
+import marimo
+
+app = marimo.App()
+
+
+@app.cell
+def _():
+    x = 0
+    return (x,)
+
+
+if __name__ == "__main__":
+    app.run()
+""".lstrip(),
+        encoding="utf-8",
+    )
+    (tmp_path / "publication_exports.py").write_text(
+        """
+from marimo._runtime.context import get_context
+
+
+def count_children(value):
+    del value
+    context = get_context()
+    return len(context.parent.children)
+
+
+def fail_on_two(value):
+    if value == 2:
+        raise RuntimeError("expected failure")
+    return value
+""".lstrip(),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("PYTHONPATH", str(tmp_path))
+    count_spec = ExportSpec(
+        inputs=("x",),
+        states={"one": {"x": 1}, "two": {"x": 2}, "three": {"x": 3}},
+        outputs={
+            "children": OutputSpec(
+                source="x",
+                exporter=importable("publication_exports:count_children"),
+            )
+        },
+    )
+    failure_spec = ExportSpec(
+        inputs=("x",),
+        states={"one": {"x": 1}, "two": {"x": 2}},
+        outputs={
+            "value": OutputSpec(
+                source="x",
+                exporter=importable("publication_exports:fail_on_two"),
+            )
+        },
+    )
+    server = ManagedServer(notebook, timeout=30)
+    try:
+        server.activate()
+        first = capture(
+            server.base_url,
+            session=server.session_id,
+            access_token=server.access_token,
+            spec=count_spec,
+            output=tmp_path / "first",
+            timeout=30,
+        )
+        with pytest.raises(ExecutionError):
+            capture(
+                server.base_url,
+                session=server.session_id,
+                access_token=server.access_token,
+                spec=failure_spec,
+                output=tmp_path / "failure",
+                timeout=30,
+            )
+        after_failure = capture(
+            server.base_url,
+            session=server.session_id,
+            access_token=server.access_token,
+            spec=count_spec,
+            output=tmp_path / "after-failure",
+            timeout=30,
+        )
+    finally:
+        server.stop()
+
+    for result in (first, after_failure):
+        publication = open_publication(result.path)
+        assert [
+            publication.state(name).output("children").scalar() for name in ("one", "two", "three")
+        ] == [1, 1, 1]
+    assert not (tmp_path / "failure").exists()
 
 
 def test_callable_and_class_siblings_are_owned_by_each_state_child(
