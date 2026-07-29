@@ -25,7 +25,8 @@ marimo-export build notebook.py \
 Its initial notebook autorun uses marimo's native cell cache.
 Exporter leaves are added to in-memory state children. The notebook file stays
 unchanged.
-`--replace` atomically replaces an existing real directory.
+`--replace` uses atomic directory exchange on macOS and Linux. On Windows,
+publish to a new destination directory.
 
 ## `capture`
 
@@ -62,8 +63,9 @@ define session-local UI elements can still execute live after a hit.
 
 Server start includes loopback startup, session connection, and kernel
 readiness. Initial autorun starts with the instantiate request and ends at the
-corresponding completed run. UI timing includes reactive execution triggered by
-child-local UI values.
+corresponding completed run. UI timing covers child-local value application.
+Projection timing covers the reactive materialization and projection cells in
+one cache-aware marimo run.
 
 `--json` returns the same data under `projection_cache`, `upstream_cache`, and
 `timings`. These run-local diagnostics stay outside `index.json`.

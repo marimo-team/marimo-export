@@ -44,6 +44,18 @@ _MAX_PUBLICATION_BYTES = 512 * 1024 * 1024
 _NPY_MAX_HEADER_BYTES = 1024 * 1024
 
 
+class _Immutable:
+    __slots__ = ()
+
+    def __setattr__(self, name: str, value: object) -> None:
+        try:
+            object.__getattribute__(self, name)
+        except AttributeError:
+            object.__setattr__(self, name, value)
+            return
+        raise AttributeError(f"{type(self).__name__} is immutable")
+
+
 @dataclass(frozen=True, slots=True)
 class VerificationResult:
     states: int
@@ -60,7 +72,7 @@ class VerificationResult:
         }
 
 
-class Publication:
+class Publication(_Immutable):
     """An immutable local publication opened from canonical `index.json`."""
 
     __slots__ = ("_index", "_path", "_states", "_vectors")
@@ -144,7 +156,7 @@ class Publication:
         )
 
 
-class PublishedState:
+class PublishedState(_Immutable):
     __slots__ = ("_entry", "_inputs", "_outputs", "_publication", "fingerprint", "name")
 
     def __init__(
@@ -208,7 +220,7 @@ class PublishedState:
         return self.publication.resolve(cast(Mapping[str, JsonValue], merged))
 
 
-class PublishedOutput:
+class PublishedOutput(_Immutable):
     __slots__ = ("_descriptor", "_state", "name")
 
     def __init__(

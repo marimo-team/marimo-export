@@ -177,6 +177,12 @@ def test_state_resolution_is_exact_and_immutable(tmp_path: Path) -> None:
 
     with pytest.raises(TypeError):
         cast(Any, baseline.inputs)["chart_width"] = 480
+    with pytest.raises(AttributeError, match="immutable"):
+        cast(Any, publication).path = tmp_path
+    with pytest.raises(AttributeError, match="immutable"):
+        cast(Any, baseline).name = "changed"
+    with pytest.raises(AttributeError, match="immutable"):
+        cast(Any, baseline.output("count")).name = "changed"
     with pytest.raises(PublicationError) as raised:
         baseline.resolve({"missing": 1})
     assert raised.value.code == "state_input_invalid"

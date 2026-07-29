@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import marimo_export._writer as writer_module
 import pytest
 from marimo_export import open_publication
 from marimo_export._json import sha256_bytes
@@ -75,6 +76,20 @@ def test_writer_stages_verifies_and_commits_a_publication(tmp_path: Path) -> Non
     assert result.asset_bytes == len(next(iter(assets.values())))
     assert result.index_bytes == len(index.to_bytes())
     assert result.warnings == ()
+    assert open_publication(target).verify().assets == 1
+
+
+def test_writer_commits_a_new_publication_on_windows(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    index, assets = _publication()
+    target = tmp_path / "publication"
+    monkeypatch.setattr(writer_module.sys, "platform", "win32")
+
+    result = write_publication(index, assets, target, replace=False)
+
+    assert result.path == target.absolute()
     assert open_publication(target).verify().assets == 1
 
 

@@ -182,7 +182,7 @@ def _add_publication_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--replace",
         action="store_true",
-        help="atomically replace an existing real directory",
+        help="atomically replace an existing real directory on macOS or Linux",
     )
     _add_json(parser)
 

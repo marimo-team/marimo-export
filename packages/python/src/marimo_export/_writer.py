@@ -273,7 +273,7 @@ def _require_atomic_exchange() -> None:
 
 
 def _rename_available() -> bool:
-    return _rename_symbol() is not None
+    return sys.platform == "win32" or _rename_symbol() is not None
 
 
 def _exchange_available() -> bool:
@@ -281,6 +281,9 @@ def _exchange_available() -> bool:
 
 
 def _rename_no_replace(source: Path, target: Path) -> None:
+    if sys.platform == "win32":
+        os.rename(source, target)
+        return
     _rename_with_flag(source, target, 0x00000004 if sys.platform == "darwin" else 1)
 
 

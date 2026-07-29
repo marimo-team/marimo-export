@@ -11,7 +11,7 @@ license = "Apache-2.0"
 license-files = ["LICENSE"]
 authors = [{ name = "Marimo Team" }]
 requires-python = ">=3.11"
-dependencies = ["marimo>=0.23.15", "msgspec>=0.20", "pydantic>=2,<3", "PyYAML>=6.0.1"]
+dependencies = ["marimo>=0.23.15,<0.24", "msgspec>=0.20", "pydantic>=2,<3", "PyYAML>=6.0.1"]
 keywords = ["cache", "export", "marimo", "notebook"]
 classifiers = [
   "Programming Language :: Python :: 3",
