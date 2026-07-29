@@ -2,14 +2,18 @@ from __future__ import annotations
 
 import ast
 
+from marimo._ast.compiler import compile_cell
+from marimo._types.ids import CellId_t
 from marimo_export import ExportSpec, OutputSpec
 from marimo_export._execution import (
     Baseline,
     Definition,
+    OutputProjection,
     normalize_matrix,
     projection_code,
 )
 from marimo_export.errors import SpecError
+from marimo_export.exporters import altair, importable
 
 
 def _baseline() -> Baseline:
@@ -117,15 +121,61 @@ def test_duplicate_normalized_vectors_fail_before_execution() -> None:
 
 def test_projection_body_reads_state_and_source_without_definitions() -> None:
     code = projection_code(
-        'chart "main"',
+        OutputProjection(
+            name='chart "main"',
+            source="symbols_chart",
+            exporter=None,
+        ),
+        "marimo_export_state_0123456789abcdef",
+    )
+    cell = compile_cell(code, cell_id=CellId_t("projection"))
+
+    assert cell.defs == set()
+    assert cell.refs == {
+        "marimo_export_state_0123456789abcdef",
         "symbols_chart",
+    }
+
+
+def test_exporter_projection_is_a_deterministic_marimo_leaf() -> None:
+    code = projection_code(
+        OutputProjection(
+            name="snapshot",
+            source="performance",
+            exporter=altair.png(scale=2),
+        ),
         "marimo_export_state_0123456789abcdef",
     )
     tree = ast.parse(code)
+    cell = compile_cell(code, cell_id=CellId_t("projection"))
 
-    assert len(tree.body) == 2
-    assert [
-        node.value.id
-        for node in tree.body
-        if isinstance(node, ast.Expr) and isinstance(node.value, ast.Name)
-    ] == ["marimo_export_state_0123456789abcdef", "symbols_chart"]
+    assert cell.defs == set()
+    assert cell.refs == {
+        "marimo_export_state_0123456789abcdef",
+        "performance",
+    }
+    imported = tree.body[1]
+    assert isinstance(imported, ast.ImportFrom)
+    assert imported.module == "marimo_export.exporters._runtime.altair"
+    call = tree.body[2]
+    assert isinstance(call, ast.Expr)
+    assert isinstance(call.value, ast.Call)
+    assert ast.unparse(call.value) == "_marimo_export_exporter(performance, scale=2)"
+
+
+def test_custom_exporter_projection_uses_an_explicit_importable_callable() -> None:
+    code = projection_code(
+        OutputProjection(
+            name="summary",
+            source="result",
+            exporter=importable(
+                "acme.exports:encode",
+                columns=["a", "b"],
+                config={"compact": True},
+            ),
+        ),
+        "marimo_export_state_0123456789abcdef",
+    )
+
+    assert "from acme.exports import encode as _marimo_export_exporter" in code
+    assert ("_marimo_export_exporter(result, columns=['a', 'b'], config={'compact': True})") in code

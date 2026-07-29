@@ -3,6 +3,7 @@ from .matrix import (
     Definition,
     MatrixPlan,
     NormalizedState,
+    OutputProjection,
     normalize_matrix,
     projection_code,
 )
@@ -12,6 +13,7 @@ __all__ = [
     "Definition",
     "MatrixPlan",
     "NormalizedState",
+    "OutputProjection",
     "normalize_matrix",
     "projection_code",
 ]

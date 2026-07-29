@@ -46,9 +46,9 @@ _CAPABILITIES = frozenset(
         "cell_cache_receipts",
         "child_sessions",
         "child_ui_updates",
-        "code_mode_projection_cells",
         "definition_overrides",
         "setup_definition_overrides",
+        "synthetic_projection_cells",
     }
 )
 _CODECS = frozenset(
@@ -645,11 +645,15 @@ def _bridge_error(error: BridgeError) -> Exception:
         return SpecError(str(error), **kwargs)
     if code in {"marimo_incompatible"}:
         return CompatibilityError(str(error), **kwargs)
-    if code.startswith("output_") or code.startswith("cache_receipt"):
+    if (
+        code.startswith("output_")
+        or code.startswith("cache_receipt")
+        or code.startswith("exporter_")
+    ):
         return OutputError(str(error), **kwargs)
     if code.startswith("codec_"):
         return CodecError(str(error), **kwargs)
-    if code.startswith("state_") or code.startswith("input_"):
+    if code.startswith("state_") or code.startswith("input_") or code.startswith("parent_"):
         return ExecutionError(str(error), **kwargs)
     if code.startswith("integrity_"):
         return IntegrityError(str(error), **kwargs)

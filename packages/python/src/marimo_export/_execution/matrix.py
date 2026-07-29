@@ -15,6 +15,8 @@ from marimo_export._json import (
     sha256_bytes,
 )
 from marimo_export.errors import SpecError
+from marimo_export.exporters._definitions import runtime_reference
+from marimo_export.exporters._spec import ExporterSpec, FrozenOption
 from marimo_export.spec import ExportSpec
 
 
@@ -112,16 +114,27 @@ class NormalizedState:
 
 
 @dataclass(frozen=True, slots=True)
+class OutputProjection:
+    """One public output and its transient representation."""
+
+    name: str
+    source: str
+    exporter: ExporterSpec | None
+
+
+@dataclass(frozen=True, slots=True)
 class MatrixPlan:
     """Fully normalized matrix ready for marimo-owned execution."""
 
     states: tuple[NormalizedState, ...]
     inputs: tuple[str, ...]
     outputs: tuple[str, ...]
-    output_sources: Mapping[str, str]
+    projections: Mapping[str, OutputProjection]
+    state_name: str
+    state_code: str
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "output_sources", MappingProxyType(dict(self.output_sources)))
+        object.__setattr__(self, "projections", MappingProxyType(dict(self.projections)))
 
 
 def normalize_matrix(spec: ExportSpec, baseline: Baseline) -> MatrixPlan:
@@ -196,11 +209,28 @@ def normalize_matrix(spec: ExportSpec, baseline: Baseline) -> MatrixPlan:
             )
         )
 
+    projections = {
+        name: OutputProjection(
+            name=name,
+            source=output.source,
+            exporter=output.exporter,
+        )
+        for name, output in spec.outputs.items()
+    }
+    state_name = _projection_state_name(spec.inputs, projections)
+    if state_name in baseline.definitions:
+        raise SpecError(
+            f"notebook definition {state_name!r} collides with the transient state token",
+            code="spec_definition_conflict",
+            details={"definition": state_name},
+        )
     return MatrixPlan(
         states=tuple(normalized),
         inputs=spec.inputs,
         outputs=tuple(spec.outputs),
-        output_sources={name: output.source for name, output in spec.outputs.items()},
+        projections=projections,
+        state_name=state_name,
+        state_code=f"{state_name} = {normalized[0].fingerprint!r}",
     )
 
 
@@ -236,14 +266,64 @@ def _ordinary_packet(
     return packet
 
 
-def projection_code(output_name: str, source: str, state_name: str) -> str:
-    """Return the deterministic definition-selecting projection cell body."""
+def projection_code(projection: OutputProjection, state_name: str) -> str:
+    """Return one deterministic transient projection cell body."""
 
-    if not isinstance(output_name, str) or not output_name:
-        raise TypeError("output_name must be a non-empty string")
-    if not isinstance(source, str) or not source.isidentifier():
-        raise TypeError("source must be a Python identifier")
+    if not isinstance(projection, OutputProjection):
+        raise TypeError("projection must be an OutputProjection")
     if not isinstance(state_name, str) or not state_name.isidentifier():
         raise TypeError("state_name must be a Python identifier")
-    label = json.dumps(output_name, ensure_ascii=False)
-    return f"# marimo-export projection: {label}\n{state_name}\n{source}"
+    label = json.dumps(projection.name, ensure_ascii=False)
+    lines = [f"# marimo-export projection: {label}", state_name]
+    if projection.exporter is None:
+        lines.append(projection.source)
+        return "\n".join(lines)
+    reference = runtime_reference(projection.exporter.name)
+    lines.extend(
+        [
+            "",
+            f"from {reference.module} import {reference.symbol} as _marimo_export_exporter",
+            "",
+            f"_marimo_export_exporter({projection.source}{_render_options(projection.exporter)})",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def _projection_state_name(
+    inputs: tuple[str, ...],
+    projections: Mapping[str, OutputProjection],
+) -> str:
+    outputs: JsonObject = {}
+    for name, projection in projections.items():
+        value: JsonObject = {"source": projection.source}
+        if projection.exporter is not None:
+            value["exporter"] = projection.exporter.to_value()
+        outputs[name] = value
+    payload = json_object(
+        {
+            "inputs": inputs,
+            "outputs": outputs,
+        },
+        "projection plan",
+    )
+    suffix = sha256_bytes(canonical_bytes(payload))[:16]
+    return f"marimo_export_state_{suffix}"
+
+
+def _render_options(exporter: ExporterSpec) -> str:
+    return "".join(
+        f", {name}={_python_literal(value)}" for name, value in sorted(exporter.options.items())
+    )
+
+
+def _python_literal(value: FrozenOption) -> str:
+    if value is None or isinstance(value, (bool, int, float, str)):
+        return repr(value)
+    if isinstance(value, tuple):
+        return "[" + ", ".join(_python_literal(item) for item in value) + "]"
+    return (
+        "{"
+        + ", ".join(f"{key!r}: {_python_literal(item)}" for key, item in sorted(value.items()))
+        + "}"
+    )

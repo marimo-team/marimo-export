@@ -97,9 +97,9 @@ def _inspection() -> JsonObject:
             "cell_cache_receipts",
             "child_sessions",
             "child_ui_updates",
-            "code_mode_projection_cells",
             "definition_overrides",
             "setup_definition_overrides",
+            "synthetic_projection_cells",
         ],
         "definitions": [
             {

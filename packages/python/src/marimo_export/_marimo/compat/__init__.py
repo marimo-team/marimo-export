@@ -3,14 +3,14 @@ from __future__ import annotations
 import copy
 import gc
 import hashlib
+import importlib
 import threading
 import time
 import unicodedata
-from collections.abc import AsyncIterator, Callable, Iterator, Mapping
-from contextlib import asynccontextmanager, contextmanager, suppress
+from collections.abc import Callable, Iterator, Mapping
+from contextlib import contextmanager, suppress
 from dataclasses import dataclass
 from pathlib import Path
-from types import MappingProxyType
 from typing import Any, Literal, cast
 
 import msgspec
@@ -25,6 +25,7 @@ from marimo_export._execution.matrix import (
 )
 from marimo_export._json import JsonObject, JsonValue, canonical_bytes, json_object, json_value
 from marimo_export.errors import CodecError, CompatibilityError, ExecutionError, OutputError
+from marimo_export.exporters._definitions import runtime_reference
 from marimo_export.publication import (
     ArrowDescriptor,
     AssetRef,
@@ -45,9 +46,9 @@ _CAPABILITIES = (
     "cell_cache_receipts",
     "child_sessions",
     "child_ui_updates",
-    "code_mode_projection_cells",
     "definition_overrides",
     "setup_definition_overrides",
+    "synthetic_projection_cells",
 )
 _MAX_PYTHON_TYPE_BYTES = 512
 
@@ -58,27 +59,6 @@ class MarimoCapabilities:
 
     version: str
     names: tuple[str, ...]
-
-
-@dataclass(frozen=True, slots=True)
-class ProjectionLease:
-    """Operation-local state token and output leaves installed in the parent."""
-
-    state_cell: str
-    state_name: str
-    state_code: str
-    cells: Mapping[str, str]
-    codes: Mapping[str, str]
-
-    def __post_init__(self) -> None:
-        if not isinstance(self.state_cell, str) or not self.state_cell:
-            raise TypeError("state_cell must be a non-empty string")
-        if not isinstance(self.state_name, str) or not self.state_name.isidentifier():
-            raise TypeError("state_name must be a Python identifier")
-        if not isinstance(self.state_code, str) or not self.state_code:
-            raise TypeError("state_code must be a non-empty string")
-        object.__setattr__(self, "cells", MappingProxyType(dict(self.cells)))
-        object.__setattr__(self, "codes", MappingProxyType(dict(self.codes)))
 
 
 @dataclass(frozen=True, slots=True)
@@ -249,7 +229,6 @@ def require_capabilities() -> MarimoCapabilities:
         import marimo
         from marimo._ast.app import InternalApp
         from marimo._ast.load import load_notebook_ir
-        from marimo._code_mode import AsyncCodeModeContext
         from marimo._code_mode import get_context as get_code_context
         from marimo._runtime.app.kernel_runner import AppKernelRunner
         from marimo._runtime.context import get_context as get_runtime_context
@@ -265,7 +244,7 @@ def require_capabilities() -> MarimoCapabilities:
         from marimo._save.loaders.lazy import LazyLoader
         from marimo._save.stubs import BlobAsset as NativeBlobAsset
         from marimo._save.stubs.lazy_stub import BLOB_DESERIALIZERS, BLOB_SERIALIZERS
-        from marimo._schemas.serialization import NotebookSerializationV1
+        from marimo._schemas.serialization import CellDef, NotebookSerializationV1
     except ImportError as error:
         raise CompatibilityError(
             "the attached marimo runtime lacks required export capabilities",
@@ -281,17 +260,13 @@ def require_capabilities() -> MarimoCapabilities:
         (direct_cache_attempt, "cell_cache_receipts"),
         (flush_active_caches, "cell_cache_receipts"),
         (LazyLoader, "cell_cache_receipts"),
+        (CellDef, "synthetic_projection_cells"),
         (NotebookSerializationV1, "child_sessions"),
     ):
         if not callable(value):
             missing.append(name)
-    if not all(
-        callable(getattr(AsyncCodeModeContext, name, None))
-        for name in ("create_cell", "delete_cell", "set_ui_value")
-    ):
-        missing.append("code_mode_projection_cells")
     if not callable(get_code_context):
-        missing.append("code_mode_projection_cells")
+        missing.append("child_sessions")
     if not _blob_asset_codec(NativeBlobAsset, BLOB_SERIALIZERS, BLOB_DESERIALIZERS):
         missing.append("blob_asset")
 
@@ -398,139 +373,40 @@ async def declared_ui_values(names: tuple[str, ...]) -> JsonObject:
     return result
 
 
-async def install_projections(plan: MatrixPlan) -> ProjectionLease:
-    """Append one state token and one unexecuted leaf per output."""
+def preflight_exporters(plan: MatrixPlan) -> None:
+    """Resolve every selected exporter in the attached kernel environment."""
 
-    state_name = _projection_state_name(plan)
-    state_code = f"{state_name} = {plan.states[0].fingerprint!r}"
-    cells: dict[str, str] = {}
-    codes = {
-        output: projection_code(output, source, state_name)
-        for output, source in plan.output_sources.items()
-    }
-    async with _ephemeral_code_context() as context:
-        if state_name in context._kernel.graph.definitions:
-            raise ExecutionError(
-                f"temporary projection state name {state_name!r} collides with the notebook",
-                code="projection_invalid",
-                details={"definition": state_name},
-            )
-        after = str(context.cells[-1].id) if len(context.cells) else None
-        created: list[str] = []
+    for output, projection in plan.projections.items():
+        if projection.exporter is None:
+            continue
+        reference = runtime_reference(projection.exporter.name)
         try:
-            state_cell = str(
-                context.create_cell(
-                    state_code,
-                    after=after,
-                    hide_code=True,
-                    disabled=False,
-                )
+            module = importlib.import_module(reference.module)
+            value = getattr(module, reference.symbol)
+        except Exception as error:
+            raise OutputError(
+                f"output {output!r} exporter {projection.exporter.name!r} is unavailable",
+                code="exporter_unavailable",
+                details={
+                    "output": output,
+                    "exporter": projection.exporter.name,
+                    "exception_type": type(error).__name__,
+                },
+            ) from error
+        if not callable(value):
+            raise OutputError(
+                f"output {output!r} exporter {projection.exporter.name!r} is not callable",
+                code="exporter_invalid",
+                details={
+                    "output": output,
+                    "exporter": projection.exporter.name,
+                },
             )
-            created.append(state_cell)
-            after = state_cell
-            for output, code in codes.items():
-                cell_id = context.create_cell(
-                    code,
-                    after=after,
-                    hide_code=True,
-                    disabled=False,
-                )
-                cells[output] = str(cell_id)
-                created.append(str(cell_id))
-                after = str(cell_id)
-        except BaseException:
-            cleanup_errors: list[BaseException] = []
-            for cell_id in reversed(created):
-                try:
-                    context.delete_cell(cell_id)
-                except BaseException as error:
-                    cleanup_errors.append(error)
-            if cleanup_errors:
-                raise ExecutionError(
-                    "temporary projection installation could not be rolled back",
-                    code="projection_cleanup_failed",
-                    details={"cell_ids": created},
-                ) from cleanup_errors[0]
-            raise
-    return ProjectionLease(
-        state_cell=state_cell,
-        state_name=state_name,
-        state_code=state_code,
-        cells=cells,
-        codes=codes,
-    )
-
-
-def _projection_state_name(plan: MatrixPlan) -> str:
-    payload = json_object(
-        {
-            "inputs": plan.inputs,
-            "outputs": plan.outputs,
-            "output_sources": plan.output_sources,
-        },
-        "projection plan",
-    )
-    suffix = hashlib.sha256(canonical_bytes(payload)).hexdigest()[:16]
-    return f"marimo_export_state_{suffix}"
-
-
-async def delete_projections(lease: ProjectionLease) -> None:
-    """Delete every still-live lease cell in one code-mode transaction."""
-
-    cell_ids = [*lease.cells.values(), lease.state_cell]
-    errors: list[BaseException] = []
-    async with _ephemeral_code_context() as context:
-        existing = {str(cell.id) for cell in context.cells}
-        for cell_id in cell_ids:
-            if cell_id not in existing:
-                errors.append(RuntimeError(f"projection cell {cell_id!r} is missing"))
-                continue
-            try:
-                context.delete_cell(cell_id)
-            except BaseException as error:
-                errors.append(error)
-    if errors:
-        raise ExecutionError(
-            "one or more projection cells could not be deleted",
-            code="projection_cleanup_failed",
-            details={"cell_ids": cell_ids},
-        ) from errors[0]
-
-
-@asynccontextmanager
-async def _ephemeral_code_context() -> AsyncIterator[Any]:
-    """Broadcast projection edits as kernel transactions to skip autosave."""
-
-    from marimo._code_mode import get_context
-    from marimo._messaging.notification import (
-        NotebookDocumentTransactionNotification,
-    )
-
-    context = get_context()
-    original = context.broadcast_raw_notification
-
-    def broadcast(notification: object) -> None:
-        if isinstance(notification, NotebookDocumentTransactionNotification):
-            notification = NotebookDocumentTransactionNotification(
-                transaction=msgspec.structs.replace(
-                    notification.transaction,
-                    source="kernel",
-                )
-            )
-        original(notification)
-
-    context.broadcast_raw_notification = broadcast
-    try:
-        async with context as entered:
-            yield entered
-    finally:
-        context.broadcast_raw_notification = original
 
 
 async def execute_state(
     state: NormalizedState,
     plan: MatrixPlan,
-    lease: ProjectionLease,
 ) -> StateExecution:
     """Execute one fresh child through marimo's graph and cell cache."""
 
@@ -550,6 +426,10 @@ async def execute_state(
     code_context = get_code_context()
     runtime = get_runtime_context()
     cells = tuple(code_context.cells)
+    projection_codes = {
+        output: projection_code(projection, plan.state_name)
+        for output, projection in plan.projections.items()
+    }
     notebook = NotebookSerializationV1(
         app=AppInstantiation(options=runtime.app_config.asdict()),
         cells=[
@@ -559,6 +439,21 @@ async def execute_state(
                 options=cell.config.asdict(),
             )
             for cell in cells
+        ]
+        + [
+            CellDef(
+                code=plan.state_code,
+                name="_",
+                options={"hide_code": True},
+            )
+        ]
+        + [
+            CellDef(
+                code=projection_codes[output],
+                name="_",
+                options={"hide_code": True},
+            )
+            for output in plan.outputs
         ],
         filename=runtime.filename,
     )
@@ -583,10 +478,10 @@ async def execute_state(
         cast(Any, child._kernel).user_config = config
         child._kernel.reactive_execution_mode = "autorun"
         overrides = dict(state.ordinary_overrides)
-        overrides[lease.state_name] = state.fingerprint
+        overrides[plan.state_name] = state.fingerprint
         child._kernel.globals.update(overrides)
 
-        projection_ids = _projection_ids(internal, lease)
+        projection_ids = _projection_ids(internal, projection_codes)
         projection_id_set = frozenset(projection_ids.values())
         execution_order = prune_cells_for_overrides(
             internal.graph,
@@ -692,7 +587,10 @@ async def execute_state(
     )
 
 
-def _projection_ids(internal: Any, lease: ProjectionLease) -> dict[str, Any]:
+def _projection_ids(
+    internal: Any,
+    projection_codes: Mapping[str, str],
+) -> dict[str, Any]:
     by_code: dict[str, list[Any]] = {}
     for cell_id, data in zip(
         internal.cell_manager.cell_ids(),
@@ -701,7 +599,7 @@ def _projection_ids(internal: Any, lease: ProjectionLease) -> dict[str, Any]:
     ):
         by_code.setdefault(data.code, []).append(cell_id)
     result: dict[str, Any] = {}
-    for output, code in lease.codes.items():
+    for output, code in projection_codes.items():
         matches = by_code.get(code, [])
         if len(matches) != 1:
             raise ExecutionError(
@@ -1028,17 +926,15 @@ __all__ = [
     "BlobAsset",
     "MarimoCapabilities",
     "NativeReceipt",
-    "ProjectionLease",
     "StateExecution",
     "blob_asset_type",
     "current_document_sha256",
     "declared_ui_values",
-    "delete_projections",
     "execute_state",
     "flush_native_caches",
     "inspect_baseline",
-    "install_projections",
     "new_transfer_virtual_file",
+    "preflight_exporters",
     "require_capabilities",
     "transfer_runtime_context",
 ]

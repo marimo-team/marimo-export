@@ -9,11 +9,10 @@ from marimo_export._json import JsonObject, canonical_bytes, decode_json_object
 from marimo_export._marimo.compat import (
     current_document_sha256,
     declared_ui_values,
-    delete_projections,
     execute_state,
     flush_native_caches,
     inspect_baseline,
-    install_projections,
+    preflight_exporters,
     require_capabilities,
     runtime_path,
 )
@@ -157,8 +156,8 @@ async def _capture(spec: ExportSpec) -> JsonObject:
     plan = normalize_matrix(spec, baseline)
     ui_names = tuple(name for name in plan.inputs if baseline.definitions[name].kind == "ui")
     parent_ui = await declared_ui_values(ui_names)
+    preflight_exporters(plan)
     flush_native_caches()
-    lease = None
     primary: BaseException | None = None
     receipts = []
     upstream_hits = 0
@@ -169,9 +168,8 @@ async def _capture(spec: ExportSpec) -> JsonObject:
     projection_execution_seconds = 0.0
     child_cleanup_seconds = 0.0
     try:
-        lease = await install_projections(plan)
         for state in plan.states:
-            executed = await execute_state(state, plan, lease)
+            executed = await execute_state(state, plan)
             receipts.extend(executed.receipts)
             upstream_hits += executed.upstream_cache.hits
             upstream_misses += executed.upstream_cache.misses
@@ -183,19 +181,14 @@ async def _capture(spec: ExportSpec) -> JsonObject:
     except BaseException as error:
         primary = error
     finally:
-        cleanup: BaseException | None = None
-        if lease is not None:
-            try:
-                await delete_projections(lease)
-            except BaseException as error:
-                cleanup = error
+        consistency_error: BaseException | None = None
         try:
             after_digest = await current_document_sha256()
             after_ui = await declared_ui_values(ui_names)
             if after_digest != baseline.document_sha256:
                 raise ExecutionError(
                     "the parent notebook document changed during capture",
-                    code="projection_cleanup_failed",
+                    code="parent_document_changed",
                     details={
                         "before": baseline.document_sha256,
                         "after": after_digest,
@@ -208,23 +201,26 @@ async def _capture(spec: ExportSpec) -> JsonObject:
                     details={"inputs": list(ui_names)},
                 )
         except BaseException as error:
-            if cleanup is None:
-                cleanup = error
+            consistency_error = error
         if primary is not None:
-            if cleanup is not None and isinstance(primary, MarimoExportError):
+            if consistency_error is not None and isinstance(primary, MarimoExportError):
                 primary._merge_details(
                     {
-                        "cleanup": [
+                        "parent_consistency": [
                             {
-                                "code": getattr(cleanup, "code", "cleanup_failed"),
-                                "message": str(cleanup),
+                                "code": getattr(
+                                    consistency_error,
+                                    "code",
+                                    "parent_consistency_failed",
+                                ),
+                                "message": str(consistency_error),
                             }
                         ]
                     }
                 )
             raise primary
-        if cleanup is not None:
-            raise cleanup
+        if consistency_error is not None:
+            raise consistency_error
 
     expected_receipts = len(plan.states) * len(plan.outputs)
     if len(receipts) != expected_receipts:
