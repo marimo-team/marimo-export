@@ -236,6 +236,11 @@ def test_exporter_preflight_accepts_importable_callable_instances(
             "    def __call__(self, value):\n"
             "        return self.label, value\n"
             "\n"
+            "    def __getattr__(self, name):\n"
+            "        if name == '__code__':\n"
+            "            return object()\n"
+            "        raise AttributeError(name)\n"
+            "\n"
             "encode = Encoder(label)\n",
             module.__dict__,
         )

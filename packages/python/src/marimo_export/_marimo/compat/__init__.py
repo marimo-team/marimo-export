@@ -541,6 +541,28 @@ def preflight_exporters(plan: MatrixPlan) -> Mapping[str, str]:
     return identities
 
 
+def _direct_callable_code(value: Any) -> Any | None:
+    if inspect.ismethod(value):
+        value = value.__func__
+    if inspect.isfunction(value):
+        return value.__code__
+    candidate = inspect.getattr_static(value, "__code__", None)
+    return candidate if inspect.iscode(candidate) else None
+
+
+def _callable_code(value: Any) -> Any | None:
+    candidate = _direct_callable_code(value)
+    if candidate is not None:
+        return candidate
+    call = inspect.getattr_static(type(value), "__call__", None)
+    if isinstance(call, (classmethod, staticmethod)):
+        call = call.__func__
+    if inspect.isfunction(call):
+        return call.__code__
+    candidate = inspect.getattr_static(call, "__code__", None)
+    return candidate if inspect.iscode(candidate) else None
+
+
 def _exporter_identity(
     *,
     name: str,
@@ -565,9 +587,7 @@ def _exporter_identity(
         module_digest = _file_digest(Path(origin))
         if module_digest is not None:
             payload["module_sha256"] = module_digest
-    code = getattr(value, "__code__", None)
-    if code is None:
-        code = getattr(inspect.getattr_static(type(value), "__call__", None), "__code__", None)
+    code = _callable_code(value)
     if code is not None:
         from marimo._save.hash import hash_module
 
@@ -869,7 +889,7 @@ def _exporter_dependencies(
         )
         if owner is not None:
             visit_module(owner, expand=False)
-        code = getattr(dependency, "__code__", None)
+        code = _direct_callable_code(dependency)
         if code is None and inspect.isclass(dependency):
             if owner is None or (owner is not module and not is_local_module(owner)):
                 return
