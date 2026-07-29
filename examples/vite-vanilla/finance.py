@@ -364,42 +364,5 @@ def _():
     return alt, mo, pl, yf
 
 
-@app.cell(hide_code=True)
-def _():
-    from marimo_export.exporters.altair import png, vegalite
-    from marimo_export.exporters.anywidget import bundle
-    from marimo_export.exporters.parquet import table
-
-    return bundle, png, table, vegalite
-
-
-@app.cell(hide_code=True)
-def _(bundle, quote_detail):
-    market_explorer = bundle(quote_detail)
-    return (market_explorer,)
-
-
-@app.cell(hide_code=True)
-def _(performance, vegalite):
-    performance_chart = vegalite(performance)
-    return (performance_chart,)
-
-
-@app.cell(hide_code=True)
-def _(performance, png):
-    performance_snapshot = png(performance, scale=2)
-    return (performance_snapshot,)
-
-
-@app.cell(hide_code=True)
-def _(selected_prices, table):
-    price_history = table(
-        selected_prices,
-        compression="snappy",
-        filename="price-history.parquet",
-    )
-    return (price_history,)
-
-
 if __name__ == "__main__":
     app.run()

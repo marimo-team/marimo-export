@@ -1,10 +1,14 @@
-# Vanilla Vite market dashboard
+# Market dashboard with vanilla Vite
 
 This example publishes a live Yahoo Finance notebook as a market dashboard
 built with HTML, CSS, and TypeScript. Five saved views update the comparison
 chart, latest-session table, quote explorer, and chart snapshot together.
 
-## Publish the notebook
+The notebook contains the analysis and interactive controls. It does not import
+marimo-export. [`finance.export.yaml`](finance.export.yaml) selects the source
+definitions and their browser representations.
+
+## Build from the notebook file
 
 Install the repository workspaces:
 
@@ -32,6 +36,26 @@ Verify the generated publication:
 pnpm --filter @marimo-team/marimo-export-example-vite-vanilla run verify:publication
 ```
 
+## Capture an open notebook
+
+Start the notebook in one terminal:
+
+```bash
+pnpm --filter @marimo-team/marimo-export-example-vite-vanilla run notebook
+```
+
+Keep that session open after the Yahoo Finance request completes. In another
+terminal, pass its server URL to the capture script:
+
+```bash
+pnpm --filter @marimo-team/marimo-export-example-vite-vanilla run capture -- \
+  http://127.0.0.1:2718
+```
+
+Add `--session`, `--access-token`, or `--server-token` when the server requires
+them. Capture reads the same sidecar spec and leaves the open notebook source
+and controls unchanged.
+
 ## Open the dashboard
 
 Start Vite:
@@ -49,8 +73,8 @@ among the companies in the current view.
 
 | Path                  | Role                                                   |
 | --------------------- | ------------------------------------------------------ |
-| `finance.py`          | Yahoo Finance notebook and four representation cells   |
-| `finance.export.yaml` | five saved market views and their published outputs    |
+| `finance.py`          | Yahoo Finance notebook                                 |
+| `finance.export.yaml` | saved views, source definitions, and representations   |
 | `pyproject.toml`      | notebook dependencies from the local uv workspace      |
 | `index.html`          | dashboard structure                                    |
 | `src/main.ts`         | publication loading, view changes, and table rendering |
