@@ -815,12 +815,14 @@ def _reloadable_module_names(
     roots: set[str],
 ) -> set[str]:
     reloadable = {name for name in names if _is_reloadable_module(modules.get(name))}
+    reloadable_roots = {root for root in roots if _is_reloadable_module(modules.get(root))}
     for root in roots:
-        if _is_reloadable_module(modules.get(root)):
+        if root in reloadable_roots:
             continue
         candidate = root
         while candidate:
-            reloadable.discard(candidate)
+            if candidate not in reloadable_roots:
+                reloadable.discard(candidate)
             candidate = candidate.rpartition(".")[0]
     return reloadable
 

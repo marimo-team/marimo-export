@@ -421,6 +421,41 @@ def test_prepared_exporters_restores_source_parent_of_native_callable() -> None:
     assert sys.modules[module_name] is original
 
 
+def test_prepared_exporters_reloads_explicit_source_parent_of_native_root() -> None:
+    module_name = "msgspec"
+    native_name = "msgspec._core"
+    original = importlib.import_module(module_name)
+    native = importlib.import_module(native_name)
+    projections = {
+        "source": OutputProjection(
+            name="source",
+            source="value",
+            exporter=importable(f"{module_name}:to_builtins"),
+        ),
+        "native": OutputProjection(
+            name="native",
+            source="value",
+            exporter=importable(f"{native_name}:to_builtins"),
+        ),
+    }
+    plan = MatrixPlan(
+        states=(),
+        inputs=(),
+        outputs=("source", "native"),
+        projections=projections,
+        ordinary_cells={},
+        state_name="marimo_export_state_0123456789abcdef",
+        state_code="marimo_export_state_0123456789abcdef = 'state'",
+    )
+
+    with prepared_exporters(plan):
+        assert sys.modules[module_name] is not original
+        assert sys.modules[native_name] is native
+
+    assert sys.modules[module_name] is original
+    assert sys.modules[native_name] is native
+
+
 def test_exporter_preflight_restores_modules_imported_before_failure(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
