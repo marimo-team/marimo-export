@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import importlib
+import subprocess
 import sys
 import weakref
 from contextlib import nullcontext
@@ -403,6 +404,44 @@ def test_prepared_exporters_preserves_native_extension_modules() -> None:
         assert importlib.import_module(module_name) is imported
 
     assert sys.modules[module_name] is imported
+
+
+def test_prepared_exporters_retains_new_native_package_graph() -> None:
+    code = """
+import sys
+from marimo_export._execution import MatrixPlan, OutputProjection
+from marimo_export._marimo.compat import prepared_exporters
+from marimo_export.exporters import importable
+
+assert "numpy" not in sys.modules
+projection = OutputProjection(
+    name="summary",
+    source="value",
+    exporter=importable("numpy:array"),
+)
+plan = MatrixPlan(
+    states=(),
+    inputs=(),
+    outputs=("summary",),
+    projections={"summary": projection},
+    ordinary_cells={},
+    state_name="marimo_export_state_0123456789abcdef",
+    state_code="marimo_export_state_0123456789abcdef = 'state'",
+)
+for _ in range(2):
+    with prepared_exporters(plan):
+        assert "numpy" in sys.modules
+    assert "numpy" in sys.modules
+    assert "numpy._core._multiarray_umath" in sys.modules
+"""
+    completed = subprocess.run(
+        [sys.executable, "-c", code],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert completed.returncode == 0, completed.stderr
 
 
 def test_prepared_exporters_restores_source_parent_of_native_callable() -> None:

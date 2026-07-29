@@ -226,6 +226,7 @@ _EXPORTER_SNAPSHOT_LOCK = threading.Lock()
 _EXPORTER_SNAPSHOTS: dict[str, _ExporterSnapshot] = {}
 _EXPORTER_SNAPSHOT_STATE_ATTRIBUTE = "_marimo_export_exporter_snapshot_state"
 _EXPORTER_IMPORT_LOCK = threading.RLock()
+_RETAINED_EXPORTER_PACKAGES: dict[str, weakref.ReferenceType[Any]] = {}
 
 
 @contextmanager
@@ -734,6 +735,7 @@ def _isolated_modules(
         if module is not None and hasattr(module, "__path__")
     }
     native_get_code = SourceFileLoader.get_code
+    retained_packages = _retained_exporter_package_roots(original_modules)
 
     def get_code(loader: SourceFileLoader, fullname: str) -> Any:
         filename = loader.get_filename(fullname)
@@ -745,6 +747,9 @@ def _isolated_modules(
             original_modules,
             roots=roots,
         )
+        eviction_names = {
+            name for name in eviction_names if name.partition(".")[0] not in retained_packages
+        }
         for name in sorted(
             eviction_names,
             key=lambda value: value.count("."),
@@ -767,6 +772,14 @@ def _isolated_modules(
             if _is_reloadable_module(sys.modules.get(name))
             for distribution in package_distributions.get(name.partition(".")[0], ())
         }
+        retained_packages.update(
+            _new_native_package_roots(
+                roots=roots,
+                original_modules=original_modules,
+                modules=sys.modules,
+            )
+        )
+        _record_retained_exporter_packages(retained_packages, sys.modules)
         rollback_names = _reloadable_module_names(
             names,
             sys.modules,
@@ -782,6 +795,9 @@ def _isolated_modules(
                 package_distributions=package_distributions,
             )
         )
+        rollback_names = {
+            name for name in rollback_names if name.partition(".")[0] not in retained_packages
+        }
         for name in sorted(
             rollback_names,
             key=lambda value: value.count("."),
@@ -834,6 +850,45 @@ def _is_reloadable_module(module: Any) -> bool:
 def _is_namespace_package(module: Any) -> bool:
     spec = getattr(module, "__spec__", None)
     return spec is not None and spec.origin is None and spec.submodule_search_locations is not None
+
+
+def _new_native_package_roots(
+    *,
+    roots: set[str],
+    original_modules: Mapping[str, Any],
+    modules: Mapping[str, Any],
+) -> set[str]:
+    native_packages = {
+        name.partition(".")[0]
+        for name, module in modules.items()
+        if name not in original_modules and not _is_reloadable_module(module)
+    }
+    return {
+        package
+        for root in roots
+        if (package := root.partition(".")[0]) not in original_modules
+        and package in native_packages
+    }
+
+
+def _retained_exporter_package_roots(modules: Mapping[str, Any]) -> set[str]:
+    retained: set[str] = set()
+    for name, reference in tuple(_RETAINED_EXPORTER_PACKAGES.items()):
+        if modules.get(name) is reference():
+            retained.add(name)
+        else:
+            _RETAINED_EXPORTER_PACKAGES.pop(name, None)
+    return retained
+
+
+def _record_retained_exporter_packages(
+    names: set[str],
+    modules: Mapping[str, Any],
+) -> None:
+    for name in names:
+        module = modules.get(name)
+        if module is not None:
+            _RETAINED_EXPORTER_PACKAGES[name] = weakref.ref(module)
 
 
 def _is_python_source_module(module: Any) -> bool:
