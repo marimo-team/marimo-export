@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import Literal
 
@@ -32,7 +32,7 @@ class Definition:
     value: object
     frontend_value: JsonValue | None = None
     sensitive: bool = False
-    domain: Mapping[str, JsonValue] = MappingProxyType({})
+    domain: Mapping[str, JsonValue] = field(default_factory=lambda: MappingProxyType({}))
 
     def __post_init__(self) -> None:
         if not isinstance(self.name, str) or not self.name.isidentifier():
