@@ -152,6 +152,11 @@ def fail_on_two(value):
             )
         },
     )
+    after_failure_spec = ExportSpec(
+        inputs=("x",),
+        states={"four": {"x": 4}, "five": {"x": 5}, "six": {"x": 6}},
+        outputs=count_spec.outputs,
+    )
     server = ManagedServer(notebook, timeout=30)
     try:
         server.activate()
@@ -176,18 +181,19 @@ def fail_on_two(value):
             server.base_url,
             session=server.session_id,
             access_token=server.access_token,
-            spec=count_spec,
+            spec=after_failure_spec,
             output=tmp_path / "after-failure",
             timeout=30,
         )
     finally:
         server.stop()
 
-    for result in (first, after_failure):
+    for result, names in (
+        (first, ("one", "two", "three")),
+        (after_failure, ("four", "five", "six")),
+    ):
         publication = open_publication(result.path)
-        assert [
-            publication.state(name).output("children").scalar() for name in ("one", "two", "three")
-        ] == [1, 1, 1]
+        assert [publication.state(name).output("children").scalar() for name in names] == [1, 1, 1]
     assert not (tmp_path / "failure").exists()
 
 
