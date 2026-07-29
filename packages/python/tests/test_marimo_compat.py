@@ -21,7 +21,7 @@ from marimo_export._execution import MatrixPlan, OutputProjection
 from marimo_export._marimo.compat import (
     _cleanup_state_child,
     _document_sha256,
-    _include_new_package_parents,
+    _include_package_parents,
     _isolated_modules,
     _native_receipt,
     _ReadSnapshotStore,
@@ -100,7 +100,7 @@ def test_exporter_module_overlay_restores_new_package_bindings(
     importlib.invalidate_caches()
     original_modules = dict(sys.modules)
     names: set[str] = {module_name}
-    _include_new_package_parents(names, original_modules)
+    _include_package_parents(names)
 
     with (
         pytest.raises(RuntimeError) if fail else nullcontext(),
@@ -132,12 +132,14 @@ def test_exporter_module_overlay_restores_existing_package_identities(
     original_package = sys.modules[package_name]
     original_modules = dict(sys.modules)
     names: set[str] = {module_name}
-    _include_new_package_parents(names, original_modules)
+    _include_package_parents(names)
 
     with _isolated_modules(names, original_modules, roots={module_name}):
         imported = importlib.import_module(module_name)
+        imported_package = sys.modules[package_name]
         assert imported is not original_module
-        assert original_package.exporter is imported
+        assert imported_package is not original_package
+        assert imported_package.exporter is imported
 
     assert sys.modules[package_name] is original_package
     assert sys.modules[module_name] is original_module
@@ -219,7 +221,7 @@ def test_exporter_module_overlay_restores_namespace_packages(
     original_package = importlib.import_module(package_name) if preexisting else None
     original_modules = dict(sys.modules)
     names: set[str] = {module_name}
-    _include_new_package_parents(names, original_modules)
+    _include_package_parents(names)
 
     with (
         pytest.raises(KeyboardInterrupt) if fail else nullcontext(),
@@ -551,6 +553,52 @@ def test_prepared_exporters_reloads_explicit_source_parent_of_native_root() -> N
         assert sys.modules[native_name] is native
 
     assert sys.modules[module_name] is original
+    assert sys.modules[native_name] is native
+
+
+def test_prepared_exporters_refreshes_loaded_source_parent(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    package_name = "marimo_export_test_source_parent"
+    exporter_name = f"{package_name}.exporter"
+    native_name = f"{package_name}._native"
+    package = tmp_path / package_name
+    package.mkdir()
+    source = package / "__init__.py"
+    source.write_text("config = 'first'\n", encoding="utf-8")
+    (package / "exporter.py").write_text(
+        "from . import config\n\ndef encode(value):\n    return config, value\n",
+        encoding="utf-8",
+    )
+    monkeypatch.syspath_prepend(str(tmp_path))
+    original_exporter = importlib.import_module(exporter_name)
+    original_package = sys.modules[package_name]
+    native_file = tmp_path / "source_parent_native.so"
+    native_file.write_bytes(b"native")
+    native = ModuleType(native_name)
+    native.__file__ = str(native_file)
+    native.__spec__ = ModuleSpec(native_name, loader=None, origin=str(native_file))
+    monkeypatch.setitem(sys.modules, native_name, native)
+    monkeypatch.setattr(original_package, "_native", native, raising=False)
+    plan = _custom_exporter_plan(exporter_name)
+
+    with prepared_exporters(plan) as first_identities:
+        assert sys.modules[package_name] is not original_package
+        assert sys.modules[exporter_name].encode(None) == ("first", None)
+
+    source.write_text("config = 'other'\n", encoding="utf-8")
+    with prepared_exporters(plan) as second_identities:
+        fresh_package = sys.modules[package_name]
+        fresh_exporter = sys.modules[exporter_name]
+        assert fresh_package is not original_package
+        assert fresh_package.config == "other"
+        assert fresh_exporter.encode(None) == ("other", None)
+        assert sys.modules[native_name] is native
+
+    assert first_identities["summary"] != second_identities["summary"]
+    assert sys.modules[package_name] is original_package
+    assert sys.modules[exporter_name] is original_exporter
     assert sys.modules[native_name] is native
 
 

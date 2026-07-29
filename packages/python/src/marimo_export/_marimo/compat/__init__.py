@@ -671,7 +671,7 @@ def prepared_exporters(plan: MatrixPlan) -> Iterator[Mapping[str, str]]:
         original_modules = dict(sys.modules)
         candidates = set(custom.values())
         candidates.update(_recorded_exporter_modules(custom))
-        _include_new_package_parents(candidates, original_modules)
+        _include_package_parents(candidates)
         while True:
             with _isolated_modules(
                 candidates,
@@ -684,7 +684,7 @@ def prepared_exporters(plan: MatrixPlan) -> Iterator[Mapping[str, str]]:
                     yield identities
                     return
                 candidates.update(discovered)
-                _include_new_package_parents(candidates, original_modules)
+                _include_package_parents(candidates)
             if len(candidates) > _MAX_EXPORTER_DEPENDENCIES + len(custom):
                 name = next(iter(custom))
                 raise OutputError(
@@ -704,15 +704,11 @@ def _recorded_exporter_modules(exporters: Mapping[str, str]) -> set[str]:
         }
 
 
-def _include_new_package_parents(
-    names: set[str],
-    original_modules: Mapping[str, Any],
-) -> None:
+def _include_package_parents(names: set[str]) -> None:
     for name in tuple(names):
         parent = name.rpartition(".")[0]
         while parent:
-            if parent not in original_modules:
-                names.add(parent)
+            names.add(parent)
             parent = parent.rpartition(".")[0]
 
 
