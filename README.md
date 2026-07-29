@@ -220,7 +220,7 @@ output = OutputSpec(
 )
 ```
 
-Custom exporters use an explicit `module:function` reference. The callable
+Custom exporters use an explicit `module:function` reference. The function
 must be importable in the notebook kernel and return a supported native cache
 value. A `BlobAsset` with a versioned media type can pair with a custom browser
 loader.
@@ -251,7 +251,7 @@ marimo-export capture http://127.0.0.1:2718 \
 
 The live kernel and the calling environment must import the same
 marimo-export version. It must also contain the dependencies and custom
-callables selected by the spec. Pass credentials with
+functions selected by the spec. Pass credentials with
 `MARIMO_EXPORT_ACCESS_TOKEN` and `MARIMO_EXPORT_SERVER_TOKEN` to keep them out
 of command history.
 

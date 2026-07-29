@@ -7,7 +7,7 @@ execution.
 
 Build and capture execute notebook code with the notebook environment's normal
 authority. Input overrides run through marimo's dependency graph. Exporter
-callables selected by the sidecar spec execute with the same access to files,
+functions selected by the sidecar spec execute with the same access to files,
 credentials, network, and libraries as the notebook.
 
 Capture borrows a live session. State execution and transient output leaves
@@ -17,9 +17,9 @@ controls and source document are checked across the operation.
 Custom exporter references resolve installed kernel modules. Review and pin
 those packages like notebook dependencies. The spec carries the import
 reference and portable options, never executable source or serialized
-closures. The projection cache includes the resolved module, callable, package
+closures. The projection cache includes the resolved module, function, package
 version when available, and declared built-in runtime dependency versions.
-Network responses, files read by the callable, and other external state require
+Network responses, files read by the function, and other external state require
 the same explicit invalidation discipline as notebook code.
 
 ## Publication boundary

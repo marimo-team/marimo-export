@@ -36,7 +36,7 @@ table = parquet.table(compression="snappy", filename="prices.parquet")
 document = blob.json(media_type="application/vnd.example.v1+json")
 ```
 
-These calls construct immutable descriptors. The selected runtime callable
+These calls construct immutable descriptors. The selected runtime function
 receives the notebook source value later, inside a transient marimo child cell.
 Its return enters the normal marimo cache before publication.
 
@@ -62,7 +62,7 @@ installs the runtimes for the subpaths it imports.
 A custom representation needs:
 
 1. A versioned media type.
-2. An importable top-level Python callable that returns a validated
+2. An importable top-level Python function that returns a validated
    `BlobAsset`.
 3. Bounded public metadata.
 4. An `OutputLoader` that matches the codec and media type.
@@ -70,11 +70,11 @@ A custom representation needs:
 6. Disposal when browser resources are created.
 7. A producer-to-browser test over exact bytes.
 
-Reference the callable as `module:function` in the ExportSpec. The module and
-its dependencies must be available in the selected kernel. The callable
+Reference the function as `module:function` in the ExportSpec. The module and
+its dependencies must be available in the selected kernel. The function
 receives one source value plus portable keyword options. No Python source or
 serialized closure enters the spec.
 
-Preflight fingerprints the resolved module, callable code, available owning
+Preflight fingerprints the resolved module, function code, available owning
 package version, and declared built-in runtime dependencies. Changing one of
 those inputs invalidates the projection cache.

@@ -98,7 +98,7 @@ native = OutputSpec(source="ohlc_matrix")
 
 Built-in factories return an `ExporterSpec`. They do not convert a Python
 object in the calling process. `importable(name, **options)` accepts a
-`module:function` reference to a top-level callable in the notebook
+`module:function` reference to a top-level function in the notebook
 environment. Exporter options are portable JSON values and become keyword
 arguments in the transient projection cell.
 

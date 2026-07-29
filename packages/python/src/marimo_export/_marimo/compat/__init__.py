@@ -413,9 +413,9 @@ def preflight_exporters(plan: MatrixPlan) -> Mapping[str, str]:
                     "exception_type": type(error).__name__,
                 },
             ) from error
-        if not callable(value):
+        if not inspect.isfunction(value) or "<locals>" in value.__qualname__:
             raise OutputError(
-                f"output {output!r} exporter {exporter.name!r} is not callable",
+                f"output {output!r} exporter {exporter.name!r} is not a top-level function",
                 code="exporter_invalid",
                 details={
                     "output": output,

@@ -15,6 +15,7 @@ from marimo_export._marimo.compat import (
     preflight_exporters,
     require_capabilities,
 )
+from marimo_export.errors import OutputError
 from marimo_export.exporters import importable
 
 
@@ -115,16 +116,13 @@ def test_upstream_cache_trackers_restore_native_binding_out_of_order(
             first.__exit__(None, None, None)
 
 
-def test_exporter_preflight_fingerprints_sideloaded_callable_code(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    module_name = "marimo_export_test_sideload"
+def _custom_exporter_plan(module_name: str) -> MatrixPlan:
     projection = OutputProjection(
         name="summary",
         source="value",
         exporter=importable(f"{module_name}:encode"),
     )
-    plan = MatrixPlan(
+    return MatrixPlan(
         states=(),
         inputs=(),
         outputs=("summary",),
@@ -133,6 +131,13 @@ def test_exporter_preflight_fingerprints_sideloaded_callable_code(
         state_name="marimo_export_state_0123456789abcdef",
         state_code="marimo_export_state_0123456789abcdef = 'state'",
     )
+
+
+def test_exporter_preflight_fingerprints_sideloaded_function_code(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module_name = "marimo_export_test_sideload"
+    plan = _custom_exporter_plan(module_name)
 
     first = ModuleType(module_name)
     exec("def encode(value):\n    return value + 1\n", first.__dict__)
@@ -146,3 +151,27 @@ def test_exporter_preflight_fingerprints_sideloaded_callable_code(
 
     assert len(first_identity) == 64
     assert first_identity != second_identity
+
+
+def test_exporter_preflight_rejects_callable_instances(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module_name = "marimo_export_test_stateful_exporter"
+    module = ModuleType(module_name)
+    exec(
+        "class Encoder:\n"
+        "    def __call__(self, value):\n"
+        "        return value\n"
+        "\n"
+        "encode = Encoder()\n",
+        module.__dict__,
+    )
+    monkeypatch.setitem(sys.modules, module_name, module)
+
+    with pytest.raises(OutputError) as raised:
+        preflight_exporters(_custom_exporter_plan(module_name))
+
+    assert raised.value.code == "exporter_invalid"
+    assert str(raised.value) == (
+        f"output 'summary' exporter '{module_name}:encode' is not a top-level function"
+    )

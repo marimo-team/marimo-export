@@ -114,7 +114,7 @@ exactly `name` and `options`. Options use the same portable value grammar as
 state overrides.
 
 marimo-export generates a transient leaf that reads the state token and source,
-imports the selected callable, and returns its result. marimo executes and
+imports the selected function, and returns its result. marimo executes and
 caches that leaf through its normal graph. The source notebook receives no
 imports or publication cells.
 
@@ -130,7 +130,7 @@ Built-in names are:
 
 ### Custom exporter
 
-Use `module:function` for an installed top-level callable:
+Use `module:function` for an installed top-level function:
 
 ```yaml
 outputs:
@@ -142,7 +142,7 @@ outputs:
         compact: true
 ```
 
-The callable receives the source value as its first argument and exporter
+The function receives the source value as its first argument and exporter
 options as keyword arguments:
 
 ```python
@@ -155,7 +155,8 @@ def summary(value: object, *, compact: bool) -> BlobAsset:
 
 The module must be importable in the selected kernel. Capture can use a package
 that was installed into the running environment before capture starts. Missing
-modules, missing symbols, and non-callable symbols fail the publication.
+modules, missing symbols, and symbols that are not top-level functions fail the
+publication.
 
 ## Programmatic construction
 
