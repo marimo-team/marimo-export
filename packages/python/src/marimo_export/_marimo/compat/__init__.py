@@ -740,7 +740,11 @@ def _isolated_modules(
         return loader.source_to_code(loader.get_data(filename), filename)
 
     try:
-        eviction_names = _reloadable_module_names(names, original_modules)
+        eviction_names = _reloadable_module_names(
+            names,
+            original_modules,
+            roots=roots,
+        )
         for name in sorted(
             eviction_names,
             key=lambda value: value.count("."),
@@ -760,11 +764,14 @@ def _isolated_modules(
         selected_distributions = {
             distribution
             for name in roots
-            if _is_python_source_module(sys.modules.get(name))
-            or (name not in sys.modules and not _is_non_source_module(original_modules.get(name)))
+            if _is_reloadable_module(sys.modules.get(name))
             for distribution in package_distributions.get(name.partition(".")[0], ())
         }
-        rollback_names = _reloadable_module_names(names, sys.modules)
+        rollback_names = _reloadable_module_names(
+            names,
+            sys.modules,
+            roots=roots,
+        )
         rollback_names.update(
             name
             for name in set(sys.modules) - set(original_modules)
@@ -804,20 +811,27 @@ def _isolated_modules(
 def _reloadable_module_names(
     names: set[str],
     modules: Mapping[str, Any],
+    *,
+    roots: set[str],
 ) -> set[str]:
-    protected: set[str] = set()
-    for name in names:
-        if not _is_non_source_module(modules.get(name)):
+    reloadable = {name for name in names if _is_reloadable_module(modules.get(name))}
+    for root in roots:
+        if _is_reloadable_module(modules.get(root)):
             continue
-        candidate = name
+        candidate = root
         while candidate:
-            protected.add(candidate)
+            reloadable.discard(candidate)
             candidate = candidate.rpartition(".")[0]
-    return names - protected
+    return reloadable
 
 
-def _is_non_source_module(module: Any) -> bool:
-    return module is not None and not _is_python_source_module(module)
+def _is_reloadable_module(module: Any) -> bool:
+    return module is None or _is_python_source_module(module) or _is_namespace_package(module)
+
+
+def _is_namespace_package(module: Any) -> bool:
+    spec = getattr(module, "__spec__", None)
+    return spec is not None and spec.origin is None and spec.submodule_search_locations is not None
 
 
 def _is_python_source_module(module: Any) -> bool:

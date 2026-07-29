@@ -130,7 +130,7 @@ def test_exporter_module_overlay_restores_existing_package_identities(
     original_module = importlib.import_module(module_name)
     original_package = sys.modules[package_name]
     original_modules = dict(sys.modules)
-    names = {module_name}
+    names: set[str] = {module_name}
     _include_new_package_parents(names, original_modules)
 
     with _isolated_modules(names, original_modules, roots={module_name}):
@@ -141,6 +141,46 @@ def test_exporter_module_overlay_restores_existing_package_identities(
     assert sys.modules[package_name] is original_package
     assert sys.modules[module_name] is original_module
     assert original_package.exporter is original_module
+
+
+@pytest.mark.parametrize("preexisting", [False, True], ids=["new", "existing"])
+@pytest.mark.parametrize("fail", [False, True], ids=["success", "base-exception"])
+def test_exporter_module_overlay_restores_namespace_packages(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    preexisting: bool,
+    fail: bool,
+) -> None:
+    package_name = (
+        f"marimo_export_test_namespace_{'existing' if preexisting else 'new'}_"
+        f"{'error' if fail else 'success'}"
+    )
+    module_name = f"{package_name}.exporter"
+    package = tmp_path / package_name
+    package.mkdir()
+    (package / "exporter.py").write_text("value = 1\n", encoding="utf-8")
+    monkeypatch.syspath_prepend(str(tmp_path))
+    importlib.invalidate_caches()
+    original_package = importlib.import_module(package_name) if preexisting else None
+    original_modules = dict(sys.modules)
+    names: set[str] = {module_name}
+    _include_new_package_parents(names, original_modules)
+
+    with (
+        pytest.raises(KeyboardInterrupt) if fail else nullcontext(),
+        _isolated_modules(names, original_modules, roots={module_name}),
+    ):
+        imported = importlib.import_module(module_name)
+        assert sys.modules[package_name].exporter is imported
+        if fail:
+            raise KeyboardInterrupt
+
+    assert module_name not in sys.modules
+    if original_package is None:
+        assert package_name not in sys.modules
+    else:
+        assert sys.modules[package_name] is original_package
+        assert not hasattr(original_package, "exporter")
 
 
 def test_exporter_module_overlay_restores_setup_after_cancellation(
@@ -363,6 +403,22 @@ def test_prepared_exporters_preserves_native_extension_modules() -> None:
         assert importlib.import_module(module_name) is imported
 
     assert sys.modules[module_name] is imported
+
+
+def test_prepared_exporters_restores_source_parent_of_native_callable() -> None:
+    module_name = "msgspec"
+    original = importlib.import_module(module_name)
+    plan = _custom_exporter_plan(module_name, "to_builtins")
+
+    with prepared_exporters(plan):
+        assert sys.modules[module_name] is not original
+
+    assert sys.modules[module_name] is original
+
+    with prepared_exporters(plan):
+        assert sys.modules[module_name] is not original
+
+    assert sys.modules[module_name] is original
 
 
 def test_exporter_preflight_restores_modules_imported_before_failure(
