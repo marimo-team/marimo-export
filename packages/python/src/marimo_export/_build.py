@@ -123,7 +123,7 @@ def _capture_owned(
                 server_shutdown_seconds = time.monotonic() - shutdown_started
         if working_notebook is not None:
             try:
-                working_notebook.unlink()
+                _remove_working_notebook(working_notebook)
             except BaseException as cleanup_error:
                 if primary is None:
                     primary = cleanup_error
@@ -149,6 +149,17 @@ def _capture_owned(
         initial_autorun_seconds=initial_autorun_seconds,
         server_shutdown_seconds=server_shutdown_seconds,
     )
+
+
+def _remove_working_notebook(notebook: Path) -> None:
+    try:
+        notebook.unlink()
+    except OSError as error:
+        raise ExecutionError(
+            "the managed notebook copy could not be removed",
+            code="server_shutdown_failed",
+            details={"exception_type": type(error).__name__},
+        ) from error
 
 
 def _copy_notebook(notebook: Path) -> Path:

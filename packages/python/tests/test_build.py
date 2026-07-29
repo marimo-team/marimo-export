@@ -165,6 +165,27 @@ if __name__ == "__main__":
     assert notebook.read_bytes() == source
 
 
+def test_managed_copy_cleanup_has_a_bounded_shutdown_error(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    notebook = tmp_path / ".notebook.marimo-export-copy.py"
+    notebook.write_text("import marimo\n", encoding="utf-8")
+
+    def fail_unlink(path: Path) -> None:
+        del path
+        raise PermissionError("private path")
+
+    monkeypatch.setattr(Path, "unlink", fail_unlink)
+
+    with pytest.raises(ExecutionError) as raised:
+        build_module._remove_working_notebook(notebook)
+
+    assert raised.value.code == "server_shutdown_failed"
+    assert str(raised.value) == "the managed notebook copy could not be removed"
+    assert raised.value.details == {"exception_type": "PermissionError"}
+
+
 @pytest.mark.parametrize("timeout", [0, -1, float("nan"), float("inf")])
 def test_build_rejects_invalid_timeout(tmp_path: Path, timeout: float) -> None:
     notebook = tmp_path / "notebook.py"
