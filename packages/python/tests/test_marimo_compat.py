@@ -245,6 +245,40 @@ def test_exporter_preflight_checks_a_reexported_selected_function(
     assert str(raised.value) == (f"output 'summary' exporter '{api_name}:encode' is not stateless")
 
 
+def test_exporter_preflight_checks_reexported_function_dependencies(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    api_root = tmp_path / "api"
+    implementation_root = tmp_path / "implementation"
+    api_root.mkdir()
+    implementation_root.mkdir()
+    api_name = "marimo_export_test_reexport_dependency_api"
+    implementation_name = "marimo_export_test_reexport_dependency_implementation"
+    (api_root / f"{api_name}.py").write_text(
+        f"from {implementation_name} import encode\n",
+        encoding="utf-8",
+    )
+    (implementation_root / f"{implementation_name}.py").write_text(
+        "class State:\n"
+        "    seen = []\n"
+        "\n"
+        "def encode(value):\n"
+        "    State.seen.append(value)\n"
+        "    return len(State.seen)\n",
+        encoding="utf-8",
+    )
+    monkeypatch.syspath_prepend(str(api_root))
+    monkeypatch.syspath_prepend(str(implementation_root))
+    importlib.invalidate_caches()
+
+    with pytest.raises(OutputError) as raised:
+        preflight_exporters(_custom_exporter_plan(api_name))
+
+    assert raised.value.code == "exporter_invalid"
+    assert str(raised.value) == (f"output 'summary' exporter '{api_name}:encode' is not stateless")
+
+
 def test_exporter_preflight_rejects_mutable_local_module_state(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

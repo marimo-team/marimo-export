@@ -709,17 +709,27 @@ def _exporter_dependencies(value: Any, module: Any) -> tuple[JsonObject, frozens
     checked_modules: set[int] = set()
     checked_callables: set[int] = set()
     resolved_imports: dict[str, Any | None] = {}
-    local_root = _module_tree_root(module)
+    selected_owner = sys.modules.get(str(getattr(value, "__module__", "")))
+    local_roots = tuple(
+        root
+        for root in {
+            _module_tree_root(module),
+            _module_tree_root(selected_owner) if selected_owner is not None else None,
+        }
+        if root is not None
+    )
 
     def is_local_module(dependency: Any) -> bool:
         origin = _module_origin(dependency)
-        if origin is None or local_root is None:
+        if origin is None:
             return False
-        try:
-            origin.relative_to(local_root)
-        except ValueError:
-            return False
-        return True
+        for root in local_roots:
+            try:
+                origin.relative_to(root)
+            except ValueError:
+                continue
+            return True
+        return False
 
     def record(name: str, digest: str) -> None:
         if name in records:
