@@ -106,13 +106,6 @@ def _immutable_exporter_constant(value: Any, label: str) -> JsonValue:
             "pattern": _immutable_exporter_constant(value.pattern, f"{label} pattern"),
             "flags": value.flags,
         }
-    if (
-        isinstance(value, types.UnionType)
-        or typing.get_origin(value) is not None
-        or type(value).__module__ == "typing"
-        or type(value).__module__ == "__future__"
-    ):
-        return {"type": "type-expression", "value": repr(value)}
     raise _StatefulExporterError(label, value)
 
 
@@ -123,38 +116,146 @@ def _reject_exporter_state_writes(
     *,
     protected_locals: frozenset[str] = frozenset(),
 ) -> None:
+    instructions = tuple(dis.get_instructions(code))
+    namespace = getattr(value, "__globals__", {})
+    global_names = global_names | frozenset(
+        instruction.argval
+        for instruction in instructions
+        if instruction.opname in {"LOAD_GLOBAL", "LOAD_NAME"}
+        and isinstance(instruction.argval, str)
+        and instruction.argval in namespace
+        and (
+            inspect.ismodule(namespace[instruction.argval])
+            or inspect.isclass(namespace[instruction.argval])
+            or inspect.isfunction(namespace[instruction.argval])
+            or inspect.ismethod(namespace[instruction.argval])
+            or inspect.isbuiltin(namespace[instruction.argval])
+        )
+    )
+    scope: ast.FunctionDef | ast.AsyncFunctionDef | ast.Lambda | None = None
     try:
-        source = textwrap.dedent(inspect.getsource(value))
+        source_lines, source_start = inspect.getsourcelines(value)
+        source = textwrap.dedent("".join(source_lines))
         tree = ast.parse(source)
     except (IndentationError, OSError, SyntaxError, TypeError):
         tree = None
     if tree is not None:
+        relative_line = code.co_firstlineno - source_start + 1
+        scopes = [
+            node
+            for node in ast.walk(tree)
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda))
+            and (isinstance(node, ast.Lambda) or node.name == code.co_name)
+        ]
+        scope = next(
+            (
+                node
+                for node in scopes
+                if node.lineno == relative_line
+                or (
+                    isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+                    and any(decorator.lineno == relative_line for decorator in node.decorator_list)
+                )
+            ),
+            None,
+        )
+        if scope is None and code is getattr(value, "__code__", None):
+            scope = next(
+                (
+                    node
+                    for node in scopes
+                    if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+                    and node.name == getattr(value, "__name__", "")
+                ),
+                None,
+            )
+        if scope is None:
+            tree = None
+    if tree is not None and scope is not None:
+        nodes: list[ast.AST] = []
+
+        class ScopeVisitor(ast.NodeVisitor):
+            def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+                return
+
+            def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
+                return
+
+            def visit_Lambda(self, node: ast.Lambda) -> None:
+                return
+
+            def visit_ClassDef(self, node: ast.ClassDef) -> None:
+                return
+
+            def generic_visit(self, node: ast.AST) -> None:
+                nodes.append(node)
+                super().generic_visit(node)
+
+        visitor = ScopeVisitor()
+        if isinstance(scope, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            for statement in scope.body:
+                visitor.visit(statement)
+            arguments = scope.args
+        else:
+            visitor.visit(scope.body)
+            arguments = scope.args
         declared_globals = {
-            name for node in ast.walk(tree) if isinstance(node, ast.Global) for name in node.names
+            name for node in nodes if isinstance(node, ast.Global) for name in node.names
         }
         protected_names = set(protected_locals)
-        for node in ast.walk(tree):
-            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
-                arguments = node.args
-                protected_names.update(
-                    argument.arg
-                    for argument in (
-                        *arguments.posonlyargs,
-                        *arguments.args,
-                        *arguments.kwonlyargs,
-                    )
-                )
-                if arguments.vararg is not None:
-                    protected_names.add(arguments.vararg.arg)
-                if arguments.kwarg is not None:
-                    protected_names.add(arguments.kwarg.arg)
-            elif isinstance(node, ast.Import):
+        protected_names.update(
+            argument.arg
+            for argument in (
+                *arguments.posonlyargs,
+                *arguments.args,
+                *arguments.kwonlyargs,
+            )
+        )
+        if arguments.vararg is not None:
+            protected_names.add(arguments.vararg.arg)
+        if arguments.kwarg is not None:
+            protected_names.add(arguments.kwarg.arg)
+        for node in nodes:
+            if isinstance(node, ast.Import):
                 protected_names.update(
                     alias.asname or alias.name.partition(".")[0] for alias in node.names
                 )
             elif isinstance(node, ast.ImportFrom):
                 protected_names.update(
                     alias.asname or alias.name for alias in node.names if alias.name != "*"
+                )
+            elif (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id == "globals"
+            ):
+                raise _StatefulExporterError(
+                    f"global-namespace-access:{value.__module__}:{value.__qualname__}",
+                    value,
+                )
+            elif (
+                (
+                    isinstance(node, ast.Name)
+                    and isinstance(node.ctx, ast.Load)
+                    and node.id in {"setattr", "delattr"}
+                )
+                or (
+                    isinstance(node, ast.Attribute)
+                    and isinstance(node.ctx, ast.Load)
+                    and node.attr in {"setattr", "delattr"}
+                )
+                or (
+                    isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Name)
+                    and (
+                        namespace.get(node.func.id) is setattr
+                        or namespace.get(node.func.id) is delattr
+                    )
+                )
+            ):
+                raise _StatefulExporterError(
+                    f"reflective-write:{value.__module__}:{value.__qualname__}",
+                    value,
                 )
 
         def persistent_namespace(node: ast.AST) -> bool:
@@ -182,7 +283,7 @@ def _reject_exporter_state_writes(
         changed = True
         while changed:
             changed = False
-            for node in ast.walk(tree):
+            for node in nodes:
                 assignments: list[tuple[ast.AST, ast.AST | None]] = []
                 if isinstance(node, ast.Assign):
                     assignments.extend((target, node.value) for target in node.targets)
@@ -199,7 +300,7 @@ def _reject_exporter_state_writes(
                         changed = True
 
         mutation_targets: list[ast.AST] = []
-        for node in ast.walk(tree):
+        for node in nodes:
             if isinstance(node, ast.Assign):
                 for target in node.targets:
                     mutation_targets.extend(targets(target))
@@ -234,7 +335,45 @@ def _reject_exporter_state_writes(
             )
         return
 
-    instructions = tuple(dis.get_instructions(code))
+    if any(
+        instruction.opname in {"LOAD_GLOBAL", "LOAD_NAME"} and instruction.argval == "globals"
+        for instruction in instructions
+    ):
+        raise _StatefulExporterError(
+            f"global-namespace-access:{value.__module__}:{value.__qualname__}",
+            value,
+        )
+    if any(
+        (
+            instruction.opname
+            in {
+                "LOAD_GLOBAL",
+                "LOAD_NAME",
+                "IMPORT_FROM",
+                "LOAD_ATTR",
+                "LOAD_METHOD",
+            }
+            and instruction.argval in {"setattr", "delattr"}
+        )
+        for instruction in instructions
+    ):
+        raise _StatefulExporterError(
+            f"reflective-write:{value.__module__}:{value.__qualname__}",
+            value,
+        )
+    if any(
+        instruction.opname in {"LOAD_GLOBAL", "LOAD_NAME"}
+        and isinstance(instruction.argval, str)
+        and (
+            namespace.get(instruction.argval) is setattr
+            or namespace.get(instruction.argval) is delattr
+        )
+        for instruction in instructions
+    ):
+        raise _StatefulExporterError(
+            f"reflective-write:{value.__module__}:{value.__qualname__}",
+            value,
+        )
     parameter_count = code.co_argcount + code.co_kwonlyargcount
     protected_names = set(protected_locals)
     protected_names.update(code.co_varnames[:parameter_count])
@@ -778,6 +917,7 @@ def _exporter_identity(
         value,
         module,
         enforce_state=enforce_state,
+        package_distributions=package_distributions,
     )
     payload: JsonObject = {
         "dependencies": dependencies,
@@ -827,6 +967,7 @@ def _exporter_dependencies(
     module: Any,
     *,
     enforce_state: bool,
+    package_distributions: Mapping[str, list[str]],
 ) -> tuple[JsonObject, frozenset[str]]:
     records: JsonObject = {}
     module_names: set[str] = set()
@@ -837,6 +978,10 @@ def _exporter_dependencies(
     checked_callables: set[int] = set()
     resolved_imports: dict[str, Any | None] = {}
     selected_owner = sys.modules.get(str(getattr(value, "__module__", "")))
+    selected_distributions: set[str] = set()
+    for selected_module in (module, selected_owner):
+        selected_top_level = str(getattr(selected_module, "__name__", "")).partition(".")[0]
+        selected_distributions.update(package_distributions.get(selected_top_level, ()))
     local_roots = tuple(
         root
         for root in {
@@ -856,7 +1001,13 @@ def _exporter_dependencies(
             except ValueError:
                 continue
             return True
-        return False
+        top_level = str(getattr(dependency, "__name__", "")).partition(".")[0]
+        if not top_level or top_level == "marimo_export" or top_level in sys.stdlib_module_names:
+            return False
+        dependency_distributions = package_distributions.get(top_level)
+        if not dependency_distributions:
+            return True
+        return bool(selected_distributions.intersection(dependency_distributions))
 
     def record(name: str, digest: str) -> None:
         if name in records:
@@ -959,6 +1110,39 @@ def _exporter_dependencies(
         if saw_reference and saw_dynamic_reference:
             attributes.add("*")
         return frozenset(attributes)
+
+    def visit_code_globals(dependency: Any, code: Any, *, strict: bool) -> None:
+        owner = sys.modules.get(str(getattr(dependency, "__module__", "")))
+        namespace = getattr(owner, "__dict__", {}) if owner is not None else {}
+        names = {
+            instruction.argval
+            for instruction in dis.get_instructions(code)
+            if instruction.opname in {"LOAD_GLOBAL", "LOAD_NAME"}
+            and isinstance(instruction.argval, str)
+        }
+        module_name = str(getattr(dependency, "__module__", ""))
+        qualname = str(
+            getattr(
+                dependency,
+                "__qualname__",
+                getattr(dependency, "__name__", type(dependency).__qualname__),
+            )
+        )
+        for name in sorted(names):
+            if name not in namespace:
+                continue
+            referenced = namespace[name]
+            visit_reference(
+                referenced,
+                f"code-value:{module_name}:{qualname}:{code.co_name}:{name}",
+                strict=strict,
+                module_members=(
+                    referenced_attributes(code, name) if inspect.ismodule(referenced) else None
+                ),
+            )
+        for constant in code.co_consts:
+            if inspect.iscode(constant):
+                visit_code_globals(dependency, constant, strict=strict)
 
     def visit_module_members(
         dependency: Any,
@@ -1178,6 +1362,7 @@ def _exporter_dependencies(
         if not strict and owner is not None and owner is not module and not is_local_module(owner):
             return
         visit_imports(dependency, code, strict=strict)
+        visit_code_globals(dependency, code, strict=strict)
         defaults = getattr(dependency, "__defaults__", None)
         if isinstance(defaults, tuple):
             for index, default in enumerate(defaults):

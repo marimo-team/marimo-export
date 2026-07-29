@@ -357,6 +357,29 @@ def test_exporter_preflight_checks_only_the_imported_local_member(
     assert len(identity["summary"]) == 64
 
 
+def test_exporter_preflight_allows_scope_local_construction(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module_name = "marimo_export_test_scope_local_construction"
+    (tmp_path / f"{module_name}.py").write_text(
+        "def encode(value):\n"
+        "    def normalize(result):\n"
+        "        return result\n"
+        "\n"
+        "    result = {}\n"
+        "    result['value'] = value\n"
+        "    return normalize(result)\n",
+        encoding="utf-8",
+    )
+    monkeypatch.syspath_prepend(str(tmp_path))
+    importlib.invalidate_caches()
+
+    identity = preflight_exporters(_custom_exporter_plan(module_name))
+
+    assert len(identity["summary"]) == 64
+
+
 def test_exporter_preflight_checks_literal_getattr_on_a_local_module(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -384,6 +407,116 @@ def test_exporter_preflight_checks_literal_getattr_on_a_local_module(
     assert str(raised.value) == (
         f"output 'summary' exporter '{exporter_name}:encode' is not stateless"
     )
+
+
+def test_exporter_preflight_tracks_unversioned_transitive_module_roots(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    names = (
+        "marimo_export_test_multiroot_api",
+        "marimo_export_test_multiroot_implementation",
+        "marimo_export_test_multiroot_helper",
+        "marimo_export_test_multiroot_deep",
+    )
+    roots = [tmp_path / f"root-{index}" for index in range(len(names))]
+    for root in roots:
+        root.mkdir()
+        monkeypatch.syspath_prepend(str(root))
+    api_name, implementation_name, helper_name, deep_name = names
+    (roots[0] / f"{api_name}.py").write_text(
+        f"from {implementation_name} import encode\n",
+        encoding="utf-8",
+    )
+    (roots[1] / f"{implementation_name}.py").write_text(
+        f"from {helper_name} import transform\n\ndef encode(value):\n    return transform(value)\n",
+        encoding="utf-8",
+    )
+    (roots[2] / f"{helper_name}.py").write_text(
+        f"from {deep_name} import PREFIX\n\ndef transform(value):\n    return PREFIX, value\n",
+        encoding="utf-8",
+    )
+    deep_path = roots[3] / f"{deep_name}.py"
+    deep_path.write_text("PREFIX = 'first'\n", encoding="utf-8")
+    importlib.invalidate_caches()
+
+    first = preflight_exporters(_custom_exporter_plan(api_name))["summary"]
+    deep_path.write_text("PREFIX = 'changed-and-longer'\n", encoding="utf-8")
+    for name in names:
+        monkeypatch.delitem(sys.modules, name, raising=False)
+    importlib.invalidate_caches()
+    second = preflight_exporters(_custom_exporter_plan(api_name))["summary"]
+
+    assert first != second
+
+
+def test_exporter_preflight_tracks_globals_used_only_by_nested_code(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    exporter_name = "marimo_export_test_nested_global_exporter"
+    helper_name = "marimo_export_test_nested_global_helper"
+    (tmp_path / f"{exporter_name}.py").write_text(
+        f"import {helper_name} as helper\n"
+        "\n"
+        "def encode(value):\n"
+        "    def nested():\n"
+        "        return helper.transform(value)\n"
+        "\n"
+        "    return nested()\n",
+        encoding="utf-8",
+    )
+    helper_path = tmp_path / f"{helper_name}.py"
+    helper_path.write_text(
+        "def transform(value):\n    return 'first', value\n",
+        encoding="utf-8",
+    )
+    monkeypatch.syspath_prepend(str(tmp_path))
+    importlib.invalidate_caches()
+
+    first = preflight_exporters(_custom_exporter_plan(exporter_name))["summary"]
+    helper_path.write_text(
+        "def transform(value):\n    return 'changed-and-longer', value\n",
+        encoding="utf-8",
+    )
+    monkeypatch.delitem(sys.modules, exporter_name, raising=False)
+    monkeypatch.delitem(sys.modules, helper_name, raising=False)
+    importlib.invalidate_caches()
+    second = preflight_exporters(_custom_exporter_plan(exporter_name))["summary"]
+
+    assert first != second
+
+
+def test_exporter_preflight_checks_unversioned_transitive_module_state(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    api_name = "marimo_export_test_state_root_api"
+    implementation_name = "marimo_export_test_state_root_implementation"
+    helper_name = "marimo_export_test_state_root_helper"
+    roots = [tmp_path / f"root-{index}" for index in range(3)]
+    for root in roots:
+        root.mkdir()
+        monkeypatch.syspath_prepend(str(root))
+    (roots[0] / f"{api_name}.py").write_text(
+        f"from {implementation_name} import encode\n",
+        encoding="utf-8",
+    )
+    (roots[1] / f"{implementation_name}.py").write_text(
+        f"from {helper_name} import transform\n\ndef encode(value):\n    return transform(value)\n",
+        encoding="utf-8",
+    )
+    (roots[2] / f"{helper_name}.py").write_text(
+        "def transform(value, seen=[]):\n    seen.append(value)\n    return len(seen)\n",
+        encoding="utf-8",
+    )
+    importlib.invalidate_caches()
+
+    with pytest.raises(OutputError) as raised:
+        preflight_exporters(_custom_exporter_plan(api_name))
+
+    assert raised.value.code == "exporter_invalid"
+    assert str(raised.value) == (f"output 'summary' exporter '{api_name}:encode' is not stateless")
 
 
 @pytest.mark.parametrize(
@@ -477,11 +610,30 @@ def test_exporter_preflight_preserves_python_scalar_identity(
             "    return value, namespace['count']\n",
         ),
         (
+            "globals-mutating-call",
+            "seen = []\n"
+            "\n"
+            "def encode(value):\n"
+            "    globals()['seen'].append(value)\n"
+            "    return len(seen)\n",
+        ),
+        (
             "function-local-import-write",
             "def encode(value):\n"
             "    import helper as state\n"
             "    state.count += 1\n"
             "    return value, state.count\n",
+        ),
+        (
+            "reflective-write-alias",
+            "class State:\n"
+            "    count = 0\n"
+            "\n"
+            "mutate = setattr\n"
+            "\n"
+            "def encode(value):\n"
+            "    mutate(State, 'count', State.count + 1)\n"
+            "    return value, State.count\n",
         ),
         (
             "parameter-write",
@@ -518,6 +670,22 @@ def test_exporter_preflight_preserves_python_scalar_identity(
             "\n"
             "def encode(value):\n"
             "    return type(marker).__name__, marker, value\n",
+        ),
+        (
+            "typing-metadata-state",
+            "from typing import Annotated\n"
+            "\n"
+            "class Box:\n"
+            "    def __init__(self):\n"
+            "        self.count = 0\n"
+            "\n"
+            "box = Box()\n"
+            "Value = Annotated[int, box]\n"
+            "\n"
+            "def encode(value):\n"
+            "    metadata = Value.__metadata__[0]\n"
+            "    metadata.count += 1\n"
+            "    return value, metadata.count\n",
         ),
         (
             "class-state",

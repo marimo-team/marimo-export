@@ -146,6 +146,38 @@ def encode(value):
     )
 
 
+def _write_globals_method_exporter(path: Path) -> None:
+    path.write_text(
+        """
+seen = []
+
+
+def encode(value):
+    globals()["seen"].append(value)
+    return len(seen)
+""".lstrip(),
+        encoding="utf-8",
+    )
+
+
+def _write_reflective_alias_exporter(path: Path) -> None:
+    path.write_text(
+        """
+class State:
+    count = 0
+
+
+mutate = setattr
+
+
+def encode(value):
+    mutate(State, "count", State.count + 1)
+    return value, State.count
+""".lstrip(),
+        encoding="utf-8",
+    )
+
+
 def _write_parameter_state_exporter(path: Path) -> None:
     path.write_text(
         """
@@ -365,9 +397,17 @@ def test_custom_exporter_cache_identity_tracks_transitive_reexports(
     [
         _write_stateful_exporter,
         _write_globals_alias_exporter,
+        _write_globals_method_exporter,
+        _write_reflective_alias_exporter,
         _write_parameter_state_exporter,
     ],
-    ids=["class-state", "globals-alias", "derived-class"],
+    ids=[
+        "class-state",
+        "globals-alias",
+        "globals-method",
+        "reflective-alias",
+        "derived-class",
+    ],
 )
 def test_stateful_exporter_is_rejected_before_two_state_execution(
     tmp_path: Path,
