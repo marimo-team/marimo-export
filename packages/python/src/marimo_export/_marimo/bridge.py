@@ -11,6 +11,7 @@ from marimo_export._marimo.compat import (
     declared_ui_values,
     delete_projections,
     execute_state,
+    flush_native_caches,
     inspect_baseline,
     install_projections,
     require_capabilities,
@@ -24,6 +25,7 @@ from marimo_export.errors import (
 )
 from marimo_export.publication import (
     CacheSummary,
+    FreshChildTimings,
     NotebookProvenance,
     ProducerProvenance,
     PublicationIndex,
@@ -155,13 +157,29 @@ async def _capture(spec: ExportSpec) -> JsonObject:
     plan = normalize_matrix(spec, baseline)
     ui_names = tuple(name for name in plan.inputs if baseline.definitions[name].kind == "ui")
     parent_ui = await declared_ui_values(ui_names)
+    flush_native_caches()
     lease = None
     primary: BaseException | None = None
     receipts = []
+    upstream_hits = 0
+    upstream_misses = 0
+    child_construction_seconds = 0.0
+    upstream_execution_seconds = 0.0
+    ui_application_seconds = 0.0
+    projection_execution_seconds = 0.0
+    child_cleanup_seconds = 0.0
     try:
         lease = await install_projections(plan)
         for state in plan.states:
-            receipts.extend(await execute_state(state, plan, lease))
+            executed = await execute_state(state, plan, lease)
+            receipts.extend(executed.receipts)
+            upstream_hits += executed.upstream_cache.hits
+            upstream_misses += executed.upstream_cache.misses
+            child_construction_seconds += executed.timings.construction_seconds
+            upstream_execution_seconds += executed.timings.upstream_execution_seconds
+            ui_application_seconds += executed.timings.ui_application_seconds
+            projection_execution_seconds += executed.timings.projection_execution_seconds
+            child_cleanup_seconds += executed.timings.cleanup_seconds
     except BaseException as error:
         primary = error
     finally:
@@ -241,14 +259,34 @@ async def _capture(spec: ExportSpec) -> JsonObject:
         states=states,
     )
     ticket = create_ticket(receipts)
-    cache = CacheSummary(
+    projection_cache = CacheSummary(
         hits=sum(receipt.disposition == "hit" for receipt in receipts),
         misses=sum(receipt.disposition == "miss" for receipt in receipts),
+    )
+    upstream_cache = CacheSummary(
+        hits=upstream_hits,
+        misses=upstream_misses,
+    )
+    fresh_children = FreshChildTimings(
+        states=len(plan.states),
+        construction_seconds=child_construction_seconds,
+        upstream_execution_seconds=upstream_execution_seconds,
+        ui_application_seconds=ui_application_seconds,
+        projection_execution_seconds=projection_execution_seconds,
+        cleanup_seconds=child_cleanup_seconds,
     )
     return {
         "index": index.to_value(),
         "transfer": ticket.wire(),
-        "cache": {"hits": cache.hits, "misses": cache.misses},
+        "projection_cache": {
+            "hits": projection_cache.hits,
+            "misses": projection_cache.misses,
+        },
+        "upstream_cache": {
+            "hits": upstream_cache.hits,
+            "misses": upstream_cache.misses,
+        },
+        "fresh_child_timings": fresh_children.to_dict(),
     }
 
 

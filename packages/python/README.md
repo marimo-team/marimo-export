@@ -30,11 +30,17 @@ result = build(
     spec=spec,
     output="dist/notebook",
 )
+
+print(result.projection_cache)
+print(result.upstream_cache)
+print(result.timings.total_seconds)
 ```
 
 `build` starts an authenticated loopback marimo server with the current Python
-interpreter. It activates one session, delegates publication to the capture
-engine, stops the server, and returns `PublicationResult`.
+interpreter. The initial autorun and state children use marimo's native cell
+cache. Pending parent writes are flushed before the first state child starts.
+`build` activates one session, delegates publication to the capture engine,
+stops the server, and returns `PublicationResult`.
 
 ## Capture
 

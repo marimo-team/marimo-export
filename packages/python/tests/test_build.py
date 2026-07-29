@@ -9,6 +9,7 @@ from marimo_export.client import _CaptureData
 from marimo_export.errors import ExecutionError
 from marimo_export.publication import (
     CacheSummary,
+    FreshChildTimings,
     NotebookProvenance,
     ProducerProvenance,
     Provenance,
@@ -56,7 +57,20 @@ def _captured(filename: str) -> _CaptureData:
             },
         ),
         assets={},
-        cache=CacheSummary(hits=0, misses=1),
+        projection_cache=CacheSummary(hits=0, misses=1),
+        upstream_cache=CacheSummary(hits=0, misses=1),
+        fresh_child_timings=FreshChildTimings(
+            states=1,
+            construction_seconds=0.1,
+            upstream_execution_seconds=0.1,
+            ui_application_seconds=0.0,
+            projection_execution_seconds=0.1,
+            cleanup_seconds=0.1,
+        ),
+        capture_seconds=0.4,
+        server_start_seconds=0.1,
+        initial_autorun_seconds=0.1,
+        server_shutdown_seconds=0.1,
     )
 
 

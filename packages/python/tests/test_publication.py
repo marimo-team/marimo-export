@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+from dataclasses import replace
 from pathlib import Path
 from typing import Any, cast
 
@@ -17,8 +18,10 @@ from marimo_export.publication import (
     AssetRef,
     BlobAssetDescriptor,
     CacheSummary,
+    FreshChildTimings,
     NotebookProvenance,
     NumpyDescriptor,
+    PhaseTimings,
     ProducerProvenance,
     Provenance,
     PublicationIndex,
@@ -410,7 +413,21 @@ def test_publication_result_is_a_run_local_record(tmp_path: Path) -> None:
         assets=1,
         asset_bytes=100,
         index_bytes=500,
-        cache=CacheSummary(hits=1, misses=1),
+        projection_cache=CacheSummary(hits=1, misses=1),
+        upstream_cache=CacheSummary(hits=3, misses=2),
+        timings=PhaseTimings(
+            total_seconds=2.0,
+            capture_seconds=1.5,
+            publication_write_seconds=0.1,
+            fresh_children=FreshChildTimings(
+                states=2,
+                construction_seconds=0.1,
+                upstream_execution_seconds=0.8,
+                ui_application_seconds=0.2,
+                projection_execution_seconds=0.3,
+                cleanup_seconds=0.1,
+            ),
+        ),
         warnings=(
             PublicationWarning(
                 code="retired_destination_cleanup_failed",
@@ -420,7 +437,24 @@ def test_publication_result_is_a_run_local_record(tmp_path: Path) -> None:
         ),
     )
 
-    assert result.to_dict()["cache"] == {"hits": 1, "misses": 1}
+    assert result.to_dict()["projection_cache"] == {"hits": 1, "misses": 1}
+    assert result.to_dict()["upstream_cache"] == {"hits": 3, "misses": 2}
+    assert result.to_dict()["timings"] == {
+        "total_seconds": 2.0,
+        "server_start_seconds": None,
+        "initial_autorun_seconds": None,
+        "capture_seconds": 1.5,
+        "server_shutdown_seconds": None,
+        "publication_write_seconds": 0.1,
+        "fresh_children": {
+            "states": 2,
+            "construction_seconds": 0.1,
+            "upstream_execution_seconds": 0.8,
+            "ui_application_seconds": 0.2,
+            "projection_execution_seconds": 0.3,
+            "cleanup_seconds": 0.1,
+        },
+    }
     assert result.to_dict()["warnings"] == [
         {
             "code": "retired_destination_cleanup_failed",
@@ -428,6 +462,15 @@ def test_publication_result_is_a_run_local_record(tmp_path: Path) -> None:
             "details": {"path": "/tmp/retired"},
         }
     ]
+
+    with pytest.raises(
+        ValueError,
+        match="projection cache activity must cover every state and output",
+    ):
+        replace(
+            result,
+            projection_cache=CacheSummary(hits=1, misses=0),
+        )
 
 
 def _single_output_wire(descriptor: JsonObject) -> JsonObject:

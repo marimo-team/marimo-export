@@ -73,6 +73,16 @@ baseline values, and UI domains.
 
 ## `PublicationResult`
 
+`build`, `capture`, and `Session.capture()` return the publication record and
+run-local performance data:
+
+```python
+print(result.projection_cache.hits, result.projection_cache.misses)
+print(result.upstream_cache.hits, result.upstream_cache.misses)
+print(result.timings.total_seconds)
+print(result.timings.fresh_children.construction_seconds)
+```
+
 The result records:
 
 - absolute publication path
@@ -83,8 +93,24 @@ The result records:
 - state and output names
 - unique asset count and bytes
 - canonical index bytes
-- native cache hit and miss counts
+- projection cache lookup counts
+- upstream cell-cache lookup counts
+- managed server, capture, publication, and total timings
+- aggregated fresh-child construction, execution, UI, projection, and cleanup
+  timings
 - bounded cleanup warnings
+
+`projection_cache` covers one native projection receipt per state and output.
+`upstream_cache` covers native cache lookups for non-projection cells executed
+in the fresh state children. A hit records a matching entry. marimo can still
+run the cell when restoration fails or the cell defines session-local UI
+elements.
+
+`timings.fresh_children.ui_application_seconds` includes marimo reactive work
+triggered by applying child-local UI values. `server_start_seconds` includes
+session connection and kernel readiness. `initial_autorun_seconds` measures the
+instantiate request through the corresponding completed run. Managed server
+fields are floats for `build` and `None` for `capture`.
 
 `to_dict()` returns a detached JSON value.
 

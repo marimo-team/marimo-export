@@ -343,8 +343,38 @@ def _publication_human(result: object, verb: str) -> str:
     lines = [
         f"{verb} {len(result.states)} states and {len(result.outputs)} outputs to {result.path}",
         f"Assets: {result.assets} files, {_bytes(result.asset_bytes)}",
-        f"Cache: {result.cache.hits} hits, {result.cache.misses} misses",
+        (
+            "Projection cache: "
+            f"{_count(result.projection_cache.hits, 'hit')}, "
+            f"{_count(result.projection_cache.misses, 'miss')}"
+        ),
+        (
+            "Upstream cache activity: "
+            f"{_count(result.upstream_cache.hits, 'hit')}, "
+            f"{_count(result.upstream_cache.misses, 'miss')}"
+        ),
     ]
+    phase_values = []
+    for label, value in (
+        ("server start", result.timings.server_start_seconds),
+        ("initial autorun", result.timings.initial_autorun_seconds),
+        ("capture", result.timings.capture_seconds),
+        ("server shutdown", result.timings.server_shutdown_seconds),
+        ("publication write", result.timings.publication_write_seconds),
+        ("total", result.timings.total_seconds),
+    ):
+        if value is not None:
+            phase_values.append(f"{label} {_seconds(value)}")
+    lines.append("Phase timings: " + ", ".join(phase_values))
+    child = result.timings.fresh_children
+    lines.append(
+        f"Fresh-child timings ({child.states} states): "
+        f"construction {_seconds(child.construction_seconds)}, "
+        f"upstream execution {_seconds(child.upstream_execution_seconds)}, "
+        f"UI application {_seconds(child.ui_application_seconds)}, "
+        f"projection execution {_seconds(child.projection_execution_seconds)}, "
+        f"cleanup {_seconds(child.cleanup_seconds)}"
+    )
     lines.extend(f"warning: {warning.message}" for warning in result.warnings)
     return "\n".join(lines)
 
@@ -527,6 +557,15 @@ def _bytes(value: int) -> str:
         if amount < 1024 or unit == "GiB":
             return f"{amount:.1f} {unit}"
     raise AssertionError
+
+
+def _seconds(value: float) -> str:
+    return f"{value:.3f}s"
+
+
+def _count(value: int, noun: str) -> str:
+    plural = noun + ("es" if noun.endswith("s") else "s")
+    return f"{value} {noun if value == 1 else plural}"
 
 
 def _bounded(value: str) -> str:

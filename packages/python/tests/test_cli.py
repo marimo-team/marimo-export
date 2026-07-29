@@ -11,7 +11,9 @@ from marimo_export._writer import write_publication
 from marimo_export.errors import ExecutionError, TransportError
 from marimo_export.publication import (
     CacheSummary,
+    FreshChildTimings,
     NotebookProvenance,
+    PhaseTimings,
     ProducerProvenance,
     Provenance,
     PublicationIndex,
@@ -111,7 +113,17 @@ def test_publication_commands_emit_publication_result(
     assert payload["ok"] is True
     assert payload["result"]["mode"] == command
     assert payload["result"]["states"] == ["baseline", "msft"]
-    assert payload["result"]["cache"] == {"hits": 2, "misses": 2}
+    assert payload["result"]["projection_cache"] == {"hits": 2, "misses": 2}
+    assert payload["result"]["upstream_cache"] == {"hits": 5, "misses": 1}
+    assert payload["result"]["timings"]["fresh_children"]["states"] == 2
+
+    arguments.remove("--json")
+    assert cli.main(arguments) == 0
+    human = capsys.readouterr().out
+    assert "Projection cache: 2 hits, 2 misses" in human
+    assert "Upstream cache activity: 5 hits, 1 miss" in human
+    assert "Phase timings:" in human
+    assert "Fresh-child timings (2 states):" in human
 
 
 def test_session_lists_and_inspects_definitions(
@@ -258,7 +270,24 @@ def _result(path: Path, *, mode: str) -> PublicationResult:
         assets=1,
         asset_bytes=2048,
         index_bytes=512,
-        cache=CacheSummary(hits=2, misses=2),
+        projection_cache=CacheSummary(hits=2, misses=2),
+        upstream_cache=CacheSummary(hits=5, misses=1),
+        timings=PhaseTimings(
+            total_seconds=3.0,
+            server_start_seconds=0.2 if mode == "build" else None,
+            initial_autorun_seconds=0.3 if mode == "build" else None,
+            capture_seconds=2.0,
+            server_shutdown_seconds=0.1 if mode == "build" else None,
+            publication_write_seconds=0.1,
+            fresh_children=FreshChildTimings(
+                states=2,
+                construction_seconds=0.2,
+                upstream_execution_seconds=0.7,
+                ui_application_seconds=0.3,
+                projection_execution_seconds=0.6,
+                cleanup_seconds=0.2,
+            ),
+        ),
     )
 
 

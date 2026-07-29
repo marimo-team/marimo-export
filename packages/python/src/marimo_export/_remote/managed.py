@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import secrets
+import signal
 import socket
 import subprocess
 import sys
@@ -12,6 +13,8 @@ import time
 import urllib.error
 import urllib.request
 from collections.abc import Callable, Mapping
+from contextlib import suppress
+from dataclasses import dataclass
 from pathlib import Path
 from typing import BinaryIO, cast
 from urllib.parse import urlencode
@@ -24,6 +27,12 @@ from marimo_export.errors import TransportError
 _EVENT_LIMIT = 40 * 1024 * 1024
 _HTTP_RESPONSE_LIMIT = 1024 * 1024
 _LOG_LIMIT = 8192
+
+
+@dataclass(frozen=True, slots=True)
+class _ActivationTimings:
+    session_start_seconds: float
+    initial_autorun_seconds: float
 
 
 class ManagedServer:
@@ -54,7 +63,7 @@ class ManagedServer:
                 [
                     sys.executable,
                     "-m",
-                    "marimo",
+                    "marimo_export._marimo.compat.managed_server",
                     "edit",
                     str(notebook),
                     "--headless",
@@ -71,49 +80,81 @@ class ManagedServer:
                 stdin=subprocess.DEVNULL,
                 stdout=self._log_file,
                 stderr=subprocess.STDOUT,
+                creationflags=(
+                    getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+                    if sys.platform == "win32"
+                    else 0
+                ),
+                start_new_session=sys.platform != "win32",
             )
             self._wait_ready()
-        except BaseException:
-            self._stop_process()
-            self._close_files()
+        except BaseException as error:
+            try:
+                self._stop_process()
+            except BaseException as cleanup_error:
+                error.add_note(
+                    f"managed process cleanup also failed: {type(cleanup_error).__name__}"
+                )
+            try:
+                self._close_files()
+            except BaseException as cleanup_error:
+                error.add_note(f"managed file cleanup also failed: {type(cleanup_error).__name__}")
             raise
 
-    def activate(self) -> None:
+    def activate(self) -> _ActivationTimings:
         """Open the edit session and finish its initial autorun."""
 
         if self._stream is not None:
             raise RuntimeError("managed server session is already active")
+        session_started = time.monotonic()
         stream = _SessionStream(self, timeout=self.timeout)
         self._stream = stream
         stream.wait_for_kernel()
+        session_start_seconds = time.monotonic() - session_started
         completed_runs = stream.completed_runs
+        autorun_started = time.monotonic()
         self._post_json(
             "/api/kernel/instantiate",
             {"objectIds": [], "values": [], "autoRun": True},
         )
         stream.wait_for_completed_run(completed_runs)
+        return _ActivationTimings(
+            session_start_seconds=session_start_seconds,
+            initial_autorun_seconds=time.monotonic() - autorun_started,
+        )
 
     def stop(self) -> None:
         """Stop the edit stream and owned process within the build timeout."""
 
-        failures: list[str] = []
-        if self._stream is not None:
-            try:
-                self._stream.close()
-            except Exception as error:
-                failures.append(safe_diagnostic(type(error).__name__))
-            self._stream = None
+        failures: list[Exception] = []
+        stream = self._stream
+        self._stream = None
+        if stream is not None:
+            stream.request_close()
+        owned_groups = self._owned_process_groups()
+        self._request_server_shutdown()
         try:
-            self._stop_process()
+            self._stop_process(owned_groups)
         except Exception as error:
-            failures.append(safe_diagnostic(type(error).__name__))
-        self._close_files()
+            failures.append(error)
+        if stream is not None:
+            try:
+                stream.close()
+            except Exception as error:
+                failures.append(error)
+        try:
+            self._close_files()
+        except Exception as error:
+            failures.append(error)
         if failures:
+            first_failure = failures[0]
             raise TransportError(
                 "the managed marimo server could not be stopped",
                 code="server_shutdown_failed",
-                details={"failures": failures},
-            )
+                details={
+                    "failures": [safe_diagnostic(type(failure).__name__) for failure in failures]
+                },
+            ) from first_failure
 
     def _wait_ready(self) -> None:
         deadline = time.monotonic() + self.timeout
@@ -152,7 +193,13 @@ class ManagedServer:
             except (urllib.error.URLError, TimeoutError, OSError):
                 time.sleep(min(0.05, max(remaining, 0)))
 
-    def _post_json(self, path: str, value: Mapping[str, object]) -> JsonObject:
+    def _post_json(
+        self,
+        path: str,
+        value: Mapping[str, object],
+        *,
+        timeout: float | None = None,
+    ) -> JsonObject:
         request = urllib.request.Request(
             f"{self.base_url}{path}",
             data=json.dumps(
@@ -169,7 +216,10 @@ class ManagedServer:
             method="POST",
         )
         try:
-            with urllib.request.urlopen(request, timeout=self.timeout) as response:
+            with urllib.request.urlopen(
+                request,
+                timeout=self.timeout if timeout is None else timeout,
+            ) as response:
                 payload = response.read(_HTTP_RESPONSE_LIMIT + 1)
         except (urllib.error.URLError, TimeoutError, OSError) as error:
             raise TransportError(
@@ -190,27 +240,179 @@ class ManagedServer:
                 code="server_start_failed",
             ) from error
 
+    def _request_server_shutdown(self) -> None:
+        process = self._process
+        if process is None or process.poll() is not None or sys.platform == "win32":
+            return
+        # Native shutdown closes the kernel process group. Direct signaling
+        # below remains the bounded fallback when the server cannot respond.
+        with suppress(TransportError):
+            self._post_json(
+                "/api/kernel/shutdown",
+                {},
+                timeout=min(self.timeout, 2.0),
+            )
+
     def _headers(self) -> dict[str, str]:
         return {"Authorization": f"Bearer {self.access_token}"}
 
-    def _stop_process(self) -> None:
+    def _stop_process(self, owned_groups: set[int] | None = None) -> None:
         process = self._process
         if process is None:
             return
-        self._process = None
-        if process.poll() is None:
-            process.terminate()
+        failures: list[Exception] = []
+        groups = self._owned_process_groups() if owned_groups is None else owned_groups
+        if sys.platform == "win32" and process.poll() is None:
             try:
+                self._terminate_windows_tree(process)
+            except Exception as error:
+                failures.append(error)
+        if process.poll() is None:
+            try:
+                self._signal_process(process, force=False)
+            except Exception as error:
+                failures.append(error)
+            with suppress(subprocess.TimeoutExpired):
                 process.wait(timeout=self.timeout)
-            except subprocess.TimeoutExpired:
+        if process.poll() is None:
+            try:
+                self._signal_process(process, force=True)
+            except Exception as error:
+                failures.append(error)
+            with suppress(subprocess.TimeoutExpired):
+                process.wait(timeout=min(self.timeout, 5.0))
+        if sys.platform != "win32":
+            try:
+                self._kill_owned_process_groups(groups)
+            except Exception as error:
+                failures.append(error)
+            if process.poll() is None:
+                with suppress(subprocess.TimeoutExpired):
+                    process.wait(timeout=min(self.timeout, 1.0))
+        if process.poll() is None:
+            failures.append(
+                TransportError(
+                    "the managed marimo process did not stop",
+                    code="server_shutdown_failed",
+                )
+            )
+        else:
+            self._process = None
+        if failures:
+            first_failure = failures[0]
+            raise TransportError(
+                "the managed marimo process tree did not stop cleanly",
+                code="server_shutdown_failed",
+                details={
+                    "failures": [safe_diagnostic(type(failure).__name__) for failure in failures]
+                },
+            ) from first_failure
+
+    def _owned_process_groups(self) -> set[int]:
+        process = self._process
+        if process is None or sys.platform == "win32" or process.poll() is not None:
+            return set()
+        groups = {process.pid}
+        try:
+            listed = subprocess.run(
+                ["ps", "-axo", "pid=,ppid=,pgid="],
+                capture_output=True,
+                check=False,
+                text=True,
+                timeout=min(self.timeout, 2.0),
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            return groups
+        if listed.returncode != 0:
+            return groups
+        children: dict[int, list[tuple[int, int]]] = {}
+        for line in listed.stdout.splitlines():
+            parts = line.split()
+            if len(parts) != 3:
+                continue
+            try:
+                pid, parent_pid, group_id = map(int, parts)
+            except ValueError:
+                continue
+            children.setdefault(parent_pid, []).append((pid, group_id))
+        pending = [process.pid]
+        descendants = {process.pid}
+        while pending:
+            parent_pid = pending.pop()
+            for child_pid, group_id in children.get(parent_pid, ()):
+                if child_pid in descendants:
+                    continue
+                descendants.add(child_pid)
+                groups.add(group_id)
+                pending.append(child_pid)
+        groups.discard(os.getpgrp())
+        return groups
+
+    @staticmethod
+    def _kill_owned_process_groups(groups: set[int]) -> None:
+        failures: list[int] = []
+        for group_id in groups:
+            try:
+                os.killpg(group_id, signal.SIGKILL)
+            except ProcessLookupError:
+                continue
+            except OSError:
+                failures.append(group_id)
+        if failures:
+            raise TransportError(
+                "the managed marimo process groups could not be stopped",
+                code="server_shutdown_failed",
+                details={"process_groups": sorted(failures)},
+            )
+
+    def _terminate_windows_tree(
+        self,
+        process: subprocess.Popen[bytes],
+    ) -> None:
+        try:
+            terminated = subprocess.run(
+                [
+                    "taskkill",
+                    "/PID",
+                    str(process.pid),
+                    "/T",
+                    "/F",
+                ],
+                check=False,
+                stdin=subprocess.DEVNULL,
+                stdout=self._log_file,
+                stderr=subprocess.STDOUT,
+                timeout=min(self.timeout, 5.0),
+            )
+        except (OSError, subprocess.TimeoutExpired) as error:
+            raise TransportError(
+                "the managed marimo process tree could not be stopped",
+                code="server_shutdown_failed",
+            ) from error
+        if terminated.returncode != 0:
+            raise TransportError(
+                "the managed marimo process tree could not be stopped",
+                code="server_shutdown_failed",
+                details={"return_code": terminated.returncode},
+            )
+
+    @staticmethod
+    def _signal_process(
+        process: subprocess.Popen[bytes],
+        *,
+        force: bool,
+    ) -> None:
+        if sys.platform == "win32":
+            if force:
                 process.kill()
-                try:
-                    process.wait(timeout=min(self.timeout, 5.0))
-                except subprocess.TimeoutExpired as error:
-                    raise TransportError(
-                        "the managed marimo process did not stop",
-                        code="server_shutdown_failed",
-                    ) from error
+            else:
+                process.terminate()
+            return
+        with suppress(ProcessLookupError):
+            os.killpg(
+                process.pid,
+                signal.SIGKILL if force else signal.SIGTERM,
+            )
 
     def _close_files(self) -> None:
         if not self._log_file.closed:
@@ -282,10 +484,17 @@ class _SessionStream:
                 details={"cells": sorted(active)[:16]},
             )
 
-    def close(self) -> None:
+    def request_close(self) -> None:
         self._closed.set()
-        self._response.close()
+
+    def close(self) -> None:
+        self.request_close()
         self._thread.join(timeout=min(self._timeout, 5.0))
+        if self._thread.is_alive():
+            self._response.close()
+            self._thread.join(timeout=min(self._timeout, 1.0))
+        else:
+            self._response.close()
         if self._thread.is_alive():
             raise TransportError(
                 "the managed marimo edit stream did not close",

@@ -26,7 +26,9 @@ Python tests cover:
 - strict ExportSpec decoding and programmatic parity
 - state normalization and sibling packets
 - marimo capability probing
-- child-local execution and native cache receipts
+- managed autorun caching, process ownership, and SSE shutdown ordering
+- child-local execution, upstream cache activity, and projection receipts
+- run-local phase and fresh-child timing records
 - projection cleanup and parent preservation
 - transfer integrity and atomic writes
 - local publication filesystem safety

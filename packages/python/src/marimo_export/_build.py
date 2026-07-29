@@ -5,6 +5,7 @@ import math
 import os
 import stat
 import tempfile
+import time
 from dataclasses import replace
 from pathlib import Path
 
@@ -12,7 +13,7 @@ from marimo_export._remote.managed import ManagedServer
 from marimo_export._writer import preflight_publication, write_publication
 from marimo_export.client import Client, _CaptureData, _publication_result
 from marimo_export.errors import ExecutionError
-from marimo_export.publication import NotebookProvenance, PublicationResult
+from marimo_export.publication import NotebookProvenance, PhaseTimings, PublicationResult
 from marimo_export.spec import ExportSpec, StrPath
 
 
@@ -26,6 +27,7 @@ def build(
 ) -> PublicationResult:
     """Publish a notebook through an owned authenticated loopback server."""
 
+    total_started = time.monotonic()
     source = _notebook_path(notebook)
     if not isinstance(spec, ExportSpec):
         raise TypeError("spec must be an ExportSpec")
@@ -42,17 +44,34 @@ def build(
             code="notebook_changed",
             details={"before": before, "after": after},
         )
+    publication_started = time.monotonic()
     written = write_publication(
         captured.index,
         captured.assets,
         destination,
         replace=replace,
     )
+    publication_write_seconds = time.monotonic() - publication_started
+    if (
+        captured.server_start_seconds is None
+        or captured.initial_autorun_seconds is None
+        or captured.server_shutdown_seconds is None
+    ):
+        raise RuntimeError("managed capture produced incomplete phase timings")
     return _publication_result(
         captured,
         written,
         mode="build",
         session_id=None,
+        timings=PhaseTimings(
+            total_seconds=time.monotonic() - total_started,
+            server_start_seconds=captured.server_start_seconds,
+            initial_autorun_seconds=captured.initial_autorun_seconds,
+            capture_seconds=captured.capture_seconds,
+            server_shutdown_seconds=captured.server_shutdown_seconds,
+            publication_write_seconds=publication_write_seconds,
+            fresh_children=captured.fresh_child_timings,
+        ),
     )
 
 
@@ -65,10 +84,17 @@ def _capture_owned(
     working_notebook: Path | None = None
     captured: _CaptureData | None = None
     primary: BaseException | None = None
+    server_start_seconds = 0.0
+    initial_autorun_seconds = 0.0
+    server_shutdown_seconds = 0.0
     try:
         working_notebook = _copy_notebook(notebook)
+        server_started = time.monotonic()
         server = ManagedServer(working_notebook, timeout=timeout)
-        server.activate()
+        server_start_seconds = time.monotonic() - server_started
+        activation = server.activate()
+        server_start_seconds += activation.session_start_seconds
+        initial_autorun_seconds = activation.initial_autorun_seconds
         with Client(
             server.base_url,
             access_token=server.access_token,
@@ -79,6 +105,7 @@ def _capture_owned(
         primary = error
     finally:
         if server is not None:
+            shutdown_started = time.monotonic()
             try:
                 server.stop()
             except BaseException as cleanup_error:
@@ -88,6 +115,8 @@ def _capture_owned(
                     primary.add_note(
                         f"managed server cleanup also failed: {type(cleanup_error).__name__}"
                     )
+            finally:
+                server_shutdown_seconds = time.monotonic() - shutdown_started
         if working_notebook is not None:
             try:
                 working_notebook.unlink()
@@ -109,7 +138,13 @@ def _capture_owned(
             document_sha256=captured.index.notebook.document_sha256,
         ),
     )
-    return replace(captured, index=index)
+    return replace(
+        captured,
+        index=index,
+        server_start_seconds=server_start_seconds,
+        initial_autorun_seconds=initial_autorun_seconds,
+        server_shutdown_seconds=server_shutdown_seconds,
+    )
 
 
 def _copy_notebook(notebook: Path) -> Path:

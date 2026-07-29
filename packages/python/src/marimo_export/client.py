@@ -3,6 +3,7 @@ from __future__ import annotations
 import math
 import os
 import sys
+import time
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from types import MappingProxyType
@@ -29,7 +30,9 @@ from marimo_export.errors import (
 )
 from marimo_export.publication import (
     CacheSummary,
+    FreshChildTimings,
     OutputCodec,
+    PhaseTimings,
     PublicationIndex,
     PublicationResult,
 )
@@ -213,6 +216,7 @@ class Session:
     ) -> PublicationResult:
         """Publish the complete finite matrix from this borrowed session."""
 
+        total_started = time.monotonic()
         self._client._require_open()
         if not isinstance(spec, ExportSpec):
             raise TypeError("spec must be an ExportSpec")
@@ -220,22 +224,31 @@ class Session:
             raise TypeError("replace must be a boolean")
         destination = preflight_publication(output, replace=replace)
         captured = self._capture(spec)
+        publication_started = time.monotonic()
         written = write_publication(
             captured.index,
             captured.assets,
             destination,
             replace=replace,
         )
+        publication_write_seconds = time.monotonic() - publication_started
         return _publication_result(
             captured,
             written,
             mode="capture",
             session_id=self.id,
+            timings=PhaseTimings(
+                total_seconds=time.monotonic() - total_started,
+                capture_seconds=captured.capture_seconds,
+                publication_write_seconds=publication_write_seconds,
+                fresh_children=captured.fresh_child_timings,
+            ),
         )
 
     def _capture(self, spec: ExportSpec) -> _CaptureData:
         """Capture verified publication data before local commit."""
 
+        capture_started = time.monotonic()
         self._client._require_open()
         if not isinstance(spec, ExportSpec):
             raise TypeError("spec must be an ExportSpec")
@@ -249,6 +262,17 @@ class Session:
                 )
             except BridgeError as error:
                 raise _bridge_error(error) from error
+            _exact(
+                response,
+                {
+                    "index",
+                    "transfer",
+                    "projection_cache",
+                    "upstream_cache",
+                    "fresh_child_timings",
+                },
+                "capture response",
+            )
             index = PublicationIndex.from_value(response.get("index"))
             transfer = _transfer(response.get("transfer"), index)
             ticket = transfer.ticket
@@ -262,10 +286,29 @@ class Session:
                 if len(data) != item.size:
                     raise IntegrityError("a transferred asset length disagrees with its descriptor")
                 assets[(item.codec, item.sha256)] = data
-            cache = _cache_summary(response.get("cache"), index)
+            projection_cache = _cache_summary(
+                response.get("projection_cache"),
+                "projection cache",
+                expected=len(index.states) * len(index.outputs),
+            )
+            upstream_cache = _cache_summary(
+                response.get("upstream_cache"),
+                "upstream cache",
+            )
+            fresh_child_timings = _fresh_child_timings(
+                response.get("fresh_child_timings"),
+                states=len(index.states),
+            )
             self._release(ticket)
             ticket = None
-            return _CaptureData(index=index, assets=assets, cache=cache)
+            return _CaptureData(
+                index=index,
+                assets=assets,
+                projection_cache=projection_cache,
+                upstream_cache=upstream_cache,
+                fresh_child_timings=fresh_child_timings,
+                capture_seconds=time.monotonic() - capture_started,
+            )
         finally:
             if ticket is not None:
                 primary = sys.exception()
@@ -405,7 +448,13 @@ class _Transfer:
 class _CaptureData:
     index: PublicationIndex
     assets: Mapping[tuple[OutputCodec, str], bytes]
-    cache: CacheSummary
+    projection_cache: CacheSummary
+    upstream_cache: CacheSummary
+    fresh_child_timings: FreshChildTimings
+    capture_seconds: float
+    server_start_seconds: float | None = None
+    initial_autorun_seconds: float | None = None
+    server_shutdown_seconds: float | None = None
 
 
 def _transfer(value: object, index: PublicationIndex) -> _Transfer:
@@ -455,19 +504,50 @@ def _transfer(value: object, index: PublicationIndex) -> _Transfer:
     return _Transfer(ticket=ticket, expires_at_ms=expires, assets=tuple(assets))
 
 
-def _cache_summary(value: object, index: PublicationIndex) -> CacheSummary:
-    data = _mapping(value, "capture cache")
-    _exact(data, {"hits", "misses"}, "capture cache")
+def _cache_summary(
+    value: object,
+    path: str,
+    *,
+    expected: int | None = None,
+) -> CacheSummary:
+    data = _mapping(value, path)
+    _exact(data, {"hits", "misses"}, path)
     hits = data["hits"]
     misses = data["misses"]
     if isinstance(hits, bool) or not isinstance(hits, int) or hits < 0:
-        raise TransportError("capture cache counts are invalid")
+        raise TransportError(f"{path} counts are invalid")
     if isinstance(misses, bool) or not isinstance(misses, int) or misses < 0:
-        raise TransportError("capture cache counts are invalid")
-    expected = len(index.states) * len(index.outputs)
-    if hits + misses != expected:
-        raise TransportError("capture cache counts do not cover every state output")
+        raise TransportError(f"{path} counts are invalid")
+    if expected is not None and hits + misses != expected:
+        raise TransportError(f"{path} counts do not cover every state output")
     return CacheSummary(hits=hits, misses=misses)
+
+
+def _fresh_child_timings(value: object, *, states: int) -> FreshChildTimings:
+    path = "fresh child timings"
+    data = _mapping(value, path)
+    fields = {
+        "states",
+        "construction_seconds",
+        "upstream_execution_seconds",
+        "ui_application_seconds",
+        "projection_execution_seconds",
+        "cleanup_seconds",
+    }
+    _exact(data, fields, path)
+    if data["states"] != states:
+        raise TransportError("fresh child timing count does not match publication states")
+    try:
+        return FreshChildTimings(
+            states=cast(int, data["states"]),
+            construction_seconds=cast(float, data["construction_seconds"]),
+            upstream_execution_seconds=cast(float, data["upstream_execution_seconds"]),
+            ui_application_seconds=cast(float, data["ui_application_seconds"]),
+            projection_execution_seconds=cast(float, data["projection_execution_seconds"]),
+            cleanup_seconds=cast(float, data["cleanup_seconds"]),
+        )
+    except (TypeError, ValueError) as error:
+        raise TransportError("fresh child timings are invalid") from error
 
 
 def _session_description(
@@ -582,6 +662,7 @@ def _publication_result(
     *,
     mode: Literal["build", "capture"],
     session_id: str | None,
+    timings: PhaseTimings,
 ) -> PublicationResult:
     index = captured.index
     return PublicationResult(
@@ -596,7 +677,9 @@ def _publication_result(
         assets=written.assets,
         asset_bytes=written.asset_bytes,
         index_bytes=written.index_bytes,
-        cache=captured.cache,
+        projection_cache=captured.projection_cache,
+        upstream_cache=captured.upstream_cache,
+        timings=timings,
         warnings=written.warnings,
     )
 

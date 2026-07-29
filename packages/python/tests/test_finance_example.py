@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -49,6 +50,15 @@ def test_finance_example_builds_live_publication(tmp_path: Path) -> None:
 
     assert build.returncode == 0, build.stdout + build.stderr
     assert "Published 6 states and 7 outputs" in build.stdout
+    assert "Projection cache:" in build.stdout
+    activity = re.search(
+        r"Upstream cache activity: (\d+) hits?, (\d+) misses?",
+        build.stdout,
+    )
+    assert activity is not None
+    assert int(activity.group(1)) + int(activity.group(2)) > 0
+    assert "Phase timings:" in build.stdout
+    assert "Fresh-child timings (6 states):" in build.stdout
 
     publication = open_publication(publication_path)
     assert tuple(state.name for state in publication.states()) == (

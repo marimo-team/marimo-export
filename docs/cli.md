@@ -21,7 +21,8 @@ marimo-export build notebook.py \
   --timeout 30
 ```
 
-`build` owns an authenticated loopback server and its process group.
+`build` owns an authenticated loopback server and its notebook process tree.
+Its initial notebook autorun uses marimo's native cell cache.
 `--replace` atomically replaces an existing real directory.
 
 ## `capture`
@@ -35,6 +36,31 @@ marimo-export capture http://127.0.0.1:2718 \
 
 Credentials use `--access-token`, `--server-token`,
 `MARIMO_EXPORT_ACCESS_TOKEN`, or `MARIMO_EXPORT_SERVER_TOKEN`.
+
+## Publication diagnostics
+
+A finance build reports these fields:
+
+```text
+Projection cache: 42 hits, 0 misses
+Upstream cache activity: 138 hits, 12 misses
+Phase timings: server start 0.689s, initial autorun 0.783s, capture 4.245s, server shutdown 0.230s, publication write 0.094s, total 6.055s
+Fresh-child timings (6 states): construction 0.104s, upstream execution 1.345s, UI application 0.504s, projection execution 1.699s, cleanup 0.200s
+```
+
+Durations and cache counts reflect the current run.
+Projection counts cover the state and output relation. Upstream activity covers
+native cache lookups by non-projection cells in fresh state children. A hit
+means marimo found a matching cache entry. Restoration failures and cells that
+define session-local UI elements can still execute live after a hit.
+
+Server start includes loopback startup, session connection, and kernel
+readiness. Initial autorun starts with the instantiate request and ends at the
+corresponding completed run. UI timing includes reactive execution triggered by
+child-local UI values.
+
+`--json` returns the same data under `projection_cache`, `upstream_cache`, and
+`timings`. These run-local diagnostics stay outside `index.json`.
 
 ## `session`
 

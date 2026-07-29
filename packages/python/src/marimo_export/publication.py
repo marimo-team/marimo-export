@@ -491,6 +491,89 @@ class CacheSummary:
                 raise ValueError(f"cache.{name} must be a non-negative integer")
 
 
+def _validate_seconds(value: object, name: str, *, optional: bool = False) -> None:
+    if optional and value is None:
+        return
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, (int, float))
+        or value < 0
+        or not math.isfinite(value)
+    ):
+        suffix = " or null" if optional else ""
+        raise ValueError(f"{name} must be a non-negative finite number{suffix}")
+
+
+@dataclass(frozen=True, slots=True)
+class FreshChildTimings:
+    states: int
+    construction_seconds: float
+    upstream_execution_seconds: float
+    ui_application_seconds: float
+    projection_execution_seconds: float
+    cleanup_seconds: float
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.states, int) or isinstance(self.states, bool) or self.states < 0:
+            raise ValueError("fresh_child_timings.states must be a non-negative integer")
+        for name, value in (
+            ("construction_seconds", self.construction_seconds),
+            ("upstream_execution_seconds", self.upstream_execution_seconds),
+            ("ui_application_seconds", self.ui_application_seconds),
+            ("projection_execution_seconds", self.projection_execution_seconds),
+            ("cleanup_seconds", self.cleanup_seconds),
+        ):
+            _validate_seconds(value, f"fresh_child_timings.{name}")
+
+    def to_dict(self) -> JsonObject:
+        return {
+            "states": self.states,
+            "construction_seconds": self.construction_seconds,
+            "upstream_execution_seconds": self.upstream_execution_seconds,
+            "ui_application_seconds": self.ui_application_seconds,
+            "projection_execution_seconds": self.projection_execution_seconds,
+            "cleanup_seconds": self.cleanup_seconds,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class PhaseTimings:
+    total_seconds: float
+    capture_seconds: float
+    publication_write_seconds: float
+    fresh_children: FreshChildTimings
+    server_start_seconds: float | None = None
+    initial_autorun_seconds: float | None = None
+    server_shutdown_seconds: float | None = None
+
+    def __post_init__(self) -> None:
+        for name, value in (
+            ("total_seconds", self.total_seconds),
+            ("capture_seconds", self.capture_seconds),
+            ("publication_write_seconds", self.publication_write_seconds),
+        ):
+            _validate_seconds(value, f"timings.{name}")
+        for name, value in (
+            ("server_start_seconds", self.server_start_seconds),
+            ("initial_autorun_seconds", self.initial_autorun_seconds),
+            ("server_shutdown_seconds", self.server_shutdown_seconds),
+        ):
+            _validate_seconds(value, f"timings.{name}", optional=True)
+        if not isinstance(self.fresh_children, FreshChildTimings):
+            raise TypeError("timings.fresh_children must be FreshChildTimings")
+
+    def to_dict(self) -> JsonObject:
+        return {
+            "total_seconds": self.total_seconds,
+            "server_start_seconds": self.server_start_seconds,
+            "initial_autorun_seconds": self.initial_autorun_seconds,
+            "capture_seconds": self.capture_seconds,
+            "server_shutdown_seconds": self.server_shutdown_seconds,
+            "publication_write_seconds": self.publication_write_seconds,
+            "fresh_children": self.fresh_children.to_dict(),
+        }
+
+
 @dataclass(frozen=True, slots=True, init=False)
 class PublicationWarning:
     code: Literal["retired_destination_cleanup_failed"]
@@ -536,7 +619,9 @@ class PublicationResult:
     assets: int
     asset_bytes: int
     index_bytes: int
-    cache: CacheSummary
+    projection_cache: CacheSummary
+    upstream_cache: CacheSummary
+    timings: PhaseTimings
     warnings: tuple[PublicationWarning, ...] = ()
 
     def __post_init__(self) -> None:
@@ -560,8 +645,27 @@ class PublicationResult:
         ):
             if not isinstance(value, int) or isinstance(value, bool) or value < 0:
                 raise ValueError(f"{name} must be a non-negative integer")
-        if not isinstance(self.cache, CacheSummary):
-            raise TypeError("cache must be CacheSummary")
+        if not isinstance(self.projection_cache, CacheSummary):
+            raise TypeError("projection_cache must be CacheSummary")
+        if self.projection_cache.hits + self.projection_cache.misses != len(self.states) * len(
+            self.outputs
+        ):
+            raise ValueError("projection cache activity must cover every state and output")
+        if not isinstance(self.upstream_cache, CacheSummary):
+            raise TypeError("upstream_cache must be CacheSummary")
+        if not isinstance(self.timings, PhaseTimings):
+            raise TypeError("timings must be PhaseTimings")
+        if self.timings.fresh_children.states != len(self.states):
+            raise ValueError("fresh child timing count must match publication states")
+        managed = (
+            self.timings.server_start_seconds,
+            self.timings.initial_autorun_seconds,
+            self.timings.server_shutdown_seconds,
+        )
+        if self.mode == "build" and any(value is None for value in managed):
+            raise ValueError("build timings must include every managed server phase")
+        if self.mode == "capture" and any(value is not None for value in managed):
+            raise ValueError("capture timings cannot include managed server phases")
         if any(not isinstance(warning, PublicationWarning) for warning in self.warnings):
             raise TypeError("warnings must contain PublicationWarning values")
 
@@ -578,7 +682,15 @@ class PublicationResult:
             "assets": self.assets,
             "asset_bytes": self.asset_bytes,
             "index_bytes": self.index_bytes,
-            "cache": {"hits": self.cache.hits, "misses": self.cache.misses},
+            "projection_cache": {
+                "hits": self.projection_cache.hits,
+                "misses": self.projection_cache.misses,
+            },
+            "upstream_cache": {
+                "hits": self.upstream_cache.hits,
+                "misses": self.upstream_cache.misses,
+            },
+            "timings": self.timings.to_dict(),
             "warnings": [warning.to_dict() for warning in self.warnings],
         }
 
@@ -930,10 +1042,12 @@ __all__ = [
     "AssetRef",
     "BlobAssetDescriptor",
     "CacheSummary",
+    "FreshChildTimings",
     "NotebookProvenance",
     "NumpyDescriptor",
     "OutputCodec",
     "OutputDescriptor",
+    "PhaseTimings",
     "ProducerProvenance",
     "Provenance",
     "PublicationIndex",

@@ -14,7 +14,7 @@ from marimo_export import (
 )
 from marimo_export._json import JsonObject, sha256_bytes
 from marimo_export._remote import BridgeError, SessionInfo
-from marimo_export.errors import PublicationError, SessionError
+from marimo_export.errors import PublicationError, SessionError, TransportError
 from marimo_export.publication import (
     AssetRef,
     NotebookProvenance,
@@ -173,7 +173,16 @@ class _Transport:
                 "expires_at_ms": 4_000_000_000_000,
                 "assets": assets,
             },
-            "cache": {"hits": 0, "misses": 1},
+            "projection_cache": {"hits": 0, "misses": 1},
+            "upstream_cache": {"hits": 2, "misses": 1},
+            "fresh_child_timings": {
+                "states": 1,
+                "construction_seconds": 0.1,
+                "upstream_execution_seconds": 0.2,
+                "ui_application_seconds": 0.0,
+                "projection_execution_seconds": 0.1,
+                "cleanup_seconds": 0.1,
+            },
         }
 
     def download_asset(
@@ -224,7 +233,9 @@ def test_capture_releases_transfer_before_committing(
 
     assert result.mode == "capture"
     assert result.assets == 1
-    assert result.cache.misses == 1
+    assert result.projection_cache.misses == 1
+    assert result.upstream_cache == client_module.CacheSummary(hits=2, misses=1)
+    assert result.timings.capture_seconds >= 0
     assert [call[0] for call in transport.calls] == [
         "sessions",
         "capture",
@@ -246,6 +257,32 @@ def test_capture_release_failure_leaves_destination_absent(
     with (
         _client(monkeypatch, transport) as client,
         pytest.raises(SessionError, match="release failed"),
+    ):
+        client.session().capture(spec=_spec(), output=output)
+
+    assert not output.exists()
+
+
+def test_capture_rejects_extra_top_level_bridge_fields(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _ExtraFieldTransport(_Transport):
+        def invoke(
+            self,
+            session_id: str,
+            operation: str,
+            params: Mapping[str, object],
+        ) -> dict[str, object]:
+            response = super().invoke(session_id, operation, params)
+            if operation == "capture":
+                response["extra"] = True
+            return response
+
+    output = tmp_path / "publication"
+    with (
+        _client(monkeypatch, _ExtraFieldTransport()) as client,
+        pytest.raises(TransportError, match="capture response has invalid fields"),
     ):
         client.session().capture(spec=_spec(), output=output)
 

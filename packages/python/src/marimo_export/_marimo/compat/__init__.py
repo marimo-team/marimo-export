@@ -3,9 +3,11 @@ from __future__ import annotations
 import copy
 import gc
 import hashlib
+import threading
+import time
 import unicodedata
-from collections.abc import AsyncIterator, Callable, Mapping
-from contextlib import asynccontextmanager, suppress
+from collections.abc import AsyncIterator, Callable, Iterator, Mapping
+from contextlib import asynccontextmanager, contextmanager, suppress
 from dataclasses import dataclass
 from pathlib import Path
 from types import MappingProxyType
@@ -27,6 +29,8 @@ from marimo_export.publication import (
     ArrowDescriptor,
     AssetRef,
     BlobAssetDescriptor,
+    CacheSummary,
+    FreshChildTimings,
     NumpyDescriptor,
     OutputCodec,
     OutputDescriptor,
@@ -93,6 +97,101 @@ class NativeReceipt:
         return self.descriptor.codec, self.descriptor.asset.sha256
 
 
+@dataclass(frozen=True, slots=True)
+class StateExecution:
+    """Receipts and run-local diagnostics from one fresh state child."""
+
+    receipts: tuple[NativeReceipt, ...]
+    upstream_cache: CacheSummary
+    timings: FreshChildTimings
+
+
+@dataclass(slots=True)
+class _CacheActivity:
+    hits: int = 0
+    misses: int = 0
+
+
+_CACHE_TRACKER_LOCK = threading.Lock()
+_CACHE_TRACKERS: dict[int, tuple[Any, frozenset[Any], _CacheActivity]] = {}
+_TRACKED_CACHE_FUNCTION: Callable[..., Any] | None = None
+_NATIVE_CACHE_FUNCTION: Callable[..., Any] | None = None
+
+
+@contextmanager
+def _track_upstream_cache(
+    child_graph: Any,
+    projection_ids: frozenset[Any],
+) -> Iterator[_CacheActivity]:
+    import marimo._runtime.executor.lifecycles.cached as cached_lifecycle
+
+    global _NATIVE_CACHE_FUNCTION
+    global _TRACKED_CACHE_FUNCTION
+
+    activity = _CacheActivity()
+    tracker_key = id(child_graph)
+
+    with _CACHE_TRACKER_LOCK:
+        if tracker_key in _CACHE_TRACKERS:
+            raise RuntimeError("cache activity is already tracked for this graph")
+        if not _CACHE_TRACKERS:
+            native = cached_lifecycle.cache_attempt_from_hash
+
+            def tracked(
+                module: Any,
+                graph: Any,
+                cell_id: Any,
+                scope: dict[str, Any],
+                *args: Any,
+                **kwargs: Any,
+            ) -> Any:
+                attempt = native(
+                    module,
+                    graph,
+                    cell_id,
+                    scope,
+                    *args,
+                    **kwargs,
+                )
+                with _CACHE_TRACKER_LOCK:
+                    tracker = _CACHE_TRACKERS.get(id(graph))
+                    if tracker is not None and tracker[0] is graph:
+                        _, excluded, current = tracker
+                        if cell_id not in excluded:
+                            if attempt.hit:
+                                current.hits += 1
+                            else:
+                                current.misses += 1
+                return attempt
+
+            _NATIVE_CACHE_FUNCTION = native
+            _TRACKED_CACHE_FUNCTION = tracked
+            cast(Any, cached_lifecycle).cache_attempt_from_hash = tracked
+
+        _CACHE_TRACKERS[tracker_key] = (
+            child_graph,
+            projection_ids,
+            activity,
+        )
+
+    try:
+        yield activity
+    finally:
+        with _CACHE_TRACKER_LOCK:
+            tracker = _CACHE_TRACKERS.get(tracker_key)
+            if tracker is not None and tracker[0] is child_graph:
+                del _CACHE_TRACKERS[tracker_key]
+            if not _CACHE_TRACKERS:
+                if (
+                    _TRACKED_CACHE_FUNCTION is not None
+                    and cached_lifecycle.cache_attempt_from_hash is _TRACKED_CACHE_FUNCTION
+                    and _NATIVE_CACHE_FUNCTION is not None
+                ):
+                    cast(Any, cached_lifecycle).cache_attempt_from_hash = _NATIVE_CACHE_FUNCTION
+                _TRACKED_CACHE_FUNCTION = None
+                _NATIVE_CACHE_FUNCTION = None
+
+
 def blob_asset_type() -> type:
     """Return the exact native BlobAsset class."""
 
@@ -134,6 +233,14 @@ def new_transfer_virtual_file(data: bytes) -> object:
     return VirtualFile(filename=random_filename("bin"), buffer=data)
 
 
+def flush_native_caches() -> None:
+    """Make pending native cache writes visible to fresh state children."""
+
+    from marimo._save.loaders import flush_active_caches
+
+    flush_active_caches()
+
+
 def require_capabilities() -> MarimoCapabilities:
     """Validate the focused private seams used by the rewrite."""
 
@@ -148,7 +255,12 @@ def require_capabilities() -> MarimoCapabilities:
         from marimo._runtime.context import get_context as get_runtime_context
         from marimo._runtime.context.kernel_context import KernelRuntimeContext
         from marimo._runtime.dataflow import prune_cells_for_overrides
-        from marimo._save.hash import cache_attempt_from_hash
+        from marimo._runtime.executor.lifecycles.cached import (
+            cache_attempt_from_hash as lifecycle_cache_attempt,
+        )
+        from marimo._save.hash import (
+            cache_attempt_from_hash as direct_cache_attempt,
+        )
         from marimo._save.loaders import flush_active_caches
         from marimo._save.loaders.lazy import LazyLoader
         from marimo._save.stubs import BlobAsset as NativeBlobAsset
@@ -165,7 +277,8 @@ def require_capabilities() -> MarimoCapabilities:
         (AppKernelRunner, "child_sessions"),
         (load_notebook_ir, "child_sessions"),
         (prune_cells_for_overrides, "definition_overrides"),
-        (cache_attempt_from_hash, "cell_cache_receipts"),
+        (lifecycle_cache_attempt, "cell_cache_receipts"),
+        (direct_cache_attempt, "cell_cache_receipts"),
         (flush_active_caches, "cell_cache_receipts"),
         (LazyLoader, "cell_cache_receipts"),
         (NotebookSerializationV1, "child_sessions"),
@@ -418,7 +531,7 @@ async def execute_state(
     state: NormalizedState,
     plan: MatrixPlan,
     lease: ProjectionLease,
-) -> tuple[NativeReceipt, ...]:
+) -> StateExecution:
     """Execute one fresh child through marimo's graph and cell cache."""
 
     from marimo._ast.app import InternalApp
@@ -433,6 +546,7 @@ async def execute_state(
         NotebookSerializationV1,
     )
 
+    construction_started = time.monotonic()
     code_context = get_code_context()
     runtime = get_runtime_context()
     cells = tuple(code_context.cells)
@@ -452,6 +566,13 @@ async def execute_state(
     internal = InternalApp(app)
     child = AppKernelRunner(internal)
     child_context = child._runtime_context
+    receipts: tuple[NativeReceipt, ...] | None = None
+    upstream_cache = _CacheActivity()
+    construction_seconds = 0.0
+    upstream_execution_seconds = 0.0
+    ui_application_seconds = 0.0
+    projection_execution_seconds = 0.0
+    cleanup_seconds = 0.0
     try:
         config = cast(dict[str, Any], copy.deepcopy(runtime.marimo_config))
         runtime_config = cast(dict[str, Any], config["runtime"])
@@ -466,6 +587,7 @@ async def execute_state(
         child._kernel.globals.update(overrides)
 
         projection_ids = _projection_ids(internal, lease)
+        projection_id_set = frozenset(projection_ids.values())
         execution_order = prune_cells_for_overrides(
             internal.graph,
             internal.execution_order,
@@ -476,67 +598,98 @@ async def execute_state(
             for cell_id in execution_order
             if cell_id not in projection_ids.values() and not internal.graph.is_disabled(cell_id)
         }
-        await child.run(cells_to_run)
-        _raise_child_errors(child, cells_to_run, state.name)
+        construction_seconds = time.monotonic() - construction_started
 
-        if state.ui_values:
-            from marimo._plugins.ui._core.ui_element import UIElement
-            from marimo._runtime.commands import UpdateUIElementCommand
+        with _track_upstream_cache(
+            child._kernel.graph,
+            projection_id_set,
+        ) as upstream_cache:
+            upstream_started = time.monotonic()
+            await child.run(cells_to_run)
+            upstream_execution_seconds = time.monotonic() - upstream_started
+            _raise_child_errors(child, cells_to_run, state.name)
 
-            elements: list[UIElement[Any, Any]] = []
-            values: list[JsonValue] = []
-            for name, value in state.ui_values.items():
-                element = child.globals.get(name)
-                if not isinstance(element, UIElement):
+            if state.ui_values:
+                ui_started = time.monotonic()
+                from marimo._plugins.ui._core.ui_element import UIElement
+                from marimo._runtime.commands import UpdateUIElementCommand
+
+                elements: list[UIElement[Any, Any]] = []
+                values: list[JsonValue] = []
+                for name, value in state.ui_values.items():
+                    element = child.globals.get(name)
+                    if not isinstance(element, UIElement):
+                        raise ExecutionError(
+                            f"state {state.name!r} input {name!r} did not create a UI element",
+                            code="input_value_invalid",
+                            details={"state": state.name, "input": name},
+                        )
+                    elements.append(element)
+                    values.append(value)
+                updated = await child.set_ui_element_value(
+                    UpdateUIElementCommand(
+                        object_ids=[element._id for element in elements],
+                        values=values,
+                    ),
+                    notify_frontend=False,
+                )
+                if not updated:
                     raise ExecutionError(
-                        f"state {state.name!r} input {name!r} did not create a UI element",
+                        f"state {state.name!r} UI values were not applied",
                         code="input_value_invalid",
-                        details={"state": state.name, "input": name},
+                        details={"state": state.name, "inputs": list(state.ui_values)},
                     )
-                elements.append(element)
-                values.append(value)
-            updated = await child.set_ui_element_value(
-                UpdateUIElementCommand(
-                    object_ids=[element._id for element in elements],
-                    values=values,
-                ),
-                notify_frontend=False,
-            )
-            if not updated:
-                raise ExecutionError(
-                    f"state {state.name!r} UI values were not applied",
-                    code="input_value_invalid",
-                    details={"state": state.name, "inputs": list(state.ui_values)},
-                )
-            for name, expected in state.ui_values.items():
-                actual = _frontend_value(
-                    child.globals[name],
-                    f"state {state.name!r} input {name!r}",
-                )
-                if actual != expected:
-                    raise ExecutionError(
-                        f"state {state.name!r} input {name!r} rejected its value",
-                        code="input_value_invalid",
-                        details={"state": state.name, "input": name},
+                for name, expected in state.ui_values.items():
+                    actual = _frontend_value(
+                        child.globals[name],
+                        f"state {state.name!r} input {name!r}",
                     )
+                    if actual != expected:
+                        raise ExecutionError(
+                            f"state {state.name!r} input {name!r} rejected its value",
+                            code="input_value_invalid",
+                            details={"state": state.name, "input": name},
+                        )
+                ui_application_seconds = time.monotonic() - ui_started
 
-        receipts: list[NativeReceipt] = []
-        for output in plan.outputs:
-            cell_id = projection_ids[output]
-            receipts.append(
-                await _execute_projection(
-                    child,
-                    cell_id,
-                    output,
-                    state.name,
+            projection_started = time.monotonic()
+            receipt_items: list[NativeReceipt] = []
+            for output in plan.outputs:
+                cell_id = projection_ids[output]
+                receipt_items.append(
+                    await _execute_projection(
+                        child,
+                        cell_id,
+                        output,
+                        state.name,
+                    )
                 )
-            )
-        return tuple(receipts)
+            receipts = tuple(receipt_items)
+            projection_execution_seconds = time.monotonic() - projection_started
     finally:
+        cleanup_started = time.monotonic()
         with child_context.install(), suppress(Exception):
             child._kernel.cache_callbacks.teardown()
         del child
         gc.collect()
+        cleanup_seconds = time.monotonic() - cleanup_started
+    if receipts is None:
+        raise RuntimeError("fresh child produced no projection receipts")
+    return StateExecution(
+        receipts=receipts,
+        upstream_cache=CacheSummary(
+            hits=upstream_cache.hits,
+            misses=upstream_cache.misses,
+        ),
+        timings=FreshChildTimings(
+            states=1,
+            construction_seconds=construction_seconds,
+            upstream_execution_seconds=upstream_execution_seconds,
+            ui_application_seconds=ui_application_seconds,
+            projection_execution_seconds=projection_execution_seconds,
+            cleanup_seconds=cleanup_seconds,
+        ),
+    )
 
 
 def _projection_ids(internal: Any, lease: ProjectionLease) -> dict[str, Any]:
@@ -876,11 +1029,13 @@ __all__ = [
     "MarimoCapabilities",
     "NativeReceipt",
     "ProjectionLease",
+    "StateExecution",
     "blob_asset_type",
     "current_document_sha256",
     "declared_ui_values",
     "delete_projections",
     "execute_state",
+    "flush_native_caches",
     "inspect_baseline",
     "install_projections",
     "new_transfer_virtual_file",

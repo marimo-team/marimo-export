@@ -72,7 +72,9 @@ excluded so a saved notebook and its reloaded session keep the same identity.
 ## Native execution and caching
 
 Every state runs through marimo's `AppKernelRunner` with cache execution
-enabled. marimo owns:
+enabled. Managed build also enables native caching for the parent session's
+initial autorun. Capture flushes pending parent writes before constructing the
+first state child. marimo owns:
 
 - dependency pruning
 - cell hashing
@@ -94,6 +96,18 @@ marimo.blob-asset.msgpack.v1
 marimo-export records cache keys and return references as provenance. It copies
 verified native bytes into content-addressed publication paths.
 
+`PublicationResult` keeps three run-local views separate:
+
+- projection cache dispositions for the state and output relation
+- upstream cache activity for non-projection cells in fresh children
+- managed, capture, publication, total, and fresh-child phase timings
+
+Cache counts describe native lookup activity. A lookup hit can still execute
+live when restoration fails or when a cell defines session-local UI elements.
+Fresh-child construction covers notebook serialization, IR loading, runner
+creation, configuration, and dependency pruning. UI application includes the
+reactive closure marimo executes after a child-local UI update.
+
 ## Capture and build
 
 `capture` selects an existing edit session, invokes the kernel bridge, downloads
@@ -104,6 +118,10 @@ ticket.
 Python interpreter. It activates exactly one session and delegates to the same
 capture engine. Owned server processes, sockets, notebook copies, and secrets
 remain operation-local.
+
+Shutdown marks the session stream as closing, stops the owned process, then
+joins and closes the SSE reader. Process termination releases a blocked SSE
+read before the client waits for its reader thread.
 
 ## Publication protocol
 
