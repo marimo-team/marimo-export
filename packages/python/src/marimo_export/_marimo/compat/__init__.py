@@ -765,8 +765,8 @@ def _isolated_modules(
                     delattr(parent, attribute)
         importlib.invalidate_caches()
         cast(Any, SourceFileLoader).get_code = get_code
-        for name in sorted(shadow_names):
-            sys.modules[name] = _shadow_source_module(name, original_modules[name])
+        for name in sorted(shadow_names, key=lambda value: value.count(".")):
+            _shadow_source_module(name, original_modules[name])
         yield
     finally:
         cast(Any, SourceFileLoader).get_code = native_get_code
@@ -898,7 +898,29 @@ def _shadow_source_module(name: str, module: Any) -> Any:
     if spec is None or spec.loader is None:
         return module
     fresh = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(fresh)
+    prefix = f"{name}."
+    for child_name, child in tuple(sys.modules.items()):
+        if not child_name.startswith(prefix):
+            continue
+        attribute = child_name[len(prefix) :]
+        if "." not in attribute:
+            setattr(fresh, attribute, child)
+    sys.modules[name] = fresh
+    parent_name, separator, attribute = name.rpartition(".")
+    parent = sys.modules.get(parent_name) if separator else None
+    if parent is not None:
+        setattr(parent, attribute, fresh)
+    try:
+        spec.loader.exec_module(fresh)
+    except Exception as error:
+        raise OutputError(
+            f"exporter module {name!r} is unavailable",
+            code="exporter_unavailable",
+            details={
+                "module": name,
+                "exception_type": type(error).__name__,
+            },
+        ) from error
     return fresh
 
 

@@ -153,7 +153,10 @@ def test_exporter_module_overlay_shadows_source_parent_of_native_module(
     package = tmp_path / package_name
     package.mkdir()
     source = package / "__init__.py"
-    source.write_text("value = 'first'\n", encoding="utf-8")
+    source.write_text(
+        "import sys\nvalue = 'first'\nself_ref = sys.modules[__name__]\n",
+        encoding="utf-8",
+    )
     monkeypatch.syspath_prepend(str(tmp_path))
     original = importlib.import_module(package_name)
     native_file = tmp_path / "_native.so"
@@ -163,7 +166,10 @@ def test_exporter_module_overlay_shadows_source_parent_of_native_module(
     native.__spec__ = ModuleSpec(native_name, loader=None, origin=str(native_file))
     monkeypatch.setitem(sys.modules, native_name, native)
     monkeypatch.setattr(original, "_native", native, raising=False)
-    source.write_text("value = 'other'\n", encoding="utf-8")
+    source.write_text(
+        "import sys\nvalue = 'other'\nself_ref = sys.modules[__name__]\n",
+        encoding="utf-8",
+    )
     original_modules = dict(sys.modules)
     names: set[str] = {package_name, native_name}
 
@@ -171,7 +177,9 @@ def test_exporter_module_overlay_shadows_source_parent_of_native_module(
         fresh = sys.modules[package_name]
         assert fresh is not original
         assert fresh.value == "other"
+        assert fresh.self_ref is fresh
         assert sys.modules[native_name] is native
+        assert fresh._native is native
 
     assert sys.modules[package_name] is original
     assert sys.modules[native_name] is native
@@ -556,6 +564,45 @@ def test_exporter_preflight_restores_modules_imported_before_failure(
     assert raised.value.code == "exporter_unavailable"
     assert helper_name not in sys.modules
     assert exporter_name not in sys.modules
+
+
+def test_prepared_exporters_reports_shadow_initialization_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    package_name = "marimo_export_test_failed_shadow"
+    native_name = f"{package_name}._native"
+    package = tmp_path / package_name
+    package.mkdir()
+    source = package / "__init__.py"
+    source.write_text(
+        "def encode(value):\n    return value\n",
+        encoding="utf-8",
+    )
+    monkeypatch.syspath_prepend(str(tmp_path))
+    original = importlib.import_module(package_name)
+    native_file = tmp_path / "failed_shadow_native.so"
+    native_file.write_bytes(b"native")
+    native = ModuleType(native_name)
+    native.__file__ = str(native_file)
+    native.__spec__ = ModuleSpec(native_name, loader=None, origin=str(native_file))
+    monkeypatch.setitem(sys.modules, native_name, native)
+    monkeypatch.setattr(original, "_native", native, raising=False)
+    source.write_text("raise RuntimeError('failed shadow')\n", encoding="utf-8")
+
+    with (
+        pytest.raises(OutputError) as raised,
+        prepared_exporters(_custom_exporter_plan(package_name)),
+    ):
+        pass
+
+    assert raised.value.code == "exporter_unavailable"
+    assert raised.value.details == {
+        "module": package_name,
+        "exception_type": "RuntimeError",
+    }
+    assert sys.modules[package_name] is original
+    assert sys.modules[native_name] is native
 
 
 def test_exporter_preflight_fingerprints_sideloaded_function_code(
