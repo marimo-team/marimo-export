@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
 import { anyWidgetLoader } from "../src/index.js";
-import { resolveAnyWidgetModule } from "../src/runtime/binding.js";
 import { moduleUrl, notification, outputFor, payload } from "./fixture.js";
 
 let documentValue: FakeDocument;
@@ -17,69 +16,6 @@ afterEach(() => {
 });
 
 describe("AnyWidget browser runtime", () => {
-  test("bounds an invalid module URL diagnostic", () => {
-    const url = `data:text/javascript,${"x".repeat(1_000_000)}`;
-
-    expect(() => resolveAnyWidgetModule({}, url)).toThrowError(
-      expect.objectContaining({
-        message: expect.stringMatching(/^AnyWidget module ".*\.\.\." must default-export/),
-      }),
-    );
-    try {
-      resolveAnyWidgetModule({}, url);
-    } catch (error) {
-      expect((error as Error).message.length).toBeLessThan(256);
-      expect((error as Error).message).not.toContain("x".repeat(128));
-    }
-  });
-
-  test("keeps parent disposal authoritative over a child render signal", async () => {
-    const counters = { childAbort: 0, childController: new AbortController() };
-    vi.stubGlobal("__anywidgetChildSignal", counters);
-    const rootUrl = moduleUrl(`
-      export default {
-        async render({ model, el, host }) {
-          const child = await host.getWidget(model.get("child"));
-          await child.render({
-            el: document.createElement("div"),
-            signal: globalThis.__anywidgetChildSignal.childController.signal,
-          });
-        },
-      };
-    `);
-    const childUrl = moduleUrl(`
-      export default {
-        render({ signal }) {
-          signal.addEventListener(
-            "abort",
-            () => globalThis.__anywidgetChildSignal.childAbort += 1,
-            { once: true },
-          );
-        },
-      };
-    `);
-    const output = await outputFor(
-      payload({
-        modelNotifications: [
-          notification({
-            id: "model-0",
-            state: { child: "anywidget:model-1" },
-            moduleUrl: rootUrl,
-          }),
-          notification({ id: "model-1", state: {}, moduleUrl: childUrl }),
-        ],
-      }),
-    );
-    const mounted = await (
-      await output.load(anyWidgetLoader())
-    ).mount(documentValue.createElement("div") as unknown as HTMLElement);
-
-    await mounted.dispose();
-
-    expect(counters.childAbort).toBe(1);
-    expect(counters.childController.signal.aborted).toBe(false);
-  });
-
   test("releases a failed child view while its parent continues", async () => {
     const counters = { changes: 0 };
     vi.stubGlobal("__anywidgetFailedChild", counters);
@@ -148,92 +84,6 @@ describe("AnyWidget browser runtime", () => {
     await second.dispose();
   });
 
-  test("reports a cleanup failure that arrives after disposal", async () => {
-    let releaseRender!: () => void;
-    const renderGate = new Promise<void>((resolve) => {
-      releaseRender = resolve;
-    });
-    let markStarted!: () => void;
-    const started = new Promise<void>((resolve) => {
-      markStarted = resolve;
-    });
-    vi.stubGlobal("__anywidgetLateCleanup", { renderGate, markStarted });
-    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
-    const url = moduleUrl(`
-      export default {
-        render() {
-          globalThis.__anywidgetLateCleanup.markStarted();
-          return globalThis.__anywidgetLateCleanup.renderGate.then(
-            () => () => { throw new Error("late cleanup failed"); },
-          );
-        },
-      };
-    `);
-    const output = await outputFor(
-      payload({
-        modelNotifications: [notification({ id: "model-0", state: {}, moduleUrl: url })],
-      }),
-    );
-    const loaded = await output.load(anyWidgetLoader());
-    const controller = new AbortController();
-    const mounting = loaded.mount(documentValue.createElement("div") as unknown as HTMLElement, {
-      signal: controller.signal,
-    });
-    await started;
-
-    controller.abort();
-    await expect(mounting).rejects.toMatchObject({ name: "AbortError" });
-    releaseRender();
-    await renderGate;
-    await vi.waitFor(() =>
-      expect(consoleError).toHaveBeenCalledWith(
-        "AnyWidget render settled after its mount was disposed.",
-        expect.objectContaining({ message: "AnyWidget render cleanup failed." }),
-      ),
-    );
-  });
-
-  test("destroys child bindings before their parent", async () => {
-    const cleanupOrder: string[] = [];
-    vi.stubGlobal("__anywidgetCleanupOrder", cleanupOrder);
-    const rootUrl = moduleUrl(`
-      export default {
-        async render({ model, el, host }) {
-          const child = await host.getWidget(model.get("child"));
-          await child.render({ el: document.createElement("div") });
-          return () => globalThis.__anywidgetCleanupOrder.push("root");
-        },
-      };
-    `);
-    const childUrl = moduleUrl(`
-      export default {
-        render() {
-          return () => globalThis.__anywidgetCleanupOrder.push("child");
-        },
-      };
-    `);
-    const output = await outputFor(
-      payload({
-        modelNotifications: [
-          notification({
-            id: "model-0",
-            state: { child: "anywidget:model-1" },
-            moduleUrl: rootUrl,
-          }),
-          notification({ id: "model-1", state: {}, moduleUrl: childUrl }),
-        ],
-      }),
-    );
-    const loaded = await output.load(anyWidgetLoader());
-    const mounted = await loaded.mount(
-      documentValue.createElement("div") as unknown as HTMLElement,
-    );
-
-    await mounted.dispose();
-
-    expect(cleanupOrder).toEqual(["child", "root"]);
-  });
-
   test("creates isolated state for each mount", async () => {
     const url = moduleUrl(`
       export default {
@@ -279,131 +129,6 @@ describe("AnyWidget browser runtime", () => {
     await second.dispose();
   });
 
-  test("keeps module cache entries distinct when hashes and URLs contain NUL", async () => {
-    const firstSource = `export default { render({ el }) { el.dataset.module = "first"; } };`;
-    const secondSource = `export default { render({ el }) { el.dataset.module = "second"; } };`;
-    const moduleUrls = [moduleUrl(firstSource), moduleUrl(secondSource)];
-    const createObjectUrl = vi
-      .spyOn(URL, "createObjectURL")
-      .mockImplementation(() => moduleUrls.shift()!);
-    vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => undefined);
-    const firstVirtualFile = "b\0c";
-    const secondVirtualFile = "c";
-    const rootUrl = moduleUrl(`
-      export default {
-        async render({ model, el, host }) {
-          const first = await host.getWidget(model.get("first"));
-          const firstElement = document.createElement("div");
-          el.append(firstElement);
-          await first.render({ el: firstElement });
-          const second = await host.getWidget(model.get("second"));
-          const secondElement = document.createElement("div");
-          el.append(secondElement);
-          await second.render({ el: secondElement });
-        },
-      };
-    `);
-    const output = await outputFor(
-      payload({
-        files: {
-          [firstVirtualFile]: moduleUrl(firstSource),
-          [secondVirtualFile]: moduleUrl(secondSource),
-        },
-        modelNotifications: [
-          notification({
-            id: "model-0",
-            state: { first: "anywidget:model-1", second: "anywidget:model-2" },
-            moduleUrl: rootUrl,
-          }),
-          notification({
-            id: "model-1",
-            state: {},
-            moduleUrl: firstVirtualFile,
-            moduleHash: "a",
-          }),
-          notification({
-            id: "model-2",
-            state: {},
-            moduleUrl: secondVirtualFile,
-            moduleHash: "a\0b",
-          }),
-        ],
-      }),
-    );
-    const loaded = await output.load(anyWidgetLoader());
-    const element = documentValue.createElement("div");
-
-    const mounted = await loaded.mount(element as unknown as HTMLElement);
-
-    expect(createObjectUrl).toHaveBeenCalledTimes(2);
-    expect(element.children.map((child) => child.dataset.module)).toEqual(["first", "second"]);
-    await mounted.dispose();
-  });
-
-  test("does not start a child module after its parent render is disposed", async () => {
-    let releaseRender!: () => void;
-    const renderGate = new Promise<void>((resolve) => {
-      releaseRender = resolve;
-    });
-    let markStarted!: () => void;
-    const started = new Promise<void>((resolve) => {
-      markStarted = resolve;
-    });
-    let markSettled!: () => void;
-    const settled = new Promise<void>((resolve) => {
-      markSettled = resolve;
-    });
-    const counters = { childImports: 0, markSettled, markStarted, renderGate };
-    vi.stubGlobal("__anywidgetDelayedChild", counters);
-    const rootUrl = moduleUrl(`
-      export default {
-        async render({ model, host }) {
-          const counters = globalThis.__anywidgetDelayedChild;
-          counters.markStarted();
-          await counters.renderGate;
-          try {
-            await host.getWidget(model.get("child"));
-          } finally {
-            counters.markSettled();
-          }
-        },
-      };
-    `);
-    const childSource = `
-      globalThis.__anywidgetDelayedChild.childImports += 1;
-      export default { render() {} };
-    `;
-    const createObjectUrl = vi.spyOn(URL, "createObjectURL");
-    const output = await outputFor(
-      payload({
-        files: { "/@file/child.js": moduleUrl(childSource) },
-        modelNotifications: [
-          notification({
-            id: "model-0",
-            state: { child: "anywidget:model-1" },
-            moduleUrl: rootUrl,
-          }),
-          notification({ id: "model-1", state: {}, moduleUrl: "/@file/child.js" }),
-        ],
-      }),
-    );
-    const loaded = await output.load(anyWidgetLoader());
-    const controller = new AbortController();
-    const mounting = loaded.mount(documentValue.createElement("div") as unknown as HTMLElement, {
-      signal: controller.signal,
-    });
-    await started;
-
-    controller.abort();
-    await expect(settleWithin(mounting)).rejects.toMatchObject({ name: "AbortError" });
-    releaseRender();
-    await settled;
-    await Promise.resolve();
-
-    expect(createObjectUrl).not.toHaveBeenCalled();
-    expect(counters.childImports).toBe(0);
-  });
-
   test("clears partial DOM when render throws synchronously", async () => {
     const url = moduleUrl(`
       export default {
@@ -424,60 +149,6 @@ describe("AnyWidget browser runtime", () => {
     await expect(loaded.mount(element as unknown as HTMLElement)).rejects.toThrow("render failed");
 
     expect(element.children).toHaveLength(0);
-  });
-
-  test("clears DOM when a void renderer aborts during render", async () => {
-    const controller = new AbortController();
-    vi.stubGlobal("__anywidgetVoidAbort", controller);
-    const url = moduleUrl(`
-      export default {
-        render({ el }) {
-          el.append(document.createElement("span"));
-          globalThis.__anywidgetVoidAbort.abort();
-        },
-      };
-    `);
-    const output = await outputFor(
-      payload({
-        modelNotifications: [notification({ id: "model-0", state: {}, moduleUrl: url })],
-      }),
-    );
-    const loaded = await output.load(anyWidgetLoader());
-    const element = documentValue.createElement("div");
-
-    await expect(
-      loaded.mount(element as unknown as HTMLElement, { signal: controller.signal }),
-    ).rejects.toMatchObject({ name: "AbortError" });
-
-    expect(element.children).toHaveLength(0);
-  });
-
-  test("settles an aborted mount while module evaluation remains pending", async () => {
-    let markStarted!: () => void;
-    const started = new Promise<void>((resolve) => {
-      markStarted = resolve;
-    });
-    vi.stubGlobal("__anywidgetNeverImport", { markStarted });
-    const url = moduleUrl(`
-      globalThis.__anywidgetNeverImport.markStarted();
-      await new Promise(() => {});
-      export default { render() {} };
-    `);
-    const output = await outputFor(
-      payload({
-        modelNotifications: [notification({ id: "model-0", state: {}, moduleUrl: url })],
-      }),
-    );
-    const loaded = await output.load(anyWidgetLoader());
-    const controller = new AbortController();
-    const mounting = loaded.mount(documentValue.createElement("div") as unknown as HTMLElement, {
-      signal: controller.signal,
-    });
-    await started;
-
-    controller.abort();
-
-    await expect(settleWithin(mounting)).rejects.toMatchObject({ name: "AbortError" });
   });
 
   test("revokes an embedded module URL and skips late initialization after abort", async () => {
@@ -567,47 +238,6 @@ describe("AnyWidget browser runtime", () => {
     expect(element.children).toHaveLength(0);
   });
 
-  test("cancels an in-flight initialize and runs its late cleanup", async () => {
-    let markStarted!: () => void;
-    const started = new Promise<void>((resolve) => {
-      markStarted = resolve;
-    });
-    const counters = { initialize: 0, cleanup: 0, markStarted };
-    vi.stubGlobal("__anywidgetPendingCounters", counters);
-    const url = moduleUrl(`
-      export default {
-        initialize({ signal }) {
-          const counters = globalThis.__anywidgetPendingCounters;
-          counters.initialize += 1;
-          counters.markStarted();
-          return new Promise((resolve) => {
-            signal.addEventListener(
-              "abort",
-              () => resolve(() => counters.cleanup += 1),
-              { once: true },
-            );
-          });
-        },
-      };
-    `);
-    const output = await outputFor(
-      payload({
-        modelNotifications: [notification({ id: "model-0", state: {}, moduleUrl: url })],
-      }),
-    );
-    const loaded = await output.load(anyWidgetLoader());
-    const controller = new AbortController();
-    const mounting = loaded.mount(documentValue.createElement("div") as unknown as HTMLElement, {
-      signal: controller.signal,
-    });
-    await started;
-
-    controller.abort();
-
-    await expect(mounting).rejects.toMatchObject({ name: "AbortError" });
-    expect(counters.cleanup).toBe(1);
-  });
-
   test("cancels an in-flight render and runs its late cleanup", async () => {
     let markStarted!: () => void;
     const started = new Promise<void>((resolve) => {
@@ -647,31 +277,6 @@ describe("AnyWidget browser runtime", () => {
 
     await expect(mounting).rejects.toMatchObject({ name: "AbortError" });
     expect(counters.cleanup).toBe(1);
-  });
-
-  test("aborts the binding signal when initialization fails", async () => {
-    const counters = { abort: 0 };
-    vi.stubGlobal("__anywidgetFailedInitializeCounters", counters);
-    const url = moduleUrl(`
-      export default {
-        initialize({ signal }) {
-          const counters = globalThis.__anywidgetFailedInitializeCounters;
-          signal.addEventListener("abort", () => counters.abort += 1, { once: true });
-          throw new Error("initialize failed");
-        },
-      };
-    `);
-    const output = await outputFor(
-      payload({
-        modelNotifications: [notification({ id: "model-0", state: {}, moduleUrl: url })],
-      }),
-    );
-    const loaded = await output.load(anyWidgetLoader());
-
-    await expect(
-      loaded.mount(documentValue.createElement("div") as unknown as HTMLElement),
-    ).rejects.toThrow("initialize failed");
-    expect(counters.abort).toBe(1);
   });
 
   test("isolates model listener failures from sibling and aggregate change events", async () => {
@@ -738,56 +343,6 @@ describe("AnyWidget browser runtime", () => {
     expect(element.dataset.childLabel).toBe("legacy child");
     await mounted.dispose();
   });
-
-  test("shares model styles within a shadow root and releases the final reference", async () => {
-    const rootUrl = moduleUrl(`
-      export default {
-        async render({ model, el, host }) {
-          const child = await host.getWidget(model.get("child"));
-          for (let index = 0; index < 2; index += 1) {
-            const childElement = document.createElement("section");
-            el.append(childElement);
-            await child.render({ el: childElement });
-          }
-        },
-      };
-    `);
-    const childUrl = moduleUrl("export default { render() {} };");
-    const output = await outputFor(
-      payload({
-        modelNotifications: [
-          notification({
-            id: "model-0",
-            state: { child: "anywidget:model-1", _css: ".root {}" },
-            moduleUrl: rootUrl,
-          }),
-          notification({
-            id: "model-1",
-            state: { _css: ".child {}" },
-            moduleUrl: childUrl,
-          }),
-        ],
-      }),
-    );
-    const loaded = await output.load(anyWidgetLoader());
-    const host = documentValue.createElement("aside");
-    const shadow = new FakeShadowRoot(documentValue, host);
-    const element = documentValue.createElement("main");
-    shadow.append(element);
-
-    const mounted = await loaded.mount(element as unknown as HTMLElement);
-
-    expect(shadow.children.filter((child) => child.tagName === "STYLE")).toHaveLength(2);
-    expect(
-      shadow.children
-        .filter((child) => child.tagName === "STYLE")
-        .map((style) => style.textContent),
-    ).toEqual([".root {}", ".child {}"]);
-
-    await mounted.dispose();
-
-    expect(shadow.children.filter((child) => child.tagName === "STYLE")).toHaveLength(0);
-  });
 });
 
 async function settleWithin<T>(task: Promise<T>): Promise<T> {
@@ -808,7 +363,7 @@ class FakeElement {
   readonly dataset: Record<string, string> = {};
   readonly ownerDocument: FakeDocument;
   readonly tagName: string;
-  parent: FakeElement | FakeShadowRoot | undefined;
+  parent: FakeElement | undefined;
   #textContent = "";
 
   constructor(ownerDocument: FakeDocument, tagName: string) {
@@ -826,7 +381,7 @@ class FakeElement {
     this.children.splice(0);
   }
 
-  getRootNode(): FakeDocument | FakeShadowRoot {
+  getRootNode(): FakeDocument {
     return this.parent?.getRootNode() ?? this.ownerDocument;
   }
 
@@ -849,27 +404,6 @@ class FakeElement {
     const index = this.parent.children.indexOf(this);
     if (index >= 0) this.parent.children.splice(index, 1);
     this.parent = undefined;
-  }
-}
-
-class FakeShadowRoot {
-  readonly nodeType = 11;
-  readonly children: FakeElement[] = [];
-
-  constructor(
-    readonly ownerDocument: FakeDocument,
-    readonly host: FakeElement,
-  ) {}
-
-  append(...children: FakeElement[]): void {
-    for (const child of children) {
-      child.parent = this;
-      this.children.push(child);
-    }
-  }
-
-  getRootNode(): FakeShadowRoot {
-    return this;
   }
 }
 

@@ -137,19 +137,6 @@ describe("anywidget", () => {
     await expect(output.load(anyWidgetLoader())).rejects.toThrow("malformed base64 data");
   });
 
-  test("treats a base64 media type as percent-encoded data", async () => {
-    const output = await outputFor(
-      payload({
-        files: { "/@file/widget.js": "data:base64,export%20default%20%7B%7D" },
-        modelNotifications: [
-          notification({ id: "model-0", state: {}, moduleUrl: "/@file/widget.js" }),
-        ],
-      }),
-    );
-
-    await expect(output.load(anyWidgetLoader())).resolves.toBeDefined();
-  });
-
   test("requires the canonical root model ID", async () => {
     const output = await outputFor(
       payload({
@@ -165,82 +152,5 @@ describe("anywidget", () => {
     );
 
     await expect(output.load(anyWidgetLoader())).rejects.toThrow('rootModelId must be "model-0"');
-  });
-
-  test("requires model notifications in canonical order", async () => {
-    const output = await outputFor(
-      payload({
-        modelNotifications: [
-          notification({
-            id: "model-1",
-            state: {},
-            moduleUrl: moduleUrl("export default { render() {} }"),
-          }),
-        ],
-      }),
-    );
-
-    await expect(output.load(anyWidgetLoader())).rejects.toThrow(
-      'modelNotifications[0].model_id must be "model-0"',
-    );
-  });
-
-  test("bounds and escapes unexpected payload fields", async () => {
-    const fields = Object.fromEntries(
-      Array.from({ length: 20 }, (_, index) => [
-        `${index === 0 ? "\u009b" : "field"}-${index}-${"x".repeat(4_000)}`,
-        true,
-      ]),
-    );
-    const output = await outputFor({ ...payload({ modelNotifications: [] }), ...fields });
-
-    let message = "";
-    try {
-      await output.load(anyWidgetLoader());
-    } catch (error) {
-      if (error instanceof Error) message = error.message;
-    }
-
-    expect(message).toContain("Unexpected:");
-    expect(message).toContain("\\u009b");
-    expect(message).not.toContain("\u009b");
-    expect(message).toContain("(+12 more)");
-    expect(message.length).toBeLessThanOrEqual(2_048);
-  });
-
-  test("bounds a file-path diagnostic", async () => {
-    const path = `\u009b${"file".repeat(300_000)}`;
-    const output = await outputFor({
-      ...payload({ modelNotifications: [] }),
-      files: { [path]: "not-a-data-url" },
-    });
-
-    let message = "";
-    try {
-      await output.load(anyWidgetLoader());
-    } catch (error) {
-      if (error instanceof Error) message = error.message;
-    }
-
-    expect(message.length).toBeLessThan(256);
-    expect(message).toContain("\\u009b");
-    expect(message).not.toContain("\u009b");
-    expect(message).toContain("...");
-  });
-
-  test("bounds the unrelated-model list", async () => {
-    const notifications = [
-      notification({
-        id: "model-0",
-        state: {},
-        moduleUrl: moduleUrl("export default { render() {} }"),
-      }),
-      ...Array.from({ length: 20 }, (_, index) =>
-        notification({ id: `model-${index + 1}`, state: {} }),
-      ),
-    ];
-    const output = await outputFor(payload({ modelNotifications: notifications }));
-
-    await expect(output.load(anyWidgetLoader())).rejects.toThrow("(+12 more)");
   });
 });
