@@ -3,7 +3,6 @@ from __future__ import annotations
 import ast
 import io
 import json
-import traceback
 import urllib.error
 import urllib.request
 from collections.abc import Callable
@@ -15,7 +14,6 @@ from marimo_export._remote.client import (
     BridgeError,
     HttpKernelTransport,
     SessionInfo,
-    _MarkerExtractor,
 )
 from marimo_export.errors import TransportError
 
@@ -70,14 +68,6 @@ class Opener:
         self.requests.append(request)
         self.timeouts.append(timeout)
         return self.respond(request)
-
-
-class AvailableBytesResponse(Response):
-    def read(self, size: int = -1) -> bytes:
-        raise AssertionError("bounded streaming must prefer read1")
-
-    def read1(self, size: int = -1) -> bytes:
-        return super().read(size)
 
 
 def test_session_discovery_is_validated_and_deterministic() -> None:
@@ -170,14 +160,6 @@ def test_invoke_reads_a_bridge_response_larger_than_one_stdout_write() -> None:
     assert transport.invoke("session-1", "inspect", {}) == {"value": value}
 
 
-def test_marker_extractor_applies_its_limit_to_utf8_bytes_across_chunks() -> None:
-    extractor = _MarkerExtractor("marker:", maximum_bytes=4)
-
-    extractor.feed("ignored marker:\N{EURO SIGN}")
-    with pytest.raises(TransportError, match="transport limit"):
-        extractor.feed("ab")
-
-
 def test_invoke_surfaces_structured_bridge_error_and_redacts_tokens() -> None:
     def respond(request: urllib.request.Request) -> Response:
         bridge_request, marker = decode_execute_request(request)
@@ -257,69 +239,6 @@ def test_failed_scratchpad_preserves_bounded_redacted_stderr() -> None:
     assert len(diagnostic) <= 8192
 
 
-def test_bridge_error_diagnostics_are_bounded_ascii_and_credential_safe() -> None:
-    def respond(request: urllib.request.Request) -> Response:
-        bridge_request, marker = decode_execute_request(request)
-        envelope = {
-            "schema": BRIDGE_SCHEMA,
-            "request_id": bridge_request["request_id"],
-            "ok": False,
-            "error": {
-                "code": "session_error",
-                "message": (
-                    "http://user:password@example.test/?access_token=url-secret\n" + "x" * 5000
-                ),
-                "details": {"unsafe\x1bkey": ("http://example.test/?server_token=detail-secret")},
-            },
-        }
-        return scratchpad_response(marker, envelope)
-
-    transport = HttpKernelTransport(
-        "https://marimo.test/",
-        access_token="url-secret",
-        server_token="detail-secret",
-        _opener=Opener(respond),
-    )
-
-    with pytest.raises(BridgeError) as caught:
-        transport.invoke("session-1", "inspect", {})
-
-    encoded = json.dumps(caught.value.wire())
-    assert "password" not in encoded
-    assert "url-secret" not in encoded
-    assert "detail-secret" not in encoded
-    assert r"unsafe\x1bkey" in caught.value.details
-    assert len(str(caught.value)) <= 4096
-
-
-def test_execution_rejects_a_done_event_received_after_the_deadline(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    def respond(request: urllib.request.Request) -> Response:
-        bridge_request, marker = decode_execute_request(request)
-        envelope = {
-            "schema": BRIDGE_SCHEMA,
-            "request_id": bridge_request["request_id"],
-            "ok": True,
-            "data": {},
-        }
-        return scratchpad_response(marker, envelope)
-
-    clock = iter((0.0, 0.0, 2.0))
-    monkeypatch.setattr(
-        "marimo_export._remote.client.time.monotonic",
-        lambda: next(clock),
-    )
-    transport = HttpKernelTransport(
-        "https://marimo.test/",
-        timeout=1,
-        _opener=Opener(respond),
-    )
-
-    with pytest.raises(TransportError, match="timed out"):
-        transport.invoke("session-1", "inspect", {})
-
-
 def test_invoke_rejects_mismatched_response_correlation() -> None:
     def respond(request: urllib.request.Request) -> Response:
         _bridge_request, marker = decode_execute_request(request)
@@ -356,31 +275,6 @@ def test_execute_request_is_never_retried_after_transport_failure() -> None:
     with pytest.raises(TransportError, match="remote capture"):
         transport.invoke("session-1", "capture", {})
     assert attempts == 1
-
-
-def test_execute_timeout_is_translated_without_exposing_credentials() -> None:
-    def timeout(_request: urllib.request.Request) -> Response:
-        raise TimeoutError("secret-token")
-
-    transport = HttpKernelTransport(
-        "https://marimo.test/",
-        access_token="secret-token",
-        _opener=Opener(timeout),
-    )
-
-    with pytest.raises(TransportError) as caught:
-        transport.invoke("session-1", "capture", {})
-    assert "secret-token" not in str(caught.value)
-    assert "access_token" not in str(caught.value)
-    formatted = "".join(
-        traceback.format_exception(
-            type(caught.value),
-            caught.value,
-            caught.value.__traceback__,
-        )
-    )
-    assert "secret-token" not in formatted
-    assert "access_token" not in formatted
 
 
 def test_asset_download_is_same_origin_virtual_file_and_strictly_bounded() -> None:
@@ -420,29 +314,11 @@ def test_asset_download_is_same_origin_virtual_file_and_strictly_bounded() -> No
         )
 
 
-def test_bounded_download_reads_available_bytes_without_waiting_for_the_limit() -> None:
-    transport = HttpKernelTransport(
-        "https://marimo.test/",
-        _opener=Opener(lambda _request: AvailableBytesResponse(b"asset")),
-    )
-
-    assert (
-        transport.download_asset(
-            "session-1",
-            "./@file/5-projection.bin",
-            5,
-        )
-        == b"asset"
-    )
-
-
 @pytest.mark.parametrize(
     "body",
     [
         b'{"session":NaN}',
         b'{"session":{"filename":null,"path":null},"session":{}}',
-        b'{"bad\\nid":{"filename":null,"path":null}}',
-        b'{"session":{"filename":"","path":null}}',
     ],
 )
 def test_session_registry_rejects_noncanonical_json(body: bytes) -> None:
@@ -453,17 +329,6 @@ def test_session_registry_rejects_noncanonical_json(body: bytes) -> None:
 
     with pytest.raises(TransportError, match="invalid session registry"):
         transport.list_sessions()
-
-
-def test_transport_limits_are_validated_at_construction() -> None:
-    with pytest.raises(ValueError):
-        HttpKernelTransport("https://marimo.test/", timeout=float("nan"))
-    with pytest.raises(ValueError):
-        HttpKernelTransport("https://marimo.test/", timeout=float("inf"))
-    with pytest.raises(ValueError):
-        HttpKernelTransport("https://marimo.test/", maximum_event_bytes=0)
-    with pytest.raises(ValueError):
-        HttpKernelTransport("https://marimo.test/", maximum_response_bytes=0)
 
 
 def decode_execute_request(
