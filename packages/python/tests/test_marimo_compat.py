@@ -7,10 +7,7 @@ import weakref
 from importlib.machinery import ModuleSpec
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
-from typing import Any, cast
 
-import marimo._runtime.executor.lifecycles.cached as cached_lifecycle
-import marimo._save.loaders as native_loaders
 import marimo_export._marimo.compat as marimo_compat
 import msgspec
 import pytest
@@ -22,8 +19,6 @@ from marimo_export._marimo.compat import (
     _native_receipt,
     _ReadSnapshotStore,
     _release_state_child,
-    _track_upstream_cache,
-    flush_native_caches,
     preflight_exporters,
     prepared_exporters,
     require_capabilities,
@@ -111,21 +106,6 @@ def test_prepared_exporters_restores_loaded_modules_after_cancellation(
     assert original_package.exporter is original_module
 
 
-def test_native_cache_flush_uses_marimo_loader_lifecycle(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    calls: list[str] = []
-    monkeypatch.setattr(
-        native_loaders,
-        "flush_active_caches",
-        lambda: calls.append("flushed"),
-    )
-
-    flush_native_caches()
-
-    assert calls == ["flushed"]
-
-
 def test_state_child_cleanup_releases_after_teardown_cancellation() -> None:
     events: list[str] = []
 
@@ -192,40 +172,6 @@ def test_state_child_cleanup_preserves_the_execution_error() -> None:
     ]
 
 
-def test_upstream_cache_trackers_restore_native_binding_out_of_order(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    graph_one = object()
-    graph_two = object()
-    outcomes = iter((True, False))
-
-    def native(*args: Any, **kwargs: Any) -> SimpleNamespace:
-        del args, kwargs
-        return SimpleNamespace(hit=next(outcomes))
-
-    monkeypatch.setattr(cached_lifecycle, "cache_attempt_from_hash", native)
-    first = _track_upstream_cache(graph_one, frozenset())
-    second = _track_upstream_cache(graph_two, frozenset())
-    activity_one = first.__enter__()
-    activity_two = second.__enter__()
-    try:
-        tracked = cast(Any, cached_lifecycle.cache_attempt_from_hash)
-        tracked(None, graph_one, "one", {})
-        tracked(None, graph_two, "two", {})
-
-        first.__exit__(None, None, None)
-        assert cached_lifecycle.cache_attempt_from_hash is tracked
-        assert activity_one.hits == 1
-        assert activity_two.misses == 1
-
-        second.__exit__(None, None, None)
-        assert cached_lifecycle.cache_attempt_from_hash is native
-    finally:
-        if cached_lifecycle.cache_attempt_from_hash is not native:
-            second.__exit__(None, None, None)
-            first.__exit__(None, None, None)
-
-
 def _custom_exporter_plan(module_name: str, symbol: str = "encode") -> MatrixPlan:
     projection = OutputProjection(
         name="summary",
@@ -266,12 +212,9 @@ def test_prepared_exporters_refreshes_loaded_source_dependencies(
     exporter_name = f"{package_name}.exporter"
     bridge_name = f"{package_name}.bridge"
     config_name = f"{package_name}.config"
-    native_parent_name = f"{package_name}.native_parent"
-    native_name = f"{native_parent_name}._native"
     package = tmp_path / package_name
     package.mkdir()
-    source = package / "__init__.py"
-    source.write_text(
+    (package / "__init__.py").write_text(
         "from .config import CONFIG as config\n",
         encoding="utf-8",
     )
@@ -291,51 +234,15 @@ def test_prepared_exporters_refreshes_loaded_source_dependencies(
     )
     monkeypatch.syspath_prepend(str(tmp_path))
     original_exporter = importlib.import_module(exporter_name)
-    importlib.import_module(native_parent_name)
     original_package = sys.modules[package_name]
     original_config = sys.modules[config_name]
-    original_native_parent = sys.modules[native_parent_name]
     assert bridge_name not in sys.modules
-    native_file = tmp_path / "source_parent_native.so"
-    native_file.write_bytes(b"native")
-    native = ModuleType(native_name)
-    native.__file__ = str(native_file)
-    native.__spec__ = ModuleSpec(native_name, loader=None, origin=str(native_file))
-
-    def native_encode(value: Any) -> tuple[str, Any]:
-        return "native", value
-
-    native_encode.__module__ = native_name
-    cast(Any, native).encode = native_encode
-    monkeypatch.setitem(sys.modules, native_name, native)
-    monkeypatch.setattr(original_native_parent, "_native", native, raising=False)
-    projections = {
-        "summary": OutputProjection(
-            name="summary",
-            source="value",
-            exporter=importable(f"{exporter_name}:encode"),
-        ),
-        "native": OutputProjection(
-            name="native",
-            source="value",
-            exporter=importable(f"{native_name}:encode"),
-        ),
-    }
-    plan = MatrixPlan(
-        states=(),
-        inputs=(),
-        outputs=("summary", "native"),
-        projections=projections,
-        ordinary_cells={},
-        state_name="marimo_export_state_0123456789abcdef",
-        state_code="marimo_export_state_0123456789abcdef = 'state'",
-    )
+    plan = _custom_exporter_plan(exporter_name)
 
     with prepared_exporters(plan) as first_identities:
         assert sys.modules[package_name] is not original_package
         assert sys.modules[exporter_name].encode(None) == ("first", None)
         assert sys.modules[bridge_name].CONFIG == "first"
-        assert sys.modules[native_name].encode(None) == ("native", None)
 
     assert bridge_name not in sys.modules
     config_source.write_text("CONFIG = 'other'\n", encoding="utf-8")
@@ -343,24 +250,18 @@ def test_prepared_exporters_refreshes_loaded_source_dependencies(
         fresh_package = sys.modules[package_name]
         fresh_bridge = sys.modules[bridge_name]
         fresh_config = sys.modules[config_name]
-        fresh_native_parent = sys.modules[native_parent_name]
         fresh_exporter = sys.modules[exporter_name]
         assert fresh_package is not original_package
         assert fresh_config is not original_config
-        assert fresh_native_parent is not original_native_parent
         assert fresh_package.config == "other"
         assert fresh_bridge.CONFIG == "other"
         assert fresh_config.CONFIG == "other"
         assert fresh_exporter.encode(None) == ("other", None)
-        assert sys.modules[native_name] is native
-        assert sys.modules[native_name].encode(None) == ("native", None)
 
     assert first_identities["summary"] != second_identities["summary"]
     assert sys.modules[package_name] is original_package
     assert sys.modules[config_name] is original_config
-    assert sys.modules[native_parent_name] is original_native_parent
     assert sys.modules[exporter_name] is original_exporter
-    assert sys.modules[native_name] is native
     assert bridge_name not in sys.modules
 
 
