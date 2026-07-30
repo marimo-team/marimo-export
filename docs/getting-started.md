@@ -1,142 +1,50 @@
-# Getting started
+# Run the market dashboard
 
-Build a Yahoo Finance notebook across five saved market views, then open its
-results in a vanilla Vite dashboard. The dashboard changes its chart, table,
-quote explorer, and shareable snapshot from published files.
-
-The checked-in
-[vanilla Vite example](https://github.com/marimo-team/marimo-export/tree/main/examples/vite-vanilla)
-is a uv workspace member and a pnpm workspace package. Its Python environment
-includes the local `marimo-export` package. Its browser package uses the public
-npm entry points and the peer dependencies required by each loader.
+This example turns a Yahoo Finance notebook into a static dashboard with five
+interactive market views.
 
 ::: warning Live data
-The build executes notebook-authored Python and requests historical prices from
-Yahoo Finance. Review `examples/vite-vanilla/finance.py` before running it.
-Yahoo Finance availability and response data affect the build.
+The export requests historical prices from Yahoo Finance. Network availability
+and response data can affect the run.
 :::
 
-## Install the workspaces
+## Build and open it
 
-Install Git, uv, Node 22.18 or newer, and pnpm 11.15.1. Clone the repository
-and install both workspaces:
+Install Git, uv, Node 22.18 or newer, and pnpm 11.15.1.
 
 ```bash
 git clone https://github.com/marimo-team/marimo-export.git
 cd marimo-export
 make bootstrap
+cd examples/vite-vanilla
+pnpm run export
+pnpm run verify:export
+pnpm run dev
 ```
 
-`make bootstrap` installs every uv workspace member and pnpm workspace package
-from the root lockfiles.
+Open the URL printed by Vite. Switching views updates the summary, chart,
+table, and quote explorer from one prepared notebook state.
 
-## Read the publication contract
+The complete path is
+[`finance.py`](https://github.com/marimo-team/marimo-export/blob/main/examples/vite-vanilla/finance.py),
+[`finance.export.yaml`](https://github.com/marimo-team/marimo-export/blob/main/examples/vite-vanilla/finance.export.yaml),
+and
+[`src/main.ts`](https://github.com/marimo-team/marimo-export/blob/main/examples/vite-vanilla/src/main.ts).
 
-`examples/vite-vanilla/finance.py` fetches the price history, filters the
-selected watchlist, creates an Altair chart, and mounts an AnyWidget. It
-contains no marimo-export import.
+## Capture the open notebook
 
-`examples/vite-vanilla/finance.export.yaml` declares five sparse states, names
-the notebook definitions to publish, and chooses four representations:
-
-<<< ../examples/vite-vanilla/finance.export.yaml
-
-The input names address definitions in the marimo graph:
-
-| Input              | Effect                                      |
-| ------------------ | ------------------------------------------- |
-| `interval`         | daily or weekly market interval             |
-| `symbols_selector` | watchlist value from the marimo multiselect |
-
-Every omitted value comes from the notebook baseline. marimo-export records the
-complete normalized vector for each published state.
-
-The output mapping selects two representations of `performance`, a Parquet
-representation of `selected_prices`, and an AnyWidget bundle for
-`quote_detail`. These conversions run as transient marimo cells inside each
-state child. The notebook file stays unchanged.
-
-## Build and verify the publication
-
-Run the package-level command from the repository root:
+Start the notebook:
 
 ```bash
-pnpm --filter @marimo-team/marimo-export-example-vite-vanilla run publish
+pnpm run notebook
 ```
 
-The script executes:
+After it finishes loading, run from another terminal:
 
 ```bash
-uv run --locked --package marimo-export-vite-vanilla-example \
-  marimo-export build finance.py \
-  --spec finance.export.yaml \
-  --output public/publication \
-  --replace
+pnpm run capture -- http://127.0.0.1:2718
 ```
 
-The script runs from `examples/vite-vanilla`, so the relative paths resolve
-inside the example package. A successful build reports:
+Capture updates the same export and leaves the notebook open.
 
-```text
-Published 5 states and 4 outputs to .../examples/vite-vanilla/public/publication
-```
-
-Verify the generated directory:
-
-```bash
-pnpm --filter @marimo-team/marimo-export-example-vite-vanilla \
-  run verify:publication
-```
-
-`public/publication/index.json` contains the complete input vectors, state
-fingerprints, producer versions, cache codecs, media types, asset lengths, and
-SHA-256 digests. Its adjacent `assets` directory contains the payloads
-referenced by the state and output relation.
-
-## Capture an existing session
-
-Open the example notebook in one terminal:
-
-```bash
-pnpm --filter @marimo-team/marimo-export-example-vite-vanilla run notebook
-```
-
-After its Yahoo Finance request completes, pass the printed server URL to the
-capture script from another terminal:
-
-```bash
-pnpm --filter @marimo-team/marimo-export-example-vite-vanilla run capture -- \
-  http://127.0.0.1:2718
-```
-
-Add the session ID and access token when the server requires them. Capture uses
-the same ExportSpec, keeps the server running, and preserves the notebook
-source and current controls.
-
-## Run the market dashboard
-
-Start the Vite application:
-
-```bash
-pnpm --filter @marimo-team/marimo-export-example-vite-vanilla dev
-```
-
-Open the local URL printed by Vite. The application opens and verifies the
-publication, loads the `baseline` state, and renders the **Leaders** view.
-
-Choose **Cloud**, **AI buildout**, **All names**, or **Weekly** to load another
-complete state. Each transition aborts stale work, disposes the current chart
-and widget, mounts the selected outputs, and derives the headline metrics and
-latest-close table from the Parquet rows.
-
-The application imports each specialized loader from the public npm package:
-
-```ts
-import { imageLoader, openPublication } from "@marimo-team/marimo-export";
-import { anyWidgetLoader } from "@marimo-team/marimo-export/loader/anywidget";
-import { parquetRowsLoader } from "@marimo-team/marimo-export/loader/parquet";
-import { vegaLiteLoader } from "@marimo-team/marimo-export/loader/vegalite";
-```
-
-Continue with [ExportSpec](export-spec.md) to define another state matrix or
-[representations](representations.md) to select an exporter and browser loader.
+Next, [choose states and results](export-spec.md) for your own notebook.

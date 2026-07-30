@@ -1,83 +1,85 @@
-# Representations
+# Choose output formats
 
-Publication v1 has four stable native codecs:
+Pair each notebook result with the browser loader that will consume it.
 
-| Codec                          | Producer value        | Browser payload      |
-| ------------------------------ | --------------------- | -------------------- |
-| `marimo.scalar.v1`             | Portable scalar       | scalar or BigInt     |
-| `numpy.npy.v1`                 | Numeric NumPy array   | verified NPY bytes   |
-| `apache.arrow.file.v1`         | Supported table value | verified Arrow bytes |
-| `marimo.blob-asset.msgpack.v1` | marimo `BlobAsset`    | decoded `BlobAsset`  |
+| Notebook result | Exporter                            | Browser loader        |
+| --------------- | ----------------------------------- | --------------------- |
+| scalar          | none                                | `scalarLoader()`      |
+| NumPy array     | none                                | `numpyLoader()`       |
+| Arrow table     | none                                | `arrowTableLoader()`  |
+| table rows      | `parquet.table`                     | `parquetRowsLoader()` |
+| Altair chart    | `altair.vegalite`                   | `vegaLiteLoader()`    |
+| chart image     | `altair.png`                        | `imageLoader()`       |
+| AnyWidget       | `anywidget.bundle`                  | `anyWidgetLoader()`   |
+| custom value    | function that returns a `BlobAsset` | custom loader         |
 
-Codec selects the stable byte envelope. Media type selects the semantic
-representation inside a `BlobAsset`.
+## Browser dependencies
 
-## Built-in Exporters
+Install the runtime used by each loader:
 
-| Exporter ID        | Options                              | Result media type                                 |
-| ------------------ | ------------------------------------ | ------------------------------------------------- |
-| `anywidget.bundle` | none                                 | `application/vnd.marimo-export.anywidget.v1+json` |
-| `altair.vegalite`  | none                                 | `application/vnd.vegalite.v<major>+json`          |
-| `altair.png`       | `scale`                              | `image/png`                                       |
-| `parquet.table`    | `compression`, `filename`            | `application/vnd.apache.parquet`                  |
-| `blob.json`        | `media_type`, `filename`, `metadata` | `application/json` by default                     |
-| `blob.text`        | `media_type`, `filename`, `metadata` | `text/plain; charset=utf-8` by default            |
-| `blob.html`        | `filename`, `metadata`               | `text/html; charset=utf-8`                        |
+| Loader        | Additional package              |
+| ------------- | ------------------------------- |
+| scalar, image | none                            |
+| NumPy         | none                            |
+| Arrow         | `@uwdata/flechette` and `lz4js` |
+| Parquet       | `hyparquet`                     |
+| Vega-Lite     | `vega-embed`                    |
+| AnyWidget     | `@anywidget/types`              |
 
-Use an ID in YAML or a typed factory in Python:
-
-```python
-from marimo_export.exporters import altair, anywidget, blob, parquet
-
-chart = altair.vegalite()
-snapshot = altair.png(scale=2)
-widget = anywidget.bundle()
-table = parquet.table(compression="snappy", filename="prices.parquet")
-document = blob.json(media_type="application/vnd.example.v1+json")
+```bash
+pnpm add @marimo-team/marimo-export hyparquet vega-embed
 ```
 
-These calls construct immutable descriptors. The selected runtime callable
-receives the notebook source value later, inside a transient marimo child cell.
-Its return enters the normal marimo cache before publication.
+Import each loader from the public package:
 
-## Browser loaders
+```ts
+import { parquetRowsLoader } from "@marimo-team/marimo-export/loader/parquet";
+import { vegaLiteLoader } from "@marimo-team/marimo-export/loader/vegalite";
+```
 
-All browser loaders are entry points of `@marimo-team/marimo-export`.
+## Exporter options
 
-| Import subpath     | Peer dependencies            | Result                        |
-| ------------------ | ---------------------------- | ----------------------------- |
-| `loader/numpy`     | none                         | typed array plus NPY metadata |
-| `loader/arrow`     | `@uwdata/flechette`, `lz4js` | Flechette table               |
-| `loader/parquet`   | `hyparquet`                  | Hyparquet row objects         |
-| `loader/anywidget` | `@anywidget/types`           | mountable local model graph   |
-| `loader/vegalite`  | `vega-embed`                 | mountable Vega-Lite chart     |
+| Exporter           | Options                              |
+| ------------------ | ------------------------------------ |
+| `altair.vegalite`  | none                                 |
+| `altair.png`       | `scale`                              |
+| `anywidget.bundle` | none                                 |
+| `parquet.table`    | `compression`, `filename`            |
+| `blob.json`        | `media_type`, `filename`, `metadata` |
+| `blob.text`        | `media_type`, `filename`, `metadata` |
+| `blob.html`        | `filename`, `metadata`               |
 
-Import each row from
-`@marimo-team/marimo-export/<subpath>`. The package root supplies scalar and
-image loaders. Loader peers are optional at the root, so an application
-installs the runtimes for the subpaths it imports.
+Python helpers live under `marimo_export.exporters`.
 
-## Custom representation
+## Custom output
 
-A custom representation needs:
+A Python exporter converts the notebook result into a `BlobAsset`:
 
-1. A versioned media type.
-2. An importable Python callable that returns a validated
-   `BlobAsset`.
-3. Bounded public metadata.
-4. An `OutputLoader` that matches the codec and media type.
-5. Inner-byte validation and allocation limits.
-6. Disposal when browser resources are created.
-7. A producer-to-browser test over exact bytes.
+```python
+import json
 
-Reference the callable as `module:symbol` in the ExportSpec. The module and
-its dependencies must be available in the selected kernel. The callable
-receives one source value plus portable keyword options. No Python source or
-serialized closure enters the spec.
+from marimo_export import BlobAsset
 
-Preflight fingerprints the resolved module, callable implementation,
-statically reachable Python modules, available owning package version, and
-declared built-in runtime dependencies. Changing one of those inputs
-invalidates the projection cache. Files, network responses, mutable module
-state, and other external inputs follow the same invalidation discipline as
-cached notebook code.
+
+def encode_summary(value: object) -> BlobAsset:
+    return BlobAsset(
+        data=json.dumps(value).encode(),
+        media_type="application/vnd.example.summary.v1+json",
+        filename="summary.json",
+    )
+```
+
+A browser loader handles the same media type:
+
+```ts
+import { defineBlobAssetLoader } from "@marimo-team/marimo-export";
+
+export const summaryLoader = defineBlobAssetLoader({
+  mediaTypes: "application/vnd.example.summary.v1+json",
+  load({ payload }) {
+    return JSON.parse(new TextDecoder().decode(payload.data));
+  },
+});
+```
+
+The loader may return data or a value with a browser `mount()` method.

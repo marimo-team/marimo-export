@@ -1,87 +1,37 @@
 # Market dashboard with vanilla Vite
 
-This example publishes a live Yahoo Finance notebook as a market dashboard
-built with HTML, CSS, and TypeScript. Five saved views update the market
-summary, comparison chart, latest-session table, quote explorer, and chart
-snapshot together.
+This example exports five views from a live Yahoo Finance notebook into a
+static dashboard.
 
-The notebook remains ordinary marimo source with its analysis and interactive
-controls. [`finance.export.yaml`](finance.export.yaml) selects the source
-definitions and their browser representations.
-[`market_summary.py`](market_summary.py) provides the dashboard-specific
-summary representation as a companion module.
-
-## Build from the notebook file
-
-Install the repository workspaces:
+## Run
 
 ```bash
 make bootstrap
+cd examples/vite-vanilla
+pnpm run export
+pnpm run verify:export
+pnpm run dev
 ```
 
-Run the notebook across the declared market views:
+Open the URL printed by Vite. The export writes `public/export` and depends on
+Yahoo Finance availability.
+
+## Capture
 
 ```bash
-pnpm --filter @marimo-team/marimo-export-example-vite-vanilla run publish
+pnpm run notebook
 ```
 
-The command requests historical prices from Yahoo Finance and writes the
-publication to `examples/vite-vanilla/public/publication`. A successful run
-reports:
-
-```text
-Published 5 states and 5 outputs to .../examples/vite-vanilla/public/publication
-```
-
-Verify the generated publication:
+After the notebook loads, run:
 
 ```bash
-pnpm --filter @marimo-team/marimo-export-example-vite-vanilla run verify:publication
+pnpm run capture -- http://127.0.0.1:2718
 ```
 
-## Capture an open notebook
+The session remains open.
 
-Start the notebook in one terminal:
+## Files
 
-```bash
-pnpm --filter @marimo-team/marimo-export-example-vite-vanilla run notebook
-```
-
-Keep that session open after the Yahoo Finance request completes. In another
-terminal, pass its server URL to the capture script:
-
-```bash
-pnpm --filter @marimo-team/marimo-export-example-vite-vanilla run capture -- \
-  http://127.0.0.1:2718
-```
-
-Add `--session`, `--access-token`, or `--server-token` when the server requires
-them. Capture reads the same sidecar spec and leaves the open notebook source
-and controls unchanged.
-
-## Open the dashboard
-
-Start Vite:
-
-```bash
-pnpm --filter @marimo-team/marimo-export-example-vite-vanilla dev
-```
-
-Open the local URL printed by Vite. Choose **Leaders**, **Cloud**,
-**AI buildout**, **All names**, or **Weekly** to load the matching results.
-The chart supports pointer inspection, and the quote detail control switches
-among the companies in the current view.
-
-## Example structure
-
-| Path                    | Role                                                   |
-| ----------------------- | ------------------------------------------------------ |
-| `finance.py`            | Yahoo Finance notebook                                 |
-| `finance.export.yaml`   | saved views, source definitions, and representations   |
-| `market_summary.py`     | market summary representation for the browser          |
-| `pyproject.toml`        | notebook dependencies from the local uv workspace      |
-| `index.html`            | dashboard structure                                    |
-| `src/main.ts`           | publication loading, view changes, and table rendering |
-| `src/market-summary.ts` | validation and loading for the market summary          |
-| `src/style.css`         | marimo-aligned dashboard layout                        |
-| `public/publication`    | generated files served by Vite                         |
+- [`finance.py`](finance.py) contains the analysis.
+- [`finance.export.yaml`](finance.export.yaml) selects states and results.
+- [`src/main.ts`](src/main.ts) renders the dashboard.

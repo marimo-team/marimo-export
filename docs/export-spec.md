@@ -1,98 +1,65 @@
-# ExportSpec
+# Choose states and results
 
-An ExportSpec has exactly four top-level fields:
+An ExportSpec names the notebook choices your audience can make and the results
+your web app can load.
 
 ```yaml
 schema: marimo-export.spec.v1
-inputs: []
-states:
-  baseline: {}
-outputs:
-  answer:
-    source: answer
-```
-
-## For Papermill users
-
-[Papermill](https://papermill.readthedocs.io/en/latest/usage-parameterize.html)
-treats values in a tagged `parameters` cell as defaults, injects overrides for
-one execution, and writes the executed Jupyter notebook. marimo-export
-addresses marimo definitions by name, normalizes multiple sparse state rows
-against the live baseline, and publishes selected definitions.
-
-| Workflow concept | Papermill                        | marimo-export                             |
-| ---------------- | -------------------------------- | ----------------------------------------- |
-| Defaults         | Tagged `parameters` cell         | Live value of each input definition       |
-| Overrides        | Parameter dictionary or YAML     | Sparse map under each name in `states`    |
-| Execution        | One notebook per API or CLI call | Every declared state per build or capture |
-| Result           | Executed Jupyter notebook        | Static publication with named outputs     |
-
-`build` is the closest lifecycle match. It starts the notebook, executes the
-matrix, and shuts down its loopback server. `capture` keeps the same state and
-output contract while attaching to a kernel that is already running.
-
-Each normalized state follows normal marimo execution, so reactive dependency
-ordering and cache restoration remain owned by marimo.
-
-## Inputs
-
-`inputs` lists notebook definition names. Any definition in the marimo graph
-can participate when its baseline value and authored overrides fit portable
-JSON. UI definitions use their frontend value.
-
-```yaml
 inputs:
-  - symbols
   - interval
-  - start
-  - end
-  - chart_width
   - symbols_selector
-```
-
-For an ordinary definition, marimo-export appends the state assignment to that
-cell in the transient child document. The authored cell still creates its
-siblings, including functions, classes, and UI elements. marimo then executes
-the resulting graph normally. The source notebook remains byte-for-byte
-unchanged.
-
-## States
-
-Each state is a sparse map from declared input names to override values:
-
-```yaml
 states:
-  baseline: {}
-  compact:
-    chart_width: 480
+  leaders: {}
+  cloud:
+    symbols_selector: [MSFT, GOOGL, AMZN]
   weekly:
     interval: 1wk
-  focus:
-    symbols_selector: [MSFT, GOOGL, AMZN]
-```
-
-The producer captures one baseline, fills every omitted input, and publishes
-the complete vector. Equal complete vectors are rejected.
-
-Portable input values are null, booleans, Unicode strings, finite ECMAScript
-numbers, arrays, and string-keyed objects. Integral values stay inside the
-JavaScript safe integer range.
-
-## Outputs
-
-Each public output names one notebook definition and an optional exporter:
-
-```yaml
+    symbols_selector: [AAPL, MSFT, GOOGL, AMZN]
 outputs:
   chart:
     source: performance
     exporter: altair.vegalite
-  chart_image:
-    source: performance
-    exporter:
-      name: altair.png
-      options:
-        scale: 2
+  prices:
+    source: selected_prices
+    exporter: parquet.table
+  explorer:
+    source: quote_detail
+    exporter: anywidget.bundle
+```
+
+```bash
+marimo-export build finance.py \
+  --spec finance.export.yaml \
+  --output dist/finance
+```
+
+The browser can now select `leaders`, `cloud`, or `weekly` and load the same
+three output names from each state.
+
+## Fields
+
+| Field     | Meaning                                                         |
+| --------- | --------------------------------------------------------------- |
+| `inputs`  | Notebook definitions that may change                            |
+| `states`  | Named input values available to the app                         |
+| `outputs` | Browser-facing names mapped to notebook definitions and formats |
+
+State rows may be sparse. Missing values come from the notebook state captured
+at the start of the export. Input values support null, booleans, strings,
+finite numbers, arrays, and string-keyed objects.
+
+`source` names a notebook definition. `exporter` converts its result into a
+browser format. Scalars, NumPy arrays, Arrow tables, and existing `BlobAsset`
+values can keep their native form.
+
+[Choose exporters and browser loaders](representations.md).
+
+## Exporter options
+
+Use the expanded form when an exporter accepts options:
+
+```yaml
+outputs:
   prices:
     source: selected_prices
     exporter:
@@ -100,105 +67,31 @@ outputs:
       options:
         compression: snappy
         filename: prices.parquet
-  row_count:
-    source: row_count
 ```
 
-Omit `exporter` when the source already returns one supported native cache
-value:
-
-- scalar
-- numeric NumPy array
-- pandas, Polars, or Arrow table accepted by marimo's Arrow codec
-- marimo `BlobAsset`
-
-An exporter string selects a built-in with default options. The object form has
-exactly `name` and `options`. Options use the same portable value grammar as
-state overrides.
-
-marimo-export generates a transient leaf that reads the state token and source,
-imports the selected function, and returns its result. marimo executes and
-caches that leaf through its normal graph. The source notebook receives no
-imports or publication cells.
-
-Built-in names are:
-
-- `altair.vegalite`
-- `altair.png`
-- `anywidget.bundle`
-- `parquet.table`
-- `blob.json`
-- `blob.text`
-- `blob.html`
-
-### Custom exporter
-
-Use `module:symbol` for an installed or sideloaded callable:
+Custom exporters live in a regular Python module beside the notebook:
 
 ```yaml
 outputs:
   summary:
     source: report
     exporter:
-      name: acme_exports:summary
+      name: market_summary:encode
       options:
-        compact: true
+        currency: USD
 ```
 
-The callable receives the source value as its first argument and exporter
-options as keyword arguments:
+The function receives the notebook result and returns the chosen browser
+representation. Install or sideload its module into the notebook environment
+before `build` or `capture`.
 
-```python
-from marimo_export import BlobAsset
+Construct the same model programmatically with
+[`ExportSpec` and `OutputSpec`](python-api.md#construct-a-spec).
 
+## Coming from Papermill
 
-def summary(value: object, *, compact: bool) -> BlobAsset:
-    ...
-```
+[Papermill](https://papermill.readthedocs.io/en/latest/usage-parameterize.html)
+runs one parameter set and saves an executed notebook. marimo-export prepares
+several named states and saves selected results for a browser app.
 
-The module must be importable in the selected kernel. Capture can use a package
-that was installed into the running environment before capture starts. Missing
-modules, missing symbols, and symbols that are not callable fail the
-publication. Files, network responses, mutable module state, and other external
-inputs follow the same invalidation discipline as cached notebook code.
-
-## Programmatic construction
-
-```python
-from marimo_export import ExportSpec, OutputSpec
-from marimo_export.exporters import altair, importable, parquet
-
-spec = ExportSpec(
-    inputs=("chart_width",),
-    states={
-        "baseline": {},
-        "compact": {"chart_width": 480},
-    },
-    outputs={
-        "chart": OutputSpec(
-            source="performance",
-            exporter=altair.vegalite(),
-        ),
-        "snapshot": OutputSpec(
-            source="performance",
-            exporter=altair.png(scale=2),
-        ),
-        "prices": OutputSpec(
-            source="selected_prices",
-            exporter=parquet.table(filename="prices.parquet"),
-        ),
-        "summary": OutputSpec(
-            source="report",
-            exporter=importable("acme_exports:summary", compact=True),
-        ),
-    },
-)
-```
-
-Descriptor factories build spec values. Conversion runs later in the marimo
-child.
-
-`ExportSpec.to_value()` returns the wire object.
-`ExportSpec.from_value()` validates a wire object.
-`ExportSpec.from_file()` reads JSON or YAML.
-`ExportSpec.json_schema()` generates an authoring schema on demand.
+Use `build` for a notebook file. Use `capture` for an open notebook.

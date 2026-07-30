@@ -1,114 +1,95 @@
-# Command-line interface
+# Build or capture
 
-marimo-export has five noninteractive commands:
+`build` opens a notebook file. `capture` uses an open notebook session. Both
+commands create the same notebook export.
 
-```text
-marimo-export build NOTEBOOK --spec FILE --output DIR
-marimo-export capture SERVER --spec FILE --output DIR
-marimo-export session SERVER
-marimo-export inspect PUBLICATION
-marimo-export verify PUBLICATION
-```
+| Task                  | Command   |
+| --------------------- | --------- |
+| Build from a file     | `build`   |
+| Capture a session     | `capture` |
+| Find notebook values  | `session` |
+| Summarize an export   | `inspect` |
+| Verify exported files | `verify`  |
 
-Add `--json` to receive one canonical machine-readable result.
-
-## `build`
+## Build from a file
 
 ```bash
-marimo-export build notebook.py \
-  --spec notebook.export.yaml \
-  --output dist/notebook \
-  --timeout 30
+marimo-export build finance.py \
+  --spec finance.export.yaml \
+  --output dist/finance
 ```
 
-`build` owns an authenticated loopback server and its notebook process tree.
-Its initial notebook autorun uses marimo's native cell cache.
-Exporter leaves are added to in-memory state children. The notebook file stays
-unchanged.
-`--replace` uses atomic directory exchange on macOS and Linux. On Windows,
-publish to a new destination directory.
+`build` prepares every state, writes the export, and closes its notebook
+session. The notebook file stays unchanged.
 
-## `capture`
+Use `--replace` to atomically replace an existing destination on macOS or
+Linux.
+
+## Capture an open notebook
 
 ```bash
 marimo-export capture http://127.0.0.1:2718 \
   --session SESSION_ID \
-  --spec notebook.export.yaml \
-  --output dist/notebook
+  --spec finance.export.yaml \
+  --output dist/finance
 ```
 
-Credentials use `--access-token`, `--server-token`,
-`MARIMO_EXPORT_ACCESS_TOKEN`, or `MARIMO_EXPORT_SERVER_TOKEN`.
+Capture leaves the selected session open. Omit `--session` when the server has
+exactly one session.
 
-The selected kernel must import the same marimo-export version as the CLI. It
-must also import every custom exporter and contain the optional dependencies
-needed by selected built-ins.
+The notebook environment must provide the same marimo-export version and the
+dependencies used by its exporters.
 
-## Publication diagnostics
+Set server credentials through the environment:
 
-A managed build reports these fields:
-
-```text
-Projection cache: 20 hits, 0 misses
-Upstream cache activity: 75 hits, 40 misses
-Phase timings: server start 0.766s, initial autorun 2.249s, capture 2.618s, server shutdown 0.210s, publication write 0.061s, total 5.919s
-Fresh-child timings (5 states): construction 0.115s, upstream execution 0.713s, UI application 0.889s, projection execution 0.481s, cleanup 0.161s
+```bash
+export MARIMO_EXPORT_ACCESS_TOKEN="..."
+export MARIMO_EXPORT_SERVER_TOKEN="..."
 ```
 
-Durations and cache counts reflect the current run.
-Projection counts cover the state and output relation. Upstream activity covers
-native cache lookups by non-projection cells in fresh state children. A hit
-means marimo found a matching cache entry. Restoration failures and cells that
-define session-local UI elements can still execute live after a hit.
+The equivalent flags are `--access-token` and `--server-token`.
 
-Server start includes loopback startup, session connection, and kernel
-readiness. Initial autorun starts with the instantiate request and ends at the
-corresponding completed run. UI timing covers child-local value application.
-Projection timing covers the reactive materialization and projection cells in
-one cache-aware marimo run.
-
-`--json` returns the same data under `projection_cache`, `upstream_cache`, and
-`timings`. These run-local diagnostics stay outside `index.json`.
-
-## `session`
+## Find, inspect, and verify
 
 ```bash
 marimo-export session http://127.0.0.1:2718
-marimo-export session http://127.0.0.1:2718 --session SESSION_ID --json
+marimo-export session http://127.0.0.1:2718 --session SESSION_ID
+marimo-export inspect dist/finance
+marimo-export verify dist/finance
 ```
 
-The list form reports active session IDs, filenames, and paths. Selecting a
-session reports the notebook definitions available for input and output
-authoring.
+`session` lists open notebooks or one session's available values. `inspect`
+summarizes a finished export. `verify` reads and checks every exported file.
 
-## `inspect`
+## Common options
 
-```bash
-marimo-export inspect dist/notebook --json
+| Option              | Commands                      | Behavior                                          |
+| ------------------- | ----------------------------- | ------------------------------------------------- |
+| `--replace`         | `build`, `capture`            | Replace an existing export atomically             |
+| `--timeout SECONDS` | `build`, `capture`, `session` | Set the inactivity timeout, which defaults to 30  |
+| `--json`            | every command                 | Write one machine-readable result to standard out |
+
+Progress resets the inactivity timeout.
+
+JSON success and failure use stable top-level shapes:
+
+```json
+{ "ok": true, "result": {} }
 ```
 
-`inspect` validates canonical `index.json` and reports notebook identity,
-producer versions, complete state vectors, codecs, media types, and declared
-asset totals. It leaves assets unread.
-
-## `verify`
-
-```bash
-marimo-export verify dist/notebook --json
+```json
+{ "error": { "code": "...", "message": "..." }, "ok": false }
 ```
 
-`verify` reads every unique asset and validates length, SHA-256, native file
-framing, and `BlobAsset` envelope agreement.
+## Exit codes
 
-## Exit categories
-
-| Exit | Category                        |
+| Exit | Meaning                         |
 | ---- | ------------------------------- |
 | 0    | success                         |
 | 2    | arguments, spec, or local input |
-| 3    | remote transport                |
-| 4    | session or managed server       |
-| 5    | state or output execution       |
-| 6    | publication or integrity        |
-| 7    | filesystem commit               |
-| 141  | broken output pipe              |
+| 3    | server connection               |
+| 4    | session or managed notebook     |
+| 5    | notebook state or output        |
+| 6    | export or integrity check       |
+| 7    | filesystem write                |
+| 141  | closed output pipe              |

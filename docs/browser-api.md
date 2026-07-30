@@ -1,105 +1,104 @@
 # Browser API
 
-Install the browser package and the peer dependencies for the loaders used by
-the application:
+The browser package opens an export, selects a prepared state, and loads its
+outputs.
 
 ```bash
-pnpm add \
-  @marimo-team/marimo-export \
-  @anywidget/types \
-  @uwdata/flechette \
-  hyparquet \
-  lz4js \
-  vega-embed
+pnpm add @marimo-team/marimo-export
 ```
 
-Each loader has a dedicated package subpath:
-
 ```ts
-import { imageLoader, openPublication, scalarLoader } from "@marimo-team/marimo-export";
-import { anyWidgetLoader } from "@marimo-team/marimo-export/loader/anywidget";
-import { arrowTableLoader } from "@marimo-team/marimo-export/loader/arrow";
-import { numpyLoader } from "@marimo-team/marimo-export/loader/numpy";
-import { parquetRowsLoader } from "@marimo-team/marimo-export/loader/parquet";
-import { vegaLiteLoader } from "@marimo-team/marimo-export/loader/vegalite";
+import { openExport, scalarLoader } from "@marimo-team/marimo-export";
+
+const notebookExport = await openExport("/exports/report/");
+const state = notebookExport.state("baseline");
+const title = await state.output("title").load(scalarLoader());
+
+document.querySelector("#title")!.textContent = String(title);
 ```
 
-The specialized peers are optional at the package root. Install the peers for
-the subpaths imported by the application:
+`openExport()` fetches and validates `index.json`. Output files load on demand.
 
-| Loader subpath     | Peer dependencies            |
-| ------------------ | ---------------------------- |
-| `loader/anywidget` | `@anywidget/types`           |
-| `loader/arrow`     | `@uwdata/flechette`, `lz4js` |
-| `loader/numpy`     | none                         |
-| `loader/parquet`   | `hyparquet`                  |
-| `loader/vegalite`  | `vega-embed`                 |
-
-## Open and resolve
+## Select a state
 
 ```ts
-const publication = await openPublication("/publications/notebook/");
+const leaders = notebookExport.state("leaders");
 
-const baseline = publication.state("baseline");
-const compact = baseline.resolve({ chart_width: 480 });
-const exact = publication.resolve({
-  symbols: ["AAPL", "MSFT"],
-  chart_width: 480,
+const weekly = notebookExport.resolve({
+  interval: "1wk",
+  symbols_selector: ["AAPL", "MSFT", "GOOGL", "AMZN"],
+});
+
+const cloud = leaders.resolve({
+  symbols_selector: ["MSFT", "GOOGL", "AMZN"],
 });
 ```
 
-Publication, state, descriptor, input, and metadata objects are immutable.
-Opening reads `index.json`. Output loading reads assets lazily.
+`state(name)` selects by ExportSpec name. `resolve(inputs)` selects the state
+with that complete input set. `state.resolve(patch)` applies a smaller change
+to an existing state.
 
-## Load
+Resolution selects results already present in the export.
+
+## Load outputs
 
 ```ts
-const count = await state.output("row_count").load(scalarLoader());
+import { imageLoader } from "@marimo-team/marimo-export";
+import { numpyLoader } from "@marimo-team/marimo-export/loader/numpy";
+import { parquetRowsLoader } from "@marimo-team/marimo-export/loader/parquet";
+
 const matrix = await state.output("matrix").load(numpyLoader());
-const table = await state.output("prices").load(arrowTableLoader());
-const rows = await state.output("prices_file").load(parquetRowsLoader());
+const rows = await state.output("prices").load(parquetRowsLoader());
+const image = await state.output("snapshot").load(imageLoader());
 ```
 
-`PublishedOutput.load(loader, options?)` checks that the loader's codec and
-media-type predicate match. The core then fetches, bounds, hashes, validates,
-and decodes the native payload before calling the loader.
+[Choose a loader and install its runtime](representations.md).
 
-## Mount
+Pass a signal to cancel stale work and `maxBytes` to cap one output:
 
 ```ts
-const chart = await state.output("chart").load(vegaLiteLoader());
-const mounted = await chart.mount(host, { renderer: "svg" });
+const controller = new AbortController();
+const rows = await state.output("prices").load(parquetRowsLoader(), {
+  signal: controller.signal,
+  maxBytes: 256 * 1024 * 1024,
+});
+```
+
+## Mount interactive output
+
+```ts
+import { vegaLiteLoader } from "@marimo-team/marimo-export/loader/vegalite";
+
+const chart = await state.output("chart").load(vegaLiteLoader({ actions: false }));
+const mounted = await chart.mount(document.querySelector("#chart")!, {
+  renderer: "svg",
+});
 
 await mounted.dispose();
 ```
 
-Interactive values own their DOM, object URLs, listeners, module state, and
-finalizers. Dispose a mount before replacing its host. Pass one `AbortSignal`
-through load and mount to cancel stale state transitions.
+Dispose a mounted chart or widget before replacing it. Use the same abort
+signal for `load()` and `mount()` when state changes may overlap.
 
-## Custom BlobAssetLoader
+AnyWidget starts from its saved model state. Its browser interactions do not
+call Python.
 
-```ts
-const loader = defineBlobAssetLoader({
-  mediaTypes: "application/vnd.example.summary.v1+json",
-  load({ payload, signal }) {
-    signal?.throwIfAborted();
-    return JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(payload.data));
-  },
-});
-```
-
-The media type owns representation identity. A custom loader can use any client
-runtime, including table or query libraries selected by the application.
-
-## Verify
+## Verify an export
 
 ```ts
-const result = await publication.verify({
+const result = await notebookExport.verify({
   maxBytes: 512 * 1024 * 1024,
   maxTotalBytes: 2 * 1024 * 1024 * 1024,
 });
 ```
 
-Verification reads every unique declared asset and returns state, output,
-asset, and byte counts.
+`verify()` checks every asset and returns state, output, asset, and byte counts.
+
+## Errors and custom loaders
+
+`NotebookExportError` provides `code`, optional `details`, and `cause`. Common
+codes include `state_not_found`, `state_unavailable`, `output_not_found`,
+`loader_unavailable`, `integrity_failed`, `read_limit_exceeded`, and `abort`.
+
+Use [`defineBlobAssetLoader`](representations.md#custom-output) for a custom
+media type.

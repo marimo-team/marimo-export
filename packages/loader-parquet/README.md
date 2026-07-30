@@ -1,10 +1,6 @@
-# Parquet loader workspace
+# Parquet loader
 
-This private workspace package owns verified Parquet decoding through
-Hyparquet.
-
-Consumers install `@marimo-team/marimo-export` with `hyparquet`, then import
-the public loader subpath:
+Load selected rows and columns from an exported Parquet table:
 
 ```ts
 import { parquetRowsLoader } from "@marimo-team/marimo-export/loader/parquet";
@@ -18,6 +14,4 @@ const rows = await output.load(
 );
 ```
 
-Loader options pass through to Hyparquet, including columns, row ranges,
-filters, logical-type parsers, and compressor plugins. Cancellation is checked
-before and after decoding.
+Install `hyparquet` beside `@marimo-team/marimo-export`.

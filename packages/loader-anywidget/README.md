@@ -1,10 +1,6 @@
-# AnyWidget loader workspace
+# AnyWidget loader
 
-This private workspace package owns AnyWidget snapshot validation, the local
-browser model graph, module resolution, mounting, cancellation, and disposal.
-
-Consumers install `@marimo-team/marimo-export` with `@anywidget/types`, then
-import the public loader subpath:
+Load an exported AnyWidget and mount it with browser-local interaction:
 
 ```ts
 import { anyWidgetLoader } from "@marimo-team/marimo-export/loader/anywidget";
@@ -18,11 +14,5 @@ mounted.model.save_changes();
 await mounted.dispose();
 ```
 
-`widget.initialState` is a detached frozen snapshot. Each mount clones the
-model graph, binary buffers, child registry, styles, listeners, and module
-URLs. Disposal is asynchronous and idempotent.
-
-Mounting executes notebook-authored JavaScript with page authority. Configure
-Content Security Policy and CORS for embedded or remote module URLs. Static
-models support local change events and frontend exports. A Python callback
-request through `experimental.invoke()` rejects.
+Install `@anywidget/types` beside `@marimo-team/marimo-export`. Widget changes
+stay in the browser and do not call Python.

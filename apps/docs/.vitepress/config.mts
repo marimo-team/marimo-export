@@ -10,7 +10,7 @@ const base = basePath ? `${basePath}/` : "/";
 export default defineConfig({
   base,
   cleanUrls: true,
-  description: "Publish finite marimo state matrices for Python-free clients.",
+  description: "Precompute marimo notebook states for interactive apps served as static files.",
   head: [
     ["meta", { name: "theme-color", content: "#3451b2" }],
     ["meta", { property: "og:title", content: "marimo-export" }],
@@ -18,7 +18,7 @@ export default defineConfig({
       "meta",
       {
         property: "og:description",
-        content: "Publish finite marimo state matrices for Python-free clients.",
+        content: "Precompute marimo notebook states for interactive apps served as static files.",
       },
     ],
   ],
@@ -44,30 +44,35 @@ export default defineConfig({
       text: "Edit this page on GitHub",
     },
     nav: [
-      { text: "Getting started", link: "/getting-started" },
-      { text: "ExportSpec", link: "/export-spec" },
-      { text: "Browser", link: "/browser-api" },
-      { text: "CLI", link: "/cli" },
+      { text: "Try it", link: "/getting-started" },
+      { text: "Choose states", link: "/export-spec" },
+      { text: "Build or capture", link: "/cli" },
+      { text: "Browser API", link: "/browser-api" },
     ],
     outline: { level: [2, 3], label: "On this page" },
     search: { provider: "local" },
     sidebar: [
       {
-        text: "Publish",
+        text: "Start",
         items: [
           { text: "Overview", link: "/" },
-          { text: "Getting started", link: "/getting-started" },
-          { text: "ExportSpec", link: "/export-spec" },
+          { text: "Run the market dashboard", link: "/getting-started" },
+        ],
+      },
+      {
+        text: "Prepare notebook results",
+        items: [
+          { text: "Choose states and results", link: "/export-spec" },
+          { text: "Build or capture", link: "/cli" },
           { text: "Python API", link: "/python-api" },
         ],
       },
       {
-        text: "Consume",
+        text: "Build the web app",
         items: [
           { text: "Browser API", link: "/browser-api" },
-          { text: "Representations", link: "/representations" },
-          { text: "CLI", link: "/cli" },
-          { text: "Trust and integrity", link: "/trust" },
+          { text: "Output formats", link: "/representations" },
+          { text: "Deploy safely", link: "/trust" },
         ],
       },
     ],

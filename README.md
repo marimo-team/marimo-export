@@ -1,292 +1,50 @@
 # marimo-export
 
-Publish interactive, zero-Python web apps from marimo notebook outputs.
+Turn a marimo notebook into a deterministic, interactive web app served
+from any CDN.
 
-marimo-export runs the notebook states you choose while Python is available,
-stores their outputs in a static publication, and lets a TypeScript app load
-them later. Deploy the app and publication to any static host. Notebook
-execution finishes before deployment.
+Precompute the states your audience can explore. Each state loads its fixed
+result instantly from static files, with no Python server, kernel startup, or
+Python WebAssembly runtime.
 
-```mermaid
-flowchart TD
-    Notebook["marimo notebook<br/>and chosen input states"]
-    Publish["build or capture"]
-    Publication["static index.json<br/>and output assets"]
-    Loaders["typed browser loaders"]
-    App["your HTML, CSS,<br/>and TypeScript app"]
+## Try it
 
-    Notebook --> Publish --> Publication --> Loaders --> App
-```
-
-Use it to:
-
-- run expensive queries, model inference, or data preparation during
-  publication so each visitor receives static files
-- precompute the input combinations that an app should expose
-- publish tables, arrays, charts, images, AnyWidgets, and scalar values
-- build the client with vanilla TypeScript or the web framework your app
-  already uses
-- deploy the finished app to object storage, a CDN, or a static site host
-
-> [!NOTE]
-> marimo-export is a development preview. Its Python and TypeScript packages are
-> currently versioned `0.0.0`, so the quickstart runs from a repository
-> checkout.
-
-## If you know Papermill
-
-[Papermill](https://github.com/nteract/papermill) gives Jupyter users a
-familiar workflow: supply parameters, execute a notebook, and save the executed
-notebook. marimo-export applies that workflow shape to a finite matrix of
-marimo definition values. marimo executes each named state through its reactive
-graph and cache, and marimo-export collects selected definitions into a static
-publication for a browser app.
-
-The analogy is closest to `build`, which owns notebook startup, execution, and
-shutdown. `capture` applies the same ExportSpec to an already-running kernel.
-
-[Map Papermill concepts to ExportSpec](docs/export-spec.md#for-papermill-users).
-
-## Publish your first notebook
-
-Clone the repository and install the locked workspace:
+This development preview runs from the repository:
 
 ```bash
 git clone https://github.com/marimo-team/marimo-export.git
 cd marimo-export
 make bootstrap
+cd examples/vite-vanilla
+pnpm run export
+pnpm run dev
 ```
 
-Create `notebook.py` with one input and one derived output:
+Open the URL printed by Vite and switch between the five market views. The
+export uses live Yahoo Finance data, so network availability can affect the
+run.
 
-```python
-import marimo
+## Use your notebook
 
-app = marimo.App()
-
-
-@app.cell
-def _():
-    greeting = "Hello"
-    return (greeting,)
-
-
-@app.cell
-def _(greeting):
-    message = f"{greeting}, browser!"
-    return (message,)
-
-
-if __name__ == "__main__":
-    app.run()
-```
-
-Create `notebook.export.yaml` to choose the states and output that the app can
-load:
-
-```yaml
-schema: marimo-export.spec.v1
-inputs:
-  - greeting
-states:
-  hello: {}
-  welcome:
-    greeting: Welcome
-outputs:
-  message:
-    source: message
-```
-
-Build and verify the static publication:
+[Choose the states and results](docs/export-spec.md), then build the export:
 
 ```bash
-uv run marimo-export build notebook.py \
-  --spec notebook.export.yaml \
-  --output dist/greeting
-
-uv run marimo-export verify dist/greeting
+marimo-export build report.py \
+  --spec report.export.yaml \
+  --output dist/report
 ```
 
-The commands report the published states and verification result:
+Use [`capture`](docs/cli.md#capture-an-open-notebook) for a notebook that is
+already running. Both commands leave the notebook source unchanged.
 
-```text
-Published 2 states and 1 outputs to .../dist/greeting
-Assets: 0 files, 0 B
-...
-Verified 0 assets and 0 B for 2 states
-```
+## Documentation
 
-The `message` scalar lives directly in `dist/greeting/index.json`. Tables,
-arrays, images, charts, and widgets add content-addressed files beside the
-index.
+- [Run the market dashboard](docs/getting-started.md)
+- [Choose states and results](docs/export-spec.md)
+- [Build or capture](docs/cli.md)
+- [Use the browser API](docs/browser-api.md) or [automate from
+  Python](docs/python-api.md)
+- [Choose output formats](docs/representations.md) and [deploy
+  safely](docs/trust.md)
 
-Serve `dist/greeting` at `/publications/greeting/`. A Vite app in this workspace
-can then load the publication from browser code:
-
-```ts
-import { openPublication, scalarLoader } from "@marimo-team/marimo-export";
-
-const publication = await openPublication("/publications/greeting/");
-const message = await publication.state("hello").output("message").load(scalarLoader());
-
-document.querySelector("#app")!.textContent = String(message);
-```
-
-The page renders `Hello, browser!` from static files. Switch to the `welcome`
-state to load `Welcome, browser!`.
-
-See the [vanilla Vite example](examples/vite-vanilla) for a live Yahoo Finance
-notebook and market dashboard built from Parquet, PNG, Vega-Lite, AnyWidget,
-and a custom market-summary representation.
-
-## Choose what users can interact with
-
-An ExportSpec connects notebook definitions to the states and outputs exposed by
-the app:
-
-- `inputs` names notebook definitions that the publication can vary.
-- `states` lists sparse overrides such as a symbol selection, date range, or
-  chart width.
-- `outputs` gives public names to notebook definitions and selects an optional
-  browser representation.
-
-marimo-export reads the current notebook values as the baseline, completes each
-sparse state, and executes every state through normal marimo execution. Matching
-cells can restore from marimo's cache on later publication runs. Export-specific
-cells and imports never enter the notebook source.
-
-At runtime, the browser selects one of these published states and runs the
-loaded output's browser behavior. Vega-Lite interactions, AnyWidget controls,
-DOM events, and custom JavaScript continue in the page. Add a state and
-republish when an interaction requires a new Python result.
-
-[Read the ExportSpec guide](docs/export-spec.md) for JSON, YAML, and
-programmatic construction.
-
-## Publish rich notebook outputs
-
-Choose representations beside the source definitions in the ExportSpec:
-
-```yaml
-outputs:
-  dashboard:
-    source: widget
-    exporter: anywidget.bundle
-  chart:
-    source: performance
-    exporter: altair.vegalite
-  chart_image:
-    source: performance
-    exporter:
-      name: altair.png
-      options:
-        scale: 2
-  prices:
-    source: selected_prices
-    exporter:
-      name: parquet.table
-      options:
-        filename: prices.parquet
-  matrix:
-    source: ohlc_matrix
-```
-
-Choose the representation that fits the client:
-
-| Notebook result    | Published representation | Browser import                                |
-| ------------------ | ------------------------ | --------------------------------------------- |
-| Scalar value       | marimo scalar            | `@marimo-team/marimo-export`                  |
-| NumPy array        | NPY                      | `@marimo-team/marimo-export/loader/numpy`     |
-| Arrow table        | Arrow IPC file           | `@marimo-team/marimo-export/loader/arrow`     |
-| DataFrame or table | Parquet                  | `@marimo-team/marimo-export/loader/parquet`   |
-| Altair chart       | Vega-Lite spec           | `@marimo-team/marimo-export/loader/vegalite`  |
-| Altair chart       | PNG                      | `@marimo-team/marimo-export`                  |
-| AnyWidget          | AnyWidget bundle         | `@marimo-team/marimo-export/loader/anywidget` |
-
-Omitting `exporter` publishes the source through marimo's native cache codec.
-When an exporter is present, marimo-export adds a transient leaf to each state
-child. marimo executes and caches that leaf, then marimo-export reads its native
-cache receipt. The leaf disappears with the child.
-
-Programmatic specs use typed descriptor factories:
-
-```python
-from marimo_export import OutputSpec
-from marimo_export.exporters import altair
-
-output = OutputSpec(
-    source="performance",
-    exporter=altair.png(scale=2),
-)
-```
-
-Custom exporters use an explicit `module:symbol` reference. The selected
-kernel imports the module, resolves the callable symbol, and passes the source
-value plus portable exporter options. The callable returns a supported native
-cache value. A `BlobAsset` with a versioned media type can pair with a custom
-browser loader.
-
-Preflight fingerprints the callable implementation and its referenced local
-code for projection-cache invalidation. Files, network responses, mutable
-module state, and other external inputs follow the same invalidation discipline
-as cached notebook code.
-
-[Read the representations guide](docs/representations.md) for loader peer
-dependencies, media types, and the custom loader contract.
-
-## Build from a file or capture a live session
-
-Use `build` when marimo-export should start the notebook, publish every state,
-and clean up the temporary server:
-
-```bash
-marimo-export build notebook.py \
-  --spec notebook.export.yaml \
-  --output dist/notebook
-```
-
-Use `capture` when a running notebook already contains credentials, files, or
-expensive results:
-
-```bash
-marimo-export capture http://127.0.0.1:2718 \
-  --session SESSION_ID \
-  --spec notebook.export.yaml \
-  --output dist/notebook
-```
-
-The live kernel and the calling environment must import the same
-marimo-export version. It must also contain the dependencies and custom
-functions selected by the spec. Pass credentials with
-`MARIMO_EXPORT_ACCESS_TOKEN` and `MARIMO_EXPORT_SERVER_TOKEN` to keep them out
-of command history.
-
-[Read the CLI guide](docs/cli.md) for session discovery, machine-readable
-output, replacement behavior, and exit categories.
-
-## Ship the publication
-
-A publication is a static directory containing one canonical `index.json` and
-the output files referenced by it. Serve the directory unchanged over HTTPS or
-localhost, then give `openPublication()` the URL that contains `index.json`.
-
-The browser client verifies each file's declared length and SHA-256 digest
-before its loader receives the content. Interactive loaders can execute
-published JavaScript with page authority, so review notebook-authored widgets
-and custom representations before deployment.
-
-[Read the trust guide](docs/trust.md) for producer, publication, loader, and
-hosting boundaries.
-
-## Learn and contribute
-
-- [Getting started](docs/getting-started.md)
-- [Python API](docs/python-api.md)
-- [Browser API](docs/browser-api.md)
-- [ExportSpec](docs/export-spec.md)
-- [Representations and loaders](docs/representations.md)
-- [Command-line interface](docs/cli.md)
-- [Trust and integrity](docs/trust.md)
-- [Contributor guide](development_docs/README.md)
-
-marimo-export is licensed under the [Apache License 2.0](LICENSE).
+Licensed under Apache-2.0.

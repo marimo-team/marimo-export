@@ -1,44 +1,53 @@
 # Python API
 
-The package root exposes the composition API:
+Use the Python API from scripts, jobs, and build systems.
+
+```bash
+uv add marimo-export
+```
+
+## Build from a notebook file
 
 ```python
-from marimo_export import (
-    BlobAsset,
-    Client,
-    ExportSpec,
-    OutputSpec,
-    Publication,
-    PublicationResult,
-    Session,
-    build,
-    capture,
-    open_publication,
+from marimo_export import ExportSpec, build
+
+result = build(
+    "finance.py",
+    spec=ExportSpec.from_file("finance.export.yaml"),
+    output="dist/finance",
 )
 ```
 
-## `build`
-
 ```python
-build(
+def build(
     notebook,
     *,
     spec: ExportSpec,
     output,
     timeout: float = 30.0,
     replace: bool = False,
-) -> PublicationResult
+) -> ExportResult: ...
 ```
 
-Starts an authenticated loopback server through the current interpreter,
-activates one notebook session, publishes the matrix, and stops owned
-processes. The source notebook digest is checked before and after execution.
-Projection cells exist only in the in-memory state children.
+`build` prepares every state, writes the export, and closes its notebook
+session. `timeout` limits periods without progress. `replace` atomically
+replaces an existing directory on macOS and Linux.
 
-## `capture`
+## Capture an open notebook
 
 ```python
-capture(
+from marimo_export import ExportSpec, capture
+
+result = capture(
+    "http://127.0.0.1:2718",
+    session="SESSION_ID",
+    spec=ExportSpec.from_file("finance.export.yaml"),
+    output="dist/finance",
+)
+```
+
+```python
+def capture(
     server: str,
     *,
     spec: ExportSpec,
@@ -48,124 +57,89 @@ capture(
     server_token: str | None = None,
     timeout: float = 30.0,
     replace: bool = False,
-) -> PublicationResult
+) -> ExportResult: ...
 ```
 
-Borrows one active session. Omitting `session` requires exactly one session.
-The server and parent session remain live when capture returns.
+Capture leaves the session open. Omit `session` when the server has exactly one
+open notebook.
 
-## `Client`
+Credentials can come from `MARIMO_EXPORT_ACCESS_TOKEN` and
+`MARIMO_EXPORT_SERVER_TOKEN`. The notebook environment must provide the same
+marimo-export version and exporter dependencies.
+
+## Inspect sessions
 
 ```python
-with Client(
-    "http://127.0.0.1:2718",
-    access_token=token,
-    timeout=30,
-) as client:
+from marimo_export import Client, ExportSpec
+
+spec = ExportSpec.from_file("finance.export.yaml")
+with Client("http://127.0.0.1:2718", timeout=30) as client:
     sessions = client.sessions()
-    session = client.session()
-    description = session.inspect()
-    result = session.capture(spec=spec, output="dist/notebook")
+    session = client.session("SESSION_ID")
+    notebook = session.inspect()
+    result = session.capture(spec=spec, output="dist/finance")
 ```
 
-`Session.inspect()` returns definition names, cell ownership, sibling names,
-Python types, UI or ordinary kind, portable-input status, sensitivity, public
-baseline values, and UI domains.
+`Client.sessions()` lists open notebooks. `Session.inspect()` lists definitions
+available as ExportSpec inputs or outputs.
 
-## `OutputSpec` and `ExporterSpec`
+## Construct a spec
 
 ```python
-from marimo_export import OutputSpec
-from marimo_export.exporters import ExporterSpec, altair, importable
+from marimo_export import ExportSpec, OutputSpec
+from marimo_export.exporters import altair, parquet
 
-interactive = OutputSpec(
-    source="performance",
-    exporter=altair.vegalite(),
+spec = ExportSpec(
+    inputs=("symbols_selector",),
+    states={
+        "leaders": {},
+        "cloud": {"symbols_selector": ["MSFT", "GOOGL", "AMZN"]},
+    },
+    outputs={
+        "chart": OutputSpec(
+            source="performance",
+            exporter=altair.vegalite(),
+        ),
+        "prices": OutputSpec(
+            source="selected_prices",
+            exporter=parquet.table(filename="prices.parquet"),
+        ),
+    },
 )
-snapshot = OutputSpec(
-    source="performance",
-    exporter=altair.png(scale=2),
-)
-custom = OutputSpec(
-    source="report",
-    exporter=importable("acme_exports:summary", compact=True),
-)
-native = OutputSpec(source="ohlc_matrix")
 ```
 
-`OutputSpec(source, exporter=None)` selects one notebook definition.
-`exporter=None` keeps marimo's native cache representation.
+`ExportSpec.from_file()` reads YAML or JSON. `from_value()` validates a Python
+value. `to_value()` returns plain Python data. `json_schema()` returns the
+authoring schema.
 
-Built-in factories return an `ExporterSpec`. They do not convert a Python
-object in the calling process. `importable(name, **options)` accepts a
-`module:symbol` reference to a callable in the notebook environment. Exporter
-options are portable JSON values and become keyword arguments in the transient
-projection cell.
+Install the exporter families used by the spec:
 
-`ExporterSpec.name` is the normalized built-in ID or import reference.
-`ExporterSpec.options` is immutable. `to_value()` returns the normalized wire
-value, and `from_value()` accepts the string shorthand or exact object form.
+```bash
+uv add "marimo-export[charts,parquet,anywidget]"
+```
 
-## `PublicationResult`
-
-`build`, `capture`, and `Session.capture()` return the publication record and
-run-local performance data:
+## Read a finished export
 
 ```python
-print(result.projection_cache.hits, result.projection_cache.misses)
-print(result.upstream_cache.hits, result.upstream_cache.misses)
-print(result.timings.total_seconds)
-print(result.timings.fresh_children.construction_seconds)
+from marimo_export import open_export
+
+notebook_export = open_export("dist/finance")
+state = notebook_export.state("leaders")
+
+prices = state.output("prices").blob_asset()
+chart = state.output("chart").blob_asset()
+
+notebook_export.verify()
 ```
 
-The result records:
+`NotebookExport.resolve(inputs)` selects a complete input set.
+`ExportState.resolve(patch)` applies a smaller change to an existing state.
 
-- absolute publication path
-- `build` or `capture` mode
-- borrowed session ID when applicable
-- notebook filename and document SHA-256
-- producer versions
-- state and output names
-- unique asset count and bytes
-- canonical index bytes
-- projection cache lookup counts
-- upstream cell-cache lookup counts
-- managed server, capture, publication, and total timings
-- aggregated fresh-child construction, execution, UI, projection, and cleanup
-  timings
-- bounded cleanup warnings
+## Results and errors
 
-`projection_cache` covers one native projection receipt per state and output.
-`upstream_cache` covers native cache lookups for non-projection cells executed
-in the fresh state children. A hit records a matching entry. marimo can still
-run the cell when restoration fails or the cell defines session-local UI
-elements.
+`build`, `capture`, and `Session.capture()` return `ExportResult`. It reports
+the path, state and output counts, cache activity, and timings. `to_dict()`
+returns the same data as JSON-compatible values.
 
-`timings.fresh_children.ui_application_seconds` measures child-local UI value
-application. `projection_execution_seconds` includes the marimo reactive work
-needed to materialize those values and execute the projection cells in one
-cache-aware run. `server_start_seconds` includes session connection and kernel
-readiness. `initial_autorun_seconds` measures the instantiate request through
-the corresponding completed run. Managed server fields are floats for `build`
-and `None` for `capture`.
-
-`to_dict()` returns a detached JSON value.
-
-## Local publication reader
-
-```python
-publication = open_publication("dist/notebook")
-state = publication.state("baseline")
-output = state.output("chart")
-
-print(output.codec, output.media_type)
-publication.verify()
-```
-
-Use `scalar()` for scalar outputs, `asset_bytes()` for NPY or Arrow assets, and
-`blob_asset()` for a decoded native `BlobAsset`.
-
-`Publication.resolve(inputs)` selects a complete vector.
-`PublishedState.resolve(patch)` applies a sparse patch.
-
-Typed failures are available from `marimo_export.errors`.
+Typed failures live in `marimo_export.errors`. Each `MarimoExportError`
+provides a stable `code`, JSON-compatible `details`, and `wire()` result.

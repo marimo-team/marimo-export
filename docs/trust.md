@@ -1,63 +1,34 @@
-# Trust and integrity
+# Deploy an export safely
 
-marimo-export separates static-byte verification from representation
-execution.
+`build` and `capture` execute notebook code with access to its files,
+credentials, network, and installed packages. Review the notebook, custom
+exporters, and open capture session before creating an export.
 
-## Producer boundary
+Pin the notebook environment and data inputs when you need reproducible builds.
 
-Build and capture execute notebook code with the notebook environment's normal
-authority. Input overrides run through marimo's dependency graph. Exporter
-functions selected by the sidecar spec execute with the same access to files,
-credentials, network, and libraries as the notebook.
+## Verify before deployment
 
-Capture borrows a live session. State execution and transient output leaves
-exist in child runtimes. Destroying a child removes its leaves. The parent input
-controls and source document are checked across the operation.
+```bash
+marimo-export verify dist/finance
+```
 
-Custom exporter references resolve installed or sideloaded kernel modules.
-Review and pin those packages like notebook dependencies. The spec carries the
-import reference and portable options, never executable source or serialized
-closures. The projection cache includes the resolved module, callable
-implementation, statically reachable Python modules, package version when
-available, and declared built-in runtime dependency versions. Network
-responses, files read by the callable, mutable module state, and other external
-inputs require the same explicit invalidation discipline as cached notebook
-code.
+The Python and browser readers also verify assets before returning them.
 
-## Publication boundary
+## Review browser code
 
-`index.json` is canonical UTF-8 JSON. It contains complete state vectors,
-state fingerprints, output descriptors, producer provenance, and
-content-addressed asset references.
+AnyWidget, Vega-Lite, and custom loaders may execute JavaScript or load external
+resources with the same authority as the page.
 
-Readers validate:
+- review widget code and custom loaders
+- configure Content Security Policy and cross-origin access
+- cap large output loads
+- cancel stale state transitions
+- dispose replaced charts and widgets
 
-- schema and exact fields
-- bounded strings, values, depth, and counts
-- portable number semantics
-- state fingerprints and vector uniqueness
-- codec and media-type agreement
-- declared asset size and SHA-256
-- NPY and Arrow framing
-- native `BlobAsset` MessagePack fields
-- filename and local path safety
+## Serve the export
 
-Python reads local assets through no-follow filesystem operations. Browser
-reads use relative URLs and Web Crypto.
+Serve the directory over HTTPS or localhost. Pass `openExport()` the directory
+URL that contains `index.json`.
 
-## Loader boundary
-
-Opening, inspection, and verification execute no notebook-authored JavaScript.
-A loader begins representation-specific parsing. Mounting AnyWidget or
-Vega-Lite can execute authored modules, expressions, external requests, and
-rendering logic with page authority.
-
-Applications choose loaders explicitly, apply Content Security Policy and
-CORS, pass byte limits, cancel stale loads, and dispose mounted values.
-
-## Hosting
-
-Serve the publication directory unchanged through HTTPS or localhost. Asset
-URLs resolve relative to the URL containing `index.json`. Configure immutable
-caching for content-addressed assets. Revalidate `index.json` according to the
-deployment's publication update policy.
+Assets use content-based filenames and can receive immutable cache headers.
+Choose an `index.json` cache policy that matches your deployment cadence.
