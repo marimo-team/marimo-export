@@ -1,0 +1,4 @@
+interface:
+  display_name: "Notebook to Static App"
+  short_description: "Turn marimo notebooks into static web apps"
+  default_prompt: "Use $notebook-to-static-app to turn this marimo notebook into a polished static web app."
