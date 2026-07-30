@@ -27,6 +27,7 @@ from marimo_export.errors import TransportError
 _EVENT_LIMIT = 40 * 1024 * 1024
 _HTTP_RESPONSE_LIMIT = 1024 * 1024
 _LOG_LIMIT = 8192
+_MANAGED_CACHE_COMPAT_ENV = "MARIMO_EXPORT_MANAGED_CACHE_COMPAT"
 _MANAGED_SOURCE_ENV = "MARIMO_EXPORT_MANAGED_SOURCE"
 _MANAGED_SNAPSHOT_ENV = "MARIMO_EXPORT_MANAGED_SNAPSHOT"
 
@@ -60,8 +61,14 @@ class ManagedServer:
         self._process: subprocess.Popen[bytes] | None = None
         self._stream: _SessionStream | None = None
         environment = dict(os.environ)
+        startup = Path(__file__).resolve().parents[1] / "_marimo" / "compat" / "_startup"
+        python_path = environment.get("PYTHONPATH")
+        environment["PYTHONPATH"] = os.pathsep.join(
+            [str(startup), *([python_path] if python_path else [])]
+        )
         environment.update(
             {
+                _MANAGED_CACHE_COMPAT_ENV: "1",
                 _MANAGED_SNAPSHOT_ENV: str(notebook),
                 _MANAGED_SOURCE_ENV: str(runtime_notebook or notebook),
                 "MARIMO_SKIP_UPDATE_CHECK": "1",

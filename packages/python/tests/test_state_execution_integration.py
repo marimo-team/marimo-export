@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from marimo_export import ExportSpec, OutputSpec, capture, open_export
+from marimo_export import ExportSpec, OutputSpec, build, capture, open_export
 from marimo_export._remote.managed import ManagedServer
 from marimo_export.errors import ExecutionError
 from marimo_export.exporters import importable
@@ -99,6 +99,143 @@ if __name__ == "__main__":
         assert export.state("one").output("snapshot").scalar() == "[1]:[1]:[1]"
         assert export.state("two").output("snapshot").scalar() == "[2]:[2]:[2]"
     assert notebook.read_bytes() == source
+
+
+def test_managed_sparse_anywidget_state_uses_widget_traits(tmp_path: Path) -> None:
+    notebook = tmp_path / "notebook.py"
+    notebook.write_text(
+        """
+import marimo
+
+app = marimo.App()
+
+
+@app.cell
+def _():
+    import anywidget
+    import marimo as mo
+    import traitlets
+
+    class Counter(anywidget.AnyWidget):
+        _esm = "export default { render() {} }"
+        count = traitlets.Int(2).tag(sync=True)
+
+    counter = mo.ui.anywidget(Counter())
+    return (counter,)
+
+
+@app.cell
+def _(counter):
+    count = counter.value["count"]
+    return (count,)
+
+
+if __name__ == "__main__":
+    app.run()
+""".lstrip(),
+        encoding="utf-8",
+    )
+    source = notebook.read_bytes()
+    result = build(
+        notebook,
+        spec=ExportSpec(
+            inputs=("counter",),
+            states={"baseline": {}, "raised": {"counter": {"count": 7}}},
+            outputs={"count": OutputSpec(source="count")},
+        ),
+        output=tmp_path / "export",
+        timeout=30,
+    )
+    export = open_export(result.path)
+
+    assert export.state("baseline").inputs == {"counter": {"count": 2}}
+    assert export.state("baseline").output("count").scalar() == 2
+    assert export.state("raised").output("count").scalar() == 7
+    assert notebook.read_bytes() == source
+
+
+def test_state_execution_finishes_cache_writes_before_hashing_shared_values(
+    tmp_path: Path,
+) -> None:
+    notebook = tmp_path / "notebook.py"
+    notebook.write_text(
+        """
+import marimo
+
+app = marimo.App()
+
+
+@app.cell
+def _():
+    import threading
+    import time
+    import numpy as np
+
+    class ExclusiveArray:
+        dtype = np.dtype("int64")
+        _lock = threading.Lock()
+        _pickle_started = threading.Event()
+
+        def __array__(self, dtype=None, copy=None):
+            self._pickle_started.wait(timeout=0.2)
+            if not self._lock.acquire(blocking=False):
+                raise RuntimeError("value is being serialized")
+            try:
+                return np.asarray([7], dtype=dtype)
+            finally:
+                self._lock.release()
+
+        def __getstate__(self):
+            if not self._lock.acquire(blocking=False):
+                raise RuntimeError("value is being hashed")
+            self._pickle_started.set()
+            try:
+                time.sleep(0.2)
+                return {}
+            finally:
+                self._lock.release()
+
+        def __setstate__(self, state):
+            del state
+
+    shared = ExclusiveArray()
+    return np, shared
+
+
+@app.cell
+def _(np, shared):
+    first = int(np.asarray(shared)[0])
+    return (first,)
+
+
+@app.cell
+def _(np, shared):
+    second = int(np.asarray(shared)[0])
+    return (second,)
+
+
+if __name__ == "__main__":
+    app.run()
+""".lstrip(),
+        encoding="utf-8",
+    )
+    result = build(
+        notebook,
+        spec=ExportSpec(
+            inputs=(),
+            states={"baseline": {}},
+            outputs={
+                "first": OutputSpec(source="first"),
+                "second": OutputSpec(source="second"),
+            },
+        ),
+        output=tmp_path / "export",
+        timeout=30,
+    )
+    export = open_export(result.path)
+
+    assert export.state("baseline").output("first").scalar() == 7
+    assert export.state("baseline").output("second").scalar() == 7
 
 
 def test_state_children_leave_the_parent_after_success_and_failure(

@@ -556,7 +556,9 @@ async def inspect_baseline() -> Baseline:
                 kind="ui" if is_ui else "ordinary",
                 python_type=_python_type(value),
                 value=value,
-                frontend_value=(_frontend_value(value, f"definition {name!r}") if is_ui else None),
+                frontend_value=(
+                    _ui_baseline_value(value, f"definition {name!r}") if is_ui else None
+                ),
                 sensitive=_is_sensitive(value) if is_ui else False,
                 domain=_control_domain(value) if is_ui else {},
             )
@@ -576,7 +578,7 @@ async def declared_ui_values(names: tuple[str, ...]) -> JsonObject:
         for name in names:
             value = context.globals.get(name)
             if isinstance(value, UIElement):
-                result[name] = _frontend_value(value, f"definition {name!r}")
+                result[name] = _ui_baseline_value(value, f"definition {name!r}")
     return result
 
 
@@ -1697,6 +1699,13 @@ def _file_digest(path: Path) -> str | None:
     return digest.hexdigest()
 
 
+async def _run_state_child(child: Any, cells: set[Any]) -> None:
+    from marimo_export._marimo.compat.cache import sequential_cache_loader
+
+    with sequential_cache_loader():
+        await child.run(cells)
+
+
 async def execute_state(
     state: NormalizedState,
     plan: ExportPlan,
@@ -1765,6 +1774,9 @@ async def execute_state(
     app = load_notebook_ir(notebook, filepath=runtime.filename)
     internal = InternalApp(app)
     child = AppKernelRunner(internal)
+    from marimo_export._marimo.compat.cache import add_cache_write_barrier
+
+    add_cache_write_barrier(child._kernel._hooks)
     child._kernel._hooks.add_post_execution(_set_run_result_status)
     child_context = child._runtime_context
     receipts: tuple[NativeReceipt, ...] | None = None
@@ -1805,7 +1817,7 @@ async def execute_state(
             output_cell_id_set,
         ) as notebook_cache:
             dependency_started = time.monotonic()
-            await child.run(cells_to_run)
+            await _run_state_child(child, cells_to_run)
             dependency_execution_seconds = time.monotonic() - dependency_started
             _raise_child_errors(child, cells_to_run, state.name)
 
@@ -1881,7 +1893,7 @@ async def execute_state(
                 for cell_id, cell in child._kernel.graph.cells.items()
                 if cell.stale and cell_id not in output_cell_id_set
             }
-            await child.run(reactive_cells | set(output_cell_id_set))
+            await _run_state_child(child, reactive_cells | set(output_cell_id_set))
             _raise_child_errors(child, reactive_cells, state.name)
             for output, cell_id in output_cell_ids.items():
                 _raise_child_errors(child, {cell_id}, state.name, output=output)
@@ -2011,13 +2023,14 @@ def _output_receipt(
     from marimo._runtime.context import get_context
     from marimo._save.hash import cache_attempt_from_hash
     from marimo._save.loaders import flush_active_caches
-    from marimo._save.loaders.lazy import LazyLoader
+
+    from marimo_export._marimo.compat.cache import SequentialLazyLoader
 
     with child._runtime_context.install():
         context = get_context()
         flush_active_caches()
         cell = child._kernel.graph.cells[cell_id]
-        native_loader = LazyLoader(name="cell_cache", store=context.cache.store)
+        native_loader = SequentialLazyLoader(name="cell_cache", store=context.cache.store)
         effective_mode = native_loader._effective_mode()
         store = _ReadSnapshotStore(native_loader.store)
         native_store = native_loader.store
@@ -2271,6 +2284,17 @@ def _frontend_value(value: Any, path: str) -> JsonValue:
         return json_value(frontend, f"{path} frontend value")
     except (TypeError, ValueError) as error:
         raise ExecutionError(f"{path} has a nonportable frontend value") from error
+
+
+def _ui_baseline_value(value: Any, path: str) -> JsonValue:
+    from marimo._plugins.ui._impl.from_anywidget import anywidget
+
+    if isinstance(value, anywidget):
+        try:
+            return json_value(value.value, f"{path} widget state")
+        except (TypeError, ValueError) as error:
+            raise ExecutionError(f"{path} has a nonportable widget state") from error
+    return _frontend_value(value, path)
 
 
 def _is_sensitive(value: Any) -> bool:

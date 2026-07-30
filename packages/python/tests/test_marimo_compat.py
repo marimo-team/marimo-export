@@ -3,10 +3,12 @@ from __future__ import annotations
 import hashlib
 import importlib
 import sys
+import threading
 import weakref
 from importlib.machinery import ModuleSpec
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
+from typing import Any, cast
 
 import marimo_export._marimo.compat as marimo_compat
 import msgspec
@@ -23,6 +25,7 @@ from marimo_export._marimo.compat import (
     prepared_exporters,
     require_capabilities,
 )
+from marimo_export._marimo.compat.cache import SequentialLazyLoader
 from marimo_export.errors import OutputError
 from marimo_export.exporters import importable
 
@@ -42,6 +45,37 @@ def test_attached_marimo_exposes_live_capture_capabilities() -> None:
         "setup_definition_overrides",
         "synthetic_output_cells",
     )
+
+
+def test_native_cache_values_restore_on_the_kernel_thread() -> None:
+    caller = threading.get_ident()
+    deserializer_threads: list[int] = []
+
+    class Store:
+        def get(self, key: str) -> bytes:
+            return key.encode()
+
+    class Loader:
+        store = Store()
+
+        def _deserialize_blob(self, key: str, data: bytes, *args: object) -> str:
+            del data, args
+            deserializer_threads.append(threading.get_ident())
+            return key
+
+    restored = SequentialLazyLoader._read_blobs(
+        cast(SequentialLazyLoader, cast(Any, Loader())),
+        {"first.arrow", "second.arrow"},
+        {},
+        None,
+        None,
+    )
+
+    assert restored == {
+        "first.arrow": "first.arrow",
+        "second.arrow": "second.arrow",
+    }
+    assert deserializer_threads == [caller, caller]
 
 
 def test_document_digest_uses_portable_cell_content() -> None:
