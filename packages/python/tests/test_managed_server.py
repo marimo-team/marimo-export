@@ -286,6 +286,26 @@ def test_process_group_cleanup_finishes_after_cancellation(
     assert calls == [123, 123, 456]
 
 
+def test_process_group_cleanup_accepts_a_group_that_exits_before_signal(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    probes = iter(({123}, set()))
+
+    def signal_group(group_id: int, signal_number: int) -> None:
+        assert group_id == 123
+        assert signal_number == signal.SIGKILL
+        raise PermissionError
+
+    monkeypatch.setattr(
+        ManagedServer,
+        "_live_process_groups",
+        staticmethod(lambda groups: set(next(probes))),
+    )
+    monkeypatch.setattr(os, "killpg", signal_group)
+
+    ManagedServer._kill_owned_process_groups({123})
+
+
 @pytest.mark.timeout(30)
 def test_managed_initial_autorun_restores_native_cell_cache(tmp_path: Path) -> None:
     marker = tmp_path / "autorun-count.txt"

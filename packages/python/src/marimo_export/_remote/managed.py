@@ -444,6 +444,13 @@ class ManagedServer:
                 os.killpg(group_id, signal.SIGKILL)
             except ProcessLookupError:
                 continue
+            except PermissionError as error:
+                try:
+                    if group_id not in ManagedServer._live_process_groups({group_id}):
+                        continue
+                except BaseException as probe_error:
+                    failures.append(probe_error)
+                failures.append(error)
             except BaseException as error:
                 failures.append(error)
                 if isinstance(error, Exception):
