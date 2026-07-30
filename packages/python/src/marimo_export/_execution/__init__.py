@@ -1,21 +1,21 @@
-from .matrix import (
+from .plan import (
     Baseline,
     Definition,
-    MatrixPlan,
+    ExportPlan,
     NormalizedState,
-    OutputProjection,
-    normalize_matrix,
+    PlannedOutput,
+    create_export_plan,
     ordinary_cell_code,
-    projection_code,
+    output_cell_code,
 )
 
 __all__ = [
     "Baseline",
     "Definition",
-    "MatrixPlan",
+    "ExportPlan",
     "NormalizedState",
-    "OutputProjection",
-    "normalize_matrix",
+    "PlannedOutput",
+    "create_export_plan",
     "ordinary_cell_code",
-    "projection_code",
+    "output_cell_code",
 ]

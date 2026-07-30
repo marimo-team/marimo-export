@@ -20,4 +20,4 @@ __pycache__/
 *.tsbuildinfo
 **/__marimo__/
 examples/*/dist/
-examples/*/public/publication/
+examples/*/public/export/

@@ -4,7 +4,7 @@ const generated = [
   "**/dist/**",
   "**/node_modules/**",
   "packages/python/.pytest_cache/**",
-  "tests/fixtures/publication/*.json",
+  "tests/fixtures/export/*.json",
 ];
 
 export default defineConfig({

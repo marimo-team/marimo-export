@@ -4,11 +4,11 @@ import * as api from "../src/index.js";
 
 test("exports the browser core contract", () => {
   expect(Object.keys(api).sort()).toEqual([
-    "PublicationError",
+    "NotebookExportError",
     "defineBlobAssetLoader",
     "defineOutputLoader",
     "imageLoader",
-    "openPublication",
+    "openExport",
     "resolveOutputLoader",
     "scalarLoader",
   ]);

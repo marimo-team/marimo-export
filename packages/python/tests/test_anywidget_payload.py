@@ -96,16 +96,16 @@ def test_payload_accepts_self_contained_and_remote_modules() -> None:
         assert validate_anywidget_payload(_payload(document)).root_model_id == "model-0"
 
 
-def test_payload_rejects_missing_or_unpublished_modules() -> None:
+def test_payload_rejects_missing_or_local_file_modules() -> None:
     missing = _document()
     missing["files"] = {}
     with pytest.raises(ValueError, match="references missing virtual file"):
         validate_anywidget_payload(_payload(missing))
 
-    unpublished = _document()
-    unpublished["modelNotifications"][0]["message"]["esm_spec"]["url"] = "file:///tmp/widget.js"
+    local_file = _document()
+    local_file["modelNotifications"][0]["message"]["esm_spec"]["url"] = "file:///tmp/widget.js"
     with pytest.raises(ValueError, match="incompatible ESM URL protocol"):
-        validate_anywidget_payload(_payload(unpublished))
+        validate_anywidget_payload(_payload(local_file))
 
     malformed = _document()
     malformed["files"]["./@file/root.js"] = "data:text/javascript;base64,%%%"

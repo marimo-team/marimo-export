@@ -65,7 +65,7 @@ jobs:
       - name: Install Python workspace
         run: uv sync --package marimo-export --locked
 
-      - name: Validate native Windows publication reads
+      - name: Validate native Windows export reads
         run: >-
           uv run --package marimo-export pytest -q
           packages/python/tests/test_secure_io.py

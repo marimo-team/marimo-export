@@ -7,10 +7,10 @@ import type {
   MountableValue,
   OutputCodec,
   OutputLoader,
-  PublishedOutput,
+  ExportOutput,
   ScalarValue,
 } from "./types.js";
-import { PublicationError } from "./types.js";
+import { NotebookExportError } from "./types.js";
 
 const CODECS = new Set<OutputCodec>([
   "marimo.scalar.v1",
@@ -65,7 +65,7 @@ export function defineBlobAssetLoader<T>(definition: {
 }
 
 export function resolveOutputLoader(
-  output: PublishedOutput,
+  output: ExportOutput,
   loaders: readonly AnyOutputLoader[],
 ): AnyOutputLoader {
   if (!Array.isArray(loaders)) throw new TypeError("loaders must be an array.");
@@ -87,7 +87,7 @@ export function resolveOutputLoader(
     if (accepted) matches.push(loader);
   }
   if (matches.length === 0) {
-    throw new PublicationError(
+    throw new NotebookExportError(
       "loader_unavailable",
       `No OutputLoader accepts ${output.codec} with ${output.mediaType.essence}.`,
       {
@@ -100,7 +100,7 @@ export function resolveOutputLoader(
     );
   }
   if (matches.length > 1) {
-    throw new PublicationError(
+    throw new NotebookExportError(
       "loader_ambiguous",
       `Multiple OutputLoaders accept ${output.codec} with ${output.mediaType.essence}.`,
       {
@@ -162,8 +162,8 @@ export function imageLoader(): BlobAssetLoader<MountableValue> {
   });
 }
 
-function invalidLoader(output: PublishedOutput, cause: unknown): PublicationError {
-  return new PublicationError("loader_invalid", "OutputLoader validation failed.", {
+function invalidLoader(output: ExportOutput, cause: unknown): NotebookExportError {
+  return new NotebookExportError("loader_invalid", "OutputLoader validation failed.", {
     cause,
     details: {
       output: output.name,

@@ -28,29 +28,29 @@ import msgspec
 from marimo._save.stores.store import Store
 from marimo._save.stubs import BlobAsset
 
-from marimo_export._execution.matrix import (
+from marimo_export._execution.plan import (
     Baseline,
     Definition,
-    MatrixPlan,
+    ExportPlan,
     NormalizedState,
     ordinary_cell_code,
-    projection_code,
+    output_cell_code,
 )
 from marimo_export._json import JsonObject, JsonValue, canonical_bytes, json_object, json_value
 from marimo_export.errors import CodecError, CompatibilityError, ExecutionError, OutputError
-from marimo_export.exporters._definitions import runtime_reference
-from marimo_export.publication import (
+from marimo_export.export import (
     ArrowDescriptor,
     AssetRef,
     BlobAssetDescriptor,
     CacheSummary,
-    FreshChildTimings,
     NumpyDescriptor,
     OutputCodec,
     OutputDescriptor,
     Provenance,
     ScalarDescriptor,
+    StateRunTimings,
 )
+from marimo_export.exporters._definitions import runtime_reference
 
 _CAPABILITIES = (
     "asset_transfer",
@@ -61,7 +61,7 @@ _CAPABILITIES = (
     "child_ui_updates",
     "definition_overrides",
     "setup_definition_overrides",
-    "synthetic_projection_cells",
+    "synthetic_output_cells",
 )
 _MAX_PYTHON_TYPE_BYTES = 512
 _MAX_EXPORTER_DEPENDENCIES = 256
@@ -139,7 +139,7 @@ class MarimoCapabilities:
 
 @dataclass(frozen=True, slots=True)
 class NativeReceipt:
-    """One verified native cell-cache return ready for publication."""
+    """One verified native cell-cache return ready for export."""
 
     output: str
     descriptor: OutputDescriptor
@@ -155,18 +155,18 @@ class NativeReceipt:
 
 @dataclass(frozen=True, slots=True)
 class StateExecution:
-    """Receipts and run-local diagnostics from one fresh state child."""
+    """Receipts and diagnostics from one state run."""
 
     receipts: tuple[NativeReceipt, ...]
-    upstream_cache: CacheSummary
-    timings: FreshChildTimings
+    notebook_cache: CacheSummary
+    timings: StateRunTimings
 
 
 @dataclass(slots=True)
 class _CacheActivity:
     hits: int = 0
     misses: int = 0
-    projections: dict[Any, Literal["hit", "miss"]] = field(default_factory=dict)
+    output_cells: dict[Any, Literal["hit", "miss"]] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -230,9 +230,9 @@ _EXPORTER_IMPORT_LOCK = threading.RLock()
 
 
 @contextmanager
-def _track_upstream_cache(
+def _track_notebook_cache(
     child_graph: Any,
-    projection_ids: frozenset[Any],
+    output_cell_ids: frozenset[Any],
 ) -> Iterator[_CacheActivity]:
     import marimo._runtime.executor.lifecycles.cached as cached_lifecycle
 
@@ -270,7 +270,7 @@ def _track_upstream_cache(
                         _, excluded, current = tracker
                         disposition: Literal["hit", "miss"] = "hit" if attempt.hit else "miss"
                         if cell_id in excluded:
-                            current.projections[cell_id] = disposition
+                            current.output_cells[cell_id] = disposition
                         elif attempt.hit:
                             current.hits += 1
                         else:
@@ -283,7 +283,7 @@ def _track_upstream_cache(
 
         _CACHE_TRACKERS[tracker_key] = (
             child_graph,
-            projection_ids,
+            output_cell_ids,
             activity,
         )
 
@@ -347,7 +347,7 @@ def new_transfer_virtual_file(data: bytes) -> object:
 
 
 def flush_native_caches() -> None:
-    """Make pending native cache writes visible to fresh state children."""
+    """Make pending native cache writes visible to subsequent state runs."""
 
     from marimo._save.loaders import flush_active_caches
 
@@ -474,7 +474,7 @@ def require_capabilities() -> MarimoCapabilities:
         (hash_module, "cell_cache_receipts"),
         (flush_active_caches, "cell_cache_receipts"),
         (LazyLoader, "cell_cache_receipts"),
-        (CellDef, "synthetic_projection_cells"),
+        (CellDef, "synthetic_output_cells"),
         (NotebookSerializationV1, "child_sessions"),
     ):
         if not callable(value):
@@ -581,16 +581,16 @@ async def declared_ui_values(names: tuple[str, ...]) -> JsonObject:
 
 
 def preflight_exporters(
-    plan: MatrixPlan,
+    plan: ExportPlan,
     *,
     source_modules: frozenset[str] = frozenset(),
 ) -> Mapping[str, str]:
     """Resolve selected exporters and return their cache identities."""
 
     selected = {
-        output: projection.exporter
-        for output, projection in plan.projections.items()
-        if projection.exporter is not None
+        output: planned_output.exporter
+        for output, planned_output in plan.planned_outputs.items()
+        if planned_output.exporter is not None
     }
     if not selected:
         return {}
@@ -663,13 +663,13 @@ def preflight_exporters(
 
 
 @contextmanager
-def prepared_exporters(plan: MatrixPlan) -> Iterator[Mapping[str, str]]:
+def prepared_exporters(plan: ExportPlan) -> Iterator[Mapping[str, str]]:
     """Resolve custom exporters in a capture-scoped module overlay."""
 
     custom = {
-        projection.exporter.name: runtime_reference(projection.exporter.name).module
-        for projection in plan.projections.values()
-        if projection.exporter is not None and ":" in projection.exporter.name
+        planned_output.exporter.name: runtime_reference(planned_output.exporter.name).module
+        for planned_output in plan.planned_outputs.values()
+        if planned_output.exporter is not None and ":" in planned_output.exporter.name
     }
     if not custom:
         yield preflight_exporters(plan)
@@ -1699,10 +1699,10 @@ def _file_digest(path: Path) -> str | None:
 
 async def execute_state(
     state: NormalizedState,
-    plan: MatrixPlan,
+    plan: ExportPlan,
     exporter_identities: Mapping[str, str],
 ) -> StateExecution:
-    """Execute one fresh child through marimo's graph and cell cache."""
+    """Execute one state run through marimo's graph and cell cache."""
 
     from marimo._ast.app import InternalApp
     from marimo._ast.load import load_notebook_ir
@@ -1719,17 +1719,17 @@ async def execute_state(
         NotebookSerializationV1,
     )
 
-    construction_started = time.monotonic()
+    setup_started = time.monotonic()
     code_context = get_code_context()
     runtime = get_runtime_context()
     cells = tuple(code_context.cells)
-    projection_codes = {
-        output: projection_code(
-            projection,
+    output_cell_codes = {
+        output: output_cell_code(
+            planned_output,
             plan.state_name,
             exporter_identity=exporter_identities.get(output),
         )
-        for output, projection in plan.projections.items()
+        for output, planned_output in plan.planned_outputs.items()
     }
     notebook = NotebookSerializationV1(
         app=AppInstantiation(options=runtime.app_config.asdict()),
@@ -1754,7 +1754,7 @@ async def execute_state(
         ]
         + [
             CellDef(
-                code=projection_codes[output],
+                code=output_cell_codes[output],
                 name="_",
                 options={"hide_code": True},
             )
@@ -1768,11 +1768,11 @@ async def execute_state(
     child._kernel._hooks.add_post_execution(_set_run_result_status)
     child_context = child._runtime_context
     receipts: tuple[NativeReceipt, ...] | None = None
-    upstream_cache = _CacheActivity()
-    construction_seconds = 0.0
-    upstream_execution_seconds = 0.0
-    ui_application_seconds = 0.0
-    projection_execution_seconds = 0.0
+    notebook_cache = _CacheActivity()
+    setup_seconds = 0.0
+    dependency_execution_seconds = 0.0
+    ui_update_seconds = 0.0
+    output_materialization_seconds = 0.0
     cleanup_seconds = 0.0
     try:
         config = cast(dict[str, Any], copy.deepcopy(runtime.marimo_config))
@@ -1786,8 +1786,8 @@ async def execute_state(
         overrides = {plan.state_name: state.fingerprint}
         child._kernel.globals.update(overrides)
 
-        projection_ids = _projection_ids(internal, projection_codes)
-        projection_id_set = frozenset(projection_ids.values())
+        output_cell_ids = _output_cell_ids(internal, output_cell_codes)
+        output_cell_id_set = frozenset(output_cell_ids.values())
         execution_order = prune_cells_for_overrides(
             internal.graph,
             internal.execution_order,
@@ -1796,17 +1796,17 @@ async def execute_state(
         cells_to_run = {
             cell_id
             for cell_id in execution_order
-            if cell_id not in projection_ids.values() and not internal.graph.is_disabled(cell_id)
+            if cell_id not in output_cell_ids.values() and not internal.graph.is_disabled(cell_id)
         }
-        construction_seconds = time.monotonic() - construction_started
+        setup_seconds = time.monotonic() - setup_started
 
-        with _track_upstream_cache(
+        with _track_notebook_cache(
             child._kernel.graph,
-            projection_id_set,
-        ) as upstream_cache:
-            upstream_started = time.monotonic()
+            output_cell_id_set,
+        ) as notebook_cache:
+            dependency_started = time.monotonic()
             await child.run(cells_to_run)
-            upstream_execution_seconds = time.monotonic() - upstream_started
+            dependency_execution_seconds = time.monotonic() - dependency_started
             _raise_child_errors(child, cells_to_run, state.name)
 
             if state.ui_values:
@@ -1873,22 +1873,22 @@ async def execute_state(
                             code="input_value_invalid",
                             details={"state": state.name, "input": name},
                         )
-                ui_application_seconds = time.monotonic() - ui_started
+                ui_update_seconds = time.monotonic() - ui_started
 
-            projection_started = time.monotonic()
+            output_started = time.monotonic()
             reactive_cells = {
                 cell_id
                 for cell_id, cell in child._kernel.graph.cells.items()
-                if cell.stale and cell_id not in projection_id_set
+                if cell.stale and cell_id not in output_cell_id_set
             }
-            await child.run(reactive_cells | set(projection_id_set))
+            await child.run(reactive_cells | set(output_cell_id_set))
             _raise_child_errors(child, reactive_cells, state.name)
-            for output, cell_id in projection_ids.items():
+            for output, cell_id in output_cell_ids.items():
                 _raise_child_errors(child, {cell_id}, state.name, output=output)
             receipt_items: list[NativeReceipt] = []
             for output in plan.outputs:
-                cell_id = projection_ids[output]
-                disposition = upstream_cache.projections.get(cell_id)
+                cell_id = output_cell_ids[output]
+                disposition = notebook_cache.output_cells.get(cell_id)
                 if disposition is None:
                     raise OutputError(
                         f"output {output!r} did not execute through marimo's cell cache",
@@ -1896,7 +1896,7 @@ async def execute_state(
                         details={"state": state.name, "output": output},
                     )
                 receipt_items.append(
-                    _projection_receipt(
+                    _output_receipt(
                         child,
                         cell_id,
                         output,
@@ -1904,7 +1904,7 @@ async def execute_state(
                     )
                 )
             receipts = tuple(receipt_items)
-            projection_execution_seconds = time.monotonic() - projection_started
+            output_materialization_seconds = time.monotonic() - output_started
     finally:
         cleanup_started = time.monotonic()
         primary = sys.exception()
@@ -1933,19 +1933,19 @@ async def execute_state(
         finally:
             cleanup_seconds = time.monotonic() - cleanup_started
     if receipts is None:
-        raise RuntimeError("fresh child produced no projection receipts")
+        raise RuntimeError("state run produced no output receipts")
     return StateExecution(
         receipts=receipts,
-        upstream_cache=CacheSummary(
-            hits=upstream_cache.hits,
-            misses=upstream_cache.misses,
+        notebook_cache=CacheSummary(
+            hits=notebook_cache.hits,
+            misses=notebook_cache.misses,
         ),
-        timings=FreshChildTimings(
+        timings=StateRunTimings(
             states=1,
-            construction_seconds=construction_seconds,
-            upstream_execution_seconds=upstream_execution_seconds,
-            ui_application_seconds=ui_application_seconds,
-            projection_execution_seconds=projection_execution_seconds,
+            setup_seconds=setup_seconds,
+            dependency_execution_seconds=dependency_execution_seconds,
+            ui_update_seconds=ui_update_seconds,
+            output_materialization_seconds=output_materialization_seconds,
             cleanup_seconds=cleanup_seconds,
         ),
     )
@@ -1978,9 +1978,9 @@ def _capture_ui_callback_errors(
             element._on_change = callback
 
 
-def _projection_ids(
+def _output_cell_ids(
     internal: Any,
-    projection_codes: Mapping[str, str],
+    output_cell_codes: Mapping[str, str],
 ) -> dict[str, Any]:
     by_code: dict[str, list[Any]] = {}
     for cell_id, data in zip(
@@ -1990,19 +1990,19 @@ def _projection_ids(
     ):
         by_code.setdefault(data.code, []).append(cell_id)
     result: dict[str, Any] = {}
-    for output, code in projection_codes.items():
+    for output, code in output_cell_codes.items():
         matches = by_code.get(code, [])
         if len(matches) != 1:
             raise ExecutionError(
-                f"projection for output {output!r} is unavailable in the child",
-                code="projection_invalid",
+                f"output cell for {output!r} is unavailable in the state run",
+                code="output_cell_unavailable",
                 details={"output": output},
             )
         result[output] = matches[0]
     return result
 
 
-def _projection_receipt(
+def _output_receipt(
     child: Any,
     cell_id: Any,
     output: str,

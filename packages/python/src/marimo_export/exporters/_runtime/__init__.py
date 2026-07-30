@@ -1,1 +1,1 @@
-"""Exporter implementations invoked by transient projection cells."""
+"""Exporter implementations invoked by transient output cells."""

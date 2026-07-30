@@ -18,7 +18,7 @@ from marimo_export._marimo.compat import (
     transfer_runtime_context,
 )
 from marimo_export.errors import IntegrityError
-from marimo_export.publication import OutputCodec, ScalarDescriptor
+from marimo_export.export import OutputCodec, ScalarDescriptor
 
 _DEFAULT_TTL_SECONDS = 5 * 60.0
 _MAX_TTL_SECONDS = 30 * 60.0
@@ -49,7 +49,7 @@ class _RuntimeContext(Protocol):
 
 @dataclass(frozen=True, slots=True)
 class TransferAsset:
-    """One temporary URL for one content-addressed publication asset."""
+    """One temporary URL for one content-addressed export asset."""
 
     codec: OutputCodec
     sha256: str
@@ -152,7 +152,7 @@ def create_ticket(
                     _schedule_locked()
             if isinstance(error, IntegrityError) and not cleanup_errors:
                 raise
-            raise IntegrityError("failed to register publication assets") from error
+            raise IntegrityError("failed to register export assets") from error
 
 
 def release(ticket_id: str) -> bool:

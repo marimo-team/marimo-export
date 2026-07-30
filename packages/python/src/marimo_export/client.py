@@ -17,7 +17,7 @@ from marimo_export._json import (
     json_object,
 )
 from marimo_export._remote import BridgeError, HttpKernelTransport, SessionInfo
-from marimo_export._writer import WriteResult, preflight_publication, write_publication
+from marimo_export._writer import WriteResult, preflight_export, write_export
 from marimo_export.errors import (
     CodecError,
     CompatibilityError,
@@ -28,13 +28,13 @@ from marimo_export.errors import (
     SpecError,
     TransportError,
 )
-from marimo_export.publication import (
+from marimo_export.export import (
     CacheSummary,
-    FreshChildTimings,
+    ExportIndex,
+    ExportResult,
     OutputCodec,
     PhaseTimings,
-    PublicationIndex,
-    PublicationResult,
+    StateRunTimings,
 )
 from marimo_export.spec import ExportSpec, FrozenJsonObject, FrozenJsonValue, StrPath
 
@@ -48,7 +48,7 @@ _CAPABILITIES = frozenset(
         "child_ui_updates",
         "definition_overrides",
         "setup_definition_overrides",
-        "synthetic_projection_cells",
+        "synthetic_output_cells",
     }
 )
 _CODECS = frozenset(
@@ -213,8 +213,8 @@ class Session:
         spec: ExportSpec,
         output: StrPath,
         replace: bool = False,
-    ) -> PublicationResult:
-        """Publish the complete finite matrix from this borrowed session."""
+    ) -> ExportResult:
+        """Create a notebook export from this borrowed session."""
 
         total_started = time.monotonic()
         self._client._require_open()
@@ -222,17 +222,17 @@ class Session:
             raise TypeError("spec must be an ExportSpec")
         if not isinstance(replace, bool):
             raise TypeError("replace must be a boolean")
-        destination = preflight_publication(output, replace=replace)
+        destination = preflight_export(output, replace=replace)
         captured = self._capture(spec)
-        publication_started = time.monotonic()
-        written = write_publication(
+        export_started = time.monotonic()
+        written = write_export(
             captured.index,
             captured.assets,
             destination,
             replace=replace,
         )
-        publication_write_seconds = time.monotonic() - publication_started
-        return _publication_result(
+        export_write_seconds = time.monotonic() - export_started
+        return _export_result(
             captured,
             written,
             mode="capture",
@@ -240,13 +240,13 @@ class Session:
             timings=PhaseTimings(
                 total_seconds=time.monotonic() - total_started,
                 capture_seconds=captured.capture_seconds,
-                publication_write_seconds=publication_write_seconds,
-                fresh_children=captured.fresh_child_timings,
+                export_write_seconds=export_write_seconds,
+                state_runs=captured.state_run_timings,
             ),
         )
 
     def _capture(self, spec: ExportSpec) -> _CaptureData:
-        """Capture verified publication data before local commit."""
+        """Capture verified export data before local commit."""
 
         capture_started = time.monotonic()
         self._client._require_open()
@@ -267,13 +267,13 @@ class Session:
                 {
                     "index",
                     "transfer",
-                    "projection_cache",
-                    "upstream_cache",
-                    "fresh_child_timings",
+                    "output_cache",
+                    "notebook_cache",
+                    "state_run_timings",
                 },
                 "capture response",
             )
-            index = PublicationIndex.from_value(response.get("index"))
+            index = ExportIndex.from_value(response.get("index"))
             transfer = _transfer(response.get("transfer"), index)
             ticket = transfer.ticket
             assets: dict[tuple[OutputCodec, str], bytes] = {}
@@ -286,17 +286,17 @@ class Session:
                 if len(data) != item.size:
                     raise IntegrityError("a transferred asset length disagrees with its descriptor")
                 assets[(item.codec, item.sha256)] = data
-            projection_cache = _cache_summary(
-                response.get("projection_cache"),
-                "projection cache",
+            output_cache = _cache_summary(
+                response.get("output_cache"),
+                "output cache",
                 expected=len(index.states) * len(index.outputs),
             )
-            upstream_cache = _cache_summary(
-                response.get("upstream_cache"),
-                "upstream cache",
+            notebook_cache = _cache_summary(
+                response.get("notebook_cache"),
+                "notebook cache",
             )
-            fresh_child_timings = _fresh_child_timings(
-                response.get("fresh_child_timings"),
+            state_run_timings = _state_run_timings(
+                response.get("state_run_timings"),
                 states=len(index.states),
             )
             live_document_sha256 = self.inspect().document_sha256
@@ -314,9 +314,9 @@ class Session:
             return _CaptureData(
                 index=index,
                 assets=assets,
-                projection_cache=projection_cache,
-                upstream_cache=upstream_cache,
-                fresh_child_timings=fresh_child_timings,
+                output_cache=output_cache,
+                notebook_cache=notebook_cache,
+                state_run_timings=state_run_timings,
                 capture_seconds=time.monotonic() - capture_started,
             )
         finally:
@@ -423,8 +423,8 @@ def capture(
     server_token: str | None = None,
     timeout: float = 30.0,
     replace: bool = False,
-) -> PublicationResult:
-    """Capture one existing marimo session into a static publication."""
+) -> ExportResult:
+    """Capture one existing marimo session into a static export."""
 
     with Client(
         server,
@@ -456,18 +456,18 @@ class _Transfer:
 
 @dataclass(frozen=True, slots=True)
 class _CaptureData:
-    index: PublicationIndex
+    index: ExportIndex
     assets: Mapping[tuple[OutputCodec, str], bytes]
-    projection_cache: CacheSummary
-    upstream_cache: CacheSummary
-    fresh_child_timings: FreshChildTimings
+    output_cache: CacheSummary
+    notebook_cache: CacheSummary
+    state_run_timings: StateRunTimings
     capture_seconds: float
     server_start_seconds: float | None = None
     initial_autorun_seconds: float | None = None
     server_shutdown_seconds: float | None = None
 
 
-def _transfer(value: object, index: PublicationIndex) -> _Transfer:
+def _transfer(value: object, index: ExportIndex) -> _Transfer:
     data = _mapping(value, "capture transfer")
     _exact(data, {"ticket", "expires_at_ms", "assets"}, "capture transfer")
     ticket = data["ticket"]
@@ -510,7 +510,7 @@ def _transfer(value: object, index: PublicationIndex) -> _Transfer:
     expected = {(codec, asset.sha256, asset.size) for codec, asset in index.assets()}
     actual = {(asset.codec, asset.sha256, asset.size) for asset in assets}
     if actual != expected or len(actual) != len(assets):
-        raise TransportError("capture transfer assets do not match the publication")
+        raise TransportError("capture transfer assets do not match the export")
     return _Transfer(ticket=ticket, expires_at_ms=expires, assets=tuple(assets))
 
 
@@ -533,31 +533,31 @@ def _cache_summary(
     return CacheSummary(hits=hits, misses=misses)
 
 
-def _fresh_child_timings(value: object, *, states: int) -> FreshChildTimings:
-    path = "fresh child timings"
+def _state_run_timings(value: object, *, states: int) -> StateRunTimings:
+    path = "state run timings"
     data = _mapping(value, path)
     fields = {
         "states",
-        "construction_seconds",
-        "upstream_execution_seconds",
-        "ui_application_seconds",
-        "projection_execution_seconds",
+        "setup_seconds",
+        "dependency_execution_seconds",
+        "ui_update_seconds",
+        "output_materialization_seconds",
         "cleanup_seconds",
     }
     _exact(data, fields, path)
     if data["states"] != states:
-        raise TransportError("fresh child timing count does not match publication states")
+        raise TransportError("state run timing count does not match export states")
     try:
-        return FreshChildTimings(
+        return StateRunTimings(
             states=cast(int, data["states"]),
-            construction_seconds=cast(float, data["construction_seconds"]),
-            upstream_execution_seconds=cast(float, data["upstream_execution_seconds"]),
-            ui_application_seconds=cast(float, data["ui_application_seconds"]),
-            projection_execution_seconds=cast(float, data["projection_execution_seconds"]),
+            setup_seconds=cast(float, data["setup_seconds"]),
+            dependency_execution_seconds=cast(float, data["dependency_execution_seconds"]),
+            ui_update_seconds=cast(float, data["ui_update_seconds"]),
+            output_materialization_seconds=cast(float, data["output_materialization_seconds"]),
             cleanup_seconds=cast(float, data["cleanup_seconds"]),
         )
     except (TypeError, ValueError) as error:
-        raise TransportError("fresh child timings are invalid") from error
+        raise TransportError("state run timings are invalid") from error
 
 
 def _session_description(
@@ -670,16 +670,16 @@ def _bridge_error(error: BridgeError) -> Exception:
     return SessionError(str(error), **kwargs)
 
 
-def _publication_result(
+def _export_result(
     captured: _CaptureData,
     written: WriteResult,
     *,
     mode: Literal["build", "capture"],
     session_id: str | None,
     timings: PhaseTimings,
-) -> PublicationResult:
+) -> ExportResult:
     index = captured.index
-    return PublicationResult(
+    return ExportResult(
         path=written.path,
         mode=mode,
         session_id=session_id,
@@ -691,8 +691,8 @@ def _publication_result(
         assets=written.assets,
         asset_bytes=written.asset_bytes,
         index_bytes=written.index_bytes,
-        projection_cache=captured.projection_cache,
-        upstream_cache=captured.upstream_cache,
+        output_cache=captured.output_cache,
+        notebook_cache=captured.notebook_cache,
         timings=timings,
         warnings=written.warnings,
     )

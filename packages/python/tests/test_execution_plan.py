@@ -8,10 +8,10 @@ from marimo_export import ExportSpec, OutputSpec
 from marimo_export._execution import (
     Baseline,
     Definition,
-    OutputProjection,
-    normalize_matrix,
+    PlannedOutput,
+    create_export_plan,
     ordinary_cell_code,
-    projection_code,
+    output_cell_code,
 )
 from marimo_export.errors import SpecError
 from marimo_export.exporters import altair, importable
@@ -80,7 +80,7 @@ def _spec() -> ExportSpec:
 
 
 def test_sparse_rows_normalize_in_canonical_state_order() -> None:
-    plan = normalize_matrix(_spec(), _baseline())
+    plan = create_export_plan(_spec(), _baseline())
 
     assert tuple(state.name for state in plan.states) == ("baseline", "focus", "wide")
     assert dict(plan.states[0].inputs) == {
@@ -95,7 +95,7 @@ def test_sparse_rows_normalize_in_canonical_state_order() -> None:
 
 
 def test_ordinary_overrides_target_the_authored_definition_cell() -> None:
-    plan = normalize_matrix(_spec(), _baseline())
+    plan = create_export_plan(_spec(), _baseline())
     state = plan.states[-1]
 
     assert dict(state.ordinary_values) == {
@@ -125,23 +125,23 @@ def test_duplicate_normalized_vectors_fail_before_execution() -> None:
     )
 
     try:
-        normalize_matrix(spec, _baseline())
+        create_export_plan(spec, _baseline())
     except SpecError as error:
         assert error.code == "spec_state_duplicate"
     else:
         raise AssertionError("duplicate normalized states were accepted")
 
 
-def test_projection_body_reads_state_and_source_without_definitions() -> None:
-    code = projection_code(
-        OutputProjection(
+def test_output_cell_reads_state_and_source_without_definitions() -> None:
+    code = output_cell_code(
+        PlannedOutput(
             name='chart "main"',
             source="symbols_chart",
             exporter=None,
         ),
         "marimo_export_state_0123456789abcdef",
     )
-    cell = compile_cell(code, cell_id=CellId_t("projection"))
+    cell = compile_cell(code, cell_id=CellId_t("planned_output"))
 
     assert cell.defs == set()
     assert cell.refs == {
@@ -150,9 +150,9 @@ def test_projection_body_reads_state_and_source_without_definitions() -> None:
     }
 
 
-def test_exporter_projection_is_a_deterministic_marimo_leaf() -> None:
-    code = projection_code(
-        OutputProjection(
+def test_exporter_output_cell_is_a_deterministic_marimo_leaf() -> None:
+    code = output_cell_code(
+        PlannedOutput(
             name="snapshot",
             source="performance",
             exporter=altair.png(scale=2),
@@ -161,7 +161,7 @@ def test_exporter_projection_is_a_deterministic_marimo_leaf() -> None:
         exporter_identity="b" * 64,
     )
     tree = ast.parse(code)
-    cell = compile_cell(code, cell_id=CellId_t("projection"))
+    cell = compile_cell(code, cell_id=CellId_t("planned_output"))
 
     assert cell.defs == set()
     assert cell.refs == {
@@ -180,9 +180,9 @@ def test_exporter_projection_is_a_deterministic_marimo_leaf() -> None:
     assert ast.unparse(call.value) == "_marimo_export_exporter(performance, scale=2)"
 
 
-def test_custom_exporter_projection_uses_an_explicit_importable_callable() -> None:
-    code = projection_code(
-        OutputProjection(
+def test_custom_exporter_output_cell_uses_an_explicit_importable_callable() -> None:
+    code = output_cell_code(
+        PlannedOutput(
             name="summary",
             source="result",
             exporter=importable(

@@ -10,18 +10,18 @@ from marimo_export import (
     Client,
     ExportSpec,
     OutputSpec,
-    open_publication,
+    open_export,
 )
 from marimo_export._json import JsonObject, sha256_bytes
 from marimo_export._remote import BridgeError, SessionInfo
-from marimo_export.errors import ExecutionError, PublicationError, SessionError, TransportError
-from marimo_export.publication import (
+from marimo_export.errors import ExecutionError, NotebookExportError, SessionError, TransportError
+from marimo_export.export import (
     AssetRef,
+    ExportIndex,
     NotebookProvenance,
     NumpyDescriptor,
     ProducerProvenance,
     Provenance,
-    PublicationIndex,
     ScalarDescriptor,
     StateEntry,
 )
@@ -35,7 +35,7 @@ def _spec() -> ExportSpec:
     )
 
 
-def _index(*, asset: bytes | None = None) -> PublicationIndex:
+def _index(*, asset: bytes | None = None) -> ExportIndex:
     if asset is None:
         descriptor = ScalarDescriptor(
             value=42,
@@ -55,7 +55,7 @@ def _index(*, asset: bytes | None = None) -> PublicationIndex:
                 python_type="numpy.ndarray",
             ),
         )
-    return PublicationIndex(
+    return ExportIndex(
         notebook=NotebookProvenance(
             filename="notebook.py",
             document_sha256="a" * 64,
@@ -99,7 +99,7 @@ def _inspection() -> JsonObject:
             "child_ui_updates",
             "definition_overrides",
             "setup_definition_overrides",
-            "synthetic_projection_cells",
+            "synthetic_output_cells",
         ],
         "definitions": [
             {
@@ -121,7 +121,7 @@ def _inspection() -> JsonObject:
 class _Transport:
     def __init__(
         self,
-        index: PublicationIndex | None = None,
+        index: ExportIndex | None = None,
         *,
         payload: bytes | None = None,
         release_error: BridgeError | None = None,
@@ -173,14 +173,14 @@ class _Transport:
                 "expires_at_ms": 4_000_000_000_000,
                 "assets": assets,
             },
-            "projection_cache": {"hits": 0, "misses": 1},
-            "upstream_cache": {"hits": 2, "misses": 1},
-            "fresh_child_timings": {
+            "output_cache": {"hits": 0, "misses": 1},
+            "notebook_cache": {"hits": 2, "misses": 1},
+            "state_run_timings": {
                 "states": 1,
-                "construction_seconds": 0.1,
-                "upstream_execution_seconds": 0.2,
-                "ui_application_seconds": 0.0,
-                "projection_execution_seconds": 0.1,
+                "setup_seconds": 0.1,
+                "dependency_execution_seconds": 0.2,
+                "ui_update_seconds": 0.0,
+                "output_materialization_seconds": 0.1,
                 "cleanup_seconds": 0.1,
             },
         }
@@ -227,14 +227,14 @@ def test_capture_releases_transfer_before_committing(
 ) -> None:
     payload = _npy()
     transport = _Transport(_index(asset=payload), payload=payload)
-    output = tmp_path / "publication"
+    output = tmp_path / "export"
     with _client(monkeypatch, transport) as client:
         result = client.session().capture(spec=_spec(), output=output)
 
     assert result.mode == "capture"
     assert result.assets == 1
-    assert result.projection_cache.misses == 1
-    assert result.upstream_cache == client_module.CacheSummary(hits=2, misses=1)
+    assert result.output_cache.misses == 1
+    assert result.notebook_cache == client_module.CacheSummary(hits=2, misses=1)
     assert result.timings.capture_seconds >= 0
     assert [call[0] for call in transport.calls] == [
         "sessions",
@@ -243,7 +243,7 @@ def test_capture_releases_transfer_before_committing(
         "inspect",
         "release",
     ]
-    assert open_publication(output).state("baseline").output("answer").asset_bytes() == payload
+    assert open_export(output).state("baseline").output("answer").asset_bytes() == payload
 
 
 def test_capture_rejects_a_live_document_change_before_commit(
@@ -263,7 +263,7 @@ def test_capture_rejects_a_live_document_change_before_commit(
             return response
 
     transport = _ChangedDocumentTransport()
-    output = tmp_path / "publication"
+    output = tmp_path / "export"
     with (
         _client(monkeypatch, transport) as client,
         pytest.raises(ExecutionError) as raised,
@@ -291,7 +291,7 @@ def test_capture_release_failure_leaves_destination_absent(
     transport = _Transport(
         release_error=BridgeError("session_error", "release failed"),
     )
-    output = tmp_path / "publication"
+    output = tmp_path / "export"
 
     with (
         _client(monkeypatch, transport) as client,
@@ -318,7 +318,7 @@ def test_capture_rejects_extra_top_level_bridge_fields(
                 response["extra"] = True
             return response
 
-    output = tmp_path / "publication"
+    output = tmp_path / "export"
     with (
         _client(monkeypatch, _ExtraFieldTransport()) as client,
         pytest.raises(TransportError, match="capture response has invalid fields"),
@@ -333,12 +333,12 @@ def test_destination_preflight_runs_before_remote_capture(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     transport = _Transport()
-    output = tmp_path / "publication"
+    output = tmp_path / "export"
     output.mkdir()
 
     with (
         _client(monkeypatch, transport) as client,
-        pytest.raises(PublicationError) as raised,
+        pytest.raises(NotebookExportError) as raised,
     ):
         client.session().capture(spec=_spec(), output=output)
 

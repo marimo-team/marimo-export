@@ -1,4 +1,4 @@
-import { PublicationError } from "./types.js";
+import { NotebookExportError } from "./types.js";
 
 const MAX_DIAGNOSTIC_PATH = 256;
 
@@ -12,7 +12,7 @@ export function normalizeBase(base: string | URL): URL {
       try {
         url = new URL(base);
       } catch (error) {
-        throw new TypeError("A string publication base must be absolute outside a document.", {
+        throw new TypeError("A string export base must be absolute outside a document.", {
           cause: error,
         });
       }
@@ -21,13 +21,13 @@ export function normalizeBase(base: string | URL): URL {
     }
   }
   if (url.protocol !== "http:" && url.protocol !== "https:") {
-    throw new TypeError("Publication base must use HTTP or HTTPS.");
+    throw new TypeError("Export base URL must use HTTP or HTTPS.");
   }
   if (url.username !== "" || url.password !== "") {
-    throw new TypeError("Publication base must not contain user information.");
+    throw new TypeError("Export base URL must not contain user information.");
   }
   if (url.search !== "" || url.hash !== "") {
-    throw new TypeError("Publication base must not contain a query or fragment.");
+    throw new TypeError("Export base URL must not contain a query or fragment.");
   }
   if (!url.pathname.endsWith("/")) url.pathname += "/";
   return url;
@@ -52,13 +52,9 @@ export async function fetchBytes(
   }
   if (!response.ok) {
     cancelBody(response, new Error("Unsuccessful response"));
-    throw new PublicationError(
-      "read_failed",
-      `Publication object ${quotePath(path)} was not found.`,
-      {
-        details: { path: boundedPath(path), status: response.status },
-      },
-    );
+    throw new NotebookExportError("read_failed", `Export file ${quotePath(path)} was not found.`, {
+      details: { path: boundedPath(path), status: response.status },
+    });
   }
 
   const declared = decodedContentLength(response);
@@ -69,9 +65,9 @@ export async function fetchBytes(
     }
     if (options.expectedBytes !== undefined && declared !== options.expectedBytes) {
       cancelBody(response, new Error("Response size differs from descriptor"));
-      throw new PublicationError(
+      throw new NotebookExportError(
         "integrity_failed",
-        `Publication object ${quotePath(path)} has an unexpected declared size.`,
+        `Export file ${quotePath(path)} has an unexpected declared size.`,
         {
           details: {
             path: boundedPath(path),
@@ -86,9 +82,9 @@ export async function fetchBytes(
   try {
     const bytes = await readBody(response, path, options.maxBytes, options.signal);
     if (options.expectedBytes !== undefined && bytes.byteLength !== options.expectedBytes) {
-      throw new PublicationError(
+      throw new NotebookExportError(
         "integrity_failed",
-        `Publication object ${quotePath(path)} has an unexpected size.`,
+        `Export file ${quotePath(path)} has an unexpected size.`,
         {
           details: {
             path: boundedPath(path),
@@ -100,7 +96,7 @@ export async function fetchBytes(
     }
     return bytes;
   } catch (error) {
-    if (error instanceof PublicationError) throw error;
+    if (error instanceof NotebookExportError) throw error;
     throwReadError(error, options.signal, path);
   }
 }
@@ -112,9 +108,9 @@ async function readBody(
   signal: AbortSignal | undefined,
 ): Promise<Uint8Array> {
   if (response.body === null) {
-    throw new PublicationError(
+    throw new NotebookExportError(
       "read_failed",
-      `Publication object ${quotePath(path)} has no readable response body.`,
+      `Export file ${quotePath(path)} has no readable response body.`,
       { details: { path: boundedPath(path) } },
     );
   }
@@ -162,10 +158,10 @@ function decodedContentLength(response: Response): number | undefined {
   return Number.isSafeInteger(value) ? value : undefined;
 }
 
-function limitError(path: string, maxBytes: number, observed: number): PublicationError {
-  return new PublicationError(
+function limitError(path: string, maxBytes: number, observed: number): NotebookExportError {
+  return new NotebookExportError(
     "read_limit_exceeded",
-    `Publication object ${quotePath(path)} exceeds its byte limit.`,
+    `Export file ${quotePath(path)} exceeds its byte limit.`,
     {
       details: {
         path: boundedPath(path),
@@ -178,7 +174,7 @@ function limitError(path: string, maxBytes: number, observed: number): Publicati
 
 function throwIfAborted(signal: AbortSignal | undefined): void {
   if (signal?.aborted) {
-    throw new PublicationError("abort", "Publication operation was aborted.", {
+    throw new NotebookExportError("abort", "Export operation was aborted.", {
       cause: signal.reason,
     });
   }
@@ -186,16 +182,12 @@ function throwIfAborted(signal: AbortSignal | undefined): void {
 
 function throwReadError(error: unknown, signal: AbortSignal | undefined, path: string): never {
   if (signal?.aborted || (error instanceof DOMException && error.name === "AbortError")) {
-    throw new PublicationError("abort", "Publication operation was aborted.", { cause: error });
+    throw new NotebookExportError("abort", "Export operation was aborted.", { cause: error });
   }
-  throw new PublicationError(
-    "read_failed",
-    `Failed to read publication object ${quotePath(path)}.`,
-    {
-      cause: error,
-      details: { path: boundedPath(path) },
-    },
-  );
+  throw new NotebookExportError("read_failed", `Failed to read export object ${quotePath(path)}.`, {
+    cause: error,
+    details: { path: boundedPath(path) },
+  });
 }
 
 function cancelBody(response: Response, reason: unknown): void {

@@ -1,7 +1,7 @@
 {
   "name": "@marimo-team/marimo-export",
   "version": "0.0.0",
-  "description": "Read and render portable marimo notebook publications in a browser",
+  "description": "Load prepared marimo notebook results in browser applications",
   "license": "Apache-2.0",
   "files": [
     "dist",

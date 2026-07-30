@@ -5,7 +5,7 @@ build-backend = "uv_build"
 [project]
 name = "marimo-export"
 version = "0.0.0"
-description = "Publish selected results from a running marimo notebook."
+description = "Turn marimo notebook results into interactive web apps served as static files."
 readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE"]

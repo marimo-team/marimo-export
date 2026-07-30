@@ -13,13 +13,13 @@ import type {
   ScalarDescriptor,
   ScalarValue,
 } from "./types.js";
-import { PublicationError, freezeJsonObject, freezeJsonValue } from "./types.js";
+import { NotebookExportError, freezeJsonObject, freezeJsonValue } from "./types.js";
 
 const encoder = new TextEncoder();
 const SHA256 = /^[0-9a-f]{64}$/u;
 const BIGINT = /^(?:0|-[1-9][0-9]*|[1-9][0-9]*)$/u;
 const MAX_SAFE_INTEGER = Number.MAX_SAFE_INTEGER;
-const MAX_PUBLIC_NAME_BYTES = 255;
+const MAX_EXPORT_NAME_BYTES = 255;
 const MAX_PROVENANCE_BYTES = 2_048;
 const MAX_ASSET_SIZE = 2_147_483_647;
 const MAX_METADATA_BYTES = 256 * 1024;
@@ -33,7 +33,7 @@ export interface ParsedState {
   readonly outputs: Readonly<Record<string, OutputDescriptor>>;
 }
 
-export interface ParsedPublicationIndex {
+export interface ParsedExportIndex {
   readonly notebook: NotebookProvenance;
   readonly producer: ProducerProvenance;
   readonly inputs: readonly string[];
@@ -41,9 +41,9 @@ export interface ParsedPublicationIndex {
   readonly states: Readonly<Record<string, ParsedState>>;
 }
 
-export function parsePublicationIndex(input: unknown): ParsedPublicationIndex {
+export function parseExportIndex(input: unknown): ParsedExportIndex {
   try {
-    const root = strictRecord(input, "publication", [
+    const root = strictRecord(input, "export", [
       "inputs",
       "notebook",
       "outputs",
@@ -51,21 +51,21 @@ export function parsePublicationIndex(input: unknown): ParsedPublicationIndex {
       "schema",
       "states",
     ]);
-    literal(root.schema, "marimo-export.publication.v1", "publication.schema");
+    literal(root.schema, "marimo-export.export.v1", "export.schema");
     const notebook = parseNotebook(root.notebook);
     const producer = parseProducer(root.producer);
-    const inputs = nameArray(root.inputs, "publication.inputs", false);
-    const outputs = nameArray(root.outputs, "publication.outputs", true);
+    const inputs = nameArray(root.inputs, "export.inputs", false);
+    const outputs = nameArray(root.outputs, "export.outputs", true);
     const inputSet = new Set(inputs);
     const outputSet = new Set(outputs);
-    const statesRecord = record(root.states, "publication.states");
-    if (Object.keys(statesRecord).length === 0) fail("publication.states must not be empty");
+    const statesRecord = record(root.states, "export.states");
+    if (Object.keys(statesRecord).length === 0) fail("export.states must not be empty");
 
     const states = Object.freeze(
       Object.fromEntries(
         Object.entries(statesRecord).map(([name, value]) => {
-          const stateName = publicName(name, "publication.states key", MAX_PUBLIC_NAME_BYTES);
-          const path = `publication.states[${JSON.stringify(stateName)}]`;
+          const stateName = exportName(name, "export.states key");
+          const path = `export.states[${JSON.stringify(stateName)}]`;
           const state = strictRecord(value, path, ["fingerprint", "inputs", "outputs"]);
           const stateInputs = portableJsonObject(state.inputs, `${path}.inputs`);
           requireExactKeys(stateInputs, inputSet, `${path}.inputs`);
@@ -74,7 +74,7 @@ export function parsePublicationIndex(input: unknown): ParsedPublicationIndex {
           const parsedOutputs = Object.freeze(
             Object.fromEntries(
               Object.entries(outputRecord).map(([outputName, descriptor]) => [
-                publicName(outputName, `${path}.outputs key`, MAX_PUBLIC_NAME_BYTES),
+                exportName(outputName, `${path}.outputs key`),
                 parseDescriptor(descriptor, outputName),
               ]),
             ),
@@ -102,31 +102,29 @@ export function parsePublicationIndex(input: unknown): ParsedPublicationIndex {
       states,
     });
   } catch (error) {
-    if (error instanceof PublicationError) throw error;
-    throw new PublicationError("publication_invalid", boundedMessage(error), { cause: error });
+    if (error instanceof NotebookExportError) throw error;
+    throw new NotebookExportError("export_invalid", boundedMessage(error), { cause: error });
   }
 }
 
 function parseNotebook(input: unknown): NotebookProvenance {
-  const value = strictRecord(input, "publication.notebook", ["document_sha256", "filename"]);
+  const value = strictRecord(input, "export.notebook", ["document_sha256", "filename"]);
   const filename =
-    value.filename === null
-      ? null
-      : portableBasename(value.filename, "publication.notebook.filename");
+    value.filename === null ? null : portableBasename(value.filename, "export.notebook.filename");
   return Object.freeze({
     filename,
-    documentSha256: digest(value.document_sha256, "publication.notebook.document_sha256"),
+    documentSha256: digest(value.document_sha256, "export.notebook.document_sha256"),
   });
 }
 
 function parseProducer(input: unknown): ProducerProvenance {
-  const value = strictRecord(input, "publication.producer", ["marimo", "marimo_export"]);
+  const value = strictRecord(input, "export.producer", ["marimo", "marimo_export"]);
   return Object.freeze({
-    marimo: publicName(value.marimo, "publication.producer.marimo", MAX_PUBLIC_NAME_BYTES),
-    marimoExport: publicName(
+    marimo: boundedPrintable(value.marimo, "export.producer.marimo", MAX_EXPORT_NAME_BYTES),
+    marimoExport: boundedPrintable(
       value.marimo_export,
-      "publication.producer.marimo_export",
-      MAX_PUBLIC_NAME_BYTES,
+      "export.producer.marimo_export",
+      MAX_EXPORT_NAME_BYTES,
     ),
   });
 }
@@ -212,7 +210,7 @@ function parseProvenance(input: unknown, parent: string, asset: boolean): Proven
   return Object.freeze({
     cacheKey: opaqueReference(value.cache_key, `${path}.cache_key`),
     returnReference: reference,
-    pythonType: publicName(value.python_type, `${path}.python_type`, MAX_PROVENANCE_BYTES),
+    pythonType: boundedPrintable(value.python_type, `${path}.python_type`, MAX_PROVENANCE_BYTES),
   });
 }
 
@@ -268,9 +266,7 @@ function validateStateVectors(states: Readonly<Record<string, ParsedState>>): vo
     const key = canonicalJson(state.inputs);
     const other = vectors.get(key);
     if (other !== undefined) {
-      fail(
-        `publication states ${JSON.stringify(other)} and ${JSON.stringify(name)} have equal inputs`,
-      );
+      fail(`export states ${JSON.stringify(other)} and ${JSON.stringify(name)} have equal inputs`);
     }
     vectors.set(key, name);
   }
@@ -287,7 +283,7 @@ function validateRepresentations(
       const representation = `${descriptor.codec}\0${descriptor.mediaType}`;
       const previous = representations.get(name);
       if (previous !== undefined && previous !== representation) {
-        throw new PublicationError(
+        throw new NotebookExportError(
           "output_representation_changed",
           `Output ${JSON.stringify(name)} changes codec or media type across states.`,
           { details: { output: name } },
@@ -439,15 +435,17 @@ function requireExactKeys(
 
 function nameArray(input: unknown, path: string, nonempty: boolean): readonly string[] {
   if (!Array.isArray(input)) fail(`${path} must be an array`);
-  const values = input.map((name, index) =>
-    publicName(name, `${path}[${index}]`, MAX_PUBLIC_NAME_BYTES),
-  );
+  const values = input.map((name, index) => exportName(name, `${path}[${index}]`));
   if (nonempty && values.length === 0) fail(`${path} must not be empty`);
   if (new Set(values).size !== values.length) fail(`${path} must contain unique names`);
   return Object.freeze(values);
 }
 
-function publicName(input: unknown, path: string, maxBytes: number): string {
+function exportName(input: unknown, path: string): string {
+  return boundedPrintable(input, path, MAX_EXPORT_NAME_BYTES);
+}
+
+function boundedPrintable(input: unknown, path: string, maxBytes: number): string {
   if (typeof input !== "string") fail(`${path} must be a string`);
   unicodeScalar(input, path);
   if (
@@ -462,7 +460,7 @@ function publicName(input: unknown, path: string, maxBytes: number): string {
 }
 
 function opaqueReference(input: unknown, path: string): string {
-  const value = publicName(input, path, MAX_PROVENANCE_BYTES);
+  const value = boundedPrintable(input, path, MAX_PROVENANCE_BYTES);
   if (value.startsWith("/") || /^[A-Za-z]:[\\/]/u.test(value) || value.startsWith("\\\\")) {
     fail(`${path} must be a store-relative opaque identifier`);
   }
@@ -482,7 +480,7 @@ function portableBasename(input: unknown, path: string): string {
     hasControl(input) ||
     WINDOWS_RESERVED.test(input) ||
     WINDOWS_DEVICE.test(stem) ||
-    encoder.encode(input).byteLength > MAX_PUBLIC_NAME_BYTES
+    encoder.encode(input).byteLength > MAX_EXPORT_NAME_BYTES
   ) {
     fail(`${path} must be a portable basename`);
   }
@@ -514,14 +512,14 @@ function hasControl(value: string): boolean {
 }
 
 function boundedMessage(error: unknown): string {
-  const source = error instanceof Error ? error.message : "Publication index validation failed.";
+  const source = error instanceof Error ? error.message : "Export index validation failed.";
   const message = source.length > 2_048 ? `${source.slice(0, 2_045)}...` : source;
-  return `Invalid publication index: ${message}`;
+  return `Invalid export index: ${message}`;
 }
 
 function fail(message: string): never {
-  throw new PublicationError(
-    "publication_invalid",
+  throw new NotebookExportError(
+    "export_invalid",
     message.length > 2_048 ? `${message.slice(0, 2_045)}...` : message,
   );
 }

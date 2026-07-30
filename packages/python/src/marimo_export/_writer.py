@@ -14,16 +14,16 @@ from pathlib import Path
 from typing import Any
 
 from marimo_export._json import sha256_bytes
-from marimo_export.errors import IntegrityError, PublicationError
-from marimo_export.publication import (
+from marimo_export.errors import IntegrityError, NotebookExportError
+from marimo_export.export import (
     AssetDescriptor,
+    ExportIndex,
+    ExportWarning,
     OutputCodec,
-    PublicationIndex,
-    PublicationWarning,
     ScalarDescriptor,
     asset_path,
 )
-from marimo_export.reader import _validate_asset, open_publication
+from marimo_export.reader import _validate_asset, open_export
 
 
 @dataclass(frozen=True, slots=True)
@@ -32,29 +32,29 @@ class WriteResult:
     assets: int
     asset_bytes: int
     index_bytes: int
-    warnings: tuple[PublicationWarning, ...]
+    warnings: tuple[ExportWarning, ...]
 
 
-def write_publication(
-    index: PublicationIndex,
+def write_export(
+    index: ExportIndex,
     assets: Mapping[tuple[OutputCodec, str], bytes],
     destination: str | os.PathLike[str],
     *,
     replace: bool,
 ) -> WriteResult:
-    """Stage, verify, and atomically commit one immutable publication."""
+    """Stage, verify, and atomically commit one immutable export."""
 
-    if not isinstance(index, PublicationIndex):
-        raise TypeError("index must be a PublicationIndex")
+    if not isinstance(index, ExportIndex):
+        raise TypeError("index must be an ExportIndex")
     if not isinstance(assets, Mapping):
         raise TypeError("assets must be a mapping")
     if not isinstance(replace, bool):
         raise TypeError("replace must be a boolean")
-    target = preflight_publication(destination, replace=replace)
+    target = preflight_export(destination, replace=replace)
     expected = {(codec, asset.sha256): asset for codec, asset in index.assets()}
     if set(assets) != set(expected):
-        raise PublicationError(
-            "asset payload keys must exactly match the publication asset closure",
+        raise NotebookExportError(
+            "asset payload keys must exactly match the export asset closure",
             code="asset_conflict",
             details={
                 "missing": [
@@ -75,7 +75,7 @@ def write_publication(
     )
     retired: Path | None = None
     committed = False
-    warnings: list[PublicationWarning] = []
+    warnings: list[ExportWarning] = []
     try:
         asset_directory = staging / "assets"
         asset_directory.mkdir(mode=0o700)
@@ -105,7 +105,7 @@ def write_publication(
         _write_file(staging / "index.json", index_bytes)
         _sync_directory(asset_directory)
         _sync_directory(staging)
-        open_publication(staging).verify()
+        open_export(staging).verify()
 
         retired = _commit(staging, target, replace=replace)
         committed = True
@@ -113,9 +113,9 @@ def write_publication(
             _sync_directory(parent)
         except OSError:
             warnings.append(
-                PublicationWarning(
-                    code="publication_parent_sync_failed",
-                    message="The publication is visible, but its directory entry was not synced.",
+                ExportWarning(
+                    code="export_parent_sync_failed",
+                    message="The export is visible, but its directory entry was not synced.",
                     details={"path": str(target)},
                 )
             )
@@ -125,9 +125,9 @@ def write_publication(
                 shutil.rmtree(retired)
             except OSError:
                 warnings.append(
-                    PublicationWarning(
+                    ExportWarning(
                         code="retired_destination_cleanup_failed",
-                        message="The previous publication remains beside the destination.",
+                        message="The previous export remains beside the destination.",
                         details={"path": str(retired)},
                     )
                 )
@@ -139,12 +139,12 @@ def write_publication(
             index_bytes=len(index_bytes),
             warnings=tuple(warnings),
         )
-    except (IntegrityError, PublicationError):
+    except (IntegrityError, NotebookExportError):
         raise
     except (OSError, RuntimeError, ValueError) as error:
-        raise PublicationError(
-            f"publication commit failed: {error}",
-            code="publication_commit_failed",
+        raise NotebookExportError(
+            f"export commit failed: {error}",
+            code="export_commit_failed",
         ) from error
     finally:
         if not committed:
@@ -157,16 +157,16 @@ def _destination(value: str | os.PathLike[str]) -> Path:
         raise TypeError("destination must be a string or path-like object")
     target = Path(value).expanduser().absolute()
     if target.name in {"", ".", ".."}:
-        raise ValueError("destination must name a publication directory")
+        raise ValueError("destination must name an export directory")
     return target
 
 
-def preflight_publication(
+def preflight_export(
     destination: str | os.PathLike[str],
     *,
     replace: bool,
 ) -> Path:
-    """Validate a publication destination before notebook execution."""
+    """Validate an export destination before notebook execution."""
 
     if not isinstance(replace, bool):
         raise TypeError("replace must be a boolean")
@@ -175,24 +175,24 @@ def preflight_publication(
     try:
         parent_metadata = parent.lstat()
     except OSError as error:
-        raise PublicationError(
+        raise NotebookExportError(
             f"destination parent could not be inspected: {parent}",
             code="destination_invalid",
         ) from error
     if not stat.S_ISDIR(parent_metadata.st_mode):
-        raise PublicationError(
+        raise NotebookExportError(
             "destination parent must be a directory",
             code="destination_invalid",
         )
     if not os.access(parent, os.W_OK | os.X_OK):
-        raise PublicationError(
+        raise NotebookExportError(
             "destination parent must be writable",
             code="destination_invalid",
         )
     try:
         target = parent.resolve(strict=True) / requested.name
     except (OSError, RuntimeError) as error:
-        raise PublicationError(
+        raise NotebookExportError(
             f"destination parent could not be resolved: {parent}",
             code="destination_invalid",
         ) from error
@@ -203,17 +203,17 @@ def preflight_publication(
         _require_atomic_rename()
         return target
     except OSError as error:
-        raise PublicationError(
+        raise NotebookExportError(
             f"destination could not be inspected: {target}",
             code="destination_invalid",
         ) from error
     if not stat.S_ISDIR(target_metadata.st_mode) or stat.S_ISLNK(target_metadata.st_mode):
-        raise PublicationError(
+        raise NotebookExportError(
             "destination must be a real directory",
             code="destination_invalid",
         )
     if not replace:
-        raise PublicationError(
+        raise NotebookExportError(
             f"destination already exists: {target}",
             code="destination_exists",
         )
@@ -229,7 +229,7 @@ def _write_file(path: Path, data: bytes) -> None:
         while view:
             written = os.write(descriptor, view)
             if written <= 0:
-                raise OSError("publication file write made no progress")
+                raise OSError("export file write made no progress")
             view = view[written:]
         os.fsync(descriptor)
     finally:
@@ -241,7 +241,7 @@ def _commit(staging: Path, target: Path, *, replace: bool) -> Path | None:
         try:
             _rename_no_replace(staging, target)
         except FileExistsError as error:
-            raise PublicationError(
+            raise NotebookExportError(
                 f"destination already exists: {target}",
                 code="destination_exists",
             ) from error
@@ -256,7 +256,7 @@ def _commit(staging: Path, target: Path, *, replace: bool) -> Path | None:
             return _commit(staging, target, replace=True)
         return None
     if not stat.S_ISDIR(target_metadata.st_mode) or stat.S_ISLNK(target_metadata.st_mode):
-        raise PublicationError(
+        raise NotebookExportError(
             "destination must be a real directory",
             code="destination_invalid",
         )
@@ -266,7 +266,7 @@ def _commit(staging: Path, target: Path, *, replace: bool) -> Path | None:
 
 def _require_atomic_rename() -> None:
     if not _rename_available():
-        raise PublicationError(
+        raise NotebookExportError(
             "this platform has no atomic no-replace directory rename",
             code="destination_invalid",
         )
@@ -274,7 +274,7 @@ def _require_atomic_rename() -> None:
 
 def _require_atomic_exchange() -> None:
     if not _exchange_available():
-        raise PublicationError(
+        raise NotebookExportError(
             "this platform has no atomic directory exchange",
             code="destination_invalid",
         )
@@ -350,4 +350,4 @@ def _sync_directory(path: Path) -> None:
         os.close(descriptor)
 
 
-__all__ = ["WriteResult", "preflight_publication", "write_publication"]
+__all__ = ["WriteResult", "preflight_export", "write_export"]

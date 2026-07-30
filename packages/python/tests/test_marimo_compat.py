@@ -12,7 +12,7 @@ import marimo_export._marimo.compat as marimo_compat
 import msgspec
 import pytest
 from marimo._save.stubs.lazy_stub import Cache, CacheType, Item, Meta
-from marimo_export._execution import MatrixPlan, OutputProjection
+from marimo_export._execution import ExportPlan, PlannedOutput
 from marimo_export._marimo.compat import (
     _cleanup_state_child,
     _document_sha256,
@@ -40,7 +40,7 @@ def test_attached_marimo_exposes_live_capture_capabilities() -> None:
         "child_ui_updates",
         "definition_overrides",
         "setup_definition_overrides",
-        "synthetic_projection_cells",
+        "synthetic_output_cells",
     )
 
 
@@ -172,17 +172,17 @@ def test_state_child_cleanup_preserves_the_execution_error() -> None:
     ]
 
 
-def _custom_exporter_plan(module_name: str, symbol: str = "encode") -> MatrixPlan:
-    projection = OutputProjection(
+def _custom_exporter_plan(module_name: str, symbol: str = "encode") -> ExportPlan:
+    planned_output = PlannedOutput(
         name="summary",
         source="value",
         exporter=importable(f"{module_name}:{symbol}"),
     )
-    return MatrixPlan(
+    return ExportPlan(
         states=(),
         inputs=(),
         outputs=("summary",),
-        projections={"summary": projection},
+        planned_outputs={"summary": planned_output},
         ordinary_cells={},
         state_name="marimo_export_state_0123456789abcdef",
         state_code="marimo_export_state_0123456789abcdef = 'state'",

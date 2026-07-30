@@ -266,7 +266,7 @@ def json_equal(left: JsonValue, right: JsonValue) -> bool:
 
 
 def canonical_bytes(value: object) -> bytes:
-    """Serialize a portable value with the publication's canonical JSON rules."""
+    """Serialize a portable value with the export's canonical JSON rules."""
 
     parsed = json_value(value)
     chunks: list[str] = []

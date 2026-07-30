@@ -7,8 +7,8 @@ from marimo_export.errors import (
     ExecutionError,
     IntegrityError,
     MarimoExportError,
+    NotebookExportError,
     OutputError,
-    PublicationError,
     TransportError,
 )
 
@@ -25,9 +25,9 @@ def test_errors_expose_stable_codes_and_json_wire_shape() -> None:
     }
 
 
-def test_error_hierarchy_matches_execution_and_publication_boundaries() -> None:
+def test_error_hierarchy_matches_execution_and_export_boundaries() -> None:
     assert isinstance(OutputError("failed"), ExecutionError)
-    assert isinstance(IntegrityError("corrupt"), PublicationError)
+    assert isinstance(IntegrityError("corrupt"), NotebookExportError)
 
 
 def test_error_details_must_be_json_safe() -> None:

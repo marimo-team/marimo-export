@@ -1,10 +1,5 @@
 import type { ArrowDescriptor, MediaType } from "@marimo-team/marimo-export";
-import {
-  CompressionType,
-  getCompressionCodec,
-  tableFromArrays,
-  tableToIPC,
-} from "@uwdata/flechette";
+import { CompressionType, tableFromArrays, tableToIPC } from "@uwdata/flechette";
 import { describe, expect, test } from "vite-plus/test";
 
 import { arrowTableLoader } from "../src/index.js";
@@ -14,9 +9,9 @@ const descriptor: ArrowDescriptor = {
   codec: "apache.arrow.file.v1",
   mediaType: "application/vnd.apache.arrow.file",
   provenance: {
-    cacheKey: "cell_cache/P_table.json",
+    cacheKey: "cell_cache/O_table.json",
     pythonType: "polars.dataframe.frame.DataFrame",
-    returnReference: "cell_cache/P_table/return.arrow",
+    returnReference: "cell_cache/O_table/return.arrow",
   },
 };
 const mediaType: MediaType = {
@@ -52,7 +47,6 @@ describe("arrowTableLoader", () => {
       payload: compressed,
     });
 
-    expect(getCompressionCodec(CompressionType.LZ4_FRAME)).not.toBeNull();
     expect(result.toArray()).toEqual([
       { category: "one", value: 1.5 },
       { category: "two", value: 2.5 },

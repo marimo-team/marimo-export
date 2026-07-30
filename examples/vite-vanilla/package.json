@@ -5,14 +5,14 @@
   "type": "module",
   "scripts": {
     "build": "vp build",
-    "capture": "uv run --locked --package marimo-export-vite-vanilla-example marimo-export capture --spec finance.export.yaml --output public/publication --replace",
+    "capture": "uv run --locked --package marimo-export-vite-vanilla-example marimo-export capture --spec finance.export.yaml --output public/export --replace",
     "check": "vp check",
     "dev": "vp dev --host 127.0.0.1",
     "notebook": "uv run --locked --package marimo-export-vite-vanilla-example marimo edit finance.py",
     "preview": "vp preview --host 127.0.0.1",
-    "publish": "uv run --locked --package marimo-export-vite-vanilla-example marimo-export build finance.py --spec finance.export.yaml --output public/publication --replace",
+    "export": "uv run --locked --package marimo-export-vite-vanilla-example marimo-export build finance.py --spec finance.export.yaml --output public/export --replace",
     "test": "node --test tests/dev-server.test.mjs",
-    "verify:publication": "uv run --locked --package marimo-export-vite-vanilla-example marimo-export verify public/publication",
+    "verify:export": "uv run --locked --package marimo-export-vite-vanilla-example marimo-export verify public/export",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

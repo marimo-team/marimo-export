@@ -1,6 +1,6 @@
 import { encode } from "@msgpack/msgpack";
-import { openPublication } from "@marimo-team/marimo-export";
-import type { PublishedOutput } from "@marimo-team/marimo-export";
+import { openExport } from "@marimo-team/marimo-export";
+import type { ExportOutput } from "@marimo-team/marimo-export";
 import { beforeEach, describe, expect, test, vi } from "vite-plus/test";
 
 import { vegaLiteLoader } from "../src/index.js";
@@ -108,7 +108,7 @@ describe("vegaLiteLoader", () => {
 async function fixture(
   data: Uint8Array,
   mediaType = "application/vnd.vegalite.v6+json",
-): Promise<PublishedOutput> {
+): Promise<ExportOutput> {
   const envelope = encode({
     data,
     media_type: mediaType,
@@ -122,7 +122,7 @@ async function fixture(
     notebook: { filename: "fixture.py", document_sha256: "a".repeat(64) },
     outputs: ["chart"],
     producer: { marimo: "0.24.0", marimo_export: "0.0.0" },
-    schema: "marimo-export.publication.v1",
+    schema: "marimo-export.export.v1",
     states: {
       current: {
         fingerprint,
@@ -135,9 +135,9 @@ async function fixture(
             media_type: mediaType,
             metadata: {},
             provenance: {
-              cache_key: "cell_cache/P_chart.json",
+              cache_key: "cell_cache/O_chart.json",
               python_type: "marimo._save.cache.BlobAsset",
-              return_reference: "cell_cache/P_chart/return.bin",
+              return_reference: "cell_cache/O_chart/return.bin",
             },
           },
         },
@@ -152,8 +152,8 @@ async function fixture(
     }
     return new Response(null, { status: 404 });
   };
-  const publication = await openPublication("https://example.test/export/", { fetch });
-  return publication.state("current").output("chart");
+  const notebookExport = await openExport("https://example.test/export/", { fetch });
+  return notebookExport.state("current").output("chart");
 }
 
 function canonicalJson(value: unknown): string {

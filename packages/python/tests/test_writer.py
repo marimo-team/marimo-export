@@ -4,18 +4,18 @@ from pathlib import Path
 
 import marimo_export._writer as writer_module
 import pytest
-from marimo_export import open_publication
+from marimo_export import open_export
 from marimo_export._json import sha256_bytes
-from marimo_export._writer import write_publication
-from marimo_export.errors import PublicationError
-from marimo_export.publication import (
+from marimo_export._writer import write_export
+from marimo_export.errors import NotebookExportError
+from marimo_export.export import (
     AssetRef,
+    ExportIndex,
     NotebookProvenance,
     NumpyDescriptor,
     OutputCodec,
     ProducerProvenance,
     Provenance,
-    PublicationIndex,
     ScalarDescriptor,
     StateEntry,
 )
@@ -29,10 +29,10 @@ def _npy() -> bytes:
     return prefix + len(header_bytes).to_bytes(2, "little") + header_bytes + b"\x01\x02\x03"
 
 
-def _publication() -> tuple[PublicationIndex, dict[tuple[OutputCodec, str], bytes]]:
+def _export() -> tuple[ExportIndex, dict[tuple[OutputCodec, str], bytes]]:
     payload = _npy()
     digest = sha256_bytes(payload)
-    index = PublicationIndex(
+    index = ExportIndex(
         notebook=NotebookProvenance(filename="notebook.py", document_sha256="a" * 64),
         producer=ProducerProvenance(marimo="0.23.15", marimo_export="1.0.0"),
         inputs=(),
@@ -65,65 +65,65 @@ def _publication() -> tuple[PublicationIndex, dict[tuple[OutputCodec, str], byte
     return index, {identity: payload}
 
 
-def test_writer_stages_verifies_and_commits_a_publication(tmp_path: Path) -> None:
-    index, assets = _publication()
-    target = tmp_path / "publication"
+def test_writer_stages_verifies_and_commits_a_export(tmp_path: Path) -> None:
+    index, assets = _export()
+    target = tmp_path / "export"
 
-    result = write_publication(index, assets, target, replace=False)
+    result = write_export(index, assets, target, replace=False)
 
     assert result.path == target.absolute()
     assert result.assets == 1
     assert result.asset_bytes == len(next(iter(assets.values())))
     assert result.index_bytes == len(index.to_bytes())
     assert result.warnings == ()
-    assert open_publication(target).verify().assets == 1
+    assert open_export(target).verify().assets == 1
 
 
-def test_writer_commits_a_new_publication_on_windows(
+def test_writer_commits_a_new_export_on_windows(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    index, assets = _publication()
-    target = tmp_path / "publication"
+    index, assets = _export()
+    target = tmp_path / "export"
     monkeypatch.setattr(writer_module.sys, "platform", "win32")
 
-    result = write_publication(index, assets, target, replace=False)
+    result = write_export(index, assets, target, replace=False)
 
     assert result.path == target.absolute()
-    assert open_publication(target).verify().assets == 1
+    assert open_export(target).verify().assets == 1
 
 
 def test_writer_requires_explicit_replacement(tmp_path: Path) -> None:
-    index, assets = _publication()
-    target = tmp_path / "publication"
-    write_publication(index, assets, target, replace=False)
+    index, assets = _export()
+    target = tmp_path / "export"
+    write_export(index, assets, target, replace=False)
 
-    with pytest.raises(PublicationError) as raised:
-        write_publication(index, assets, target, replace=False)
+    with pytest.raises(NotebookExportError) as raised:
+        write_export(index, assets, target, replace=False)
 
     assert raised.value.code == "destination_exists"
 
 
-def test_writer_atomically_replaces_a_verified_publication(tmp_path: Path) -> None:
-    index, assets = _publication()
-    target = tmp_path / "publication"
-    write_publication(index, assets, target, replace=False)
+def test_writer_atomically_replaces_a_verified_export(tmp_path: Path) -> None:
+    index, assets = _export()
+    target = tmp_path / "export"
+    write_export(index, assets, target, replace=False)
     before = (target / "index.json").read_bytes()
 
-    result = write_publication(index, assets, target, replace=True)
+    result = write_export(index, assets, target, replace=True)
 
     assert result.warnings == ()
     assert (target / "index.json").read_bytes() == before
-    assert not tuple(tmp_path.glob(".publication.retired-*"))
-    assert not tuple(tmp_path.glob(".publication.staging-*"))
+    assert not tuple(tmp_path.glob(".export.retired-*"))
+    assert not tuple(tmp_path.glob(".export.staging-*"))
 
 
 def test_writer_reports_parent_sync_failure_after_a_visible_commit(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    index, assets = _publication()
-    target = tmp_path / "publication"
+    index, assets = _export()
+    target = tmp_path / "export"
     native_sync = writer_module._sync_directory
 
     def fail_parent_sync(path: Path) -> None:
@@ -133,22 +133,22 @@ def test_writer_reports_parent_sync_failure_after_a_visible_commit(
 
     monkeypatch.setattr(writer_module, "_sync_directory", fail_parent_sync)
 
-    result = write_publication(index, assets, target, replace=False)
+    result = write_export(index, assets, target, replace=False)
 
-    assert open_publication(target).verify().assets == 1
-    assert [warning.code for warning in result.warnings] == ["publication_parent_sync_failed"]
+    assert open_export(target).verify().assets == 1
+    assert [warning.code for warning in result.warnings] == ["export_parent_sync_failed"]
 
 
 def test_writer_rejects_missing_extra_and_mismatched_assets(tmp_path: Path) -> None:
-    index, assets = _publication()
+    index, assets = _export()
     identity, payload = next(iter(assets.items()))
 
-    with pytest.raises(PublicationError) as raised:
-        write_publication(index, {}, tmp_path / "missing", replace=False)
+    with pytest.raises(NotebookExportError) as raised:
+        write_export(index, {}, tmp_path / "missing", replace=False)
     assert raised.value.code == "asset_conflict"
 
-    with pytest.raises(PublicationError) as raised:
-        write_publication(
+    with pytest.raises(NotebookExportError) as raised:
+        write_export(
             index,
             {identity: payload, ("numpy.npy.v1", "f" * 64): b"extra"},
             tmp_path / "extra",
@@ -156,8 +156,8 @@ def test_writer_rejects_missing_extra_and_mismatched_assets(tmp_path: Path) -> N
         )
     assert raised.value.code == "asset_conflict"
 
-    with pytest.raises(PublicationError) as raised:
-        write_publication(
+    with pytest.raises(NotebookExportError) as raised:
+        write_export(
             index,
             {identity: payload[:-1]},
             tmp_path / "changed",
@@ -167,24 +167,24 @@ def test_writer_rejects_missing_extra_and_mismatched_assets(tmp_path: Path) -> N
 
 
 def test_writer_replaces_any_existing_real_directory(tmp_path: Path) -> None:
-    index, assets = _publication()
-    target = tmp_path / "publication"
+    index, assets = _export()
+    target = tmp_path / "export"
     target.mkdir()
     (target / "unrelated.txt").write_text("user data", encoding="utf-8")
 
-    result = write_publication(index, assets, target, replace=True)
+    result = write_export(index, assets, target, replace=True)
 
     assert result.path == target.absolute()
     assert not (target / "unrelated.txt").exists()
-    assert open_publication(target).verify().assets == 1
+    assert open_export(target).verify().assets == 1
 
 
 def test_writer_preflight_requires_an_existing_parent(tmp_path: Path) -> None:
-    index, assets = _publication()
-    target = tmp_path / "missing" / "publication"
+    index, assets = _export()
+    target = tmp_path / "missing" / "export"
 
-    with pytest.raises(PublicationError) as raised:
-        write_publication(index, assets, target, replace=False)
+    with pytest.raises(NotebookExportError) as raised:
+        write_export(index, assets, target, replace=False)
 
     assert raised.value.code == "destination_invalid"
     assert not target.parent.exists()

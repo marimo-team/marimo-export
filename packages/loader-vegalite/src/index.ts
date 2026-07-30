@@ -22,7 +22,7 @@ export interface VegaLiteChart {
   mount(element: HTMLElement, options?: VegaLiteMountOptions): Promise<MountedVegaLite>;
 }
 
-/** Load a Vega-Lite projection and prepare it for browser mounting. */
+/** Load an exported Vega-Lite value and prepare it for browser mounting. */
 export function vegaLiteLoader(defaults: EmbedOptions = {}): BlobAssetLoader<VegaLiteChart> {
   const defaultOptions = { ...defaults };
   return defineBlobAssetLoader({

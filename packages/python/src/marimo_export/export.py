@@ -20,9 +20,9 @@ from marimo_export._json import (
 )
 from marimo_export._media_type import MAX_BLOB_METADATA_JSON_BYTES, validate_media_type
 from marimo_export._portable import validate_portable_basename
-from marimo_export.errors import PublicationError
+from marimo_export.errors import NotebookExportError
 
-PUBLICATION_SCHEMA = "marimo-export.publication.v1"
+EXPORT_SCHEMA = "marimo-export.export.v1"
 SCALAR_CODEC = "marimo.scalar.v1"
 NUMPY_CODEC = "numpy.npy.v1"
 ARROW_CODEC = "apache.arrow.file.v1"
@@ -286,13 +286,13 @@ class StateEntry:
             raise ValueError("state.outputs must contain at least one output")
         parsed_outputs: dict[str, OutputDescriptor] = {}
         for name, descriptor in outputs.items():
-            public_name = _public_name(name, "state.outputs key")
+            export_name = _export_name(name, "state.outputs key")
             if not isinstance(
                 descriptor,
                 (ScalarDescriptor, NumpyDescriptor, ArrowDescriptor, BlobAssetDescriptor),
             ):
-                raise TypeError(f"state.outputs[{public_name!r}] has an invalid descriptor")
-            parsed_outputs[public_name] = descriptor
+                raise TypeError(f"state.outputs[{export_name!r}] has an invalid descriptor")
+            parsed_outputs[export_name] = descriptor
         object.__setattr__(self, "fingerprint", computed)
         object.__setattr__(self, "_inputs_bytes", canonical_bytes(input_value))
         object.__setattr__(self, "outputs", MappingProxyType(parsed_outputs))
@@ -310,7 +310,7 @@ class StateEntry:
 
 
 @dataclass(frozen=True, slots=True)
-class PublicationIndex:
+class ExportIndex:
     notebook: NotebookProvenance
     producer: ProducerProvenance
     inputs: tuple[str, ...]
@@ -319,41 +319,35 @@ class PublicationIndex:
 
     def __post_init__(self) -> None:
         if not isinstance(self.notebook, NotebookProvenance):
-            raise TypeError("publication.notebook must be NotebookProvenance")
+            raise TypeError("export.notebook must be NotebookProvenance")
         if not isinstance(self.producer, ProducerProvenance):
-            raise TypeError("publication.producer must be ProducerProvenance")
-        parsed_inputs = _ordered_names(self.inputs, "publication.inputs", identifier=True)
+            raise TypeError("export.producer must be ProducerProvenance")
+        parsed_inputs = _ordered_names(self.inputs, "export.inputs", identifier=True)
         parsed_outputs = _ordered_names(
             self.outputs,
-            "publication.outputs",
+            "export.outputs",
             identifier=False,
             nonempty=True,
         )
         if not isinstance(self.states, Mapping) or not self.states:
-            raise ValueError("publication.states must contain at least one state")
+            raise ValueError("export.states must contain at least one state")
         parsed_states: dict[str, StateEntry] = {}
         input_set = set(parsed_inputs)
         output_set = set(parsed_outputs)
         fingerprints: dict[bytes, str] = {}
         representation: dict[str, tuple[str, str]] = {}
         for name, state in self.states.items():
-            state_name = _public_name(name, "publication.states key")
+            state_name = _export_name(name, "export.states key")
             if not isinstance(state, StateEntry):
-                raise TypeError(f"publication.states[{state_name!r}] must be StateEntry")
+                raise TypeError(f"export.states[{state_name!r}] must be StateEntry")
             if set(state.inputs) != input_set:
-                raise ValueError(
-                    f"publication.states[{state_name!r}].inputs must equal publication.inputs"
-                )
+                raise ValueError(f"export.states[{state_name!r}].inputs must equal export.inputs")
             if set(state.outputs) != output_set:
-                raise ValueError(
-                    f"publication.states[{state_name!r}].outputs must equal publication.outputs"
-                )
+                raise ValueError(f"export.states[{state_name!r}].outputs must equal export.outputs")
             vector = canonical_bytes(state.inputs)
             other = fingerprints.setdefault(vector, state_name)
             if other != state_name:
-                raise ValueError(
-                    f"publication states {other!r} and {state_name!r} have equal inputs"
-                )
+                raise ValueError(f"export states {other!r} and {state_name!r} have equal inputs")
             for output_name, descriptor in state.outputs.items():
                 current = (descriptor.codec, descriptor.media_type)
                 previous = representation.setdefault(output_name, current)
@@ -369,7 +363,7 @@ class PublicationIndex:
 
     def to_value(self) -> JsonObject:
         return {
-            "schema": PUBLICATION_SCHEMA,
+            "schema": EXPORT_SCHEMA,
             "notebook": self.notebook.to_value(),
             "producer": self.producer.to_value(),
             "inputs": list(self.inputs),
@@ -380,30 +374,30 @@ class PublicationIndex:
     def to_bytes(self) -> bytes:
         data = canonical_bytes(self.to_value())
         if len(data) > _MAX_INDEX_BYTES:
-            raise PublicationError(
+            raise NotebookExportError(
                 f"canonical index exceeds {_MAX_INDEX_BYTES} bytes",
-                code="publication_invalid",
+                code="export_invalid",
             )
         return data
 
     @classmethod
-    def from_value(cls, value: object) -> PublicationIndex:
+    def from_value(cls, value: object) -> ExportIndex:
         try:
-            root = json_object(value, "publication")
+            root = json_object(value, "export")
             _exact_fields(
                 root,
                 {"schema", "notebook", "producer", "inputs", "outputs", "states"},
-                "publication",
+                "export",
             )
-            if root["schema"] != PUBLICATION_SCHEMA:
-                raise ValueError(f"publication.schema must be {PUBLICATION_SCHEMA!r}")
+            if root["schema"] != EXPORT_SCHEMA:
+                raise ValueError(f"export.schema must be {EXPORT_SCHEMA!r}")
             notebook = _notebook(root["notebook"])
             producer = _producer(root["producer"])
-            inputs = _name_array(root["inputs"], "publication.inputs")
-            outputs = _name_array(root["outputs"], "publication.outputs")
-            states_value = _object(root["states"], "publication.states")
+            inputs = _name_array(root["inputs"], "export.inputs")
+            outputs = _name_array(root["outputs"], "export.outputs")
+            states_value = _object(root["states"], "export.states")
             states = {
-                _public_name(name, "publication.states key"): _state(item, name)
+                _export_name(name, "export.states key"): _state(item, name)
                 for name, item in states_value.items()
             }
             return cls(
@@ -413,39 +407,39 @@ class PublicationIndex:
                 outputs=outputs,
                 states=states,
             )
-        except PublicationError:
+        except NotebookExportError:
             raise
         except (TypeError, ValueError) as error:
-            raise PublicationError(
-                f"invalid publication index: {error}",
-                code="publication_invalid",
+            raise NotebookExportError(
+                f"invalid export index: {error}",
+                code="export_invalid",
             ) from error
 
     @classmethod
-    def from_bytes(cls, data: bytes) -> PublicationIndex:
+    def from_bytes(cls, data: bytes) -> ExportIndex:
         if not isinstance(data, bytes):
-            raise TypeError("publication index must be bytes")
+            raise TypeError("export index must be bytes")
         if len(data) > _MAX_INDEX_BYTES:
-            raise PublicationError(
-                f"publication index exceeds {_MAX_INDEX_BYTES} bytes",
-                code="publication_invalid",
+            raise NotebookExportError(
+                f"export index exceeds {_MAX_INDEX_BYTES} bytes",
+                code="export_invalid",
             )
         try:
             root = decode_json_object(
                 data,
-                "publication",
+                "export",
                 max_values=_MAX_INDEX_VALUES,
             )
         except (TypeError, ValueError) as error:
-            raise PublicationError(
-                f"invalid publication index: {error}",
-                code="publication_invalid",
+            raise NotebookExportError(
+                f"invalid export index: {error}",
+                code="export_invalid",
             ) from error
         index = cls.from_value(root)
         if index.to_bytes() != data:
-            raise PublicationError(
-                "publication index is not canonical JSON",
-                code="publication_noncanonical",
+            raise NotebookExportError(
+                "export index is not canonical JSON",
+                code="export_noncanonical",
             )
         return index
 
@@ -505,33 +499,33 @@ def _validate_seconds(value: object, name: str, *, optional: bool = False) -> No
 
 
 @dataclass(frozen=True, slots=True)
-class FreshChildTimings:
+class StateRunTimings:
     states: int
-    construction_seconds: float
-    upstream_execution_seconds: float
-    ui_application_seconds: float
-    projection_execution_seconds: float
+    setup_seconds: float
+    dependency_execution_seconds: float
+    ui_update_seconds: float
+    output_materialization_seconds: float
     cleanup_seconds: float
 
     def __post_init__(self) -> None:
         if not isinstance(self.states, int) or isinstance(self.states, bool) or self.states < 0:
-            raise ValueError("fresh_child_timings.states must be a non-negative integer")
+            raise ValueError("state_run_timings.states must be a non-negative integer")
         for name, value in (
-            ("construction_seconds", self.construction_seconds),
-            ("upstream_execution_seconds", self.upstream_execution_seconds),
-            ("ui_application_seconds", self.ui_application_seconds),
-            ("projection_execution_seconds", self.projection_execution_seconds),
+            ("setup_seconds", self.setup_seconds),
+            ("dependency_execution_seconds", self.dependency_execution_seconds),
+            ("ui_update_seconds", self.ui_update_seconds),
+            ("output_materialization_seconds", self.output_materialization_seconds),
             ("cleanup_seconds", self.cleanup_seconds),
         ):
-            _validate_seconds(value, f"fresh_child_timings.{name}")
+            _validate_seconds(value, f"state_run_timings.{name}")
 
     def to_dict(self) -> JsonObject:
         return {
             "states": self.states,
-            "construction_seconds": self.construction_seconds,
-            "upstream_execution_seconds": self.upstream_execution_seconds,
-            "ui_application_seconds": self.ui_application_seconds,
-            "projection_execution_seconds": self.projection_execution_seconds,
+            "setup_seconds": self.setup_seconds,
+            "dependency_execution_seconds": self.dependency_execution_seconds,
+            "ui_update_seconds": self.ui_update_seconds,
+            "output_materialization_seconds": self.output_materialization_seconds,
             "cleanup_seconds": self.cleanup_seconds,
         }
 
@@ -540,8 +534,8 @@ class FreshChildTimings:
 class PhaseTimings:
     total_seconds: float
     capture_seconds: float
-    publication_write_seconds: float
-    fresh_children: FreshChildTimings
+    export_write_seconds: float
+    state_runs: StateRunTimings
     server_start_seconds: float | None = None
     initial_autorun_seconds: float | None = None
     server_shutdown_seconds: float | None = None
@@ -550,7 +544,7 @@ class PhaseTimings:
         for name, value in (
             ("total_seconds", self.total_seconds),
             ("capture_seconds", self.capture_seconds),
-            ("publication_write_seconds", self.publication_write_seconds),
+            ("export_write_seconds", self.export_write_seconds),
         ):
             _validate_seconds(value, f"timings.{name}")
         for name, value in (
@@ -559,8 +553,8 @@ class PhaseTimings:
             ("server_shutdown_seconds", self.server_shutdown_seconds),
         ):
             _validate_seconds(value, f"timings.{name}", optional=True)
-        if not isinstance(self.fresh_children, FreshChildTimings):
-            raise TypeError("timings.fresh_children must be FreshChildTimings")
+        if not isinstance(self.state_runs, StateRunTimings):
+            raise TypeError("timings.state_runs must be StateRunTimings")
 
     def to_dict(self) -> JsonObject:
         return {
@@ -569,15 +563,15 @@ class PhaseTimings:
             "initial_autorun_seconds": self.initial_autorun_seconds,
             "capture_seconds": self.capture_seconds,
             "server_shutdown_seconds": self.server_shutdown_seconds,
-            "publication_write_seconds": self.publication_write_seconds,
-            "fresh_children": self.fresh_children.to_dict(),
+            "export_write_seconds": self.export_write_seconds,
+            "state_runs": self.state_runs.to_dict(),
         }
 
 
 @dataclass(frozen=True, slots=True, init=False)
-class PublicationWarning:
+class ExportWarning:
     code: Literal[
-        "publication_parent_sync_failed",
+        "export_parent_sync_failed",
         "retired_destination_cleanup_failed",
     ]
     message: str
@@ -587,36 +581,36 @@ class PublicationWarning:
         self,
         *,
         code: Literal[
-            "publication_parent_sync_failed",
+            "export_parent_sync_failed",
             "retired_destination_cleanup_failed",
         ],
         message: str,
         details: Mapping[str, JsonValue],
     ) -> None:
         if code not in {
-            "publication_parent_sync_failed",
+            "export_parent_sync_failed",
             "retired_destination_cleanup_failed",
         }:
-            raise ValueError("publication warning code is invalid")
-        _bounded_printable(message, "publication warning message", _MAX_PROVENANCE_BYTES)
+            raise ValueError("export warning code is invalid")
+        _bounded_printable(message, "export warning message", _MAX_PROVENANCE_BYTES)
         object.__setattr__(self, "code", code)
         object.__setattr__(self, "message", message)
         object.__setattr__(
             self,
             "_details_bytes",
-            canonical_bytes(json_object(details, "publication warning details")),
+            canonical_bytes(json_object(details, "export warning details")),
         )
 
     @property
     def details(self) -> JsonObject:
-        return decode_json_object(self._details_bytes, "publication warning details")
+        return decode_json_object(self._details_bytes, "export warning details")
 
     def to_dict(self) -> JsonObject:
         return {"code": self.code, "message": self.message, "details": self.details}
 
 
 @dataclass(frozen=True, slots=True)
-class PublicationResult:
+class ExportResult:
     path: Path
     mode: Literal["build", "capture"]
     session_id: str | None
@@ -628,16 +622,20 @@ class PublicationResult:
     assets: int
     asset_bytes: int
     index_bytes: int
-    projection_cache: CacheSummary
-    upstream_cache: CacheSummary
+    output_cache: CacheSummary
+    notebook_cache: CacheSummary
     timings: PhaseTimings
-    warnings: tuple[PublicationWarning, ...] = ()
+    warnings: tuple[ExportWarning, ...] = ()
 
     def __post_init__(self) -> None:
         if not isinstance(self.path, Path) or not self.path.is_absolute():
-            raise ValueError("publication result path must be absolute")
+            raise ValueError("export result path must be absolute")
         if self.mode not in {"build", "capture"}:
-            raise ValueError("publication result mode must be build or capture")
+            raise ValueError("export result mode must be build or capture")
+        if self.mode == "build" and self.session_id is not None:
+            raise ValueError("build results cannot name a borrowed session")
+        if self.mode == "capture" and self.session_id is None:
+            raise ValueError("capture results must name the borrowed session")
         if self.session_id is not None:
             _bounded_printable(self.session_id, "session_id", _MAX_PROVENANCE_BYTES)
         if self.notebook_filename is not None:
@@ -654,18 +652,18 @@ class PublicationResult:
         ):
             if not isinstance(value, int) or isinstance(value, bool) or value < 0:
                 raise ValueError(f"{name} must be a non-negative integer")
-        if not isinstance(self.projection_cache, CacheSummary):
-            raise TypeError("projection_cache must be CacheSummary")
-        if self.projection_cache.hits + self.projection_cache.misses != len(self.states) * len(
+        if not isinstance(self.output_cache, CacheSummary):
+            raise TypeError("output_cache must be CacheSummary")
+        if self.output_cache.hits + self.output_cache.misses != len(self.states) * len(
             self.outputs
         ):
-            raise ValueError("projection cache activity must cover every state and output")
-        if not isinstance(self.upstream_cache, CacheSummary):
-            raise TypeError("upstream_cache must be CacheSummary")
+            raise ValueError("output cache activity must cover every state and output")
+        if not isinstance(self.notebook_cache, CacheSummary):
+            raise TypeError("notebook_cache must be CacheSummary")
         if not isinstance(self.timings, PhaseTimings):
             raise TypeError("timings must be PhaseTimings")
-        if self.timings.fresh_children.states != len(self.states):
-            raise ValueError("fresh child timing count must match publication states")
+        if self.timings.state_runs.states != len(self.states):
+            raise ValueError("state run timing count must match export states")
         managed = (
             self.timings.server_start_seconds,
             self.timings.initial_autorun_seconds,
@@ -675,8 +673,8 @@ class PublicationResult:
             raise ValueError("build timings must include every managed server phase")
         if self.mode == "capture" and any(value is not None for value in managed):
             raise ValueError("capture timings cannot include managed server phases")
-        if any(not isinstance(warning, PublicationWarning) for warning in self.warnings):
-            raise TypeError("warnings must contain PublicationWarning values")
+        if any(not isinstance(warning, ExportWarning) for warning in self.warnings):
+            raise TypeError("warnings must contain ExportWarning values")
 
     def to_dict(self) -> JsonObject:
         return {
@@ -691,13 +689,13 @@ class PublicationResult:
             "assets": self.assets,
             "asset_bytes": self.asset_bytes,
             "index_bytes": self.index_bytes,
-            "projection_cache": {
-                "hits": self.projection_cache.hits,
-                "misses": self.projection_cache.misses,
+            "output_cache": {
+                "hits": self.output_cache.hits,
+                "misses": self.output_cache.misses,
             },
-            "upstream_cache": {
-                "hits": self.upstream_cache.hits,
-                "misses": self.upstream_cache.misses,
+            "notebook_cache": {
+                "hits": self.notebook_cache.hits,
+                "misses": self.notebook_cache.misses,
             },
             "timings": self.timings.to_dict(),
             "warnings": [warning.to_dict() for warning in self.warnings],
@@ -716,11 +714,11 @@ def asset_path(codec: OutputCodec, digest: str) -> str:
 
 
 def _notebook(value: object) -> NotebookProvenance:
-    item = _object(value, "publication.notebook")
-    _exact_fields(item, {"filename", "document_sha256"}, "publication.notebook")
+    item = _object(value, "export.notebook")
+    _exact_fields(item, {"filename", "document_sha256"}, "export.notebook")
     filename = item["filename"]
     if filename is not None and not isinstance(filename, str):
-        raise TypeError("publication.notebook.filename must be a string or null")
+        raise TypeError("export.notebook.filename must be a string or null")
     return NotebookProvenance(
         filename=filename,
         document_sha256=cast(str, item["document_sha256"]),
@@ -728,8 +726,8 @@ def _notebook(value: object) -> NotebookProvenance:
 
 
 def _producer(value: object) -> ProducerProvenance:
-    item = _object(value, "publication.producer")
-    _exact_fields(item, {"marimo", "marimo_export"}, "publication.producer")
+    item = _object(value, "export.producer")
+    _exact_fields(item, {"marimo", "marimo_export"}, "export.producer")
     return ProducerProvenance(
         marimo=cast(str, item["marimo"]),
         marimo_export=cast(str, item["marimo_export"]),
@@ -737,7 +735,7 @@ def _producer(value: object) -> ProducerProvenance:
 
 
 def _state(value: object, state_name: str) -> StateEntry:
-    path = f"publication.states[{state_name!r}]"
+    path = f"export.states[{state_name!r}]"
     item = _object(value, path)
     _exact_fields(item, {"fingerprint", "inputs", "outputs"}, path)
     output_values = _object(item["outputs"], f"{path}.outputs")
@@ -745,7 +743,7 @@ def _state(value: object, state_name: str) -> StateEntry:
         fingerprint=cast(str, item["fingerprint"]),
         inputs=_object(item["inputs"], f"{path}.inputs"),
         outputs={
-            _public_name(name, f"{path}.outputs key"): _descriptor(descriptor, name)
+            _export_name(name, f"{path}.outputs key"): _descriptor(descriptor, name)
             for name, descriptor in output_values.items()
         },
     )
@@ -944,7 +942,7 @@ def _ordered_names(
     result = tuple(
         _identifier(name, f"{path}[{index}]")
         if identifier
-        else _public_name(name, f"{path}[{index}]")
+        else _export_name(name, f"{path}[{index}]")
         for index, name in enumerate(value)
     )
     if nonempty and not result:
@@ -965,7 +963,7 @@ def _identifier(value: object, path: str) -> str:
     return name
 
 
-def _public_name(value: object, path: str) -> str:
+def _export_name(value: object, path: str) -> str:
     return _bounded_printable(value, path, _MAX_NAME_BYTES)
 
 
@@ -1041,9 +1039,9 @@ __all__ = [
     "ARROW_CODEC",
     "ARROW_MEDIA_TYPE",
     "BLOB_ASSET_CODEC",
+    "EXPORT_SCHEMA",
     "NUMPY_CODEC",
     "NUMPY_MEDIA_TYPE",
-    "PUBLICATION_SCHEMA",
     "SCALAR_CODEC",
     "SCALAR_MEDIA_TYPE",
     "ArrowDescriptor",
@@ -1051,7 +1049,9 @@ __all__ = [
     "AssetRef",
     "BlobAssetDescriptor",
     "CacheSummary",
-    "FreshChildTimings",
+    "ExportIndex",
+    "ExportResult",
+    "ExportWarning",
     "NotebookProvenance",
     "NumpyDescriptor",
     "OutputCodec",
@@ -1059,12 +1059,10 @@ __all__ = [
     "PhaseTimings",
     "ProducerProvenance",
     "Provenance",
-    "PublicationIndex",
-    "PublicationResult",
-    "PublicationWarning",
     "ScalarDescriptor",
     "ScalarValue",
     "StateEntry",
+    "StateRunTimings",
     "asset_path",
     "state_fingerprint",
 ]

@@ -176,7 +176,7 @@ def test_custom_importable_exporter_uses_the_wire_contract() -> None:
     }
 
 
-def test_public_names_and_state_values_use_the_portable_grammar() -> None:
+def test_export_names_and_state_values_use_the_portable_grammar() -> None:
     invalid_name = _value()
     state = invalid_name["states"].pop("baseline")
     invalid_name["states"]["state\n"] = state

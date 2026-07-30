@@ -4,18 +4,18 @@ from pathlib import Path
 
 import marimo_export._build as build_module
 import pytest
-from marimo_export import ExportSpec, OutputSpec, build, open_publication
+from marimo_export import ExportSpec, OutputSpec, build, open_export
 from marimo_export.client import _CaptureData
 from marimo_export.errors import ExecutionError
-from marimo_export.publication import (
+from marimo_export.export import (
     CacheSummary,
-    FreshChildTimings,
+    ExportIndex,
     NotebookProvenance,
     ProducerProvenance,
     Provenance,
-    PublicationIndex,
     ScalarDescriptor,
     StateEntry,
+    StateRunTimings,
 )
 
 
@@ -29,7 +29,7 @@ def _spec() -> ExportSpec:
 
 def _captured(filename: str) -> _CaptureData:
     return _CaptureData(
-        index=PublicationIndex(
+        index=ExportIndex(
             notebook=NotebookProvenance(
                 filename=filename,
                 document_sha256="a" * 64,
@@ -57,14 +57,14 @@ def _captured(filename: str) -> _CaptureData:
             },
         ),
         assets={},
-        projection_cache=CacheSummary(hits=0, misses=1),
-        upstream_cache=CacheSummary(hits=0, misses=1),
-        fresh_child_timings=FreshChildTimings(
+        output_cache=CacheSummary(hits=0, misses=1),
+        notebook_cache=CacheSummary(hits=0, misses=1),
+        state_run_timings=StateRunTimings(
             states=1,
-            construction_seconds=0.1,
-            upstream_execution_seconds=0.1,
-            ui_application_seconds=0.0,
-            projection_execution_seconds=0.1,
+            setup_seconds=0.1,
+            dependency_execution_seconds=0.1,
+            ui_update_seconds=0.0,
+            output_materialization_seconds=0.1,
             cleanup_seconds=0.1,
         ),
         capture_seconds=0.4,
@@ -90,14 +90,14 @@ def test_build_commits_owned_capture_after_source_verification(
     result = build(
         notebook,
         spec=_spec(),
-        output=tmp_path / "publication",
+        output=tmp_path / "export",
     )
 
     assert result.mode == "build"
     assert result.session_id is None
     assert result.notebook_filename == "notebook.py"
     assert notebook.read_bytes() == source
-    assert open_publication(result.path).state("baseline").output("answer").scalar() == 42
+    assert open_export(result.path).state("baseline").output("answer").scalar() == 42
 
 
 def test_build_rejects_source_change_before_commit(
@@ -117,7 +117,7 @@ def test_build_rejects_source_change_before_commit(
         return _captured(path.name)
 
     monkeypatch.setattr(build_module, "_capture_owned", change_source)
-    output = tmp_path / "publication"
+    output = tmp_path / "export"
 
     with pytest.raises(ExecutionError) as raised:
         build(notebook, spec=_spec(), output=output)
@@ -155,11 +155,11 @@ if __name__ == "__main__":
             states={"baseline": {}},
             outputs={"runtime_file": OutputSpec(source="runtime_file")},
         ),
-        output=tmp_path / "publication",
+        output=tmp_path / "export",
         timeout=30,
     )
 
-    assert open_publication(result.path).state("baseline").output("runtime_file").scalar() == str(
+    assert open_export(result.path).state("baseline").output("runtime_file").scalar() == str(
         notebook
     )
     assert notebook.read_bytes() == source
@@ -235,6 +235,6 @@ def test_build_rejects_invalid_timeout(tmp_path: Path, timeout: float) -> None:
         build(
             notebook,
             spec=_spec(),
-            output=tmp_path / "publication",
+            output=tmp_path / "export",
             timeout=timeout,
         )

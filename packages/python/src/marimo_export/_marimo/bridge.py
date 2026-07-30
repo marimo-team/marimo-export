@@ -4,7 +4,7 @@ from importlib.metadata import PackageNotFoundError, version
 from typing import cast
 
 from marimo_export._diagnostics import safe_diagnostic
-from marimo_export._execution import normalize_matrix
+from marimo_export._execution import create_export_plan
 from marimo_export._json import JsonObject, canonical_bytes, decode_json_object
 from marimo_export._marimo.compat import (
     declared_ui_values,
@@ -21,13 +21,13 @@ from marimo_export.errors import (
     MarimoExportError,
     SessionError,
 )
-from marimo_export.publication import (
+from marimo_export.export import (
     CacheSummary,
-    FreshChildTimings,
+    ExportIndex,
     NotebookProvenance,
     ProducerProvenance,
-    PublicationIndex,
     StateEntry,
+    StateRunTimings,
 )
 from marimo_export.spec import ExportSpec
 
@@ -152,17 +152,17 @@ async def _inspect() -> JsonObject:
 async def _capture(spec: ExportSpec) -> JsonObject:
     capabilities = require_capabilities()
     baseline = await inspect_baseline()
-    plan = normalize_matrix(spec, baseline)
+    plan = create_export_plan(spec, baseline)
     ui_names = tuple(name for name in plan.inputs if baseline.definitions[name].kind == "ui")
     parent_ui = await declared_ui_values(ui_names)
     receipts = []
-    upstream_hits = 0
-    upstream_misses = 0
-    child_construction_seconds = 0.0
-    upstream_execution_seconds = 0.0
-    ui_application_seconds = 0.0
-    projection_execution_seconds = 0.0
-    child_cleanup_seconds = 0.0
+    notebook_hits = 0
+    notebook_misses = 0
+    state_setup_seconds = 0.0
+    dependency_execution_seconds = 0.0
+    ui_update_seconds = 0.0
+    output_materialization_seconds = 0.0
+    state_cleanup_seconds = 0.0
     with prepared_exporters(plan) as exporter_identities:
         flush_native_caches()
         primary: BaseException | None = None
@@ -170,13 +170,13 @@ async def _capture(spec: ExportSpec) -> JsonObject:
             for state in plan.states:
                 executed = await execute_state(state, plan, exporter_identities)
                 receipts.extend(executed.receipts)
-                upstream_hits += executed.upstream_cache.hits
-                upstream_misses += executed.upstream_cache.misses
-                child_construction_seconds += executed.timings.construction_seconds
-                upstream_execution_seconds += executed.timings.upstream_execution_seconds
-                ui_application_seconds += executed.timings.ui_application_seconds
-                projection_execution_seconds += executed.timings.projection_execution_seconds
-                child_cleanup_seconds += executed.timings.cleanup_seconds
+                notebook_hits += executed.notebook_cache.hits
+                notebook_misses += executed.notebook_cache.misses
+                state_setup_seconds += executed.timings.setup_seconds
+                dependency_execution_seconds += executed.timings.dependency_execution_seconds
+                ui_update_seconds += executed.timings.ui_update_seconds
+                output_materialization_seconds += executed.timings.output_materialization_seconds
+                state_cleanup_seconds += executed.timings.cleanup_seconds
         except BaseException as error:
             primary = error
         finally:
@@ -214,7 +214,7 @@ async def _capture(spec: ExportSpec) -> JsonObject:
     expected_receipts = len(plan.states) * len(plan.outputs)
     if len(receipts) != expected_receipts:
         raise ExecutionError(
-            "the matrix did not produce a complete output relation",
+            "state execution did not produce the complete output relation",
             code="cache_receipt_missing",
             details={"expected": expected_receipts, "actual": len(receipts)},
         )
@@ -233,7 +233,7 @@ async def _capture(spec: ExportSpec) -> JsonObject:
         marimo=capabilities.version,
         marimo_export=_package_version(),
     )
-    index = PublicationIndex(
+    index = ExportIndex(
         notebook=NotebookProvenance(
             filename=baseline.filename,
             document_sha256=baseline.document_sha256,
@@ -244,34 +244,34 @@ async def _capture(spec: ExportSpec) -> JsonObject:
         states=states,
     )
     ticket = create_ticket(receipts)
-    projection_cache = CacheSummary(
+    output_cache = CacheSummary(
         hits=sum(receipt.disposition == "hit" for receipt in receipts),
         misses=sum(receipt.disposition == "miss" for receipt in receipts),
     )
-    upstream_cache = CacheSummary(
-        hits=upstream_hits,
-        misses=upstream_misses,
+    notebook_cache = CacheSummary(
+        hits=notebook_hits,
+        misses=notebook_misses,
     )
-    fresh_children = FreshChildTimings(
+    state_runs = StateRunTimings(
         states=len(plan.states),
-        construction_seconds=child_construction_seconds,
-        upstream_execution_seconds=upstream_execution_seconds,
-        ui_application_seconds=ui_application_seconds,
-        projection_execution_seconds=projection_execution_seconds,
-        cleanup_seconds=child_cleanup_seconds,
+        setup_seconds=state_setup_seconds,
+        dependency_execution_seconds=dependency_execution_seconds,
+        ui_update_seconds=ui_update_seconds,
+        output_materialization_seconds=output_materialization_seconds,
+        cleanup_seconds=state_cleanup_seconds,
     )
     return {
         "index": index.to_value(),
         "transfer": ticket.wire(),
-        "projection_cache": {
-            "hits": projection_cache.hits,
-            "misses": projection_cache.misses,
+        "output_cache": {
+            "hits": output_cache.hits,
+            "misses": output_cache.misses,
         },
-        "upstream_cache": {
-            "hits": upstream_cache.hits,
-            "misses": upstream_cache.misses,
+        "notebook_cache": {
+            "hits": notebook_cache.hits,
+            "misses": notebook_cache.misses,
         },
-        "fresh_child_timings": fresh_children.to_dict(),
+        "state_run_timings": state_runs.to_dict(),
     }
 
 

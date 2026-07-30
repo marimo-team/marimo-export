@@ -27,7 +27,7 @@ export interface LoadedAnyWidget<State extends StateShape<State> = ModelState, E
   ): Promise<MountedAnyWidget<State, Exports>>;
 }
 
-/** Decode a static AnyWidget projection and prepare it for browser mounting. */
+/** Decode an exported AnyWidget value and prepare it for browser mounting. */
 export function anyWidgetLoader<
   State extends StateShape<State> = ModelState,
   Exports = unknown,

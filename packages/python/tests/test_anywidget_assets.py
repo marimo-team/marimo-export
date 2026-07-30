@@ -25,7 +25,7 @@ def test_embedded_esm_accepts_self_contained_and_remote_dependencies() -> None:
     )
 
 
-def test_embedded_esm_rejects_unpublished_dependencies() -> None:
+def test_embedded_esm_rejects_unresolved_dependencies() -> None:
     for source in (
         'import "./child.js";',
         "import(moduleUrl);",

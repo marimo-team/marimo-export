@@ -1,6 +1,6 @@
 import { encode } from "@msgpack/msgpack";
-import { openPublication } from "@marimo-team/marimo-export";
-import type { PublishedOutput } from "@marimo-team/marimo-export";
+import { openExport } from "@marimo-team/marimo-export";
+import type { ExportOutput } from "@marimo-team/marimo-export";
 
 const encoder = new TextEncoder();
 
@@ -9,7 +9,7 @@ export async function outputFor(
   options: {
     readonly mediaType?: string;
   } = {},
-): Promise<PublishedOutput> {
+): Promise<ExportOutput> {
   const data = encoder.encode(JSON.stringify(payload));
   const mediaType = options.mediaType ?? "application/vnd.marimo-export.anywidget.v1+json";
   const envelope = encode({
@@ -26,7 +26,7 @@ export async function outputFor(
     notebook: { document_sha256: "a".repeat(64), filename: "widget.py" },
     outputs: ["widget"],
     producer: { marimo: "0.24.0", marimo_export: "0.0.0" },
-    schema: "marimo-export.publication.v1",
+    schema: "marimo-export.export.v1",
     states: {
       current: {
         fingerprint,
@@ -39,9 +39,9 @@ export async function outputFor(
             media_type: mediaType,
             metadata: {},
             provenance: {
-              cache_key: "cell_cache/P_widget.json",
+              cache_key: "cell_cache/O_widget.json",
               python_type: "marimo._save.cache.BlobAsset",
-              return_reference: "cell_cache/P_widget/return.bin",
+              return_reference: "cell_cache/O_widget/return.bin",
             },
           },
         },
@@ -56,8 +56,8 @@ export async function outputFor(
     }
     return new Response(null, { status: 404 });
   };
-  const publication = await openPublication("https://example.test/export/", { fetch });
-  return publication.state("current").output("widget");
+  const notebookExport = await openExport("https://example.test/export/", { fetch });
+  return notebookExport.state("current").output("widget");
 }
 
 async function digest(bytes: Uint8Array): Promise<string> {

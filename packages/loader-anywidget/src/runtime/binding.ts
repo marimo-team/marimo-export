@@ -13,7 +13,7 @@ type ResolvedDefinition<T extends ModelState> = Exclude<
 
 const experimental: Experimental = {
   async invoke() {
-    throw new Error("Static AnyWidget projections cannot invoke Python.");
+    throw new Error("Exported AnyWidgets cannot invoke Python.");
   },
 };
 

@@ -1,58 +1,58 @@
 import { describe, expect, test, vi } from "vite-plus/test";
 
 import {
-  PublicationError,
+  NotebookExportError,
   defineBlobAssetLoader,
   defineOutputLoader,
-  openPublication,
+  openExport,
   scalarLoader,
 } from "../src/index.js";
 import { canonicalJson } from "../src/schema.js";
-import { publicationFixture, scalar } from "./fixture.js";
+import { exportFixture, scalar } from "./fixture.js";
 
 const encoder = new TextEncoder();
 
-describe("publication", () => {
+describe("export", () => {
   test("opens only the canonical index and exposes immutable exact states", async () => {
-    const fixture = await publicationFixture();
-    const publication = await openPublication("https://example.test/stocks", {
+    const fixture = await exportFixture();
+    const notebookExport = await openExport("https://example.test/stocks", {
       fetch: fixture.fetch,
     });
 
-    expect(publication.base.href).toBe("https://example.test/stocks/");
+    expect(notebookExport.base.href).toBe("https://example.test/stocks/");
     expect(fixture.requests).toEqual(["https://example.test/stocks/index.json"]);
-    expect(publication.notebook).toEqual({
+    expect(notebookExport.notebook).toEqual({
       filename: "finance.py",
       documentSha256: "a".repeat(64),
     });
-    expect(publication.producer).toEqual({ marimo: "0.23.15", marimoExport: "1.0.0" });
-    expect(publication.inputNames).toEqual(["symbol", "width"]);
-    expect(publication.outputNames).toEqual(["count", "array", "table", "view"]);
-    expect(publication.states().map((state) => state.name)).toEqual(["alpha", "zeta"]);
+    expect(notebookExport.producer).toEqual({ marimo: "0.23.15", marimoExport: "1.0.0" });
+    expect(notebookExport.inputNames).toEqual(["symbol", "width"]);
+    expect(notebookExport.outputNames).toEqual(["count", "array", "table", "view"]);
+    expect(notebookExport.states().map((state) => state.name)).toEqual(["alpha", "zeta"]);
     expect(
-      publication
+      notebookExport
         .state("alpha")
         .outputs()
         .map((output) => output.name),
     ).toEqual(["count", "array", "table", "view"]);
-    expect(Object.isFrozen(publication)).toBe(true);
-    expect(Object.isFrozen(publication.state("alpha"))).toBe(true);
-    expect(Object.isFrozen(publication.state("alpha").inputs)).toBe(true);
-    expect(Object.isFrozen(publication.state("alpha").output("view").descriptor)).toBe(true);
+    expect(Object.isFrozen(notebookExport)).toBe(true);
+    expect(Object.isFrozen(notebookExport.state("alpha"))).toBe(true);
+    expect(Object.isFrozen(notebookExport.state("alpha").inputs)).toBe(true);
+    expect(Object.isFrozen(notebookExport.state("alpha").output("view").descriptor)).toBe(true);
   });
 
   test("resolves complete vectors and sparse immutable patches", async () => {
-    const fixture = await publicationFixture();
-    const publication = await openPublication(new URL("https://example.test/stocks/"), {
+    const fixture = await exportFixture();
+    const notebookExport = await openExport(new URL("https://example.test/stocks/"), {
       fetch: fixture.fetch,
     });
-    const alpha = publication.state("alpha");
+    const alpha = notebookExport.state("alpha");
 
-    expect(publication.resolve({ symbol: "AAPL", width: 800 })).toBe(alpha);
+    expect(notebookExport.resolve({ symbol: "AAPL", width: 800 })).toBe(alpha);
     expect(alpha.resolve({})).toBe(alpha);
-    expect(alpha.resolve({ symbol: "MSFT", width: 640 })).toBe(publication.state("zeta"));
+    expect(alpha.resolve({ symbol: "MSFT", width: 640 })).toBe(notebookExport.state("zeta"));
     expect(alpha.inputs).toEqual({ symbol: "AAPL", width: 800 });
-    expect(() => publication.resolve({ symbol: "AAPL" })).toThrowError(
+    expect(() => notebookExport.resolve({ symbol: "AAPL" })).toThrowError(
       expect.objectContaining({ code: "state_input_invalid" }),
     );
     expect(() => alpha.resolve({ missing: true })).toThrowError(
@@ -64,35 +64,37 @@ describe("publication", () => {
   });
 
   test("reports bounded state and output lookup errors", async () => {
-    const fixture = await publicationFixture();
-    const publication = await openPublication("https://example.test/stocks", {
+    const fixture = await exportFixture();
+    const notebookExport = await openExport("https://example.test/stocks", {
       fetch: fixture.fetch,
     });
 
-    expect(() => publication.state("missing")).toThrowError(
+    expect(() => notebookExport.state("missing")).toThrowError(
       expect.objectContaining({ code: "state_not_found" }),
     );
-    expect(() => publication.state("alpha").output("missing")).toThrowError(
+    expect(() => notebookExport.state("alpha").output("missing")).toThrowError(
       expect.objectContaining({ code: "output_not_found" }),
     );
   });
 
   test("loads scalars without an asset request", async () => {
-    const fixture = await publicationFixture();
-    const publication = await openPublication("https://example.test/stocks", {
+    const fixture = await exportFixture();
+    const notebookExport = await openExport("https://example.test/stocks", {
       fetch: fixture.fetch,
     });
 
-    await expect(publication.state("alpha").output("count").load(scalarLoader())).resolves.toBe(1);
+    await expect(notebookExport.state("alpha").output("count").load(scalarLoader())).resolves.toBe(
+      1,
+    );
     expect(fixture.requests).toEqual(["https://example.test/stocks/index.json"]);
   });
 
   test("returns detached base URLs that cannot redirect asset reads", async () => {
-    const fixture = await publicationFixture();
-    const publication = await openPublication("https://example.test/stocks", {
+    const fixture = await exportFixture();
+    const notebookExport = await openExport("https://example.test/stocks", {
       fetch: fixture.fetch,
     });
-    const leaked = publication.base;
+    const leaked = notebookExport.base;
     leaked.pathname = "/elsewhere/";
     const loader = defineOutputLoader({
       codec: "numpy.npy.v1",
@@ -100,17 +102,17 @@ describe("publication", () => {
       load: ({ payload }) => payload,
     });
 
-    await publication.state("alpha").output("array").load(loader);
+    await notebookExport.state("alpha").output("array").load(loader);
 
-    expect(publication.base.href).toBe("https://example.test/stocks/");
+    expect(notebookExport.base.href).toBe("https://example.test/stocks/");
     expect(fixture.requests[1]).toMatch(
       /^https:\/\/example\.test\/stocks\/assets\/[0-9a-f]{64}\.npy$/u,
     );
   });
 
   test("loads verified native bytes and decoded BlobAssets through explicit loaders", async () => {
-    const fixture = await publicationFixture();
-    const publication = await openPublication("https://example.test/stocks", {
+    const fixture = await exportFixture();
+    const notebookExport = await openExport("https://example.test/stocks", {
       fetch: fixture.fetch,
     });
     const bytesLoader = defineOutputLoader({
@@ -127,10 +129,10 @@ describe("publication", () => {
       }),
     });
 
-    await expect(publication.state("alpha").output("array").load(bytesLoader)).resolves.toEqual(
+    await expect(notebookExport.state("alpha").output("array").load(bytesLoader)).resolves.toEqual(
       new Uint8Array([0x93, 0x4e, 0x55, 0x4d, 0x50, 0x59, 0x01, 0x00]),
     );
-    await expect(publication.state("alpha").output("view").load(blobLoader)).resolves.toEqual({
+    await expect(notebookExport.state("alpha").output("view").load(blobLoader)).resolves.toEqual({
       text: '{"ready":true}',
       filename: "fixture.json",
       metadata: { representation: "fixture" },
@@ -138,12 +140,12 @@ describe("publication", () => {
   });
 
   test("verifies each content-addressed asset once", async () => {
-    const fixture = await publicationFixture();
-    const publication = await openPublication("https://example.test/stocks", {
+    const fixture = await exportFixture();
+    const notebookExport = await openExport("https://example.test/stocks", {
       fetch: fixture.fetch,
     });
 
-    await expect(publication.verify()).resolves.toEqual({
+    await expect(notebookExport.verify()).resolves.toEqual({
       states: 2,
       outputs: 8,
       assets: 3,
@@ -153,7 +155,7 @@ describe("publication", () => {
   });
 
   test("rejects integrity failures before invoking a loader", async () => {
-    const fixture = await publicationFixture();
+    const fixture = await exportFixture();
     const brokenFetch: typeof globalThis.fetch = async (input, init) => {
       const response = await fixture.fetch(input, init);
       const url = input instanceof Request ? input.url : input.toString();
@@ -164,7 +166,7 @@ describe("publication", () => {
       }
       return response;
     };
-    const publication = await openPublication("https://example.test/stocks", {
+    const notebookExport = await openExport("https://example.test/stocks", {
       fetch: brokenFetch,
     });
     const load = vi.fn(({ payload }: { payload: Uint8Array }) => payload);
@@ -174,15 +176,15 @@ describe("publication", () => {
       load,
     });
 
-    await expect(publication.state("alpha").output("array").load(loader)).rejects.toMatchObject({
+    await expect(notebookExport.state("alpha").output("array").load(loader)).rejects.toMatchObject({
       code: "integrity_failed",
     });
     expect(load).not.toHaveBeenCalled();
   });
 
   test("enforces caller byte and aggregate limits before fetching assets", async () => {
-    const fixture = await publicationFixture();
-    const publication = await openPublication("https://example.test/stocks", {
+    const fixture = await exportFixture();
+    const notebookExport = await openExport("https://example.test/stocks", {
       fetch: fixture.fetch,
     });
     const loader = defineOutputLoader({
@@ -192,21 +194,21 @@ describe("publication", () => {
     });
 
     await expect(
-      publication.state("alpha").output("array").load(loader, { maxBytes: 1 }),
+      notebookExport.state("alpha").output("array").load(loader, { maxBytes: 1 }),
     ).rejects.toMatchObject({ code: "read_limit_exceeded" });
-    await expect(publication.verify({ maxTotalBytes: 1 })).rejects.toMatchObject({
+    await expect(notebookExport.verify({ maxTotalBytes: 1 })).rejects.toMatchObject({
       code: "read_limit_exceeded",
     });
     expect(fixture.requests).toEqual(["https://example.test/stocks/index.json"]);
   });
 
-  test("maps cancellation to the publication abort contract", async () => {
-    const fixture = await publicationFixture();
+  test("maps cancellation to the export abort contract", async () => {
+    const fixture = await exportFixture();
     const controller = new AbortController();
     controller.abort("stop");
 
     await expect(
-      openPublication("https://example.test/stocks", {
+      openExport("https://example.test/stocks", {
         fetch: fixture.fetch,
         signal: controller.signal,
       }),
@@ -215,16 +217,16 @@ describe("publication", () => {
 
   test("rejects a successful response without a readable body", async () => {
     await expect(
-      openPublication("https://example.test/stocks", {
+      openExport("https://example.test/stocks", {
         fetch: async () => new Response(null, { status: 200 }),
       }),
     ).rejects.toMatchObject({ code: "read_failed" });
   });
 });
 
-describe("canonical publication validation", () => {
+describe("canonical export validation", () => {
   test("rejects whitespace, duplicate keys, and a wrong fingerprint", async () => {
-    const fixture = await publicationFixture();
+    const fixture = await exportFixture();
     const encodings = [
       encoder.encode(`${new TextDecoder().decode(fixture.indexBytes)}\n`),
       encoder.encode(
@@ -237,9 +239,9 @@ describe("canonical publication validation", () => {
       const fetch: typeof globalThis.fetch = async () => new Response(bytes);
       // Validation cases intentionally execute in order.
       // oxlint-disable-next-line no-await-in-loop
-      await expect(
-        openPublication("https://example.test/stocks", { fetch }),
-      ).rejects.toBeInstanceOf(PublicationError);
+      await expect(openExport("https://example.test/stocks", { fetch })).rejects.toBeInstanceOf(
+        NotebookExportError,
+      );
     }
 
     const wrong = structuredClone(fixture.index);
@@ -247,14 +249,14 @@ describe("canonical publication validation", () => {
     states.alpha!.fingerprint = "f".repeat(64);
     const bytes = encoder.encode(canonicalJson(wrong as never));
     await expect(
-      openPublication("https://example.test/stocks", {
+      openExport("https://example.test/stocks", {
         fetch: async () => new Response(bytes),
       }),
-    ).rejects.toMatchObject({ code: "publication_invalid" });
+    ).rejects.toMatchObject({ code: "export_invalid" });
   });
 
   test("decodes tagged bigint and special float scalars", async () => {
-    const fixture = await publicationFixture({
+    const fixture = await exportFixture({
       indexTransform(index) {
         const states = index.states as Record<string, Record<string, unknown>>;
         for (const state of Object.values(states)) {
@@ -263,16 +265,16 @@ describe("canonical publication validation", () => {
         }
       },
     });
-    const publication = await openPublication("https://example.test/stocks", {
+    const notebookExport = await openExport("https://example.test/stocks", {
       fetch: fixture.fetch,
     });
-    await expect(publication.state("alpha").output("count").load(scalarLoader())).resolves.toBe(
+    await expect(notebookExport.state("alpha").output("count").load(scalarLoader())).resolves.toBe(
       9007199254740992n,
     );
   });
 
   test("rejects a representation that changes across states", async () => {
-    const fixture = await publicationFixture({
+    const fixture = await exportFixture({
       indexTransform(index) {
         const states = index.states as Record<string, Record<string, unknown>>;
         const zeta = states.zeta!.outputs as Record<string, Record<string, unknown>>;
@@ -281,7 +283,7 @@ describe("canonical publication validation", () => {
     });
 
     await expect(
-      openPublication("https://example.test/stocks", { fetch: fixture.fetch }),
+      openExport("https://example.test/stocks", { fetch: fixture.fetch }),
     ).rejects.toMatchObject({ code: "output_representation_changed" });
   });
 });

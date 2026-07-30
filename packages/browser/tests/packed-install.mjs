@@ -18,15 +18,15 @@ try {
   await createProject(coreRoot, {
     name: "marimo-export-packed-core-smoke",
     source: `import {
-  openPublication,
-  PublicationError,
+  openExport,
+  NotebookExportError,
   scalarLoader,
 } from "@marimo-team/marimo-export";
 
 const root = document.querySelector("#app");
-if (root === null) throw new PublicationError("publication_invalid", "Missing application root.");
+if (root === null) throw new NotebookExportError("export_invalid", "Missing application root.");
 root.textContent = scalarLoader().codec;
-void openPublication;
+void openExport;
 `,
   });
   await run(pnpm, ["install", "--ignore-scripts"], coreRoot);
@@ -37,7 +37,7 @@ void openPublication;
   await createProject(loadersRoot, {
     name: "marimo-export-packed-loader-smoke",
     dependencies: manifest.peerDependencies,
-    source: `import { openPublication, PublicationError } from "@marimo-team/marimo-export";
+    source: `import { openExport, NotebookExportError } from "@marimo-team/marimo-export";
 import { anyWidgetLoader } from "@marimo-team/marimo-export/loader/anywidget";
 import { arrowTableLoader } from "@marimo-team/marimo-export/loader/arrow";
 import { numpyLoader } from "@marimo-team/marimo-export/loader/numpy";
@@ -52,10 +52,10 @@ const loaders = [
   vegaLiteLoader(),
 ];
 const root = document.querySelector("#app");
-if (root === null) throw new PublicationError("publication_invalid", "Missing application root.");
+if (root === null) throw new NotebookExportError("export_invalid", "Missing application root.");
 void loaders;
-void openPublication("/publication/").then((publication) => {
-  root.textContent = publication.notebook.filename;
+void openExport("/export/").then((notebookExport) => {
+  root.textContent = notebookExport.notebook.filename;
 });
 `,
   });

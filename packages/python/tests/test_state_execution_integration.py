@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from marimo_export import ExportSpec, OutputSpec, capture, open_publication
+from marimo_export import ExportSpec, OutputSpec, capture, open_export
 from marimo_export._remote.managed import ManagedServer
 from marimo_export.errors import ExecutionError
 from marimo_export.exporters import importable
@@ -95,9 +95,9 @@ if __name__ == "__main__":
         server.stop()
 
     for result in (first, second):
-        publication = open_publication(result.path)
-        assert publication.state("one").output("snapshot").scalar() == "[1]:[1]:[1]"
-        assert publication.state("two").output("snapshot").scalar() == "[2]:[2]:[2]"
+        export = open_export(result.path)
+        assert export.state("one").output("snapshot").scalar() == "[1]:[1]:[1]"
+        assert export.state("two").output("snapshot").scalar() == "[2]:[2]:[2]"
     assert notebook.read_bytes() == source
 
 
@@ -124,7 +124,7 @@ if __name__ == "__main__":
 """.lstrip(),
         encoding="utf-8",
     )
-    (tmp_path / "publication_exports.py").write_text(
+    (tmp_path / "export_exports.py").write_text(
         """
 from marimo._runtime.context import get_context
 
@@ -149,7 +149,7 @@ def fail_on_two(value):
         outputs={
             "children": OutputSpec(
                 source="x",
-                exporter=importable("publication_exports:count_children"),
+                exporter=importable("export_exports:count_children"),
             )
         },
     )
@@ -159,7 +159,7 @@ def fail_on_two(value):
         outputs={
             "value": OutputSpec(
                 source="x",
-                exporter=importable("publication_exports:fail_on_two"),
+                exporter=importable("export_exports:fail_on_two"),
             )
         },
     )
@@ -203,8 +203,8 @@ def fail_on_two(value):
         (first, ("one", "two", "three")),
         (after_failure, ("four", "five", "six")),
     ):
-        publication = open_publication(result.path)
-        assert [publication.state(name).output("children").scalar() for name in names] == [1, 1, 1]
+        export = open_export(result.path)
+        assert [export.state(name).output("children").scalar() for name in names] == [1, 1, 1]
     assert not (tmp_path / "failure").exists()
 
 
@@ -245,11 +245,11 @@ if __name__ == "__main__":
         outputs={"result": OutputSpec(source="result")},
     )
 
-    _capture(notebook, spec, tmp_path / "publication")
-    publication = open_publication(tmp_path / "publication")
+    _capture(notebook, spec, tmp_path / "export")
+    export = open_export(tmp_path / "export")
 
-    assert publication.state("one").output("result").scalar() == "1:1"
-    assert publication.state("two").output("result").scalar() == "2:1"
+    assert export.state("one").output("result").scalar() == "1:1"
+    assert export.state("two").output("result").scalar() == "2:1"
 
 
 def test_ui_dependent_cell_failure_rejects_the_state(tmp_path: Path) -> None:
@@ -287,7 +287,7 @@ if __name__ == "__main__":
         states={"failure": {"selector": ["fail"]}},
         outputs={"stable": OutputSpec(source="stable")},
     )
-    output = tmp_path / "publication"
+    output = tmp_path / "export"
 
     with pytest.raises(ExecutionError) as raised:
         _capture(notebook, spec, output)
@@ -328,7 +328,7 @@ if __name__ == "__main__":
         states={"failure": {"selector": 2}},
         outputs={"stable": OutputSpec(source="stable")},
     )
-    output = tmp_path / "publication"
+    output = tmp_path / "export"
 
     with pytest.raises(ExecutionError) as raised:
         _capture(notebook, spec, output)

@@ -14,22 +14,22 @@ from marimo_export._json import JsonObject, JsonValue, canonical_bytes
 from marimo_export._marimo.compat import BlobAsset
 from marimo_export._secure_io import (
     SecureReadError,
-    read_publication_asset,
-    read_publication_index,
+    read_export_asset,
+    read_export_index,
 )
 from marimo_export.errors import (
     IntegrityError,
-    PublicationError,
+    NotebookExportError,
     StateUnavailableError,
 )
-from marimo_export.publication import (
+from marimo_export.export import (
     ArrowDescriptor,
     BlobAssetDescriptor,
+    ExportIndex,
     NotebookProvenance,
     NumpyDescriptor,
     OutputDescriptor,
     ProducerProvenance,
-    PublicationIndex,
     ScalarDescriptor,
     ScalarValue,
     StateEntry,
@@ -40,7 +40,7 @@ from marimo_export.spec import FrozenJsonObject, FrozenJsonValue, StrPath
 
 _MAX_INDEX_BYTES = 16 * 1024 * 1024
 _MAX_ASSET_BYTES = 64 * 1024 * 1024
-_MAX_PUBLICATION_BYTES = 512 * 1024 * 1024
+_MAX_EXPORT_BYTES = 512 * 1024 * 1024
 _NPY_MAX_HEADER_BYTES = 1024 * 1024
 
 
@@ -72,16 +72,16 @@ class VerificationResult:
         }
 
 
-class Publication(_Immutable):
-    """An immutable local publication opened from canonical `index.json`."""
+class NotebookExport(_Immutable):
+    """An immutable local export opened from canonical `index.json`."""
 
     __slots__ = ("_index", "_path", "_states", "_vectors")
 
-    def __init__(self, path: Path, index: PublicationIndex) -> None:
+    def __init__(self, path: Path, index: ExportIndex) -> None:
         self._path = path
         self._index = index
         self._states = {
-            name: PublishedState(self, name, entry) for name, entry in sorted(index.states.items())
+            name: ExportState(self, name, entry) for name, entry in sorted(index.states.items())
         }
         self._vectors = {
             canonical_bytes(entry.inputs): self._states[name]
@@ -108,28 +108,28 @@ class Publication(_Immutable):
     def producer(self) -> ProducerProvenance:
         return self._index.producer
 
-    def states(self) -> tuple[PublishedState, ...]:
+    def states(self) -> tuple[ExportState, ...]:
         return tuple(self._states.values())
 
-    def state(self, name: str) -> PublishedState:
+    def state(self, name: str) -> ExportState:
         if not isinstance(name, str):
             raise TypeError("state name must be a string")
         try:
             return self._states[name]
         except KeyError as error:
-            raise PublicationError(
-                f"publication state {name!r} was not found",
+            raise NotebookExportError(
+                f"export state {name!r} was not found",
                 code="state_not_found",
                 details={"name": name, "available": list(self._states)[:16]},
             ) from error
 
-    def resolve(self, inputs: Mapping[str, JsonValue]) -> PublishedState:
+    def resolve(self, inputs: Mapping[str, JsonValue]) -> ExportState:
         vector = _complete_inputs(inputs, self.input_names)
         try:
             return self._vectors[canonical_bytes(vector)]
         except KeyError as error:
             raise StateUnavailableError(
-                "publication has no state for the requested input vector",
+                "export has no state for the requested input vector",
                 details={"fingerprint": state_fingerprint(vector)},
             ) from error
 
@@ -156,59 +156,59 @@ class Publication(_Immutable):
         )
 
 
-class PublishedState(_Immutable):
-    __slots__ = ("_entry", "_inputs", "_outputs", "_publication", "fingerprint", "name")
+class ExportState(_Immutable):
+    __slots__ = ("_entry", "_inputs", "_notebook_export", "_outputs", "fingerprint", "name")
 
     def __init__(
         self,
-        publication: Publication,
+        notebook_export: NotebookExport,
         name: str,
         entry: StateEntry,
     ) -> None:
-        self._publication = publication
+        self._notebook_export = notebook_export
         self.name = name
         self.fingerprint = entry.fingerprint
         self._entry = entry
         self._inputs = cast(FrozenJsonObject, _freeze(entry.inputs))
         self._outputs = {
-            output_name: PublishedOutput(self, output_name, entry.outputs[output_name])
-            for output_name in publication.output_names
+            output_name: ExportOutput(self, output_name, entry.outputs[output_name])
+            for output_name in notebook_export.output_names
         }
 
     @property
-    def publication(self) -> Publication:
-        return self._publication
+    def notebook_export(self) -> NotebookExport:
+        return self._notebook_export
 
     @property
     def inputs(self) -> FrozenJsonObject:
         return self._inputs
 
-    def outputs(self) -> tuple[PublishedOutput, ...]:
+    def outputs(self) -> tuple[ExportOutput, ...]:
         return tuple(self._outputs.values())
 
-    def output(self, name: str) -> PublishedOutput:
+    def output(self, name: str) -> ExportOutput:
         if not isinstance(name, str):
             raise TypeError("output name must be a string")
         try:
             return self._outputs[name]
         except KeyError as error:
-            raise PublicationError(
-                f"publication output {name!r} was not found",
+            raise NotebookExportError(
+                f"export output {name!r} was not found",
                 code="output_not_found",
                 details={"name": name, "available": list(self._outputs)[:16]},
             ) from error
 
-    def resolve(self, patch: Mapping[str, JsonValue]) -> PublishedState:
+    def resolve(self, patch: Mapping[str, JsonValue]) -> ExportState:
         if not isinstance(patch, Mapping):
-            raise PublicationError(
+            raise NotebookExportError(
                 "state patch must be an object",
                 code="state_input_invalid",
             )
         if not patch:
             return self
-        unknown = sorted(set(patch) - set(self.publication.input_names))
+        unknown = sorted(set(patch) - set(self.notebook_export.input_names))
         if unknown:
-            raise PublicationError(
+            raise NotebookExportError(
                 f"state patch names unknown inputs: {', '.join(unknown)}",
                 code="state_input_invalid",
                 details={"unknown": unknown},
@@ -217,15 +217,15 @@ class PublishedState(_Immutable):
         assert isinstance(merged, dict)
         for name, value in patch.items():
             merged[name] = value
-        return self.publication.resolve(cast(Mapping[str, JsonValue], merged))
+        return self.notebook_export.resolve(cast(Mapping[str, JsonValue], merged))
 
 
-class PublishedOutput(_Immutable):
+class ExportOutput(_Immutable):
     __slots__ = ("_descriptor", "_state", "name")
 
     def __init__(
         self,
-        state: PublishedState,
+        state: ExportState,
         name: str,
         descriptor: OutputDescriptor,
     ) -> None:
@@ -234,7 +234,7 @@ class PublishedOutput(_Immutable):
         self._descriptor = descriptor
 
     @property
-    def state(self) -> PublishedState:
+    def state(self) -> ExportState:
         return self._state
 
     @property
@@ -251,7 +251,7 @@ class PublishedOutput(_Immutable):
 
     def scalar(self) -> ScalarValue:
         if not isinstance(self._descriptor, ScalarDescriptor):
-            raise PublicationError(
+            raise NotebookExportError(
                 f"output {self.name!r} does not use the scalar codec",
                 code="codec_invalid",
             )
@@ -259,17 +259,17 @@ class PublishedOutput(_Immutable):
 
     def asset_bytes(self) -> bytes:
         if isinstance(self._descriptor, ScalarDescriptor):
-            raise PublicationError(
+            raise NotebookExportError(
                 f"output {self.name!r} has no asset bytes",
                 code="codec_invalid",
             )
-        data = _read_asset(self.state.publication.path, self._descriptor)
+        data = _read_asset(self.state.notebook_export.path, self._descriptor)
         _validate_asset(self._descriptor, data)
         return data
 
     def blob_asset(self) -> BlobAsset:
         if not isinstance(self._descriptor, BlobAssetDescriptor):
-            raise PublicationError(
+            raise NotebookExportError(
                 f"output {self.name!r} does not use the BlobAsset codec",
                 code="codec_invalid",
             )
@@ -282,54 +282,54 @@ class PublishedOutput(_Immutable):
         )
 
 
-def open_publication(path: StrPath) -> Publication:
-    """Open and validate a local publication index without reading assets."""
+def open_export(path: StrPath) -> NotebookExport:
+    """Open and validate a local export index without reading assets."""
 
-    root = _publication_root(path)
+    root = _export_root(path)
     try:
-        data = read_publication_index(root, max_bytes=_MAX_INDEX_BYTES)
+        data = read_export_index(root, max_bytes=_MAX_INDEX_BYTES)
     except SecureReadError as error:
-        raise PublicationError(
-            f"could not read publication index: {error}",
-            code="publication_invalid",
+        raise NotebookExportError(
+            f"could not read export index: {error}",
+            code="export_invalid",
         ) from error
-    index = PublicationIndex.from_bytes(data)
+    index = ExportIndex.from_bytes(data)
     closure = len(data) + sum(asset.size for _, asset in index.assets())
-    if closure > _MAX_PUBLICATION_BYTES:
-        raise PublicationError(
-            f"publication closure exceeds {_MAX_PUBLICATION_BYTES} bytes",
-            code="publication_invalid",
+    if closure > _MAX_EXPORT_BYTES:
+        raise NotebookExportError(
+            f"export closure exceeds {_MAX_EXPORT_BYTES} bytes",
+            code="export_invalid",
         )
     if any(asset.size > _MAX_ASSET_BYTES for _, asset in index.assets()):
-        raise PublicationError(
-            f"publication asset exceeds {_MAX_ASSET_BYTES} bytes",
-            code="publication_invalid",
+        raise NotebookExportError(
+            f"export asset exceeds {_MAX_ASSET_BYTES} bytes",
+            code="export_invalid",
         )
-    return Publication(root, index)
+    return NotebookExport(root, index)
 
 
-def _publication_root(path: StrPath) -> Path:
+def _export_root(path: StrPath) -> Path:
     if not isinstance(path, (str, os.PathLike)):
-        raise TypeError("publication path must be a string or path-like object")
+        raise TypeError("export path must be a string or path-like object")
     requested = Path(path).expanduser().absolute()
     try:
         inspected = requested.lstat()
     except OSError as error:
-        raise PublicationError(
-            f"publication directory is unavailable: {requested}",
-            code="publication_invalid",
+        raise NotebookExportError(
+            f"export directory is unavailable: {requested}",
+            code="export_invalid",
         ) from error
     if stat.S_ISLNK(inspected.st_mode) or not stat.S_ISDIR(inspected.st_mode):
-        raise PublicationError(
-            "publication root must be a real directory",
-            code="publication_invalid",
+        raise NotebookExportError(
+            "export root must be a real directory",
+            code="export_invalid",
         )
     try:
         return requested.resolve(strict=True)
     except (OSError, RuntimeError) as error:
-        raise PublicationError(
-            f"publication directory is unavailable: {requested}",
-            code="publication_invalid",
+        raise NotebookExportError(
+            f"export directory is unavailable: {requested}",
+            code="export_invalid",
         ) from error
 
 
@@ -338,15 +338,15 @@ def _complete_inputs(
     names: tuple[str, ...],
 ) -> JsonObject:
     if not isinstance(inputs, Mapping):
-        raise PublicationError(
+        raise NotebookExportError(
             "state inputs must be an object",
             code="state_input_invalid",
         )
     expected = set(names)
     actual = set(inputs)
     if actual != expected:
-        raise PublicationError(
-            "state input keys must exactly match publication.input_names",
+        raise NotebookExportError(
+            "state input keys must exactly match export.input_names",
             code="state_input_invalid",
             details={
                 "missing": sorted(expected - actual),
@@ -356,7 +356,7 @@ def _complete_inputs(
     try:
         return {name: cast(JsonValue, _thaw(_freeze(inputs[name]))) for name in names}
     except (TypeError, ValueError) as error:
-        raise PublicationError(
+        raise NotebookExportError(
             f"state inputs are invalid: {error}",
             code="state_input_invalid",
         ) from error
@@ -367,7 +367,7 @@ def _read_asset(path: Path, descriptor: OutputDescriptor) -> bytes:
         raise TypeError("scalar descriptors have no assets")
     relative = asset_path(descriptor.codec, descriptor.asset.sha256)
     try:
-        data = read_publication_asset(
+        data = read_export_asset(
             path,
             relative,
             expected_size=descriptor.asset.size,
@@ -375,7 +375,7 @@ def _read_asset(path: Path, descriptor: OutputDescriptor) -> bytes:
         )
     except SecureReadError as error:
         raise IntegrityError(
-            f"could not read publication asset {relative}: {error}",
+            f"could not read export asset {relative}: {error}",
             details={"path": relative},
         ) from error
     from marimo_export._json import sha256_bytes
@@ -383,7 +383,7 @@ def _read_asset(path: Path, descriptor: OutputDescriptor) -> bytes:
     digest = sha256_bytes(data)
     if digest != descriptor.asset.sha256:
         raise IntegrityError(
-            f"publication asset {relative} failed SHA-256 verification",
+            f"export asset {relative} failed SHA-256 verification",
             details={"path": relative},
         )
     return data
@@ -498,27 +498,27 @@ def _verify_asset_directory(root: Path, declared: set[str]) -> None:
         inspected = directory.lstat()
     except FileNotFoundError:
         if declared:
-            raise PublicationError(
-                "publication assets directory is missing",
+            raise NotebookExportError(
+                "export assets directory is missing",
                 code="asset_invalid",
             ) from None
         return
     except OSError as error:
-        raise PublicationError(
-            "publication assets directory is unavailable",
+        raise NotebookExportError(
+            "export assets directory is unavailable",
             code="asset_invalid",
         ) from error
     if stat.S_ISLNK(inspected.st_mode) or not stat.S_ISDIR(inspected.st_mode):
-        raise PublicationError(
-            "publication assets path must be a real directory",
+        raise NotebookExportError(
+            "export assets path must be a real directory",
             code="asset_invalid",
         )
     expected = {Path(path).name for path in declared}
     try:
         entries = tuple(directory.iterdir())
     except OSError as error:
-        raise PublicationError(
-            "publication assets directory could not be enumerated",
+        raise NotebookExportError(
+            "export assets directory could not be enumerated",
             code="asset_invalid",
         ) from error
     actual: set[str] = set()
@@ -526,20 +526,20 @@ def _verify_asset_directory(root: Path, declared: set[str]) -> None:
         try:
             entry_stat = entry.lstat()
         except OSError as error:
-            raise PublicationError(
-                "publication asset could not be inspected",
+            raise NotebookExportError(
+                "export asset could not be inspected",
                 code="asset_invalid",
             ) from error
         if stat.S_ISLNK(entry_stat.st_mode) or not stat.S_ISREG(entry_stat.st_mode):
-            raise PublicationError(
-                f"publication contains an undeclared asset entry: {entry.name}",
+            raise NotebookExportError(
+                f"export contains an undeclared asset entry: {entry.name}",
                 code="asset_undeclared",
             )
         actual.add(entry.name)
     undeclared = sorted(actual - expected)
     if undeclared:
-        raise PublicationError(
-            f"publication contains undeclared assets: {', '.join(undeclared[:16])}",
+        raise NotebookExportError(
+            f"export contains undeclared assets: {', '.join(undeclared[:16])}",
             code="asset_undeclared",
             details={"assets": undeclared[:16]},
         )
@@ -572,11 +572,11 @@ def _thaw(value: FrozenJsonValue) -> JsonValue:
 
 
 __all__ = [
+    "ExportOutput",
+    "ExportState",
+    "NotebookExport",
     "NotebookProvenance",
     "ProducerProvenance",
-    "Publication",
-    "PublishedOutput",
-    "PublishedState",
     "VerificationResult",
-    "open_publication",
+    "open_export",
 ]

@@ -11,10 +11,10 @@ from pathlib import Path
 from typing import BinaryIO
 
 from marimo_export._remote.managed import ManagedServer
-from marimo_export._writer import preflight_publication, write_publication
-from marimo_export.client import Client, _CaptureData, _publication_result
+from marimo_export._writer import preflight_export, write_export
+from marimo_export.client import Client, _CaptureData, _export_result
 from marimo_export.errors import ExecutionError
-from marimo_export.publication import NotebookProvenance, PhaseTimings, PublicationResult
+from marimo_export.export import ExportResult, NotebookProvenance, PhaseTimings
 from marimo_export.spec import ExportSpec, StrPath
 
 
@@ -25,8 +25,8 @@ def build(
     output: StrPath,
     timeout: float = 30.0,
     replace: bool = False,
-) -> PublicationResult:
-    """Publish a notebook through an owned authenticated loopback server."""
+) -> ExportResult:
+    """Create a notebook export through an owned authenticated loopback server."""
 
     total_started = time.monotonic()
     source = _notebook_path(notebook)
@@ -35,7 +35,7 @@ def build(
     duration = _timeout(timeout)
     if not isinstance(replace, bool):
         raise TypeError("replace must be a boolean")
-    destination = preflight_publication(output, replace=replace)
+    destination = preflight_export(output, replace=replace)
     before = _source_digest(source)
     captured = _capture_owned(source, spec, duration)
     after = _source_digest(source)
@@ -45,21 +45,21 @@ def build(
             code="notebook_changed",
             details={"before": before, "after": after},
         )
-    publication_started = time.monotonic()
-    written = write_publication(
+    export_started = time.monotonic()
+    written = write_export(
         captured.index,
         captured.assets,
         destination,
         replace=replace,
     )
-    publication_write_seconds = time.monotonic() - publication_started
+    export_write_seconds = time.monotonic() - export_started
     if (
         captured.server_start_seconds is None
         or captured.initial_autorun_seconds is None
         or captured.server_shutdown_seconds is None
     ):
         raise RuntimeError("managed capture produced incomplete phase timings")
-    return _publication_result(
+    return _export_result(
         captured,
         written,
         mode="build",
@@ -70,8 +70,8 @@ def build(
             initial_autorun_seconds=captured.initial_autorun_seconds,
             capture_seconds=captured.capture_seconds,
             server_shutdown_seconds=captured.server_shutdown_seconds,
-            publication_write_seconds=publication_write_seconds,
-            fresh_children=captured.fresh_child_timings,
+            export_write_seconds=export_write_seconds,
+            state_runs=captured.state_run_timings,
         ),
     )
 

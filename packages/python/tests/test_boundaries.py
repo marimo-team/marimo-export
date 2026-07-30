@@ -15,12 +15,12 @@ def test_root_package_exposes_the_public_api() -> None:
         "Client",
         "ExportSpec",
         "OutputSpec",
-        "Publication",
-        "PublicationResult",
+        "NotebookExport",
+        "ExportResult",
         "Session",
         "build",
         "capture",
-        "open_publication",
+        "open_export",
     }
     assert set(marimo_export.__all__) == expected
     for name in expected:
@@ -50,7 +50,7 @@ def test_private_marimo_imports_stay_in_adapter_package() -> None:
 def test_domain_modules_do_not_import_runtime_adapters() -> None:
     package = Path(__file__).parents[1] / "src" / "marimo_export"
     violations: list[str] = []
-    for name in ("errors.py", "publication.py", "spec.py"):
+    for name in ("errors.py", "export.py", "spec.py"):
         source = package / name
         tree = ast.parse(source.read_text(encoding="utf-8"), filename=str(source))
         for node in ast.walk(tree):

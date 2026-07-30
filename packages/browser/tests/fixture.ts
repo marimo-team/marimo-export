@@ -12,7 +12,7 @@ export interface Fixture {
   readonly fetch: typeof globalThis.fetch;
 }
 
-export async function publicationFixture(
+export async function exportFixture(
   options: {
     readonly envelope?: Uint8Array;
     readonly blobMetadata?: Record<string, unknown>;
@@ -76,7 +76,7 @@ export async function publicationFixture(
     notebook: { document_sha256: "a".repeat(64), filename: "finance.py" },
     outputs,
     producer: { marimo: "0.23.15", marimo_export: "1.0.0" },
-    schema: "marimo-export.publication.v1",
+    schema: "marimo-export.export.v1",
     states,
   };
   options.indexTransform?.(index);
@@ -124,7 +124,7 @@ function assetDescriptor(
 
 function provenance(name: string, asset: boolean): Record<string, unknown> {
   return {
-    cache_key: `cell_cache/P_${name}.json`,
+    cache_key: `cell_cache/O_${name}.json`,
     python_type: "fixture.Value",
     return_reference: asset ? `cell_cache/${name}/return.bin` : null,
   };

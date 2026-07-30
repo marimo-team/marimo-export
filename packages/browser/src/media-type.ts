@@ -1,5 +1,5 @@
 import type { MediaType } from "./types.js";
-import { PublicationError } from "./types.js";
+import { NotebookExportError } from "./types.js";
 
 const TOKEN = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/u;
 const PRINTABLE_ASCII = /^[\u0020-\u007e]+$/u;
@@ -18,8 +18,8 @@ export function parseMediaType(raw: string): MediaType {
     const parser = new MediaTypeParser(raw);
     return parser.parse();
   } catch (error) {
-    if (error instanceof PublicationError) throw error;
-    throw new PublicationError("publication_invalid", "Publication media type is invalid.", {
+    if (error instanceof NotebookExportError) throw error;
+    throw new NotebookExportError("export_invalid", "Export media type is invalid.", {
       cause: error,
     });
   }

@@ -5,10 +5,10 @@ import { parseMediaType } from "./media-type.js";
 import {
   canonicalJson,
   compareUnicodeScalarStrings,
-  parsePublicationIndex,
+  parseExportIndex,
   portableJsonObject,
 } from "./schema.js";
-import type { ParsedPublicationIndex, ParsedState } from "./schema.js";
+import type { ParsedExportIndex, ParsedState } from "./schema.js";
 import { parseStrictJson } from "./strict-json.js";
 import { fetchBytes, normalizeBase } from "./transport.js";
 import type {
@@ -16,18 +16,18 @@ import type {
   JsonObject,
   JsonValue,
   LoadOptions,
-  OpenPublicationOptions,
+  OpenExportOptions,
   OutputCodec,
   OutputDescriptor,
   OutputLoader,
   OutputPayloadMap,
-  Publication,
-  PublishedOutput,
-  PublishedState,
+  NotebookExport,
+  ExportOutput,
+  ExportState,
   VerificationResult,
   VerifyOptions,
 } from "./types.js";
-import { PublicationError } from "./types.js";
+import { NotebookExportError } from "./types.js";
 
 const INDEX_MAX_BYTES = 16 * 1024 * 1024;
 const INDEX_MAX_VALUES = 2_000_000;
@@ -37,10 +37,10 @@ const DEFAULT_VERIFY_MAX_BYTES = 2 * 1024 * 1024 * 1024;
 const encoder = new TextEncoder();
 const decoder = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
 
-export async function openPublication(
+export async function openExport(
   base: string | URL,
-  options: OpenPublicationOptions = {},
-): Promise<Publication> {
+  options: OpenExportOptions = {},
+): Promise<NotebookExport> {
   throwIfAborted(options.signal);
   const normalized = normalizeBase(base);
   const fetcher = options.fetch ?? globalThis.fetch;
@@ -50,9 +50,9 @@ export async function openPublication(
     ...(options.signal === undefined ? {} : { signal: options.signal }),
   });
   const wire = decodeCanonicalIndex(bytes);
-  const parsed = parsePublicationIndex(wire);
+  const parsed = parseExportIndex(wire);
   await validateFingerprints(parsed, options.signal);
-  return new PublicationValue(normalized, parsed, fetcher);
+  return new NotebookExportValue(normalized, parsed, fetcher);
 }
 
 function decodeCanonicalIndex(bytes: Uint8Array): unknown {
@@ -60,45 +60,38 @@ function decodeCanonicalIndex(bytes: Uint8Array): unknown {
   try {
     value = parseStrictJson(decoder.decode(bytes), INDEX_MAX_VALUES);
   } catch (error) {
-    throw new PublicationError(
-      "publication_invalid",
-      "Publication index must be strict UTF-8 JSON.",
-      {
-        cause: error,
-      },
-    );
+    throw new NotebookExportError("export_invalid", "Export index must be strict UTF-8 JSON.", {
+      cause: error,
+    });
   }
   let canonical: Uint8Array;
   try {
     canonical = encoder.encode(canonicalJson(value as JsonValue));
   } catch (error) {
-    if (error instanceof PublicationError) throw error;
-    throw new PublicationError("publication_invalid", "Publication index JSON is invalid.", {
+    if (error instanceof NotebookExportError) throw error;
+    throw new NotebookExportError("export_invalid", "Export index JSON is invalid.", {
       cause: error,
     });
   }
   if (!equalBytes(bytes, canonical)) {
-    throw new PublicationError(
-      "publication_noncanonical",
-      "Publication index is not canonical JSON.",
-    );
+    throw new NotebookExportError("export_noncanonical", "Export index is not canonical JSON.");
   }
   return value;
 }
 
 async function validateFingerprints(
-  index: ParsedPublicationIndex,
+  index: ParsedExportIndex,
   signal: AbortSignal | undefined,
 ): Promise<void> {
   for (const [name, state] of Object.entries(index.states)) {
     throwIfAborted(signal);
-    // Keep hashing bounded when publications contain many states.
+    // Keep hashing bounded when exports contain many states.
     // oxlint-disable-next-line no-await-in-loop
     const actual = await sha256Hex(encoder.encode(canonicalJson(state.inputs)));
     throwIfAborted(signal);
     if (actual !== state.fingerprint) {
-      throw new PublicationError(
-        "publication_invalid",
+      throw new NotebookExportError(
+        "export_invalid",
         `State ${JSON.stringify(name)} fingerprint does not match its inputs.`,
         { details: { state: name } },
       );
@@ -106,18 +99,18 @@ async function validateFingerprints(
   }
 }
 
-class PublicationValue implements Publication {
+class NotebookExportValue implements NotebookExport {
   readonly #baseHref: string;
-  readonly notebook: ParsedPublicationIndex["notebook"];
-  readonly producer: ParsedPublicationIndex["producer"];
+  readonly notebook: ParsedExportIndex["notebook"];
+  readonly producer: ParsedExportIndex["producer"];
   readonly inputNames: readonly string[];
   readonly outputNames: readonly string[];
-  readonly #states: readonly PublishedStateValue[];
-  readonly #statesByName: ReadonlyMap<string, PublishedStateValue>;
-  readonly #statesByInputs: ReadonlyMap<string, PublishedStateValue>;
+  readonly #states: readonly ExportStateValue[];
+  readonly #statesByName: ReadonlyMap<string, ExportStateValue>;
+  readonly #statesByInputs: ReadonlyMap<string, ExportStateValue>;
   readonly #reader: AssetReader;
 
-  constructor(base: URL, index: ParsedPublicationIndex, fetcher: typeof globalThis.fetch) {
+  constructor(base: URL, index: ParsedExportIndex, fetcher: typeof globalThis.fetch) {
     this.#baseHref = base.href;
     this.notebook = index.notebook;
     this.producer = index.producer;
@@ -127,7 +120,7 @@ class PublicationValue implements Publication {
     this.#states = Object.freeze(
       Object.entries(index.states)
         .sort(([left], [right]) => compareUnicodeScalarStrings(left, right))
-        .map(([name, state]) => new PublishedStateValue(this, name, state, this.#reader)),
+        .map(([name, state]) => new ExportStateValue(this, name, state, this.#reader)),
     );
     this.#statesByName = new Map(this.#states.map((state) => [state.name, state]));
     this.#statesByInputs = new Map(
@@ -140,14 +133,14 @@ class PublicationValue implements Publication {
     return new URL(this.#baseHref);
   }
 
-  states(): readonly PublishedState[] {
+  states(): readonly ExportState[] {
     return this.#states;
   }
 
-  state(name: string): PublishedState {
+  state(name: string): ExportState {
     const state = this.#statesByName.get(name);
     if (state === undefined) {
-      throw new PublicationError(
+      throw new NotebookExportError(
         "state_not_found",
         `State ${JSON.stringify(name)} was not found.`,
         {
@@ -161,18 +154,18 @@ class PublicationValue implements Publication {
     return state;
   }
 
-  resolve(inputs: JsonObject): PublishedState {
+  resolve(inputs: JsonObject): ExportState {
     const normalized = normalizeResolutionObject(inputs, "inputs");
     requireCompleteInputs(normalized, this.inputNames);
     return this.resolveNormalized(normalized);
   }
 
-  resolveNormalized(inputs: JsonObject): PublishedStateValue {
+  resolveNormalized(inputs: JsonObject): ExportStateValue {
     const state = this.#statesByInputs.get(canonicalJson(inputs));
     if (state === undefined) {
-      throw new PublicationError(
+      throw new NotebookExportError(
         "state_unavailable",
-        "The requested input vector is absent from this publication.",
+        "The requested input vector is absent from this export.",
         { details: { fingerprint: "unavailable" } },
       );
     }
@@ -185,9 +178,9 @@ class PublicationValue implements Publication {
     const assets = uniqueAssets(this.#states);
     const total = assets.reduce((sum, item) => sum + item.descriptor.asset.size, 0);
     if (total > maxTotalBytes) {
-      throw new PublicationError(
+      throw new NotebookExportError(
         "read_limit_exceeded",
-        "Publication assets exceed the verification byte limit.",
+        "Export assets exceed the verification byte limit.",
         { details: { declaredBytes: total, maxTotalBytes } },
       );
     }
@@ -209,42 +202,41 @@ class PublicationValue implements Publication {
   }
 }
 
-class PublishedStateValue implements PublishedState {
-  readonly publication: PublicationValue;
+class ExportStateValue implements ExportState {
+  readonly notebookExport: NotebookExportValue;
   readonly name: string;
   readonly fingerprint: string;
   readonly inputs: JsonObject;
-  readonly #outputs: readonly PublishedOutputValue[];
-  readonly #outputsByName: ReadonlyMap<string, PublishedOutputValue>;
+  readonly #outputs: readonly ExportOutputValue[];
+  readonly #outputsByName: ReadonlyMap<string, ExportOutputValue>;
 
   constructor(
-    publication: PublicationValue,
+    notebookExport: NotebookExportValue,
     name: string,
     state: ParsedState,
     reader: AssetReader,
   ) {
-    this.publication = publication;
+    this.notebookExport = notebookExport;
     this.name = name;
     this.fingerprint = state.fingerprint;
     this.inputs = state.inputs;
     this.#outputs = Object.freeze(
-      publication.outputNames.map(
-        (outputName) =>
-          new PublishedOutputValue(this, outputName, state.outputs[outputName]!, reader),
+      notebookExport.outputNames.map(
+        (outputName) => new ExportOutputValue(this, outputName, state.outputs[outputName]!, reader),
       ),
     );
     this.#outputsByName = new Map(this.#outputs.map((output) => [output.name, output]));
     Object.freeze(this);
   }
 
-  outputs(): readonly PublishedOutput[] {
+  outputs(): readonly ExportOutput[] {
     return this.#outputs;
   }
 
-  output(name: string): PublishedOutput {
+  output(name: string): ExportOutput {
     const output = this.#outputsByName.get(name);
     if (output === undefined) {
-      throw new PublicationError(
+      throw new NotebookExportError(
         "output_not_found",
         `Output ${JSON.stringify(name)} was not found.`,
         {
@@ -258,13 +250,13 @@ class PublishedStateValue implements PublishedState {
     return output;
   }
 
-  resolve(patch: JsonObject): PublishedState {
+  resolve(patch: JsonObject): ExportState {
     const normalized = normalizeResolutionObject(patch, "patch");
     const keys = Object.keys(normalized);
     if (keys.length === 0) return this;
-    const allowed = new Set(this.publication.inputNames);
+    const allowed = new Set(this.notebookExport.inputNames);
     if (keys.some((key) => !allowed.has(key))) {
-      throw new PublicationError(
+      throw new NotebookExportError(
         "state_input_invalid",
         "State patch contains an unknown input name.",
         { details: { keys: keys.slice(0, 16) } },
@@ -272,18 +264,18 @@ class PublishedStateValue implements PublishedState {
     }
     const merged = Object.freeze(
       Object.fromEntries(
-        this.publication.inputNames.map((name) => [
+        this.notebookExport.inputNames.map((name) => [
           name,
           Object.hasOwn(normalized, name) ? normalized[name]! : this.inputs[name]!,
         ]),
       ),
     ) as JsonObject;
-    return this.publication.resolveNormalized(merged);
+    return this.notebookExport.resolveNormalized(merged);
   }
 }
 
-class PublishedOutputValue implements PublishedOutput {
-  readonly state: PublishedStateValue;
+class ExportOutputValue implements ExportOutput {
+  readonly state: ExportStateValue;
   readonly name: string;
   readonly codec: OutputCodec;
   readonly mediaType: ReturnType<typeof parseMediaType>;
@@ -291,7 +283,7 @@ class PublishedOutputValue implements PublishedOutput {
   readonly #reader: AssetReader;
 
   constructor(
-    state: PublishedStateValue,
+    state: ExportStateValue,
     name: string,
     descriptor: OutputDescriptor,
     reader: AssetReader,
@@ -353,9 +345,9 @@ class AssetReader {
     throwIfAborted(options.signal);
     if (descriptor.codec === "marimo.scalar.v1") return descriptor.value;
     if (descriptor.asset.size > options.maxBytes) {
-      throw new PublicationError(
+      throw new NotebookExportError(
         "read_limit_exceeded",
-        "Publication asset exceeds the caller byte limit.",
+        "Export asset exceeds the caller byte limit.",
         {
           details: {
             declaredBytes: descriptor.asset.size,
@@ -388,7 +380,7 @@ function assetPath(codec: AssetOutputDescriptor["codec"], digest: string): strin
 }
 
 function uniqueAssets(
-  states: readonly PublishedStateValue[],
+  states: readonly ExportStateValue[],
 ): readonly { readonly descriptor: AssetOutputDescriptor }[] {
   const values = new Map<string, { readonly descriptor: AssetOutputDescriptor }>();
   for (const state of states) {
@@ -405,7 +397,7 @@ function normalizeResolutionObject(input: unknown, label: string): JsonObject {
   try {
     return portableJsonObject(input, label);
   } catch (error) {
-    throw new PublicationError("state_input_invalid", `State ${label} is invalid.`, {
+    throw new NotebookExportError("state_input_invalid", `State ${label} is invalid.`, {
       cause: error,
     });
   }
@@ -419,9 +411,9 @@ function requireCompleteInputs(inputs: JsonObject, names: readonly string[]): vo
     keys.some((key) => !expected.has(key)) ||
     names.some((name) => !Object.hasOwn(inputs, name))
   ) {
-    throw new PublicationError(
+    throw new NotebookExportError(
       "state_input_invalid",
-      "State inputs must equal the publication input name set.",
+      "State inputs must equal the export input name set.",
       { details: { expected: names.slice(0, 16), actual: keys.slice(0, 16) } },
     );
   }
@@ -450,7 +442,7 @@ async function waitForLoader<T>(promise: Promise<T>, signal: AbortSignal | undef
   const aborted = new Promise<never>((_resolve, reject) => {
     abort = () =>
       reject(
-        new PublicationError("abort", "Publication output loading was aborted.", {
+        new NotebookExportError("abort", "Export output loading was aborted.", {
           cause: signal.reason,
         }),
       );
@@ -465,7 +457,7 @@ async function waitForLoader<T>(promise: Promise<T>, signal: AbortSignal | undef
 
 function throwIfAborted(signal: AbortSignal | undefined): void {
   if (signal?.aborted) {
-    throw new PublicationError("abort", "Publication operation was aborted.", {
+    throw new NotebookExportError("abort", "Export operation was aborted.", {
       cause: signal.reason,
     });
   }

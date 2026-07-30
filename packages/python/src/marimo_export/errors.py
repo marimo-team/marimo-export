@@ -65,14 +65,14 @@ class SessionError(MarimoExportError):
     code = "session_error"
 
 
-class PublicationError(MarimoExportError):
-    """A static publication is missing, malformed, or cannot be read."""
+class NotebookExportError(MarimoExportError):
+    """A notebook export is missing, malformed, or cannot be read."""
 
-    code = "publication_invalid"
+    code = "export_invalid"
 
 
-class IntegrityError(PublicationError):
-    """A publication asset failed integrity or envelope validation."""
+class IntegrityError(NotebookExportError):
+    """An export asset failed integrity or envelope validation."""
 
     code = "integrity_failed"
 
@@ -90,18 +90,18 @@ class ExecutionError(MarimoExportError):
 
 
 class OutputError(ExecutionError):
-    """A projected notebook output could not execute."""
+    """An export output could not execute."""
 
     code = "output_execution_failed"
 
 
 class CodecError(MarimoExportError):
-    """A native cache return cannot enter the publication protocol."""
+    """A native cache return cannot enter the export format."""
 
     code = "codec_invalid"
 
 
-class StateUnavailableError(PublicationError):
-    """A publication has no state for the requested complete input vector."""
+class StateUnavailableError(NotebookExportError):
+    """An export has no state for the requested complete input vector."""
 
     code = "state_unavailable"

@@ -53,9 +53,9 @@ function input(data = new Uint8Array()): BlobAssetLoadInput {
       mediaType: parsed.raw,
       metadata: {},
       provenance: {
-        cacheKey: "cell_cache/P_table.json",
+        cacheKey: "cell_cache/O_table.json",
         pythonType: "marimo._save.cache.BlobAsset",
-        returnReference: "cell_cache/P_table/return.bin",
+        returnReference: "cell_cache/O_table/return.bin",
       },
     },
     mediaType: parsed,

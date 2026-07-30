@@ -8,7 +8,7 @@ export interface JsonObject {
 
 export type ScalarValue = null | boolean | string | number | bigint;
 
-export type PublicationErrorCode =
+export type NotebookExportErrorCode =
   | "abort"
   | "asset_invalid"
   | "decode_failed"
@@ -18,26 +18,26 @@ export type PublicationErrorCode =
   | "loader_unavailable"
   | "output_not_found"
   | "output_representation_changed"
-  | "publication_invalid"
-  | "publication_noncanonical"
+  | "export_invalid"
+  | "export_noncanonical"
   | "read_failed"
   | "read_limit_exceeded"
   | "state_input_invalid"
   | "state_not_found"
   | "state_unavailable";
 
-export class PublicationError extends Error {
-  readonly code: PublicationErrorCode;
+export class NotebookExportError extends Error {
+  readonly code: NotebookExportErrorCode;
   readonly details: JsonObject | undefined;
   override readonly cause: unknown;
 
   constructor(
-    code: PublicationErrorCode,
+    code: NotebookExportErrorCode,
     message: string,
     options: { readonly cause?: unknown; readonly details?: JsonObject } = {},
   ) {
     super(message, options.cause === undefined ? undefined : { cause: options.cause });
-    this.name = "PublicationError";
+    this.name = "NotebookExportError";
     this.code = code;
     this.cause = options.cause;
     this.details = options.details === undefined ? undefined : freezeJsonObject(options.details);
@@ -159,7 +159,7 @@ export interface BlobAssetLoadInput {
   readonly signal?: AbortSignal;
 }
 
-export interface OpenPublicationOptions {
+export interface OpenExportOptions {
   readonly fetch?: typeof globalThis.fetch;
   readonly signal?: AbortSignal;
 }
@@ -180,30 +180,30 @@ export interface VerificationResult {
   readonly bytesVerified: number;
 }
 
-export interface Publication {
+export interface NotebookExport {
   readonly base: URL;
   readonly notebook: NotebookProvenance;
   readonly producer: ProducerProvenance;
   readonly inputNames: readonly string[];
   readonly outputNames: readonly string[];
-  states(): readonly PublishedState[];
-  state(name: string): PublishedState;
-  resolve(inputs: JsonObject): PublishedState;
+  states(): readonly ExportState[];
+  state(name: string): ExportState;
+  resolve(inputs: JsonObject): ExportState;
   verify(options?: VerifyOptions): Promise<VerificationResult>;
 }
 
-export interface PublishedState {
-  readonly publication: Publication;
+export interface ExportState {
+  readonly notebookExport: NotebookExport;
   readonly name: string;
   readonly fingerprint: string;
   readonly inputs: JsonObject;
-  outputs(): readonly PublishedOutput[];
-  output(name: string): PublishedOutput;
-  resolve(patch: JsonObject): PublishedState;
+  outputs(): readonly ExportOutput[];
+  output(name: string): ExportOutput;
+  resolve(patch: JsonObject): ExportState;
 }
 
-export interface PublishedOutput {
-  readonly state: PublishedState;
+export interface ExportOutput {
+  readonly state: ExportState;
   readonly name: string;
   readonly codec: OutputCodec;
   readonly mediaType: MediaType;

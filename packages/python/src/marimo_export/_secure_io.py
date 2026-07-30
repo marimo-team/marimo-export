@@ -12,7 +12,7 @@ _READ_BUFFER_BYTES = 64 * 1024
 
 
 class SecureReadError(OSError):
-    """Base error for a verified publication file read."""
+    """Base error for a verified export file read."""
 
 
 class SecureReadLimitError(SecureReadError):
@@ -33,7 +33,7 @@ class SecureFileSizeError(SecureReadError):
         self.actual_size = actual_size
 
 
-def read_publication_index(root: Path, *, max_bytes: int) -> bytes:
+def read_export_index(root: Path, *, max_bytes: int) -> bytes:
     """Read ``index.json`` through verified platform file handles."""
 
     _validate_max_bytes(max_bytes)
@@ -47,7 +47,7 @@ def read_publication_index(root: Path, *, max_bytes: int) -> bytes:
     )
 
 
-def read_publication_asset(
+def read_export_asset(
     root: Path,
     relative_path: str,
     *,
@@ -64,11 +64,11 @@ def read_publication_asset(
         raise TypeError("relative_path must be a string")
     components = tuple(relative_path.split("/"))
     if len(components) != 2 or components[0] != "assets":
-        raise SecureReadError("publication asset path is invalid")
+        raise SecureReadError("export asset path is invalid")
     try:
         _validate_component(components[1])
     except ValueError as error:
-        raise SecureReadError("publication asset path is invalid") from error
+        raise SecureReadError("export asset path is invalid") from error
     return _translate_read_errors(
         lambda: _read_relative_file(
             root,
@@ -100,7 +100,7 @@ def _read_relative_file(
             max_bytes=max_bytes,
             expected_size=expected_size,
         )
-    raise SecureReadError("secure publication file reads are unavailable on this platform")
+    raise SecureReadError("secure export file reads are unavailable on this platform")
 
 
 def _read_relative_file_at(
@@ -139,7 +139,7 @@ def _read_relative_file_on_windows(
 ) -> bytes:
     """Read a file after repeated reparse, containment, and identity checks.
 
-    The fallback requires a stable publication tree until the second
+    The fallback requires a stable export tree until the second
     inspection completes because standard Python Windows file opens are path
     based.
     """
@@ -172,14 +172,14 @@ def _inspect_windows_path(
         inspected = os.lstat(current)
         _reject_reparse_point(inspected)
         if not stat.S_ISDIR(inspected.st_mode):
-            raise SecureReadError("publication path component is not a directory")
+            raise SecureReadError("export path component is not a directory")
     for component in components[:-1]:
         _validate_component(component)
         current /= component
         inspected = os.lstat(current)
         _reject_reparse_point(inspected)
         if not stat.S_ISDIR(inspected.st_mode):
-            raise SecureReadError("publication path component is not a directory")
+            raise SecureReadError("export path component is not a directory")
 
     leaf = current / components[-1]
     inspected = os.lstat(leaf)
@@ -195,7 +195,7 @@ def _reject_reparse_point(inspected: object) -> None:
     attributes = getattr(inspected, "st_file_attributes", 0)
     reparse_attribute = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0)
     if stat.S_ISLNK(mode) or attributes & reparse_attribute:
-        raise SecureReadError("publication paths cannot contain reparse points")
+        raise SecureReadError("export paths cannot contain reparse points")
 
 
 def _require_inside(root: Path, path: Path) -> None:
@@ -204,7 +204,7 @@ def _require_inside(root: Path, path: Path) -> None:
         resolved_path = path.resolve(strict=True)
         resolved_path.relative_to(resolved_root)
     except (OSError, RuntimeError, ValueError) as error:
-        raise SecureReadError("opened path resolves outside the publication") from error
+        raise SecureReadError("opened path resolves outside the export") from error
 
 
 def _require_same_file(inspected: os.stat_result, opened: os.stat_result) -> None:
@@ -378,6 +378,6 @@ __all__ = [
     "SecureFileSizeError",
     "SecureReadError",
     "SecureReadLimitError",
-    "read_publication_asset",
-    "read_publication_index",
+    "read_export_asset",
+    "read_export_index",
 ]

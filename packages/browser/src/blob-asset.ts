@@ -4,7 +4,7 @@ import { parseMediaType } from "./media-type.js";
 import { canonicalJson, portableJsonObject } from "./schema.js";
 import { validateCanonicalMessagePack } from "./strict-msgpack.js";
 import type { BlobAsset, BlobAssetDescriptor } from "./types.js";
-import { PublicationError } from "./types.js";
+import { NotebookExportError } from "./types.js";
 
 const EXPECTED_FIELDS = ["data", "media_type", "filename", "metadata"];
 
@@ -49,8 +49,8 @@ export function decodeBlobAsset(bytes: Uint8Array, descriptor: BlobAssetDescript
       metadata,
     });
   } catch (error) {
-    if (error instanceof PublicationError && error.code === "asset_invalid") throw error;
-    throw new PublicationError("asset_invalid", "BlobAsset envelope validation failed.", {
+    if (error instanceof NotebookExportError && error.code === "asset_invalid") throw error;
+    throw new NotebookExportError("asset_invalid", "BlobAsset envelope validation failed.", {
       cause: error,
       details: { outputCodec: descriptor.codec, mediaType: descriptor.mediaType },
     });

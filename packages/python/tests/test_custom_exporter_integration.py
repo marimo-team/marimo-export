@@ -4,7 +4,7 @@ import os
 from pathlib import Path
 
 import pytest
-from marimo_export import ExportSpec, OutputSpec, capture, open_publication
+from marimo_export import ExportSpec, OutputSpec, capture, open_export
 from marimo_export._remote.managed import ManagedServer
 from marimo_export.exporters import importable
 
@@ -99,7 +99,7 @@ def _capture(
             output=output,
             timeout=30,
         )
-        return result.projection_cache.hits, result.projection_cache.misses
+        return result.output_cache.hits, result.output_cache.misses
     finally:
         server.stop()
 
@@ -111,7 +111,7 @@ def test_live_capture_refreshes_sideloaded_exporter_graph(
     notebook = tmp_path / "notebook.py"
     _write_notebook(notebook)
     source = notebook.read_bytes()
-    exporter = tmp_path / "publication_exports.py"
+    exporter = tmp_path / "export_exports.py"
     helper = tmp_path / "helper.py"
     shared = tmp_path / "shared.py"
     _write_exporter(exporter, "first")
@@ -127,7 +127,7 @@ def test_live_capture_refreshes_sideloaded_exporter_graph(
         outputs={
             "summary": OutputSpec(
                 source="answer",
-                exporter=importable("publication_exports:encode", increment=1),
+                exporter=importable("export_exports:encode", increment=1),
             )
         },
     )
@@ -181,30 +181,22 @@ def test_live_capture_refreshes_sideloaded_exporter_graph(
     finally:
         server.stop()
 
-    assert (first.projection_cache.hits, first.projection_cache.misses) == (0, 1)
-    assert (warm.projection_cache.hits, warm.projection_cache.misses) == (1, 0)
+    assert (first.output_cache.hits, first.output_cache.misses) == (0, 1)
+    assert (warm.output_cache.hits, warm.output_cache.misses) == (1, 0)
     assert (
-        dependency_changed.projection_cache.hits,
-        dependency_changed.projection_cache.misses,
+        dependency_changed.output_cache.hits,
+        dependency_changed.output_cache.misses,
     ) == (0, 1)
     assert (
-        exporter_changed.projection_cache.hits,
-        exporter_changed.projection_cache.misses,
+        exporter_changed.output_cache.hits,
+        exporter_changed.output_cache.misses,
     ) == (0, 1)
     assert (
-        open_publication(dependency_changed.path)
-        .state("baseline")
-        .output("summary")
-        .blob_asset()
-        .data
+        open_export(dependency_changed.path).state("baseline").output("summary").blob_asset().data
         == b"helper-b:42:first"
     )
     assert (
-        open_publication(exporter_changed.path)
-        .state("baseline")
-        .output("summary")
-        .blob_asset()
-        .data
+        open_export(exporter_changed.path).state("baseline").output("summary").blob_asset().data
         == b"helper-b:42:second"
     )
     assert notebook.read_bytes() == source
@@ -217,7 +209,7 @@ def test_capture_sideloads_an_importable_callable(
     notebook = tmp_path / "notebook.py"
     _write_notebook(notebook)
     source = notebook.read_bytes()
-    _write_callable_exporter(tmp_path / "publication_exports.py")
+    _write_callable_exporter(tmp_path / "export_exports.py")
     monkeypatch.setenv("PYTHONPATH", str(tmp_path))
     spec = ExportSpec(
         inputs=(),
@@ -225,18 +217,14 @@ def test_capture_sideloads_an_importable_callable(
         outputs={
             "summary": OutputSpec(
                 source="answer",
-                exporter=importable("publication_exports:encode", increment=1),
+                exporter=importable("export_exports:encode", increment=1),
             )
         },
     )
 
-    assert _capture(notebook, spec, tmp_path / "publication") == (0, 1)
+    assert _capture(notebook, spec, tmp_path / "export") == (0, 1)
     assert (
-        open_publication(tmp_path / "publication")
-        .state("baseline")
-        .output("summary")
-        .blob_asset()
-        .data
+        open_export(tmp_path / "export").state("baseline").output("summary").blob_asset().data
         == b"callable:42"
     )
     assert notebook.read_bytes() == source

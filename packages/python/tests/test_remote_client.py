@@ -287,17 +287,17 @@ def test_asset_download_is_same_origin_virtual_file_and_strictly_bounded() -> No
     assert (
         transport.download_asset(
             "session-1",
-            "./@file/11-projection.bin",
+            "./@file/11-planned_output.bin",
             11,
         )
         == b"asset-bytes"
     )
-    assert opener.requests[0].full_url == ("https://marimo.test/root/@file/11-projection.bin")
+    assert opener.requests[0].full_url == ("https://marimo.test/root/@file/11-planned_output.bin")
 
     with pytest.raises(TransportError, match="server origin"):
         transport.download_asset(
             "session-1",
-            "https://other.test/@file/11-projection.bin",
+            "https://other.test/@file/11-planned_output.bin",
             11,
         )
     with pytest.raises(TransportError, match="unsafe asset URL"):
@@ -309,7 +309,7 @@ def test_asset_download_is_same_origin_virtual_file_and_strictly_bounded() -> No
     with pytest.raises(TransportError, match="transport limit"):
         transport.download_asset(
             "session-1",
-            "./@file/11-projection.bin",
+            "./@file/11-planned_output.bin",
             10,
         )
 

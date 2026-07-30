@@ -7,8 +7,8 @@ from typing import Any, cast
 
 import pytest
 from marimo_export._json import JsonObject, canonical_bytes, sha256_bytes
-from marimo_export.errors import PublicationError
-from marimo_export.publication import (
+from marimo_export.errors import NotebookExportError
+from marimo_export.export import (
     ARROW_CODEC,
     BLOB_ASSET_CODEC,
     NUMPY_CODEC,
@@ -18,17 +18,17 @@ from marimo_export.publication import (
     AssetRef,
     BlobAssetDescriptor,
     CacheSummary,
-    FreshChildTimings,
+    ExportIndex,
+    ExportResult,
+    ExportWarning,
     NotebookProvenance,
     NumpyDescriptor,
     PhaseTimings,
     ProducerProvenance,
     Provenance,
-    PublicationIndex,
-    PublicationResult,
-    PublicationWarning,
     ScalarDescriptor,
     StateEntry,
+    StateRunTimings,
     asset_path,
     state_fingerprint,
 )
@@ -40,13 +40,13 @@ def _provenance(
     asset: bool = True,
 ) -> Provenance:
     return Provenance(
-        cache_key=f"cell_cache/P_{kind}.json",
+        cache_key=f"cell_cache/O_{kind}.json",
         return_reference=f"cell_cache/{kind}/return.bin" if asset else None,
         python_type=f"example.{kind}",
     )
 
 
-def _index() -> PublicationIndex:
+def _index() -> ExportIndex:
     array = NumpyDescriptor(
         asset=AssetRef(sha256="b" * 64, size=144),
         provenance=_provenance("array"),
@@ -58,7 +58,7 @@ def _index() -> PublicationIndex:
         filename="chart.json",
         metadata={"schema_major": 6},
     )
-    return PublicationIndex(
+    return ExportIndex(
         notebook=NotebookProvenance(filename="finance.py", document_sha256="a" * 64),
         producer=ProducerProvenance(marimo="0.23.15", marimo_export="1.0.0"),
         inputs=("chart_width", "symbols_selector"),
@@ -96,10 +96,10 @@ def _index() -> PublicationIndex:
     )
 
 
-def test_publication_index_round_trips_canonical_bytes() -> None:
+def test_export_index_round_trips_canonical_bytes() -> None:
     index = _index()
     encoded = index.to_bytes()
-    decoded = PublicationIndex.from_bytes(encoded)
+    decoded = ExportIndex.from_bytes(encoded)
 
     assert decoded == index
     assert encoded == canonical_bytes(index.to_value())
@@ -141,7 +141,7 @@ def test_scalar_descriptor_round_trips_closed_wire_tags() -> None:
         assert descriptor.to_value()["value"] == wire
 
         decoded = (
-            PublicationIndex.from_value(_single_output_wire(descriptor.to_value()))
+            ExportIndex.from_value(_single_output_wire(descriptor.to_value()))
             .states["state"]
             .outputs["output"]
         )
@@ -154,7 +154,7 @@ def test_scalar_descriptor_round_trips_closed_wire_tags() -> None:
             assert decoded.value == value
 
 
-def test_publication_rejects_invalid_scalar_tags() -> None:
+def test_export_rejects_invalid_scalar_tags() -> None:
     for value in (
         {"type": "bigint", "value": "01"},
         {"type": "float", "value": "other"},
@@ -171,8 +171,8 @@ def test_publication_rejects_invalid_scalar_tags() -> None:
                 },
             )
         )
-        with pytest.raises(PublicationError):
-            PublicationIndex.from_value(wire)
+        with pytest.raises(NotebookExportError):
+            ExportIndex.from_value(wire)
 
 
 def test_asset_paths_are_derived_from_codec_and_digest() -> None:
@@ -195,7 +195,7 @@ def test_assets_deduplicate_by_codec_and_digest() -> None:
 
 def test_same_digest_under_different_codecs_is_a_distinct_asset() -> None:
     digest = "d" * 64
-    index = PublicationIndex(
+    index = ExportIndex(
         notebook=NotebookProvenance(filename=None, document_sha256="a" * 64),
         producer=ProducerProvenance(marimo="0.23.15", marimo_export="1.0.0"),
         inputs=(),
@@ -220,19 +220,19 @@ def test_same_digest_under_different_codecs_is_a_distinct_asset() -> None:
     assert len(index.assets()) == 2
 
 
-def test_publication_requires_exact_state_input_and_output_sets() -> None:
+def test_export_requires_exact_state_input_and_output_sets() -> None:
     index = _index()
 
-    with pytest.raises(ValueError, match=r"publication\.inputs"):
-        PublicationIndex(
+    with pytest.raises(ValueError, match=r"export\.inputs"):
+        ExportIndex(
             notebook=index.notebook,
             producer=index.producer,
             inputs=("chart_width",),
             outputs=index.outputs,
             states=index.states,
         )
-    with pytest.raises(ValueError, match=r"publication\.outputs"):
-        PublicationIndex(
+    with pytest.raises(ValueError, match=r"export\.outputs"):
+        ExportIndex(
             notebook=index.notebook,
             producer=index.producer,
             inputs=index.inputs,
@@ -241,7 +241,7 @@ def test_publication_requires_exact_state_input_and_output_sets() -> None:
         )
 
 
-def test_publication_rejects_duplicate_normalized_vectors() -> None:
+def test_export_rejects_duplicate_normalized_vectors() -> None:
     index = _index()
     duplicate = StateEntry(
         inputs=index.states["baseline"].inputs,
@@ -249,7 +249,7 @@ def test_publication_rejects_duplicate_normalized_vectors() -> None:
     )
 
     with pytest.raises(ValueError, match="equal inputs"):
-        PublicationIndex(
+        ExportIndex(
             notebook=index.notebook,
             producer=index.producer,
             inputs=index.inputs,
@@ -258,7 +258,7 @@ def test_publication_rejects_duplicate_normalized_vectors() -> None:
         )
 
 
-def test_publication_rejects_representation_changes_across_states() -> None:
+def test_export_rejects_representation_changes_across_states() -> None:
     index = _index()
     changed = StateEntry(
         inputs=index.states["msft"].inputs,
@@ -275,7 +275,7 @@ def test_publication_rejects_representation_changes_across_states() -> None:
     )
 
     with pytest.raises(ValueError, match="changes codec or media type"):
-        PublicationIndex(
+        ExportIndex(
             notebook=index.notebook,
             producer=index.producer,
             inputs=index.inputs,
@@ -288,17 +288,17 @@ def test_from_value_rejects_unknown_fields_at_every_boundary() -> None:
     wire = _index().to_value()
     cast(dict[str, Any], wire["notebook"])["path"] = "/secret/finance.py"
 
-    with pytest.raises(PublicationError, match="does not accept"):
-        PublicationIndex.from_value(wire)
+    with pytest.raises(NotebookExportError, match="does not accept"):
+        ExportIndex.from_value(wire)
 
 
 def test_from_bytes_rejects_noncanonical_json() -> None:
     encoded = _index().to_bytes()
 
-    with pytest.raises(PublicationError) as raised:
-        PublicationIndex.from_bytes(encoded + b"\n")
+    with pytest.raises(NotebookExportError) as raised:
+        ExportIndex.from_bytes(encoded + b"\n")
 
-    assert raised.value.code == "publication_noncanonical"
+    assert raised.value.code == "export_noncanonical"
 
 
 def test_provenance_rejects_absolute_paths_and_controls() -> None:
@@ -333,9 +333,9 @@ def test_blob_metadata_is_bounded_to_256_kib() -> None:
         )
 
 
-def test_publication_result_is_a_run_local_record(tmp_path: Path) -> None:
-    result = PublicationResult(
-        path=(tmp_path / "publication").absolute(),
+def test_export_result_is_a_run_local_record(tmp_path: Path) -> None:
+    result = ExportResult(
+        path=(tmp_path / "export").absolute(),
         mode="capture",
         session_id="session-1",
         notebook_filename="finance.py",
@@ -346,23 +346,23 @@ def test_publication_result_is_a_run_local_record(tmp_path: Path) -> None:
         assets=1,
         asset_bytes=100,
         index_bytes=500,
-        projection_cache=CacheSummary(hits=1, misses=1),
-        upstream_cache=CacheSummary(hits=3, misses=2),
+        output_cache=CacheSummary(hits=1, misses=1),
+        notebook_cache=CacheSummary(hits=3, misses=2),
         timings=PhaseTimings(
             total_seconds=2.0,
             capture_seconds=1.5,
-            publication_write_seconds=0.1,
-            fresh_children=FreshChildTimings(
+            export_write_seconds=0.1,
+            state_runs=StateRunTimings(
                 states=2,
-                construction_seconds=0.1,
-                upstream_execution_seconds=0.8,
-                ui_application_seconds=0.2,
-                projection_execution_seconds=0.3,
+                setup_seconds=0.1,
+                dependency_execution_seconds=0.8,
+                ui_update_seconds=0.2,
+                output_materialization_seconds=0.3,
                 cleanup_seconds=0.1,
             ),
         ),
         warnings=(
-            PublicationWarning(
+            ExportWarning(
                 code="retired_destination_cleanup_failed",
                 message="Previous directory remains.",
                 details={"path": "/tmp/retired"},
@@ -370,21 +370,21 @@ def test_publication_result_is_a_run_local_record(tmp_path: Path) -> None:
         ),
     )
 
-    assert result.to_dict()["projection_cache"] == {"hits": 1, "misses": 1}
-    assert result.to_dict()["upstream_cache"] == {"hits": 3, "misses": 2}
+    assert result.to_dict()["output_cache"] == {"hits": 1, "misses": 1}
+    assert result.to_dict()["notebook_cache"] == {"hits": 3, "misses": 2}
     assert result.to_dict()["timings"] == {
         "total_seconds": 2.0,
         "server_start_seconds": None,
         "initial_autorun_seconds": None,
         "capture_seconds": 1.5,
         "server_shutdown_seconds": None,
-        "publication_write_seconds": 0.1,
-        "fresh_children": {
+        "export_write_seconds": 0.1,
+        "state_runs": {
             "states": 2,
-            "construction_seconds": 0.1,
-            "upstream_execution_seconds": 0.8,
-            "ui_application_seconds": 0.2,
-            "projection_execution_seconds": 0.3,
+            "setup_seconds": 0.1,
+            "dependency_execution_seconds": 0.8,
+            "ui_update_seconds": 0.2,
+            "output_materialization_seconds": 0.3,
             "cleanup_seconds": 0.1,
         },
     }
@@ -398,18 +398,18 @@ def test_publication_result_is_a_run_local_record(tmp_path: Path) -> None:
 
     with pytest.raises(
         ValueError,
-        match="projection cache activity must cover every state and output",
+        match="output cache activity must cover every state and output",
     ):
         replace(
             result,
-            projection_cache=CacheSummary(hits=1, misses=0),
+            output_cache=CacheSummary(hits=1, misses=0),
         )
 
 
 def _single_output_wire(descriptor: JsonObject) -> JsonObject:
     inputs: JsonObject = {}
     return {
-        "schema": "marimo-export.publication.v1",
+        "schema": "marimo-export.export.v1",
         "notebook": {"filename": None, "document_sha256": "a" * 64},
         "producer": {"marimo": "0.23.15", "marimo_export": "1.0.0"},
         "inputs": [],

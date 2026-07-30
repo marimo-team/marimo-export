@@ -22,7 +22,7 @@ from marimo_export.spec import ExportSpec
 
 @dataclass(frozen=True, slots=True)
 class Definition:
-    """One live notebook definition used by matrix planning."""
+    """One live notebook definition used to plan an export."""
 
     name: str
     cell_id: str
@@ -60,7 +60,7 @@ class Definition:
 
 @dataclass(frozen=True, slots=True)
 class Baseline:
-    """Live values and graph ownership captured before matrix execution."""
+    """Live values and graph ownership captured before state execution."""
 
     definitions: Mapping[str, Definition]
     document_sha256: str
@@ -87,7 +87,7 @@ class Baseline:
 
 @dataclass(frozen=True, slots=True)
 class NormalizedState:
-    """One complete public vector plus values applied inside its child."""
+    """One complete input vector plus values applied inside its state run."""
 
     name: str
     inputs: Mapping[str, JsonValue]
@@ -119,8 +119,8 @@ class NormalizedState:
 
 
 @dataclass(frozen=True, slots=True)
-class OutputProjection:
-    """One public output and its transient representation."""
+class PlannedOutput:
+    """One export output and its transient representation."""
 
     name: str
     source: str
@@ -128,19 +128,19 @@ class OutputProjection:
 
 
 @dataclass(frozen=True, slots=True)
-class MatrixPlan:
-    """Fully normalized matrix ready for marimo-owned execution."""
+class ExportPlan:
+    """Normalized states and outputs ready for marimo-owned execution."""
 
     states: tuple[NormalizedState, ...]
     inputs: tuple[str, ...]
     outputs: tuple[str, ...]
-    projections: Mapping[str, OutputProjection]
+    planned_outputs: Mapping[str, PlannedOutput]
     ordinary_cells: Mapping[str, tuple[str, ...]]
     state_name: str
     state_code: str
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "projections", MappingProxyType(dict(self.projections)))
+        object.__setattr__(self, "planned_outputs", MappingProxyType(dict(self.planned_outputs)))
         object.__setattr__(
             self,
             "ordinary_cells",
@@ -148,7 +148,7 @@ class MatrixPlan:
         )
 
 
-def normalize_matrix(spec: ExportSpec, baseline: Baseline) -> MatrixPlan:
+def create_export_plan(spec: ExportSpec, baseline: Baseline) -> ExportPlan:
     """Complete sparse rows and map ordinary inputs to their authored cells."""
 
     if not isinstance(spec, ExportSpec):
@@ -224,8 +224,8 @@ def normalize_matrix(spec: ExportSpec, baseline: Baseline) -> MatrixPlan:
             )
         )
 
-    projections = {
-        name: OutputProjection(
+    planned_outputs = {
+        name: PlannedOutput(
             name=name,
             source=output.source,
             exporter=output.exporter,
@@ -247,18 +247,18 @@ def normalize_matrix(spec: ExportSpec, baseline: Baseline) -> MatrixPlan:
             }
         )
     }
-    state_name = _projection_state_name(spec.inputs, projections)
+    state_name = _state_token_name(spec.inputs, planned_outputs)
     if state_name in baseline.definitions:
         raise SpecError(
             f"notebook definition {state_name!r} collides with the transient state token",
             code="spec_definition_conflict",
             details={"definition": state_name},
         )
-    return MatrixPlan(
+    return ExportPlan(
         states=tuple(normalized),
         inputs=spec.inputs,
         outputs=tuple(spec.outputs),
-        projections=projections,
+        planned_outputs=planned_outputs,
         ordinary_cells=ordinary_cells,
         state_name=state_name,
         state_code=f"{state_name} = {normalized[0].fingerprint!r}",
@@ -289,24 +289,24 @@ def ordinary_cell_code(
     return code + separator + "\n".join(lines) + "\n"
 
 
-def projection_code(
-    projection: OutputProjection,
+def output_cell_code(
+    planned_output: PlannedOutput,
     state_name: str,
     *,
     exporter_identity: str | None = None,
 ) -> str:
-    """Return one deterministic transient projection cell body."""
+    """Return one deterministic transient output cell body."""
 
-    if not isinstance(projection, OutputProjection):
-        raise TypeError("projection must be an OutputProjection")
+    if not isinstance(planned_output, PlannedOutput):
+        raise TypeError("planned_output must be a PlannedOutput")
     if not isinstance(state_name, str) or not state_name.isidentifier():
         raise TypeError("state_name must be a Python identifier")
-    label = json.dumps(projection.name, ensure_ascii=False)
-    lines = [f"# marimo-export projection: {label}", state_name]
-    if projection.exporter is None:
+    label = json.dumps(planned_output.name, ensure_ascii=False)
+    lines = [f"# marimo-export output: {label}", state_name]
+    if planned_output.exporter is None:
         if exporter_identity is not None:
-            raise ValueError("native projections cannot have an exporter identity")
-        lines.append(projection.source)
+            raise ValueError("native outputs cannot have an exporter identity")
+        lines.append(planned_output.source)
         return "\n".join(lines)
     if (
         not isinstance(exporter_identity, str)
@@ -314,7 +314,7 @@ def projection_code(
         or any(character not in "0123456789abcdef" for character in exporter_identity)
     ):
         raise ValueError("exporter_identity must be a lowercase SHA-256 digest")
-    reference = runtime_reference(projection.exporter.name)
+    reference = runtime_reference(planned_output.exporter.name)
     identity_literal = repr(f"sha256:{exporter_identity}")
     lines.extend(
         [
@@ -322,28 +322,28 @@ def projection_code(
             "",
             f"from {reference.module} import {reference.symbol} as _marimo_export_exporter",
             "",
-            f"_marimo_export_exporter({projection.source}{_render_options(projection.exporter)})",
+            f"_marimo_export_exporter({planned_output.source}{_render_options(planned_output.exporter)})",
         ]
     )
     return "\n".join(lines)
 
 
-def _projection_state_name(
+def _state_token_name(
     inputs: tuple[str, ...],
-    projections: Mapping[str, OutputProjection],
+    planned_outputs: Mapping[str, PlannedOutput],
 ) -> str:
     outputs: JsonObject = {}
-    for name, projection in projections.items():
-        value: JsonObject = {"source": projection.source}
-        if projection.exporter is not None:
-            value["exporter"] = projection.exporter.to_value()
+    for name, planned_output in planned_outputs.items():
+        value: JsonObject = {"source": planned_output.source}
+        if planned_output.exporter is not None:
+            value["exporter"] = planned_output.exporter.to_value()
         outputs[name] = value
     payload = json_object(
         {
             "inputs": inputs,
             "outputs": outputs,
         },
-        "projection plan",
+        "export plan",
     )
     suffix = sha256_bytes(canonical_bytes(payload))[:16]
     return f"marimo_export_state_{suffix}"

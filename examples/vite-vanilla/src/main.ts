@@ -1,5 +1,5 @@
-import { imageLoader, openPublication } from "@marimo-team/marimo-export";
-import type { MountedView, Publication, PublishedState } from "@marimo-team/marimo-export";
+import { imageLoader, openExport } from "@marimo-team/marimo-export";
+import type { MountedView, NotebookExport, ExportState } from "@marimo-team/marimo-export";
 import { anyWidgetLoader } from "@marimo-team/marimo-export/loader/anywidget";
 import { parquetRowsLoader } from "@marimo-team/marimo-export/loader/parquet";
 import { vegaLiteLoader } from "@marimo-team/marimo-export/loader/vegalite";
@@ -85,7 +85,7 @@ const chartHost = required<HTMLElement>("#performance-chart");
 const explorerHost = required<HTMLElement>("#market-explorer");
 const snapshotHost = required<HTMLElement>("#performance-snapshot");
 
-let publication: Publication | undefined;
+let notebookExport: NotebookExport | undefined;
 let mounted: MountedView[] = [];
 let active: AbortController | undefined;
 let revision = 0;
@@ -95,10 +95,10 @@ void start();
 
 async function start(): Promise<void> {
   try {
-    const root = new URLSearchParams(location.search).get("publication") ?? "./publication/";
-    const opened = await openPublication(root);
+    const root = new URLSearchParams(location.search).get("export") ?? "./export/";
+    const opened = await openExport(root);
     await opened.verify();
-    publication = opened;
+    notebookExport = opened;
     renderViewButtons(opened);
     requestView(viewFromHash(opened));
   } catch (error) {
@@ -106,7 +106,7 @@ async function start(): Promise<void> {
   }
 }
 
-function renderViewButtons(value: Publication): void {
+function renderViewButtons(value: NotebookExport): void {
   const buttons = Object.entries(views)
     .filter(([name]) => hasState(value, name))
     .map(([name, copy]) => {
@@ -121,7 +121,7 @@ function renderViewButtons(value: Publication): void {
 }
 
 function requestView(name: string): void {
-  const state = publication?.state(name);
+  const state = notebookExport?.state(name);
   const copy = views[name];
   if (state === undefined || copy === undefined) return;
 
@@ -138,7 +138,7 @@ function requestView(name: string): void {
 }
 
 async function renderView(
-  state: PublishedState,
+  state: ExportState,
   copy: ViewCopy,
   nextRevision: number,
   controller: AbortController,
@@ -195,7 +195,7 @@ function renderMarketView(rows: readonly PriceRow[], summary: MarketSummary, cop
   const series = groupBySymbol(rows);
   const returns = summary.periodReturns.map(({ return: periodReturn, symbol }) => {
     const latest = series.get(symbol)?.at(-1);
-    if (latest === undefined) throw new Error(`${symbol} has no published prices.`);
+    if (latest === undefined) throw new Error(`${symbol} has no exported prices.`);
     return { latest, return: periodReturn, symbol };
   });
 
@@ -290,12 +290,12 @@ function showError(error: unknown): void {
   status.textContent = "Market data could not be opened";
 }
 
-function viewFromHash(value: Publication): string {
+function viewFromHash(value: NotebookExport): string {
   const name = location.hash.slice(1);
   return name in views && hasState(value, name) ? name : "baseline";
 }
 
-function hasState(value: Publication, name: string): boolean {
+function hasState(value: NotebookExport, name: string): boolean {
   try {
     value.state(name);
     return true;

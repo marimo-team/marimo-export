@@ -5,8 +5,8 @@ export {
   resolveOutputLoader,
   scalarLoader,
 } from "./loader.js";
-export { openPublication } from "./publication.js";
-export { PublicationError } from "./types.js";
+export { openExport } from "./export.js";
+export { NotebookExportError } from "./types.js";
 
 export type {
   AnyOutputLoader,
@@ -26,17 +26,17 @@ export type {
   MountableValue,
   NotebookProvenance,
   NumpyDescriptor,
-  OpenPublicationOptions,
+  OpenExportOptions,
   OutputCodec,
   OutputDescriptor,
   OutputLoader,
   OutputPayloadMap,
   ProducerProvenance,
   Provenance,
-  Publication,
-  PublicationErrorCode,
-  PublishedOutput,
-  PublishedState,
+  NotebookExport,
+  NotebookExportErrorCode,
+  ExportOutput,
+  ExportState,
   ScalarDescriptor,
   ScalarValue,
   VerificationResult,

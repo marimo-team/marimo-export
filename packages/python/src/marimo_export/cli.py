@@ -20,14 +20,14 @@ from marimo_export.errors import (
     ExecutionError,
     IntegrityError,
     MarimoExportError,
+    NotebookExportError,
     OutputError,
-    PublicationError,
     SessionError,
     SpecError,
     TransportError,
 )
-from marimo_export.publication import ScalarDescriptor
-from marimo_export.reader import Publication, VerificationResult, open_publication
+from marimo_export.export import ScalarDescriptor
+from marimo_export.reader import NotebookExport, VerificationResult, open_export
 from marimo_export.spec import ExportSpec
 
 EXIT_INPUT = 2
@@ -91,16 +91,18 @@ def _parse_and_execute(argv: Sequence[str] | None) -> int:
 def _parser() -> _ArgumentParser:
     parser = _ArgumentParser(
         prog="marimo-export",
-        description="Publish finite marimo state matrices for Python-free clients.",
+        description=(
+            "Prepare marimo notebook results for interactive web apps served as static files."
+        ),
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s {_package_version()}")
     commands = parser.add_subparsers(dest="command", required=True)
 
     build_parser = commands.add_parser(
         "build",
-        help="publish a notebook through an owned loopback server",
+        help="create a notebook export from a file",
         description=(
-            "Start a loopback marimo server, execute every state, and publish every output."
+            "Open NOTEBOOK, prepare every state from FILE, and write the static export to DIR."
         ),
         epilog=(
             "Example:\n"
@@ -110,13 +112,16 @@ def _parser() -> _ArgumentParser:
         ),
     )
     build_parser.add_argument("notebook", metavar="NOTEBOOK", help="marimo Python notebook")
-    _add_publication_options(build_parser)
+    _add_export_options(build_parser)
     _add_timeout(build_parser, "server readiness and network inactivity timeout")
 
     capture_parser = commands.add_parser(
         "capture",
-        help="publish from an existing marimo session",
-        description="Execute every state in a borrowed live session and publish every output.",
+        help="create a notebook export from a live session",
+        description=(
+            "Prepare every state from an open marimo session and write the static export to DIR. "
+            "The session remains open."
+        ),
         epilog=(
             "Example:\n"
             "  marimo-export capture http://127.0.0.1:2718 --session s_01 "
@@ -127,14 +132,14 @@ def _parser() -> _ArgumentParser:
         ),
     )
     capture_parser.add_argument("server", metavar="SERVER", help="absolute marimo server URL")
-    _add_publication_options(capture_parser)
+    _add_export_options(capture_parser)
     _add_session_selection(capture_parser)
     _add_connection_options(capture_parser)
 
     session_parser = commands.add_parser(
         "session",
         help="list sessions or inspect one session",
-        description="Discover live sessions and the notebook definitions available as inputs.",
+        description="List open notebooks or show values available for an ExportSpec.",
         epilog=(
             "Example:\n"
             "  marimo-export session http://127.0.0.1:2718 --session s_01\n\n"
@@ -150,35 +155,40 @@ def _parser() -> _ArgumentParser:
 
     inspect_parser = commands.add_parser(
         "inspect",
-        help="inspect publication metadata",
-        description="Validate index.json and summarize states, inputs, outputs, and assets.",
+        help="summarize a notebook export",
+        description="Show the states, inputs, outputs, formats, and asset size.",
         epilog=(
             "Example:\n"
             "  marimo-export inspect dist/stocks\n\n"
-            "Exit categories: 2 input, 6 publication, 7 filesystem."
+            "Exit categories: 2 input, 6 export, 7 filesystem."
         ),
     )
-    inspect_parser.add_argument("publication", metavar="PUBLICATION", help="publication directory")
+    inspect_parser.add_argument("export", metavar="EXPORT", help="notebook export directory")
     _add_json(inspect_parser)
 
     verify_parser = commands.add_parser(
         "verify",
-        help="verify every publication asset",
-        description="Read every asset and verify hashes, lengths, codecs, and BlobAsset envelopes.",
+        help="check every exported file",
+        description="Read every exported file and confirm that it matches index.json.",
         epilog=(
             "Example:\n"
             "  marimo-export verify dist/stocks\n\n"
             "Exit categories: 2 input, 6 integrity, 7 filesystem."
         ),
     )
-    verify_parser.add_argument("publication", metavar="PUBLICATION", help="publication directory")
+    verify_parser.add_argument("export", metavar="EXPORT", help="notebook export directory")
     _add_json(verify_parser)
     return parser
 
 
-def _add_publication_options(parser: argparse.ArgumentParser) -> None:
+def _add_export_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--spec", required=True, metavar="FILE", help="JSON or YAML ExportSpec")
-    parser.add_argument("--output", required=True, metavar="DIR", help="publication destination")
+    parser.add_argument(
+        "--output",
+        required=True,
+        metavar="DIR",
+        help="notebook export destination",
+    )
     parser.add_argument(
         "--replace",
         action="store_true",
@@ -203,7 +213,7 @@ def _add_timeout(parser: argparse.ArgumentParser, help_text: str) -> None:
         type=_positive_timeout,
         default=30.0,
         metavar="SECONDS",
-        help=f"{help_text}; progress resets it (default: 30)",
+        help=f"{help_text}. Progress resets the timer (default: 30)",
     )
 
 
@@ -234,7 +244,7 @@ def _execute(arguments: argparse.Namespace) -> int:
                 json_mode,
                 1,
                 "internal_error",
-                f"internal failure; request ID {request_id}",
+                f"internal failure, request ID {request_id}",
             )
         code = error.code if isinstance(error, MarimoExportError) else "invalid_arguments"
         details = error.details if isinstance(error, MarimoExportError) else None
@@ -250,7 +260,7 @@ def _run(arguments: argparse.Namespace) -> _CommandResult:
             timeout=arguments.timeout,
             replace=arguments.replace,
         )
-        return _CommandResult(result.to_dict(), _publication_human(result, "Published"))
+        return _CommandResult(result.to_dict(), _export_human(result))
 
     if arguments.command == "capture":
         result = capture(
@@ -263,11 +273,7 @@ def _run(arguments: argparse.Namespace) -> _CommandResult:
             timeout=arguments.timeout,
             replace=arguments.replace,
         )
-        lead = f"Captured session {result.session_id}\n" if result.session_id is not None else ""
-        return _CommandResult(
-            result.to_dict(),
-            lead + _publication_human(result, "Published"),
-        )
+        return _CommandResult(result.to_dict(), _export_human(result))
 
     if arguments.command == "session":
         with Client(
@@ -288,21 +294,21 @@ def _run(arguments: argparse.Namespace) -> _CommandResult:
             description = client.session(arguments.session_id).inspect()
             return _CommandResult(description.to_dict(), _session_human(description.to_dict()))
 
-    publication = open_publication(arguments.publication)
+    notebook_export = open_export(arguments.export)
     if arguments.command == "inspect":
-        summary = _publication_summary(publication)
+        summary = _export_summary(notebook_export)
         return _CommandResult(summary, _inspect_human(summary))
     if arguments.command == "verify":
-        verified = publication.verify()
+        verified = notebook_export.verify()
         return _CommandResult(
             verified.to_dict(),
-            _verify_human(verified, len(publication.states())),
+            _verify_human(verified, len(notebook_export.states())),
         )
     raise AssertionError(f"unknown command {arguments.command!r}")
 
 
-def _publication_summary(publication: Publication) -> dict[str, object]:
-    states = publication.states()
+def _export_summary(notebook_export: NotebookExport) -> dict[str, object]:
+    states = notebook_export.states()
     first = states[0]
     representations = {
         output.name: {"codec": output.codec, "media_type": output.media_type}
@@ -318,13 +324,13 @@ def _publication_summary(publication: Publication) -> dict[str, object]:
     return {
         "asset_bytes": sum(unique_assets.values()),
         "assets": len(unique_assets),
-        "inputs": list(publication.input_names),
-        "notebook": publication.notebook.to_value(),
-        "outputs": list(publication.output_names),
-        "path": str(publication.path),
-        "producer": publication.producer.to_value(),
+        "inputs": list(notebook_export.input_names),
+        "notebook": notebook_export.notebook.to_value(),
+        "outputs": list(notebook_export.output_names),
+        "path": str(notebook_export.path),
+        "producer": notebook_export.producer.to_value(),
         "representations": representations,
-        "schema": "marimo-export.publication.v1",
+        "schema": "marimo-export.export.v1",
         "states": [
             {
                 "fingerprint": state.fingerprint,
@@ -336,22 +342,28 @@ def _publication_summary(publication: Publication) -> dict[str, object]:
     }
 
 
-def _publication_human(result: object, verb: str) -> str:
-    from marimo_export.publication import PublicationResult
+def _export_human(result: object) -> str:
+    from marimo_export.export import ExportResult
 
-    assert isinstance(result, PublicationResult)
+    assert isinstance(result, ExportResult)
+    if result.mode == "build":
+        lead = f"Built notebook export at {result.path}"
+    else:
+        lead = f"Captured notebook export from session {result.session_id} at {result.path}"
     lines = [
-        f"{verb} {len(result.states)} states and {len(result.outputs)} outputs to {result.path}",
+        lead,
+        f"States: {len(result.states)}",
+        f"Outputs: {len(result.outputs)}",
         f"Assets: {result.assets} files, {_bytes(result.asset_bytes)}",
         (
-            "Projection cache: "
-            f"{_count(result.projection_cache.hits, 'hit')}, "
-            f"{_count(result.projection_cache.misses, 'miss')}"
+            "Output cache: "
+            f"{_count(result.output_cache.hits, 'hit')}, "
+            f"{_count(result.output_cache.misses, 'miss')}"
         ),
         (
-            "Upstream cache activity: "
-            f"{_count(result.upstream_cache.hits, 'hit')}, "
-            f"{_count(result.upstream_cache.misses, 'miss')}"
+            "Notebook cache: "
+            f"{_count(result.notebook_cache.hits, 'hit')}, "
+            f"{_count(result.notebook_cache.misses, 'miss')}"
         ),
     ]
     phase_values = []
@@ -360,20 +372,20 @@ def _publication_human(result: object, verb: str) -> str:
         ("initial autorun", result.timings.initial_autorun_seconds),
         ("capture", result.timings.capture_seconds),
         ("server shutdown", result.timings.server_shutdown_seconds),
-        ("publication write", result.timings.publication_write_seconds),
+        ("export write", result.timings.export_write_seconds),
         ("total", result.timings.total_seconds),
     ):
         if value is not None:
             phase_values.append(f"{label} {_seconds(value)}")
     lines.append("Phase timings: " + ", ".join(phase_values))
-    child = result.timings.fresh_children
+    state_runs = result.timings.state_runs
     lines.append(
-        f"Fresh-child timings ({child.states} states): "
-        f"construction {_seconds(child.construction_seconds)}, "
-        f"upstream execution {_seconds(child.upstream_execution_seconds)}, "
-        f"UI application {_seconds(child.ui_application_seconds)}, "
-        f"projection execution {_seconds(child.projection_execution_seconds)}, "
-        f"cleanup {_seconds(child.cleanup_seconds)}"
+        f"State-run timings ({state_runs.states} states): "
+        f"setup {_seconds(state_runs.setup_seconds)}, "
+        f"dependency execution {_seconds(state_runs.dependency_execution_seconds)}, "
+        f"UI updates {_seconds(state_runs.ui_update_seconds)}, "
+        f"output materialization {_seconds(state_runs.output_materialization_seconds)}, "
+        f"cleanup {_seconds(state_runs.cleanup_seconds)}"
     )
     lines.extend(f"warning: {warning.message}" for warning in result.warnings)
     return "\n".join(lines)
@@ -404,7 +416,7 @@ def _session_human(value: Mapping[str, object]) -> str:
     definitions = _list(value["definitions"], "definitions")
     for definition in definitions:
         item = _object(definition, "definition")
-        status = "portable" if item["portable_input"] else "producer-only"
+        status = "input-capable" if item["portable_input"] else "output-only"
         lines.append(f"  {item['name']}  {item['kind']}  {item['python_type']}  {status}")
     return "\n".join(lines)
 
@@ -415,6 +427,7 @@ def _inspect_human(value: Mapping[str, object]) -> str:
     inputs = _strings(value["inputs"], "inputs")
     outputs = _strings(value["outputs"], "outputs")
     lines = [
+        f"Export: {value['path']}",
         f"Notebook: {notebook.get('filename') or '(unknown)'}",
         f"Document: {notebook['document_sha256']}",
         f"Producer: marimo {producer['marimo']}, marimo-export {producer['marimo_export']}",
@@ -472,10 +485,9 @@ def _exit_code(error: BaseException) -> int | None:
         return EXIT_SESSION
     if isinstance(error, IntegrityError):
         return EXIT_INTEGRITY
-    if isinstance(error, PublicationError):
+    if isinstance(error, NotebookExportError):
         if error.code.startswith("destination_") or error.code in {
-            "publication_commit_failed",
-            "replacement_unavailable",
+            "export_commit_failed",
         }:
             return EXIT_FILESYSTEM
         return EXIT_INTEGRITY

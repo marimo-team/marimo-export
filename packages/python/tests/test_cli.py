@@ -7,19 +7,19 @@ from typing import Any, Literal, cast
 
 import marimo_export.cli as cli
 import pytest
-from marimo_export._writer import write_publication
+from marimo_export._writer import write_export
 from marimo_export.errors import ExecutionError, TransportError
-from marimo_export.publication import (
+from marimo_export.export import (
     CacheSummary,
-    FreshChildTimings,
+    ExportIndex,
+    ExportResult,
     NotebookProvenance,
     PhaseTimings,
     ProducerProvenance,
     Provenance,
-    PublicationIndex,
-    PublicationResult,
     ScalarDescriptor,
     StateEntry,
+    StateRunTimings,
     state_fingerprint,
 )
 
@@ -46,22 +46,22 @@ def test_inspect_emits_human_and_json_summaries(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    publication = _publication(tmp_path / "publication")
+    export = _export(tmp_path / "export")
 
-    assert cli.main(["inspect", str(publication)]) == 0
+    assert cli.main(["inspect", str(export)]) == 0
     human = capsys.readouterr()
     assert "Notebook: finance.py" in human.out
     assert "Representations:" in human.out
     assert "marimo.scalar.v1" in human.out
     assert human.err == ""
 
-    assert cli.main(["inspect", str(publication), "--json"]) == 0
+    assert cli.main(["inspect", str(export), "--json"]) == 0
     machine = capsys.readouterr()
     result = json.loads(machine.out)
     assert machine.out.count("\n") == 1
     assert machine.err == ""
     assert result["ok"] is True
-    assert result["result"]["schema"] == "marimo-export.publication.v1"
+    assert result["result"]["schema"] == "marimo-export.export.v1"
     assert result["result"]["states"][0]["inputs"] == {"symbol": "AAPL"}
     assert result["result"]["representations"]["count"] == {
         "codec": "marimo.scalar.v1",
@@ -69,13 +69,13 @@ def test_inspect_emits_human_and_json_summaries(
     }
 
 
-def test_verify_reads_the_complete_publication(
+def test_verify_reads_the_complete_export(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    publication = _publication(tmp_path / "publication")
+    export = _export(tmp_path / "export")
 
-    assert cli.main(["verify", str(publication), "--json"]) == 0
+    assert cli.main(["verify", str(export), "--json"]) == 0
 
     result = json.loads(capsys.readouterr().out)
     assert result == {
@@ -90,13 +90,13 @@ def test_verify_reads_the_complete_publication(
 
 
 @pytest.mark.parametrize("command", ["build", "capture"])
-def test_publication_commands_emit_publication_result(
+def test_export_commands_emit_export_result(
     command: str,
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    result = _result(tmp_path / "published", mode=command)
+    result = _result(tmp_path / "exported", mode=command)
     monkeypatch.setattr(cli, command, lambda *args, **kwargs: result)
     spec = _spec(tmp_path / "export.yaml")
     arguments = [command]
@@ -104,7 +104,7 @@ def test_publication_commands_emit_publication_result(
         arguments.append(str(tmp_path / "notebook.py"))
     else:
         arguments.extend(["http://127.0.0.1:2718", "--session", "s_01"])
-    arguments.extend(["--spec", str(spec), "--output", str(tmp_path / "published"), "--json"])
+    arguments.extend(["--spec", str(spec), "--output", str(tmp_path / "exported"), "--json"])
 
     assert cli.main(arguments) == 0
 
@@ -112,17 +112,17 @@ def test_publication_commands_emit_publication_result(
     assert payload["ok"] is True
     assert payload["result"]["mode"] == command
     assert payload["result"]["states"] == ["baseline", "msft"]
-    assert payload["result"]["projection_cache"] == {"hits": 2, "misses": 2}
-    assert payload["result"]["upstream_cache"] == {"hits": 5, "misses": 1}
-    assert payload["result"]["timings"]["fresh_children"]["states"] == 2
+    assert payload["result"]["output_cache"] == {"hits": 2, "misses": 2}
+    assert payload["result"]["notebook_cache"] == {"hits": 5, "misses": 1}
+    assert payload["result"]["timings"]["state_runs"]["states"] == 2
 
     arguments.remove("--json")
     assert cli.main(arguments) == 0
     human = capsys.readouterr().out
-    assert "Projection cache: 2 hits, 2 misses" in human
-    assert "Upstream cache activity: 5 hits, 1 miss" in human
+    assert "Output cache: 2 hits, 2 misses" in human
+    assert "Notebook cache: 5 hits, 1 miss" in human
     assert "Phase timings:" in human
-    assert "Fresh-child timings (2 states):" in human
+    assert "State-run timings (2 states):" in human
 
 
 def test_session_lists_and_inspects_definitions(
@@ -185,7 +185,7 @@ def test_handled_failures_use_stable_json(
             "--spec",
             str(spec),
             "--output",
-            str(tmp_path / "published"),
+            str(tmp_path / "exported"),
             "--json",
         ]
     )
@@ -211,13 +211,13 @@ def test_timeout_validation_is_a_syntax_error(capsys: pytest.CaptureFixture[str]
     assert "positive finite" in capsys.readouterr().err
 
 
-def _publication(path: Path) -> Path:
+def _export(path: Path) -> Path:
     provenance = Provenance(
-        cache_key="cell_cache/P_count.json",
+        cache_key="cell_cache/O_count.json",
         return_reference=None,
         python_type="builtins.int",
     )
-    index = PublicationIndex(
+    index = ExportIndex(
         notebook=NotebookProvenance(filename="finance.py", document_sha256="a" * 64),
         producer=ProducerProvenance(marimo="0.23.15", marimo_export="0.0.0"),
         inputs=("symbol",),
@@ -236,7 +236,7 @@ def _publication(path: Path) -> Path:
         },
     )
     path.parent.mkdir(parents=True, exist_ok=True)
-    write_publication(index, {}, path, replace=False)
+    write_export(index, {}, path, replace=False)
     return path
 
 
@@ -256,8 +256,8 @@ def _spec(path: Path) -> Path:
     return path
 
 
-def _result(path: Path, *, mode: str) -> PublicationResult:
-    return PublicationResult(
+def _result(path: Path, *, mode: str) -> ExportResult:
+    return ExportResult(
         path=path.absolute(),
         mode=cast(Literal["build", "capture"], mode),
         session_id="s_01" if mode == "capture" else None,
@@ -269,21 +269,21 @@ def _result(path: Path, *, mode: str) -> PublicationResult:
         assets=1,
         asset_bytes=2048,
         index_bytes=512,
-        projection_cache=CacheSummary(hits=2, misses=2),
-        upstream_cache=CacheSummary(hits=5, misses=1),
+        output_cache=CacheSummary(hits=2, misses=2),
+        notebook_cache=CacheSummary(hits=5, misses=1),
         timings=PhaseTimings(
             total_seconds=3.0,
             server_start_seconds=0.2 if mode == "build" else None,
             initial_autorun_seconds=0.3 if mode == "build" else None,
             capture_seconds=2.0,
             server_shutdown_seconds=0.1 if mode == "build" else None,
-            publication_write_seconds=0.1,
-            fresh_children=FreshChildTimings(
+            export_write_seconds=0.1,
+            state_runs=StateRunTimings(
                 states=2,
-                construction_seconds=0.2,
-                upstream_execution_seconds=0.7,
-                ui_application_seconds=0.3,
-                projection_execution_seconds=0.6,
+                setup_seconds=0.2,
+                dependency_execution_seconds=0.7,
+                ui_update_seconds=0.3,
+                output_materialization_seconds=0.6,
                 cleanup_seconds=0.2,
             ),
         ),

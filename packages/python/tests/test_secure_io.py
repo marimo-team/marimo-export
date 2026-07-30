@@ -9,13 +9,13 @@ from marimo_export._secure_io import (
     SecureFileSizeError,
     SecureReadError,
     SecureReadLimitError,
-    read_publication_asset,
-    read_publication_index,
+    read_export_asset,
+    read_export_index,
 )
 
 
 def _root(tmp_path: Path) -> Path:
-    root = (tmp_path / "publication").absolute()
+    root = (tmp_path / "export").absolute()
     (root / "assets").mkdir(parents=True)
     (root / "index.json").write_bytes(b"{}")
     (root / "assets" / "asset.bin").write_bytes(b"payload")
@@ -25,9 +25,9 @@ def _root(tmp_path: Path) -> Path:
 def test_secure_reader_reads_regular_index_and_asset_files(tmp_path: Path) -> None:
     root = _root(tmp_path)
 
-    assert read_publication_index(root, max_bytes=2) == b"{}"
+    assert read_export_index(root, max_bytes=2) == b"{}"
     assert (
-        read_publication_asset(
+        read_export_asset(
             root,
             "assets/asset.bin",
             expected_size=7,
@@ -41,9 +41,9 @@ def test_secure_reader_enforces_index_and_asset_limits(tmp_path: Path) -> None:
     root = _root(tmp_path)
 
     with pytest.raises(SecureReadLimitError):
-        read_publication_index(root, max_bytes=1)
+        read_export_index(root, max_bytes=1)
     with pytest.raises(SecureReadLimitError):
-        read_publication_asset(
+        read_export_asset(
             root,
             "assets/asset.bin",
             expected_size=7,
@@ -55,7 +55,7 @@ def test_secure_reader_requires_the_declared_asset_size(tmp_path: Path) -> None:
     root = _root(tmp_path)
 
     with pytest.raises(SecureFileSizeError):
-        read_publication_asset(
+        read_export_asset(
             root,
             "assets/asset.bin",
             expected_size=6,
@@ -80,7 +80,7 @@ def test_secure_reader_accepts_only_a_derived_asset_path(
     root = _root(tmp_path)
 
     with pytest.raises(SecureReadError):
-        read_publication_asset(root, path, expected_size=7, max_bytes=7)
+        read_export_asset(root, path, expected_size=7, max_bytes=7)
 
 
 @pytest.mark.skipif(os.name != "posix", reason="requires POSIX symlinks")
@@ -92,12 +92,12 @@ def test_secure_reader_does_not_follow_index_or_asset_symlinks(tmp_path: Path) -
     (root / "index.json").unlink()
     (root / "index.json").symlink_to(outside)
     with pytest.raises(SecureReadError):
-        read_publication_index(root, max_bytes=100)
+        read_export_index(root, max_bytes=100)
 
     (root / "assets" / "asset.bin").unlink()
     (root / "assets" / "asset.bin").symlink_to(outside)
     with pytest.raises(SecureReadError):
-        read_publication_asset(
+        read_export_asset(
             root,
             "assets/asset.bin",
             expected_size=7,
@@ -108,11 +108,11 @@ def test_secure_reader_does_not_follow_index_or_asset_symlinks(tmp_path: Path) -
 def test_secure_reader_requires_an_absolute_root(tmp_path: Path) -> None:
     del tmp_path
     with pytest.raises(SecureReadError):
-        read_publication_index(Path("relative"), max_bytes=1)
+        read_export_index(Path("relative"), max_bytes=1)
 
 
 @pytest.mark.parametrize("value", [True, 0, -1])
 def test_secure_reader_requires_positive_limits(tmp_path: Path, value: object) -> None:
     root = _root(tmp_path)
     with pytest.raises(TypeError):
-        read_publication_index(root, max_bytes=cast(Any, value))
+        read_export_index(root, max_bytes=cast(Any, value))

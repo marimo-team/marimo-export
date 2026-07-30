@@ -55,7 +55,7 @@ _MAX_SAFE_INTEGER = 2**53 - 1
 _UNICODE_SCALAR_LOOKAHEAD = r"(?![\s\S]*[\uD800-\uDFFF])"
 _TRUE_END = r"(?![\s\S])"
 _UNICODE_STRING_PATTERN = rf"^{_UNICODE_SCALAR_LOOKAHEAD}[\s\S]*{_TRUE_END}"
-_PUBLIC_NAME_PATTERN = (
+_EXPORT_NAME_PATTERN = (
     rf"^{_UNICODE_SCALAR_LOOKAHEAD}(?![\s\S]*[\u0000-\u001f\u007f])[\s\S]+{_TRUE_END}"
 )
 _IDENTIFIER_PATTERN = (
@@ -64,7 +64,7 @@ _IDENTIFIER_PATTERN = (
 )
 
 
-def _validate_public_name(value: object) -> object:
+def _validate_export_name(value: object) -> object:
     if not isinstance(value, str):
         return value
     if (
@@ -97,12 +97,12 @@ _UnicodeStringWire = TypeAliasType(
         StringConstraints(strict=True, pattern=_UNICODE_STRING_PATTERN),
     ],
 )
-_PublicNameWire = TypeAliasType(
-    "_PublicNameWire",
+_ExportNameWire = TypeAliasType(
+    "_ExportNameWire",
     Annotated[
         str,
-        StringConstraints(strict=True, pattern=_PUBLIC_NAME_PATTERN),
-        BeforeValidator(_validate_public_name),
+        StringConstraints(strict=True, pattern=_EXPORT_NAME_PATTERN),
+        BeforeValidator(_validate_export_name),
     ],
 )
 _IdentifierWire = TypeAliasType(
@@ -178,8 +178,8 @@ class _SpecWire(_WireModel):
 
     schema_: Literal["marimo-export.spec.v1"] = Field(alias="schema")
     inputs: list[_IdentifierWire]
-    states: dict[_PublicNameWire, dict[_IdentifierWire, _PortableValueWire]] = Field(min_length=1)
-    outputs: dict[_PublicNameWire, _OutputWire] = Field(min_length=1)
+    states: dict[_ExportNameWire, dict[_IdentifierWire, _PortableValueWire]] = Field(min_length=1)
+    outputs: dict[_ExportNameWire, _OutputWire] = Field(min_length=1)
 
     @field_validator("inputs")
     @classmethod
@@ -202,7 +202,7 @@ class _SpecWire(_WireModel):
 class _SpecSchemaGenerator(GenerateJsonSchema):
     _NAMES: ClassVar[dict[str, str]] = {
         "_UnicodeStringWire": "unicode_string",
-        "_PublicNameWire": "public_name",
+        "_ExportNameWire": "export_name",
         "_IdentifierWire": "python_identifier",
         "_PortableValueWire": "portable_input_value",
         "_OutputWire": "output",
@@ -237,7 +237,7 @@ class OutputSpec:
 
 @dataclass(frozen=True, slots=True, init=False)
 class ExportSpec:
-    """Declare a finite state matrix and the definitions to publish."""
+    """Declare named states and the notebook definitions to export."""
 
     inputs: tuple[str, ...]
     states: Mapping[str, FrozenJsonObject]

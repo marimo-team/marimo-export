@@ -4,11 +4,11 @@ import {
   defineBlobAssetLoader,
   defineOutputLoader,
   imageLoader,
-  openPublication,
+  openExport,
   resolveOutputLoader,
   scalarLoader,
 } from "../src/index.js";
-import { publicationFixture } from "./fixture.js";
+import { exportFixture } from "./fixture.js";
 
 describe("OutputLoader", () => {
   test("defines frozen inferred loaders", () => {
@@ -22,13 +22,13 @@ describe("OutputLoader", () => {
   });
 
   test("matches BlobAsset media types by lowercase essence", async () => {
-    const fixture = await publicationFixture({
+    const fixture = await exportFixture({
       blobMediaType: 'Application/Vnd.Example.Fixture+Json; Charset="utf-8"',
     });
-    const publication = await openPublication("https://example.test/stocks", {
+    const notebookExport = await openExport("https://example.test/stocks", {
       fetch: fixture.fetch,
     });
-    const output = publication.state("alpha").output("view");
+    const output = notebookExport.state("alpha").output("view");
     const loader = defineBlobAssetLoader({
       mediaTypes: "application/vnd.example.fixture+json",
       load: ({ mediaType }) => mediaType.parameters.get("charset"),
@@ -40,11 +40,11 @@ describe("OutputLoader", () => {
   });
 
   test("requires exactly one compatible loader", async () => {
-    const fixture = await publicationFixture();
-    const publication = await openPublication("https://example.test/stocks", {
+    const fixture = await exportFixture();
+    const notebookExport = await openExport("https://example.test/stocks", {
       fetch: fixture.fetch,
     });
-    const output = publication.state("alpha").output("count");
+    const output = notebookExport.state("alpha").output("count");
     const declines = defineOutputLoader({
       codec: "marimo.scalar.v1",
       accepts: () => false,
@@ -60,11 +60,11 @@ describe("OutputLoader", () => {
   });
 
   test("wraps invalid accepts behavior", async () => {
-    const fixture = await publicationFixture();
-    const publication = await openPublication("https://example.test/stocks", {
+    const fixture = await exportFixture();
+    const notebookExport = await openExport("https://example.test/stocks", {
       fetch: fixture.fetch,
     });
-    const output = publication.state("alpha").output("count");
+    const output = notebookExport.state("alpha").output("count");
     const loader = {
       codec: "marimo.scalar.v1" as const,
       accepts: () => {

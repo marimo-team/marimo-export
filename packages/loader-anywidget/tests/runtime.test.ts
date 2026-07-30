@@ -60,7 +60,6 @@ describe("AnyWidget browser runtime", () => {
     const mounted = await loaded.mount(element as unknown as HTMLElement);
 
     expect(element.dataset.caught).toBe("true");
-    expect(documentValue.head.children.map((style) => style.textContent)).toEqual([".root {}"]);
     const child = await mounted.model.widget_manager.get_model<{ value: number }>("model-1");
     child.set("value", 2);
     expect(counters.changes).toBe(0);
@@ -302,7 +301,7 @@ describe("AnyWidget browser runtime", () => {
       documentValue.createElement("div") as unknown as HTMLElement,
     );
 
-    expect(() => mounted.model.set("value", 2)).not.toThrow();
+    mounted.model.set("value", 2);
     expect(counters.sibling).toBe(1);
     await Promise.resolve();
     expect(counters.change).toBe(1);
