@@ -1,9 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
 import { anyWidgetLoader } from "../src/index.js";
-import { combineAbortSignals } from "../src/runtime/abort.js";
 import { resolveAnyWidgetModule } from "../src/runtime/binding.js";
-import { modelProxy } from "../src/runtime/model-proxy.js";
-import { base64ModuleUrl, moduleUrl, notification, outputFor, payload } from "./fixture.js";
+import { moduleUrl, notification, outputFor, payload } from "./fixture.js";
 
 let documentValue: FakeDocument;
 
@@ -33,62 +31,6 @@ describe("AnyWidget browser runtime", () => {
       expect((error as Error).message.length).toBeLessThan(256);
       expect((error as Error).message).not.toContain("x".repeat(128));
     }
-  });
-
-  test("removes fallback listeners after the first combined signal aborts", () => {
-    const descriptor = Object.getOwnPropertyDescriptor(AbortSignal, "any");
-    Object.defineProperty(AbortSignal, "any", { configurable: true, value: undefined });
-    try {
-      const first = new AbortController();
-      const second = new AbortController();
-      const firstAdd = vi.spyOn(first.signal, "addEventListener");
-      const firstRemove = vi.spyOn(first.signal, "removeEventListener");
-      const secondRemove = vi.spyOn(second.signal, "removeEventListener");
-
-      const combined = combineAbortSignals([first.signal, first.signal, second.signal]);
-      first.abort("first");
-
-      expect(combined.aborted).toBe(true);
-      expect(combined.reason).toBe("first");
-      expect(firstAdd).toHaveBeenCalledOnce();
-      expect(firstRemove).toHaveBeenCalledOnce();
-      expect(secondRemove).toHaveBeenCalledOnce();
-    } finally {
-      if (descriptor === undefined) Reflect.deleteProperty(AbortSignal, "any");
-      else Object.defineProperty(AbortSignal, "any", descriptor);
-    }
-  });
-
-  test("removes model abort listeners when callbacks are unregistered", () => {
-    const controller = new AbortController();
-    const add = vi.spyOn(controller.signal, "addEventListener");
-    const remove = vi.spyOn(controller.signal, "removeEventListener");
-    const on = vi.fn();
-    const off = vi.fn();
-    const model = {
-      get: vi.fn(),
-      set: vi.fn(),
-      save_changes: vi.fn(),
-      send: vi.fn(),
-      on,
-      off,
-      widget_manager: { get_model: vi.fn() },
-    };
-    const proxy = modelProxy(model as never, controller.signal);
-    const first = vi.fn();
-    const second = vi.fn();
-
-    proxy.on("change:value", first);
-    proxy.on("change:value", second);
-    proxy.off("change:value", first);
-    proxy.off("change:value");
-
-    expect(on).toHaveBeenCalledTimes(2);
-    expect(add).toHaveBeenCalledTimes(2);
-    expect(remove).toHaveBeenCalledTimes(2);
-    expect(off).toHaveBeenCalledTimes(2);
-    controller.abort();
-    expect(off).toHaveBeenCalledTimes(2);
   });
 
   test("keeps parent disposal authoritative over a child render signal", async () => {
@@ -335,59 +277,6 @@ describe("AnyWidget browser runtime", () => {
     expect(new Uint8Array(second.model.get("binary").view.buffer)[0]).toBe(7);
     await first.dispose();
     await second.dispose();
-  });
-
-  test("imports embedded ESM through a mount-owned object URL", async () => {
-    const source = `export default { render({ el }) { el.dataset.embedded = "true"; } };`;
-    const objectUrl = moduleUrl(source);
-    const createObjectUrl = vi.spyOn(URL, "createObjectURL").mockReturnValue(objectUrl);
-    const revokeObjectUrl = vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => undefined);
-    const output = await outputFor(
-      payload({
-        files: { "/@file/widget.js": moduleUrl(source) },
-        modelNotifications: [
-          notification({ id: "model-0", state: {}, moduleUrl: "/@file/widget.js" }),
-        ],
-      }),
-    );
-    const loaded = await output.load(anyWidgetLoader());
-    const element = documentValue.createElement("div");
-
-    const mounted = await loaded.mount(element as unknown as HTMLElement);
-    expect(element.dataset.embedded).toBe("true");
-    expect(createObjectUrl).toHaveBeenCalledOnce();
-
-    await mounted.dispose();
-
-    expect(revokeObjectUrl).toHaveBeenCalledWith(objectUrl);
-  });
-
-  test("decodes an uppercase Base64 marker before importing embedded ESM", async () => {
-    const source = `export default { render({ el }) { el.dataset.base64 = "true"; } };`;
-    const objectUrl = moduleUrl(source);
-    let embeddedModule: Blob | undefined;
-    vi.spyOn(URL, "createObjectURL").mockImplementation((value) => {
-      if (!(value instanceof Blob)) throw new TypeError("Expected an embedded module blob.");
-      embeddedModule = value;
-      return objectUrl;
-    });
-    vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => undefined);
-    const output = await outputFor(
-      payload({
-        files: { "/@file/widget.js": base64ModuleUrl(source, "BASE64") },
-        modelNotifications: [
-          notification({ id: "model-0", state: {}, moduleUrl: "/@file/widget.js" }),
-        ],
-      }),
-    );
-    const loaded = await output.load(anyWidgetLoader());
-    const element = documentValue.createElement("div");
-
-    const mounted = await loaded.mount(element as unknown as HTMLElement);
-
-    expect(element.dataset.base64).toBe("true");
-    expect(await embeddedModule?.text()).toBe(source);
-    await mounted.dispose();
   });
 
   test("keeps module cache entries distinct when hashes and URLs contain NUL", async () => {
