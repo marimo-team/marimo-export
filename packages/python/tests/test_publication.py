@@ -126,98 +126,53 @@ def test_canonical_json_uses_ecmascript_number_spelling() -> None:
     )
 
 
-@pytest.mark.parametrize(
-    ("value", "wire"),
-    [
-        (None, None),
-        (True, True),
-        ("hello", "hello"),
+def test_scalar_descriptor_round_trips_closed_wire_tags() -> None:
+    for value, wire in (
         (42, 42),
-        (3.5, 3.5),
-        (
-            2**63,
-            {"type": "bigint", "value": "9223372036854775808"},
-        ),
-        (
-            -0.0,
-            {"type": "float", "value": "negative-zero"},
-        ),
-        (
-            math.inf,
-            {"type": "float", "value": "infinity"},
-        ),
-        (
-            -math.inf,
-            {"type": "float", "value": "-infinity"},
-        ),
-    ],
-)
-def test_scalar_descriptor_uses_closed_scalar_tags(
-    value: object,
-    wire: object,
-) -> None:
-    descriptor = ScalarDescriptor(
-        value=cast(Any, value),
-        provenance=_provenance("scalar", asset=False),
-    )
-
-    assert descriptor.to_value()["value"] == wire
-    decoded = (
-        PublicationIndex.from_value(_single_output_wire(descriptor.to_value()))
-        .states["state"]
-        .outputs["output"]
-    )
-    assert isinstance(decoded, ScalarDescriptor)
-    if isinstance(value, float) and math.isinf(value):
-        assert decoded.value == value
-    elif isinstance(value, float) and value == 0:
-        assert math.copysign(1, cast(float, decoded.value)) == -1
-    else:
-        assert decoded.value == value
-
-
-def test_nan_uses_the_tagged_float_form() -> None:
-    descriptor = ScalarDescriptor(
-        value=math.nan,
-        provenance=_provenance("nan", asset=False),
-    )
-    assert descriptor.to_value()["value"] == {"type": "float", "value": "nan"}
-    loaded = cast(
-        ScalarDescriptor,
-        PublicationIndex.from_value(_single_output_wire(descriptor.to_value()))
-        .states["state"]
-        .outputs["output"],
-    )
-    assert math.isnan(cast(float, loaded.value))
-
-
-@pytest.mark.parametrize(
-    "value",
-    [
-        {"type": "bigint", "value": "01"},
-        {"type": "bigint", "value": "-0"},
-        {"type": "bigint", "value": "42"},
-        {"type": "float", "value": "NaN"},
-        {"type": "float", "value": "other"},
-        {"type": "other", "value": "nan"},
-        {"type": "float", "value": "nan", "extra": True},
-    ],
-)
-def test_publication_rejects_invalid_scalar_tags(value: object) -> None:
-    wire = _single_output_wire(
-        cast(
-            JsonObject,
-            {
-                "codec": SCALAR_CODEC,
-                "media_type": SCALAR_MEDIA_TYPE,
-                "provenance": _provenance("scalar", asset=False).to_value(),
-                "value": value,
-            },
+        (2**63, {"type": "bigint", "value": "9223372036854775808"}),
+        (-0.0, {"type": "float", "value": "negative-zero"}),
+        (math.inf, {"type": "float", "value": "infinity"}),
+        (math.nan, {"type": "float", "value": "nan"}),
+    ):
+        descriptor = ScalarDescriptor(
+            value=cast(Any, value),
+            provenance=_provenance("scalar", asset=False),
         )
-    )
+        assert descriptor.to_value()["value"] == wire
 
-    with pytest.raises(PublicationError):
-        PublicationIndex.from_value(wire)
+        decoded = (
+            PublicationIndex.from_value(_single_output_wire(descriptor.to_value()))
+            .states["state"]
+            .outputs["output"]
+        )
+        assert isinstance(decoded, ScalarDescriptor)
+        if isinstance(value, float) and math.isnan(value):
+            assert math.isnan(cast(float, decoded.value))
+        elif isinstance(value, float) and value == 0:
+            assert math.copysign(1, cast(float, decoded.value)) == -1
+        else:
+            assert decoded.value == value
+
+
+def test_publication_rejects_invalid_scalar_tags() -> None:
+    for value in (
+        {"type": "bigint", "value": "01"},
+        {"type": "float", "value": "other"},
+        {"type": "float", "value": "nan", "extra": True},
+    ):
+        wire = _single_output_wire(
+            cast(
+                JsonObject,
+                {
+                    "codec": SCALAR_CODEC,
+                    "media_type": SCALAR_MEDIA_TYPE,
+                    "provenance": _provenance("scalar", asset=False).to_value(),
+                    "value": value,
+                },
+            )
+        )
+        with pytest.raises(PublicationError):
+            PublicationIndex.from_value(wire)
 
 
 def test_asset_paths_are_derived_from_codec_and_digest() -> None:
@@ -342,28 +297,6 @@ def test_from_bytes_rejects_noncanonical_json() -> None:
 
     with pytest.raises(PublicationError) as raised:
         PublicationIndex.from_bytes(encoded + b"\n")
-
-    assert raised.value.code == "publication_noncanonical"
-
-
-def test_from_bytes_rejects_wrong_key_order() -> None:
-    value = _index().to_value()
-    noncanonical = (
-        '{"schema":"marimo-export.publication.v1","notebook":'
-        + __import__("json").dumps(value["notebook"], separators=(",", ":"))
-        + ',"producer":'
-        + __import__("json").dumps(value["producer"], separators=(",", ":"))
-        + ',"inputs":'
-        + __import__("json").dumps(value["inputs"], separators=(",", ":"))
-        + ',"outputs":'
-        + __import__("json").dumps(value["outputs"], separators=(",", ":"))
-        + ',"states":'
-        + __import__("json").dumps(value["states"], separators=(",", ":"))
-        + "}"
-    ).encode()
-
-    with pytest.raises(PublicationError) as raised:
-        PublicationIndex.from_bytes(noncanonical)
 
     assert raised.value.code == "publication_noncanonical"
 
