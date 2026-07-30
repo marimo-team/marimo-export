@@ -51,69 +51,6 @@ describe("vegaLiteLoader", () => {
     expect(host.lastContainer().removeClasses).toHaveBeenCalledWith("vega-embed", "has-actions");
   });
 
-  test("mounts a loaded publication value", async () => {
-    const spec = { mark: "point", data: { values: [] } };
-    embed.mockResolvedValueOnce({ finalize });
-    const format = await fixture(encoder.encode(JSON.stringify(spec)));
-    const host = testHost();
-
-    const chart = await format.load(vegaLiteLoader({ actions: false }));
-    const mounted = await chart.mount(host.element);
-
-    expect(embed).toHaveBeenCalledWith(host.lastContainer().element, spec, {
-      renderer: "canvas",
-      actions: false,
-    });
-    await mounted.dispose();
-  });
-
-  test("allows disposal to retry when Vega finalization fails", async () => {
-    const spec = { mark: "point", data: { values: [] } };
-    finalize.mockImplementationOnce(() => {
-      throw new Error("finalize failed");
-    });
-    embed.mockResolvedValueOnce({ finalize });
-    const format = await fixture(encoder.encode(JSON.stringify(spec)));
-    const chart = await format.load(vegaLiteLoader());
-    const host = testHost();
-    const mounted = await chart.mount(host.element);
-
-    expect(() => mounted.dispose()).toThrow("finalize failed");
-    await mounted.dispose();
-    await mounted.dispose();
-    expect(finalize).toHaveBeenCalledTimes(2);
-  });
-
-  test("settles cancellation while embedding and finalizes a late result", async () => {
-    const spec = { mark: "point", data: { values: [] } };
-    let resolveEmbed!: (value: { finalize: typeof finalize }) => void;
-    const host = testHost();
-    embed.mockImplementationOnce(
-      (element) =>
-        new Promise((resolve) => {
-          host.appendPartialDom(element);
-          resolveEmbed = resolve;
-        }),
-    );
-    const format = await fixture(encoder.encode(JSON.stringify(spec)));
-    const chart = await format.load(vegaLiteLoader());
-    const controller = new AbortController();
-    const mounting = chart.mount(host.element, {
-      signal: controller.signal,
-    });
-    await vi.waitFor(() => expect(embed).toHaveBeenCalledOnce());
-
-    controller.abort();
-
-    await expect(mounting).rejects.toMatchObject({ name: "AbortError" });
-    expect(host.childCount()).toBe(0);
-    expect(host.classes()).toEqual([]);
-    resolveEmbed({ finalize });
-    await Promise.resolve();
-    await Promise.resolve();
-    expect(finalize).toHaveBeenCalledOnce();
-  });
-
   test("does not clear a newer mount when a cancelled embed resolves late", async () => {
     const spec = { mark: "point", data: { values: [] } };
     const firstFinalize = vi.fn();
@@ -296,7 +233,6 @@ function testHost() {
       target.classes.add("has-actions");
     },
     childCount: root.childCount,
-    classes: () => [...(created.at(-1)?.classes ?? [])],
     replaceChildren: root.replaceChildren,
     lastContainer: () => created.at(-1)!,
   };

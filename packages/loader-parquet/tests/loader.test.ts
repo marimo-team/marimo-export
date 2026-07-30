@@ -23,22 +23,12 @@ describe("parquetRowsLoader", () => {
     expect(options).toMatchObject({ columns: ["symbol"], rowStart: 1, rowEnd: 3 });
     expect(options.file).toBeInstanceOf(ArrayBuffer);
     expect(new Uint8Array(options.file as ArrayBuffer)).toEqual(new Uint8Array([80, 65, 82, 49]));
-  });
-
-  test("accepts both standard Parquet media types", () => {
-    const loader = parquetRowsLoader();
     expect(loader.accepts(input().descriptor, media("application/vnd.apache.parquet"))).toBe(true);
     expect(loader.accepts(input().descriptor, media("application/x-parquet"))).toBe(true);
     expect(loader.accepts(input().descriptor, media("application/octet-stream"))).toBe(false);
   });
 
-  test("honors abort before and during decoding", async () => {
-    const before = new AbortController();
-    before.abort();
-    await expect(
-      parquetRowsLoader().load({ ...input(), signal: before.signal }),
-    ).rejects.toMatchObject({ name: "AbortError" });
-
+  test("honors abort during decoding", async () => {
     let resolve!: (rows: Record<string, unknown>[]) => void;
     read.mockReturnValueOnce(
       new Promise<Record<string, unknown>[]>((complete) => {

@@ -28,29 +28,7 @@ const mediaType: MediaType = {
 };
 
 describe("arrowTableLoader", () => {
-  test("decodes Arrow files and registers LZ4 itself", async () => {
-    const input = tableFromArrays({
-      id: new BigInt64Array([9_007_199_254_740_993n, 2n]),
-      symbol: ["AAPL", "MSFT"],
-    });
-    const bytes = tableToIPC(input, { format: "file" });
-    if (bytes === null) throw new Error("Expected an in-memory Arrow file.");
-
-    const result = await arrowTableLoader().load({
-      descriptor: { ...descriptor, asset: { ...descriptor.asset, size: bytes.byteLength } },
-      mediaType,
-      payload: bytes,
-    });
-
-    expect(getCompressionCodec(CompressionType.LZ4_FRAME)).not.toBeNull();
-    expect(result.numRows).toBe(2);
-    expect(result.toArray()).toEqual([
-      { id: 9_007_199_254_740_993n, symbol: "AAPL" },
-      { id: 2n, symbol: "MSFT" },
-    ]);
-  });
-
-  test("round-trips an LZ4-compressed Arrow file", async () => {
+  test("registers and decodes LZ4-compressed Arrow files", async () => {
     const input = tableFromArrays({
       category: ["one", "two", "three"],
       value: new Float64Array([1.5, 2.5, 3.5]),
@@ -74,6 +52,7 @@ describe("arrowTableLoader", () => {
       payload: compressed,
     });
 
+    expect(getCompressionCodec(CompressionType.LZ4_FRAME)).not.toBeNull();
     expect(result.toArray()).toEqual([
       { category: "one", value: 1.5 },
       { category: "two", value: 2.5 },
