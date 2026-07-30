@@ -1,18 +1,22 @@
 # Contributor documentation
 
-marimo-export is a uv and pnpm workspace for one Python producer, one published
-browser package, five private loader workspaces, a documentation app, and a
-vanilla Vite market dashboard.
+marimo-export is a uv and pnpm workspace for:
 
-Read:
+- one Python producer and local reader package
+- one public browser package
+- five private loader implementation packages
+- one VitePress documentation app
+- one vanilla Vite market dashboard
 
-- [Architecture](architecture.md) before changing execution, cache receipts,
-  publication bytes, or package boundaries.
-- [Development](development.md) for setup, focused commands, and extension
-  workflows.
-- [Validation](validation.md) for tests, builds, and package checks.
+Start with:
 
-The root commands are:
+- [Architecture](architecture.md) for execution, caching, wire format, and
+  package boundaries
+- [Development](development.md) for setup, focused commands, exporters, and
+  loaders
+- [Validation](validation.md) for contract suites and the root gate
+
+The root workflow is:
 
 ```bash
 make bootstrap
