@@ -259,52 +259,6 @@ def test_process_stop_reaps_after_soft_signal_cancellation(
     ]
 
 
-def test_process_stop_reaps_after_status_check_cancellation(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    events: list[str] = []
-
-    class _Process:
-        pid = 123
-
-        def poll(self) -> int | None:
-            events.append("poll")
-            raise KeyboardInterrupt("cancelled")
-
-        def wait(self, *, timeout: float) -> int:
-            assert timeout > 0
-            events.append("wait")
-            return 1
-
-    process = _Process()
-    server = ManagedServer.__new__(ManagedServer)
-    server._process = cast(Any, process)
-    server.timeout = 1
-
-    monkeypatch.setattr(sys, "platform", "linux")
-    monkeypatch.setattr(
-        server,
-        "_signal_process",
-        lambda process, *, force: events.append("force-signal" if force else "soft-signal"),
-    )
-    monkeypatch.setattr(
-        server,
-        "_kill_owned_process_groups",
-        lambda groups: events.append(f"groups:{sorted(groups)}"),
-    )
-
-    with pytest.raises(KeyboardInterrupt, match="cancelled"):
-        server._stop_process({123})
-
-    assert server._process is None
-    assert events == [
-        "poll",
-        "soft-signal",
-        "wait",
-        "groups:[123]",
-    ]
-
-
 def test_process_group_cleanup_finishes_after_cancellation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -25,7 +25,7 @@ def _capture(notebook: Path, spec: ExportSpec, output: Path) -> None:
         server.stop()
 
 
-def test_ordinary_input_cell_executes_fresh_in_every_state(
+def test_ordinary_input_state_is_isolated_across_states_and_captures(
     tmp_path: Path,
 ) -> None:
     notebook = tmp_path / "notebook.py"
@@ -39,14 +39,25 @@ app = marimo.App()
 @app.cell
 def _():
     shared = []
+
+    def record(value):
+        shared.append(value)
+        record.calls.append(value)
+
+    record.calls = []
+
+    class Bucket:
+        values = []
+
     x = 0
-    return shared, x
+    return Bucket, record, shared, x
 
 
 @app.cell
-def _(shared, x):
-    shared.append(x)
-    snapshot = ",".join(str(value) for value in shared)
+def _(Bucket, record, shared, x):
+    record(x)
+    Bucket.values.append(x)
+    snapshot = f"{shared}:{record.calls}:{Bucket.values}"
     return (snapshot,)
 
 
@@ -85,8 +96,8 @@ if __name__ == "__main__":
 
     for result in (first, second):
         publication = open_publication(result.path)
-        assert publication.state("one").output("snapshot").scalar() == "1"
-        assert publication.state("two").output("snapshot").scalar() == "2"
+        assert publication.state("one").output("snapshot").scalar() == "[1]:[1]:[1]"
+        assert publication.state("two").output("snapshot").scalar() == "[2]:[2]:[2]"
     assert notebook.read_bytes() == source
 
 
@@ -195,60 +206,6 @@ def fail_on_two(value):
         publication = open_publication(result.path)
         assert [publication.state(name).output("children").scalar() for name in names] == [1, 1, 1]
     assert not (tmp_path / "failure").exists()
-
-
-def test_callable_and_class_siblings_are_owned_by_each_state_child(
-    tmp_path: Path,
-) -> None:
-    notebook = tmp_path / "notebook.py"
-    notebook.write_text(
-        """
-import marimo
-
-app = marimo.App()
-
-
-@app.cell
-def _():
-    values = []
-
-    def record(value):
-        values.append(value)
-        record.calls.append(value)
-
-    record.calls = []
-
-    class Bucket:
-        values = []
-
-    x = 0
-    return Bucket, record, values, x
-
-
-@app.cell
-def _(Bucket, record, values, x):
-    record(x)
-    Bucket.values.append(x)
-    snapshot = f"{values}:{record.calls}:{Bucket.values}"
-    return (snapshot,)
-
-
-if __name__ == "__main__":
-    app.run()
-""".lstrip(),
-        encoding="utf-8",
-    )
-    spec = ExportSpec(
-        inputs=("x",),
-        states={"one": {"x": 1}, "two": {"x": 2}},
-        outputs={"snapshot": OutputSpec(source="snapshot")},
-    )
-
-    _capture(notebook, spec, tmp_path / "publication")
-    publication = open_publication(tmp_path / "publication")
-
-    assert publication.state("one").output("snapshot").scalar() == "[1]:[1]:[1]"
-    assert publication.state("two").output("snapshot").scalar() == "[2]:[2]:[2]"
 
 
 def test_ordinary_input_can_share_its_authored_cell_with_a_ui_element(
