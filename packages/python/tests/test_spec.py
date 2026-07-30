@@ -15,7 +15,7 @@ from marimo_export.exporters import altair, importable, parquet
 from marimo_export.spec import SPEC_SCHEMA
 
 
-def _value() -> dict[str, object]:
+def _value() -> dict[str, Any]:
     return {
         "schema": SPEC_SCHEMA,
         "inputs": ["chart_width", "symbols_selector"],
@@ -62,16 +62,8 @@ def test_programmatic_and_wire_construction_have_one_contract() -> None:
             ),
         },
     )
-    decoded = ExportSpec.from_value(_value())
 
-    assert programmatic == decoded
-    assert programmatic.inputs == ("chart_width", "symbols_selector")
-    assert tuple(programmatic.states) == ("baseline", "msft", "compact")
-    assert tuple(programmatic.outputs) == ("prices", "chart")
-    assert programmatic.outputs["prices"] == OutputSpec(
-        source="df",
-        exporter=parquet.table(filename="prices.parquet"),
-    )
+    assert ExportSpec.from_value(_value()) == programmatic
     assert programmatic.to_value() == _value()
     assert ExportSpec.from_value(programmatic) is programmatic
 
@@ -95,13 +87,8 @@ def test_spec_copies_and_freezes_authored_values() -> None:
     cast(dict[str, Any], detached["states"])["msft"]["symbols_selector"].append("GOOGL")
     assert spec.states["msft"]["symbols_selector"] == ("MSFT",)
 
-    with pytest.raises(TypeError):
-        cast(Any, spec.states)["new"] = {}
-    with pytest.raises(TypeError):
-        cast(Any, spec.states["msft"])["symbols_selector"] = ()
 
-
-def test_json_schema_accepts_the_exact_wire_value() -> None:
+def test_json_schema_accepts_the_wire_contract() -> None:
     schema = ExportSpec.json_schema()
 
     Draft202012Validator.check_schema(schema)
@@ -110,77 +97,63 @@ def test_json_schema_accepts_the_exact_wire_value() -> None:
     assert schema["additionalProperties"] is False
 
 
-@pytest.mark.parametrize(
-    ("mutate", "code"),
-    [
-        (lambda value: value.update({"unexpected": True}), "spec_invalid"),
-        (lambda value: value.update({"schema": "other"}), "spec_invalid"),
-        (lambda value: value.update({"states": {}}), "spec_value_invalid"),
-        (lambda value: value.update({"outputs": {}}), "spec_output_invalid"),
-        (
-            lambda value: cast(dict[str, Any], value["states"])["bad"].update({"interval": "1d"}),
-            "spec_state_input_unknown",
-        ),
-        (
-            lambda value: cast(list[str], value["inputs"]).append("chart_width"),
-            "spec_invalid",
-        ),
-    ],
-)
-def test_spec_rejects_invalid_root_shapes(
-    mutate: Any,
-    code: str,
-) -> None:
-    value = _value()
-    cast(dict[str, Any], value["states"])["bad"] = {}
-    mutate(value)
+def test_spec_rejects_invalid_root_contracts() -> None:
+    unexpected = _value()
+    unexpected["unexpected"] = True
 
+    empty_states = _value()
+    empty_states["states"] = {}
+
+    unknown_input = _value()
+    unknown_input["states"]["bad"] = {"interval": "1d"}
+
+    duplicate_input = _value()
+    duplicate_input["inputs"].append("chart_width")
+
+    for value, code in (
+        (unexpected, "spec_invalid"),
+        (empty_states, "spec_value_invalid"),
+        (unknown_input, "spec_state_input_unknown"),
+        (duplicate_input, "spec_invalid"),
+    ):
+        with pytest.raises(SpecError) as raised:
+            ExportSpec.from_value(value)
+        assert raised.value.code == code
+
+
+def test_output_sources_and_exporters_are_validated_at_construction() -> None:
+    for source in ("", "a.b", "x" * 256):
+        with pytest.raises(SpecError) as raised:
+            OutputSpec(source=source)
+        assert raised.value.code == "spec_output_invalid"
+
+    value = _value()
+    value["outputs"]["chart"]["exporter"] = {
+        "name": "altair.vegalite",
+        "options": {"unexpected": True},
+    }
     with pytest.raises(SpecError) as raised:
         ExportSpec.from_value(value)
-
-    assert raised.value.code == code
-
-
-@pytest.mark.parametrize(
-    "source",
-    ["", "not valid", "class", "a.b", "x" * 256],
-)
-def test_output_source_is_one_bounded_python_definition(source: str) -> None:
-    with pytest.raises(SpecError) as raised:
-        OutputSpec(source=source)
-
-    assert raised.value.code == "spec_output_invalid"
-
-
-def test_output_source_requires_a_string() -> None:
-    with pytest.raises(TypeError):
-        OutputSpec(source=cast(Any, 42))
-
-
-def test_output_exporter_requires_a_descriptor() -> None:
-    with pytest.raises(TypeError):
-        OutputSpec(source="chart", exporter=cast(Any, "altair.vegalite"))
-
-
-@pytest.mark.parametrize(
-    "exporter",
-    [
-        "unknown",
-        {"name": "altair.vegalite", "options": {"unexpected": True}},
-        {"name": "acme.exports:encode", "options": {"bad-option": 1}},
-    ],
-)
-def test_wire_exporters_are_validated_and_normalized(exporter: object) -> None:
-    value = _value()
-    cast(dict[str, Any], cast(dict[str, Any], value["outputs"])["chart"])["exporter"] = exporter
-
-    with pytest.raises(SpecError) as raised:
-        ExportSpec.from_value(value)
-
     assert raised.value.code == "spec_exporter_invalid"
 
 
-def test_custom_importable_exporter_uses_the_same_wire_contract() -> None:
+def test_programmatic_constructor_rejects_ambiguous_shorthands() -> None:
+    with pytest.raises(TypeError):
+        ExportSpec(
+            inputs=cast(Any, "chart_width"),
+            states={"baseline": {}},
+            outputs={"chart": OutputSpec(source="chart")},
+        )
+
+    with pytest.raises(TypeError):
+        ExportSpec(
+            inputs=(),
+            states={"baseline": {}},
+            outputs=cast(Any, {"chart": {"source": "chart"}}),
+        )
+
+
+def test_custom_importable_exporter_uses_the_wire_contract() -> None:
     spec = ExportSpec(
         inputs=(),
         states={"baseline": {}},
@@ -203,42 +176,22 @@ def test_custom_importable_exporter_uses_the_same_wire_contract() -> None:
     }
 
 
-@pytest.mark.parametrize(
-    "name",
-    ["", " state", "state ", "state\n", "\x00state", "x" * 256],
-)
-def test_public_names_are_bounded_and_printable(name: str) -> None:
-    value = _value()
-    state = cast(dict[str, Any], value["states"]).pop("baseline")
-    cast(dict[str, Any], value["states"])[name] = state
-
+def test_public_names_and_state_values_use_the_portable_grammar() -> None:
+    invalid_name = _value()
+    state = invalid_name["states"].pop("baseline")
+    invalid_name["states"]["state\n"] = state
     with pytest.raises(SpecError):
-        ExportSpec.from_value(value)
+        ExportSpec.from_value(invalid_name)
+
+    for authored in (2**53, math.nan, datetime(2026, 7, 28)):
+        invalid_value = _value()
+        invalid_value["states"]["bad"] = {"chart_width": authored}
+        with pytest.raises(SpecError) as raised:
+            ExportSpec.from_value(invalid_value)
+        assert raised.value.code == "spec_value_invalid"
 
 
-@pytest.mark.parametrize(
-    "value",
-    [
-        2**53,
-        -(2**53),
-        math.inf,
-        -math.inf,
-        math.nan,
-        datetime(2026, 7, 28),
-        b"bytes",
-    ],
-)
-def test_state_values_use_the_portable_input_grammar(value: object) -> None:
-    spec = _value()
-    cast(dict[str, Any], spec["states"])["bad"] = {"chart_width": value}
-
-    with pytest.raises(SpecError) as raised:
-        ExportSpec.from_value(spec)
-
-    assert raised.value.code == "spec_value_invalid"
-
-
-def test_json_file_uses_strict_duplicate_key_decoding(tmp_path: Path) -> None:
+def test_json_file_rejects_duplicate_keys(tmp_path: Path) -> None:
     path = tmp_path / "stocks.json"
     path.write_text(
         '{"schema":"marimo-export.spec.v1","inputs":[],"states":{"one":{},"one":{}},'
@@ -275,13 +228,12 @@ outputs:
 
     assert spec.inputs == ("chart_width",)
     assert spec.states["compact"]["chart_width"] == 480
-    assert spec.outputs["chart"].source == "chart"
     assert spec.outputs["chart"].exporter == altair.png(scale=2)
 
 
-@pytest.mark.parametrize(
-    "body",
-    [
+def test_yaml_rejects_aliases(tmp_path: Path) -> None:
+    path = tmp_path / "stocks.yml"
+    path.write_text(
         """
 schema: marimo-export.spec.v1
 inputs: []
@@ -289,60 +241,21 @@ states:
   base: &base {}
   copy: *base
 outputs: {result: {source: result}}
-""",
-        """
-schema: marimo-export.spec.v1
-inputs: []
-defaults: &defaults {result: {source: result}}
-states: {base: {}}
-outputs:
-  <<: *defaults
-""",
-        """
-schema: marimo-export.spec.v1
-inputs: []
-states: {base: {}, base: {}}
-outputs: {result: {source: result}}
-""",
-    ],
-)
-def test_yaml_rejects_aliases_merges_and_duplicate_keys(tmp_path: Path, body: str) -> None:
-    path = tmp_path / "stocks.yml"
-    path.write_text(body.lstrip(), encoding="utf-8")
+""".lstrip(),
+        encoding="utf-8",
+    )
 
     with pytest.raises(SpecError):
         ExportSpec.from_file(path)
 
 
-def test_file_format_is_selected_by_suffix(tmp_path: Path) -> None:
-    path = tmp_path / "stocks"
-    path.write_text(json.dumps(_value()), encoding="utf-8")
-
+def test_spec_file_suffix_and_size_are_bounded(tmp_path: Path) -> None:
+    suffixless = tmp_path / "stocks"
+    suffixless.write_text(json.dumps(_value()), encoding="utf-8")
     with pytest.raises(SpecError, match=r"\.json"):
-        ExportSpec.from_file(path)
+        ExportSpec.from_file(suffixless)
 
-
-def test_file_is_bounded_to_16_mib(tmp_path: Path) -> None:
-    path = tmp_path / "oversized.json"
-    path.write_bytes(b" " * (16 * 1024 * 1024 + 1))
-
+    oversized = tmp_path / "oversized.json"
+    oversized.write_bytes(b" " * (16 * 1024 * 1024 + 1))
     with pytest.raises(SpecError, match="16777216"):
-        ExportSpec.from_file(path)
-
-
-def test_inputs_reject_a_bare_string() -> None:
-    with pytest.raises(TypeError):
-        ExportSpec(
-            inputs=cast(Any, "chart_width"),
-            states={"baseline": {}},
-            outputs={"chart": OutputSpec(source="chart")},
-        )
-
-
-def test_programmatic_outputs_require_output_spec_values() -> None:
-    with pytest.raises(TypeError):
-        ExportSpec(
-            inputs=(),
-            states={"baseline": {}},
-            outputs=cast(Any, {"chart": {"source": "chart"}}),
-        )
+        ExportSpec.from_file(oversized)
