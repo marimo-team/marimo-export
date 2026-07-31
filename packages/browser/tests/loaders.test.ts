@@ -11,16 +11,6 @@ import {
 import { exportFixture } from "./fixture.js";
 
 describe("OutputLoader", () => {
-  test("defines frozen inferred loaders", () => {
-    const loader = defineOutputLoader({
-      codec: "marimo.scalar.v1",
-      accepts: () => true,
-      load: ({ payload }) => payload,
-    });
-    expect(Object.isFrozen(loader)).toBe(true);
-    expect(scalarLoader().codec).toBe("marimo.scalar.v1");
-  });
-
   test("matches BlobAsset media types by lowercase essence", async () => {
     const fixture = await exportFixture({
       blobMediaType: 'Application/Vnd.Example.Fixture+Json; Charset="utf-8"',

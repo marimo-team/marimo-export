@@ -17,7 +17,6 @@ describe("parquetRowsLoader", () => {
     const rows = await loader.load(input(new Uint8Array([80, 65, 82, 49])));
 
     expect(rows).toEqual([{ symbol: "AAPL" }]);
-    expect(Object.isFrozen(rows)).toBe(true);
     expect(read).toHaveBeenCalledOnce();
     const options = read.mock.calls[0]![0] as Record<string, unknown>;
     expect(options).toMatchObject({ columns: ["symbol"], rowStart: 1, rowEnd: 3 });

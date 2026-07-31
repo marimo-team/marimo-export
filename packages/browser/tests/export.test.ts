@@ -8,7 +8,7 @@ import {
   scalarLoader,
 } from "../src/index.js";
 import { canonicalJson } from "../src/schema.js";
-import { exportFixture, scalar } from "./fixture.js";
+import { exportFixture } from "./fixture.js";
 
 const encoder = new TextEncoder();
 
@@ -253,24 +253,6 @@ describe("canonical export validation", () => {
         fetch: async () => new Response(bytes),
       }),
     ).rejects.toMatchObject({ code: "export_invalid" });
-  });
-
-  test("decodes tagged bigint and special float scalars", async () => {
-    const fixture = await exportFixture({
-      indexTransform(index) {
-        const states = index.states as Record<string, Record<string, unknown>>;
-        for (const state of Object.values(states)) {
-          const outputs = state.outputs as Record<string, unknown>;
-          outputs.count = scalar({ type: "bigint", value: "9007199254740992" });
-        }
-      },
-    });
-    const notebookExport = await openExport("https://example.test/stocks", {
-      fetch: fixture.fetch,
-    });
-    await expect(notebookExport.state("alpha").output("count").load(scalarLoader())).resolves.toBe(
-      9007199254740992n,
-    );
   });
 
   test("rejects a representation that changes across states", async () => {

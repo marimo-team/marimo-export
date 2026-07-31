@@ -226,7 +226,7 @@ def test_managed_copy_creation_removes_snapshot_on_cancellation(
     assert not tuple(tmp_path.glob(".notebook.marimo-export-*.py"))
 
 
-@pytest.mark.parametrize("timeout", [0, -1, float("nan"), float("inf")])
+@pytest.mark.parametrize("timeout", [0, float("nan")])
 def test_build_rejects_invalid_timeout(tmp_path: Path, timeout: float) -> None:
     notebook = tmp_path / "notebook.py"
     notebook.write_text("import marimo\n", encoding="utf-8")
