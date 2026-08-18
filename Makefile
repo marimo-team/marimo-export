@@ -1,6 +1,8 @@
-.DEFAULT_GOAL := check
+SHELL := /bin/bash
+.SHELLFLAGS := -eu -o pipefail -c
+.DEFAULT_GOAL := help
 
-.PHONY: bootstrap format lint typecheck test build check
+.PHONY: help bootstrap format lint typecheck test build docs-build docs-serve check
 
 FORMAT_PATHS := \
 	.github \
@@ -10,6 +12,7 @@ FORMAT_PATHS := \
 	examples \
 	packages \
 	scripts \
+	skills \
 	AGENTS.md \
 	CLAUDE.md \
 	README.md \
@@ -19,34 +22,50 @@ FORMAT_PATHS := \
 	tsconfig.base.json \
 	vite.config.ts
 LINT_PATHS := apps examples packages vite.config.ts
+PYTHON_PATHS := packages/python scripts skills
 
-format:
+help: ## List development targets.
+	@awk 'BEGIN {FS = ":.*## "} /^[a-zA-Z0-9_-]+:.*## / {printf "  %-12s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+
+format: ## Format Python, TypeScript, and documentation source.
 	pnpm exec vp fmt $(FORMAT_PATHS)
-	uv run ruff format packages/python scripts
+	uv run ruff format $(PYTHON_PATHS)
 
-bootstrap:
-	uv sync --all-packages --all-groups --all-extras
+bootstrap: ## Install the locked Python and TypeScript workspaces.
+	uv sync --all-packages --all-groups --all-extras --locked
 	pnpm install --frozen-lockfile
 
-lint:
+lint: ## Check Python and TypeScript source.
 	pnpm exec vp lint --deny-warnings $(LINT_PATHS)
-	uv run ruff check packages/python scripts
+	uv run ruff check $(PYTHON_PATHS)
 
-typecheck:
+typecheck: ## Type-check every Python and TypeScript package.
 	pnpm exec vp run -r typecheck
-	uv run ty check packages/python
+	uv run --group test ty check packages/python
 
-test:
+test: ## Run Python, browser core, loader, skill, and example tests.
 	pnpm exec vp run -r test
-	uv run --group test --all-extras pytest -q packages/python/tests
+	uv run --group test --all-extras pytest -q \
+		packages/python/tests \
+		skills/notebook-to-static-app/tests
 
-build:
+build: ## Build Python, npm, docs, and example packages.
 	pnpm exec vp run -r build
+	test -s apps/docs/.vitepress/dist/llms.txt
+	test -s apps/docs/.vitepress/dist/llms-full.txt
 	uv build --package marimo-export --clear --no-sources
 
-check:
+docs-build: ## Build the public documentation site.
+	pnpm --filter @marimo-team/marimo-export-docs build
+	test -s apps/docs/.vitepress/dist/llms.txt
+	test -s apps/docs/.vitepress/dist/llms-full.txt
+
+docs-serve: ## Serve public documentation at http://127.0.0.1:4173/.
+	pnpm --filter @marimo-team/marimo-export-docs dev
+
+check: ## Run the complete local quality gate.
 	pnpm exec vp fmt --check $(FORMAT_PATHS)
-	uv run ruff format --check packages/python scripts
+	uv run ruff format --check $(PYTHON_PATHS)
 	@$(MAKE) --no-print-directory lint
 	@$(MAKE) --no-print-directory typecheck
 	@$(MAKE) --no-print-directory test

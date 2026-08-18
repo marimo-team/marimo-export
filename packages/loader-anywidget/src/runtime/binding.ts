@@ -1,6 +1,4 @@
-import type { AnyWidget, Experimental } from "@anywidget/types";
-
-import type { Host } from "@anywidget/types";
+import type { AnyWidget, Experimental, Host } from "@anywidget/types";
 import { abortReason, combineAbortSignals, raceAbort } from "./abort.js";
 import { modelProxy } from "./model-proxy.js";
 import type { ModelState, StaticModel } from "./model.js";
