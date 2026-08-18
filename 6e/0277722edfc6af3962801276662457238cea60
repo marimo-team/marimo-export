@@ -1,0 +1,68 @@
+skills/notebook-to-static-app/SKILL.md
+  s_50d55e3efa271d::t_5ce252a8b4cb05 93,96-106
+  s_50d55e3efa271d::t_e33f06ad2aff29 16-17,31,88,135,137-140,176
+  s_50d55e3efa271d::t_66787487ad694c 142-143
+  s_860b9ed3243746::t_9c800b064e28bf 114
+  s_50d55e3efa271d::t_8ddbab6de2237c 90-92,94-95
+  s_50d55e3efa271d::t_1f0b83fbdb4afe 63,126-127
+skills/notebook-to-static-app/tests/test_scaffold_app.py
+  s_50d55e3efa271d::t_37d5bbe966dd3a 95
+  s_50d55e3efa271d::t_002760444b9284 3,14-26,30-33
+  s_50d55e3efa271d::t_4df6ddeea92eaf 27-29,41,89
+  s_50d55e3efa271d::t_8003f4d1a855af 1-2,5-9,12-13,34-40,42-56,63-76,78-86,88,90-94,96-106
+  s_50d55e3efa271d::t_5a0578a817505a 10-11
+  s_50d55e3efa271d::t_718fe37a463dad 87
+  s_50d55e3efa271d::t_139498b7a5de36 4
+  s_50d55e3efa271d::t_db6e5d5268ba7c 57-62,77
+skills/notebook-to-static-app/references/contracts.md
+  s_860b9ed3243746::t_dbdfa584f8f2d8 15,49
+  s_50d55e3efa271d::t_c7c520e0c0a5f3 123-126,148
+  s_50d55e3efa271d::t_723038838dc4ce 108-109,117-119,133-141,143-145,149,151,153,159,162,164-165
+  s_50d55e3efa271d::t_d3d36a8ba189bd 120,146,150,169-172
+  s_50d55e3efa271d::t_a7739d5a56a11f 121-122,127-128,152,163
+  s_50d55e3efa271d::t_fe107ae4503eaf 103-107,111,129-131,142,147,154-158,160-161
+skills/notebook-to-static-app/assets/app/vite.config.ts
+  s_50d55e3efa271d::t_1a317de29f2c9a 4
+skills/notebook-to-static-app/assets/app/index.html
+  s_50d55e3efa271d::t_1a317de29f2c9a 17
+skills/notebook-to-static-app/references/workflow.md
+  s_50d55e3efa271d::t_db6e5d5268ba7c 23
+  s_50d55e3efa271d::t_2ba3a807299e6b 182
+  s_50d55e3efa271d::t_66787487ad694c 16,69-70
+  s_50d55e3efa271d::t_c845d0bf67792d 51-53
+  s_50d55e3efa271d::t_5ce252a8b4cb05 113-119,128
+  s_50d55e3efa271d::t_e33f06ad2aff29 1-15,17-22,24-50,54-68,71-97,99-112,120-127,129-165,169-173
+  s_860b9ed3243746::t_82d718229576bc 98
+  s_50d55e3efa271d::t_8ddbab6de2237c 166-168,174-181,183-187
+skills/notebook-to-static-app/scripts/scaffold_app.py
+  s_50d55e3efa271d::t_b7084be862b3be 201
+  s_50d55e3efa271d::t_155fe40dc96918 157
+  s_50d55e3efa271d::t_016b54a98ce099 15-17,150-151,153-156,158,162-187
+  s_50d55e3efa271d::t_1cf900d22a506a 7,11,29,33,35,44-48,52,54,57-113,225-246,257-260,277,291,346-362
+  s_50d55e3efa271d::t_718fe37a463dad 19-20,22-23,309
+  s_50d55e3efa271d::t_4df6ddeea92eaf 145-149,152,159-161,188-200,202-205
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "6e0277722edfc6af3962801276662457238cea60",
+  "prompts": {},
+  "sessions": {
+    "s_50d55e3efa271d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019fa7f0-6202-7f10-b0c4-9fdfe7e6df62",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    },
+    "s_860b9ed3243746": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a01009-2e62-7942-9ff4-f99f89f623c2",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
