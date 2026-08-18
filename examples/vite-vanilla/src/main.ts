@@ -24,6 +24,11 @@ interface PriceRow {
   readonly Symbol: string;
 }
 
+interface MountedSet {
+  readonly controller: AbortController;
+  readonly views: readonly MountedView[];
+}
+
 const views: Readonly<Record<string, ViewCopy>> = {
   baseline: {
     button: "Leaders",
@@ -81,12 +86,12 @@ const latestDate = required<HTMLElement>("#latest-date");
 const latestSummary = required<HTMLElement>("#latest-summary");
 const latestRows = required<HTMLElement>("#latest-rows");
 const changePeriod = required<HTMLElement>("#change-period");
-const chartHost = required<HTMLElement>("#performance-chart");
-const explorerHost = required<HTMLElement>("#market-explorer");
-const snapshotHost = required<HTMLElement>("#performance-snapshot");
+let chartHost = required<HTMLElement>("#performance-chart");
+let explorerHost = required<HTMLElement>("#market-explorer");
+let snapshotHost = required<HTMLElement>("#performance-snapshot");
 
 let notebookExport: NotebookExport | undefined;
-let mounted: MountedView[] = [];
+let mounted: MountedSet | undefined;
 let active: AbortController | undefined;
 let revision = 0;
 let transition = Promise.resolve();
@@ -158,36 +163,94 @@ async function renderView(
     if (nextRevision !== revision) return;
 
     const rows = parseRows(rowsValue);
-    await disposeMounted(mounted.splice(0));
-    signal.throwIfAborted();
-    if (nextRevision !== revision) return;
-    chartHost.replaceChildren();
-    explorerHost.replaceChildren();
-    snapshotHost.replaceChildren();
-
-    const nextMounted: MountedView[] = [];
+    assertMarketRows(rows, summary);
+    const nextChartHost = stagingHost(chartHost);
+    const nextExplorerHost = stagingHost(explorerHost);
+    const nextSnapshotHost = stagingHost(snapshotHost);
+    const stagingArea = document.createElement("div");
+    stagingArea.setAttribute("aria-hidden", "true");
+    stagingArea.style.position = "fixed";
+    stagingArea.style.inset = "0 auto auto -100000px";
+    stagingArea.style.pointerEvents = "none";
+    stagingArea.style.visibility = "hidden";
+    nextChartHost.style.width = `${chartHost.getBoundingClientRect().width}px`;
+    nextExplorerHost.style.width = `${explorerHost.getBoundingClientRect().width}px`;
+    nextSnapshotHost.style.width = `${snapshotHost.getBoundingClientRect().width}px`;
+    stagingArea.append(nextChartHost, nextExplorerHost, nextSnapshotHost);
+    document.body.append(stagingArea);
+    const mountController = new AbortController();
+    const abortStagedMounts = () => mountController.abort(signal.reason);
+    signal.addEventListener("abort", abortStagedMounts, { once: true });
+    const nextViews: MountedView[] = [];
+    let committed = false;
     try {
-      nextMounted.push(await chart.mount(chartHost, { signal }));
-      nextMounted.push(await widget.mount(explorerHost, { signal }));
-      nextMounted.push(await image.mount(snapshotHost, { signal }));
-      await imageReady(required<HTMLImageElement>("#performance-snapshot img"), signal);
+      nextViews.push(await chart.mount(nextChartHost, { signal: mountController.signal }));
+      nextViews.push(await widget.mount(nextExplorerHost, { signal: mountController.signal }));
+      nextViews.push(await image.mount(nextSnapshotHost, { signal: mountController.signal }));
+      const snapshot = nextSnapshotHost.querySelector<HTMLImageElement>("img");
+      if (snapshot === null) throw new Error("The chart snapshot is missing.");
+      await imageReady(snapshot, signal);
+      signal.throwIfAborted();
+      if (nextRevision !== revision) {
+        signal.removeEventListener("abort", abortStagedMounts);
+        mountController.abort();
+        await disposeViews(nextViews);
+        stagingArea.remove();
+        return;
+      }
+
+      signal.removeEventListener("abort", abortStagedMounts);
+      const previous = mounted;
+      const chartId = chartHost.id;
+      const explorerId = explorerHost.id;
+      const snapshotId = snapshotHost.id;
+      nextChartHost.style.removeProperty("width");
+      nextExplorerHost.style.removeProperty("width");
+      nextSnapshotHost.style.removeProperty("width");
+      chartHost.replaceWith(nextChartHost);
+      nextChartHost.id = chartId;
+      explorerHost.replaceWith(nextExplorerHost);
+      nextExplorerHost.id = explorerId;
+      snapshotHost.replaceWith(nextSnapshotHost);
+      nextSnapshotHost.id = snapshotId;
+      chartHost = nextChartHost;
+      explorerHost = nextExplorerHost;
+      snapshotHost = nextSnapshotHost;
+      stagingArea.remove();
+      mounted = { controller: mountController, views: nextViews };
+      committed = true;
+      renderMarketView(rows, summary, copy);
+      setBusy(state.name, false);
+      errorPanel.hidden = true;
+      await disposeMounted(previous);
     } catch (error) {
-      await disposeMounted(nextMounted);
+      signal.removeEventListener("abort", abortStagedMounts);
+      if (!committed) {
+        mountController.abort();
+        await disposeViews(nextViews);
+        stagingArea.remove();
+      }
       throw error;
     }
-    if (nextRevision !== revision) {
-      await disposeMounted(nextMounted);
-      return;
-    }
-
-    mounted = nextMounted;
-    renderMarketView(rows, summary, copy);
-    setBusy(state.name, false);
-    errorPanel.hidden = true;
   } catch (error) {
     if (!signal.aborted && nextRevision === revision) showError(error);
   } finally {
     if (active === controller) active = undefined;
+  }
+}
+
+function stagingHost(host: HTMLElement): HTMLElement {
+  const staged = host.cloneNode(false) as HTMLElement;
+  staged.removeAttribute("id");
+  return staged;
+}
+
+function assertMarketRows(rows: readonly PriceRow[], summary: MarketSummary): void {
+  const series = groupBySymbol(rows);
+  for (const item of summary.periodReturns) {
+    if (series.get(item.symbol)?.at(-1) === undefined) {
+      throw new Error(`${item.symbol} has no exported prices.`);
+    }
   }
 }
 
@@ -358,7 +421,13 @@ function requiredNumber(value: unknown, name: string): number {
   return result;
 }
 
-async function disposeMounted(values: readonly MountedView[]): Promise<void> {
+async function disposeMounted(value: MountedSet | undefined): Promise<void> {
+  if (value === undefined) return;
+  value.controller.abort();
+  await disposeViews(value.views);
+}
+
+async function disposeViews(values: readonly MountedView[]): Promise<void> {
   const results = await Promise.allSettled(values.map((value) => Promise.resolve(value.dispose())));
   const rejected = results.find(
     (result): result is PromiseRejectedResult => result.status === "rejected",
@@ -382,5 +451,7 @@ function required<T extends Element>(selector: string): T {
 window.addEventListener("pagehide", () => {
   revision += 1;
   active?.abort();
-  void disposeMounted(mounted.splice(0));
+  const current = mounted;
+  mounted = undefined;
+  void disposeMounted(current);
 });
