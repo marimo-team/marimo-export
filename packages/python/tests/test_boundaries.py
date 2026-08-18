@@ -2,11 +2,17 @@ from __future__ import annotations
 
 import ast
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
 
 import marimo_export
+
+_MARIMO_VERSION = re.compile(
+    r"(?i)(?<![\w-])marimo(?:\[[^\]\r\n]+\])?"
+    r"(?:\s*[<>=!~]{1,2}\s*v?|\s+v?)\d+\.\d+(?:\.\d+)?"
+)
 
 
 def test_root_package_exposes_the_public_api() -> None:
@@ -81,6 +87,18 @@ def test_private_adapter_imports_use_composition_roots() -> None:
             for module in _imported_modules(node)
         ):
             violations.append(relative)
+    assert violations == []
+
+
+def test_user_documentation_defers_marimo_versions_to_package_metadata() -> None:
+    root = Path(__file__).parents[3]
+    violations = [
+        path.relative_to(root).as_posix()
+        for directory in (root / "docs", root / "development_docs")
+        for path in directory.rglob("*.md")
+        if _MARIMO_VERSION.search(path.read_text(encoding="utf-8"))
+    ]
+
     assert violations == []
 
 

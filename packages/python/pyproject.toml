@@ -13,7 +13,7 @@ authors = [{ name = "marimo team" }]
 requires-python = ">=3.11"
 dependencies = [
   "cryptography==50.0.0",
-  "marimo>=0.23.15,<0.24",
+  "marimo>=0.23.15,<0.25",
   "msgspec>=0.20",
   "numpy>=1.23.5",
   "pydantic>=2,<3",

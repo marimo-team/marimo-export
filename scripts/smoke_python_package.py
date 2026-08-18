@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from importlib import metadata
 
-_MARIMO_REQUIREMENT = "marimo>=0.23.15,<0.24"
+_MARIMO_REQUIREMENT = "marimo>=0.23.15,<0.25"
 
 
 def main() -> None:
