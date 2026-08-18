@@ -1,0 +1,25 @@
+packages/python/pyproject.toml
+  s_860b9ed3243746::t_a696619a5ef1b4 16
+scripts/smoke_python_package.py
+  s_860b9ed3243746::t_a696619a5ef1b4 7
+packages/python/tests/test_boundaries.py
+  s_860b9ed3243746::t_7d0746c8fa60d8 5,12-16,93-101
+uv.lock
+  ai_agent 692,716,718,760
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "bccc4e3365d62d3fb9525461139e06f46f98ffee",
+  "prompts": {},
+  "sessions": {
+    "s_860b9ed3243746": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a01009-2e62-7942-9ff4-f99f89f623c2",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
