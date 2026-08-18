@@ -1,4 +1,4 @@
 {
   "extends": "../../tsconfig.base.json",
-  "include": [".vitepress/**/*.mts"]
+  "include": [".vitepress/**/*.mts", ".vitepress/**/*.ts"]
 }

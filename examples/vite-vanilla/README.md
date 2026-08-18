@@ -1,7 +1,8 @@
 # Market dashboard with vanilla Vite
 
-This example exports five views from a live Yahoo Finance notebook into a
-static dashboard.
+This example precomputes five result sets from a Yahoo Finance notebook, verifies
+the export, then presents it in a static browser dashboard. Python and agents
+can inspect the same export.
 
 ## Run
 

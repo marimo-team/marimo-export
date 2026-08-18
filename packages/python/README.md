@@ -1,7 +1,9 @@
 # marimo-export
 
-Precompute selected marimo notebook states for an interactive app that needs
-no Python runtime after deployment.
+Precompute selected notebook results from Python and read the resulting export.
+Build from a file, capture an active session, or open an existing export.
+Applications, agents, Python automation, and custom clients can consume the
+same verified export.
 
 ```bash
 uv add marimo-export
@@ -40,6 +42,7 @@ uv add "marimo-export[charts,parquet,anywidget]"
 ```
 
 See the
-[Python API](https://github.com/marimo-team/marimo-export/blob/main/docs/python-api.md),
-[ExportSpec guide](https://github.com/marimo-team/marimo-export/blob/main/docs/export-spec.md),
-and [CLI reference](https://github.com/marimo-team/marimo-export/blob/main/docs/cli.md).
+[Python API](https://github.com/marimo-team/marimo-export/blob/main/docs/reference/python-api.md),
+[ExportSpec guide](https://github.com/marimo-team/marimo-export/blob/main/docs/guide/choose-states.md),
+[agent guide](https://github.com/marimo-team/marimo-export/blob/main/docs/guide/agents-and-automation.md),
+and [CLI reference](https://github.com/marimo-team/marimo-export/blob/main/docs/reference/cli.md).

@@ -1,5 +1,5 @@
 # Examples
 
-- [Market dashboard with vanilla Vite](vite-vanilla) prepares five views from
-  a live Yahoo Finance notebook and serves the result as a static TypeScript
-  app.
+- [Market dashboard with vanilla Vite](vite-vanilla) precomputes and verifies five
+  prepared result sets from a Yahoo Finance notebook, then presents them in a
+  static TypeScript dashboard.

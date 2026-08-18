@@ -5,14 +5,15 @@
   "type": "module",
   "scripts": {
     "build": "vitepress build",
-    "dev": "vitepress dev",
-    "preview": "vitepress preview",
+    "dev": "vitepress dev --host 127.0.0.1 --port 4173 --strictPort",
+    "preview": "vitepress preview --host 127.0.0.1 --port 4173 --strictPort",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {
     "@types/node": "catalog:",
     "typescript": "catalog:",
     "vitepress": "catalog:",
+    "vitepress-plugin-llms": "1.13.2",
     "vue": "catalog:"
   }
 }

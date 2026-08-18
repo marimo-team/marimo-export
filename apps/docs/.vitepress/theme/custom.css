@@ -1,0 +1,97 @@
+:root {
+  --vp-c-brand-1: #1d7363;
+  --vp-c-brand-2: #155c4f;
+  --vp-c-brand-3: #1d7363;
+  --vp-c-brand-soft: rgba(29, 115, 99, 0.14);
+}
+
+.dark {
+  --vp-c-brand-1: #cad996;
+  --vp-c-brand-2: #d8e4ae;
+  --vp-c-brand-3: #cad996;
+  --vp-c-brand-soft: rgba(202, 217, 150, 0.16);
+  --vp-button-brand-text: #171d1b;
+  --vp-button-brand-bg: #cad996;
+  --vp-button-brand-hover-text: #171d1b;
+  --vp-button-brand-hover-bg: #d8e4ae;
+  --vp-button-brand-active-text: #171d1b;
+  --vp-button-brand-active-bg: #b9ca80;
+}
+
+.VPHome .VPHero .text {
+  text-wrap: balance;
+}
+
+.VPHome .VPHero .tagline {
+  text-wrap: pretty;
+}
+
+.VPNavBarTitle .logo {
+  width: 128px;
+  height: auto;
+  margin-right: 0;
+}
+
+.VPHome .VPHero .image-container {
+  width: 340px;
+  height: 300px;
+}
+
+.VPHome .VPHero .image-bg {
+  display: none;
+}
+
+.VPHome .VPHero .image-src {
+  max-width: 300px;
+  max-height: 270px;
+}
+
+.VPHome .VPFeature {
+  border-color: var(--vp-c-divider);
+}
+
+.VPHome .VPFeature .icon {
+  background-color: var(--vp-c-brand-soft);
+}
+
+.VPHome .VPFeature .details {
+  font-weight: 400;
+}
+
+.VPHome .VPFeature:focus-visible {
+  outline: 2px solid var(--vp-c-brand-1);
+  outline-offset: 3px;
+}
+
+@media (max-width: 959px) {
+  .VPHome .VPHero .image {
+    margin-top: -66px;
+    margin-bottom: 24px;
+  }
+
+  .VPHome .VPHero .image-container {
+    width: 240px;
+    height: 210px;
+  }
+
+  .VPHome .VPHero .image-src {
+    max-width: 220px;
+    max-height: 200px;
+  }
+}
+
+@media (max-width: 639px) {
+  .VPHome .VPHero .image {
+    margin: 0 0 28px;
+  }
+
+  .VPHome .VPHero .image-container {
+    margin-top: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .VPHome .VPFeature {
+    transition: none;
+  }
+}

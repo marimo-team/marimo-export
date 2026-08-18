@@ -1,7 +1,9 @@
 # @marimo-team/marimo-export
 
-Load prepared marimo notebook results into an app with no Python runtime after
-deployment.
+Load precomputed marimo notebook results in a browser without a live Python
+kernel.
+Select an exported state, then load its scalars, arrays, tables, charts, images,
+widgets, or custom representations.
 
 ```bash
 pnpm add @marimo-team/marimo-export
@@ -29,6 +31,7 @@ await mounted.dispose();
 ```
 
 See the
-[browser API](https://github.com/marimo-team/marimo-export/blob/main/docs/browser-api.md),
-[output formats](https://github.com/marimo-team/marimo-export/blob/main/docs/representations.md),
-and [deployment guide](https://github.com/marimo-team/marimo-export/blob/main/docs/trust.md).
+[browser API](https://github.com/marimo-team/marimo-export/blob/main/docs/reference/browser-api.md),
+[output representations](https://github.com/marimo-team/marimo-export/blob/main/docs/reference/representations.md),
+[browser application guide](https://github.com/marimo-team/marimo-export/blob/main/docs/guide/browser-applications.md),
+and [deployment guide](https://github.com/marimo-team/marimo-export/blob/main/docs/guide/deploy.md).

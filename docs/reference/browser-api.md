@@ -1,11 +1,20 @@
-# Browser API
+---
+title: Browser API reference
+description: TypeScript contracts for opening, resolving, loading, verifying, and mounting notebook exports.
+---
 
-The browser package opens an export, selects a prepared state, and loads its
-outputs.
+# Browser API reference
+
+Install browser core:
 
 ```bash
 pnpm add @marimo-team/marimo-export
 ```
+
+## `openExport(base)`
+
+Fetches and validates `index.json` below `base`, then returns an immutable
+`NotebookExport`. Output assets remain lazy.
 
 ```ts
 import { openExport, scalarLoader } from "@marimo-team/marimo-export";
@@ -16,8 +25,6 @@ const title = await state.output("title").load(scalarLoader());
 
 document.querySelector("#title")!.textContent = String(title);
 ```
-
-`openExport()` fetches and validates `index.json`. Output files load on demand.
 
 ## Select a state
 
@@ -34,13 +41,16 @@ const cloud = leaders.resolve({
 });
 ```
 
-`state(name)` selects by ExportSpec name. `resolve(inputs)` selects the state
-with that complete input set. `state.resolve(patch)` applies a smaller change
-to an existing state.
+- `state(name)` selects one authored state name.
+- `resolve(inputs)` selects one complete exported input vector.
+- `state.resolve(patch)` completes a sparse transition from the current state.
 
 Resolution selects results already present in the export.
 
-## Load outputs
+## `ExportOutput.load(loader, options?)`
+
+Loads and verifies one output, then asks the explicit loader to decode its
+representation.
 
 ```ts
 import { imageLoader } from "@marimo-team/marimo-export";
@@ -52,9 +62,8 @@ const rows = await state.output("prices").load(parquetRowsLoader());
 const image = await state.output("snapshot").load(imageLoader());
 ```
 
-[Choose a loader and install its runtime](representations.md).
-
-Pass a signal to cancel stale work and `maxBytes` to cap one output:
+Pass an abort signal and per-output limit when loading can become stale or
+consume untrusted bytes:
 
 ```ts
 const controller = new AbortController();
@@ -64,7 +73,12 @@ const rows = await state.output("prices").load(parquetRowsLoader(), {
 });
 ```
 
+[Output representations](representations.md) lists each loader and its peer
+dependency.
+
 ## Mount interactive output
+
+Mountable values return an idempotent disposable view:
 
 ```ts
 import { vegaLiteLoader } from "@marimo-team/marimo-export/loader/vegalite";
@@ -77,13 +91,18 @@ const mounted = await chart.mount(document.querySelector("#chart")!, {
 await mounted.dispose();
 ```
 
-Dispose a mounted chart or widget before replacing it. Use the same abort
-signal for `load()` and `mount()` when state changes may overlap.
+Dispose a mounted chart or widget before replacing it. Use one abort signal for
+related loads and a separate controller for staged mounts. Commit the complete
+replacement before disposing the previous mount owner.
 
-AnyWidget starts from its saved model state. Its browser interactions do not
-call Python.
+Mounted code can create page-global effects while staging. [Build a browser
+application](../guide/browser-applications.md) describes the transition order
+and ownership boundaries.
 
-## Verify an export
+AnyWidget starts from its saved model state. Its browser interactions call no
+Python kernel.
+
+## `NotebookExport.verify(options?)`
 
 ```ts
 const result = await notebookExport.verify({
@@ -92,7 +111,7 @@ const result = await notebookExport.verify({
 });
 ```
 
-`verify()` checks every asset and returns state, output, asset, and byte counts.
+Verifies every asset and returns state, output, asset, and byte counts.
 
 ## Errors and custom loaders
 
@@ -102,3 +121,6 @@ codes include `state_not_found`, `state_unavailable`, `output_not_found`,
 
 Use [`defineBlobAssetLoader`](representations.md#custom-output) for a custom
 media type.
+
+[Consume an export](../guide/consume-an-export.md) compares browser, Python,
+agent, and custom-client access.
