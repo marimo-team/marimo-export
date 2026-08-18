@@ -1,276 +1,142 @@
 # AGENTS.md
 
 Guidance for coding agents working in this uv, pnpm, and Vite+ workspace.
-Read this file before changing the repository.
+marimo-export runs selected marimo notebook states and writes one verified
+export for applications, agents, Python, and custom clients.
 
-## Product language
-
-marimo-export creates a **notebook export** from a marimo notebook. After the
-first definition, use **export** as the short noun.
-
-Use these verbs consistently:
-
-| Action                                  | Verb            |
-| --------------------------------------- | --------------- |
-| General producer action                 | create          |
-| Create an export from a notebook file   | build           |
-| Create an export from a running session | capture         |
-| Read an export in Python or TypeScript  | open            |
-| Select a state by name or input values  | resolve         |
-| Decode one output for browser use       | load            |
-| Attach an interactive value to the DOM  | mount           |
-| Put static files on a host              | deploy or serve |
-| Release packages to a registry          | publish         |
-
-The four product layers are:
-
-1. A **notebook** owns Python definitions, reactive execution, and cacheable
-   results.
-2. An **ExportSpec** selects input definitions, named states, and outputs.
-3. A **notebook export** stores one canonical `index.json` and any referenced
-   assets.
-4. A **browser application** opens the export, resolves a state, loads outputs,
-   and mounts interactive values.
-
-Static describes the export's delivery format. It does not limit browser
-interaction. The browser loads representations from completed Python
-executions. It does not hydrate or resume Python.
-
-A **state** is one complete assignment for the input names in an ExportSpec.
-Authors may write sparse state rows because omitted values come from one
-captured notebook baseline.
-
-An **output** is one named notebook definition and its representation for every
-state. An **asset** is a content-addressed file referenced by an output
-descriptor.
-
-An **exporter** is a Python-side representation function. It receives a
-notebook value and returns a value supported by marimo's native cache codecs.
-An **OutputLoader** is the browser-side counterpart. It accepts a codec and
-media type, then decodes or mounts the exported representation.
-
-Do not use artifact or lifecycle names as verbs. In particular, an export is a
-directory, `NotebookExport` is an opened reader, and `ExportResult` describes a
-completed `build` or `capture` run.
-
-## Build, test, and lint commands
-
-| Purpose        | Command          | Expected on success                                            |
-| -------------- | ---------------- | -------------------------------------------------------------- |
-| Install        | `make bootstrap` | locked Python and TypeScript workspaces install                |
-| Format         | `make format`    | tracked source is formatted                                    |
-| Check          | `make check`     | format, lint, types, tests, builds, and package smoke pass     |
-| Test           | `make test`      | Python, browser core, and loader tests pass                    |
-| Build packages | `make build`     | Python distribution, npm packages, docs, and example app build |
+## Commands
 
 Use Python 3.11 or newer, Node 22.18, pnpm 11.15.1, uv, and Vite+.
-Run focused package commands during development, then run `make format` and
-`make check` before handoff.
 
-## Architecture
+| Task                | Command           | Expected result                                            |
+| ------------------- | ----------------- | ---------------------------------------------------------- |
+| Install             | `make bootstrap`  | Locked Python and TypeScript workspaces sync               |
+| Format              | `make format`     | Authored source is formatted                               |
+| Lint                | `make lint`       | Python and TypeScript boundaries pass                      |
+| Type-check          | `make typecheck`  | Python and TypeScript types pass                           |
+| Test                | `make test`       | Python, browser, loader, skill, and app tests pass         |
+| Build               | `make build`      | Python, npm, docs, and example packages build              |
+| Build docs          | `make docs-build` | VitePress site and LLM text bundles build                  |
+| Serve docs          | `make docs-serve` | Documentation runs at `127.0.0.1:4173`                     |
+| Complete local gate | `make check`      | Format, lint, types, tests, builds, and package smoke pass |
 
-- `packages/python` owns ExportSpec, build, capture, the CLI, export writing
-  and reading, exporter descriptors, and exporter runtimes.
-- `_execution` owns baseline inspection records, normalized states, output-cell
-  code, and the export plan.
-- `_marimo/compat` owns every private marimo import.
-- `_remote` owns HTTP, SSE, authentication, kernel invocation, and managed
-  server lifecycle.
-- `packages/browser` owns canonical index parsing, immutable export readers,
-  asset integrity, native payload decoding, the `OutputLoader` contract, and
-  every public npm entry point.
-- `packages/loader-*` are private workspace packages. Each owns one
-  representation dependency family, decoder, result type, cancellation
-  behavior, and mount disposal.
-- `examples/vite-vanilla` is a uv and pnpm workspace member with a live market
-  notebook, ExportSpec, and vanilla TypeScript dashboard.
-- `apps/docs` builds the public documentation.
+Run focused package commands while developing, then finish with `make check`.
 
-See [`development_docs/architecture.md`](development_docs/architecture.md).
+## Architecture in seven rules
+
+1. marimo owns notebook parsing, reactive execution, dependency pruning, cell
+   hashing, cache persistence, UI updates, and native serialization.
+2. marimo-export owns ExportSpec normalization, output representation,
+   transfer, export integrity, and typed Python and browser consumption.
+3. Stable Python policy depends on records and ports under `_execution` and
+   `_marimo`. Private `marimo._*` imports stay under `_marimo/compat`.
+4. `build` owns a temporary notebook copy, loopback server, session, process
+   groups, and cleanup. `capture` borrows one active edit session.
+5. `packages/browser` owns export parsing, integrity, immutable readers, and
+   loader contracts. Each `packages/loader-*` owns one representation runtime.
+6. Python, browser, agent, and custom clients consume one durable export
+   contract. Browser applications load a complete state before commit, and
+   every interactive mount returns an idempotent disposable handle.
+7. `docs/` owns user workflows and reference. `development_docs/` owns code
+   ownership, lifecycle, compatibility seams, and contributor validation.
+
+Read [Architecture](development_docs/architecture.md) before changing an
+ownership or lifecycle boundary.
 
 ## Dependency rule
 
-Keep marimo graph and cache behavior inside marimo. marimo-export completes
-state inputs, adds transient output leaves to in-memory state runs, invokes
-normal marimo execution, reads native cache receipts, and writes verified
-bytes.
-
-Stable domain modules depend on stable types. Private marimo imports stay below
-`packages/python/src/marimo_export/_marimo/compat`. Browser core imports no
-table, array, chart, or widget runtime. Each specialized loader declares the
-runtime it imports. The browser package exposes loader facades through
-`@marimo-team/marimo-export/loader/*` and declares specialized runtimes as
-optional peers.
-
-Add dependencies to the smallest workspace member that uses them. Every
-directly imported Python package belongs in `packages/python/pyproject.toml`.
-Shared TypeScript versions belong in the pnpm catalog. Workspace edges use
-`workspace:*`.
-
-## ExportSpec contract
-
-An ExportSpec contains:
+Dependencies point from policy toward stable records, then composition roots,
+then private adapters:
 
 ```text
-schema
-inputs: notebook definition names
-states: named sparse overrides
-outputs: export name -> source definition + optional exporter descriptor
+Python API and CLI -> product records -> marimo ports -> compat adapters
+
+Browser app -> browser core -> one loader facade -> one loader runtime
 ```
 
-The producer captures one baseline and normalizes every state into a complete
-input vector. Every output runs through one transient marimo leaf for every
-state. Omitting an exporter preserves the native cache representation.
-Selecting an exporter invokes one built-in ID or an explicit `module:symbol`
-reference.
+- `_marimo/composition.py`, `_marimo/anywidget.py`, `_marimo/blob.py`, and
+  `_marimo/entrypoints.py` are composition roots.
+- `_remote` owns HTTP, authentication, scratchpad transport, server-sent
+  events, and managed process ownership.
+- Browser core imports no specialized chart, table, array, or widget runtime.
+- Loader packages import browser contracts and their own runtime dependency.
+  They do not import one another.
+- Add dependencies to the smallest workspace member that imports them.
 
-The export contains one canonical `index.json` and content-addressed assets.
-Export v1 accepts these native codecs:
+Ruff and repository boundary tests enforce private marimo containment. Vite+
+enforces browser and loader direction.
 
-```text
-marimo.scalar.v1
-numpy.npy.v1
-apache.arrow.file.v1
-marimo.blob-asset.msgpack.v1
-```
+## Product language
 
-The codec identifies the stable envelope. The media type identifies the
-representation inside a `BlobAsset`. Browser applications select a
-codec-aware `OutputLoader` explicitly.
+marimo-export creates a **notebook export**. Use **export** after defining the
+noun once.
+
+| Action                                 | Verb            |
+| -------------------------------------- | --------------- |
+| Create from a notebook file            | build           |
+| Create from a running session          | capture         |
+| Read in Python or TypeScript           | open            |
+| Select a state by name or inputs       | resolve         |
+| Decode an output for browser use       | load            |
+| Attach an interactive value to the DOM | mount           |
+| Put static files on a host             | deploy or serve |
+| Release a package to a registry        | publish         |
+
+A state is one complete assignment for the ExportSpec inputs. Authors may
+write sparse rows because one captured baseline supplies omitted values. An
+output is one published name and representation for every state. An asset is a
+content-addressed file referenced by an output descriptor. A consumer is a
+Python reader, browser reader, agent, or another implementation of the export
+format.
+
+## Change routing
+
+| Change                            | Primary owner                                              | Required companions                                         |
+| --------------------------------- | ---------------------------------------------------------- | ----------------------------------------------------------- |
+| ExportSpec or state normalization | `spec.py`, `_execution/plan.py`                            | YAML, JSON, programmatic, and live-state tests              |
+| Export format or local reader     | `export.py`, `reader.py`, `_writer.py`                     | Browser schema and canonical fixtures                       |
+| marimo integration or cache       | `_marimo/capabilities.py`, composition, one compat adapter | Probe, adapter, build, and capture tests                    |
+| Managed process lifecycle         | `_build.py`, `_remote/managed.py`, managed entry points    | Startup, shutdown, source, and descendant tests             |
+| Browser reader or loader contract | `packages/browser`                                         | TypeScript and cross-language tests                         |
+| One output representation         | `packages/loader-*` and exporter runtime                   | Peer dependency, malformed input, abort, and disposal tests |
+| CLI or public Python API          | `cli.py`, package root, public records                     | Human output, JSON, exit, and wheel smoke                   |
+| Example or browser transition     | `examples/vite-vanilla`                                    | Typecheck, build, desktop, and narrow browser proof         |
+| Public documentation              | `docs/`, VitePress config                                  | Examples, links, search, LLM bundles, and rendered proof    |
 
 ## Core invariants
 
-- `build` owns an authenticated `127.0.0.1` server, one session, its process
-  group, and cleanup. It runs through the current Python interpreter.
-- `capture` borrows one active edit session and leaves the session and server
-  running.
-- The client and attached kernel import the same marimo-export version.
-- Capability and exporter preflight runs before state execution.
-- Sparse states use notebook definition names. Complete sibling packets
-  preserve definitions returned by the same cell.
-- Ordinary overrides and UI frontend values remain local to one state run.
-  Parent UI values stay unchanged.
-- The authored notebook remains ordinary marimo source. Transient state and
-  output leaves exist in an in-memory notebook copy.
-- Each state uses marimo child execution with native caching enabled. marimo
-  owns dependency pruning, cache identity, serializer choice, persistence, and
-  hit or miss status.
-- One failed state, output, transfer, verification, or required cleanup fails
-  the complete build or capture.
-- Capture checks parent document and UI identity. Build checks source bytes
-  before and after execution.
-- `index.json` is canonical UTF-8 JSON. State vectors are complete and
-  fingerprinted.
-- Asset paths derive from codec and SHA-256. Readers verify length, digest,
-  native framing, and descriptor agreement before decoding representation
-  data.
-- New exports stage completely before commit. Replacement keeps `index.json`
-  as the atomic export point.
-- Credentials, managed endpoints, session internals, and operation paths stay
-  out of export data and public diagnostics.
+- Every output runs through one transient marimo leaf for every state.
+- State vectors are complete and fingerprinted before execution.
+- Ordinary overrides and UI updates stay local to one child state run.
+- AnyWidget patches record the complete serializer-owned model state.
+- The authored notebook source remains byte-for-byte unchanged.
+- The client and attached kernel use the same marimo-export version and source
+  identity.
+- One failed state, output, transfer, verification, or cleanup fails the
+  complete producer operation.
+- `index.json` is canonical UTF-8 JSON and the single export entry point.
+- Readers verify the declared asset closure before decoding output data.
 - Opening and verification execute no notebook-authored browser module.
   Mounting an interactive value grants it page authority.
-- Every mount owns disposal. State transitions abort stale loads and dispose
-  replaced or late mounts.
 
-## Diagnostics
+## Validation
 
-`ExportResult` separates durable export facts from run-local diagnostics:
+- Test through public APIs, command results, files, protocol records, package
+  imports, or browser state. Avoid assertions on private helper trivia.
+- Run live build and capture evidence after changing marimo integration,
+  process ownership, state execution, cache behavior, or transfer.
+- Use browser inspection for layout, responsive behavior, rapid state changes,
+  charts, AnyWidgets, cancellation, and mount disposal.
+- Rebuild generated package and documentation output from its owning source.
+  Do not commit raw build directories.
 
-- `output_cache` counts cache attempts for every state and output.
-- `notebook_cache` counts cache attempts for notebook dependency cells during
-  state runs.
-- `timings` records managed server phases, capture, export writing, and total
-  duration.
-- `timings.state_runs` aggregates setup, dependency execution, UI updates,
-  output materialization, and cleanup.
+## Reference
 
-Diagnostics stay outside `index.json`.
-
-## Python conventions
-
-The package root exports exactly:
-
-```text
-BlobAsset
-Client
-ExportResult
-ExportSpec
-NotebookExport
-OutputSpec
-Session
-build
-capture
-open_export
-```
-
-Typed failures live in `marimo_export.errors`. Translate errors once at adapter
-boundaries and preserve a stable code plus bounded JSON details. Use Pydantic
-for the ExportSpec boundary and on-demand schema generation. Use structured
-data construction for JSON, YAML, and manifests.
-
-Built-in exporter factories return immutable `ExporterSpec` values. Custom
-exporters use explicit `module:symbol` references with portable keyword
-options. The resolved symbol is callable and returns a value supported by
-marimo's native cache codecs. Transient output-cell code owns conversion cache
-identity.
-
-## TypeScript conventions
-
-Use strict TypeScript and web platform APIs in browser code. Core exposes
-immutable `NotebookExport`, `ExportState`, and `ExportOutput` values.
-`ExportOutput.load()` accepts one explicit typed loader.
-
-A loader validates its representation, bounds allocation, checks the abort
-signal, and owns every runtime dependency it imports. A mount returns an
-idempotent disposable view.
-
-Keep loader implementations in their private `packages/loader-*` workspace.
-Expose each public subpath through a `packages/browser/src/loader` facade that
-uses the `#loaders/*` TypeScript path. Consumers import the public package
-subpath.
-
-The vanilla Vite app uses DOM APIs, TypeScript, HTML, CSS, and Vite+. Keep it
-framework-free and inspectable.
-
-## Tests
-
-Protect supported behavior through the nearest public or adapter boundary:
-
-- exact ExportSpec JSON, YAML, and programmatic construction
-- baseline normalization, sibling definitions, setup definitions, and UI
-  values
-- capability probes and private-marimo containment
-- state execution, native cache hits, output receipts, and failure cleanup
-- transfer integrity, staging, replacement, and secure local reads
-- Python and browser canonical wire parity
-- exact state lookup and unavailable vectors
-- loader matching, malformed bytes, cancellation, and disposal
-- packed Python and npm entry points
-
-Keep each test focused on one contract. Assert public outputs, files, protocol
-records, or runtime behavior. Use browser evidence for visual and interaction
-claims.
-
-## Documentation
-
-`docs` explains installation, ExportSpec, Python and browser APIs,
-representations, CLI behavior, and trust. `development_docs` explains internal
-architecture, development, and validation. Package READMEs document shipped
-entry points.
-
-Use the nouns and verbs defined in this file. Start with the smallest working
-example. Keep caveats beside the affected API. Comments explain lifecycle
-ordering, cache behavior, wire shapes, worker boundaries, compatibility seams,
-or cleanup requirements.
-
-## Workflow
-
-1. Inspect the owning package and related tests.
-2. Make the smallest coherent change at the current ownership boundary.
-3. Run focused formatting, lint, types, and tests.
-4. Build the affected package or app.
-5. Review the diff for stale contract nouns, private paths, generated noise,
-   and narration comments.
-6. Commit the coherent unit with a short contract-focused title when requested.
-7. Run `make check` before final handoff.
+- [Contributor guide](development_docs/README.md)
+- [Architecture](development_docs/architecture.md)
+- [Product model and export format](development_docs/architecture/product-and-export.md)
+- [marimo integration](development_docs/architecture/marimo-integration.md)
+- [Browser loaders and mounts](development_docs/architecture/browser-loaders-and-mounts.md)
+- [Agents and delivery](development_docs/architecture/agents-and-delivery.md)
+- [Development](development_docs/development.md)
+- [Validation](development_docs/validation.md)

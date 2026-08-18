@@ -3,7 +3,7 @@
 The workspace uses Python 3.11 or newer, Node 22.18, pnpm 11.15.1, uv, and
 Vite+.
 
-## Setup
+## Install the workspace
 
 ```bash
 corepack enable
@@ -15,9 +15,9 @@ pnpm --filter @marimo-export/internal-loader-anywidget exec \
 `uv.lock` and `pnpm-lock.yaml` are the dependency records. Add a dependency to
 the smallest workspace member that imports it.
 
-## Focused commands
+## Run focused checks
 
-Python:
+Python package:
 
 ```bash
 uv run pytest packages/python/tests
@@ -34,36 +34,27 @@ pnpm --filter @marimo-team/marimo-export typecheck
 pnpm --filter @marimo-team/marimo-export build
 ```
 
-One loader or example:
+One loader, example, or docs application:
 
 ```bash
 pnpm --filter @marimo-export/internal-loader-arrow test
 pnpm --filter @marimo-team/marimo-export-example-vite-vanilla build
+pnpm --filter @marimo-team/marimo-export-docs build
 ```
 
 Run `make format` before `make check`.
 
-## Python organization
+## Change Python producer behavior
 
-Public modules use stable marimo APIs and local domain types. Private marimo
-imports belong below `_marimo/compat`. Add a capability probe before relying on
-a new private seam.
+Stable public records live in `spec.py`, `export.py`, `result.py`, and
+`errors.py`. Build and capture policy depend on local records and marimo
+capability protocols. Private marimo imports belong under `_marimo/compat`.
 
-Core files are:
+Add a capability probe before relying on a new private seam. Select the adapter
+through a composition root. Test the stable port and the live build or capture
+path that consumes it.
 
-| Path                 | Role                                                           |
-| -------------------- | -------------------------------------------------------------- |
-| `spec.py`            | ExportSpec and OutputSpec                                      |
-| `export.py`          | export wire types, result types, codecs, and canonical parsing |
-| `reader.py`          | immutable local NotebookExport reader                          |
-| `_writer.py`         | staging, verification, and atomic commit                       |
-| `_build.py`          | managed build lifecycle                                        |
-| `client.py`          | borrowed-session client and capture                            |
-| `_execution/plan.py` | baseline normalization and transient cell code                 |
-| `_marimo/bridge.py`  | attached-kernel operation boundary                             |
-| `_marimo/compat`     | private marimo adapter                                         |
-
-The package root stays limited to:
+The package root remains limited to:
 
 ```text
 BlobAsset
@@ -82,7 +73,8 @@ Typed failures live in `marimo_export.errors`.
 
 ## Add an exporter
 
-An exporter is an importable callable:
+An exporter is an importable callable that receives one notebook result and
+returns a value supported by marimo's native cache codecs:
 
 ```python
 import json
@@ -92,102 +84,71 @@ from marimo_export import BlobAsset
 
 
 def summary(value: Mapping[str, object]) -> BlobAsset:
-    payload = json.dumps(
-        value,
-        ensure_ascii=False,
-        separators=(",", ":"),
-        sort_keys=True,
-    ).encode("utf-8")
     return BlobAsset(
-        data=payload,
+        data=json.dumps(value, sort_keys=True).encode(),
         media_type="application/vnd.example.summary.v1+json",
-        filename=None,
-        metadata={"version": 1},
+        filename="summary.json",
     )
 ```
 
-Reference the callable from an ExportSpec:
+Reference the callable as `module:symbol` in an ExportSpec. The selected module
+must be importable in the notebook kernel. Files, network responses, mutable
+module state, and other external inputs need explicit cache invalidation.
 
-```yaml
-outputs:
-  summary:
-    source: report
-    exporter: acme_exports:summary
-```
+To add a built-in exporter:
 
-The callable validates its input and returned value. marimo-export imports it
-inside a transient output cell, then marimo executes and caches the conversion.
-The module must be importable in the selected kernel.
-
-Pass representation configuration through exporter options. Files, network
-responses, mutable module state, and other external inputs require the same
-cache invalidation discipline as notebook code.
-
-Add optional dependencies under a focused package extra. Keep source-object
-libraries in the notebook environment when the exporter can accept them
-through a narrow conversion protocol.
-
-To add a built-in:
-
-1. register the ID in
-   `packages/python/src/marimo_export/exporters/_definitions.py`
-2. expose a typed descriptor factory
-3. implement the callable under
-   `packages/python/src/marimo_export/exporters/_runtime`
-4. define a closed option schema and deterministic defaults
-5. add producer and exact-byte tests
+1. Register the ID in `exporters/_definitions.py`.
+2. Expose a typed descriptor factory.
+3. Implement the callable under `exporters/_runtime`.
+4. Define a closed option schema and deterministic defaults.
+5. Add producer and exact-byte tests.
 
 ## Add a browser loader
 
-Use `defineOutputLoader` for a native codec or `defineBlobAssetLoader` for a
-media representation:
+Create one private `packages/loader-<name>` workspace. It owns the decoder,
+runtime dependency, result type, malformed-input bounds, cancellation, and
+mount disposal.
 
-```ts
-export function summaryLoader() {
-  return defineBlobAssetLoader({
-    mediaTypes: "application/vnd.example.summary.v1+json",
-    load({ payload, signal }) {
-      signal?.throwIfAborted();
-      return decode(payload.data);
-    },
-  });
-}
-```
-
-Create the implementation in a private `packages/loader-<name>` workspace.
-That package owns its runtime dependencies, focused tests, and result type.
-Cover malformed bytes, allocation bounds, cancellation, and disposal when it
-creates browser resources.
-
-Expose the implementation through a browser facade:
+Expose it through `packages/browser/src/loader/<name>.ts`:
 
 ```ts
 export * from "#loaders/<name>";
 ```
 
-The facade lives at `packages/browser/src/loader/<name>.ts`. Add it to the
-browser package build entries and export map. Declare its runtime dependencies
-as optional peers of `@marimo-team/marimo-export`.
+Add the facade to the browser build entries and export map. Declare specialized
+runtimes as optional peers of `@marimo-team/marimo-export`. The packed-package
+test builds browser core and every loader subpath with its peers installed.
 
-The `#loaders/*` TypeScript path maps each facade to its private workspace
-source. Workspace Vite applications mirror that mapping in `resolve.alias`.
-The packed-package test builds the root entry and each loader subpath with the
-required peers installed.
+Use `defineOutputLoader` for a native codec and `defineBlobAssetLoader` for a
+media representation.
 
-## Protocol changes
+## Change a cross-language protocol
 
-An export wire change updates these surfaces together:
+Update these surfaces together:
 
-1. Python wire construction and parsing
+1. Python construction and parsing
 2. browser parsing and immutable types
-3. cross-language canonical fixtures
-4. malformed-input tests
+3. canonical cross-language fixtures
+4. malformed-input and boundary tests
 5. CLI inspect and verify behavior
-6. docs and example code
+6. public reference and example code
 7. packed Python and npm checks
 
-The current schema is `marimo-export.export.v1`.
+The current durable schema is `marimo-export.export.v1`.
 `ExportSpec.json_schema()` generates the authoring schema on demand.
 
-Canonical JSON fixtures are exact protocol bytes. Keep them outside
-general-purpose formatting.
+## Change documentation
+
+Public workflows live under `docs/guide/`. Exact contracts live under
+`docs/reference/`. VitePress 2.0.0-alpha.19 builds the site, local search,
+`llms.txt`, and `llms-full.txt`.
+
+Run:
+
+```bash
+make docs-build
+make docs-serve
+```
+
+Inspect navigation, search, code blocks, desktop layout, and narrow layout in a
+browser. Generated VitePress output remains untracked.
