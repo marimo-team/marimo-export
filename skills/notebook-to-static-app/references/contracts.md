@@ -12,7 +12,7 @@
 ## ExportSpec
 
 An ExportSpec contains notebook definition names, sparse named states, and
-browser-facing outputs:
+published outputs:
 
 ```yaml
 schema: marimo-export.spec.v1
@@ -46,7 +46,7 @@ rows may omit values that should stay at their baseline.
 Inputs can target ordinary authored definitions or marimo UI element
 definitions. Use the UI element's definition name, not `.value`.
 
-Outputs map a browser name to a notebook definition. The source definition must
+Outputs map a published name to a notebook definition. The source definition must
 exist after the selected state runs.
 
 ## Representations
@@ -100,39 +100,76 @@ Keep abort and disposal in one controller:
 ```ts
 import type { MountedView } from "@marimo-team/marimo-export";
 
+interface MountSet {
+  readonly controller: AbortController;
+  readonly views: readonly MountedView[];
+}
+
+let chartHost = document.querySelector<HTMLElement>("#chart")!;
+const rowsHost = document.querySelector<HTMLElement>("#rows")!;
 let transition: AbortController | undefined;
-let mounted: MountedView[] = [];
+let mounted: MountSet | undefined;
 
 async function selectState(name: string): Promise<void> {
   transition?.abort();
   const controller = new AbortController();
   transition = controller;
+  const { signal } = controller;
+  const stagedViews: MountedView[] = [];
+  const stagedChartHost = chartHost.cloneNode(false) as HTMLElement;
+  stagedChartHost.removeAttribute("id");
+  const stagingArea = document.createElement("div");
+  stagingArea.setAttribute("aria-hidden", "true");
+  stagingArea.style.position = "fixed";
+  stagingArea.style.inset = "0 auto auto -100000px";
+  stagingArea.style.visibility = "hidden";
+  stagedChartHost.style.width = `${chartHost.getBoundingClientRect().width}px`;
+  stagingArea.append(stagedChartHost);
+  document.body.append(stagingArea);
+  const mountController = new AbortController();
+  const abortStagedMount = () => mountController.abort(signal.reason);
+  signal.addEventListener("abort", abortStagedMount, { once: true });
 
-  await Promise.allSettled(mounted.map((view) => view.dispose()));
-  mounted = [];
+  try {
+    const state = notebookExport.state(name);
+    const [rows, chart] = await Promise.all([
+      state.output("rows").load(parquetRowsLoader(), { signal }),
+      state.output("chart").load(vegaLiteLoader({ actions: false }), { signal }),
+    ]);
+    signal.throwIfAborted();
 
-  const state = notebookExport.state(name);
-  const [rows, chart] = await Promise.all([
-    state.output("rows").load(parquetRowsLoader(), {
-      signal: controller.signal,
-    }),
-    state.output("chart").load(vegaLiteLoader({ actions: false }), {
-      signal: controller.signal,
-    }),
-  ]);
+    const stagedRows = renderRows(rows);
+    stagedViews.push(await chart.mount(stagedChartHost, { signal: mountController.signal }));
+    signal.throwIfAborted();
 
-  controller.signal.throwIfAborted();
-  renderRows(rows);
-  const chartView = await chart.mount(chartElement, {
-    signal: controller.signal,
-  });
-  controller.signal.throwIfAborted();
-  mounted = [chartView];
+    const previous = mounted;
+    const chartId = chartHost.id;
+    signal.removeEventListener("abort", abortStagedMount);
+    stagedChartHost.style.removeProperty("width");
+    chartHost.replaceWith(stagedChartHost);
+    stagedChartHost.id = chartId;
+    chartHost = stagedChartHost;
+    stagingArea.remove();
+    rowsHost.replaceChildren(stagedRows);
+    mounted = { controller: mountController, views: stagedViews };
+    if (previous !== undefined) {
+      previous.controller.abort();
+      await Promise.allSettled(previous.views.map((view) => view.dispose()));
+    }
+  } catch (error) {
+    signal.removeEventListener("abort", abortStagedMount);
+    mountController.abort();
+    await Promise.allSettled(stagedViews.map((view) => view.dispose()));
+    stagingArea.remove();
+    if (!signal.aborted) showError(error);
+  }
 }
 ```
 
-Dispose every mounted value when replacing it. Abort work again during page
-teardown.
+The previous application host remains mounted until every replacement output
+is ready. Staged modules execute with page authority and may create global
+effects outside those hosts. Use trusted loaders, then abort work and dispose
+the committed mounts during page teardown.
 
 ## Custom BlobAsset pair
 

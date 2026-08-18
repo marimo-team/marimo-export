@@ -13,12 +13,10 @@ browser experience feel authored for their task.
 
 Read:
 
-- [references/local-workflow.md](references/local-workflow.md) for the current
-  local package setup and exact build and capture commands
+- [references/workflow.md](references/workflow.md) for workspace setup and the
+  exact build or capture commands
 - [references/contracts.md](references/contracts.md) for ExportSpec, exporter,
   loader, and state-transition contracts
-- `/Users/petergy/Projects/opensource/marimo-team/marimo/DESIGN.md` for the
-  default visual system
 
 Inspect the current marimo-export docs and source when a command or type differs
 from the references. The checkout is authoritative.
@@ -30,7 +28,7 @@ from the references. The checkout is authoritative.
 - Run every selected output through normal marimo execution.
 - Treat browser choices as a finite product surface, not a free-form Python
   prompt.
-- Build and capture must create valid exports from the same ExportSpec.
+- Choose `build` for an owned file execution or `capture` for an existing live session.
 - The deployed app must run from static files with no Python process.
 - Freeze every notebook data dependency into the export. Mounted charts must
   not fetch their source dataset at runtime.
@@ -62,7 +60,7 @@ marimo-export features.
 ### 2. Choose the finite interaction model
 
 Design three to seven named states unless the notebook supports a genuinely
-different useful range. Each state should represent a recognizable scenario,
+different meaningful range. Each state should represent a recognizable scenario,
 policy, cohort, threshold, or comparison.
 
 Use sparse overrides. Let omitted inputs come from the captured baseline.
@@ -87,11 +85,25 @@ will import.
 Treat the generated `src/main.ts` as a loading shell. Replace it with the real
 application after the ExportSpec is known.
 
-### 4. Inspect a live session
+### 4. Inspect the notebook boundary
 
-Start the notebook from the app's uv environment. Open it in a browser so the
-initial execution completes, then use `marimo-export session --json` to inspect
-the exact available definitions.
+For `build`, run:
+
+```bash
+uv run --project "$STATIC_APP_DIR" marimo-export session "$NOTEBOOK_PATH" --json
+```
+
+For `capture`, set `NOTEBOOK_PORT` and `SESSION_ID`, then run:
+
+```bash
+uv run --project "$STATIC_APP_DIR" marimo-export session \
+  "http://127.0.0.1:$NOTEBOOK_PORT" \
+  --session "$SESSION_ID" \
+  --json
+```
+
+Both commands return the same definition records before the state matrix
+starts.
 
 Do not infer a definition from displayed prose or a local variable whose name
 starts with `_`. Use the session inspection result.
@@ -99,7 +111,7 @@ starts with `_`. Use the session inspection result.
 ### 5. Author and preflight the ExportSpec
 
 Create `<name>.export.yaml` beside the app. Use domain names for states and
-browser-facing output names.
+published output names.
 
 Run session inspection before expensive state execution. Correct missing input
 or output names before build or capture.
@@ -111,8 +123,8 @@ Choose the narrowest representation that preserves the browser experience:
 - use Parquet for browser-readable table rows
 - use Vega-Lite for interactive Altair charts
 - use PNG when the audience needs a fixed chart image
-- use AnyWidget bundles when the widget's saved browser model provides useful
-  local interaction
+- use AnyWidget bundles when the widget's saved browser model supports the
+  audience's local interaction
 - add a focused custom exporter and paired loader when no built-in
   representation fits
 
@@ -120,16 +132,15 @@ Inspect exported Vega-Lite data references. When a notebook chart points to a
 remote dataset, use an export-time representation that embeds the data or
 pair the chart with an exported table and rebuild the chart in the browser.
 
-### 6. Prove both producer modes
+### 6. Create and verify the export
 
-Run `build` into `public/export` and verify it. This is the export included in
-the production app.
+Use `build` when the workflow owns notebook startup, execution, and cleanup.
+Use `capture` when a running kernel already owns the configured environment or
+completed computation. Write the selected result to `public/export`, then run
+`marimo-export verify` before the browser build.
 
-Run `capture` against the open session into `.exports/capture` and verify it.
-Keep the source server running until capture and verification finish.
-
-Keep proof exports outside `public/`. Vite copies everything under `public/`
-into the production build. Do not hand-edit `index.json` or its assets.
+Run one producer mode for an app workflow. Do not hand-edit `index.json` or its
+assets.
 
 ### 7. Build the browser application
 
@@ -162,7 +173,7 @@ framework.
 
 Run:
 
-- Python export verification for both build and capture
+- Python export verification for the selected producer mode
 - TypeScript type checking and production build
 - a static preview with the final export
 - browser checks at desktop and mobile widths
