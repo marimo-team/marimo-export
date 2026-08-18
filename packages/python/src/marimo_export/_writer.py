@@ -18,12 +18,12 @@ from marimo_export.errors import IntegrityError, NotebookExportError
 from marimo_export.export import (
     AssetDescriptor,
     ExportIndex,
-    ExportWarning,
     OutputCodec,
     ScalarDescriptor,
     asset_path,
 )
 from marimo_export.reader import _validate_asset, open_export
+from marimo_export.result import ExportWarning
 
 
 @dataclass(frozen=True, slots=True)

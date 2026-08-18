@@ -12,9 +12,10 @@ from typing import BinaryIO
 
 from marimo_export._remote.managed import ManagedServer
 from marimo_export._writer import preflight_export, write_export
-from marimo_export.client import Client, _CaptureData, _export_result
+from marimo_export.client import Client, SessionDescription, _CaptureData, _export_result
 from marimo_export.errors import ExecutionError
-from marimo_export.export import ExportResult, NotebookProvenance, PhaseTimings
+from marimo_export.export import NotebookProvenance
+from marimo_export.result import ExportResult, PhaseTimings
 from marimo_export.spec import ExportSpec, StrPath
 
 
@@ -152,6 +153,72 @@ def _capture_owned(
     )
 
 
+def inspect_notebook(notebook: StrPath, *, timeout: float = 30.0) -> SessionDescription:
+    """Inspect one notebook through the same owned session used by build."""
+
+    source = _notebook_path(notebook)
+    duration = _timeout(timeout)
+    before = _source_digest(source)
+    server: ManagedServer | None = None
+    working_notebook: Path | None = None
+    description: SessionDescription | None = None
+    primary: BaseException | None = None
+    try:
+        working_notebook = _copy_notebook(source)
+        server = ManagedServer(
+            working_notebook,
+            timeout=duration,
+            runtime_notebook=source,
+        )
+        server.activate()
+        with Client(
+            server.base_url,
+            access_token=server.access_token,
+            timeout=duration,
+        ) as client:
+            description = client.session(server.session_id).inspect()
+    except BaseException as error:
+        primary = error
+    finally:
+        if server is not None:
+            try:
+                server.stop()
+            except BaseException as cleanup_error:
+                if primary is None:
+                    primary = cleanup_error
+                else:
+                    primary.add_note(
+                        f"managed server cleanup also failed: {type(cleanup_error).__name__}"
+                    )
+        if working_notebook is not None:
+            try:
+                _remove_working_notebook(working_notebook)
+            except BaseException as cleanup_error:
+                if primary is None:
+                    primary = cleanup_error
+                else:
+                    primary.add_note(
+                        f"managed notebook cleanup also failed: {type(cleanup_error).__name__}"
+                    )
+    if primary is not None:
+        raise primary
+    if description is None:
+        raise RuntimeError("managed notebook inspection produced no description")
+    after = _source_digest(source)
+    if after != before:
+        raise ExecutionError(
+            "the notebook source changed during inspection",
+            code="notebook_changed",
+            details={"before": before, "after": after},
+        )
+    return replace(
+        description,
+        session_id="managed",
+        filename=source.name,
+        path=str(source),
+    )
+
+
 def _remove_working_notebook(notebook: Path) -> None:
     try:
         notebook.unlink()
@@ -254,4 +321,4 @@ def _timeout(value: object) -> float:
     return result
 
 
-__all__ = ["build"]
+__all__ = ["build", "inspect_notebook"]

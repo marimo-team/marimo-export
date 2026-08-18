@@ -1,13 +1,27 @@
 from __future__ import annotations
 
-import sys
-from contextlib import contextmanager
+import asyncio
+import threading
+import time
+import weakref
+from contextlib import asynccontextmanager, contextmanager
 from typing import TYPE_CHECKING, Any, cast
 
+from marimo._runtime.executor.lifecycles import Skip
+from marimo._runtime.executor.lifecycles.cached import CachedLifecycle
+from marimo._save.cache import Cache
 from marimo._save.loaders.lazy import LazyLoader
+from marimo._save.stubs.lazy_stub import UnhashableStub
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import AsyncIterator
+
+    from marimo._save.signing import CacheSigner
+
+
+_LOADER_REGISTRY_LOCK = threading.Lock()
+_MANAGED_HOOKS_LOCK = threading.Lock()
+_MANAGED_HOOKS: weakref.WeakSet[Any] = weakref.WeakSet()
 
 
 class SequentialLazyLoader(LazyLoader):
@@ -25,7 +39,7 @@ class SequentialLazyLoader(LazyLoader):
         return_ref: str | None,
         return_type_hint: str | None,
         blob_hash_map: dict[str, str] | None = None,
-        effective_signer: Any = None,
+        effective_signer: CacheSigner | None = None,
     ) -> dict[str, Any]:
         from marimo._save.loaders.lazy import (
             LOGGER,
@@ -67,6 +81,36 @@ class SequentialLazyLoader(LazyLoader):
         return unpickled
 
 
+class CompleteCachedLifecycle(CachedLifecycle):
+    """Rerun a hit when marimo could restore only an unavailable value."""
+
+    def setup(self, cell: Any, glbls: Any) -> Any:
+        decision = super().setup(cell, glbls)
+        if not isinstance(decision, Skip):
+            return decision
+        attempt = self._attempts.get(cell.cell_id)
+        if attempt is None:
+            return decision
+        retry = _rerun_unavailable_attempt(attempt)
+        if retry is attempt:
+            return decision
+        self._attempts[cell.cell_id] = retry
+        self._exec_starts[cell.cell_id] = time.time()
+        return None
+
+
+def _rerun_unavailable_attempt(attempt: Cache) -> Cache:
+    if not attempt.hit or not any(
+        isinstance(value, UnhashableStub) for value in attempt.defs.values()
+    ):
+        return attempt
+    return Cache.empty(
+        key=attempt.key,
+        defs=set(attempt.defs),
+        stateful_refs=set(attempt.stateful_refs),
+    )
+
+
 def add_cache_write_barrier(hooks: Any) -> None:
     from marimo._runtime.runner.hooks import Priority
 
@@ -75,42 +119,51 @@ def add_cache_write_barrier(hooks: Any) -> None:
     hooks.add_post_execution(_flush_cache_writes, Priority.EARLY)
 
 
-@contextmanager
-def sequential_cache_loader() -> Iterator[None]:
+@asynccontextmanager
+async def sequential_cache_loader() -> AsyncIterator[None]:
+    import marimo._runtime.executor.lifecycles.cached as cached_lifecycle
     from marimo._save.loaders import PERSISTENT_LOADERS
 
-    previous = PERSISTENT_LOADERS["lazy"]
-    PERSISTENT_LOADERS["lazy"] = _sequential_loader_entry(previous)
+    while not _LOADER_REGISTRY_LOCK.acquire(blocking=False):
+        await asyncio.sleep(0.001)
+    previous: Any = None
+    previous_lifecycle: Any = None
+    replaced = False
+    try:
+        previous = PERSISTENT_LOADERS["lazy"]
+        previous_lifecycle = cached_lifecycle.CachedLifecycle
+        PERSISTENT_LOADERS["lazy"] = _sequential_loader_entry(previous)
+        cast(Any, cached_lifecycle).CachedLifecycle = CompleteCachedLifecycle
+        replaced = True
+        try:
+            yield
+        finally:
+            if replaced:
+                PERSISTENT_LOADERS["lazy"] = previous
+                cast(Any, cached_lifecycle).CachedLifecycle = previous_lifecycle
+    finally:
+        _LOADER_REGISTRY_LOCK.release()
+
+
+@contextmanager
+def managed_cache_compat(hooks: Any) -> Any:
+    import marimo._runtime.executor.lifecycles.cached as cached_lifecycle
+    from marimo._save.loaders import PERSISTENT_LOADERS
+
+    previous_loader = PERSISTENT_LOADERS["lazy"]
+    previous_lifecycle = cached_lifecycle.CachedLifecycle
+    with _MANAGED_HOOKS_LOCK:
+        PERSISTENT_LOADERS["lazy"] = _sequential_loader_entry(previous_loader)
+        cast(Any, cached_lifecycle).CachedLifecycle = CompleteCachedLifecycle
+        if hooks not in _MANAGED_HOOKS:
+            add_cache_write_barrier(hooks)
+            _MANAGED_HOOKS.add(hooks)
     try:
         yield
     finally:
-        PERSISTENT_LOADERS["lazy"] = previous
-
-
-def install_managed_cache_compat() -> None:
-    from marimo._save.loaders import PERSISTENT_LOADERS
-
-    PERSISTENT_LOADERS["lazy"] = _sequential_loader_entry(PERSISTENT_LOADERS["lazy"])
-    _install_default_cache_write_barrier()
-
-
-def _install_default_cache_write_barrier() -> None:
-    from marimo._runtime.runner import hooks as hooks_module
-
-    native = hooks_module.create_default_hooks
-    if getattr(native, "__marimo_export_cache_barrier__", False):
-        return
-
-    def create_default_hooks() -> Any:
-        hooks = native()
-        add_cache_write_barrier(hooks)
-        return hooks
-
-    cast(Any, create_default_hooks).__marimo_export_cache_barrier__ = True
-    cast(Any, hooks_module).create_default_hooks = create_default_hooks
-    lifecycle = sys.modules.get("marimo._runtime.kernel_lifecycle")
-    if lifecycle is not None:
-        cast(Any, lifecycle).create_default_hooks = create_default_hooks
+        with _MANAGED_HOOKS_LOCK:
+            PERSISTENT_LOADERS["lazy"] = previous_loader
+            cast(Any, cached_lifecycle).CachedLifecycle = previous_lifecycle
 
 
 def _sequential_loader_entry(entry: Any) -> Any:

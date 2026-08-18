@@ -4,8 +4,10 @@ from pathlib import Path
 
 import pytest
 from marimo_export import ExportSpec, OutputSpec, build, capture, open_export
+from marimo_export._build import inspect_notebook
 from marimo_export._remote.managed import ManagedServer
 from marimo_export.errors import ExecutionError
+from marimo_export.exporters import anywidget as anywidget_exporter
 from marimo_export.exporters import importable
 
 
@@ -101,7 +103,82 @@ if __name__ == "__main__":
     assert notebook.read_bytes() == source
 
 
-def test_managed_sparse_anywidget_state_uses_widget_traits(tmp_path: Path) -> None:
+def test_capture_preserves_the_parent_lazy_cache_store(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    notebook = tmp_path / "notebook.py"
+    notebook.write_text(
+        """
+import marimo
+
+app = marimo.App()
+
+
+@app.cell
+def _():
+    value = 1
+    return (value,)
+
+
+if __name__ == "__main__":
+    app.run()
+""".lstrip(),
+        encoding="utf-8",
+    )
+    (tmp_path / "cache_probe.py").write_text(
+        """
+def describe(value):
+    del value
+    from marimo._runtime.context import get_context
+
+    context = get_context()
+    while context.parent is not None:
+        context = context.parent
+    loader = context.cache.active_lazy_loaders["cell_cache"]
+    store = loader.store
+    inner = type(getattr(store, "_inner", None)).__name__
+    return f"{type(store).__name__}:{inner}:{len(store.export_keys())}"
+""".lstrip(),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("PYTHONPATH", str(tmp_path))
+    spec = ExportSpec(
+        inputs=(),
+        states={"baseline": {}},
+        outputs={
+            "cache": OutputSpec(
+                source="value",
+                exporter=importable("cache_probe:describe"),
+            )
+        },
+    )
+    server = ManagedServer(notebook, timeout=30)
+    try:
+        server.activate()
+        results = [
+            capture(
+                server.base_url,
+                session=server.session_id,
+                access_token=server.access_token,
+                spec=spec,
+                output=tmp_path / f"export-{position}",
+                timeout=30,
+            )
+            for position in range(2)
+        ]
+    finally:
+        server.stop()
+
+    for result in results:
+        value = open_export(result.path).state("baseline").output("cache").scalar()
+        assert isinstance(value, str)
+        store, inner, touched = value.split(":")
+        assert (store, inner) == ("LazyStore", "FileStore")
+        assert int(touched) > 0
+
+
+def test_managed_sparse_anywidget_state_records_complete_widget_traits(tmp_path: Path) -> None:
     notebook = tmp_path / "notebook.py"
     notebook.write_text(
         """
@@ -119,6 +196,7 @@ def _():
     class Counter(anywidget.AnyWidget):
         _esm = "export default { render() {} }"
         count = traitlets.Int(2).tag(sync=True)
+        label = traitlets.Unicode("ready").tag(sync=True)
 
     counter = mo.ui.anywidget(Counter())
     return (counter,)
@@ -126,8 +204,8 @@ def _():
 
 @app.cell
 def _(counter):
-    count = counter.value["count"]
-    return (count,)
+    summary = f'{counter.value["count"]}:{counter.value["label"]}'
+    return (summary,)
 
 
 if __name__ == "__main__":
@@ -141,22 +219,21 @@ if __name__ == "__main__":
         spec=ExportSpec(
             inputs=("counter",),
             states={"baseline": {}, "raised": {"counter": {"count": 7}}},
-            outputs={"count": OutputSpec(source="count")},
+            outputs={"summary": OutputSpec(source="summary")},
         ),
         output=tmp_path / "export",
         timeout=30,
     )
     export = open_export(result.path)
 
-    assert export.state("baseline").inputs == {"counter": {"count": 2}}
-    assert export.state("baseline").output("count").scalar() == 2
-    assert export.state("raised").output("count").scalar() == 7
+    assert export.state("baseline").inputs == {"counter": {"count": 2, "label": "ready"}}
+    assert export.state("raised").inputs == {"counter": {"count": 7, "label": "ready"}}
+    assert export.state("baseline").output("summary").scalar() == "2:ready"
+    assert export.state("raised").output("summary").scalar() == "7:ready"
     assert notebook.read_bytes() == source
 
 
-def test_state_execution_finishes_cache_writes_before_hashing_shared_values(
-    tmp_path: Path,
-) -> None:
+def test_managed_anywidget_state_rejects_json_type_coercion(tmp_path: Path) -> None:
     notebook = tmp_path / "notebook.py"
     notebook.write_text(
         """
@@ -167,51 +244,22 @@ app = marimo.App()
 
 @app.cell
 def _():
-    import threading
-    import time
-    import numpy as np
+    import anywidget
+    import marimo as mo
+    import traitlets
 
-    class ExclusiveArray:
-        dtype = np.dtype("int64")
-        _lock = threading.Lock()
-        _pickle_started = threading.Event()
+    class Toggle(anywidget.AnyWidget):
+        _esm = "export default { render() {} }"
+        flag = traitlets.Bool(False).tag(sync=True)
 
-        def __array__(self, dtype=None, copy=None):
-            self._pickle_started.wait(timeout=0.2)
-            if not self._lock.acquire(blocking=False):
-                raise RuntimeError("value is being serialized")
-            try:
-                return np.asarray([7], dtype=dtype)
-            finally:
-                self._lock.release()
-
-        def __getstate__(self):
-            if not self._lock.acquire(blocking=False):
-                raise RuntimeError("value is being hashed")
-            self._pickle_started.set()
-            try:
-                time.sleep(0.2)
-                return {}
-            finally:
-                self._lock.release()
-
-        def __setstate__(self, state):
-            del state
-
-    shared = ExclusiveArray()
-    return np, shared
+    toggle = mo.ui.anywidget(Toggle())
+    return (toggle,)
 
 
 @app.cell
-def _(np, shared):
-    first = int(np.asarray(shared)[0])
-    return (first,)
-
-
-@app.cell
-def _(np, shared):
-    second = int(np.asarray(shared)[0])
-    return (second,)
+def _(toggle):
+    flag = toggle.value["flag"]
+    return (flag,)
 
 
 if __name__ == "__main__":
@@ -219,23 +267,77 @@ if __name__ == "__main__":
 """.lstrip(),
         encoding="utf-8",
     )
+    output = tmp_path / "export"
+
+    with pytest.raises(ExecutionError) as raised:
+        build(
+            notebook,
+            spec=ExportSpec(
+                inputs=("toggle",),
+                states={"enabled": {"toggle": {"flag": 1}}},
+                outputs={"flag": OutputSpec(source="flag")},
+            ),
+            output=output,
+            timeout=30,
+        )
+
+    assert raised.value.code == "input_value_invalid"
+    assert raised.value.details == {"state": "enabled", "input": "toggle"}
+    assert not output.exists()
+
+
+def test_binary_anywidget_is_output_capable_and_not_a_portable_input(tmp_path: Path) -> None:
+    notebook = tmp_path / "notebook.py"
+    notebook.write_text(
+        """
+import marimo
+
+app = marimo.App()
+
+
+@app.cell
+def _():
+    import anywidget
+    import marimo as mo
+    import traitlets
+
+    class BinaryWidget(anywidget.AnyWidget):
+        _esm = "export default { render() {} }"
+        binary = traitlets.Bytes(b"\\x01\\x02\\x03").tag(sync=True)
+
+    widget = mo.ui.anywidget(BinaryWidget())
+    return (widget,)
+
+
+if __name__ == "__main__":
+    app.run()
+""".lstrip(),
+        encoding="utf-8",
+    )
+
+    description = inspect_notebook(notebook, timeout=30)
+    widget = next(item for item in description.definitions if item.name == "widget")
+    assert widget.input_mode == "patch"
+    assert not widget.portable_input
     result = build(
         notebook,
         spec=ExportSpec(
             inputs=(),
             states={"baseline": {}},
             outputs={
-                "first": OutputSpec(source="first"),
-                "second": OutputSpec(source="second"),
+                "widget": OutputSpec(
+                    source="widget",
+                    exporter=anywidget_exporter.bundle(),
+                )
             },
         ),
         output=tmp_path / "export",
         timeout=30,
     )
-    export = open_export(result.path)
+    payload = open_export(result.path).state("baseline").output("widget").blob_asset().data
 
-    assert export.state("baseline").output("first").scalar() == 7
-    assert export.state("baseline").output("second").scalar() == 7
+    assert b'"buffer_paths":[["binary"]]' in payload
+    assert b'"buffers":["AQID"]' in payload
 
 
 def test_state_children_leave_the_parent_after_success_and_failure(

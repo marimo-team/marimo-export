@@ -28,8 +28,13 @@ _EVENT_LIMIT = 40 * 1024 * 1024
 _HTTP_RESPONSE_LIMIT = 1024 * 1024
 _LOG_LIMIT = 8192
 _MANAGED_CACHE_COMPAT_ENV = "MARIMO_EXPORT_MANAGED_CACHE_COMPAT"
+_MANAGED_CACHE_ACTIVATION_ENV = "MARIMO_EXPORT_MANAGED_CACHE_ACTIVATION"
+_MANAGED_CACHE_TOKEN_ENV = "MARIMO_EXPORT_MANAGED_CACHE_TOKEN"
 _MANAGED_SOURCE_ENV = "MARIMO_EXPORT_MANAGED_SOURCE"
 _MANAGED_SNAPSHOT_ENV = "MARIMO_EXPORT_MANAGED_SNAPSHOT"
+_KERNEL_LIFESPAN_ALLOWLIST_ENV = "MARIMO_KERNEL_LIFESPAN_ALLOWLIST"
+_KERNEL_LIFESPAN_DENYLIST_ENV = "MARIMO_KERNEL_LIFESPAN_DENYLIST"
+_KERNEL_LIFESPAN_NAME = "marimo-export"
 
 
 @dataclass(frozen=True, slots=True)
@@ -60,15 +65,15 @@ class ManagedServer:
         self._log_file: BinaryIO = self._log_path.open("wb")
         self._process: subprocess.Popen[bytes] | None = None
         self._stream: _SessionStream | None = None
+        self._owned_groups: set[int] = set()
+        self._activation_path = temporary_path / "kernel-cache-active"
+        self._activation_token = secrets.token_hex(32)
         environment = dict(os.environ)
-        startup = Path(__file__).resolve().parents[1] / "_marimo" / "compat" / "_startup"
-        python_path = environment.get("PYTHONPATH")
-        environment["PYTHONPATH"] = os.pathsep.join(
-            [str(startup), *([python_path] if python_path else [])]
-        )
         environment.update(
             {
                 _MANAGED_CACHE_COMPAT_ENV: "1",
+                _MANAGED_CACHE_ACTIVATION_ENV: str(self._activation_path),
+                _MANAGED_CACHE_TOKEN_ENV: self._activation_token,
                 _MANAGED_SNAPSHOT_ENV: str(notebook),
                 _MANAGED_SOURCE_ENV: str(runtime_notebook or notebook),
                 "MARIMO_SKIP_UPDATE_CHECK": "1",
@@ -76,11 +81,12 @@ class ManagedServer:
             }
         )
         try:
+            _require_kernel_lifespan_policy(environment)
             self._process = subprocess.Popen(
                 [
                     sys.executable,
                     "-m",
-                    "marimo_export._marimo.compat.managed_server",
+                    "marimo_export._marimo.managed_server",
                     "edit",
                     str(notebook),
                     "--headless",
@@ -104,6 +110,8 @@ class ManagedServer:
                 ),
                 start_new_session=sys.platform != "win32",
             )
+            if sys.platform != "win32":
+                self._owned_groups.add(self._process.pid)
             self._wait_ready()
         except BaseException as error:
             try:
@@ -127,14 +135,26 @@ class ManagedServer:
         stream = _SessionStream(self, timeout=self.timeout)
         self._stream = stream
         stream.wait_for_kernel()
+        self._record_owned_process_groups()
+        instantiated_runs = stream.completed_runs
+        self._post_json(
+            "/api/kernel/instantiate",
+            {"objectIds": [], "values": [], "autoRun": False},
+        )
+        stream.wait_for_completed_run(instantiated_runs)
+        self._require_cache_activation()
         session_start_seconds = time.monotonic() - session_started
         completed_runs = stream.completed_runs
         autorun_started = time.monotonic()
         self._post_json(
-            "/api/kernel/instantiate",
-            {"objectIds": [], "values": [], "autoRun": True},
+            "/api/kernel/run",
+            {
+                "cellIds": list(stream.cell_ids),
+                "codes": list(stream.codes),
+            },
         )
         stream.wait_for_completed_run(completed_runs)
+        self._record_owned_process_groups()
         return _ActivationTimings(
             session_start_seconds=session_start_seconds,
             initial_autorun_seconds=time.monotonic() - autorun_started,
@@ -151,9 +171,9 @@ class ManagedServer:
                 stream.request_close()
             except BaseException as error:
                 failures.append(error)
-        owned_groups: set[int] = set()
+        owned_groups = set(getattr(self, "_owned_groups", set()))
         try:
-            owned_groups = self._owned_process_groups()
+            owned_groups.update(self._owned_process_groups())
         except BaseException as error:
             failures.append(error)
         try:
@@ -282,14 +302,28 @@ class ManagedServer:
         process = self._process
         if process is None or process.poll() is not None or sys.platform == "win32":
             return
-        # Native shutdown closes the kernel process group. Direct signaling
-        # below remains the bounded fallback when the server cannot respond.
-        with suppress(TransportError):
-            self._post_json(
-                "/api/kernel/shutdown",
-                {},
-                timeout=min(self.timeout, 2.0),
+        self._post_json(
+            "/api/kernel/shutdown",
+            {},
+            timeout=min(self.timeout, 2.0),
+        )
+
+    def _require_cache_activation(self) -> None:
+        try:
+            value = self._activation_path.read_text(encoding="utf-8")
+        except OSError as error:
+            raise TransportError(
+                "the managed marimo kernel did not activate cache integration",
+                code="server_start_failed",
+            ) from error
+        if value != self._activation_token:
+            raise TransportError(
+                "the managed marimo kernel returned an invalid cache activation",
+                code="server_start_failed",
             )
+
+    def _record_owned_process_groups(self) -> None:
+        self._owned_groups.update(self._owned_process_groups())
 
     def _headers(self) -> dict[str, str]:
         return {"Authorization": f"Bearer {self.access_token}"}
@@ -312,11 +346,13 @@ class ManagedServer:
 
         groups = owned_groups
         if groups is None:
+            groups = set(getattr(self, "_owned_groups", set()))
             try:
-                groups = self._owned_process_groups()
+                groups.update(self._owned_process_groups())
             except BaseException as error:
                 failures.append(error)
-                groups = {process.pid} if sys.platform != "win32" else set()
+                if sys.platform != "win32":
+                    groups.add(process.pid)
         if sys.platform == "win32" and is_running():
             try:
                 self._terminate_windows_tree(process)
@@ -402,19 +438,34 @@ class ManagedServer:
                 text=True,
                 timeout=min(self.timeout, 2.0),
             )
-        except (OSError, subprocess.TimeoutExpired):
-            return groups
+        except (OSError, subprocess.TimeoutExpired) as error:
+            raise TransportError(
+                "the managed marimo process tree could not be inspected",
+                code="server_shutdown_failed",
+            ) from error
         if listed.returncode != 0:
-            return groups
+            raise TransportError(
+                "the managed marimo process tree could not be inspected",
+                code="server_shutdown_failed",
+                details={"return_code": listed.returncode},
+            )
         children: dict[int, list[tuple[int, int]]] = {}
         for line in listed.stdout.splitlines():
+            if not line.strip():
+                continue
             parts = line.split()
             if len(parts) != 3:
-                continue
+                raise TransportError(
+                    "the managed marimo process tree report was invalid",
+                    code="server_shutdown_failed",
+                )
             try:
                 pid, parent_pid, group_id = map(int, parts)
-            except ValueError:
-                continue
+            except ValueError as error:
+                raise TransportError(
+                    "the managed marimo process tree report was invalid",
+                    code="server_shutdown_failed",
+                ) from error
             children.setdefault(parent_pid, []).append((pid, group_id))
         pending = [process.pid]
         descendants = {process.pid}
@@ -583,6 +634,8 @@ class _SessionStream:
         self._timeout = timeout
         self._condition = threading.Condition()
         self._kernel_ready = False
+        self._cell_ids: tuple[str, ...] = ()
+        self._codes: tuple[str, ...] = ()
         self._completed_runs = 0
         self._cell_statuses: dict[str, str] = {}
         self._failure: BaseException | None = None
@@ -611,6 +664,16 @@ class _SessionStream:
     def completed_runs(self) -> int:
         with self._condition:
             return self._completed_runs
+
+    @property
+    def cell_ids(self) -> tuple[str, ...]:
+        with self._condition:
+            return self._cell_ids
+
+    @property
+    def codes(self) -> tuple[str, ...]:
+        with self._condition:
+            return self._codes
 
     def wait_for_kernel(self) -> None:
         self._wait(lambda: self._kernel_ready, "kernel readiness")
@@ -696,7 +759,20 @@ class _SessionStream:
         data = value.get("data")
         with self._condition:
             if operation == "kernel-ready":
-                self._kernel_ready = True
+                cell_ids = data.get("cell_ids") if isinstance(data, dict) else None
+                codes = data.get("codes") if isinstance(data, dict) else None
+                if (
+                    isinstance(cell_ids, list)
+                    and isinstance(codes, list)
+                    and len(cell_ids) == len(codes)
+                    and all(isinstance(item, str) for item in cell_ids)
+                    and all(isinstance(item, str) for item in codes)
+                ):
+                    self._cell_ids = tuple(cell_ids)
+                    self._codes = tuple(codes)
+                    self._kernel_ready = True
+                else:
+                    self._failure = ValueError("kernel-ready cells are invalid")
             elif operation == "cell-op" and isinstance(data, dict):
                 cell_id = data.get("cell_id")
                 status = data.get("status")
@@ -711,6 +787,33 @@ def _free_port() -> int:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as stream:
         stream.bind(("127.0.0.1", 0))
         return cast(int, stream.getsockname()[1])
+
+
+def _require_kernel_lifespan_policy(environment: Mapping[str, str]) -> None:
+    denylist = {
+        name.strip().lower()
+        for name in environment.get(_KERNEL_LIFESPAN_DENYLIST_ENV, "").split(",")
+        if name.strip()
+    }
+    if _KERNEL_LIFESPAN_NAME in denylist:
+        raise TransportError(
+            "the managed marimo kernel policy excludes marimo-export",
+            code="server_start_failed",
+            details={"environment": _KERNEL_LIFESPAN_DENYLIST_ENV},
+        )
+    if _KERNEL_LIFESPAN_ALLOWLIST_ENV not in environment:
+        return
+    allowlist = {
+        name.strip().lower()
+        for name in environment[_KERNEL_LIFESPAN_ALLOWLIST_ENV].split(",")
+        if name.strip()
+    }
+    if _KERNEL_LIFESPAN_NAME not in allowlist:
+        raise TransportError(
+            "the managed marimo kernel policy excludes marimo-export",
+            code="server_start_failed",
+            details={"environment": _KERNEL_LIFESPAN_ALLOWLIST_ENV},
+        )
 
 
 __all__ = ["ManagedServer"]

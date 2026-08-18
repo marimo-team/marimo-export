@@ -102,7 +102,7 @@ def test_ordinary_overrides_target_the_authored_definition_cell() -> None:
         "symbols": ["AAPL", "MSFT", "GOOGL"],
     }
     assert dict(plan.ordinary_cells) == {"cell-inputs": ("symbols",)}
-    assert dict(state.ui_values) == {"selector": ["AAPL"]}
+    assert dict(state.ui_updates) == {"selector": ["AAPL"]}
 
 
 def test_ordinary_override_is_appended_to_the_transient_cell_copy() -> None:

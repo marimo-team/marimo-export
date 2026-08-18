@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 
 from marimo_export._json import JsonValue, canonical_bytes, json_string, json_value
-from marimo_export._marimo.compat import BlobAsset
+from marimo_export._marimo.blob import BlobAsset
 
 
 def json(

@@ -6,9 +6,11 @@ import json
 import urllib.error
 import urllib.request
 from collections.abc import Callable
+from importlib.metadata import version
 from typing import Any, cast
 
 import pytest
+from marimo_export._marimo.bridge import dispatch_json
 from marimo_export._remote.client import (
     BRIDGE_SCHEMA,
     BridgeError,
@@ -123,12 +125,15 @@ def test_invoke_posts_correlated_bridge_request_once() -> None:
     assert captured == {
         "schema": BRIDGE_SCHEMA,
         "client_version": captured["client_version"],
+        "client_identity": captured["client_identity"],
         "request_id": captured["request_id"],
         "operation": "capture",
         "params": {"spec": {}},
     }
     assert isinstance(captured["client_version"], str)
     assert captured["client_version"]
+    assert isinstance(captured["client_identity"], str)
+    assert len(captured["client_identity"]) == 64
     assert len(opener.requests) == 1
     request = opener.requests[0]
     headers = {name.lower(): value for name, value in request.header_items()}
@@ -137,6 +142,27 @@ def test_invoke_posts_correlated_bridge_request_once() -> None:
     assert headers["authorization"] == "Bearer auth-secret"
     assert headers["marimo-server-token"] == "server-secret"
     assert headers["marimo-session-id"] == "session-1"
+
+
+@pytest.mark.asyncio
+async def test_bridge_rejects_a_stale_development_implementation() -> None:
+    response = json.loads(
+        await dispatch_json(
+            json.dumps(
+                {
+                    "schema": BRIDGE_SCHEMA,
+                    "client_version": version("marimo-export"),
+                    "client_identity": "0" * 64,
+                    "request_id": "request-1",
+                    "operation": "inspect",
+                    "params": {},
+                }
+            )
+        )
+    )
+
+    assert response["ok"] is False
+    assert response["error"]["code"] == "bridge_version_mismatch"
 
 
 def test_invoke_reads_a_bridge_response_larger_than_one_stdout_write() -> None:

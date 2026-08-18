@@ -17,20 +17,22 @@ from marimo_export.export import (
     ArrowDescriptor,
     AssetRef,
     BlobAssetDescriptor,
-    CacheSummary,
     ExportIndex,
-    ExportResult,
-    ExportWarning,
     NotebookProvenance,
     NumpyDescriptor,
-    PhaseTimings,
     ProducerProvenance,
     Provenance,
     ScalarDescriptor,
     StateEntry,
-    StateRunTimings,
     asset_path,
     state_fingerprint,
+)
+from marimo_export.result import (
+    CacheSummary,
+    ExportResult,
+    ExportWarning,
+    PhaseTimings,
+    StateRunTimings,
 )
 
 

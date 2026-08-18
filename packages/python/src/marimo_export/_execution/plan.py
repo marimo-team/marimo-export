@@ -31,6 +31,8 @@ class Definition:
     python_type: str
     value: object
     frontend_value: JsonValue | None = None
+    portable_input: bool = True
+    ui_patch: bool = False
     sensitive: bool = False
     domain: Mapping[str, JsonValue] = field(default_factory=lambda: MappingProxyType({}))
 
@@ -51,6 +53,12 @@ class Definition:
             raise TypeError("definition python_type must be a non-empty string")
         if not isinstance(self.sensitive, bool):
             raise TypeError("definition sensitive must be a boolean")
+        if not isinstance(self.portable_input, bool):
+            raise TypeError("definition portable_input must be a boolean")
+        if not isinstance(self.ui_patch, bool):
+            raise TypeError("definition ui_patch must be a boolean")
+        if self.kind != "ui" and self.ui_patch:
+            raise ValueError("only UI definitions can use patch updates")
         object.__setattr__(
             self,
             "domain",
@@ -93,7 +101,7 @@ class NormalizedState:
     inputs: Mapping[str, JsonValue]
     fingerprint: str
     ordinary_values: Mapping[str, JsonValue]
-    ui_values: Mapping[str, JsonValue]
+    ui_updates: Mapping[str, JsonValue]
 
     def __post_init__(self) -> None:
         object.__setattr__(
@@ -113,8 +121,8 @@ class NormalizedState:
         )
         object.__setattr__(
             self,
-            "ui_values",
-            MappingProxyType(json_object(self.ui_values, f"state {self.name!r} UI values")),
+            "ui_updates",
+            MappingProxyType(json_object(self.ui_updates, f"state {self.name!r} UI updates")),
         )
 
 
@@ -169,6 +177,12 @@ def create_export_plan(spec: ExportSpec, baseline: Baseline) -> ExportPlan:
     baseline_inputs: JsonObject = {}
     for name in spec.inputs:
         definition = baseline.definitions[name]
+        if not definition.portable_input:
+            raise SpecError(
+                f"baseline input {name!r} is not portable",
+                code="spec_input_invalid",
+                details={"input": name, "python_type": definition.python_type},
+            )
         if definition.kind == "ui":
             if definition.sensitive:
                 raise SpecError(
@@ -196,7 +210,13 @@ def create_export_plan(spec: ExportSpec, baseline: Baseline) -> ExportPlan:
         authored = wire_states[state_name]
         assert isinstance(authored, dict)
         inputs = dict(baseline_inputs)
-        inputs.update(authored)
+        for name, value in authored.items():
+            definition = baseline.definitions[name]
+            baseline_value = baseline_inputs[name]
+            if definition.ui_patch and isinstance(baseline_value, dict) and isinstance(value, dict):
+                inputs[name] = {**baseline_value, **value}
+            else:
+                inputs[name] = value
         vector = canonical_bytes(inputs)
         previous = fingerprints.setdefault(vector, state_name)
         if previous != state_name:
@@ -211,8 +231,14 @@ def create_export_plan(spec: ExportSpec, baseline: Baseline) -> ExportPlan:
             for name in spec.inputs
             if baseline.definitions[name].kind == "ordinary"
         }
-        ui_values = {
-            name: inputs[name] for name in spec.inputs if baseline.definitions[name].kind == "ui"
+        ui_updates = {
+            name: (
+                authored[name]
+                if baseline.definitions[name].ui_patch and name in authored
+                else inputs[name]
+            )
+            for name in spec.inputs
+            if baseline.definitions[name].kind == "ui"
         }
         normalized.append(
             NormalizedState(
@@ -220,7 +246,7 @@ def create_export_plan(spec: ExportSpec, baseline: Baseline) -> ExportPlan:
                 inputs=inputs,
                 fingerprint=sha256_bytes(vector),
                 ordinary_values=ordinary,
-                ui_values=ui_values,
+                ui_updates=ui_updates,
             )
         )
 

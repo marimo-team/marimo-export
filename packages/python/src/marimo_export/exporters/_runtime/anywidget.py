@@ -1,13 +1,14 @@
 from __future__ import annotations
 
-from marimo_export._marimo.compat import BlobAsset, capture_anywidget_bundle
+from marimo_export._marimo.anywidget import create_anywidget_capture
+from marimo_export._marimo.blob import BlobAsset
 from marimo_export.exporters._anywidget_payload import validate_anywidget_payload
 
 _MEDIA_TYPE = "application/vnd.marimo-export.anywidget.v1+json"
 
 
 def bundle(widget: object) -> BlobAsset:
-    payload = capture_anywidget_bundle(widget)
+    payload = create_anywidget_capture().capture(widget)
     validated = validate_anywidget_payload(payload)
     return BlobAsset(
         data=payload,

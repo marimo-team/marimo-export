@@ -5,16 +5,10 @@ from typing import cast
 
 from marimo_export._diagnostics import safe_diagnostic
 from marimo_export._execution import create_export_plan
-from marimo_export._json import JsonObject, canonical_bytes, decode_json_object
-from marimo_export._marimo.compat import (
-    declared_ui_values,
-    execute_state,
-    flush_native_caches,
-    inspect_baseline,
-    prepared_exporters,
-    require_capabilities,
-    runtime_path,
-)
+from marimo_export._identity import implementation_identity
+from marimo_export._json import JsonObject, canonical_bytes, decode_json_object, json_equal
+from marimo_export._marimo.capabilities import KernelAdapters, KernelRuntime
+from marimo_export._marimo.composition import create_kernel_adapters
 from marimo_export._marimo.transfer import create_ticket, release, sweep_expired
 from marimo_export.errors import (
     ExecutionError,
@@ -22,16 +16,15 @@ from marimo_export.errors import (
     SessionError,
 )
 from marimo_export.export import (
-    CacheSummary,
     ExportIndex,
     NotebookProvenance,
     ProducerProvenance,
     StateEntry,
-    StateRunTimings,
 )
+from marimo_export.result import CacheSummary, StateRunTimings
 from marimo_export.spec import ExportSpec
 
-BRIDGE_SCHEMA = "marimo-export.bridge.v1"
+BRIDGE_SCHEMA = "marimo-export.bridge.v2"
 _OPERATIONS = frozenset({"inspect", "capture", "release"})
 _MAX_REQUEST_BYTES = 8 * 1024 * 1024
 
@@ -45,7 +38,11 @@ async def dispatch_json(request_json: str) -> str:
         request = _decode_request(request_json)
         request_id = cast(str, request["request_id"])
         operation = cast(str, request["operation"])
-        data = await _dispatch(operation, cast(JsonObject, request["params"]))
+        data = await _dispatch(
+            operation,
+            cast(JsonObject, request["params"]),
+            create_kernel_adapters(),
+        )
         response: JsonObject = {
             "schema": BRIDGE_SCHEMA,
             "request_id": request_id,
@@ -87,14 +84,18 @@ async def dispatch_json(request_json: str) -> str:
     return canonical_bytes(response).decode("utf-8")
 
 
-async def _dispatch(operation: str, params: JsonObject) -> JsonObject:
+async def _dispatch(
+    operation: str,
+    params: JsonObject,
+    adapters: KernelAdapters,
+) -> JsonObject:
     sweep_expired()
     if operation == "inspect":
         _exact(params, set(), "inspect params")
-        return await _inspect()
+        return await _inspect(adapters.kernel)
     if operation == "capture":
         _exact(params, {"spec"}, "capture params")
-        return await _capture(ExportSpec.from_value(params["spec"]))
+        return await _capture(ExportSpec.from_value(params["spec"]), adapters)
     if operation == "release":
         _exact(params, {"ticket"}, "release params")
         ticket = params["ticket"]
@@ -104,32 +105,21 @@ async def _dispatch(operation: str, params: JsonObject) -> JsonObject:
     raise SessionError(f"unsupported bridge operation: {operation}")
 
 
-async def _inspect() -> JsonObject:
-    capabilities = require_capabilities()
-    baseline = await inspect_baseline()
+async def _inspect(runtime: KernelRuntime) -> JsonObject:
+    capabilities = runtime.require_capabilities()
+    baseline = await runtime.inspect_baseline()
     definitions: list[JsonObject] = []
     for definition in baseline.definitions.values():
-        portable = False
-        value_available = False
-        value = None
-        if definition.kind == "ui" and not definition.sensitive:
-            portable = True
-            value_available = True
-            value = definition.frontend_value
-        elif definition.kind == "ordinary":
-            try:
-                from marimo_export._json import json_value
-
-                json_value(definition.value, f"definition {definition.name!r}")
-                portable = True
-            except (TypeError, ValueError):
-                pass
+        portable = definition.portable_input and not definition.sensitive
+        value_available = definition.kind == "ui" and portable
+        value = definition.frontend_value if value_available else None
         definitions.append(
             {
                 "name": definition.name,
                 "cell_id": definition.cell_id,
                 "python_type": definition.python_type,
                 "kind": definition.kind,
+                "input_mode": "patch" if definition.ui_patch else "value",
                 "siblings": list(definition.siblings),
                 "portable_input": portable,
                 "sensitive": definition.sensitive,
@@ -140,7 +130,7 @@ async def _inspect() -> JsonObject:
         )
     return {
         "filename": baseline.filename,
-        "path": runtime_path(),
+        "path": runtime.runtime_path(),
         "document_sha256": baseline.document_sha256,
         "marimo_version": capabilities.version,
         "marimo_export_version": _package_version(),
@@ -149,12 +139,13 @@ async def _inspect() -> JsonObject:
     }
 
 
-async def _capture(spec: ExportSpec) -> JsonObject:
-    capabilities = require_capabilities()
-    baseline = await inspect_baseline()
+async def _capture(spec: ExportSpec, adapters: KernelAdapters) -> JsonObject:
+    runtime = adapters.kernel
+    capabilities = runtime.require_capabilities()
+    baseline = await runtime.inspect_baseline()
     plan = create_export_plan(spec, baseline)
     ui_names = tuple(name for name in plan.inputs if baseline.definitions[name].kind == "ui")
-    parent_ui = await declared_ui_values(ui_names)
+    parent_ui = await runtime.declared_ui_values(ui_names)
     receipts = []
     notebook_hits = 0
     notebook_misses = 0
@@ -163,12 +154,12 @@ async def _capture(spec: ExportSpec) -> JsonObject:
     ui_update_seconds = 0.0
     output_materialization_seconds = 0.0
     state_cleanup_seconds = 0.0
-    with prepared_exporters(plan) as exporter_identities:
-        flush_native_caches()
+    with runtime.prepared_exporters(plan) as exporter_identities:
+        runtime.flush_native_caches()
         primary: BaseException | None = None
         try:
             for state in plan.states:
-                executed = await execute_state(state, plan, exporter_identities)
+                executed = await runtime.execute_state(state, plan, exporter_identities)
                 receipts.extend(executed.receipts)
                 notebook_hits += executed.notebook_cache.hits
                 notebook_misses += executed.notebook_cache.misses
@@ -182,8 +173,8 @@ async def _capture(spec: ExportSpec) -> JsonObject:
         finally:
             consistency_error: BaseException | None = None
             try:
-                after_ui = await declared_ui_values(ui_names)
-                if after_ui != parent_ui:
+                after_ui = await runtime.declared_ui_values(ui_names)
+                if not json_equal(after_ui, parent_ui):
                     raise ExecutionError(
                         "the parent UI state changed during capture",
                         code="parent_state_changed",
@@ -243,7 +234,7 @@ async def _capture(spec: ExportSpec) -> JsonObject:
         outputs=plan.outputs,
         states=states,
     )
-    ticket = create_ticket(receipts)
+    ticket = create_ticket(receipts, host=adapters.transfer)
     output_cache = CacheSummary(
         hits=sum(receipt.disposition == "hit" for receipt in receipts),
         misses=sum(receipt.disposition == "miss" for receipt in receipts),
@@ -286,7 +277,14 @@ def _decode_request(request_json: str) -> JsonObject:
         raise SessionError(f"bridge request is invalid: {error}") from error
     _exact(
         request,
-        {"schema", "client_version", "request_id", "operation", "params"},
+        {
+            "schema",
+            "client_version",
+            "client_identity",
+            "request_id",
+            "operation",
+            "params",
+        },
         "bridge request",
     )
     if request["schema"] != BRIDGE_SCHEMA:
@@ -299,6 +297,22 @@ def _decode_request(request_json: str) -> JsonObject:
             details={
                 "client_version": client_version,
                 "kernel_version": _package_version(),
+            },
+        )
+    client_identity = request["client_identity"]
+    kernel_identity = implementation_identity()
+    if (
+        not isinstance(client_identity, str)
+        or len(client_identity) != 64
+        or any(character not in "0123456789abcdef" for character in client_identity)
+        or client_identity != kernel_identity
+    ):
+        raise SessionError(
+            "marimo-export implementations differ between the client and attached kernel",
+            code="bridge_version_mismatch",
+            details={
+                "client_identity": client_identity,
+                "kernel_identity": kernel_identity,
             },
         )
     request_id = request["request_id"]

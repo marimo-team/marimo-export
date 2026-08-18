@@ -26,6 +26,7 @@ from marimo._types.ids import WidgetModelId
 from marimo._utils.code import hash_code
 from marimo._utils.data_uri import build_data_url
 
+from marimo_export._diagnostics import safe_diagnostic
 from marimo_export._json import json_value
 from marimo_export.errors import OutputError
 
@@ -49,6 +50,12 @@ def capture_anywidget_payload(value: object) -> bytes:
     """Snapshot one live AnyWidget model graph as canonical payload bytes."""
 
     return anywidget_payload(value).payload
+
+
+class PrivateAnyWidgetCapture:
+    """Adapt live marimo widget state to the exporter boundary."""
+
+    capture = staticmethod(capture_anywidget_payload)
 
 
 def anywidget_payload(value: object) -> AnyWidgetPayload:
@@ -96,8 +103,14 @@ def _widget_value(value: object) -> Any:
             "AnyWidget export requires the anywidget and ipywidgets packages"
         ) from error
     if not isinstance(candidate, ipywidgets.Widget):
+        concrete = type(candidate)
+        module = type.__getattribute__(concrete, "__module__")
+        qualname = type.__getattribute__(concrete, "__qualname__")
+        python_type = safe_diagnostic(module, ".", qualname, maximum_chars=512)
         raise OutputError(
-            "AnyWidget export requires an anywidget.AnyWidget or mo.ui.anywidget value"
+            "AnyWidget export requires an anywidget.AnyWidget or mo.ui.anywidget value, "
+            f"got {python_type}",
+            details={"python_type": python_type},
         )
     return candidate
 

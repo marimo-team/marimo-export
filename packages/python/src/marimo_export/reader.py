@@ -11,7 +11,8 @@ from typing import cast
 
 from marimo_export._blob_asset import BlobAssetEnvelope, decode_blob_asset
 from marimo_export._json import JsonObject, JsonValue, canonical_bytes
-from marimo_export._marimo.compat import BlobAsset
+from marimo_export._limits import MAX_EXPORT_ASSET_BYTES, MAX_EXPORT_CLOSURE_BYTES
+from marimo_export._marimo.blob import BlobAsset
 from marimo_export._secure_io import (
     SecureReadError,
     read_export_asset,
@@ -39,8 +40,6 @@ from marimo_export.export import (
 from marimo_export.spec import FrozenJsonObject, FrozenJsonValue, StrPath
 
 _MAX_INDEX_BYTES = 16 * 1024 * 1024
-_MAX_ASSET_BYTES = 64 * 1024 * 1024
-_MAX_EXPORT_BYTES = 512 * 1024 * 1024
 _NPY_MAX_HEADER_BYTES = 1024 * 1024
 
 
@@ -295,14 +294,14 @@ def open_export(path: StrPath) -> NotebookExport:
         ) from error
     index = ExportIndex.from_bytes(data)
     closure = len(data) + sum(asset.size for _, asset in index.assets())
-    if closure > _MAX_EXPORT_BYTES:
+    if closure > MAX_EXPORT_CLOSURE_BYTES:
         raise NotebookExportError(
-            f"export closure exceeds {_MAX_EXPORT_BYTES} bytes",
+            f"export closure exceeds {MAX_EXPORT_CLOSURE_BYTES} bytes",
             code="export_invalid",
         )
-    if any(asset.size > _MAX_ASSET_BYTES for _, asset in index.assets()):
+    if any(asset.size > MAX_EXPORT_ASSET_BYTES for _, asset in index.assets()):
         raise NotebookExportError(
-            f"export asset exceeds {_MAX_ASSET_BYTES} bytes",
+            f"export asset exceeds {MAX_EXPORT_ASSET_BYTES} bytes",
             code="export_invalid",
         )
     return NotebookExport(root, index)
@@ -371,7 +370,7 @@ def _read_asset(path: Path, descriptor: OutputDescriptor) -> bytes:
             path,
             relative,
             expected_size=descriptor.asset.size,
-            max_bytes=_MAX_ASSET_BYTES,
+            max_bytes=MAX_EXPORT_ASSET_BYTES,
         )
     except SecureReadError as error:
         raise IntegrityError(
@@ -403,7 +402,7 @@ def _validated_blob(
     data: bytes,
 ) -> BlobAssetEnvelope:
     try:
-        envelope = decode_blob_asset(data, maximum_bytes=_MAX_ASSET_BYTES)
+        envelope = decode_blob_asset(data, maximum_bytes=MAX_EXPORT_ASSET_BYTES)
     except (TypeError, ValueError) as error:
         raise IntegrityError(
             "BlobAsset envelope is invalid",

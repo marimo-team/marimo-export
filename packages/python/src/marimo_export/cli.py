@@ -12,7 +12,7 @@ from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Any, NoReturn, cast
 
-from marimo_export._build import build
+from marimo_export._build import build, inspect_notebook
 from marimo_export.client import Client, capture
 from marimo_export.errors import (
     CodecError,
@@ -91,9 +91,7 @@ def _parse_and_execute(argv: Sequence[str] | None) -> int:
 def _parser() -> _ArgumentParser:
     parser = _ArgumentParser(
         prog="marimo-export",
-        description=(
-            "Prepare marimo notebook results for interactive web apps served as static files."
-        ),
+        description=("Precompute selected marimo notebook results as verified exports."),
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s {_package_version()}")
     commands = parser.add_subparsers(dest="command", required=True)
@@ -138,17 +136,26 @@ def _parser() -> _ArgumentParser:
 
     session_parser = commands.add_parser(
         "session",
-        help="list sessions or inspect one session",
-        description="List open notebooks or show values available for an ExportSpec.",
+        help="inspect a notebook file or live session",
+        description=(
+            "Show notebook definitions available for an ExportSpec. Inspecting a file "
+            "executes its notebook code with the current file, credential, network, and "
+            "package access."
+        ),
         epilog=(
             "Example:\n"
+            "  marimo-export session notebook.py --json\n"
             "  marimo-export session http://127.0.0.1:2718 --session s_01\n\n"
             "Credentials also use MARIMO_EXPORT_ACCESS_TOKEN and "
             "MARIMO_EXPORT_SERVER_TOKEN.\n"
             "Exit categories: 2 input, 3 transport, 4 session."
         ),
     )
-    session_parser.add_argument("server", metavar="SERVER", help="absolute marimo server URL")
+    session_parser.add_argument(
+        "source",
+        metavar="NOTEBOOK_OR_SERVER",
+        help="marimo Python notebook or absolute marimo server URL",
+    )
     _add_session_selection(session_parser)
     _add_connection_options(session_parser)
     _add_json(session_parser)
@@ -276,8 +283,15 @@ def _run(arguments: argparse.Namespace) -> _CommandResult:
         return _CommandResult(result.to_dict(), _export_human(result))
 
     if arguments.command == "session":
+        if not _is_server(arguments.source):
+            if arguments.session_id is not None:
+                raise ValueError("--session applies only to a live server")
+            if arguments.access_token is not None or arguments.server_token is not None:
+                raise ValueError("connection tokens apply only to a live server")
+            description = inspect_notebook(arguments.source, timeout=arguments.timeout)
+            return _CommandResult(description.to_dict(), _session_human(description.to_dict()))
         with Client(
-            arguments.server,
+            arguments.source,
             access_token=arguments.access_token,
             server_token=arguments.server_token,
             timeout=arguments.timeout,
@@ -305,6 +319,12 @@ def _run(arguments: argparse.Namespace) -> _CommandResult:
             _verify_human(verified, len(notebook_export.states())),
         )
     raise AssertionError(f"unknown command {arguments.command!r}")
+
+
+def _is_server(value: object) -> bool:
+    if not isinstance(value, str):
+        return False
+    return value.startswith("http://") or value.startswith("https://")
 
 
 def _export_summary(notebook_export: NotebookExport) -> dict[str, object]:
@@ -343,7 +363,7 @@ def _export_summary(notebook_export: NotebookExport) -> dict[str, object]:
 
 
 def _export_human(result: object) -> str:
-    from marimo_export.export import ExportResult
+    from marimo_export.result import ExportResult
 
     assert isinstance(result, ExportResult)
     if result.mode == "build":

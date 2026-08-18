@@ -15,7 +15,9 @@ from marimo_export._json import (
     canonical_bytes,
     decode_json,
     json_object,
+    sha256_bytes,
 )
+from marimo_export._limits import MAX_EXPORT_ASSET_BYTES, MAX_EXPORT_CLOSURE_BYTES
 from marimo_export._remote import BridgeError, HttpKernelTransport, SessionInfo
 from marimo_export._writer import WriteResult, preflight_export, write_export
 from marimo_export.errors import (
@@ -29,13 +31,10 @@ from marimo_export.errors import (
     TransportError,
 )
 from marimo_export.export import (
-    CacheSummary,
     ExportIndex,
-    ExportResult,
     OutputCodec,
-    PhaseTimings,
-    StateRunTimings,
 )
+from marimo_export.result import CacheSummary, ExportResult, PhaseTimings, StateRunTimings
 from marimo_export.spec import ExportSpec, FrozenJsonObject, FrozenJsonValue, StrPath
 
 _CAPABILITIES = frozenset(
@@ -69,6 +68,7 @@ class DefinitionDescription:
     cell_id: str
     python_type: str
     kind: Literal["ordinary", "ui"]
+    input_mode: Literal["value", "patch"]
     siblings: tuple[str, ...]
     portable_input: bool
     sensitive: bool
@@ -83,6 +83,7 @@ class DefinitionDescription:
         cell_id: str,
         python_type: str,
         kind: Literal["ordinary", "ui"],
+        input_mode: Literal["value", "patch"],
         siblings: tuple[str, ...],
         portable_input: bool,
         sensitive: bool,
@@ -96,6 +97,10 @@ class DefinitionDescription:
             raise SessionError("definition cell_id and python_type must be non-empty strings")
         if kind not in {"ordinary", "ui"}:
             raise SessionError("definition kind must be ordinary or ui")
+        if input_mode not in {"value", "patch"}:
+            raise SessionError("definition input_mode must be value or patch")
+        if kind != "ui" and input_mode != "value":
+            raise SessionError("ordinary definitions must use value input mode")
         if (
             not isinstance(siblings, tuple)
             or name not in siblings
@@ -113,6 +118,7 @@ class DefinitionDescription:
         object.__setattr__(self, "cell_id", cell_id)
         object.__setattr__(self, "python_type", python_type)
         object.__setattr__(self, "kind", kind)
+        object.__setattr__(self, "input_mode", input_mode)
         object.__setattr__(self, "siblings", siblings)
         object.__setattr__(self, "portable_input", portable_input)
         object.__setattr__(self, "sensitive", sensitive)
@@ -143,6 +149,7 @@ class DefinitionDescription:
             "cell_id": self.cell_id,
             "python_type": self.python_type,
             "kind": self.kind,
+            "input_mode": self.input_mode,
             "siblings": list(self.siblings),
             "portable_input": self.portable_input,
             "sensitive": self.sensitive,
@@ -274,8 +281,9 @@ class Session:
                 "capture response",
             )
             index = ExportIndex.from_value(response.get("index"))
-            transfer = _transfer(response.get("transfer"), index)
-            ticket = transfer.ticket
+            transfer_value = response.get("transfer")
+            ticket = _transfer_ticket(transfer_value)
+            transfer = _transfer(transfer_value, index)
             assets: dict[tuple[OutputCodec, str], bytes] = {}
             for item in transfer.assets:
                 data = self._client._transport.download_asset(
@@ -285,6 +293,8 @@ class Session:
                 )
                 if len(data) != item.size:
                     raise IntegrityError("a transferred asset length disagrees with its descriptor")
+                if sha256_bytes(data) != item.sha256:
+                    raise IntegrityError("a transferred asset digest disagrees with its descriptor")
                 assets[(item.codec, item.sha256)] = data
             output_cache = _cache_summary(
                 response.get("output_cache"),
@@ -511,7 +521,20 @@ def _transfer(value: object, index: ExportIndex) -> _Transfer:
     actual = {(asset.codec, asset.sha256, asset.size) for asset in assets}
     if actual != expected or len(actual) != len(assets):
         raise TransportError("capture transfer assets do not match the export")
+    if any(asset.size > MAX_EXPORT_ASSET_BYTES for asset in assets):
+        raise TransportError("capture transfer asset exceeds the local export limit")
+    closure = len(index.to_bytes()) + sum(asset.size for asset in assets)
+    if closure > MAX_EXPORT_CLOSURE_BYTES:
+        raise TransportError("capture transfer exceeds the local export limit")
     return _Transfer(ticket=ticket, expires_at_ms=expires, assets=tuple(assets))
+
+
+def _transfer_ticket(value: object) -> str:
+    data = _mapping(value, "capture transfer")
+    ticket = data.get("ticket")
+    if not isinstance(ticket, str) or not ticket:
+        raise TransportError("capture transfer ticket is invalid")
+    return ticket
 
 
 def _cache_summary(
@@ -618,6 +641,7 @@ def _definition(value: object, position: int) -> DefinitionDescription:
             "cell_id",
             "python_type",
             "kind",
+            "input_mode",
             "siblings",
             "portable_input",
             "sensitive",
@@ -629,16 +653,20 @@ def _definition(value: object, position: int) -> DefinitionDescription:
     )
     siblings = data["siblings"]
     kind = data["kind"]
+    input_mode = data["input_mode"]
     if not isinstance(siblings, list) or any(not isinstance(item, str) for item in siblings):
         raise SessionError(f"{path} siblings are invalid")
     if kind not in {"ordinary", "ui"}:
         raise SessionError(f"{path} kind is invalid")
+    if input_mode not in {"value", "patch"}:
+        raise SessionError(f"{path} input_mode is invalid")
     domain = _mapping(data["domain"], f"{path} domain")
     return DefinitionDescription(
         name=_string(data["name"], f"{path} name"),
         cell_id=_string(data["cell_id"], f"{path} cell_id"),
         python_type=_string(data["python_type"], f"{path} python_type"),
         kind=cast(Literal["ordinary", "ui"], kind),
+        input_mode=cast(Literal["value", "patch"], input_mode),
         siblings=tuple(cast(list[str], siblings)),
         portable_input=_boolean(data["portable_input"], f"{path} portable_input"),
         sensitive=_boolean(data["sensitive"], f"{path} sensitive"),

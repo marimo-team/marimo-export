@@ -1,17 +1,18 @@
 [build-system]
-requires = ["uv_build>=0.11.28,<0.12.0"]
+requires = ["uv_build>=0.11.28,<0.13.0"]
 build-backend = "uv_build"
 
 [project]
 name = "marimo-export"
 version = "0.0.0"
-description = "Turn marimo notebook results into interactive web apps served as static files."
+description = "Precompute and read verified exports of selected marimo notebook results."
 readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
-authors = [{ name = "Marimo Team" }]
+authors = [{ name = "marimo team" }]
 requires-python = ">=3.11"
 dependencies = [
+  "cryptography==50.0.0",
   "marimo>=0.23.15,<0.24",
   "msgspec>=0.20",
   "numpy>=1.23.5",
@@ -30,6 +31,9 @@ classifiers = [
 
 [project.scripts]
 marimo-export = "marimo_export.cli:main"
+
+[project.entry-points."marimo.kernel.lifespan"]
+marimo-export = "marimo_export._marimo.entrypoints:kernel_lifespan"
 
 [project.optional-dependencies]
 anywidget = ["anywidget>=0.9,<1"]

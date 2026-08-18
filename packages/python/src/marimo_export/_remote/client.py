@@ -13,13 +13,14 @@ from typing import Protocol, TypeGuard, cast
 from urllib.parse import SplitResult, unquote, urljoin, urlsplit
 
 from marimo_export._diagnostics import safe_diagnostic
+from marimo_export._identity import implementation_identity
 from marimo_export._json import JsonObject, JsonValue, decode_json, json_object
 from marimo_export.errors import TransportError
 
 from .auth import auth_headers, parse_server_address
 from .sse import SSEError, SSEEvent, SSEParser
 
-BRIDGE_SCHEMA = "marimo-export.bridge.v1"
+BRIDGE_SCHEMA = "marimo-export.bridge.v2"
 
 _CHUNK_BYTES = 64 * 1024
 _DEFAULT_MAX_EVENT_BYTES = 40 * 1024 * 1024
@@ -236,6 +237,7 @@ class HttpKernelTransport:
         request_value = {
             "schema": BRIDGE_SCHEMA,
             "client_version": _package_version(),
+            "client_identity": implementation_identity(),
             "request_id": request_id,
             "operation": operation,
             "params": dict(params),

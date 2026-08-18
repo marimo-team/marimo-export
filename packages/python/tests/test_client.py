@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from dataclasses import replace
 from pathlib import Path
 from typing import cast
 
@@ -13,8 +14,15 @@ from marimo_export import (
     open_export,
 )
 from marimo_export._json import JsonObject, sha256_bytes
+from marimo_export._limits import MAX_EXPORT_ASSET_BYTES
 from marimo_export._remote import BridgeError, SessionInfo
-from marimo_export.errors import ExecutionError, NotebookExportError, SessionError, TransportError
+from marimo_export.errors import (
+    ExecutionError,
+    IntegrityError,
+    NotebookExportError,
+    SessionError,
+    TransportError,
+)
 from marimo_export.export import (
     AssetRef,
     ExportIndex,
@@ -107,6 +115,7 @@ def _inspection() -> JsonObject:
                 "cell_id": "cell-answer",
                 "python_type": "builtins.int",
                 "kind": "ordinary",
+                "input_mode": "value",
                 "siblings": ["answer"],
                 "portable_input": True,
                 "sensitive": False,
@@ -244,6 +253,94 @@ def test_capture_releases_transfer_before_committing(
         "release",
     ]
     assert open_export(output).state("baseline").output("answer").asset_bytes() == payload
+
+
+def test_capture_rejects_oversized_transfer_before_download(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    size = MAX_EXPORT_ASSET_BYTES + 1
+    digest = "b" * 64
+    descriptor = NumpyDescriptor(
+        asset=AssetRef(digest, size),
+        provenance=Provenance(
+            cache_key="cell_cache/answer.json",
+            return_reference="cell_cache/answer/return.npy",
+            python_type="numpy.ndarray",
+        ),
+    )
+    index = replace(
+        _index(),
+        states={
+            "baseline": StateEntry(
+                inputs={},
+                outputs={"answer": descriptor},
+            )
+        },
+    )
+
+    class _OversizedTransport(_Transport):
+        def invoke(
+            self,
+            session_id: str,
+            operation: str,
+            params: Mapping[str, object],
+        ) -> dict[str, object]:
+            response = super().invoke(session_id, operation, params)
+            if operation == "capture":
+                response["transfer"] = {
+                    "ticket": "ticket-1",
+                    "expires_at_ms": 4_000_000_000_000,
+                    "assets": [
+                        {
+                            "codec": "numpy.npy.v1",
+                            "sha256": digest,
+                            "size": size,
+                            "url": "/@file/native-return",
+                        }
+                    ],
+                }
+            return response
+
+    transport = _OversizedTransport(index=index)
+    with (
+        _client(monkeypatch, transport) as client,
+        pytest.raises(TransportError, match="asset exceeds"),
+    ):
+        client.session().capture(spec=_spec(), output=tmp_path / "export")
+
+    assert [call[0] for call in transport.calls] == ["sessions", "capture", "release"]
+
+
+def test_capture_hashes_each_asset_before_continuing(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    payload = _npy()
+
+    class _TamperedTransport(_Transport):
+        def download_asset(
+            self,
+            session_id: str,
+            url: str,
+            maximum_bytes: int,
+        ) -> bytes:
+            value = super().download_asset(session_id, url, maximum_bytes)
+            return value[:-1] + bytes([value[-1] ^ 1])
+
+    transport = _TamperedTransport(_index(asset=payload), payload=payload)
+    with (
+        _client(monkeypatch, transport) as client,
+        pytest.raises(IntegrityError, match="digest disagrees"),
+    ):
+        client.session().capture(spec=_spec(), output=tmp_path / "export")
+
+    assert [call[0] for call in transport.calls] == [
+        "sessions",
+        "capture",
+        "download",
+        "release",
+    ]
 
 
 def test_capture_rejects_a_live_document_change_before_commit(

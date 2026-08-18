@@ -10,18 +10,15 @@ import pytest
 from marimo_export._writer import write_export
 from marimo_export.errors import ExecutionError, TransportError
 from marimo_export.export import (
-    CacheSummary,
     ExportIndex,
-    ExportResult,
     NotebookProvenance,
-    PhaseTimings,
     ProducerProvenance,
     Provenance,
     ScalarDescriptor,
     StateEntry,
-    StateRunTimings,
     state_fingerprint,
 )
+from marimo_export.result import CacheSummary, ExportResult, PhaseTimings, StateRunTimings
 
 
 def test_root_help_names_five_commands(capsys: pytest.CaptureFixture[str]) -> None:
@@ -130,6 +127,15 @@ def test_session_lists_and_inspects_definitions(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(cli, "Client", _FakeClient)
+    monkeypatch.setattr(
+        cli,
+        "inspect_notebook",
+        lambda *args, **kwargs: _FakeSession().inspect(),
+    )
+
+    assert cli.main(["session", "notebook.py", "--json"]) == 0
+    file_inspection = json.loads(capsys.readouterr().out)
+    assert file_inspection["result"]["definitions"][0]["input_mode"] == "value"
 
     assert cli.main(["session", "http://127.0.0.1:2718", "--json"]) == 0
     listed = json.loads(capsys.readouterr().out)
@@ -304,6 +310,7 @@ class _FakeSession:
                         "cell_id": "cell-1",
                         "domain": {"options": ["AAPL", "MSFT"]},
                         "kind": "ui",
+                        "input_mode": "value",
                         "name": "symbols_selector",
                         "portable_input": True,
                         "python_type": "marimo.ui.multiselect",

@@ -12,11 +12,7 @@ from urllib.parse import urlsplit
 from uuid import uuid4
 
 from marimo_export._json import JsonObject
-from marimo_export._marimo.compat import (
-    NativeReceipt,
-    new_transfer_virtual_file,
-    transfer_runtime_context,
-)
+from marimo_export._marimo.capabilities import NativeReceipt, TransferRuntime
 from marimo_export.errors import IntegrityError
 from marimo_export.export import OutputCodec, ScalarDescriptor
 
@@ -97,13 +93,14 @@ _SCHEDULER_TOKEN: object | None = None
 def create_ticket(
     receipts: Iterable[NativeReceipt],
     *,
+    host: TransferRuntime,
     ttl_seconds: float = _DEFAULT_TTL_SECONDS,
 ) -> TransferTicket:
     """Register each unique non-scalar payload as a temporary virtual file."""
 
     ttl = _validate_ttl(ttl_seconds)
     unique = _payloads(receipts)
-    context = cast(_RuntimeContext, transfer_runtime_context())
+    context = cast(_RuntimeContext, host.context())
     if not context.virtual_files_supported:
         raise IntegrityError("the attached marimo runtime cannot serve virtual files")
     registry = context.virtual_file_registry
@@ -116,6 +113,7 @@ def create_ticket(
         try:
             for codec, digest, payload in unique:
                 virtual_file = _register(
+                    host,
                     registry,
                     context,
                     payload,
@@ -194,10 +192,6 @@ def _payloads(
         materialized = tuple(receipts)
     except TypeError as error:
         raise TypeError("receipts must be iterable") from error
-    if len(materialized) > _MAX_ASSETS_PER_TICKET:
-        raise IntegrityError(
-            f"a transfer ticket may contain at most {_MAX_ASSETS_PER_TICKET} receipts"
-        )
     unique: dict[tuple[OutputCodec, str], bytes] = {}
     for receipt in materialized:
         if not isinstance(receipt, NativeReceipt):
@@ -217,6 +211,10 @@ def _payloads(
         previous = unique.setdefault(identity, payload)
         if previous != payload:
             raise IntegrityError(f"asset identity {identity!r} has conflicting bytes")
+    if len(unique) > _MAX_ASSETS_PER_TICKET:
+        raise IntegrityError(
+            f"a transfer ticket may contain at most {_MAX_ASSETS_PER_TICKET} assets"
+        )
     return tuple((codec, digest, payload) for (codec, digest), payload in sorted(unique.items()))
 
 
@@ -230,6 +228,7 @@ def _validate_ttl(value: float) -> float:
 
 
 def _register(
+    host: TransferRuntime,
     registry: _VirtualFileRegistry,
     context: _RuntimeContext,
     payload: bytes,
@@ -237,7 +236,7 @@ def _register(
     owned_files: list[_VirtualFile],
 ) -> _VirtualFile:
     for _ in range(100):
-        virtual_file = cast(_VirtualFile, new_transfer_virtual_file(payload))
+        virtual_file = cast(_VirtualFile, host.create_virtual_file(payload))
         if not registry.has(virtual_file.filename):
             break
     else:

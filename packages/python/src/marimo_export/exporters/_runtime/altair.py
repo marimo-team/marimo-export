@@ -6,7 +6,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from marimo_export._json import canonical_bytes, json_object
-from marimo_export._marimo.compat import BlobAsset
+from marimo_export._marimo.blob import BlobAsset
 from marimo_export.exporters._optional import optional
 
 _SCHEMA_PATTERN = re.compile(

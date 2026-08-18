@@ -8,15 +8,14 @@ from marimo_export import ExportSpec, OutputSpec, build, open_export
 from marimo_export.client import _CaptureData
 from marimo_export.errors import ExecutionError
 from marimo_export.export import (
-    CacheSummary,
     ExportIndex,
     NotebookProvenance,
     ProducerProvenance,
     Provenance,
     ScalarDescriptor,
     StateEntry,
-    StateRunTimings,
 )
+from marimo_export.result import CacheSummary, StateRunTimings
 
 
 def _spec() -> ExportSpec:

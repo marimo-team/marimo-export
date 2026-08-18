@@ -8,9 +8,11 @@ import threading
 import time
 from contextlib import suppress
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, cast
 
 import pytest
+from marimo_export import ExportSpec, OutputSpec, build, open_export
 from marimo_export._remote.managed import ManagedServer, _SessionStream
 from marimo_export.errors import TransportError
 
@@ -59,6 +61,36 @@ def test_managed_server_stops_process_before_joining_session_stream() -> None:
     ]
 
 
+def test_managed_server_reports_incomplete_process_ownership() -> None:
+    events: list[str] = []
+
+    class _IncompleteOwnership(_ManagedServerHarness):
+        def __init__(self, values: list[str]) -> None:
+            super().__init__(values)
+            self._owned_groups = {100}
+
+        def _owned_process_groups(self) -> set[int]:
+            raise OSError("ps unavailable")
+
+        def _request_server_shutdown(self) -> None:
+            self.events.append("server-shutdown-failed")
+            raise TransportError("shutdown unavailable")
+
+    server = _IncompleteOwnership(events)
+
+    with pytest.raises(TransportError) as raised:
+        server.stop()
+
+    assert raised.value.code == "server_shutdown_failed"
+    assert events == [
+        "stream-closing",
+        "server-shutdown-failed",
+        "process-stopped",
+        "stream-closed",
+        "files-closed",
+    ]
+
+
 def test_managed_server_finishes_cleanup_when_process_stop_is_cancelled() -> None:
     events: list[str] = []
 
@@ -91,7 +123,7 @@ def test_startup_preserves_primary_error_and_closes_files(
     notebook = tmp_path / "notebook.py"
     notebook.write_text("import marimo\n", encoding="utf-8")
 
-    monkeypatch.setattr(subprocess, "Popen", lambda *args, **kwargs: object())
+    monkeypatch.setattr(subprocess, "Popen", lambda *args, **kwargs: SimpleNamespace(pid=123))
 
     def fail_startup(server: ManagedServer) -> None:
         del server
@@ -341,6 +373,146 @@ def test_managed_initial_autorun_restores_native_cell_cache(tmp_path: Path) -> N
             server.stop()
 
     assert marker.read_text(encoding="utf-8") == "1"
+
+
+@pytest.mark.timeout(30)
+def test_managed_server_preserves_environment_sitecustomize(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    (tmp_path / "sitecustomize.py").write_text(
+        'import os\nos.environ["MARIMO_EXPORT_TEST_SITE"] = "loaded"\n',
+        encoding="utf-8",
+    )
+    notebook = tmp_path / "notebook.py"
+    notebook.write_text(
+        """
+import marimo
+
+app = marimo.App()
+
+
+@app.cell
+def _():
+    import os
+    startup = os.environ.get("MARIMO_EXPORT_TEST_SITE", "missing")
+    return (startup,)
+
+
+if __name__ == "__main__":
+    app.run()
+""".lstrip(),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("PYTHONPATH", str(tmp_path))
+
+    result = build(
+        notebook,
+        spec=ExportSpec(
+            inputs=(),
+            states={"baseline": {}},
+            outputs={"startup": OutputSpec(source="startup")},
+        ),
+        output=tmp_path / "export",
+        timeout=30,
+    )
+
+    assert open_export(result.path).state("baseline").output("startup").scalar() == "loaded"
+
+
+@pytest.mark.timeout(30)
+def test_managed_cache_markers_are_absent_from_notebook_processes(tmp_path: Path) -> None:
+    notebook = tmp_path / "notebook.py"
+    notebook.write_text(
+        """
+import marimo
+
+app = marimo.App()
+
+
+@app.cell
+def _():
+    import os
+    import subprocess
+    import sys
+
+    parent = os.environ.get("MARIMO_EXPORT_MANAGED_CACHE_COMPAT")
+    child = subprocess.check_output(
+        [
+            sys.executable,
+            "-c",
+            "import os; "
+            "print(os.environ.get('MARIMO_EXPORT_MANAGED_CACHE_COMPAT'))",
+        ],
+        text=True,
+    ).strip()
+    visibility = f"{parent}:{child}"
+    return (visibility,)
+
+
+if __name__ == "__main__":
+    app.run()
+""".lstrip(),
+        encoding="utf-8",
+    )
+
+    result = build(
+        notebook,
+        spec=ExportSpec(
+            inputs=(),
+            states={"baseline": {}},
+            outputs={"visibility": OutputSpec(source="visibility")},
+        ),
+        output=tmp_path / "export",
+        timeout=30,
+    )
+
+    assert open_export(result.path).state("baseline").output("visibility").scalar() == "None:None"
+
+
+@pytest.mark.parametrize(
+    ("name", "value"),
+    [
+        ("MARIMO_KERNEL_LIFESPAN_ALLOWLIST", "another-extension"),
+        ("MARIMO_KERNEL_LIFESPAN_DENYLIST", "marimo-export"),
+    ],
+)
+def test_managed_build_rejects_extension_policy_before_notebook_execution(
+    name: str,
+    value: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    marker = tmp_path / "executed"
+    notebook = tmp_path / "notebook.py"
+    notebook.write_text(
+        "import marimo\n\n"
+        "app = marimo.App()\n\n"
+        "@app.cell\n"
+        "def _():\n"
+        "    from pathlib import Path\n"
+        f"    Path({str(marker)!r}).write_text('executed')\n"
+        "    value = 1\n"
+        "    return (value,)\n\n"
+        "if __name__ == '__main__':\n"
+        "    app.run()\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv(name, value)
+
+    with pytest.raises(TransportError) as raised:
+        build(
+            notebook,
+            spec=ExportSpec(
+                inputs=(),
+                states={"baseline": {}},
+                outputs={"value": OutputSpec(source="value")},
+            ),
+            output=tmp_path / "export",
+        )
+
+    assert raised.value.code == "server_start_failed"
+    assert not marker.exists()
 
 
 @pytest.mark.timeout(30)

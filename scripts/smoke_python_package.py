@@ -12,15 +12,20 @@ def main() -> None:
     if _MARIMO_REQUIREMENT not in requirements:
         raise RuntimeError(f"marimo-export wheel must require {_MARIMO_REQUIREMENT}")
 
-    from marimo._save.stubs import BlobAsset
-
-    if BlobAsset.__name__ != "BlobAsset":
-        raise RuntimeError("installed marimo distribution must expose BlobAsset")
-
     import marimo_export
 
     if not marimo_export.__all__:
         raise RuntimeError("installed marimo-export distribution must expose its public API")
+    if marimo_export.BlobAsset.__name__ != "BlobAsset":
+        raise RuntimeError("installed marimo-export distribution must expose BlobAsset")
+
+    lifespans = {
+        (entry.name, entry.value)
+        for entry in metadata.entry_points(group="marimo.kernel.lifespan")
+        if entry.dist.name == "marimo-export"
+    }
+    if lifespans != {("marimo-export", "marimo_export._marimo.entrypoints:kernel_lifespan")}:
+        raise RuntimeError("marimo-export wheel must register its managed kernel lifespan")
 
 
 if __name__ == "__main__":
