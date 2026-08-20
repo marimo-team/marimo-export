@@ -100,6 +100,31 @@ export default defineConfig({
         },
       },
       {
+        files: ["packages/browser/src/loader/anywidget.ts"],
+        rules: {
+          "no-restricted-imports": [
+            "error",
+            {
+              paths: [
+                "@marimo-export/internal-loader-arrow",
+                "@marimo-export/internal-loader-numpy",
+                "@marimo-export/internal-loader-parquet",
+                "@marimo-export/internal-loader-vegalite",
+              ],
+              patterns: [
+                "node:*",
+                "@marimo-team/marimo-export/loader/*",
+                "@anywidget/types",
+                "@uwdata/flechette",
+                "hyparquet",
+                "lz4js",
+                "vega-embed",
+              ],
+            },
+          ],
+        },
+      },
+      {
         files: ["packages/loader-*/src/**/*.ts"],
         rules: {
           "no-restricted-imports": [

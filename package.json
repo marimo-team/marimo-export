@@ -5,6 +5,7 @@
   "license": "Apache-2.0",
   "type": "module",
   "scripts": {
+    "build:browser": "pnpm --filter @marimo-team/marimo-export... build",
     "prepare": "vp config"
   },
   "devDependencies": {

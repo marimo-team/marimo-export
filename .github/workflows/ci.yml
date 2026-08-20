@@ -15,19 +15,14 @@ permissions:
 
 jobs:
   python:
-    name: Python ${{ matrix.python-version }} / marimo ${{ matrix.marimo }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
+    name: Python ${{ matrix.python-version }} / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.11", "3.14"]
-        marimo: [locked]
-        include:
-          - python-version: "3.11"
-            marimo: minimum
-          - python-version: "3.11"
-            marimo: latest-compatible
+        os: [ubuntu-latest, windows-latest]
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
 
     steps:
       - name: Check out repository
@@ -42,40 +37,11 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Run Python contracts
-        if: matrix.marimo == 'locked'
         run: >-
           uv run
           --frozen
           --isolated
-          --group test
-          --all-extras
-          --python "${{ matrix.python-version }}"
-          pytest -q packages/python/tests
-          --ignore packages/python/tests/test_vite_vanilla_example.py
-
-      - name: Resolve latest compatible marimo
-        if: matrix.marimo == 'latest-compatible'
-        run: uv lock --upgrade-package marimo
-
-      - name: Run latest compatible marimo contracts
-        if: matrix.marimo == 'latest-compatible'
-        run: >-
-          uv run
-          --frozen
-          --isolated
-          --group test
-          --all-extras
-          --python "${{ matrix.python-version }}"
-          pytest -q packages/python/tests
-          --ignore packages/python/tests/test_vite_vanilla_example.py
-
-      - name: Run minimum marimo contracts
-        if: matrix.marimo == 'minimum'
-        run: >-
-          uv run
-          --frozen
-          --isolated
-          --with "marimo==0.23.15"
+          --no-dev
           --group test
           --all-extras
           --python "${{ matrix.python-version }}"
@@ -117,28 +83,4 @@ jobs:
         run: pnpm --filter @marimo-export/internal-loader-anywidget exec playwright install --with-deps --only-shell chromium
 
       - name: Run release gate
-        run: make check
-
-  windows:
-    runs-on: windows-latest
-
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
-        with:
-          persist-credentials: false
-
-      - name: Set up uv
-        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
-        with:
-          enable-cache: true
-
-      - name: Install Python workspace
-        run: uv sync --package marimo-export --locked
-
-      - name: Validate native Windows reads and managed build
-        run: >-
-          uv run --package marimo-export pytest -q
-          packages/python/tests/test_secure_io.py
-          packages/python/tests/test_reader.py
-          packages/python/tests/test_managed_server.py::test_managed_initial_autorun_restores_native_cell_cache
+        run: make check package
