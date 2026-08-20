@@ -5,21 +5,7 @@ Run the scaffold from a marimo-export checkout:
 ```bash
 NOTEBOOK_PATH=/absolute/path/to/notebook.py
 STATIC_APP_DIR=/absolute/path/to/static-app
-```
 
-## Contents
-
-- [Create the workspace](#create-the-workspace)
-- [Build from a notebook file](#build-from-a-notebook-file)
-- [Capture an open notebook](#capture-an-open-notebook)
-- [Build and preview](#build-and-preview)
-- [Sideload an unpublished wheel](#sideload-an-unpublished-wheel)
-
-## Create the workspace
-
-Run the scaffold against a new or empty directory:
-
-```bash
 uv run --frozen --group dev python \
   skills/notebook-to-static-app/scripts/scaffold_app.py \
   --notebook "$NOTEBOOK_PATH" \
@@ -28,100 +14,91 @@ uv run --frozen --group dev python \
   --loader vegalite
 ```
 
-The scaffold builds and vendors the local Python wheel and browser tarball.
-Pass `--python-package` or `--browser-package` to reuse packages that were
-already built and reviewed.
+The scaffold vendors the current Python wheel and browser package, reads PEP 723
+dependencies, and creates one uv and Vite workspace. Loader choices include
+`anywidget`, `arrow`, `html`, `json`, `marimo-cell`, `marimo-output`, `numpy`,
+`parquet`, `text`, and `vegalite`.
 
-Available loader names are `anywidget`, `arrow`, `numpy`, `parquet`, and
-`vegalite`. Scalar and image outputs need no additional loader package.
-
-The scaffold reads the notebook's PEP 723 dependencies and creates:
-
-```text
-pyproject.toml
-package.json
-vendor/
-tsconfig.json
-vite.config.ts
-index.html
-src/main.ts
-src/style.css
-```
-
-The generated `requires-python` intersects the notebook range with the
-marimo-export Python 3.11 floor.
-
-Install both environments:
+Install the generated environments:
 
 ```bash
 uv sync --project "$STATIC_APP_DIR"
 pnpm --dir "$STATIC_APP_DIR" install
 ```
 
-The generated `pnpm-workspace.yaml` keeps the app self-contained when its
-directory sits inside another pnpm workspace.
-
-The generated package references are relative, so the complete app directory
-can move to another checkout or build worker. If the notebook imports a local
-Python package that its PEP 723 metadata does not declare, add a relative uv
-source for that package.
-
-Put custom exporter modules in the app directory. Add this path to the selected
-producer command and to the live notebook environment used by capture:
+## Inspect the notebook
 
 ```bash
-STATIC_APP_PYTHONPATH="$STATIC_APP_DIR${PYTHONPATH:+:$PYTHONPATH}"
+uv run --project "$STATIC_APP_DIR" marimo-export inspect \
+  "$NOTEBOOK_PATH" \
+  --json
 ```
 
-## Build from a notebook file
+Inspection executes the initial autorun. Use the returned definitions, cells,
+input modes, dependencies, portability, and sensitivity to author
+`$STATIC_APP_DIR/app.export.yaml`.
 
-Build from the file into the directory Vite will deploy:
-
-```bash
-env PYTHONPATH="$STATIC_APP_PYTHONPATH" \
-  uv run --project "$STATIC_APP_DIR" marimo-export build "$NOTEBOOK_PATH" \
-    --spec "$STATIC_APP_DIR/app.export.yaml" \
-    --output "$STATIC_APP_DIR/public/export" \
-    --replace \
-    --timeout 300 \
-    --json
+```yaml
+schema: marimo-export.spec.v1
+default_state: baseline
+states:
+  baseline: {}
+outputs:
+  summary:
+    source: { kind: value, selector: summary }
 ```
 
-Verify:
+## Plan and build
 
 ```bash
+uv run --project "$STATIC_APP_DIR" marimo-export plan \
+  "$NOTEBOOK_PATH" \
+  --spec "$STATIC_APP_DIR/app.export.yaml" \
+  --timeout 300
+
+uv run --project "$STATIC_APP_DIR" marimo-export build \
+  "$NOTEBOOK_PATH" \
+  --spec "$STATIC_APP_DIR/app.export.yaml" \
+  --output "$STATIC_APP_DIR/public/export" \
+  --replace \
+  --timeout 300 \
+  --jsonl
+
 uv run --project "$STATIC_APP_DIR" marimo-export verify \
   "$STATIC_APP_DIR/public/export" \
   --json
 ```
 
-`build` owns a temporary sibling copy, loopback server, marimo session, and
-cleanup. It verifies the original notebook before committing the export.
+`plan` reports inferred inputs, the default, normalized states, observations,
+reusable fingerprints, and missing fingerprints. `build` validates the
+destination before preparing missing work.
+
+Put custom exporter modules in the app directory and add the directory to
+`PYTHONPATH` for planning and preparation:
+
+```bash
+STATIC_APP_PYTHONPATH="$STATIC_APP_DIR${PYTHONPATH:+:$PYTHONPATH}"
+```
 
 ## Capture an open notebook
 
-Use `capture` when an existing edit session already holds the configured
-environment or an expensive completed computation. List and inspect the live
-session before writing the ExportSpec:
+Start the notebook with the environment and custom exporter modules available.
+List its sessions:
 
 ```bash
 NOTEBOOK_PORT=2718
-uv run --project "$STATIC_APP_DIR" marimo-export session \
-  "http://127.0.0.1:$NOTEBOOK_PORT" \
-  --timeout 180 \
-  --json
 
-SESSION_ID=s_...
-uv run --project "$STATIC_APP_DIR" marimo-export session \
+uv run --project "$STATIC_APP_DIR" marimo-export inspect \
   "http://127.0.0.1:$NOTEBOOK_PORT" \
-  --session "$SESSION_ID" \
   --timeout 180 \
   --json
 ```
 
-Capture into the directory Vite will deploy:
+Capture one selected session into the app's deployment directory:
 
 ```bash
+SESSION_ID=s_...
+
 env PYTHONPATH="$STATIC_APP_PYTHONPATH" \
   uv run --project "$STATIC_APP_DIR" marimo-export capture \
     "http://127.0.0.1:$NOTEBOOK_PORT" \
@@ -130,26 +107,34 @@ env PYTHONPATH="$STATIC_APP_PYTHONPATH" \
     --output "$STATIC_APP_DIR/public/export" \
     --replace \
     --timeout 300 \
-    --json
+    --jsonl
 ```
 
-Verify:
+The session remains active. Use the Python `capture()` context when the app needs
+to inspect, serve, or retain the prepared generation before writing:
 
-```bash
-uv run --project "$STATIC_APP_DIR" marimo-export verify \
-  "$STATIC_APP_DIR/public/export" \
-  --json
+```python
+from marimo_export import ExportSpec, capture
+
+spec = ExportSpec.from_file("app.export.yaml")
+with capture(
+    "http://127.0.0.1:2718",
+    session="SESSION_ID",
+    spec=spec,
+) as prepared:
+    prepared.write("public/export", replace=True)
 ```
 
-The borrowed server and session remain active. Compare the notebook hash from
-`.notebook-source.json` before handoff. A user may edit an attached notebook
-while capture runs, so report a changed hash and leave the user’s source as-is.
+The client and live kernel must import the same marimo-export implementation.
+Restart the session after installing another wheel or changing an already loaded
+custom exporter module.
 
-## Build and preview
+## Build and preview the app
 
 ```bash
 pnpm --dir "$STATIC_APP_DIR" run typecheck
 pnpm --dir "$STATIC_APP_DIR" run build
+
 APP_PORT=4173
 pnpm --dir "$STATIC_APP_DIR" exec vp preview \
   --host 127.0.0.1 \
@@ -157,31 +142,12 @@ pnpm --dir "$STATIC_APP_DIR" exec vp preview \
   --strictPort
 ```
 
-Open the Vite URL with `agent-browser`, exercise the app, and close the browser
-session when finished.
+Exercise every saved state, rapid successive changes, failure restoration,
+mount disposal, desktop layout, and narrow layout. Confirm that notebook result
+requests resolve from static export assets.
 
-## Sideload an unpublished wheel
+## Verify source identity before handoff
 
-Capture requires the client and notebook kernel to import the same
-marimo-export implementation. The generated app vendors the current wheel
-under `vendor/`. Serve that directory over loopback HTTP when the running
-notebook environment cannot install a local path directly:
-
-```bash
-python -m http.server --bind 127.0.0.1 --directory "$STATIC_APP_DIR/vendor" 8765
-```
-
-Install the exact wheel URL into the notebook interpreter:
-
-```bash
-NOTEBOOK_PYTHON=/path/to/notebook/python
-uv pip install \
-  --python "$NOTEBOOK_PYTHON" \
-  --reinstall \
-  "http://127.0.0.1:8765/marimo_export-0.0.0-py3-none-any.whl"
-uv pip check --python "$NOTEBOOK_PYTHON"
-```
-
-Restart the kernel, then inspect the session before capture. The bridge checks
-the installed source identity in addition to the package version. Stop the
-wheel server after the kernel imports the package.
+The scaffold records the notebook filename and SHA-256 in
+`.notebook-source.json`. Compare that digest with the authored notebook before
+handoff. Report a changed source and leave the notebook untouched.

@@ -24,11 +24,13 @@ from the references. The checkout is authoritative.
 ## Invariants
 
 - Leave the source notebook byte-for-byte unchanged.
-- Use notebook definition names in `inputs` and `outputs`.
+- Use notebook definition names in state-row keys and output selectors.
 - Run every selected output through normal marimo execution.
 - Treat browser choices as a finite product surface, not a free-form Python
   prompt.
-- Choose `build` for an owned file execution or `capture` for an existing live session.
+- Choose CLI `build` for a saved file and CLI `capture` for an existing live
+  session. Both write a deployment directory. Python `capture()` returns a
+  leased prepared export.
 - The deployed app must run from static files with no Python process.
 - Freeze every notebook data dependency into the export. Mounted charts must
   not fetch their source dataset at runtime.
@@ -90,31 +92,39 @@ application after the ExportSpec is known.
 For `build`, run:
 
 ```bash
-uv run --project "$STATIC_APP_DIR" marimo-export session "$NOTEBOOK_PATH" --json
+uv run --project "$STATIC_APP_DIR" marimo-export inspect "$NOTEBOOK_PATH" --json
 ```
 
 For `capture`, set `NOTEBOOK_PORT` and `SESSION_ID`, then run:
 
 ```bash
-uv run --project "$STATIC_APP_DIR" marimo-export session \
+uv run --project "$STATIC_APP_DIR" marimo-export inspect \
   "http://127.0.0.1:$NOTEBOOK_PORT" \
   --session "$SESSION_ID" \
   --json
 ```
 
-Both commands return the same definition records before the state matrix
-starts.
+Both commands return definition and cell records before state preparation.
 
 Do not infer a definition from displayed prose or a local variable whose name
-starts with `_`. Use the session inspection result.
+starts with `_`. Use the inspection result.
 
 ### 5. Author and preflight the ExportSpec
 
 Create `<name>.export.yaml` beside the app. Use domain names for states and
 published output names.
 
-Run session inspection before expensive state execution. Correct missing input
-or output names before build or capture.
+Run planning after authoring the spec. Correct missing input or output names
+before preparation:
+
+```bash
+uv run --project "$STATIC_APP_DIR" marimo-export plan "$NOTEBOOK_PATH" \
+  --spec "$STATIC_APP_DIR/app.export.yaml" \
+  --json
+```
+
+The plan reports inferred inputs, normalized states, the default, observations,
+reusable fingerprints, and missing fingerprints.
 
 Choose the narrowest representation that preserves the browser experience:
 
@@ -134,18 +144,25 @@ pair the chart with an exported table and rebuild the chart in the browser.
 
 ### 6. Create and verify the export
 
-Use `build` when the workflow owns notebook startup, execution, and cleanup.
-Use `capture` when a running kernel already owns the configured environment or
-completed computation. Write the selected result to `public/export`, then run
-`marimo-export verify` before the browser build.
+Use `build` when the workflow owns notebook startup, execution, cleanup, and the
+deployment directory. Write to `public/export`, then run `marimo-export verify`
+before the browser build.
+
+Use CLI `capture --output public/export` when a running kernel already owns the
+configured environment or completed computation. Use the Python `capture()`
+context when the app needs to inspect, serve, or retain the prepared generation
+before writing.
 
 Run one producer mode for an app workflow. Do not hand-edit `index.json` or its
 assets.
 
 ### 7. Build the browser application
 
-Open `./export/`, resolve named states, and load outputs explicitly. Keep one
-transition owner that:
+Open `./export/`, resolve named states, and load outputs explicitly. For a
+changing prepared publication, use `@marimo-team/marimo-export/prepared` with one
+`PreparedStateController` and an application-owned `PreparedStatePort`.
+
+Keep one transition owner that:
 
 1. aborts stale loads
 2. disposes mounted charts or widgets

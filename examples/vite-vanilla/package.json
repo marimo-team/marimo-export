@@ -11,7 +11,7 @@
     "notebook": "uv run --locked --package marimo-export-vite-vanilla-example marimo edit finance.py",
     "preview": "vp preview --host 127.0.0.1",
     "export": "uv run --locked --package marimo-export-vite-vanilla-example marimo-export build finance.py --spec finance.export.yaml --output public/export --replace",
-    "test": "node --test tests/dev-server.test.mjs",
+    "test": "node tests/dev-transform.mjs",
     "verify:export": "uv run --locked --package marimo-export-vite-vanilla-example marimo-export verify public/export",
     "typecheck": "tsc --noEmit"
   },

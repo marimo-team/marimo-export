@@ -8,7 +8,7 @@
 #     "traitlets==5.14.3",
 #     "yfinance==1.3.0",
 # ]
-# requires-python = ">=3.11"
+# requires-python = ">=3.10"
 # ///
 
 import marimo

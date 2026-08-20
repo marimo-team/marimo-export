@@ -1,24 +1,12 @@
 # marimo-export contracts
 
-## Contents
-
-- [ExportSpec](#exportspec)
-- [Representations](#representations)
-- [Browser entry](#browser-entry)
-- [Transition ownership](#transition-ownership)
-- [Custom BlobAsset pair](#custom-blobasset-pair)
-- [Trust boundary](#trust-boundary)
-
 ## ExportSpec
 
-An ExportSpec contains notebook definition names, sparse named states, and
-published outputs:
+Declare one default, sparse states, and published outputs:
 
 ```yaml
 schema: marimo-export.spec.v1
-inputs:
-  - region
-  - threshold_slider
+default_state: national
 states:
   national: {}
   northeast:
@@ -27,161 +15,118 @@ states:
     threshold_slider: 0.8
 outputs:
   headline:
-    source: summary
+    source: { kind: value, selector: summary }
   chart:
-    source: comparison_chart
+    source: { kind: value, selector: comparison_chart }
     exporter: altair.vegalite
   rows:
-    source: filtered_table
-    exporter:
-      name: parquet.table
-      options:
-        compression: snappy
-        filename: rows.parquet
+    source: { kind: value, selector: filtered_table }
+    exporter: parquet.table
 ```
 
-Each state is a complete input assignment after baseline normalization. State
-rows may omit values that should stay at their baseline.
+Planning infers inputs from output dependencies and state-row keys. Sparse rows
+inherit omitted inputs from one baseline. Equivalent rows retain their aliases
+and share one fingerprint.
 
-Inputs can target ordinary authored definitions or marimo UI element
-definitions. Use the UI element's definition name, not `.value`.
+Run `marimo-export inspect NOTEBOOK --json` to discover definitions and cells.
+Run `marimo-export plan NOTEBOOK --spec FILE --json` to inspect normalized and
+reusable work.
 
-Outputs map a published name to a notebook definition. The source definition must
-exist after the selected state runs.
+## Preparation
+
+```python
+from marimo_export import ExportSpec, prepare
+
+spec = ExportSpec.from_file("app.export.yaml")
+with prepare("notebook.py", spec=spec) as prepared:
+    prepared.write("public/export", replace=True)
+```
+
+`prepare()` opens a notebook only when repository work is missing. `capture()`
+returns the same leased `PreparedExport` from a named live session.
+
+`PreparedExport` can:
+
+- open the immutable `NotebookExport`
+- lease one file through `asset(relative)`
+- create `marimo-export.prepared.v1` browser metadata through `manifest()`
+- copy and verify a deployment directory through `write()`
+- report prepared and reused state fingerprints
+
+Keep the handle open while serving its files. Close independently leased assets
+after their responses finish.
 
 ## Representations
 
-| Notebook result    | Exporter                       | Browser loader        |
-| ------------------ | ------------------------------ | --------------------- |
-| scalar             | omit                           | `scalarLoader()`      |
-| NumPy array        | omit                           | `numpyLoader()`       |
-| Arrow table        | omit                           | `arrowTableLoader()`  |
-| table or DataFrame | `parquet.table`                | `parquetRowsLoader()` |
-| Altair chart       | `altair.vegalite`              | `vegaLiteLoader()`    |
-| Altair chart image | `altair.png`                   | `imageLoader()`       |
-| AnyWidget          | `anywidget.bundle`             | `anyWidgetLoader()`   |
-| custom value       | callable returning `BlobAsset` | custom loader         |
+| Notebook result | Exporter or source             | Browser loader         |
+| --------------- | ------------------------------ | ---------------------- |
+| JSON value      | `OutputSpec.value()`           | `jsonLoader()`         |
+| Marimo output   | `OutputSpec.output()`          | `marimoOutputLoader()` |
+| Marimo cell     | `OutputSpec.cell()`            | `marimoCellLoader()`   |
+| Scalar          | scalar exporter                | `scalarLoader()`       |
+| NumPy array     | array exporter                 | `numpyLoader()`        |
+| Arrow table     | table exporter                 | `arrowTableLoader()`   |
+| DataFrame       | `parquet.table`                | `parquetRowsLoader()`  |
+| Altair chart    | `altair.vegalite`              | `vegaLiteLoader()`     |
+| PNG             | `altair.png`                   | `imageLoader()`        |
+| AnyWidget       | `anywidget.bundle`             | `anyWidgetLoader()`    |
+| Custom value    | callable returning `BlobAsset` | custom loader          |
 
-Install the peer dependency owned by each imported loader:
+Each descriptor exposes codec, media type, originating Python type, and an inline
+value or content-addressed asset.
 
-| Loader    | Peer dependency              |
-| --------- | ---------------------------- |
-| Arrow     | `@uwdata/flechette`, `lz4js` |
-| Parquet   | `hyparquet`                  |
-| Vega-Lite | `vega-embed`                 |
-| AnyWidget | `@anywidget/types`           |
-
-## Browser entry
+## Immutable browser entry
 
 ```ts
-import { openExport, scalarLoader } from "@marimo-team/marimo-export";
-import { parquetRowsLoader } from "@marimo-team/marimo-export/loader/parquet";
-import { vegaLiteLoader } from "@marimo-team/marimo-export/loader/vegalite";
+import { openExport } from "@marimo-team/marimo-export";
+import { jsonLoader } from "@marimo-team/marimo-export/loader/json";
 
 const notebookExport = await openExport("./export/");
-const state = notebookExport.state("national");
-
-const headline = await state.output("headline").load(scalarLoader());
-const rows = await state.output("rows").load(parquetRowsLoader());
-const chart = await state.output("chart").load(vegaLiteLoader({ actions: false }));
+const state = notebookExport.defaultState;
+const headline = await state.output("headline").load(jsonLoader());
 ```
 
-`openExport()` reads `index.json`. Assets load when an output loader requests
-them.
+Use `state(alias)`, `resolve(completeInputs)`, or `state.resolve(patch)` to select
+another exported vector.
 
-Use `notebookExport.state(name)` for a named choice. Use
-`notebookExport.resolve(completeInputs)` for a complete vector, or
-`state.resolve(patch)` for a sparse transition from a current state.
-
-## Transition ownership
-
-Keep abort and disposal in one controller:
+## Prepared browser entry
 
 ```ts
-import type { MountedView } from "@marimo-team/marimo-export";
+import { jsonLoader } from "@marimo-team/marimo-export/loader/json";
+import {
+  PreparedPublicationRefresh,
+  PreparedStateController,
+  type PreparedStatePort,
+} from "@marimo-team/marimo-export/prepared";
 
-interface MountSet {
-  readonly controller: AbortController;
-  readonly views: readonly MountedView[];
-}
-
-let chartHost = document.querySelector<HTMLElement>("#chart")!;
-const rowsHost = document.querySelector<HTMLElement>("#rows")!;
-let transition: AbortController | undefined;
-let mounted: MountSet | undefined;
-
-async function selectState(name: string): Promise<void> {
-  transition?.abort();
-  const controller = new AbortController();
-  transition = controller;
-  const { signal } = controller;
-  const stagedViews: MountedView[] = [];
-  const stagedChartHost = chartHost.cloneNode(false) as HTMLElement;
-  stagedChartHost.removeAttribute("id");
-  const stagingArea = document.createElement("div");
-  stagingArea.setAttribute("aria-hidden", "true");
-  stagingArea.style.position = "fixed";
-  stagingArea.style.inset = "0 auto auto -100000px";
-  stagingArea.style.visibility = "hidden";
-  stagedChartHost.style.width = `${chartHost.getBoundingClientRect().width}px`;
-  stagingArea.append(stagedChartHost);
-  document.body.append(stagingArea);
-  const mountController = new AbortController();
-  const abortStagedMount = () => mountController.abort(signal.reason);
-  signal.addEventListener("abort", abortStagedMount, { once: true });
-
-  try {
-    const state = notebookExport.state(name);
-    const [rows, chart] = await Promise.all([
-      state.output("rows").load(parquetRowsLoader(), { signal }),
-      state.output("chart").load(vegaLiteLoader({ actions: false }), { signal }),
-    ]);
+const port: PreparedStatePort = {
+  async apply({ next }, signal) {
+    const headline = await next.state.output("headline").load(jsonLoader(), { signal });
     signal.throwIfAborted();
+    document.querySelector("#headline")!.textContent = String(headline);
+  },
+};
 
-    const stagedRows = renderRows(rows);
-    stagedViews.push(await chart.mount(stagedChartHost, { signal: mountController.signal }));
-    signal.throwIfAborted();
+const controller = new PreparedStateController(port);
+const manifestUrl = new URL("/runtime/prepared.json", location.href);
+const refresh = new PreparedPublicationRefresh(manifestUrl, controller);
 
-    const previous = mounted;
-    const chartId = chartHost.id;
-    signal.removeEventListener("abort", abortStagedMount);
-    stagedChartHost.style.removeProperty("width");
-    chartHost.replaceWith(stagedChartHost);
-    stagedChartHost.id = chartId;
-    chartHost = stagedChartHost;
-    stagingArea.remove();
-    rowsHost.replaceChildren(stagedRows);
-    mounted = { controller: mountController, views: stagedViews };
-    if (previous !== undefined) {
-      previous.controller.abort();
-      await Promise.allSettled(previous.views.map((view) => view.dispose()));
-    }
-  } catch (error) {
-    signal.removeEventListener("abort", abortStagedMount);
-    mountController.abort();
-    await Promise.allSettled(stagedViews.map((view) => view.dispose()));
-    stagingArea.remove();
-    if (!signal.aborted) showError(error);
-  }
-}
+await refresh.start();
+await controller.updateInputs({ region: "Northeast" });
 ```
 
-The previous application host remains mounted until every replacement output
-is ready. Staged modules execute with page authority and may create global
-effects outside those hosts. Use trusted loaders, then abort work and dispose
-the committed mounts during page teardown.
+The port loads and commits the complete application state. Stage multi-output
+views before changing visible hosts. `restore()` can reinstate the last committed
+publication after a failure.
 
 ## Custom BlobAsset pair
-
-Use a custom exporter when the notebook value needs a representation that the
-built-ins do not provide.
 
 Python:
 
 ```python
 import json
 
-from marimo_export import BlobAsset
+from marimo_export.outputs import BlobAsset
 
 
 def encode(value: object) -> BlobAsset:
@@ -192,45 +137,25 @@ def encode(value: object) -> BlobAsset:
     )
 ```
 
-ExportSpec:
-
-```yaml
-outputs:
-  summary:
-    source: report
-    exporter: summary_exporter:encode
-```
-
 TypeScript:
 
 ```ts
 import { defineBlobAssetLoader } from "@marimo-team/marimo-export";
 
-interface Summary {
-  readonly total: number;
-}
-
-const summaryLoader = defineBlobAssetLoader<Summary>({
+const summaryLoader = defineBlobAssetLoader({
   mediaTypes: "application/vnd.example.summary.v1+json",
   load({ payload, signal }) {
     signal?.throwIfAborted();
-    return JSON.parse(new TextDecoder().decode(payload.data)) as Summary;
+    return JSON.parse(new TextDecoder().decode(payload.data));
   },
 });
 ```
 
-Keep the exporter module in the app directory and add that directory to
-`PYTHONPATH` for notebook startup, build, and capture. Validate untrusted bytes
-inside the loader before returning an application value.
-
 ## Trust boundary
 
-`build` and `capture` execute notebook and exporter code with the environment's
-file, credential, and network access.
+`build`, `prepare`, `capture`, planning that requires inspection, and notebook
+inspection execute notebook or exporter code with the environment's file,
+credential, network, and package access.
 
-Opening and verifying an export do not execute notebook-authored browser code.
-Mounting AnyWidget, Vega-Lite, or custom interactive values grants that code
-page authority.
-
-Verify every export before deployment. Serve `index.json` and the referenced
-assets from the same static directory.
+Opening and verifying parse inert records. Mounting AnyWidget, Vega-Lite, or a
+custom interactive value grants its module browser page authority.

@@ -137,12 +137,13 @@ function requestView(name: string): void {
   setBusy(name, true);
   history.replaceState(null, "", `#${name}`);
   transition = transition.then(
-    () => renderView(state, copy, nextRevision, controller),
-    () => renderView(state, copy, nextRevision, controller),
+    () => renderView(name, state, copy, nextRevision, controller),
+    () => renderView(name, state, copy, nextRevision, controller),
   );
 }
 
 async function renderView(
+  alias: string,
   state: ExportState,
   copy: ViewCopy,
   nextRevision: number,
@@ -220,7 +221,7 @@ async function renderView(
       mounted = { controller: mountController, views: nextViews };
       committed = true;
       renderMarketView(rows, summary, copy);
-      setBusy(state.name, false);
+      setBusy(alias, false);
       errorPanel.hidden = true;
       await disposeMounted(previous);
     } catch (error) {

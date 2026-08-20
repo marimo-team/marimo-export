@@ -4,10 +4,10 @@ import importlib.util
 import json
 import shutil
 import subprocess
-import tomllib
 from pathlib import Path
 
 import pytest
+import tomli
 
 _REPOSITORY = Path(__file__).parents[3]
 _SCRIPT = _REPOSITORY / "skills/notebook-to-static-app/scripts/scaffold_app.py"
@@ -25,12 +25,12 @@ def test_scaffold_requires_python_intersects_the_package_floor() -> None:
     validate = _scaffold_module()._validate_requires_python
 
     assert validate(">=3.12") == ">=3.12"
-    assert validate(">=3.11,<3.12") == ">=3.11,<3.12"
-    assert validate(">=3.10") == ">=3.11"
+    assert validate(">=3.10,<3.11") == ">=3.10,<3.11"
+    assert validate(">=3.9") == ">=3.10"
     with pytest.raises(SystemExit, match="does not intersect"):
-        validate("<3.11")
+        validate("<3.10")
     with pytest.raises(SystemExit, match="does not intersect"):
-        validate(">=3.11,<3.11")
+        validate(">=3.10,<3.10")
 
 
 def test_scaffold_is_source_preserving_and_relocatable(tmp_path: Path) -> None:
@@ -71,6 +71,8 @@ print("analysis")
             str(python_package),
             "--loader",
             "parquet",
+            "--loader",
+            "marimo-cell",
         ],
         check=True,
         capture_output=True,
@@ -85,8 +87,8 @@ print("analysis")
         "file:vendor/marimo-export.tgz"
     )
     assert package["dependencies"]["hyparquet"] == "1.26.2"
-    project = tomllib.loads((output / "pyproject.toml").read_text(encoding="utf-8"))
-    assert project["project"]["requires-python"] == ">=3.11"
+    project = tomli.loads((output / "pyproject.toml").read_text(encoding="utf-8"))
+    assert project["project"]["requires-python"] == ">=3.10"
     assert project["tool"]["uv"]["sources"]["marimo-export"] == {
         "path": "vendor/marimo_export-0.0.0-py3-none-any.whl"
     }

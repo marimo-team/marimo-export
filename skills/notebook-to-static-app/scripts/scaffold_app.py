@@ -9,17 +9,22 @@ import re
 import shutil
 import subprocess
 import tempfile
-import tomllib
 from pathlib import Path
 
+import tomli
 from packaging.specifiers import InvalidSpecifier, SpecifierSet
 from packaging.version import InvalidVersion, Version
 
 LOADER_DEPENDENCIES = {
     "anywidget": {"@anywidget/types": "0.4.0"},
     "arrow": {"@uwdata/flechette": "2.5.0", "lz4js": "0.2.0"},
+    "html": {},
+    "json": {},
+    "marimo-cell": {},
+    "marimo-output": {},
     "numpy": {},
     "parquet": {"hyparquet": "1.26.2"},
+    "text": {},
     "vegalite": {"vega-embed": "7.1.0"},
 }
 
@@ -90,7 +95,7 @@ def main() -> None:
         _write_pyproject(
             staging / "pyproject.toml",
             slug=slug,
-            requires_python=metadata.get("requires-python", ">=3.11"),
+            requires_python=metadata.get("requires-python", ">=3.10"),
             dependencies=metadata.get("dependencies", []),
             python_package=python_package.relative_to(staging),
         )
@@ -120,7 +125,7 @@ def _script_metadata(path: Path) -> dict[str, object]:
         (index for index, line in enumerate(lines) if line.strip() == "# /// script"), None
     )
     if start is None:
-        return {"dependencies": [], "requires-python": ">=3.11"}
+        return {"dependencies": [], "requires-python": ">=3.10"}
     end = next(
         (index for index in range(start + 1, len(lines)) if lines[index].strip() == "# ///"),
         None,
@@ -133,9 +138,9 @@ def _script_metadata(path: Path) -> dict[str, object]:
             raise SystemExit(f"invalid PEP 723 metadata line: {line!r}")
         value = line[1:]
         body.append(value[1:] if value.startswith(" ") else value)
-    parsed = tomllib.loads("\n".join(body))
+    parsed = tomli.loads("\n".join(body))
     dependencies = parsed.get("dependencies", [])
-    requires_python = parsed.get("requires-python", ">=3.11")
+    requires_python = parsed.get("requires-python", ">=3.10")
     if not isinstance(dependencies, list) or any(
         not isinstance(item, str) for item in dependencies
     ):
@@ -154,7 +159,7 @@ def _validate_requires_python(value: str) -> str:
         requested = SpecifierSet(value)
     except InvalidSpecifier as error:
         raise SystemExit(f"PEP 723 requires-python is invalid: {value}") from error
-    combined = requested & SpecifierSet(">=3.11")
+    combined = requested & SpecifierSet(">=3.10")
     candidates = {
         Version("3.8"),
         Version("3.9"),
@@ -183,9 +188,9 @@ def _validate_requires_python(value: str) -> str:
             candidates.add(Version(".".join(map(str, (*release[:-1], release[-1] + 1)))))
     if not any(combined.contains(candidate, prereleases=True) for candidate in candidates):
         raise SystemExit(
-            f"notebook requires-python {value!r} does not intersect marimo-export >=3.11"
+            f"notebook requires-python {value!r} does not intersect marimo-export >=3.10"
         )
-    floor = Version("3.11")
+    floor = Version("3.10")
     if not any(
         candidate < floor and requested.contains(candidate, prereleases=True)
         for candidate in candidates
@@ -201,7 +206,7 @@ def _validate_requires_python(value: str) -> str:
         if version is not None and version < floor and specifier.operator in {">", ">="}:
             continue
         effective.append(str(specifier))
-    effective.append(">=3.11")
+    effective.append(">=3.10")
     return str(SpecifierSet(",".join(effective)))
 
 

@@ -1,7 +1,5 @@
 schema: marimo-export.spec.v1
-inputs:
-  - interval
-  - symbols_selector
+default_state: baseline
 states:
   baseline: {}
   cloud_platforms:
@@ -15,27 +13,32 @@ states:
     symbols_selector: [AAPL, CRWV, MSFT, GOOGL, AMZN]
 outputs:
   market_explorer:
-    source: quote_detail
+    source: { kind: value, selector: quote_detail }
     exporter: anywidget.bundle
   market_summary:
-    source: selected_prices
+    source: { kind: value, selector: selected_prices }
     exporter:
       name: market_summary:encode
       options:
         currency: USD
+      dependencies:
+        - json
+        - polars
   performance_chart:
-    source: performance
+    source: { kind: value, selector: performance }
     exporter: altair.vegalite
   performance_snapshot:
-    source: performance
+    source: { kind: value, selector: performance }
     exporter:
       name: altair.png
       options:
         scale: 2
+      dependencies: []
   price_history:
-    source: selected_prices
+    source: { kind: value, selector: selected_prices }
     exporter:
       name: parquet.table
       options:
         compression: snappy
         filename: price-history.parquet
+      dependencies: []

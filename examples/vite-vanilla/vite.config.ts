@@ -6,6 +6,9 @@ export default defineConfig({
   build: {
     target: "es2022",
   },
+  optimizeDeps: {
+    exclude: ["@marimo-export/internal-loader-anywidget"],
+  },
   resolve: {
     // Mirror the root TypeScript path during Vite's source-workspace transform.
     alias: [

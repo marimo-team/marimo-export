@@ -4,7 +4,7 @@ import json
 from typing import Any
 
 import polars as pl
-from marimo_export import BlobAsset
+from marimo_export.outputs import BlobAsset
 
 _MEDIA_TYPE = "application/vnd.marimo-export.market-summary.v1+json"
 _SCHEMA = "marimo-export.market-summary.v1"
