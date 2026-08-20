@@ -1,24 +1,24 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
+import marimo_export._directory as directory_module
 import marimo_export._writer as writer_module
 import pytest
 from marimo_export import open_export
 from marimo_export._json import sha256_bytes
-from marimo_export._writer import write_export
-from marimo_export.errors import NotebookExportError
-from marimo_export.export import (
+from marimo_export._writer import materialize_export, write_export
+from marimo_export.descriptors import (
     AssetRef,
-    ExportIndex,
-    NotebookProvenance,
     NumpyDescriptor,
     OutputCodec,
-    ProducerProvenance,
     Provenance,
     ScalarDescriptor,
-    StateEntry,
 )
+from marimo_export.errors import NotebookExportError
+from marimo_export.index import ExportIndex, NotebookProvenance, ProducerProvenance, StateEntry
+from marimo_export.wire import state_fingerprint
 
 
 def _npy() -> bytes:
@@ -32,30 +32,31 @@ def _npy() -> bytes:
 def _export() -> tuple[ExportIndex, dict[tuple[OutputCodec, str], bytes]]:
     payload = _npy()
     digest = sha256_bytes(payload)
+    fingerprint = state_fingerprint({})
     index = ExportIndex(
+        spec_sha256="d" * 64,
+        default_state=fingerprint,
         notebook=NotebookProvenance(filename="notebook.py", document_sha256="a" * 64),
-        producer=ProducerProvenance(marimo="0.23.15", marimo_export="1.0.0"),
+        producer=ProducerProvenance(
+            marimo="0.23.15",
+            marimo_export="1.0.0",
+            implementation_sha256="c" * 64,
+        ),
         inputs=(),
+        control_bindings={},
         outputs=("count", "array"),
+        aliases={"state": fingerprint},
         states={
-            "state": StateEntry(
+            fingerprint: StateEntry(
                 inputs={},
                 outputs={
                     "count": ScalarDescriptor(
                         value=3,
-                        provenance=Provenance(
-                            cache_key="cell_cache/count.json",
-                            return_reference=None,
-                            python_type="builtins.int",
-                        ),
+                        provenance=Provenance(python_type="builtins.int"),
                     ),
                     "array": NumpyDescriptor(
                         asset=AssetRef(digest, len(payload)),
-                        provenance=Provenance(
-                            cache_key="cell_cache/array.json",
-                            return_reference="cell_cache/array/return.npy",
-                            python_type="numpy.ndarray",
-                        ),
+                        provenance=Provenance(python_type="numpy.ndarray"),
                     ),
                 },
             )
@@ -77,18 +78,55 @@ def test_writer_stages_verifies_and_commits_a_export(tmp_path: Path) -> None:
     assert result.index_bytes == len(index.to_bytes())
     assert result.warnings == ()
     assert open_export(target).verify().assets == 1
+    assert next(target.joinpath("assets").iterdir()).read_bytes() == next(iter(assets.values()))
 
 
-def test_writer_commits_a_new_export_on_windows(
+def test_writer_materializes_into_an_owned_empty_directory(tmp_path: Path) -> None:
+    index, assets = _export()
+    target = tmp_path / "owned-stage"
+    target.mkdir()
+
+    result = materialize_export(index, assets, target)
+
+    assert result.path == target
+    assert result.warnings == ()
+    assert open_export(target).verify().assets == 1
+
+
+def test_writer_rejects_a_nonempty_materialization_directory(tmp_path: Path) -> None:
+    index, assets = _export()
+    target = tmp_path / "owned-stage"
+    target.mkdir()
+    target.joinpath("existing.txt").write_text("keep", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="empty directory"):
+        materialize_export(index, assets, target)
+
+    assert target.joinpath("existing.txt").read_text(encoding="utf-8") == "keep"
+
+
+def test_writer_commits_through_the_shared_directory_transaction(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     index, assets = _export()
     target = tmp_path / "export"
-    monkeypatch.setattr(writer_module.sys, "platform", "win32")
+    native_commit = writer_module.commit_directory
+    committed: list[Path] = []
+
+    def commit(staged, selected, *, retain_replaced=False):
+        committed.append(selected.path)
+        return native_commit(
+            staged,
+            selected,
+            retain_replaced=retain_replaced,
+        )
+
+    monkeypatch.setattr(writer_module, "commit_directory", commit)
 
     result = write_export(index, assets, target, replace=False)
 
+    assert committed == [target]
     assert result.path == target.absolute()
     assert open_export(target).verify().assets == 1
 
@@ -115,6 +153,87 @@ def test_writer_atomically_replaces_a_verified_export(tmp_path: Path) -> None:
     assert result.warnings == ()
     assert (target / "index.json").read_bytes() == before
     assert not tuple(tmp_path.glob(".export.retired-*"))
+    assert not tuple(tmp_path.glob(".export.staging-*"))
+
+
+@pytest.mark.parametrize("transaction", ["exchange", "fallback"])
+def test_writer_reports_retired_destination_cleanup_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    transaction: str,
+) -> None:
+    index, assets = _export()
+    target = tmp_path / "export"
+    write_export(index, assets, target, replace=False)
+    native_remove = writer_module.shutil.rmtree
+
+    def exchange(first: Path, second: Path) -> bool:
+        if transaction == "fallback":
+            return False
+        temporary = tmp_path / "exchange"
+        os.replace(first, temporary)
+        os.replace(second, first)
+        os.replace(temporary, second)
+        return True
+
+    def fail_retired(path: Path) -> None:
+        if path.name.startswith((".export.staging-", ".export.recovery-")):
+            raise OSError("cleanup failed")
+        native_remove(path)
+
+    monkeypatch.setattr(directory_module, "_exchange_directories", exchange)
+    monkeypatch.setattr(writer_module.shutil, "rmtree", fail_retired)
+
+    result = write_export(index, assets, target, replace=True)
+
+    assert open_export(target).verify().assets == 1
+    assert [warning.code for warning in result.warnings] == ["retired_destination_cleanup_failed"]
+
+
+def test_writer_rejects_destination_root_replacement_during_commit(
+    tmp_path: Path,
+) -> None:
+    index, assets = _export()
+    target = tmp_path / "export"
+    write_export(index, assets, target, replace=False)
+    previous = tmp_path / "previous"
+
+    def replace_root() -> None:
+        os.replace(target, previous)
+        target.mkdir()
+
+    with pytest.raises(NotebookExportError) as raised:
+        write_export(
+            index,
+            assets,
+            target,
+            replace=True,
+            commit_guard=replace_root,
+        )
+
+    assert raised.value.code == "destination_changed"
+    assert target.is_dir()
+    assert tuple(target.iterdir()) == ()
+    assert previous.joinpath("index.json").is_file()
+
+
+def test_writer_commit_guard_cancellation_removes_staging(tmp_path: Path) -> None:
+    index, assets = _export()
+    target = tmp_path / "export"
+
+    def cancel_commit() -> None:
+        raise KeyboardInterrupt("cancelled")
+
+    with pytest.raises(KeyboardInterrupt, match="cancelled"):
+        write_export(
+            index,
+            assets,
+            target,
+            replace=False,
+            commit_guard=cancel_commit,
+        )
+
+    assert not target.exists()
     assert not tuple(tmp_path.glob(".export.staging-*"))
 
 
