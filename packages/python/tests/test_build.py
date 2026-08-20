@@ -2,133 +2,32 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import marimo_export._build as build_module
 import pytest
-from marimo_export import ExportSpec, OutputSpec, build, open_export
-from marimo_export.client import _CaptureData
+from marimo_export import ExportSpec, OutputSpec
+from marimo_export._build import build
 from marimo_export.errors import ExecutionError
-from marimo_export.export import (
-    ExportIndex,
-    NotebookProvenance,
-    ProducerProvenance,
-    Provenance,
-    ScalarDescriptor,
-    StateEntry,
-)
-from marimo_export.result import CacheSummary, StateRunTimings
+from marimo_export.reader import open_export
+from marimo_export.repository import ExportRepository
 
 
 def _spec() -> ExportSpec:
     return ExportSpec(
-        inputs=(),
+        default_state="baseline",
         states={"baseline": {}},
-        outputs={"answer": OutputSpec(source="answer")},
+        outputs={"answer": OutputSpec.value("answer")},
     )
 
 
-def _captured(filename: str) -> _CaptureData:
-    return _CaptureData(
-        index=ExportIndex(
-            notebook=NotebookProvenance(
-                filename=filename,
-                document_sha256="a" * 64,
-            ),
-            producer=ProducerProvenance(
-                marimo="0.23.15",
-                marimo_export="1.0.0",
-            ),
-            inputs=(),
-            outputs=("answer",),
-            states={
-                "baseline": StateEntry(
-                    inputs={},
-                    outputs={
-                        "answer": ScalarDescriptor(
-                            value=42,
-                            provenance=Provenance(
-                                cache_key="cell_cache/answer.json",
-                                return_reference=None,
-                                python_type="builtins.int",
-                            ),
-                        )
-                    },
-                )
-            },
-        ),
-        assets={},
-        output_cache=CacheSummary(hits=0, misses=1),
-        notebook_cache=CacheSummary(hits=0, misses=1),
-        state_run_timings=StateRunTimings(
-            states=1,
-            setup_seconds=0.1,
-            dependency_execution_seconds=0.1,
-            ui_update_seconds=0.0,
-            output_materialization_seconds=0.1,
-            cleanup_seconds=0.1,
-        ),
-        capture_seconds=0.4,
-        server_start_seconds=0.1,
-        initial_autorun_seconds=0.1,
-        server_shutdown_seconds=0.1,
-    )
-
-
-def test_build_commits_owned_capture_after_source_verification(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    notebook = tmp_path / "notebook.py"
-    notebook.write_text("import marimo\n", encoding="utf-8")
-    source = notebook.read_bytes()
-    monkeypatch.setattr(
-        build_module,
-        "_capture_owned",
-        lambda path, spec, timeout: _captured(path.name),
-    )
-
-    result = build(
-        notebook,
-        spec=_spec(),
-        output=tmp_path / "export",
-    )
-
-    assert result.mode == "build"
-    assert result.session_id is None
-    assert result.notebook_filename == "notebook.py"
-    assert notebook.read_bytes() == source
-    assert open_export(result.path).state("baseline").output("answer").scalar() == 42
-
-
-def test_build_rejects_source_change_before_commit(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    notebook = tmp_path / "notebook.py"
-    notebook.write_text("import marimo\n", encoding="utf-8")
-
-    def change_source(
-        path: Path,
-        spec: ExportSpec,
-        timeout: float,
-    ) -> _CaptureData:
-        del spec, timeout
-        path.write_text("import marimo\n# changed\n", encoding="utf-8")
-        return _captured(path.name)
-
-    monkeypatch.setattr(build_module, "_capture_owned", change_source)
-    output = tmp_path / "export"
-
-    with pytest.raises(ExecutionError) as raised:
-        build(notebook, spec=_spec(), output=output)
-
-    assert raised.value.code == "notebook_changed"
-    assert not output.exists()
-
-
-def test_build_preserves_the_authored_runtime_filename(tmp_path: Path) -> None:
-    notebook = tmp_path / "notebook.py"
-    notebook.write_text(
-        """
+def _notebook(path: Path, counter: Path | None = None) -> None:
+    counter_code = ""
+    if counter is not None:
+        counter_code = f"""
+    counter = Path({str(counter)!r})
+    runs = int(counter.read_text()) + 1 if counter.exists() else 1
+    counter.write_text(str(runs))
+"""
+    path.write_text(
+        f"""\
 import marimo
 
 app = marimo.App()
@@ -136,104 +35,113 @@ app = marimo.App()
 
 @app.cell
 def _():
-    runtime_file = __file__
-    return (runtime_file,)
+    from pathlib import Path
+{counter_code}
+    answer = 42
+    return (answer,)
 
 
 if __name__ == "__main__":
     app.run()
-""".lstrip(),
+""",
         encoding="utf-8",
     )
+
+
+def test_build_preflights_destination_before_preparation(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    events: list[str] = []
+    expected = object()
+
+    class Prepared:
+        def __enter__(self):
+            events.append("enter")
+            return self
+
+        def __exit__(self, *_error: object) -> None:
+            events.append("close")
+
+        def write(self, *_args, **_kwargs):
+            events.append("write")
+            return expected
+
+    monkeypatch.setattr(
+        "marimo_export._build.preflight_export_destination",
+        lambda *_args, **_kwargs: events.append("preflight"),
+    )
+    monkeypatch.setattr(
+        "marimo_export._build.prepare",
+        lambda *_args, **_kwargs: (events.append("prepare"), Prepared())[1],
+    )
+
+    result = build(tmp_path / "notebook.py", spec=_spec(), output=tmp_path / "dist")
+
+    assert result is expected
+    assert events == ["preflight", "prepare", "enter", "write", "close"]
+
+
+def test_build_prepares_once_then_reuses_without_starting_a_notebook(tmp_path: Path) -> None:
+    notebook = tmp_path / "notebook.py"
+    counter = tmp_path / "autoruns.txt"
+    _notebook(notebook, counter)
     source = notebook.read_bytes()
+    repository = ExportRepository.open(tmp_path / "repository")
+    try:
+        first = build(
+            notebook,
+            spec=_spec(),
+            output=tmp_path / "first",
+            repository=repository,
+            timeout=30,
+        )
+        second = build(
+            notebook,
+            spec=_spec(),
+            output=tmp_path / "second",
+            repository=repository,
+            timeout=30,
+        )
+    finally:
+        repository.close()
 
-    result = build(
-        notebook,
-        spec=ExportSpec(
-            inputs=(),
-            states={"baseline": {}},
-            outputs={"runtime_file": OutputSpec(source="runtime_file")},
-        ),
-        output=tmp_path / "export",
-        timeout=30,
-    )
-
-    assert open_export(result.path).state("baseline").output("runtime_file").scalar() == str(
-        notebook
-    )
+    assert counter.read_text(encoding="utf-8") == "1"
     assert notebook.read_bytes() == source
+    assert first.reused is False
+    assert second.reused is True
+    assert first.identity == second.identity
+    assert open_export(first.path).default_state.output("answer").json() == 42
+    assert open_export(second.path).default_state.output("answer").json() == 42
 
 
-def test_managed_copy_cleanup_has_a_bounded_shutdown_error(
-    tmp_path: Path,
+def test_source_change_after_identity_preflight_fails_before_publish(
     monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    notebook = tmp_path / ".notebook.marimo-export-copy.py"
-    notebook.write_text("import marimo\n", encoding="utf-8")
-
-    def fail_unlink(path: Path) -> None:
-        del path
-        raise PermissionError("private path")
-
-    monkeypatch.setattr(Path, "unlink", fail_unlink)
-
-    with pytest.raises(ExecutionError) as raised:
-        build_module._remove_working_notebook(notebook)
-
-    assert raised.value.code == "server_shutdown_failed"
-    assert str(raised.value) == "the managed notebook copy could not be removed"
-    assert raised.value.details == {"exception_type": "PermissionError"}
-
-
-def test_managed_copy_creation_removes_partial_snapshot(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     notebook = tmp_path / "notebook.py"
-    notebook.write_text("import marimo\n", encoding="utf-8")
+    _notebook(notebook)
+    from marimo_export.producer import open_notebook
 
-    def fail_fsync(descriptor: int) -> None:
-        del descriptor
-        raise OSError("sync failed")
+    def changed(path: Path, *, timeout: float):
+        path.write_text(path.read_text(encoding="utf-8") + "\n# changed\n", encoding="utf-8")
+        return open_notebook(path, timeout=timeout)
 
-    monkeypatch.setattr(build_module.os, "fsync", fail_fsync)
+    monkeypatch.setattr("marimo_export._services.prepare_export.open_notebook", changed)
 
-    with pytest.raises(ExecutionError) as raised:
-        build_module._copy_notebook(notebook)
+    with pytest.raises(ExecutionError):
+        build(notebook, spec=_spec(), output=tmp_path / "dist", timeout=30)
 
-    assert raised.value.code == "server_start_failed"
-    assert raised.value.details == {"exception_type": "OSError"}
-    assert not tuple(tmp_path.glob(".notebook.marimo-export-*.py"))
-
-
-def test_managed_copy_creation_removes_snapshot_on_cancellation(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    notebook = tmp_path / "notebook.py"
-    notebook.write_text("import marimo\n", encoding="utf-8")
-
-    def cancel_fsync(descriptor: int) -> None:
-        del descriptor
-        raise KeyboardInterrupt("cancelled")
-
-    monkeypatch.setattr(build_module.os, "fsync", cancel_fsync)
-
-    with pytest.raises(KeyboardInterrupt, match="cancelled"):
-        build_module._copy_notebook(notebook)
-
-    assert not tuple(tmp_path.glob(".notebook.marimo-export-*.py"))
+    assert not (tmp_path / "dist").exists()
 
 
 @pytest.mark.parametrize("timeout", [0, float("nan")])
-def test_build_rejects_invalid_timeout(tmp_path: Path, timeout: float) -> None:
+def test_build_rejects_invalid_timeout_before_source_inspection(
+    tmp_path: Path,
+    timeout: float,
+) -> None:
     notebook = tmp_path / "notebook.py"
-    notebook.write_text("import marimo\n", encoding="utf-8")
+    notebook.write_text("not a notebook\n", encoding="utf-8")
 
     with pytest.raises(ValueError, match="positive finite"):
-        build(
-            notebook,
-            spec=_spec(),
-            output=tmp_path / "export",
-            timeout=timeout,
-        )
+        build(notebook, spec=_spec(), output=tmp_path / "dist", timeout=timeout)

@@ -6,6 +6,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
 
+from marimo_export._format import (
+    bounded_printable as _bounded_printable,
+)
+from marimo_export._format import (
+    digest as _digest,
+)
 from marimo_export._json import (
     JsonObject,
     JsonValue,
@@ -13,20 +19,16 @@ from marimo_export._json import (
     decode_json_object,
     json_object,
 )
-from marimo_export._portable import validate_portable_basename
-from marimo_export.export import (
-    ProducerProvenance,
-    _bounded_printable,
-    _digest,
-    _ordered_names,
-)
+from marimo_export.planning import ExportPlan
+from marimo_export.progress import CacheActivity
+from marimo_export.reader import VerificationResult
 
 _MAX_DIAGNOSTIC_TEXT_BYTES = 2_048
 
 
 @dataclass(frozen=True, slots=True)
 class CacheSummary:
-    """Cache attempts observed while creating one export."""
+    """Final cache dispositions observed while creating one export."""
 
     hits: int
     misses: int
@@ -169,42 +171,44 @@ class ExportWarning:
 
 @dataclass(frozen=True, slots=True)
 class ExportResult:
-    """Durable export facts and run-local producer diagnostics."""
+    """Verified write facts and preparation work for one notebook export."""
 
     path: Path
-    mode: Literal["build", "capture"]
-    session_id: str | None
-    notebook_filename: str | None
-    document_sha256: str
-    producer: ProducerProvenance
-    states: tuple[str, ...]
-    outputs: tuple[str, ...]
+    identity: str
+    plan: ExportPlan
+    reused: bool
+    prepared_states: tuple[str, ...]
+    reused_states: tuple[str, ...]
+    cache_activity: CacheActivity
     assets: int
     asset_bytes: int
     index_bytes: int
-    output_cache: CacheSummary
-    notebook_cache: CacheSummary
-    timings: PhaseTimings
+    verification: VerificationResult
     warnings: tuple[ExportWarning, ...] = ()
+    elapsed_seconds: float = 0.0
 
     def __post_init__(self) -> None:
         if not isinstance(self.path, Path) or not self.path.is_absolute():
             raise ValueError("export result path must be absolute")
-        if self.mode not in {"build", "capture"}:
-            raise ValueError("export result mode must be build or capture")
-        if self.mode == "build" and self.session_id is not None:
-            raise ValueError("build results cannot name a borrowed session")
-        if self.mode == "capture" and self.session_id is None:
-            raise ValueError("capture results must name the borrowed session")
-        if self.session_id is not None:
-            _bounded_printable(self.session_id, "session_id", _MAX_DIAGNOSTIC_TEXT_BYTES)
-        if self.notebook_filename is not None:
-            validate_portable_basename(self.notebook_filename, "notebook_filename")
-        _digest(self.document_sha256, "document_sha256")
-        if not isinstance(self.producer, ProducerProvenance):
-            raise TypeError("producer must be ProducerProvenance")
-        _ordered_names(self.states, "states", identifier=False)
-        _ordered_names(self.outputs, "outputs", identifier=False, nonempty=True)
+        object.__setattr__(self, "identity", _digest(self.identity, "export result identity"))
+        if not isinstance(self.plan, ExportPlan):
+            raise TypeError("export result plan must be ExportPlan")
+        if not isinstance(self.reused, bool):
+            raise TypeError("export result reused must be a boolean")
+        prepared = _result_fingerprints(self.prepared_states, "prepared_states")
+        reused = _result_fingerprints(self.reused_states, "reused_states")
+        if set(prepared) & set(reused):
+            raise ValueError("prepared_states and reused_states must be disjoint")
+        if set(prepared) | set(reused) != set(self.plan.state_fingerprints):
+            raise ValueError("prepared_states and reused_states must cover the export plan")
+        if self.reused != self.plan.exact_reuse:
+            raise ValueError("export result reuse must match the export plan")
+        if self.reused and prepared:
+            raise ValueError("an exactly reused export cannot prepare states")
+        object.__setattr__(self, "prepared_states", prepared)
+        object.__setattr__(self, "reused_states", reused)
+        if not isinstance(self.cache_activity, CacheActivity):
+            raise TypeError("export result cache_activity must be CacheActivity")
         for name, value in (
             ("assets", self.assets),
             ("asset_bytes", self.asset_bytes),
@@ -212,54 +216,44 @@ class ExportResult:
         ):
             if not isinstance(value, int) or isinstance(value, bool) or value < 0:
                 raise ValueError(f"{name} must be a non-negative integer")
-        if not isinstance(self.output_cache, CacheSummary):
-            raise TypeError("output_cache must be CacheSummary")
-        if self.output_cache.hits + self.output_cache.misses != len(self.states) * len(
-            self.outputs
+        if not isinstance(self.verification, VerificationResult):
+            raise TypeError("export result verification must be VerificationResult")
+        if (
+            self.verification.states != len(self.plan.states)
+            or self.verification.outputs != len(self.plan.states) * len(self.plan.outputs)
+            or self.verification.assets != self.assets
+            or self.verification.bytes_verified != self.asset_bytes
         ):
-            raise ValueError("output cache activity must cover every state and output")
-        if not isinstance(self.notebook_cache, CacheSummary):
-            raise TypeError("notebook_cache must be CacheSummary")
-        if not isinstance(self.timings, PhaseTimings):
-            raise TypeError("timings must be PhaseTimings")
-        if self.timings.state_runs.states != len(self.states):
-            raise ValueError("state run timing count must match export states")
-        managed = (
-            self.timings.server_start_seconds,
-            self.timings.initial_autorun_seconds,
-            self.timings.server_shutdown_seconds,
-        )
-        if self.mode == "build" and any(value is None for value in managed):
-            raise ValueError("build timings must include every managed server phase")
-        if self.mode == "capture" and any(value is not None for value in managed):
-            raise ValueError("capture timings cannot include managed server phases")
+            raise ValueError("export result verification must match the written export")
         if any(not isinstance(warning, ExportWarning) for warning in self.warnings):
             raise TypeError("warnings must contain ExportWarning values")
+        _validate_seconds(self.elapsed_seconds, "elapsed_seconds")
 
     def to_dict(self) -> JsonObject:
         return {
             "path": str(self.path),
-            "mode": self.mode,
-            "session_id": self.session_id,
-            "notebook_filename": self.notebook_filename,
-            "document_sha256": self.document_sha256,
-            "producer": self.producer.to_value(),
-            "states": list(self.states),
-            "outputs": list(self.outputs),
+            "identity": self.identity,
+            "plan": self.plan.to_dict(),
+            "reused": self.reused,
+            "prepared_states": list(self.prepared_states),
+            "reused_states": list(self.reused_states),
+            "cache_activity": self.cache_activity.to_dict(),
             "assets": self.assets,
             "asset_bytes": self.asset_bytes,
             "index_bytes": self.index_bytes,
-            "output_cache": {
-                "hits": self.output_cache.hits,
-                "misses": self.output_cache.misses,
-            },
-            "notebook_cache": {
-                "hits": self.notebook_cache.hits,
-                "misses": self.notebook_cache.misses,
-            },
-            "timings": self.timings.to_dict(),
+            "verification": self.verification.to_dict(),
             "warnings": [warning.to_dict() for warning in self.warnings],
+            "elapsed_seconds": self.elapsed_seconds,
         }
+
+
+def _result_fingerprints(values: tuple[str, ...], label: str) -> tuple[str, ...]:
+    if not isinstance(values, tuple):
+        raise TypeError(f"export result {label} must be a tuple")
+    parsed = tuple(_digest(value, f"export result {label} item") for value in values)
+    if parsed != tuple(sorted(set(parsed))):
+        raise ValueError(f"export result {label} must be sorted and unique")
+    return parsed
 
 
 __all__ = [

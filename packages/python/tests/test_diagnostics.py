@@ -1,6 +1,11 @@
 from __future__ import annotations
 
-from marimo_export._diagnostics import redact_credentials, safe_diagnostic
+from marimo_export._diagnostics import (
+    cleanup_failures,
+    record_cleanup_failure,
+    redact_credentials,
+    safe_diagnostic,
+)
 
 
 def test_safe_diagnostic_redacts_url_and_configured_credentials() -> None:
@@ -26,4 +31,16 @@ def test_redact_credentials_recognizes_encoded_query_separator() -> None:
     assert (
         redact_credentials("https://example.test/?access_token%3Dsecret&next=1")
         == "https://example.test/?access_token%3D<redacted>&next=1"
+    )
+
+
+def test_cleanup_failures_preserve_structured_secondary_diagnostics() -> None:
+    primary = ValueError("primary")
+
+    record_cleanup_failure(primary, "managed process cleanup", RuntimeError("secret"))
+    record_cleanup_failure(primary, "managed file cleanup", OSError("private path"))
+
+    assert cleanup_failures(primary) == (
+        "managed process cleanup also failed: RuntimeError",
+        "managed file cleanup also failed: OSError",
     )

@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import re
 from collections.abc import Iterable
+from typing import cast
 
 _DEFAULT_MAXIMUM_CHARS = 4096
+_CLEANUP_FAILURES_ATTRIBUTE = "_marimo_export_cleanup_failures"
 _URL_USERINFO_PATTERN = re.compile(r"(?i)(\bhttps?://)[^/?#\s@]+@")
 _QUERY_CREDENTIAL_PATTERN = re.compile(
     r"(?i)((?:[?&]|\b)(?:access_token|server_token|token|api_key)(?:=|%3d))"
@@ -47,6 +49,30 @@ def redact_credentials(value: str, *, secrets: Iterable[str] = ()) -> str:
     return result
 
 
+def record_cleanup_failure(
+    primary: BaseException,
+    operation: str,
+    failure: BaseException,
+) -> None:
+    """Attach one bounded cleanup diagnostic to the primary failure."""
+
+    diagnostic = safe_diagnostic(operation, " also failed: ", type(failure).__name__)
+    setattr(
+        primary,
+        _CLEANUP_FAILURES_ATTRIBUTE,
+        (*cleanup_failures(primary), diagnostic),
+    )
+
+
+def cleanup_failures(error: BaseException) -> tuple[str, ...]:
+    """Return cleanup diagnostics attached while preserving the primary failure."""
+
+    value = getattr(error, _CLEANUP_FAILURES_ATTRIBUTE, ())
+    if not isinstance(value, tuple) or any(not isinstance(item, str) for item in value):
+        return ()
+    return cast(tuple[str, ...], value)
+
+
 def _ascii_prefix(value: str, maximum_chars: int) -> str:
     result: list[str] = []
     length = 0
@@ -69,4 +95,9 @@ def _ascii_prefix(value: str, maximum_chars: int) -> str:
     return "".join(result)
 
 
-__all__ = ["redact_credentials", "safe_diagnostic"]
+__all__ = [
+    "cleanup_failures",
+    "record_cleanup_failure",
+    "redact_credentials",
+    "safe_diagnostic",
+]

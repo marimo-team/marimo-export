@@ -1,51 +1,51 @@
 from __future__ import annotations
 
 import math
+from collections.abc import Mapping
 from dataclasses import replace
 from pathlib import Path
 from typing import Any, cast
 
 import pytest
 from marimo_export._json import JsonObject, canonical_bytes, sha256_bytes
-from marimo_export.errors import NotebookExportError
-from marimo_export.export import (
+from marimo_export.descriptors import (
     ARROW_CODEC,
     BLOB_ASSET_CODEC,
+    JSON_CODEC,
+    MARIMO_CELL_CODEC,
+    MARIMO_OUTPUT_CODEC,
     NUMPY_CODEC,
     SCALAR_CODEC,
     SCALAR_MEDIA_TYPE,
     ArrowDescriptor,
     AssetRef,
     BlobAssetDescriptor,
-    ExportIndex,
-    NotebookProvenance,
+    JsonDescriptor,
     NumpyDescriptor,
-    ProducerProvenance,
     Provenance,
     ScalarDescriptor,
-    StateEntry,
     asset_path,
-    state_fingerprint,
 )
-from marimo_export.result import (
-    CacheSummary,
-    ExportResult,
-    ExportWarning,
-    PhaseTimings,
-    StateRunTimings,
+from marimo_export.errors import NotebookExportError
+from marimo_export.index import (
+    ControlBinding,
+    ControlElementStep,
+    ControlIndexStep,
+    ControlKeyStep,
+    ExportIndex,
+    NotebookProvenance,
+    ProducerProvenance,
+    StateEntry,
 )
+from marimo_export.planning import ExportPlan, PlannedState
+from marimo_export.progress import CacheActivity
+from marimo_export.reader import VerificationResult
+from marimo_export.result import ExportResult, ExportWarning
+from marimo_export.wire import state_fingerprint
 
 
-def _provenance(
-    kind: str,
-    *,
-    asset: bool = True,
-) -> Provenance:
-    return Provenance(
-        cache_key=f"cell_cache/O_{kind}.json",
-        return_reference=f"cell_cache/{kind}/return.bin" if asset else None,
-        python_type=f"example.{kind}",
-    )
+def _provenance(kind: str) -> Provenance:
+    return Provenance(python_type=f"example.{kind}")
 
 
 def _index() -> ExportIndex:
@@ -60,35 +60,56 @@ def _index() -> ExportIndex:
         filename="chart.json",
         metadata={"schema_major": 6},
     )
+    baseline_inputs: JsonObject = {
+        "chart_width": 800,
+        "symbols_selector": ["AAPL", "CRWV"],
+    }
+    msft_inputs: JsonObject = {
+        "chart_width": 800,
+        "symbols_selector": ["MSFT"],
+    }
+    baseline_fingerprint = state_fingerprint(baseline_inputs)
+    msft_fingerprint = state_fingerprint(msft_inputs)
     return ExportIndex(
+        spec_sha256="d" * 64,
+        default_state=baseline_fingerprint,
         notebook=NotebookProvenance(filename="finance.py", document_sha256="a" * 64),
-        producer=ProducerProvenance(marimo="0.23.15", marimo_export="1.0.0"),
+        producer=ProducerProvenance(
+            marimo="0.23.15",
+            marimo_export="1.0.0",
+            implementation_sha256="c" * 64,
+        ),
         inputs=("chart_width", "symbols_selector"),
+        control_bindings={
+            "cell-selector-0": ControlBinding(
+                input="symbols_selector",
+                path=(),
+            )
+        },
         outputs=("count", "array", "chart"),
+        aliases={
+            "baseline": baseline_fingerprint,
+            "leaders": baseline_fingerprint,
+            "msft": msft_fingerprint,
+        },
         states={
-            "baseline": StateEntry(
-                inputs={
-                    "chart_width": 800,
-                    "symbols_selector": ["AAPL", "CRWV"],
-                },
+            baseline_fingerprint: StateEntry(
+                inputs=baseline_inputs,
                 outputs={
                     "count": ScalarDescriptor(
                         value=42,
-                        provenance=_provenance("count", asset=False),
+                        provenance=_provenance("count"),
                     ),
                     "array": array,
                     "chart": chart,
                 },
             ),
-            "msft": StateEntry(
-                inputs={
-                    "chart_width": 800,
-                    "symbols_selector": ["MSFT"],
-                },
+            msft_fingerprint: StateEntry(
+                inputs=msft_inputs,
                 outputs={
                     "count": ScalarDescriptor(
                         value=1,
-                        provenance=_provenance("count-msft", asset=False),
+                        provenance=_provenance("count-msft"),
                     ),
                     "array": array,
                     "chart": chart,
@@ -105,12 +126,19 @@ def test_export_index_round_trips_canonical_bytes() -> None:
 
     assert decoded == index
     assert encoded == canonical_bytes(index.to_value())
+    assert decoded.spec_sha256 == "d" * 64
+    assert decoded.default_state == decoded.aliases["baseline"]
     assert decoded.inputs == ("chart_width", "symbols_selector")
     assert decoded.outputs == ("count", "array", "chart")
-    assert tuple(decoded.states) == ("baseline", "msft")
-    assert decoded.states["baseline"].fingerprint == state_fingerprint(
+    assert tuple(decoded.states) == tuple(sorted(index.states))
+    assert decoded.aliases["baseline"] == state_fingerprint(
         {"chart_width": 800, "symbols_selector": ["AAPL", "CRWV"]}
     )
+    assert decoded.aliases["leaders"] == decoded.aliases["baseline"]
+    assert decoded.control_bindings == {
+        "cell-selector-0": ControlBinding(input="symbols_selector", path=())
+    }
+    assert decoded.producer.implementation_sha256 == "c" * 64
 
 
 def test_canonical_json_uses_ecmascript_number_spelling() -> None:
@@ -138,15 +166,12 @@ def test_scalar_descriptor_round_trips_closed_wire_tags() -> None:
     ):
         descriptor = ScalarDescriptor(
             value=cast(Any, value),
-            provenance=_provenance("scalar", asset=False),
+            provenance=_provenance("scalar"),
         )
         assert descriptor.to_value()["value"] == wire
 
-        decoded = (
-            ExportIndex.from_value(_single_output_wire(descriptor.to_value()))
-            .states["state"]
-            .outputs["output"]
-        )
+        index = ExportIndex.from_value(_single_output_wire(descriptor.to_value()))
+        decoded = index.states[index.aliases["state"]].outputs["output"]
         assert isinstance(decoded, ScalarDescriptor)
         if isinstance(value, float) and math.isnan(value):
             assert math.isnan(cast(float, decoded.value))
@@ -154,6 +179,27 @@ def test_scalar_descriptor_round_trips_closed_wire_tags() -> None:
             assert math.copysign(1, cast(float, decoded.value)) == -1
         else:
             assert decoded.value == value
+
+
+def test_json_descriptor_exposes_immutable_canonical_value() -> None:
+    descriptor = JsonDescriptor(
+        value={"nested": {"count": 1}, "items": ["one"]},
+        provenance=_provenance("json"),
+    )
+
+    with pytest.raises(TypeError):
+        cast(Any, descriptor.value)["nested"]["count"] = 2
+    with pytest.raises(TypeError):
+        cast(Any, descriptor.value)["items"][0] = "changed"
+
+    detached = cast(dict[str, Any], descriptor.to_value()["value"])
+    detached["nested"]["count"] = 3
+    value = cast(Mapping[str, Any], descriptor.value)
+    assert value["nested"] == {"count": 1}
+    assert descriptor.to_value()["value"] == {
+        "items": ["one"],
+        "nested": {"count": 1},
+    }
 
 
 def test_export_rejects_invalid_scalar_tags() -> None:
@@ -168,7 +214,7 @@ def test_export_rejects_invalid_scalar_tags() -> None:
                 {
                     "codec": SCALAR_CODEC,
                     "media_type": SCALAR_MEDIA_TYPE,
-                    "provenance": _provenance("scalar", asset=False).to_value(),
+                    "provenance": _provenance("scalar").to_value(),
                     "value": value,
                 },
             )
@@ -182,8 +228,12 @@ def test_asset_paths_are_derived_from_codec_and_digest() -> None:
     assert asset_path(NUMPY_CODEC, digest) == f"assets/{digest}.npy"
     assert asset_path(ARROW_CODEC, digest) == f"assets/{digest}.arrow"
     assert asset_path(BLOB_ASSET_CODEC, digest) == f"assets/{digest}.bin"
+    assert asset_path(MARIMO_OUTPUT_CODEC, digest) == f"assets/{digest}.output.json"
+    assert asset_path(MARIMO_CELL_CODEC, digest) == f"assets/{digest}.cell.json"
     with pytest.raises(ValueError):
         asset_path(SCALAR_CODEC, digest)
+    with pytest.raises(ValueError):
+        asset_path(JSON_CODEC, digest)
 
 
 def test_assets_deduplicate_by_codec_and_digest() -> None:
@@ -198,12 +248,20 @@ def test_assets_deduplicate_by_codec_and_digest() -> None:
 def test_same_digest_under_different_codecs_is_a_distinct_asset() -> None:
     digest = "d" * 64
     index = ExportIndex(
+        spec_sha256="e" * 64,
+        default_state=state_fingerprint({}),
         notebook=NotebookProvenance(filename=None, document_sha256="a" * 64),
-        producer=ProducerProvenance(marimo="0.23.15", marimo_export="1.0.0"),
+        producer=ProducerProvenance(
+            marimo="0.23.15",
+            marimo_export="1.0.0",
+            implementation_sha256="c" * 64,
+        ),
         inputs=(),
+        control_bindings={},
         outputs=("array", "table"),
+        aliases={"one": state_fingerprint({})},
         states={
-            "one": StateEntry(
+            state_fingerprint({}): StateEntry(
                 inputs={},
                 outputs={
                     "array": NumpyDescriptor(
@@ -227,45 +285,111 @@ def test_export_requires_exact_state_input_and_output_sets() -> None:
 
     with pytest.raises(ValueError, match=r"export\.inputs"):
         ExportIndex(
+            spec_sha256=index.spec_sha256,
+            default_state=index.default_state,
             notebook=index.notebook,
             producer=index.producer,
             inputs=("chart_width",),
+            control_bindings={},
             outputs=index.outputs,
+            aliases=index.aliases,
             states=index.states,
         )
     with pytest.raises(ValueError, match=r"export\.outputs"):
         ExportIndex(
+            spec_sha256=index.spec_sha256,
+            default_state=index.default_state,
             notebook=index.notebook,
             producer=index.producer,
             inputs=index.inputs,
+            control_bindings=index.control_bindings,
             outputs=("count",),
+            aliases=index.aliases,
             states=index.states,
         )
 
 
-def test_export_rejects_duplicate_normalized_vectors() -> None:
+def test_export_control_bindings_are_typed_bounded_and_name_declared_inputs() -> None:
     index = _index()
-    duplicate = StateEntry(
-        inputs=index.states["baseline"].inputs,
-        outputs=index.states["baseline"].outputs,
-    )
 
-    with pytest.raises(ValueError, match="equal inputs"):
+    with pytest.raises(ValueError, match="255"):
+        replace(index, inputs=("x" * 256,))
+    with pytest.raises(ValueError, match="declared input"):
+        replace(
+            index,
+            control_bindings={"cell-selector-0": ControlBinding(input="missing", path=())},
+        )
+    with pytest.raises(ValueError, match="1024"):
+        replace(
+            index,
+            control_bindings={"x" * 1_025: ControlBinding(input="symbols_selector", path=())},
+        )
+    with pytest.raises(ValueError, match="255"):
+        ControlBinding(input="x" * 256, path=())
+
+    assert ControlBinding(
+        input="symbols_selector",
+        path=(
+            ControlIndexStep(value=0),
+            ControlKeyStep(value="country"),
+            ControlElementStep(),
+        ),
+    ).to_value() == {
+        "input": "symbols_selector",
+        "path": [
+            {"kind": "index", "value": 0},
+            {"kind": "key", "value": "country"},
+            {"kind": "element"},
+        ],
+    }
+    with pytest.raises(ValueError, match="nonnegative safe integer"):
+        ControlIndexStep(value=-1)
+    with pytest.raises(ValueError, match="1024"):
+        ControlKeyStep(value="x" * 1_025)
+
+
+def test_export_rejects_malformed_control_binding_wire_steps() -> None:
+    for step in (
+        {"kind": "element", "value": 0},
+        {"kind": "index", "value": -1},
+        {"kind": "key", "value": "x", "extra": True},
+    ):
+        wire = _index().to_value()
+        wire["control_bindings"] = {
+            "cell-selector-0": {
+                "input": "symbols_selector",
+                "path": [step],
+            }
+        }
+        with pytest.raises(NotebookExportError):
+            ExportIndex.from_value(wire)
+
+
+def test_export_rejects_a_state_key_that_disagrees_with_its_inputs() -> None:
+    index = _index()
+    fingerprint = index.aliases["baseline"]
+
+    with pytest.raises(ValueError, match="does not match state inputs"):
         ExportIndex(
+            spec_sha256=index.spec_sha256,
+            default_state="f" * 64,
             notebook=index.notebook,
             producer=index.producer,
             inputs=index.inputs,
+            control_bindings=index.control_bindings,
             outputs=index.outputs,
-            states={"one": index.states["baseline"], "two": duplicate},
+            aliases={"baseline": "f" * 64},
+            states={"f" * 64: index.states[fingerprint]},
         )
 
 
 def test_export_rejects_representation_changes_across_states() -> None:
     index = _index()
+    msft_fingerprint = index.aliases["msft"]
     changed = StateEntry(
-        inputs=index.states["msft"].inputs,
+        inputs=index.states[msft_fingerprint].inputs,
         outputs={
-            **index.states["msft"].outputs,
+            **index.states[msft_fingerprint].outputs,
             "chart": BlobAssetDescriptor(
                 asset=AssetRef("e" * 64, 100),
                 provenance=_provenance("chart-other"),
@@ -278,11 +402,18 @@ def test_export_rejects_representation_changes_across_states() -> None:
 
     with pytest.raises(ValueError, match="changes codec or media type"):
         ExportIndex(
+            spec_sha256=index.spec_sha256,
+            default_state=index.default_state,
             notebook=index.notebook,
             producer=index.producer,
             inputs=index.inputs,
+            control_bindings=index.control_bindings,
             outputs=index.outputs,
-            states={"baseline": index.states["baseline"], "msft": changed},
+            aliases=index.aliases,
+            states={
+                index.aliases["baseline"]: index.states[index.aliases["baseline"]],
+                msft_fingerprint: changed,
+            },
         )
 
 
@@ -294,6 +425,34 @@ def test_from_value_rejects_unknown_fields_at_every_boundary() -> None:
         ExportIndex.from_value(wire)
 
 
+def test_from_value_requires_new_v1_root_fields() -> None:
+    wire = _index().to_value()
+    del wire["spec_sha256"]
+    del wire["default_state"]
+
+    with pytest.raises(NotebookExportError, match="default_state, spec_sha256"):
+        ExportIndex.from_value(wire)
+
+
+def test_export_requires_default_state_to_reference_a_declared_fingerprint() -> None:
+    with pytest.raises(ValueError, match="default_state"):
+        replace(_index(), default_state="f" * 64)
+    with pytest.raises(ValueError, match="spec_sha256"):
+        replace(_index(), spec_sha256="invalid")
+
+
+def test_from_value_requires_exact_producer_implementation_identity() -> None:
+    missing = _index().to_value()
+    del cast(dict[str, Any], missing["producer"])["implementation_sha256"]
+    with pytest.raises(NotebookExportError, match="implementation_sha256"):
+        ExportIndex.from_value(missing)
+
+    invalid = _index().to_value()
+    cast(dict[str, Any], invalid["producer"])["implementation_sha256"] = "invalid"
+    with pytest.raises(NotebookExportError, match="lowercase SHA-256"):
+        ExportIndex.from_value(invalid)
+
+
 def test_from_bytes_rejects_noncanonical_json() -> None:
     encoded = _index().to_bytes()
 
@@ -303,14 +462,31 @@ def test_from_bytes_rejects_noncanonical_json() -> None:
     assert raised.value.code == "export_noncanonical"
 
 
-def test_provenance_rejects_absolute_paths_and_controls() -> None:
-    for value in ("/tmp/cache.json", r"C:\cache\return.bin", "bad\nkey"):
+def test_provenance_serializes_only_the_python_type() -> None:
+    provenance = Provenance(python_type="builtins.int")
+
+    assert provenance.to_value() == {"python_type": "builtins.int"}
+
+
+def test_provenance_rejects_controls() -> None:
+    for value in ("bad\nname", "bad\x00name"):
         with pytest.raises(ValueError):
-            Provenance(
-                cache_key=value,
-                return_reference=None,
-                python_type="builtins.int",
-            )
+            Provenance(python_type=value)
+
+
+def test_from_value_rejects_private_cache_receipt_fields_in_provenance() -> None:
+    for field, value in (
+        ("cache_key", "cell_cache/O_count.json"),
+        ("return_reference", None),
+    ):
+        wire = _index().to_value()
+        state = cast(dict[str, Any], next(iter(cast(dict[str, Any], wire["states"]).values())))
+        outputs = cast(dict[str, Any], state["outputs"])
+        provenance = cast(dict[str, Any], cast(dict[str, Any], outputs["count"])["provenance"])
+        provenance[field] = value
+
+        with pytest.raises(NotebookExportError, match="does not accept"):
+            ExportIndex.from_value(wire)
 
 
 def test_blob_metadata_is_bounded_to_256_kib() -> None:
@@ -335,34 +511,44 @@ def test_blob_metadata_is_bounded_to_256_kib() -> None:
         )
 
 
-def test_export_result_is_a_run_local_record(tmp_path: Path) -> None:
+def test_export_result_reports_verified_write_and_preparation_facts(tmp_path: Path) -> None:
+    baseline_inputs: JsonObject = {"symbol": "AAPL"}
+    msft_inputs: JsonObject = {"symbol": "MSFT"}
+    baseline = state_fingerprint(baseline_inputs)
+    msft = state_fingerprint(msft_inputs)
+    plan = ExportPlan(
+        document_sha256="a" * 64,
+        producer_sha256="b" * 64,
+        output_plan_sha256="c" * 64,
+        spec_sha256="d" * 64,
+        default_alias="baseline",
+        default_fingerprint=baseline,
+        inputs=("symbol",),
+        states=(
+            PlannedState(aliases=("baseline",), inputs=baseline_inputs, fingerprint=baseline),
+            PlannedState(aliases=("msft",), inputs=msft_inputs, fingerprint=msft),
+        ),
+        outputs=("chart",),
+        reusable_states=(baseline,),
+        missing_states=(msft,),
+    )
     result = ExportResult(
         path=(tmp_path / "export").absolute(),
-        mode="capture",
-        session_id="session-1",
-        notebook_filename="finance.py",
-        document_sha256="a" * 64,
-        producer=ProducerProvenance(marimo="0.23.15", marimo_export="1.0.0"),
-        states=("baseline", "msft"),
-        outputs=("chart",),
+        identity="e" * 64,
+        plan=plan,
+        reused=False,
+        prepared_states=(msft,),
+        reused_states=(baseline,),
+        cache_activity=CacheActivity(
+            authored_hits=3,
+            authored_misses=2,
+            projection_hits=1,
+            projection_misses=1,
+        ),
         assets=1,
         asset_bytes=100,
         index_bytes=500,
-        output_cache=CacheSummary(hits=1, misses=1),
-        notebook_cache=CacheSummary(hits=3, misses=2),
-        timings=PhaseTimings(
-            total_seconds=2.0,
-            capture_seconds=1.5,
-            export_write_seconds=0.1,
-            state_runs=StateRunTimings(
-                states=2,
-                setup_seconds=0.1,
-                dependency_execution_seconds=0.8,
-                ui_update_seconds=0.2,
-                output_materialization_seconds=0.3,
-                cleanup_seconds=0.1,
-            ),
-        ),
+        verification=VerificationResult(states=2, outputs=2, assets=1, bytes_verified=100),
         warnings=(
             ExportWarning(
                 code="retired_destination_cleanup_failed",
@@ -370,55 +556,67 @@ def test_export_result_is_a_run_local_record(tmp_path: Path) -> None:
                 details={"path": "/tmp/retired"},
             ),
         ),
+        elapsed_seconds=2.0,
     )
 
-    assert result.to_dict()["output_cache"] == {"hits": 1, "misses": 1}
-    assert result.to_dict()["notebook_cache"] == {"hits": 3, "misses": 2}
-    assert result.to_dict()["timings"] == {
-        "total_seconds": 2.0,
-        "server_start_seconds": None,
-        "initial_autorun_seconds": None,
-        "capture_seconds": 1.5,
-        "server_shutdown_seconds": None,
-        "export_write_seconds": 0.1,
-        "state_runs": {
-            "states": 2,
-            "setup_seconds": 0.1,
-            "dependency_execution_seconds": 0.8,
-            "ui_update_seconds": 0.2,
-            "output_materialization_seconds": 0.3,
-            "cleanup_seconds": 0.1,
+    assert result.prepared_states == (msft,)
+    assert result.reused_states == (baseline,)
+    assert result.cache_activity.projection_misses == 1
+    assert result.to_dict() == {
+        "path": str((tmp_path / "export").absolute()),
+        "identity": "e" * 64,
+        "plan": plan.to_dict(),
+        "reused": False,
+        "prepared_states": [msft],
+        "reused_states": [baseline],
+        "cache_activity": {
+            "authored_hits": 3,
+            "authored_misses": 2,
+            "projection_hits": 1,
+            "projection_misses": 1,
         },
+        "assets": 1,
+        "asset_bytes": 100,
+        "index_bytes": 500,
+        "verification": {
+            "states": 2,
+            "outputs": 2,
+            "assets": 1,
+            "bytes_verified": 100,
+        },
+        "warnings": [
+            {
+                "code": "retired_destination_cleanup_failed",
+                "message": "Previous directory remains.",
+                "details": {"path": "/tmp/retired"},
+            }
+        ],
+        "elapsed_seconds": 2.0,
     }
-    assert result.to_dict()["warnings"] == [
-        {
-            "code": "retired_destination_cleanup_failed",
-            "message": "Previous directory remains.",
-            "details": {"path": "/tmp/retired"},
-        }
-    ]
 
-    with pytest.raises(
-        ValueError,
-        match="output cache activity must cover every state and output",
-    ):
-        replace(
-            result,
-            output_cache=CacheSummary(hits=1, misses=0),
-        )
+    with pytest.raises(ValueError, match="cover the export plan"):
+        replace(result, prepared_states=())
 
 
 def _single_output_wire(descriptor: JsonObject) -> JsonObject:
     inputs: JsonObject = {}
+    fingerprint = sha256_bytes(canonical_bytes(inputs))
     return {
         "schema": "marimo-export.export.v1",
+        "spec_sha256": "d" * 64,
+        "default_state": fingerprint,
         "notebook": {"filename": None, "document_sha256": "a" * 64},
-        "producer": {"marimo": "0.23.15", "marimo_export": "1.0.0"},
+        "producer": {
+            "marimo": "0.23.15",
+            "marimo_export": "1.0.0",
+            "implementation_sha256": "c" * 64,
+        },
         "inputs": [],
+        "control_bindings": {},
         "outputs": ["output"],
+        "aliases": {"state": fingerprint},
         "states": {
-            "state": {
-                "fingerprint": sha256_bytes(canonical_bytes(inputs)),
+            fingerprint: {
                 "inputs": inputs,
                 "outputs": {"output": descriptor},
             }
