@@ -5,38 +5,58 @@ from __future__ import annotations
 from importlib import import_module
 from typing import TYPE_CHECKING, Any
 
+from marimo_export._identity import implementation_identity as _implementation_identity
+
+_LOADED_SOURCE_IDENTITY = _implementation_identity()
+
 if TYPE_CHECKING:
     from marimo_export._build import build
-    from marimo_export._marimo.blob import BlobAsset
-    from marimo_export.client import Client, Session, capture
+    from marimo_export._services.capture_export import capture
+    from marimo_export._services.plan_export import plan
+    from marimo_export._services.prepare_export import prepare
+    from marimo_export.planning import ExportPlan
+    from marimo_export.prepared import PreparedExport
+    from marimo_export.progress import ProgressEvent
     from marimo_export.reader import NotebookExport, open_export
+    from marimo_export.repository import ExportRepository
     from marimo_export.result import ExportResult
     from marimo_export.spec import ExportSpec, OutputSpec
+    from marimo_export.verification import VerificationResult, verify_export
 
 _EXPORTS = {
-    "BlobAsset": ("marimo_export._marimo.blob", "BlobAsset"),
-    "Client": ("marimo_export.client", "Client"),
+    "ExportPlan": ("marimo_export.planning", "ExportPlan"),
+    "ExportRepository": ("marimo_export.repository", "ExportRepository"),
     "ExportResult": ("marimo_export.result", "ExportResult"),
     "ExportSpec": ("marimo_export.spec", "ExportSpec"),
     "NotebookExport": ("marimo_export.reader", "NotebookExport"),
     "OutputSpec": ("marimo_export.spec", "OutputSpec"),
-    "Session": ("marimo_export.client", "Session"),
+    "PreparedExport": ("marimo_export.prepared", "PreparedExport"),
+    "ProgressEvent": ("marimo_export.progress", "ProgressEvent"),
+    "VerificationResult": ("marimo_export.verification", "VerificationResult"),
     "build": ("marimo_export._build", "build"),
-    "capture": ("marimo_export.client", "capture"),
+    "capture": ("marimo_export._services.capture_export", "capture"),
     "open_export": ("marimo_export.reader", "open_export"),
+    "plan": ("marimo_export._services.plan_export", "plan"),
+    "prepare": ("marimo_export._services.prepare_export", "prepare"),
+    "verify_export": ("marimo_export.verification", "verify_export"),
 }
 
 __all__ = (
-    "BlobAsset",
-    "Client",
+    "ExportPlan",
+    "ExportRepository",
     "ExportResult",
     "ExportSpec",
     "NotebookExport",
     "OutputSpec",
-    "Session",
+    "PreparedExport",
+    "ProgressEvent",
+    "VerificationResult",
     "build",
     "capture",
     "open_export",
+    "plan",
+    "prepare",
+    "verify_export",
 )
 
 
