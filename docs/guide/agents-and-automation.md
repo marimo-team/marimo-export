@@ -1,108 +1,114 @@
 ---
 title: Use with agents
-description: Ground agent answers in exported notebook data or ask an agent to publish a notebook and build a bespoke frontend.
+description: Ground agent work in verified prepared notebook states and structured output representations.
 ---
 
 # Use notebook exports with agents
 
-A notebook export gives an agent a bounded data source with named states,
-explicit output representations, notebook provenance, content identity, and
-verification evidence.
-
-Agents can use an existing export to answer questions from prepared data. They
-can also inspect a notebook, choose a focused publication surface, create the
-export, and build a purpose-specific frontend outside the Python ecosystem.
+A notebook export gives an agent a finite data source with named states, explicit
+output representations, content identity, and verification facts.
 
 ## Ground an answer in an existing export
 
 1. Verify the export.
-2. Inspect its prepared states and outputs.
-3. Select the state that matches the question.
-4. Read an inspectable representation.
-5. Bind claims to the state, output, and provenance used.
+2. Open its default or requested state.
+3. Select an output the available tools can decode.
+4. Bind claims to the source and state identities.
 
 ```bash
-marimo-export inspect dist/report --json
 marimo-export verify dist/report --json
 ```
 
-The inspection record tells the agent which state names and output
-representations exist. The agent must not infer a state that is absent from the
-export or treat a visual representation as structured data it cannot decode.
+```python
+from marimo_export import open_export
+
+export = open_export("dist/report")
+state = export.default_state
+summary = state.output("summary").json()
+
+evidence = {
+    "export_sha256": export.identity,
+    "spec_sha256": export.spec_sha256,
+    "state_sha256": state.fingerprint,
+    "output": "summary",
+    "python_type": state.output("summary").descriptor.provenance.python_type,
+}
+```
+
+The selected representation constrains the claims an agent can support. Pair a
+visual output with JSON, a table, or an array when the answer depends on exact
+values.
 
 ## Choose agent-readable outputs
 
-| Representation       | Agent use                                                          |
-| -------------------- | ------------------------------------------------------------------ |
-| Scalar               | Metrics, labels, statuses, thresholds, and identifiers             |
-| NumPy                | Numeric arrays when the agent tooling can decode NPY               |
-| Arrow                | Typed columnar data when Arrow tooling is available                |
-| Parquet              | Tables, filtering, aggregation, comparisons, and data questions    |
-| Versioned JSON asset | Domain records with an explicit schema                             |
-| Vega-Lite            | Inspectable chart specification and visual companion               |
-| PNG                  | Visual companion with limited machine-readable semantics           |
-| AnyWidget            | Saved state and browser behavior, primarily for interactive review |
+| Representation         | Agent task                                           |
+| ---------------------- | ---------------------------------------------------- |
+| Portable JSON          | Summaries, records, arrays, metrics, and identifiers |
+| Scalar                 | Labels, statuses, thresholds, and metrics            |
+| Parquet or Arrow       | Filtering, aggregation, comparison, and typed tables |
+| NumPy                  | Numeric arrays when NPY tooling is available         |
+| Complete Marimo cell   | Output, console records, and cell identity           |
+| Rendered Marimo output | Formatted output and replay resources                |
+| Vega-Lite              | Inspectable chart specification and visual companion |
+| PNG                    | Visual review paired with structured evidence        |
+| AnyWidget              | Saved browser model state and interactive review     |
+| Versioned BlobAsset    | Domain records with a named media-type contract      |
 
-For agent-oriented publication, combine:
-
-- one concise scalar or versioned JSON summary
-- one inspectable table or array
-- one human-facing chart, image, or widget when visual review helps
-
-[Output representations](../reference/representations.md) defines the built-in
-families and custom media-type seam.
+[Output representations](../reference/representations.md) maps these forms to
+Python access and browser loaders.
 
 ## Retain evidence identity
 
-Keep these fields with a data-driven answer or generated application:
+Keep these facts with a data-driven answer or generated application:
 
 - notebook filename and document SHA-256
-- marimo and marimo-export producer versions
-- state name and fingerprint
-- output name, codec, and media type
+- ExportSpec SHA-256
+- notebook export identity from canonical `index.json`
+- Marimo and marimo-export producer versions
+- producer implementation SHA-256
+- state aliases and fingerprint
+- output name, codec, media type, and originating Python type
 - asset SHA-256 when the output has an asset
 - verification result
 
-These identifiers distinguish the source notebook, prepared scenario, stored
-representation, and exact bytes.
+These records distinguish authored intent, producer implementation, selected
+state, representation, and exact bytes.
 
-## Ask an agent to publish a notebook
+## Ask an agent to prepare an export
 
-An agent should:
-
-1. inspect notebook definitions before choosing inputs or outputs
-2. identify the audience question or downstream data task
-3. author a small set of meaningful prepared states
-4. choose outputs that each consumer can decode
-5. select `build` or `capture` from notebook ownership
-6. verify the completed export
-7. return evidence bound to notebook and export identity
+An agent can inspect the notebook, author a finite spec, plan the work, build the
+export, and verify it:
 
 ```bash
-marimo-export session report.py --json
+marimo-export inspect report.py --json
+marimo-export plan report.py \
+  --spec report.export.yaml \
+  --json
 marimo-export build report.py \
   --spec report.export.yaml \
   --output dist/report \
-  --json
+  --jsonl
 marimo-export verify dist/report --json
 ```
 
-`session NOTEBOOK` executes notebook code with the producer environment's file,
-credential, network, and package access.
+Notebook inspection and preparation execute notebook code with the producer
+environment's file, credential, network, and package access. The agent should
+report external data dependencies and preserve the authored notebook source.
 
-## Ask an agent to create a bespoke frontend
+`plan` reports reusable state fingerprints. An unchanged second build can reuse
+the exact prepared export before notebook startup. Adding one state prepares its
+missing fingerprint while retaining matching state artifacts.
+
+## Ask an agent to build a frontend
 
 The repository includes a [notebook-to-static-app
-workflow](https://github.com/marimo-team/marimo-export/blob/main/skills/notebook-to-static-app/SKILL.md)
-for coding agents. It guides the agent through notebook inspection, ExportSpec
-design, package vendoring, export creation, frontend implementation, and
-browser validation.
+workflow](https://github.com/marimo-team/marimo-export/blob/main/skills/notebook-to-static-app/SKILL.md).
+It routes the agent through notebook inspection, ExportSpec design, preparation,
+frontend implementation, and browser validation.
 
-The generated frontend should use exported values as its data source. It should
-exercise every state, preserve the last complete view during rapid changes,
-report recoverable errors, and make no request to a Python server for notebook
-results.
+The frontend should exercise every saved state, preserve the last committed view
+during rapid changes, dispose stale mounts, report recoverable errors, and load
+notebook results from the verified export.
 
-Use [Build a browser application](browser-applications.md) for the public
-consumer contract and [Browser API](../reference/browser-api.md) for exact
-methods.
+Use [Build a browser application](browser-applications.md) for prepared state
+transitions and [Browser API](../reference/browser-api.md) for exact methods.

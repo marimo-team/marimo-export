@@ -55,10 +55,14 @@ pnpm run notebook
 After the notebook finishes loading, run from another terminal:
 
 ```bash
-pnpm run capture -- http://127.0.0.1:2718
+uv run --locked --package marimo-export-vite-vanilla-example \
+  marimo-export inspect http://127.0.0.1:2718
+
+pnpm run capture -- http://127.0.0.1:2718 --session SESSION_ID
 ```
 
-Capture replaces the same local export and leaves the notebook session open.
+Copy the session ID reported by `inspect` into the capture command. Capture
+replaces the same local export and leaves the selected notebook session open.
 The dashboard consumes the same `index.json` contract from either producer.
 
 Next, [choose states and results](choose-states.md) for your own notebook or

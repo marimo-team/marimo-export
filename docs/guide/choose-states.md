@@ -1,19 +1,16 @@
 ---
-title: Choose states and results
-description: Choose the prepared notebook inputs and output representations available to people, agents, Python automation, and applications.
+title: Choose states and outputs
+description: Declare the finite notebook states and output representations available to every consumer.
 ---
 
-# Choose states and results
+# Choose states and outputs
 
-Choose the notebook inputs that should vary and the results each consumer
-should receive for every prepared choice. An ExportSpec records those choices
-and named outputs.
+An `ExportSpec` names a default state, sparse state rows, and the output
+representation produced for each normalized state.
 
 ```yaml
 schema: marimo-export.spec.v1
-inputs:
-  - interval
-  - symbols_selector
+default_state: leaders
 states:
   leaders: {}
   cloud:
@@ -22,114 +19,146 @@ states:
     interval: 1wk
     symbols_selector: [AAPL, MSFT, GOOGL, AMZN]
 outputs:
+  summary:
+    source: { kind: value, selector: report.summary }
   chart:
-    source: performance
+    source: { kind: value, selector: performance }
     exporter: altair.vegalite
   prices:
-    source: selected_prices
+    source: { kind: value, selector: selected_prices }
     exporter: parquet.table
-  explorer:
-    source: quote_detail
-    exporter: anywidget.bundle
+  report:
+    source: { kind: output, selector: report.view }
 ```
 
-Build the selected relation:
+Build the relation:
 
 ```bash
+marimo-export plan finance.py --spec finance.export.yaml
 marimo-export build finance.py \
   --spec finance.export.yaml \
   --output dist/finance
 ```
 
-Every consumer can now select `leaders`, `cloud`, or `weekly` and find `chart`,
-`prices`, and `explorer` in each state.
+Every state exposes the same output names. Python and browser readers select
+`leaders` when no other state is requested.
 
-## Name notebook inputs
+## Let planning infer inputs
 
-`inputs` contains notebook definition names. An input can be an ordinary Python
-definition or a marimo UI element. Use the UI element's definition name, not
-its `.value` property.
+The authored spec has no `inputs` field. marimo-export infers input definitions
+from:
 
-Inspect a notebook before authoring the matrix:
+- portable stateful roots in the selected outputs' dependency closure
+- definition names used as keys in state rows
+
+Input names are notebook definition names. Use the UI element definition such as
+`symbols_selector`, not its `.value` property.
+
+Inspect available definitions and cells before authoring output selectors:
 
 ```bash
-marimo-export session finance.py --json
+marimo-export inspect finance.py --json
 ```
 
 ::: warning File inspection executes the notebook
-`session NOTEBOOK` starts and executes the notebook with the current file,
+`inspect NOTEBOOK` performs the notebook's initial autorun with the current file,
 credential, network, and package access.
 :::
 
+Planning rejects missing, sensitive, unavailable, and nonportable inputs. It also
+rejects an ordinary input assigned by the defining cell's final named expression
+because the authored assignment and selected state would compete for ownership.
+
 ## Write sparse named states
 
-Each state row may omit values that should remain at the captured baseline.
-The producer records one complete input vector and fingerprint per state.
+Each state row may omit inputs that should retain the captured baseline. The
+producer records a complete input vector and SHA-256 fingerprint for each
+distinct normalized row.
 
-Input values support null, booleans, strings, finite numbers, arrays, and
-string-keyed objects.
+Equivalent rows become aliases of one state:
 
-An AnyWidget input uses a string-keyed object as a sparse trait patch. The
-producer merges the patch over the complete baseline state and rejects a trait
-validator that changes the requested value. Session inspection reports
-`input_mode: patch` for these definitions.
+```yaml
+default_state: current
+states:
+  baseline: {}
+  current: {}
+```
 
-Binary AnyWidget state is available as an output representation. It cannot be
-an input while ExportSpec state vectors use JSON values.
+Both aliases select one prepared vector. The authored `default_state` remains
+`current` in the `ExportPlan`, while the export index stores its resolved
+fingerprint.
 
-## Select published outputs
+Portable state values support null, booleans, Unicode strings, JavaScript-safe
+finite numbers, arrays, and string-keyed objects. Negative zero normalizes to
+zero for state identity.
 
-Each output maps one published name to a notebook definition. Omit `exporter`
-for supported scalars, NumPy arrays, Arrow tables, and existing `BlobAsset`
-values. Select an exporter when the notebook result needs another stored
-representation.
+An AnyWidget input uses an object as a sparse trait patch. The producer merges
+the patch over the baseline serializer-owned model state and verifies the
+accepted complete value.
 
-Choose outputs for the consumers that need them:
+## Select output sources
 
-- scalars or versioned JSON for concise human and agent summaries
-- Parquet, Arrow, or NumPy for inspectable data and frontend computation
-- Vega-Lite or images for visual presentation
-- AnyWidget bundles for browser-local interaction
-- custom media types for domain-specific agent or application data
+Each output has one source kind:
 
-Use the expanded form for exporter options:
+| Source         | Stored result                                                 |
+| -------------- | ------------------------------------------------------------- |
+| `kind: value`  | Portable JSON or one explicit exporter result                 |
+| `kind: output` | Formatted Marimo output and replay resources                  |
+| `kind: cell`   | Cell identity, terminal output, console, and replay resources |
+
+Value and output selectors accept a Python identifier root, attribute steps,
+nonnegative integer items, and JSON-string items. Mapping keys take precedence
+over attributes.
+
+Select a complete cell by native name or an inspected runtime ID:
+
+```yaml
+outputs:
+  summary_cell:
+    source: { kind: cell, by: name, value: summary_cell }
+```
+
+## Choose representations for consumers
+
+- portable JSON for summaries, records, and metrics
+- rendered output or complete cells for Marimo-aware applications
+- Parquet, Arrow, or NumPy for typed data and frontend computation
+- Vega-Lite or PNG for visual presentation
+- AnyWidget for browser-local model interaction
+- a versioned `BlobAsset` media type for domain-specific data
+
+Use expanded exporter form when options or source dependencies are required:
 
 ```yaml
 outputs:
   prices:
-    source: selected_prices
+    source: { kind: value, selector: selected_prices }
     exporter:
       name: parquet.table
       options:
         compression: snappy
         filename: prices.parquet
+      dependencies: []
 ```
 
-Custom exporters use an importable `module:symbol` reference:
+A custom exporter uses an importable `module:symbol` callable:
 
 ```yaml
 outputs:
   summary:
-    source: report
+    source: { kind: value, selector: report }
     exporter:
       name: market_summary:encode
       options:
         currency: USD
+      dependencies:
+        - market_summary.formatting
 ```
 
-The callable receives the notebook result and returns a value supported by
-marimo's native cache codecs. Install or sideload the module into the notebook
-environment before `build` or `capture`.
+Declare dynamically loaded modules that affect conversion bytes. Custom
+exporter leaves execute for each prepared state. Built-in deterministic leaves
+can reuse Marimo's native cache.
 
-[Output representations](../reference/representations.md) lists built-in
-exporter, consumer, and loader pairs. The [ExportSpec
-reference](../reference/export-spec.md) defines the exact schema. The [Python
-API](../reference/python-api.md) shows programmatic construction.
-
-## Coming from Papermill
-
-[Papermill](https://papermill.readthedocs.io/en/latest/usage-parameterize.html)
-runs one parameter set and saves an executed notebook. marimo-export prepares
-several named states and saves selected results for multiple consumers.
-
-Use `build` for a notebook file. Use `capture` for an open notebook session.
+Use [Output representations](../reference/representations.md) for exporter and
+loader pairs and the [ExportSpec reference](../reference/export-spec.md) for the
+exact wire schema.

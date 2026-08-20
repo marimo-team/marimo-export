@@ -1,7 +1,23 @@
 # Validation
 
 Use the smallest check that proves the changed owner while developing. Finish
-with the root gate and any required live browser evidence.
+with the root gate and live evidence for process, repository, or browser
+boundaries.
+
+## Supported Python environments
+
+Local development uses Python 3.12 from `.python-version`. The Python package
+supports 3.10 through 3.14.
+
+GitHub Actions runs the Python package contracts on:
+
+```text
+Ubuntu:  3.10, 3.11, 3.12, 3.13, 3.14
+Windows: 3.10, 3.11, 3.12, 3.13, 3.14
+```
+
+The Ubuntu check job also runs formatting, lint, Python and TypeScript types,
+all tests, builds, packed npm consumers, and isolated wheel smoke.
 
 ## Root gate
 
@@ -9,30 +25,155 @@ with the root gate and any required live browser evidence.
 make check
 ```
 
-The gate checks formatting, lint, dependency direction, Python and TypeScript
-types, unit and integration contracts, browser loader tests, package and docs
+The gate checks formatting, dependency direction, Python and TypeScript types,
+unit and integration contracts, browser loader tests, package and documentation
 builds, packed npm installation, and isolated Python wheel imports.
 
 ## Select evidence by boundary
 
-| Changed boundary                | Focused evidence                                     | Live or package evidence                           |
-| ------------------------------- | ---------------------------------------------------- | -------------------------------------------------- |
-| ExportSpec and state plan       | Spec, plan, ordinary UI, and AnyWidget tests         | File build with representative states              |
-| marimo capability or cache      | Probe, adapter, registry, receipt, and cleanup tests | Warm build and borrowed capture                    |
-| Managed server lifecycle        | Startup, activation, ownership, shutdown tests       | Source-preserving file build                       |
-| Transfer, writer, local reader  | Limits, digest, framing, rollback, filesystem tests  | Public capture and `verify`                        |
-| Browser reader or loader        | Parser, integrity, decode, cancellation, disposal    | Packed subpath build with required peer            |
-| State transition or visible app | Typecheck and production build                       | Desktop, narrow, rapid changes, mounted action     |
-| Scaffold or agent workflow      | Source-preserving relocation test                    | Generated app install, export, typecheck, build    |
-| Documentation                   | Prose, links, VitePress build                        | Navigation, search, source view, LLM text, browser |
+| Changed boundary               | Focused evidence                                      | Live or package evidence                                |
+| ------------------------------ | ----------------------------------------------------- | ------------------------------------------------------- |
+| ExportSpec and export format   | Spec, index, wire, fixture, reader tests              | Python and TypeScript fixture parity                    |
+| Planning and preparation       | Plan and preparation service tests                    | Exact repeat, one-state addition, file and live capture |
+| Observations                   | Queue, ledger, source-match, SQLite observation tests | Successful normal-run recording in a live kernel        |
+| Repository                     | Repository, concurrency, integrity, lifecycle tests   | Multiprocess contention, owner death, Windows matrix    |
+| Marimo cache adapter           | Probe, patch, graph scope, receipt, cleanup tests     | Warm owned build and borrowed capture                   |
+| Managed process lifecycle      | Producer, managed server, startup, shutdown tests     | Source-preserving file preparation                      |
+| Transfer, writer, local reader | Limits, digest, framing, rollback, filesystem tests   | Public capture and `verify`                             |
+| Prepared browser control       | Manifest, query, control, refresh, controller tests   | Rapid state changes and publication rotation            |
+| Browser reader or loader       | Parser, integrity, decode, cancellation, disposal     | Packed subpath with required peer                       |
+| marimo-studio integration      | Compiler, registry, route, static delivery tests      | Live Zero-Python preview and static bundle              |
+| Visible application            | Typecheck and production build                        | Desktop, narrow, rapid changes, mounted action          |
+| Documentation                  | Prose, links, VitePress build                         | Navigation, search, source view, LLM text, browser      |
 
-## Cross-language contracts
+## Public Python and dependency direction
 
-Python produces the canonical `ExportIndex` fixture consumed by browser tests.
-Both languages use the same canonical JSON, state fingerprints, codecs,
-descriptors, media types, and malformed-input cases.
+```bash
+uv run pytest -q \
+  packages/python/tests/test_public_modules.py \
+  packages/python/tests/test_boundaries.py
+```
 
-## Live finance path
+These tests protect the package root, focused public modules, the
+service-to-`PreparationRepository` boundary, private Marimo containment,
+deferred imports, and package source identity.
+
+## Planning, observations, and preparation
+
+```bash
+uv run pytest -q \
+  packages/python/tests/test_planning.py \
+  packages/python/tests/test_preparation_*.py \
+  packages/python/tests/test_prepared_*.py \
+  packages/python/tests/test_observations.py \
+  packages/python/tests/test_marimo_observations.py
+```
+
+Required behavioral cases:
+
+- exact repeat returns before notebook startup
+- equal state vectors share one prepared state
+- adding one state executes one missing vector
+- changing the default reuses prepared states
+- cancellation leaves the prior generation current
+- a live producer change fails before publication
+- progress counts match the missing-state partition
+- observation queue pressure preserves revision order
+- failed, interrupted, cancelled, and scratch runs record no vector
+- public observation methods derive producer and input scope from `ExportPlan`
+
+## Export repository
+
+```bash
+uv run pytest -q \
+  packages/python/tests/test_repository.py \
+  packages/python/tests/test_repository_*.py
+```
+
+Repository changes require evidence for:
+
+- concurrent first open
+- exact state and generation identity
+- reservation owner and fencing token
+- initial and replacement pointer compare-and-swap
+- cross-spec reuse of one prepared state
+- heartbeat during slow preparation and maintenance
+- detached response leases
+- expired owner recovery
+- failure before and after filesystem installation
+- corrupt row and artifact isolation
+- abandoned staging and interrupted installation recovery
+- retention pinning, byte accounting, and dry-run parity
+- bounded reservation acquisition
+- cleanup failure accounting
+- plan-shaped public observation and exact-prepared lookup
+- private observation and preparation capability containment
+
+Use multiprocess tests for cross-process claims. The Windows CI matrix is the
+authority for native Windows locking, paths, and process behavior.
+
+## Marimo cache adapter
+
+```bash
+uv run pytest -q \
+  packages/python/tests/test_marimo_cache_boundaries.py \
+  packages/python/tests/test_marimo_cache_host.py \
+  packages/python/tests/test_marimo_cache_patch.py \
+  packages/python/tests/test_marimo_cache_side_effects.py \
+  packages/python/tests/test_marimo_{child_run,exporter_compat,projection_recording,receipts,runtime_compat}.py
+```
+
+Run the public probe:
+
+```bash
+marimo-export doctor
+```
+
+Adapter evidence must cover the exact Marimo release, private source drift,
+reversible overlapping leases, foreign patch conflicts, unrelated graph
+isolation, forced projection execution, signed receipts, incomplete cache data,
+unavailable restored values, write barriers, and cleanup.
+
+After focused tests, run one warm file preparation and one borrowed capture.
+Report authored and projection cache activity from the public result.
+
+## Cross-language and prepared browser contracts
+
+Python produces canonical ExportIndex, prepared-manifest, projection, and
+portable JSON fixtures consumed by browser tests. Both languages use the same
+canonical JSON, state fingerprints, codecs, descriptors, media types, and
+malformed-input cases.
+
+```bash
+pnpm --filter @marimo-team/portable-json test
+pnpm --filter @marimo-team/marimo-export test
+pnpm --filter @marimo-team/marimo-export typecheck
+pnpm --filter @marimo-team/portable-json test:package
+pnpm --filter @marimo-team/marimo-export test:package
+```
+
+Prepared browser evidence must cover strict manifest parsing, base URL and
+identity binding, default state, query and control updates, missing states,
+supersession, restoration, publication refresh, selection preservation,
+settlement, and idempotent disposal.
+
+## marimo-studio consumer
+
+Run Studio's Python, TypeScript, and browser gates in the Studio checkout using
+the editable marimo-export workspace dependency. Required integration cases:
+
+- view compilation produces public OutputSpec records and separate host bindings
+- live preview uses `Session.plan()` and `Session.capture()`
+- independently leased assets survive manifest rotation
+- Studio source contains no repository schema or SQL
+- static delivery calls public `prepare()` and copies the verified export
+- the Studio renderer implements `PreparedStatePort`
+- rapid transitions preserve the last complete view
+- current-manifest refresh preserves a valid local selection
+- notebook-scope close releases prepared handles and pending work
+- Studio host-cache setup calls the public marimo-export integration capability
+
+## Live application path
 
 ```bash
 pnpm --filter @marimo-team/marimo-export-example-vite-vanilla run export
@@ -40,9 +181,13 @@ pnpm --filter @marimo-team/marimo-export-example-vite-vanilla run verify:export
 pnpm --filter @marimo-team/marimo-export-example-vite-vanilla dev
 ```
 
-Exercise every saved view and one interaction inside the mounted widget. Check
-rapid changes, final state, staging cleanup, console errors, failed requests,
-duplicate IDs, page overflow, and desktop and narrow layouts.
+Exercise every declared state and one interaction inside each mounted runtime.
+Check rapid changes, final state, staging cleanup, console errors, failed
+requests, duplicate IDs, page overflow, and desktop and narrow layouts.
+
+A Zero-Python deployment check must confirm that prepared manifests, export
+files, state transitions, and controls use the static origin and open no kernel
+or WebSocket connection.
 
 ## Documentation delivery
 

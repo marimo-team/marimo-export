@@ -1,130 +1,139 @@
 ---
 title: How notebook exports work
-description: How selected notebook states become one verified export for applications, agents, Python automation, and custom clients.
+description: How an ExportSpec becomes reusable prepared states and one verified notebook export.
 ---
 
 # How notebook exports work
 
-marimo-export runs selected notebook states through marimo and packages their
-results as one verified export. Applications, agents, Python automation, and
-custom clients can consume the same export.
+marimo-export resolves an `ExportSpec`, prepares its finite state relation through
+Marimo, and writes one verified directory for Python and browser consumers.
 
-The marimo notebook remains the source of truth for Python computation,
-reactive dependencies, controls, and data access. An ExportSpec selects the
-states and outputs to include. The resulting notebook export can be inspected
-by agents, opened from Python, or loaded by a browser application.
+```text
+notebook + ExportSpec
+  -> ExportPlan
+  -> prepared states in the export repository
+  -> PreparedExport
+  -> index.json + content-addressed assets
+```
 
-## Four objects carry the workflow
-
-| Object          | Owns                                                                          |
-| --------------- | ----------------------------------------------------------------------------- |
-| Notebook        | Python definitions, reactive dependencies, controls, and computation          |
-| ExportSpec      | Prepared input choices, named states, outputs, and representation choices     |
-| Notebook export | Complete states, provenance, output descriptors, and content-addressed assets |
-| Consumer        | Human-facing application, agent, Python automation, or custom client          |
-
-The notebook remains ordinary marimo source. State overrides and output
-projection cells exist in an in-memory copy used for each export run.
-
-## Prepared choices become complete states
-
-An ExportSpec may omit values that should stay at the captured notebook
-baseline:
+## ExportSpec declares the product surface
 
 ```yaml
-inputs: [interval, symbols_selector]
+schema: marimo-export.spec.v1
+default_state: baseline
 states:
-  leaders: {}
-  cloud:
-    symbols_selector: [MSFT, GOOGL, AMZN]
+  baseline: {}
   weekly:
     interval: 1wk
 outputs:
-  chart:
-    source: performance
-    exporter: altair.vegalite
-  prices:
-    source: selected_prices
-    exporter: parquet.table
+  summary:
+    source: { kind: value, selector: report.summary }
+  report:
+    source: { kind: output, selector: report.view }
 ```
 
-The producer fills each row into a complete input vector and records its
-fingerprint. Every consumer sees the same state names and complete vectors.
+The spec contains exactly `schema`, `default_state`, `states`, and `outputs`.
+marimo-export infers the input definitions from selected output dependencies and
+keys present in state rows. It fills sparse rows from the notebook baseline and
+deduplicates rows that resolve to the same complete input vector.
 
-[Choose states and results](guide/choose-states.md) defines the authoring
-workflow. The [ExportSpec reference](reference/export-spec.md) defines the
-accepted wire shape.
+`default_state` names the state selected by Python readers, browser readers, and
+prepared manifests when a caller supplies no state.
 
-## marimo executes states and representations
+## ExportPlan makes the work inspectable
 
-Every state runs through marimo's reactive graph. marimo owns dependency
-pruning, cell hashing, cache lookup, restoration, serialization, and
-persistence. marimo-export adds one transient leaf per output so an exporter
-such as `altair.vegalite` or `parquet.table` participates in the same execution
-and cache lifecycle.
+`plan()` returns an immutable `ExportPlan` with:
 
-Use `build` when the producer owns notebook startup. Use `capture` when an open
-session already owns the environment or completed computation. Both paths
-produce the same export format.
+- notebook, producer, output-plan, and spec SHA-256 identities
+- inferred input names and normalized states
+- the authored default alias and its state fingerprint
+- output names
+- observed input vectors from the export repository
+- reusable and missing state fingerprints
+- `exact_reuse`, which reports that the plan came from a matching prepared export
+  before notebook startup
 
-## One index describes the complete export
+The output-plan identity depends on `outputs`. Changing aliases, state rows, or
+the default keeps prepared state artifacts reusable. Adding an output changes the
+output-plan identity and prepares the requested output relation again.
+
+## Marimo caches computation
+
+Marimo owns notebook parsing, dependency execution, cache keys, invalidation,
+restoration, serialization, signing, and cache stores. marimo-export adapts those
+capabilities inside its contained Marimo compatibility modules.
+
+marimo-export owns the finite state relation and portable prepared results. Its
+export repository stores observations, prepared output artifacts, immutable
+export generations, reservations, leases, and retention metadata. Repository
+records do not replace Marimo's computation cache.
+
+This split supports two recovery paths:
+
+- A missing prepared export can be reconstructed while Marimo reuses valid cell
+  cache entries.
+- A missing Marimo cache can leave an existing verified prepared export reusable.
+
+## prepare and capture return a leased artifact
+
+`prepare()` owns notebook startup when missing work exists. `capture()` borrows a
+named live session. Both return `PreparedExport`.
+
+The handle keeps its repository generation leased while the caller opens files,
+serves assets, builds a browser manifest, or writes a deployment directory. Close
+the handle after the last consumer releases its assets.
+
+```python
+from marimo_export import ExportSpec, prepare
+
+spec = ExportSpec.from_file("report.export.yaml")
+with prepare("report.py", spec=spec) as prepared:
+    print(prepared.plan.missing_states)
+    prepared.write("dist/report")
+```
+
+`build()` composes `prepare()` and `PreparedExport.write()`. It validates the
+destination before notebook execution.
+
+## index.json defines the portable relation
 
 ```text
-dist/finance/
+dist/report/
   index.json
   assets/
     <sha256>.bin
     <sha256>.arrow
     <sha256>.npy
+    <sha256>.output.json
+    <sha256>.cell.json
 ```
 
-`index.json` records notebook and producer identity, input and output names,
-complete states, fingerprints, representation descriptors, and asset sizes.
-Asset filenames come from their SHA-256 digest.
+The index records `spec_sha256`, the default state fingerprint, notebook and
+producer facts, input and output names, control bindings, aliases, complete state
+vectors, output descriptors, and asset declarations. Descriptor provenance
+contains the originating Python type. Marimo cache paths remain producer-local.
 
-The writer stages and verifies the complete directory before commit. Python
-and browser readers verify asset length, digest, native framing, and descriptor
-agreement before decoding a result.
+Python and TypeScript readers validate canonical index bytes, exact state and
+output sets, fingerprints, representation consistency, and asset declarations.
+`verify_export()` or `NotebookExport.verify()` reads and verifies the complete
+asset closure.
 
-The [export format reference](reference/export-format.md) defines the durable
-consumer contract.
+## Applications consume immutable or changing publications
 
-## Consumers open the same export
-
-Python automation can open a local export, resolve a state, read its outputs,
-and verify the complete directory. Agents can use the same reader or the CLI's
-JSON output to enumerate states, inspect representations, and bind claims to
-notebook, state, producer, and asset identity.
-
-A browser application opens the export from static hosting:
+Core readers open one immutable export:
 
 ```ts
 import { openExport } from "@marimo-team/marimo-export";
-import { parquetRowsLoader } from "@marimo-team/marimo-export/loader/parquet";
 
-const notebookExport = await openExport("./finance/");
-const state = notebookExport.state("cloud");
-const rows = await state.output("prices").load(parquetRowsLoader());
+const notebookExport = await openExport("/exports/report/");
+const initial = notebookExport.defaultState;
 ```
 
-Opening fetches `index.json`. Output assets load on demand. Interactive values
-such as Vega-Lite charts and AnyWidgets return disposable mount handles. A
-frontend can present the results with HTML, CSS, TypeScript, or a frontend
-framework without reproducing notebook computation in JavaScript.
+The `@marimo-team/marimo-export/prepared` subpath adds manifest validation,
+semantic input updates, control routing, cancellation, last-good restoration,
+publication refresh, and disposal. Applications provide a `PreparedStatePort`
+that loads required outputs and commits one complete view.
 
-Applications replacing several interactive outputs should stage and commit the
-replacement as one complete view. Mounted modules have the browser page's
-authority.
-
-Use [Consume an export](guide/consume-an-export.md) to choose a reader, [Use
-with agents](guide/agents-and-automation.md) for grounded analysis and
-agent-built frontends, and [Build a browser
-application](guide/browser-applications.md) for mount lifecycle and state
-replacement. The [Browser API](reference/browser-api.md) defines exact methods.
-
-## Prepared results define the static boundary
-
-Consumers can resolve states present in the notebook export. A request that
-needs a new Python result requires another export or a Python service. Browser
-interactions that use saved data, chart state, or widget-local models can remain
-inside the static consumer.
+Use [Choose states and outputs](guide/choose-states.md), [Build or
+capture](guide/build-and-capture.md), and the [export format
+reference](reference/export-format.md) for the exact contracts.

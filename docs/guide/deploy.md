@@ -17,9 +17,21 @@ command again checks the files selected for deployment.
 
 ## Treat producer code as notebook code
 
-`build`, `capture`, and `session NOTEBOOK` execute notebook code with its file,
-credential, network, and package access. Review the notebook, custom exporters,
-and selected capture session before running these commands.
+`build` and file-based `inspect NOTEBOOK` execute notebook code with its file,
+credential, network, and package access. `capture` runs selected states in an
+active session with the same authority. Review the notebook, custom exporters,
+and selected session before running these commands.
+
+List the sessions on a server before capture, then pass the selected ID:
+
+```bash
+marimo-export inspect http://127.0.0.1:2718
+
+marimo-export capture http://127.0.0.1:2718 \
+  --session SESSION_ID \
+  --spec export.yaml \
+  --output dist/export
+```
 
 Pin the notebook environment and external data inputs when the export must be
 reproducible. marimo cache entries execute with the notebook's authority when

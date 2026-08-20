@@ -1,7 +1,8 @@
 # Development
 
-The workspace uses Python 3.11 or newer, Node 22.18, pnpm 11.15.1, uv, and
-Vite+.
+The workspace pins Python 3.12 for local development with Node 22.18, pnpm
+11.15.1, uv, and Vite+. Package CI verifies Python 3.10 through 3.14 on Ubuntu
+and Windows.
 
 ## Install the workspace
 
@@ -22,7 +23,7 @@ Python package:
 ```bash
 uv run pytest packages/python/tests
 uv run ruff check packages/python
-uv run ruff format packages/python
+uv run ruff format --check packages/python
 uv run ty check packages/python
 ```
 
@@ -33,6 +34,20 @@ pnpm --filter @marimo-team/marimo-export test
 pnpm --filter @marimo-team/marimo-export typecheck
 pnpm --filter @marimo-team/marimo-export build
 ```
+
+Portable JSON:
+
+```bash
+pnpm --filter @marimo-team/portable-json test
+pnpm --filter @marimo-team/portable-json typecheck
+pnpm --filter @marimo-team/portable-json test:package
+```
+
+Workspace package exports resolve browser and portable JSON TypeScript source.
+`publishConfig.exports` maps packed packages to their built `dist` entry points.
+The pnpm `beforePacking` hook emits the public browser dependency set after
+Vite+ bundles its internal AnyWidget loader.
+Run `pnpm run build:browser` to pack portable JSON before the browser package.
 
 One loader, example, or docs application:
 
@@ -46,30 +61,85 @@ Run `make format` before `make check`.
 
 ## Change Python producer behavior
 
-Stable public records live in `spec.py`, `export.py`, `result.py`, and
-`errors.py`. Build and capture policy depend on local records and marimo
-capability protocols. Private marimo imports belong under `_marimo/compat`.
+Stable public records live in `spec.py`, `planning.py`, `prepared.py`,
+`progress.py`, `descriptors.py`, `index.py`, `inspection.py`, `wire.py`,
+`result.py`, `repository.py`, and `errors.py`. `_services` owns planning,
+preparation, capture, artifact assembly, and write policy. Private Marimo imports
+belong under `_marimo/compat`. SQL belongs under `_repository/sqlite`.
 
 Add a capability probe before relying on a new private seam. Select the adapter
 through a composition root. Test the stable port and the live build or capture
 path that consumes it.
 
-The package root remains limited to:
+The package root remains limited to the common workflow:
 
 ```text
-BlobAsset
-Client
+ExportPlan
+ExportRepository
 ExportResult
 ExportSpec
 NotebookExport
 OutputSpec
-Session
+PreparedExport
+ProgressEvent
+VerificationResult
 build
 capture
 open_export
+plan
+prepare
+verify_export
 ```
 
-Typed failures live in `marimo_export.errors`.
+Advanced capabilities live in focused modules such as
+`marimo_export.sessions`, `marimo_export.observations`,
+`marimo_export.outputs`, `marimo_export.diagnostics`, and
+`marimo_export.wire`. Core export failures live in `marimo_export.errors`.
+Repository and observation modules expose the failures tied to their own
+lifecycle contracts.
+
+## Change planning or preparation
+
+`plan()` reports exact and per-state reuse. `prepare()` and borrowed-session
+capture execute missing states and return a leased `PreparedExport`. `build()`
+adds caller-destination write and verification.
+
+Keep file and borrowed-session paths aligned through `_services`. Test exact
+reuse, missing-state reuse, default-state changes, cancellation, progress,
+source drift, and cleanup through the public API.
+
+Read [Planning and preparation](architecture/preparation.md) before changing
+identity or lifecycle ordering.
+
+## Change the export repository
+
+`ExportRepository` is the public plan-shaped facade for observations, exact
+prepared lookup, status, pruning, and lifecycle.
+`_repository/preparation.py` is the private capability used by producer
+services. `_repository/observations.py` is the private producer-keyed capability
+used by the observation ledger and preparation. `_repository/sqlite` owns
+connections, transactions, schema, and SQL. Artifact modules own verified
+files, staging, leases, reservations, fencing, recovery, and retention.
+
+Run the repository, concurrency, integrity, lifecycle, observation, and
+boundary suites. A storage failure must preserve the current generation. A
+stale reservation must fail before pointer publication. A live artifact lease
+must survive concurrent preparation and retention.
+
+Read [Export repository](architecture/repository.md) before changing a table,
+identity, transaction, lease, fence, or cleanup path.
+
+## Change the Marimo adapter
+
+The package pins `marimo==0.24.0`. `_marimo/compat/release.json` records the
+release commit and source digests required by the cache adapter. Update the pin,
+release record, focused probe, adapter tests, and live build and capture evidence
+together.
+
+The Marimo checkout is an external source reference for this integration.
+Implement current adapter behavior in marimo-export through package-owned ports.
+Read [Execution and caching](architecture/execution-and-caching.md) and
+[Marimo upstream candidates](architecture/marimo-upstream-candidates.md).
 
 ## Add an exporter
 
@@ -80,20 +150,38 @@ returns a value supported by marimo's native cache codecs:
 import json
 from collections.abc import Mapping
 
-from marimo_export import BlobAsset
+from marimo_export.outputs import BlobAsset
+from marimo_export.wire import portable_json
 
 
-def summary(value: Mapping[str, object]) -> BlobAsset:
+def summary(value: Mapping[str, object], *, indent: int = 2) -> BlobAsset:
+    normalized = portable_json(value, "summary")
     return BlobAsset(
-        data=json.dumps(value, sort_keys=True).encode(),
+        data=json.dumps(normalized, indent=indent, sort_keys=True).encode(),
         media_type="application/vnd.example.summary.v1+json",
         filename="summary.json",
     )
 ```
 
 Reference the callable as `module:symbol` in an ExportSpec. The selected module
-must be importable in the notebook kernel. Files, network responses, mutable
-module state, and other external inputs need explicit cache invalidation.
+and every declared dependency must be importable in the notebook kernel.
+Declare source modules that affect conversion output, including modules loaded
+dynamically. A borrowed session uses module objects already loaded at first
+exporter preparation. Restart the session for earlier edits to take effect.
+Later disk drift fails with `exporter_source_changed`. Custom exporter leaves
+never produce a cache hit. Files, network responses, mutable module state, and
+other external inputs affect each execution. The selected notebook value still
+follows Marimo's native cache policy.
+
+```python
+from marimo_export.exporters import importable
+
+summary_exporter = importable(
+    "summary_exporter:summary",
+    options={"indent": 2},
+    dependencies=("json",),
+)
+```
 
 To add a built-in exporter:
 
@@ -101,25 +189,31 @@ To add a built-in exporter:
 2. Expose a typed descriptor factory.
 3. Implement the callable under `exporters/_runtime`.
 4. Define a closed option schema and deterministic defaults.
-5. Add producer and exact-byte tests.
+5. Add producer, cache-reuse, and exact-byte tests.
 
 ## Add a browser loader
 
-Create one private `packages/loader-<name>` workspace. It owns the decoder,
-runtime dependency, result type, malformed-input bounds, cancellation, and
-mount disposal.
+Implement zero-runtime JSON, text, or core format decoding in
+`packages/browser/src/loader`. Add a private `packages/loader-<name>` workspace
+when a specialized decoder owns a runtime dependency, result type,
+malformed-input bounds, cancellation, or mount disposal.
 
-Expose it through `packages/browser/src/loader/<name>.ts`:
+Expose a loader workspace through `packages/browser/src/loader/<name>.ts`:
 
 ```ts
 export * from "#loaders/<name>";
 ```
 
-Add the facade to the browser build entries and export map. Declare specialized
+When browser must depend on a loader workspace for linked source consumption,
+keep that workspace independent of browser contracts. Export a decoder over
+verified bytes or package-owned records, then bind it to `defineOutputLoader` or
+`defineBlobAssetLoader` in the public browser facade.
+
+Add the loader entry to the browser build and export map. Declare specialized
 runtimes as optional peers of `@marimo-team/marimo-export`. The packed-package
 test builds browser core and every loader subpath with its peers installed.
 
-Use `defineOutputLoader` for a native codec and `defineBlobAssetLoader` for a
+Use `defineOutputLoader` for an export codec and `defineBlobAssetLoader` for a
 media representation.
 
 ## Change a cross-language protocol

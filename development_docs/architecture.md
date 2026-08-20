@@ -1,109 +1,233 @@
 # Architecture
 
-marimo-export publishes selected marimo notebook results for human-facing
-applications, agents, Python automation, browser clients, and custom consumers.
-It stores a finite relation of prepared states and outputs in one verified
-directory.
+marimo-export prepares a finite relation of notebook states and named outputs,
+retains reusable results, and writes one verified notebook export for Python,
+browsers, agents, and custom applications.
 
 ```text
 notebook + ExportSpec
-  -> complete input states
-  -> marimo execution and native cache receipts
+  -> ExportPlan
+  -> reusable states + missing states
+  -> Marimo execution for missing work
+  -> leased PreparedExport
   -> index.json + content-addressed assets
-  -> Python, agent, browser, and custom consumers
+  -> Python, browser, agent, or application
 ```
 
-## Product boundary
+## Responsibility boundary
 
-| Product decision                              | User capability                                                 | Complexity accepted by marimo-export                          |
-| --------------------------------------------- | --------------------------------------------------------------- | ------------------------------------------------------------- |
-| Execute every state through marimo            | Notebook authors retain reactive and cache semantics            | State-local child runtimes and transient cells                |
-| Normalize sparse rows against one baseline    | Every consumer resolves the same complete prepared vectors      | Definition ownership, UI state, coercion checks, fingerprints |
-| Make output representations explicit          | People, agents, Python, and frontends receive decodable results | Python exporter and consumer representation contracts         |
-| Commit one canonical export directory         | Static hosts, agents, and readers receive one verified result   | Canonical JSON, content identity, staging, atomic replacement |
-| Support owned and borrowed notebook execution | Jobs build files while prepared kernels can be captured         | Separate process and session ownership roots                  |
-| Give interactive mounts explicit owners       | Rapid state changes preserve the last complete application view | Loading, staging, commit, cancellation, and disposal          |
+| Owner         | Responsibilities                                                                                                                          |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| marimo        | Notebook parsing, reactive graph, execution, controls, cache keys, cache stores, restoration, native serialization                        |
+| marimo-export | ExportSpec, observations, planning, preparation, prepared-state reuse, repository coordination, export format, Python and browser readers |
+| application   | Authored presentation, selected spec relation, view bindings, renderer, runtime UX, deployment assembly                                   |
 
-marimo owns notebook parsing, execution, dependency traversal, controls,
-cache keys, restoration, serialization, and persistence. marimo-export owns
-state selection, representation, transfer, the export format, and typed Python
-and browser consumption.
+marimo-studio is one application of these capabilities. It compiles HTML
+projection hosts into ExportSpec outputs and Studio-owned view bindings. It
+uses the public Python SDK to prepare exports and the public browser `prepared`
+subpath to drive static state transitions.
 
-## Ports and adapters contain marimo details
+The published Marimo 0.24.0 package remains the execution dependency. Private
+integration code stays under `marimo_export._marimo.compat` behind
+package-owned records and protocols.
+
+## Three persisted layers
+
+```text
+Marimo native cache
+  restorable notebook computation
+
+marimo-export repository
+  observations, prepared output artifacts, generations, leases, reservations
+
+notebook export
+  canonical index and declared consumer assets
+```
+
+Marimo owns computation-cache identity, persistence, signing, codecs, and
+validity. marimo-export stores portable prepared outputs after they cross the
+native cache receipt boundary. Exact repository reuse can skip notebook startup.
+Native cache reuse can reduce computation when a missing prepared state runs.
+
+Read [Execution and caching](architecture/execution-and-caching.md) and
+[Export repository](architecture/repository.md) before changing this boundary.
+
+## Dependency direction
 
 ```mermaid
-flowchart LR
-    policy[Producer policy]
-    records[Stable local records]
-    ports[marimo capability ports]
-    roots[Composition roots]
-    adapters[Private compatibility adapters]
-    host[marimo server and kernel]
+flowchart TB
+    apps[CLI, marimo-studio, Python applications]
+    sdk[Public Python SDK]
+    services[Planning and preparation services]
+    readers[Reader and verification]
+    publicRepository[ExportRepository]
+    integration[Inspection and diagnostics]
+    observationWorker[Observation ledger and worker]
+    records[Stable package records]
+    preparationRepository[Private PreparationRepository]
+    observationRepository[Private ObservationRepository]
+    marimoPorts[Marimo capability ports]
+    sqlite[Private SQLite and artifact adapters]
+    compat[Private Marimo compatibility adapters]
+    host[Marimo 0.24.0]
 
-    policy --> records
-    policy --> ports
-    roots --> ports
-    roots --> adapters
-    adapters --> host
+    apps --> sdk
+    sdk --> records
+    sdk --> services
+    sdk --> readers
+    sdk --> publicRepository
+    sdk --> integration
+    sdk --> observationWorker
+    services --> records
+    services --> preparationRepository
+    services --> marimoPorts
+    readers --> records
+    publicRepository --> records
+    publicRepository --> sqlite
+    publicRepository --> observationRepository
+    publicRepository --> preparationRepository
+    integration --> marimoPorts
+    observationWorker --> observationRepository
+    preparationRepository --> observationRepository
+    preparationRepository --> sqlite
+    observationRepository --> sqlite
+    marimoPorts --> compat
+    compat --> host
 ```
 
-Stable policy imports local records and capability protocols. Composition
-roots select concrete adapters. Private `marimo._*` imports stay under
-`_marimo/compat`. A marimo upgrade should replace or shrink one adapter while
-the producer policy, export format, and consumers retain their local
-contracts.
+The package root exposes common records and operations. `_services` owns
+producer planning, preparation, capture, artifact assembly, and durable write
+policy. Reader, repository, inspection, and diagnostic operations use their
+focused modules. `_repository/preparation.py` contains the private preparation
+capability used by producer services. `_repository/observations.py` contains the
+private raw observation capability used by the ledger and preparation.
+`_marimo/capabilities.py` contains package-owned execution records and
+protocols.
 
-Browser packages follow the same direction. Browser core owns parsing,
-integrity, readers, and loader contracts. Each loader package owns one optional
-representation runtime and returns application-owned data or a disposable
-mount.
+The browser dependency direction is:
 
-## Detailed maps
+```text
+application renderer
+  <- PreparedStatePort
+  <- @marimo-team/marimo-export/prepared
+  -> browser export reader
+  -> one loader facade
+  -> one representation runtime
+```
 
-| Area                                     | Detailed map                                                             | Question answered                                      |
-| ---------------------------------------- | ------------------------------------------------------------------------ | ------------------------------------------------------ |
-| Product records and durable files        | [Product model and export format](architecture/product-and-export.md)    | What is normalized, stored, and verified?              |
-| marimo processes, graph, cache, transfer | [marimo integration](architecture/marimo-integration.md)                 | Which host behavior is requested and who releases it?  |
-| Browser readers, loaders, and mounts     | [Browser loaders and mounts](architecture/browser-loaders-and-mounts.md) | How does static data become interactive browser state? |
-| Agents, CLI, example, docs, and packages | [Agents and delivery](architecture/agents-and-delivery.md)               | How do consumers inspect, prove, and ship the product? |
+Read [Ports and composition](architecture/ports.md) for the public modules,
+internal capabilities, composition roots, and enforced import rules.
 
-[Development](development.md) contains focused package workflows.
-[Validation](validation.md) selects evidence for each boundary.
+## Preparation lifecycle
+
+An ExportSpec declares sparse named states, one explicit default state, and
+named outputs. Planning infers input names, fills sparse rows from the baseline,
+deduplicates equal complete vectors, and resolves repository reuse.
+
+Preparation first checks for an exact verified generation. A hit returns a
+leased `PreparedExport` before starting a notebook. A miss claims a fenced
+reservation, rechecks repository state, opens or borrows one Marimo session,
+captures missing state fingerprints, assembles the relation, and commits one
+generation.
+
+`PreparedExport` can be opened, served through independently leased assets,
+described by a prepared browser manifest, or written to a caller destination.
+
+Read [Planning and preparation](architecture/preparation.md) for identities,
+file and session sources, progress, cancellation, and incremental reuse.
+
+## Durable product model
+
+The durable notebook export stores:
+
+```text
+states x outputs -> descriptor
+```
+
+`index.json` names the explicit default state, aliases, complete state vectors,
+output descriptors, control bindings, producer identity, and asset closure. A
+consumer opens the index before loading representation assets.
+
+Read [Product model and export format](architecture/product-and-export.md) for
+the exact records, codecs, writer transaction, and reader invariants.
+
+## Browser lifecycle
+
+The browser core opens and verifies immutable notebook exports. Loader subpaths
+decode one representation. The `prepared` subpath adds:
+
+- strict `marimo-export.prepared.v1` parsing
+- immutable publication opening
+- exact state selection
+- sparse input, query, and control updates
+- supersession and cancellation
+- manifest refresh
+- selection rules across publication refresh
+- settlement and disposal
+
+An application implements `PreparedStatePort` to load every required output and
+publish one complete visible state.
+
+Read [Browser loaders and mounts](architecture/browser-loaders-and-mounts.md)
+for integrity, staging, mounts, and disposal. Read
+[marimo-studio integration](architecture/studio-integration.md) for the concrete
+view compiler, server routes, static bundle, and renderer adapter.
 
 ## Ownership zones
 
-| Zone                         | Owns                                                                      |
-| ---------------------------- | ------------------------------------------------------------------------- |
-| `spec.py`                    | Authored ExportSpec and OutputSpec                                        |
-| `_execution`                 | Baseline records, complete states, transient cells, and export plan       |
-| `_marimo/capabilities.py`    | Kernel and transfer records and protocols                                 |
-| `_marimo` composition roots  | Adapter construction, focused native bindings, and process entry points   |
-| `_marimo/compat`             | Private marimo translation, exporter identity, execution, cache, transfer |
-| `_remote`                    | HTTP, authentication, scratchpad transport, events, managed process tree  |
-| `export.py` and `result.py`  | Durable export records and run-local diagnostics                          |
-| `reader.py` and `_writer.py` | Verified local reads, staging, and atomic commit                          |
-| `packages/browser`           | Browser parsing, integrity, immutable readers, and loader contracts       |
-| `packages/loader-*`          | One representation decoder, runtime dependency, cancellation, disposal    |
+| Zone                               | Owns                                                              |
+| ---------------------------------- | ----------------------------------------------------------------- |
+| `spec.py`                          | Authored ExportSpec and OutputSpec                                |
+| `planning.py`, `_execution`        | Public plan records, baseline, normalization, transient cells     |
+| `_services`                        | Plan, prepare, capture, artifact assembly, durable write          |
+| `observations.py`, `_observations` | Public observation records, queue, worker, source binding         |
+| `repository.py`                    | Public repository facade, status, pruning, lifecycle              |
+| `_repository/preparation.py`       | Private service-facing repository capability                      |
+| `_repository/observations.py`      | Private raw observation persistence for ledger and preparation    |
+| `_repository/sqlite`               | SQL schema, connections, transactions, retention queries          |
+| `_repository` artifact modules     | Immutable files, staging, leases, fencing, recovery               |
+| `_marimo/capabilities.py`          | Package-owned execution records and protocols                     |
+| `_marimo` composition roots        | Concrete adapter construction and managed entry points            |
+| `_marimo/compat`                   | Private Marimo inspection, execution, cache, projection, transfer |
+| `_remote`                          | HTTP, authentication, scratchpad transport, managed process tree  |
+| `descriptors.py`, `index.py`       | Durable output and export records                                 |
+| `reader.py`, `_writer.py`          | Verified consumer reads and caller destination commit             |
+| `packages/portable-json`           | Cross-language JSON types, parsing, conversion, Zod adapter       |
+| `packages/browser`                 | Browser reader, prepared controller, built-in loaders             |
+| `packages/loader-*`                | One specialized decoder and optional runtime                      |
 
-## Mutable state and release boundaries
+## Lifecycle owners
 
-| State                             | Owner                             | Released when                                  |
-| --------------------------------- | --------------------------------- | ---------------------------------------------- |
-| Managed marimo process groups     | `ManagedServer`                   | Build completes or startup fails               |
-| Borrowed server and session       | Caller                            | Caller closes them                             |
-| State child runtime               | Execution adapter                 | One state succeeds, fails, or cancels          |
-| Exporter module overlay           | Exporter adapter context          | Exporter preparation and all state runs finish |
-| Transfer ticket and virtual files | Transfer registry                 | Client release or lease expiry                 |
-| Staged export directory           | Writer                            | Commit succeeds or the operation fails         |
-| Browser load generation           | Application transition controller | Newer state request or page teardown           |
-| Committed interactive mounts      | Application mount owner           | Replacement commit or page teardown            |
+| Resource                          | Owner                           | Release boundary                                   |
+| --------------------------------- | ------------------------------- | -------------------------------------------------- |
+| Observation worker                | `ObservationLedger`             | `close()` joins and reports persistence status     |
+| Preparation reservation           | preparation context             | exact generation returns, failure, or cancellation |
+| Prepared-state staging            | `StagedPreparedState`           | state commit or close                              |
+| Export staging                    | `StagedExport`                  | generation commit or close                         |
+| Repository artifact lease         | prepared state or export handle | handle close or lease failure                      |
+| Detached response lease           | `PreparedAsset`                 | response completion and close                      |
+| Managed notebook source copy      | `OwnedNotebook`                 | producer context close                             |
+| Managed server and process tree   | `OwnedNotebook`                 | producer context close                             |
+| Borrowed server and session       | application                     | application close                                  |
+| State child graph                 | Marimo execution adapter        | state completion, failure, or cancellation         |
+| Transfer ticket and virtual files | transfer registry               | client release or lease expiry                     |
+| Browser state transition          | `PreparedStateController`       | commit, supersession, failure, or disposal         |
+| Mounted representation            | application renderer            | replacement commit or page teardown                |
 
-## Reason about a change
+## Contributor maps
 
-1. State the producer or consumer behavior and the identity that must survive.
-2. Find the owner in the detailed maps.
-3. Cross a package or process boundary through a stable record, capability, or
-   disposable handle.
-4. Test the nearest public boundary and add live evidence when the contract
-   crosses processes or mounted documents.
-5. Finish with `make check` and rendered browser proof for visible behavior.
+| Question                                    | Map                                                                      |
+| ------------------------------------------- | ------------------------------------------------------------------------ |
+| What is stored in a notebook export?        | [Product model and export format](architecture/product-and-export.md)    |
+| How are states planned and prepared?        | [Planning and preparation](architecture/preparation.md)                  |
+| What does SQLite own?                       | [Export repository](architecture/repository.md)                          |
+| Which dependencies are ports or adapters?   | [Ports and composition](architecture/ports.md)                           |
+| How is Marimo caching reused?               | [Execution and caching](architecture/execution-and-caching.md)           |
+| How are notebook outputs captured?          | [marimo integration](architecture/marimo-integration.md)                 |
+| Which private seams could move upstream?    | [Marimo upstream candidates](architecture/marimo-upstream-candidates.md) |
+| How does browser state become visible UI?   | [Browser loaders and mounts](architecture/browser-loaders-and-mounts.md) |
+| How does Studio consume the package?        | [marimo-studio integration](architecture/studio-integration.md)          |
+| How are packages, agents, and docs shipped? | [Agents and delivery](architecture/agents-and-delivery.md)               |
+
+[Development](development.md) contains focused workflows. [Validation](validation.md)
+maps each changed boundary to required evidence.

@@ -6,33 +6,51 @@ format stores that relation as canonical JSON and content-addressed assets.
 
 ## Product nouns
 
-| Noun            | Contract                                                         |
-| --------------- | ---------------------------------------------------------------- |
-| Notebook        | Saved marimo source and its reactive dependency graph            |
-| Baseline        | Definitions, values, UI state, cell ownership, document identity |
-| ExportSpec      | Input names, sparse named states, and output specifications      |
-| State           | One complete input assignment and canonical fingerprint          |
-| Output          | Published name, source definition, and optional exporter         |
-| Representation  | Native cache codec plus media type and metadata                  |
-| Asset           | Content-addressed native return bytes                            |
-| Notebook export | One canonical `index.json` and its declared assets               |
-| ExportResult    | Completed producer facts, cache activity, timings, warnings      |
-| Consumer        | Human-facing application, agent, Python reader, or custom client |
+| Noun            | Contract                                                             |
+| --------------- | -------------------------------------------------------------------- |
+| Notebook        | Saved marimo source and its reactive dependency graph                |
+| Baseline        | Definitions, values, UI state, cell ownership, document identity     |
+| ExportSpec      | Default state, sparse named states, and output specifications        |
+| ExportPlan      | Inferred inputs, complete states, identities, and reusable work      |
+| State           | One complete input assignment and canonical fingerprint              |
+| Control binding | Scoped UI object ID mapped to an input and semantic tree path        |
+| Output          | Published name, typed source, and optional value exporter            |
+| Representation  | Export descriptor codec plus media type and metadata                 |
+| Asset           | Content-addressed export payload bytes                               |
+| Notebook export | One canonical `index.json` and its declared assets                   |
+| ExportResult    | Plan, preparation reuse, verification, bytes, warnings, elapsed time |
+| Consumer        | Human-facing application, agent, Python reader, or custom client     |
 
-## ExportSpec becomes an export plan
+## ExportSpec resolves to execution and preparation plans
 
-`create_export_plan()` validates referenced definitions, fills omitted input
-names from the baseline, rejects duplicate complete vectors, and separates
-ordinary assignments from UI updates.
+Inside the kernel, `create_execution_plan()` validates referenced definitions,
+infers input names, fills omitted state values from the baseline, groups aliases
+for equal complete vectors, resolves the explicit default state, and separates
+ordinary assignments from UI updates. Its private `ExecutionPlan` holds the
+normalized states and transient cells needed by child execution.
 
-Ordinary values are appended to transient copies of their authored cells. This
-preserves sibling functions, classes, and UI elements returned by the same
-cell. An AnyWidget row merges a sparse trait patch over the complete baseline
-model. The state runner rejects validation or coercion that changes the
-requested vector.
+Ordinary values are written into transient copies of their authored cells. An
+assignment is inserted immediately before one final expression or appended when
+the cell has no final expression. This preserves sibling functions, classes,
+and UI elements returned by the same cell. An AnyWidget row merges a sparse
+trait patch over the complete baseline model. The state runner rejects
+validation or coercion that changes the requested vector.
 
-The authored notebook source remains unchanged. The plan holds the transient
-state and output cells used by child execution.
+The public `ExportPlan` returned by `plan()` or `Session.plan()` combines that
+kernel result with producer identities, repository observations, prepared-state
+reuse, and exact prepared-export reuse. The authored notebook source remains
+unchanged throughout planning and execution.
+
+An output source is one of three records:
+
+- a structurally parsed value selector
+- a structurally parsed rendered-output selector
+- a complete cell selected by native name or runtime ID
+
+The default value projection captures portable JSON. A value exporter can
+produce a specialized native cache value. Rendered-output and complete-cell
+projections capture Marimo-owned output records through the child recording
+stream and `SessionView`.
 
 ## Every state has every output
 
@@ -45,10 +63,13 @@ states × outputs -> descriptor
 The state fingerprint is SHA-256 over canonical JSON for the complete input
 object. One output name keeps one codec and media type across every state.
 
-Export format version 1 accepts four native codecs:
+Export format version 1 accepts seven export codecs:
 
 ```text
 marimo.scalar.v1
+marimo.json.v1
+marimo.output.v1
+marimo.cell.v1
 numpy.npy.v1
 apache.arrow.file.v1
 marimo.blob-asset.msgpack.v1
@@ -63,19 +84,35 @@ remains closed for version 1.
 `ExportIndex` records:
 
 - schema identifier
+- canonical ExportSpec SHA-256
+- explicit default state fingerprint
 - notebook filename and document SHA-256
 - marimo and marimo-export producer versions
+- exact marimo-export implementation SHA-256
 - ordered input and output names
-- complete state vectors and fingerprints
+- projection-scoped UI object IDs bound to input names and semantic paths
+- authored aliases mapped to state fingerprints
+- fingerprint-keyed complete state vectors
 - one descriptor for every state and output
 
 `ExportIndex.to_bytes()` emits canonical UTF-8 JSON. Python and TypeScript use
 the same number spelling, key order, scalar tags, fingerprints, codec names,
 and media types. Exact cross-language fixtures protect this boundary.
 
-Producer timings, cache activity, and warnings live in `result.py` outside the
-durable index. Equal notebook, state, exporter, and return bytes can therefore
-produce the same export despite different run-local diagnostics.
+Preparation reuse, cache activity, warnings, elapsed time, and verification
+counts live in `result.py` outside the durable index. Equal notebook, state,
+exporter, and return bytes can therefore produce the same export despite
+different run-local diagnostics.
+
+`ExportResult.plan` carries the complete states and aliases.
+`prepared_states` and `reused_states` form an exact partition of the plan's
+fingerprints. `cache_activity` reports Marimo work that ran while preparing
+missing states.
+
+Session inspection and the durable producer record expose the kernel's
+`implementation_sha256`. Capture freezes the value before state execution and
+verifies it again before committing the index. Publication coordinators bind
+reuse keys and capture receipts to that same digest.
 
 ## Assets and commit form one transaction
 
@@ -84,17 +121,26 @@ Asset paths derive from codec and SHA-256:
 ```text
 assets/<sha256>.npy
 assets/<sha256>.arrow
+assets/<sha256>.output.json
+assets/<sha256>.cell.json
 assets/<sha256>.bin
 ```
 
 The writer validates the exact asset closure, length, digest, native framing,
 and descriptor agreement. It writes a staging directory, opens and verifies
 that directory through the local reader, then commits the complete directory.
-Replacement uses an atomic directory exchange where the platform provides one.
+Replacement uses an atomic directory exchange where the host filesystem
+provides one. A failed write removes staging and leaves the destination
+unchanged.
+
+File preparation runs its producer source guard before the repository generation
+commit. That guard binds the reusable prepared export to the source identity
+used during execution.
 
 `open_export()` validates `index.json` through secure filesystem handles and
 returns immutable `NotebookExport`, `ExportState`, and `ExportOutput` values.
 Assets remain lazy until one output is read or the export is verified.
+`NotebookExport.identity` is the SHA-256 of the exact canonical index bytes.
 
 ## Coherence rules
 
@@ -106,6 +152,9 @@ Assets remain lazy until one output is read or the export is verified.
 6. One output name keeps one representation across states.
 7. `index.json` references every asset and no undeclared asset.
 8. A committed directory passes the same reader used by consumers.
+9. Snapshot resources contain the reachable AnyWidget model closure and every
+   projection-scoped UI object namespace.
 
-Read [marimo integration](marimo-integration.md) for the execution and cache
-path that produces native receipts.
+Read [Planning and preparation](preparation.md) for prepared-state and exact
+generation reuse. Read [Execution and caching](execution-and-caching.md) for the
+native receipt path.

@@ -2,36 +2,46 @@
 
 The delivery path starts with an unchanged notebook and ends with a verified
 notebook export for people, agents, Python automation, browser applications,
-and custom consumers. The repository also delivers two installable packages,
+and custom consumers. The repository also delivers three installable packages,
 an agent workflow, a reference application, and documentation for the same
 contracts.
 
 ## Delivery pipeline
 
-| Stage                | Owner                                         | Durable result                                         |
-| -------------------- | --------------------------------------------- | ------------------------------------------------------ |
-| Inspect definitions  | `Session.inspect()`, bridge, CLI              | Stable definition and capability records               |
-| Describe publication | ExportSpec                                    | Reviewable states, outputs, and representations        |
-| Produce results      | `build` or `capture`                          | Export index, assets, and run diagnostics              |
-| Verify               | Readers and writer                            | Complete verified notebook export                      |
-| Consume              | Python reader, agents, browser, custom client | Grounded data, automation result, or application       |
-| Package              | uv and pnpm workspaces                        | Python wheel, source archive, npm package subpaths     |
-| Explain              | README, public docs, contributor docs, skill  | Human, agent, and maintainer paths through the product |
+| Stage               | Owner                                         | Result                                                   |
+| ------------------- | --------------------------------------------- | -------------------------------------------------------- |
+| Inspect definitions | `Session.inspect()`, bridge, CLI              | Stable definition and capability records                 |
+| Describe export     | ExportSpec                                    | Reviewable default, states, outputs, and representations |
+| Plan preparation    | `plan` or `Session.plan()`                    | Reusable and missing work                                |
+| Prepare results     | `prepare`, `capture`, or `Session.capture()`  | Leased immutable prepared export                         |
+| Build from file     | `build`                                       | Prepared and written notebook export                     |
+| Write prepared      | `PreparedExport.write()`                      | Export index, assets, and run diagnostics                |
+| Verify              | Readers and writer                            | Complete verified notebook export                        |
+| Consume             | Python reader, agents, browser, custom client | Grounded data, automation result, or application         |
+| Package             | uv and pnpm workspaces                        | Python wheel, source archive, and npm packages           |
+| Explain             | README, public docs, contributor docs, skill  | Human, agent, and maintainer paths through the product   |
 
-Each stage consumes the durable result from the previous stage. Operation
-paths, process handles, credentials, temporary virtual files, and mounted
-browser resources remain owned by their runtime lifecycle.
+Each stage consumes a bounded contract. `build()` composes file preparation and
+write into one operation. The notebook export is the durable consumer artifact.
+Operation paths, process handles, credentials, temporary virtual files,
+repository leases, and mounted browser resources remain owned by their runtime
+lifecycle.
 
-## Inspection precedes expensive execution
+## Inspection resolves definitions before state preparation
 
-`marimo-export session` and `Session.inspect()` return notebook identity,
-definitions, UI domains, input mode, version, and capability records. A person
-or agent can therefore use real definition names before executing a state
-matrix.
+`marimo-export inspect` starts an owned notebook, runs its initial autorun, and
+returns notebook identity, definitions, UI domains, input mode, version, and
+capability records. `Session.inspect()` returns the same contract from an
+already-active session. A person or agent can therefore use real definition
+names before preparing a state matrix.
+
+`plan()` takes a separate exact-reuse fast path. When the repository already
+contains the matching prepared export, it reconstructs the public plan from the
+verified artifact and starts no notebook.
 
 ExportSpec supports YAML, JSON, and Python construction through one validation
-model. Humans and agents can review the finite publication surface before
-`build` or `capture` begins.
+model. Humans and agents can review the finite export relation before `build`
+or `capture` begins.
 
 ## Exports ground agent answers
 
@@ -42,8 +52,7 @@ with inspectable tables, arrays, or versioned JSON. Visual and interactive
 representations remain companion evidence for human review.
 
 The same export can ground a coding agent that creates a bespoke frontend. The
-frontend consumes exported values rather than inventing fixtures or
-reimplementing notebook computation.
+frontend uses exported values as its fixtures and notebook-computation results.
 
 ## Producer choice follows source ownership
 
@@ -77,23 +86,38 @@ The skill workflow requires agents to:
 
 ## The CLI supports people and agents
 
-`build`, `capture`, `session`, `inspect`, and `verify` provide human output.
-`--json` returns one bounded success or failure record with stable error codes
-and exit categories. The CLI layer parses, calls the importable product API,
-and renders results. Product modules own no terminal behavior.
+`plan`, `build`, `capture`, `inspect`, `verify`, `observations`, `repository`,
+and `doctor` provide human output. `--json` returns one bounded result.
+Preparation commands can emit ordered progress through `--jsonl`. Failures
+carry stable codes and exit categories. The CLI parses arguments, calls the
+importable Python SDK, and renders results. Product modules own no terminal
+behavior.
+
+The Python `capture()` operation returns `PreparedExport`. The CLI `capture`
+command requires `--output` and composes that operation with
+`PreparedExport.write()` so one invocation writes the verified live-session
+export.
+
+`observations list` and `observations clear` require a notebook and ExportSpec.
+Each command resolves an `ExportPlan` first. `list` renders the plan's
+revision-consistent observation snapshot. `clear` passes that plan to
+`ExportRepository.clear_observations(plan)`.
 
 ## Package boundaries match public distribution
 
 The uv workspace builds one `marimo-export` wheel and source archive. The pnpm
-workspace builds one `@marimo-team/marimo-export` package. Loader
-implementations remain private workspaces and appear through public
-`loader/*` subpaths with optional peer dependencies.
+workspace builds `@marimo-team/portable-json` and
+`@marimo-team/marimo-export`. Browser core implements the root scalar and image
+loaders. Other representation loaders live in private workspaces and appear
+through public `loader/*` subpaths with their required peer dependencies.
 
 Package smoke verifies:
 
 - Python root exports and console command
 - managed kernel lifespan entry point
-- browser core installation without specialized peers
+- portable JSON root installation with no peer runtime
+- portable JSON Zod installation with its peer runtime
+- standalone browser core installation
 - every loader subpath with its required peer runtime
 - docs and example builds
 

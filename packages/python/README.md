@@ -1,13 +1,13 @@
 # marimo-export
 
-Precompute selected notebook results from Python and read the resulting export.
-Build from a file, capture an active session, or open an existing export.
-Applications, agents, Python automation, and custom clients can consume the
-same verified export.
+Plan, prepare, write, and read verified exports of selected Marimo notebook
+states.
 
 ```bash
 uv add marimo-export
 ```
+
+Build from a notebook file:
 
 ```python
 from marimo_export import ExportSpec, build
@@ -19,30 +19,36 @@ result = build(
 )
 ```
 
-`build` opens the notebook, prepares the selected states, writes the export,
-and closes its session. The notebook file stays unchanged.
+`build` prepares missing states, writes the export, verifies its complete file
+closure, and closes the owned notebook process tree. Matching later calls reuse
+prepared repository artifacts.
 
-Use `capture` when the notebook is already open:
+Capture an active session:
 
 ```python
 from marimo_export import ExportSpec, capture
 
-result = capture(
+spec = ExportSpec.from_file("finance.export.yaml")
+
+with capture(
     "http://127.0.0.1:2718",
     session="SESSION_ID",
-    spec=ExportSpec.from_file("finance.export.yaml"),
-    output="dist/finance",
-)
+    spec=spec,
+) as prepared:
+    prepared.write("dist/finance", replace=True)
 ```
 
-Install optional exporter families as needed:
+`capture` returns a leased `PreparedExport` and leaves the selected session
+active. The handle can open the immutable export, lease individual assets, create
+a prepared browser manifest, or write a deployment directory.
+
+Install optional exporter families used by the spec:
 
 ```bash
 uv add "marimo-export[charts,parquet,anywidget]"
 ```
 
-See the
-[Python API](https://github.com/marimo-team/marimo-export/blob/main/docs/reference/python-api.md),
+See the [Python API](https://github.com/marimo-team/marimo-export/blob/main/docs/reference/python-api.md),
 [ExportSpec guide](https://github.com/marimo-team/marimo-export/blob/main/docs/guide/choose-states.md),
 [agent guide](https://github.com/marimo-team/marimo-export/blob/main/docs/guide/agents-and-automation.md),
 and [CLI reference](https://github.com/marimo-team/marimo-export/blob/main/docs/reference/cli.md).

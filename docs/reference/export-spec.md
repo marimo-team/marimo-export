@@ -1,18 +1,16 @@
 ---
 title: ExportSpec reference
-description: Exact schema, value, state, output, and exporter contracts for authoring a notebook export.
+description: Exact version 1 schema for default state, sparse states, outputs, selectors, and exporters.
 ---
 
 # ExportSpec reference
 
-An ExportSpec defines the prepared notebook states and named output
-representations included in one notebook export.
+An ExportSpec defines the finite state relation and named output representations
+prepared from one notebook.
 
 ```yaml
 schema: marimo-export.spec.v1
-inputs:
-  - interval
-  - symbols_selector
+default_state: baseline
 states:
   baseline: {}
   cloud:
@@ -20,112 +18,127 @@ states:
   weekly:
     interval: 1wk
 outputs:
+  summary:
+    source: { kind: value, selector: report.summary }
+  report:
+    source: { kind: output, selector: report.view }
+  summary_cell:
+    source: { kind: cell, by: name, value: summary_cell }
   chart:
-    source: performance
+    source: { kind: value, selector: performance }
     exporter: altair.vegalite
-  prices:
-    source: selected_prices
-    exporter:
-      name: parquet.table
-      options:
-        compression: snappy
-        filename: prices.parquet
 ```
 
 ## Root fields
 
-| Field     | Contract                                                         |
-| --------- | ---------------------------------------------------------------- |
-| `schema`  | Exact value `marimo-export.spec.v1`                              |
-| `inputs`  | Ordered unique notebook definition names                         |
-| `states`  | Nonempty mapping from published state names to sparse input rows |
-| `outputs` | Nonempty mapping from published output names to output specs     |
+The root contains exactly:
+
+| Field           | Contract                                                    |
+| --------------- | ----------------------------------------------------------- |
+| `schema`        | Exact string `marimo-export.spec.v1`                        |
+| `default_state` | Name of one entry in `states`                               |
+| `states`        | Nonempty mapping from aliases to sparse portable input rows |
+| `outputs`       | Nonempty mapping from published names to output specs       |
 
 Unknown fields are invalid.
 
-## Input names
+## Inferred inputs
 
-Each input name must be a non-keyword Python identifier. The named definition
-must exist in the inspected notebook and have one defining cell.
+Planning derives input names from selected output dependencies and state-row
+keys. Each inferred name must identify one eligible notebook definition.
 
-An input can identify:
+Eligible definitions include ordinary Python definitions, supported Marimo UI
+elements, and AnyWidget values with portable serializer-owned state. Planning
+rejects missing, sensitive, unavailable, and nonportable definitions.
 
-- an ordinary Python definition
-- a supported marimo UI element
-- an AnyWidget whose synchronized state is portable JSON
-
-Use `marimo-export session NOTEBOOK --json` or `Session.inspect()` to discover
-definitions, input mode, current value, domain, portability, and sensitivity.
+Use `marimo-export inspect NOTEBOOK --json` or
+`marimo_export.inspection.inspect_notebook()` to inspect definitions, cells,
+input modes, current values, dependencies, portability, and sensitivity.
 
 ## State names and rows
 
-State names are nonempty UTF-8 strings without surrounding whitespace or
-control characters. A state row maps declared input names to portable values.
+State names are nonempty UTF-8 strings with at most 255 encoded bytes. They have
+no surrounding whitespace or control characters.
 
-Rows may be sparse. The producer captures one baseline and fills each omitted
-input from that baseline before execution. Every durable state contains the
-complete input vector and its fingerprint.
+Each row maps input definition names to portable values. Rows are sparse. The
+producer fills omitted inputs from one captured baseline, then records the
+complete vector and its SHA-256 fingerprint.
 
-Two state names cannot resolve to the same complete input vector.
+Rows that normalize to the same complete vector share one prepared state and
+retain every authored alias. `default_state` retains the selected authored alias
+in `ExportPlan`. The export index stores its resolved fingerprint.
 
-## Portable input values
+## Portable state values
 
-Input values support:
+State values support:
 
-- `null`
+- null
 - booleans
-- strings containing Unicode scalar values
+- Unicode scalar strings
 - integers in the JavaScript safe-integer range
 - finite numbers in the same bounded range
 - arrays of portable values
 - objects with string keys and portable values
 
-Input numbers cannot contain NaN, infinity, or negative infinity. Negative zero
-normalizes to zero for state identity.
+NaN and infinity are invalid state inputs. Negative zero normalizes to zero for
+state identity.
 
-## UI values
-
-Ordinary UI values use the complete frontend value accepted by the marimo
-control. The producer applies the value through marimo, runs reactive
-dependents, then reads the accepted value back.
-
-An AnyWidget input uses a string-keyed object as a sparse trait patch. The
-producer merges the patch over the complete baseline model and records the
-serializer-owned result. A trait validator that changes the requested value
-fails the state.
-
-Binary AnyWidget state can be published as an output representation. It cannot
-form part of an ExportSpec state vector because state vectors use portable JSON
-values.
+An AnyWidget row uses an object as a sparse trait patch. The producer merges the
+patch over baseline model state and verifies the serializer-owned accepted
+value.
 
 ## Output specs
 
-Each output maps one published name to:
+Each output contains `source` and an optional `exporter`.
 
-| Field      | Contract                                                |
-| ---------- | ------------------------------------------------------- |
-| `source`   | Notebook definition name                                |
-| `exporter` | Optional built-in or importable representation function |
+### Value source
 
-Omitting `exporter` preserves a supported native marimo cache representation:
+```yaml
+source: { kind: value, selector: 'report.rows[0]["total"]' }
+```
 
-- scalar
-- NumPy array
-- Arrow table
-- existing `BlobAsset`
+A value source stores portable JSON through `marimo.json.v1` by default. Add an
+exporter for another representation.
 
-Every state must produce every configured output. One output name keeps one
-codec and media type across all states.
+### Rendered-output source
+
+```yaml
+source: { kind: output, selector: report.view }
+```
+
+A rendered-output source stores one canonical `marimo.output.v1` snapshot with
+the formatted output, source cell identity, and replay resources.
+
+### Complete-cell source
+
+```yaml
+source: { kind: cell, by: name, value: summary_cell }
+```
+
+Set `by` to `name` for a native cell name or `id` for an inspected runtime cell
+ID. A complete-cell source stores `marimo.cell.v1` with cell identity, config,
+terminal output, console records, outcome, and replay resources.
+
+Value and rendered-output selectors accept:
+
+- one Python identifier root
+- attribute steps such as `.summary`
+- nonnegative integer items such as `[0]`
+- JSON-string items such as `["total"]`
+
+Mapping keys take precedence over attributes. Every normalized state must
+produce every configured output. One output name retains one codec and media
+type across the relation.
 
 ## Exporter forms
 
-String form:
+Built-in shorthand:
 
 ```yaml
 exporter: altair.vegalite
 ```
 
-Expanded form:
+Expanded built-in:
 
 ```yaml
 exporter:
@@ -133,29 +146,33 @@ exporter:
   options:
     compression: snappy
     filename: prices.parquet
+  dependencies: []
 ```
 
-Custom form:
+Custom callable:
 
 ```yaml
 exporter:
   name: market_summary:encode
   options:
     currency: USD
+  dependencies:
+    - market_summary.formatting
 ```
 
-The custom callable receives the notebook result as its first argument and the
-configured options as keyword arguments. Install or sideload its module into
-the notebook environment before `build` or `capture`.
+The callable receives the selected value as its first argument and exporter
+options as keyword arguments. `dependencies` contains sorted unique module names
+whose code affects the returned bytes. Declare dynamically imported modules.
 
-[Output representations](representations.md) lists built-in exporter names,
-options, stored forms, consumer support, and optional dependencies.
+A borrowed session uses its loaded module objects. Restart the session after
+changing an already imported exporter module. Source drift during preparation
+raises a typed output error.
 
 ## File input
 
 `ExportSpec.from_file()` accepts UTF-8 `.json`, `.yaml`, and `.yml` files up to
-16 MiB. JSON and YAML reject duplicate object keys. YAML aliases and merge keys
-are invalid. YAML composition is bounded by depth and node count.
+16 MiB. JSON and YAML reject duplicate keys. YAML aliases and merge keys are
+invalid. YAML composition is bounded by depth and node count.
 
 ## Python construction
 
@@ -164,38 +181,23 @@ from marimo_export import ExportSpec, OutputSpec
 from marimo_export.exporters import altair, parquet
 
 spec = ExportSpec(
-    inputs=("symbols_selector",),
+    default_state="baseline",
     states={
         "baseline": {},
         "cloud": {"symbols_selector": ["MSFT", "GOOGL", "AMZN"]},
     },
     outputs={
-        "chart": OutputSpec(
-            source="performance",
-            exporter=altair.vegalite(),
-        ),
-        "prices": OutputSpec(
-            source="selected_prices",
-            exporter=parquet.table(filename="prices.parquet"),
+        "summary": OutputSpec.value("report.summary"),
+        "report": OutputSpec.output("report.view"),
+        "summary_cell": OutputSpec.cell("summary_cell"),
+        "chart": OutputSpec.value("performance", altair.vegalite()),
+        "prices": OutputSpec.value(
+            "selected_prices",
+            parquet.table(filename="prices.parquet"),
         ),
     },
 )
 ```
 
-`ExportSpec.from_value()` validates a Python wire value. `to_value()` returns a
-detached mutable wire value. `json_schema()` returns the Draft 2020-12
-authoring schema.
-
-## Errors
-
-Invalid specs raise `SpecError` with a stable code and bounded details. Common
-codes include:
-
-- `spec_invalid`
-- `spec_value_invalid`
-- `spec_state_input_unknown`
-- `spec_output_invalid`
-- `spec_exporter_invalid`
-
-[Choose states and results](../guide/choose-states.md) provides the task-shaped
-authoring workflow.
+Invalid specs raise `SpecError` with a stable code and portable details. [Choose
+states and outputs](../guide/choose-states.md) provides the authoring workflow.

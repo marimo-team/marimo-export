@@ -1,89 +1,94 @@
 ---
 title: Consume an export
-description: Open the same prepared notebook states and outputs from Python, a browser, an agent, or a custom client.
+description: Read the same prepared states and outputs from Python, a browser, an agent, or another client.
 ---
 
 # Consume a notebook export
 
-A notebook export exposes the same state and output names to human-facing
-applications, agents, Python automation, and browser clients.
+A notebook export exposes one default state, authored aliases, complete input
+vectors, and the same named outputs to each consumer.
 
-## Choose a consumer
-
-| Job                                     | Interface                                      |
-| --------------------------------------- | ---------------------------------------------- |
-| Read and verify local files from Python | `open_export()`                                |
-| Load prepared results in a browser      | `openExport()`                                 |
-| Ground an agent answer in exported data | CLI JSON, Python reader, or export format      |
-| Implement another client                | [Export format](../reference/export-format.md) |
+| Job                                   | Interface                                         |
+| ------------------------------------- | ------------------------------------------------- |
+| Read and verify local files           | `open_export()` and `verify_export()`             |
+| Load immutable results in a browser   | `openExport()`                                    |
+| Drive a changing prepared publication | Browser `prepared` subpath                        |
+| Ground an agent answer                | Python reader, CLI verification, or export format |
+| Implement another reader              | [Export format](../reference/export-format.md)    |
 
 ## Open from Python
 
-For an export with a `baseline` state and scalar `title` output:
-
 ```python
-from marimo_export import open_export
+from marimo_export import open_export, verify_export
 
-notebook_export = open_export("dist/report")
-state = notebook_export.state("baseline")
-title = state.output("title").scalar()
+export = open_export("dist/report")
+state = export.default_state
+title = state.output("title").json()
 
-notebook_export.verify()
+verified = verify_export("dist/report")
 ```
 
-Opening validates `index.json`. Assets remain lazy until one output is read or
-the complete export is verified.
+Opening validates canonical `index.json` and leaves assets lazy. The reader
+exposes:
 
-## Inspect for an agent
-
-```bash
-marimo-export inspect dist/report --json
-marimo-export verify dist/report --json
-```
-
-`inspect` reports notebook identity, prepared states, outputs,
-representations, and declared asset size. `verify` reads the complete asset
-closure. An agent can then select a state and read a structured output through
-the Python reader or another implementation of the export format.
-
-Bind data-driven claims to the selected state and output. Retain notebook,
-producer, fingerprint, representation, and asset identity when the answer needs
-an auditable source.
-
-[Use notebook exports with agents](agents-and-automation.md) develops this
-workflow and explains which representations are suitable for agent reasoning.
+- `identity`, the SHA-256 of exact `index.json` bytes
+- `spec_sha256`, the identity of the authored ExportSpec
+- `default_state`, the resolved `ExportState`
+- notebook and producer facts
+- input names, control bindings, output names, aliases, and states
 
 ## Open from a browser
 
 ```ts
-import { openExport, scalarLoader } from "@marimo-team/marimo-export";
+import { openExport } from "@marimo-team/marimo-export";
+import { jsonLoader } from "@marimo-team/marimo-export/loader/json";
 
 const notebookExport = await openExport("/exports/report/");
-const state = notebookExport.state("baseline");
-const title = await state.output("title").load(scalarLoader());
+const title = await notebookExport.defaultState.output("title").load(jsonLoader());
 ```
 
-Install each optional loader runtime used by the application. [Output
-representations](../reference/representations.md) lists the exporter, loader,
-result type, agent suitability, and peer dependency for every built-in family.
+Install the optional peer runtime used by each imported loader. [Output
+representations](../reference/representations.md) maps stored forms to browser
+loaders and peer dependencies.
 
 ## Select a prepared state
 
 Readers support three forms of selection:
 
-- `state(name)` selects one authored state name.
+- `state(alias)` selects an authored alias.
 - `resolve(inputs)` selects one complete exported input vector.
 - `state.resolve(patch)` completes a sparse transition from the current state.
 
-Resolution selects a state already present in the export. A request that needs
-a new Python result requires another export or a Python service.
+Resolution returns a state already present in the export. A new Python result
+requires another preparation run or a Python service.
+
+## Follow a prepared publication
+
+Applications can open a `marimo-export.prepared.v1` manifest with the browser
+prepared subpath:
+
+```ts
+import {
+  fetchPreparedExportManifest,
+  openPreparedPublication,
+} from "@marimo-team/marimo-export/prepared";
+
+const manifestUrl = new URL("/runtime/prepared.json", location.href);
+const manifest = await fetchPreparedExportManifest(manifestUrl);
+const publication = await openPreparedPublication(manifest, manifestUrl);
+```
+
+The manifest binds one immutable export identity, export URL, complete input
+vector, and state fingerprint. `PreparedStateController` owns semantic state
+updates and cancellation. `PreparedPublicationRefresh` swaps to a newer verified
+manifest while preserving a compatible current selection.
 
 ## Verify the complete export
 
 Python:
 
 ```python
-result = notebook_export.verify()
+result = verify_export("dist/report")
 ```
 
 Browser:
@@ -96,7 +101,14 @@ const result = await notebookExport.verify({
 ```
 
 Verification checks every declared asset and returns state, output, asset, and
-byte counts. The loaded `index.json` is the integrity root.
+byte counts. `index.json` is the integrity root.
 
-Use [Build a browser application](browser-applications.md) when the consumer
-mounts interactive representations or replaces several outputs as one view.
+## Retain evidence for an agent
+
+Bind data-driven claims to the selected state and output. Retain notebook,
+producer, spec, state fingerprint, codec, media type, asset SHA-256, and
+verification facts when the answer needs an auditable source.
+
+[Use notebook exports with agents](agents-and-automation.md) develops this
+workflow. [Build a browser application](browser-applications.md) covers complete
+state transitions and mount disposal.

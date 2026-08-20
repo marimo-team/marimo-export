@@ -1,26 +1,19 @@
 ---
 title: Build a browser application
-description: Create a purpose-specific frontend from prepared notebook results with explicit loading, mounting, cancellation, and disposal.
+description: Load immutable exports or drive prepared publications with atomic state transitions and disposal.
 ---
 
 # Build a browser application
 
-Build a frontend from prepared notebook results without translating the
-notebook's Python computation into JavaScript. The application selects exported
-states and presents their stored representations with HTML, CSS, TypeScript, or
-a frontend framework.
+Use browser core for one immutable export. Use the `prepared` subpath when an
+application follows a repository-backed publication or routes saved Marimo
+control events.
 
-## Install the consumer and loader runtimes
+## Load one immutable export
 
 ```bash
 pnpm add @marimo-team/marimo-export hyparquet vega-embed
 ```
-
-Install the optional peers for the representations the application loads.
-[Output representations](../reference/representations.md) lists the complete
-mapping.
-
-## Open and load one prepared state
 
 ```ts
 import { openExport } from "@marimo-team/marimo-export";
@@ -28,7 +21,7 @@ import { parquetRowsLoader } from "@marimo-team/marimo-export/loader/parquet";
 import { vegaLiteLoader } from "@marimo-team/marimo-export/loader/vegalite";
 
 const notebookExport = await openExport("./export/");
-const state = notebookExport.state("baseline");
+const state = notebookExport.defaultState;
 
 const [rows, chart] = await Promise.all([
   state.output("prices").load(parquetRowsLoader()),
@@ -37,52 +30,102 @@ const [rows, chart] = await Promise.all([
 ```
 
 Opening validates `index.json`. Each output load verifies its asset before the
-representation runtime decodes it.
+selected loader decodes it.
 
-## Give one owner to each state transition
+## Drive a prepared publication
 
-A state change has two lifetimes:
+`PreparedStateController` accepts a `PreparedStatePort`. The port owns loading
+and committing one complete application state:
 
-1. The load generation owns fetch and decoding until a newer request aborts it.
-2. The committed mount owner remains active until a complete replacement is
-   ready.
+```ts
+import { jsonLoader } from "@marimo-team/marimo-export/loader/json";
+import {
+  fetchPreparedExportManifest,
+  openPreparedPublication,
+  PreparedStateController,
+  type PreparedStatePort,
+} from "@marimo-team/marimo-export/prepared";
 
-Use this transition order:
+const manifestUrl = new URL("/runtime/prepared.json", location.href);
+const manifest = await fetchPreparedExportManifest(manifestUrl);
+const publication = await openPreparedPublication(manifest, manifestUrl);
 
-1. Abort stale loads.
-2. Load every output required by the selected state.
-3. Create connected, offscreen staging hosts for interactive values.
-4. Mount charts, images, or widgets with a separate mount controller.
-5. Confirm that the selected generation is still current.
-6. Commit all new hosts and data.
-7. Abort and dispose the previous mount owner.
+const port: PreparedStatePort = {
+  async apply({ next }, signal) {
+    const title = await next.state.output("title").load(jsonLoader(), { signal });
+    signal.throwIfAborted();
+    document.querySelector("#title")!.textContent = String(title);
+  },
+};
 
-A failed load or mount should dispose staged work and leave the last complete
-view visible.
+const controller = new PreparedStateController(port);
+await controller.start(publication);
+await controller.updateInputs({ interval: "1wk" });
+```
 
-## Dispose mounted representations
+For a view with several outputs, `apply` should load and mount every required
+output in staging hosts, confirm the signal remains active, then commit the
+complete replacement. A rejected transition invokes the optional `restore`
+method with the last committed publication.
+
+## Route controls and URL queries
+
+The export's `controlBindings` maps projection-scoped object IDs to semantic
+input paths. Route an accepted frontend value through the controller:
+
+```ts
+const handled = await controller.updateControl("cell-region", "Northeast");
+```
+
+`handled` is false when the object ID has no exported binding. Query-driven
+applications can call `updateQuery(location.search)` to resolve a complete saved
+state from URL parameters.
+
+## Refresh the publication
+
+`PreparedPublicationRefresh` fetches the manifest, reuses an already opened
+immutable export when its identity matches, and replaces the controller's
+publication atomically:
+
+```ts
+import { PreparedPublicationRefresh } from "@marimo-team/marimo-export/prepared";
+
+const liveController = new PreparedStateController(port);
+const refresh = new PreparedPublicationRefresh(manifestUrl, liveController, {
+  onError: console.error,
+});
+
+await refresh.start();
+```
+
+`refresh_interval_ms` in the manifest enables polling from 250 through 60,000
+milliseconds. A value of zero disables polling. Call `refresh.refresh()` for an
+explicit update. `syncPolling()` reschedules polling from the current manifest.
+
+## Dispose the complete lifecycle
+
+```ts
+await refresh.dispose();
+await liveController.dispose();
+```
+
+Mounted output values return their own idempotent disposal handles:
 
 ```ts
 const mounted = await chart.mount(document.querySelector("#chart")!);
-
-// Replace or tear down the view.
 await mounted.dispose();
 ```
 
-Mount handles own their DOM nodes, listeners, object URLs, renderer resources,
-widget models, modules, styles, and cleanup callbacks. Disposal is idempotent.
+Dispose staged work after failure and committed mounts after replacement or page
+teardown. AnyWidget definitions use page-lifetime module ownership, while each
+mount owns its model and view state.
 
 ## Review executable browser code
 
-Opening, resolving, loading, and verifying execute no notebook-authored browser
-module. Mounting an AnyWidget, Vega-Lite chart, or custom interactive
-representation grants that code the page's authority.
+Opening, resolving, loading, and verifying parse inert records. Mounting
+AnyWidget, Vega-Lite, or custom interactive output grants that code the page's
+authority. Review mounted modules and configure Content Security Policy, allowed
+origins, byte limits, cancellation, and teardown for the deployment.
 
-Review mounted modules and configure Content Security Policy, allowed origins,
-load limits, cancellation, and teardown for the deployment environment.
-
-The [market dashboard source](https://github.com/marimo-team/marimo-export/blob/main/examples/vite-vanilla/src/main.ts)
-implements a complete transition across Parquet data, a custom summary,
-Vega-Lite, an image, and AnyWidget.
-
-Use the [Browser API](../reference/browser-api.md) for exact types and methods.
+Use the [Browser API](../reference/browser-api.md) for exact core and prepared
+subpath contracts.
