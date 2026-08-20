@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
-import { anyWidgetLoader } from "../src/index.js";
-import { moduleUrl, notification, outputFor, payload } from "./fixture.js";
+import { loadPayload, moduleUrl, notification, payload } from "./fixture.js";
 
 let documentValue: FakeDocument;
 
@@ -39,7 +38,7 @@ describe("AnyWidget browser runtime", () => {
         },
       };
     `);
-    const output = await outputFor(
+    const loaded = await loadPayload<{ child: string }>(
       payload({
         modelNotifications: [
           notification({
@@ -55,7 +54,6 @@ describe("AnyWidget browser runtime", () => {
         ],
       }),
     );
-    const loaded = await output.load(anyWidgetLoader<{ child: string }>());
     const element = documentValue.createElement("div");
     const mounted = await loaded.mount(element as unknown as HTMLElement);
 
@@ -68,12 +66,11 @@ describe("AnyWidget browser runtime", () => {
 
   test("requires disposal before reusing a mount element", async () => {
     const url = moduleUrl("export default { render() {} };");
-    const output = await outputFor(
+    const loaded = await loadPayload(
       payload({
         modelNotifications: [notification({ id: "model-0", state: {}, moduleUrl: url })],
       }),
     );
-    const loaded = await output.load(anyWidgetLoader());
     const element = documentValue.createElement("div") as unknown as HTMLElement;
     const first = await loaded.mount(element);
 
@@ -81,6 +78,33 @@ describe("AnyWidget browser runtime", () => {
     await first.dispose();
     const second = await loaded.mount(element);
     await second.dispose();
+  });
+
+  test("reads only own model fields, including reserved names", async () => {
+    const url = moduleUrl("export default { render() {} };");
+    const loaded = await loadPayload<Record<string, unknown>>(
+      payload({
+        modelNotifications: [
+          notification({
+            id: "model-0",
+            state: {},
+            moduleUrl: url,
+          }),
+        ],
+      }),
+    );
+    const mounted = await loaded.mount(
+      documentValue.createElement("div") as unknown as HTMLElement,
+    );
+
+    expect(mounted.model.get("toString")).toBeUndefined();
+    expect(mounted.model.get("constructor")).toBeUndefined();
+    mounted.model.set("toString", "own toString");
+    mounted.model.set("constructor", "own constructor");
+    expect(mounted.model.get("toString")).toBe("own toString");
+    expect(mounted.model.get("constructor")).toBe("own constructor");
+
+    await mounted.dispose();
   });
 
   test("creates isolated state for each mount", async () => {
@@ -94,7 +118,7 @@ describe("AnyWidget browser runtime", () => {
         },
       };
     `);
-    const output = await outputFor(
+    const loaded = await loadPayload<{ value: number; binary: { view: DataView } }>(
       payload({
         modelNotifications: [
           notification({
@@ -107,8 +131,6 @@ describe("AnyWidget browser runtime", () => {
         ],
       }),
     );
-    const loaded =
-      await output.load(anyWidgetLoader<{ value: number; binary: { view: DataView } }>());
     new Uint8Array(loaded.initialState.binary.view.buffer)[0] = 99;
     const firstElement = documentValue.createElement("div");
     const secondElement = documentValue.createElement("div");
@@ -137,12 +159,11 @@ describe("AnyWidget browser runtime", () => {
         },
       };
     `);
-    const output = await outputFor(
+    const loaded = await loadPayload(
       payload({
         modelNotifications: [notification({ id: "model-0", state: {}, moduleUrl: url })],
       }),
     );
-    const loaded = await output.load(anyWidgetLoader());
     const element = documentValue.createElement("div");
 
     await expect(loaded.mount(element as unknown as HTMLElement)).rejects.toThrow("render failed");
@@ -150,7 +171,7 @@ describe("AnyWidget browser runtime", () => {
     expect(element.children).toHaveLength(0);
   });
 
-  test("revokes an embedded module URL and skips late initialization after abort", async () => {
+  test("revokes an embedded module URL after settlement and skips late initialization", async () => {
     let releaseModule!: () => void;
     const moduleGate = new Promise<void>((resolve) => {
       releaseModule = resolve;
@@ -178,7 +199,7 @@ describe("AnyWidget browser runtime", () => {
     const objectUrl = moduleUrl(source);
     vi.spyOn(URL, "createObjectURL").mockReturnValue(objectUrl);
     const revokeObjectUrl = vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => undefined);
-    const output = await outputFor(
+    const loaded = await loadPayload(
       payload({
         files: { "/@file/late-widget.js": moduleUrl(source) },
         modelNotifications: [
@@ -186,7 +207,6 @@ describe("AnyWidget browser runtime", () => {
         ],
       }),
     );
-    const loaded = await output.load(anyWidgetLoader());
     const controller = new AbortController();
     const mounting = loaded.mount(documentValue.createElement("div") as unknown as HTMLElement, {
       signal: controller.signal,
@@ -196,12 +216,11 @@ describe("AnyWidget browser runtime", () => {
     controller.abort();
 
     await expect(settleWithin(mounting)).rejects.toMatchObject({ name: "AbortError" });
-    expect(revokeObjectUrl).toHaveBeenCalledOnce();
-    expect(revokeObjectUrl).toHaveBeenCalledWith(objectUrl);
+    expect(revokeObjectUrl).not.toHaveBeenCalled();
 
     releaseModule();
     await settled;
-    await Promise.resolve();
+    await vi.waitFor(() => expect(revokeObjectUrl).toHaveBeenCalledWith(objectUrl));
 
     expect(counters.initialize).toBe(0);
     expect(counters.render).toBe(0);
@@ -218,12 +237,11 @@ describe("AnyWidget browser runtime", () => {
         },
       };
     `);
-    const output = await outputFor(
+    const loaded = await loadPayload(
       payload({
         modelNotifications: [notification({ id: "model-0", state: {}, moduleUrl: url })],
       }),
     );
-    const loaded = await output.load(anyWidgetLoader());
     const element = documentValue.createElement("div");
     const controller = new AbortController();
     const mounted = await loaded.mount(element as unknown as HTMLElement, {
@@ -260,12 +278,11 @@ describe("AnyWidget browser runtime", () => {
         },
       };
     `);
-    const output = await outputFor(
+    const loaded = await loadPayload(
       payload({
         modelNotifications: [notification({ id: "model-0", state: {}, moduleUrl: url })],
       }),
     );
-    const loaded = await output.load(anyWidgetLoader());
     const controller = new AbortController();
     const mounting = loaded.mount(documentValue.createElement("div") as unknown as HTMLElement, {
       signal: controller.signal,
@@ -291,12 +308,11 @@ describe("AnyWidget browser runtime", () => {
         },
       };
     `);
-    const output = await outputFor(
+    const loaded = await loadPayload<{ value: number }>(
       payload({
         modelNotifications: [notification({ id: "model-0", state: { value: 1 }, moduleUrl: url })],
       }),
     );
-    const loaded = await output.load(anyWidgetLoader<{ value: number }>());
     const mounted = await loaded.mount(
       documentValue.createElement("div") as unknown as HTMLElement,
     );
@@ -322,7 +338,7 @@ describe("AnyWidget browser runtime", () => {
         },
       };
     `);
-    const output = await outputFor(
+    const loaded = await loadPayload<{ child: string }>(
       payload({
         modelNotifications: [
           notification({
@@ -334,7 +350,6 @@ describe("AnyWidget browser runtime", () => {
         ],
       }),
     );
-    const loaded = await output.load(anyWidgetLoader<{ child: string }>());
     const element = documentValue.createElement("div");
 
     const mounted = await loaded.mount(element as unknown as HTMLElement);

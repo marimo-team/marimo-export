@@ -19,6 +19,10 @@ export interface AnyWidgetSnapshot {
   readonly models: ReadonlyMap<string, ModelSnapshot>;
 }
 
+export function embeddedFileKey(url: string): string {
+  return url.startsWith("./@file/") ? url.slice(1) : url;
+}
+
 type PathToken = string | number;
 
 const UNSAFE_PATH_KEYS = new Set(["__proto__", "constructor", "prototype"]);
@@ -164,7 +168,7 @@ function parseEsmSpec(
   exactKeys(spec, ["url", "hash"], `AnyWidget model ${JSON.stringify(modelId)} ESM spec`);
   const url = nonEmptyString(spec.url, `AnyWidget model ${JSON.stringify(modelId)} ESM URL`);
   const hash = nonEmptyString(spec.hash, `AnyWidget model ${JSON.stringify(modelId)} ESM hash`);
-  if (!Object.hasOwn(files, url)) {
+  if (!Object.hasOwn(files, embeddedFileKey(url))) {
     if (hasDataUrlPrefix(url)) {
       validateDataUrl(url, `AnyWidget model ${JSON.stringify(modelId)} ESM URL`);
       return Object.freeze({ url, hash });
@@ -435,12 +439,27 @@ function setBuffer(
   }
   const finalToken = path.at(-1)!;
   if (typeof finalToken === "number") {
-    if (!Array.isArray(target) || finalToken >= target.length) invalidBufferPath(modelId, path);
-    target[finalToken] = buffer as never;
+    if (
+      !Array.isArray(target) ||
+      finalToken >= target.length ||
+      !Object.hasOwn(target, finalToken)
+    ) {
+      invalidBufferPath(modelId, path);
+    }
+    defineBuffer(target, finalToken, buffer);
     return;
   }
   if (!isRecord(target)) invalidBufferPath(modelId, path);
-  target[finalToken] = buffer;
+  defineBuffer(target, finalToken, buffer);
+}
+
+function defineBuffer(target: object, token: PathToken, buffer: DataView): void {
+  Object.defineProperty(target, token, {
+    value: buffer,
+    configurable: true,
+    enumerable: true,
+    writable: true,
+  });
 }
 
 function ownChild(

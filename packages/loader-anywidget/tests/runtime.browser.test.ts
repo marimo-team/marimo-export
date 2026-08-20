@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 
-import { anyWidgetLoader } from "../src/index.js";
-import { moduleUrl, notification, outputFor, payload } from "./fixture.js";
+import { loadPayload, moduleUrl, notification, payload } from "./fixture.js";
 
 interface RuntimeCounters {
   rootInitialize: number;
@@ -15,6 +14,13 @@ interface RuntimeCounters {
 }
 
 const COUNTERS = "__marimoExportAnyWidgetBrowserCounters";
+const MODULE_EVALUATIONS = "__marimoExportAnyWidgetModuleEvaluations";
+const PENDING_IMPORT = "__marimoExportAnyWidgetPendingImport";
+const PENDING_IMPORT_GATE = "__marimoExportAnyWidgetPendingImportGate";
+const RETRY_IMPORT = "__marimoExportAnyWidgetRetryImport";
+const DUAL_PENDING_IMPORT = "__marimoExportAnyWidgetDualPendingImport";
+const DUAL_PENDING_GATE = "__marimoExportAnyWidgetDualPendingGate";
+const DUAL_RETRY_IMPORT = "__marimoExportAnyWidgetDualRetryImport";
 const ROOT_CSS = '[data-anywidget-root="true"] { color: rgb(17, 34, 51); }';
 const UPDATED_ROOT_CSS = '[data-anywidget-root="true"] { color: rgb(85, 102, 119); }';
 const CHILD_CSS = '[data-anywidget-child="true"] { color: rgb(51, 68, 85); }';
@@ -28,6 +34,13 @@ afterEach(async () => {
   host?.remove();
   host = undefined;
   Reflect.deleteProperty(globalThis, COUNTERS);
+  Reflect.deleteProperty(globalThis, MODULE_EVALUATIONS);
+  Reflect.deleteProperty(globalThis, PENDING_IMPORT);
+  Reflect.deleteProperty(globalThis, PENDING_IMPORT_GATE);
+  Reflect.deleteProperty(globalThis, RETRY_IMPORT);
+  Reflect.deleteProperty(globalThis, DUAL_PENDING_IMPORT);
+  Reflect.deleteProperty(globalThis, DUAL_PENDING_GATE);
+  Reflect.deleteProperty(globalThis, DUAL_RETRY_IMPORT);
   vi.restoreAllMocks();
 });
 
@@ -114,7 +127,10 @@ describe("AnyWidget native browser runtime", () => {
         },
       };
     `;
-    const output = await outputFor(
+    const loaded = await loadPayload<
+      { count: number; child: string; _css: string },
+      { read(): number }
+    >(
       payload({
         files: {
           "/@file/root.js": moduleUrl(rootSource),
@@ -138,10 +154,6 @@ describe("AnyWidget native browser runtime", () => {
         ],
       }),
     );
-    const loaded =
-      await output.load(
-        anyWidgetLoader<{ count: number; child: string; _css: string }, { read(): number }>(),
-      );
     host = document.createElement("main");
     document.body.append(host);
 
@@ -197,7 +209,244 @@ describe("AnyWidget native browser runtime", () => {
     expect(widgetStyles()).toHaveLength(0);
     expect([...revokedObjectUrls].sort()).toEqual([...createdObjectUrls].sort());
   });
+
+  test("shares one embedded module evaluation across concurrent and sequential mounts", async () => {
+    Reflect.set(globalThis, MODULE_EVALUATIONS, 0);
+    const source = `
+      globalThis.${MODULE_EVALUATIONS} += 1;
+      export default {
+        render({ model, el }) { el.textContent = String(model.get("count")); },
+      };
+    `;
+    const loaded = await loadPayload<{ count: number }>(
+      payload({
+        files: { "/@file/shared.js": moduleUrl(source) },
+        modelNotifications: [
+          notification({
+            id: "model-0",
+            state: { count: 1 },
+            moduleUrl: "/@file/shared.js",
+            moduleHash: "shared-browser-module-v1",
+          }),
+        ],
+      }),
+    );
+    const firstHost = document.createElement("section");
+    const secondHost = document.createElement("section");
+    const thirdHost = document.createElement("section");
+    document.body.append(firstHost, secondHost, thirdHost);
+
+    const [first, second] = await Promise.all([loaded.mount(firstHost), loaded.mount(secondHost)]);
+    try {
+      expect(Reflect.get(globalThis, MODULE_EVALUATIONS)).toBe(1);
+      expect(first.model).not.toBe(second.model);
+      first.model.set("count", 2);
+      expect(second.model.get("count")).toBe(1);
+
+      await first.dispose();
+      await second.dispose();
+      const third = await loaded.mount(thirdHost);
+      try {
+        expect(Reflect.get(globalThis, MODULE_EVALUATIONS)).toBe(1);
+        expect(thirdHost.textContent).toBe("1");
+      } finally {
+        await third.dispose();
+      }
+    } finally {
+      await first.dispose();
+      await second.dispose();
+      firstHost.remove();
+      secondHost.remove();
+      thirdHost.remove();
+    }
+  });
+
+  test("disposing one mount preserves a shared pending module import", async () => {
+    let markStarted!: () => void;
+    const started = new Promise<void>((resolve) => {
+      markStarted = resolve;
+    });
+    let releaseImport!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      releaseImport = resolve;
+    });
+    Reflect.set(globalThis, PENDING_IMPORT, { evaluations: 0, markStarted });
+    Reflect.set(globalThis, PENDING_IMPORT_GATE, gate);
+    const source = `
+      globalThis.${PENDING_IMPORT}.evaluations += 1;
+      globalThis.${PENDING_IMPORT}.markStarted();
+      await globalThis.${PENDING_IMPORT_GATE};
+      export default { render({ el }) { el.textContent = "ready"; } };
+    `;
+    const loaded = await loadPayload(
+      payload({
+        files: { "/@file/pending.js": moduleUrl(source) },
+        modelNotifications: [
+          notification({
+            id: "model-0",
+            state: {},
+            moduleUrl: "/@file/pending.js",
+            moduleHash: "pending-browser-module-v1",
+          }),
+        ],
+      }),
+    );
+    const firstHost = document.createElement("section");
+    const secondHost = document.createElement("section");
+    document.body.append(firstHost, secondHost);
+    const controller = new AbortController();
+    const firstMount = loaded.mount(firstHost, { signal: controller.signal });
+    const secondMount = loaded.mount(secondHost);
+
+    await started;
+    controller.abort();
+    await expect(firstMount).rejects.toMatchObject({ name: "AbortError" });
+
+    releaseImport();
+    const second = await secondMount;
+    try {
+      expect(secondHost.textContent).toBe("ready");
+      expect(Reflect.get(globalThis, PENDING_IMPORT)).toMatchObject({ evaluations: 1 });
+    } finally {
+      await second.dispose();
+      firstHost.remove();
+      secondHost.remove();
+    }
+  });
+
+  test("retries an embedded module after evaluation rejects", async () => {
+    Reflect.set(globalThis, RETRY_IMPORT, 0);
+    const source = `
+      globalThis.${RETRY_IMPORT} += 1;
+      if (globalThis.${RETRY_IMPORT} === 1) throw new Error("first module evaluation failed");
+      export default { render({ el }) { el.textContent = "retried"; } };
+    `;
+    const loaded = await loadPayload(
+      payload({
+        files: { "/@file/retry.js": moduleUrl(source) },
+        modelNotifications: [
+          notification({
+            id: "model-0",
+            state: {},
+            moduleUrl: "/@file/retry.js",
+            moduleHash: "retry-browser-module-v1",
+          }),
+        ],
+      }),
+    );
+    const firstHost = document.createElement("section");
+    const secondHost = document.createElement("section");
+    document.body.append(firstHost, secondHost);
+
+    await expect(loaded.mount(firstHost)).rejects.toThrow("first module evaluation failed");
+    const mounted = await loaded.mount(secondHost);
+    try {
+      expect(Reflect.get(globalThis, RETRY_IMPORT)).toBe(2);
+      expect(secondHost.textContent).toBe("retried");
+    } finally {
+      await mounted.dispose();
+      firstHost.remove();
+      secondHost.remove();
+    }
+  });
+
+  test("shares pending and sequential imports across module-cache copies", async () => {
+    const [firstCache, secondCache] = await moduleCacheCopies();
+    let markStarted!: () => void;
+    const started = new Promise<void>((resolve) => {
+      markStarted = resolve;
+    });
+    let releaseImport!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      releaseImport = resolve;
+    });
+    Reflect.set(globalThis, DUAL_PENDING_IMPORT, { evaluations: 0, markStarted });
+    Reflect.set(globalThis, DUAL_PENDING_GATE, gate);
+    const source = `
+      globalThis.${DUAL_PENDING_IMPORT}.evaluations += 1;
+      globalThis.${DUAL_PENDING_IMPORT}.markStarted();
+      await globalThis.${DUAL_PENDING_GATE};
+      export default { render() {} };
+    `;
+    const spec = {
+      hash: "dual-pending-browser-module-v1",
+      url: "/@file/dual-pending.js",
+    };
+    const files = { "/@file/dual-pending.js": moduleUrl(source) };
+
+    const first = firstCache.loadPageAnyWidget(spec, files);
+    const second = secondCache.loadPageAnyWidget(spec, files);
+    await started;
+    releaseImport();
+    const [firstWidget, secondWidget] = await Promise.all([first, second]);
+
+    expect(firstWidget).toBe(secondWidget);
+    expect(Reflect.get(globalThis, DUAL_PENDING_IMPORT)).toMatchObject({ evaluations: 1 });
+    expect(await secondCache.loadPageAnyWidget(spec, files)).toBe(firstWidget);
+    expect(Reflect.get(globalThis, DUAL_PENDING_IMPORT)).toMatchObject({ evaluations: 1 });
+  });
+
+  test("shares rejection eviction and retry across module-cache copies", async () => {
+    const [firstCache, secondCache] = await moduleCacheCopies();
+    Reflect.set(globalThis, DUAL_RETRY_IMPORT, 0);
+    const source = `
+      globalThis.${DUAL_RETRY_IMPORT} += 1;
+      if (globalThis.${DUAL_RETRY_IMPORT} === 1) throw new Error("dual import failed");
+      export default { render() {} };
+    `;
+    const spec = { hash: "dual-retry-browser-module-v1", url: "/@file/dual-retry.js" };
+    const files = { "/@file/dual-retry.js": moduleUrl(source) };
+
+    const failures = await Promise.allSettled([
+      firstCache.loadPageAnyWidget(spec, files),
+      secondCache.loadPageAnyWidget(spec, files),
+    ]);
+    expect(failures.map((result) => result.status)).toEqual(["rejected", "rejected"]);
+    expect(Reflect.get(globalThis, DUAL_RETRY_IMPORT)).toBe(1);
+
+    await secondCache.loadPageAnyWidget(spec, files);
+    expect(Reflect.get(globalThis, DUAL_RETRY_IMPORT)).toBe(2);
+  });
+
+  test("shares the page admission cap across module-cache copies", async () => {
+    const [firstCache, secondCache] = await moduleCacheCopies();
+    const record = Reflect.get(globalThis, firstCache.PAGE_MODULE_CACHE_SYMBOL) as {
+      readonly version: number;
+      readonly modules: Map<string, Promise<unknown>>;
+    };
+    expect(record.version).toBe(1);
+    expect(record.modules).toBeInstanceOf(Map);
+    const added: string[] = [];
+    while (record.modules.size < firstCache.MAX_PAGE_MODULES) {
+      const key = `dual-cap-fixture-${added.length}`;
+      record.modules.set(key, Promise.resolve({ render() {} }));
+      added.push(key);
+    }
+    const spec = { hash: "dual-cap-browser-module-v1", url: "/@file/dual-cap.js" };
+    const files = { "/@file/dual-cap.js": moduleUrl("export default { render() {} };") };
+
+    try {
+      await expect(firstCache.loadPageAnyWidget(spec, files)).rejects.toThrow(
+        `${firstCache.MAX_PAGE_MODULES} unique modules`,
+      );
+      await expect(secondCache.loadPageAnyWidget(spec, files)).rejects.toThrow(
+        `${secondCache.MAX_PAGE_MODULES} unique modules`,
+      );
+    } finally {
+      for (const key of added) record.modules.delete(key);
+    }
+  });
 });
+
+async function moduleCacheCopies() {
+  const [first, second] = await Promise.all([
+    // @ts-expect-error Vite query parameters create independent browser module instances.
+    import("../src/runtime/module-cache.ts?copy=first"),
+    // @ts-expect-error Vite query parameters create independent browser module instances.
+    import("../src/runtime/module-cache.ts?copy=second"),
+  ]);
+  return [first, second] as const;
+}
 
 function widgetStyles(): string[] {
   return [...document.head.querySelectorAll("style")]

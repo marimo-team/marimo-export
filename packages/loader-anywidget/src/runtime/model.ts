@@ -28,7 +28,7 @@ export class StaticModel<T extends ModelState = ModelState> implements AnyModel<
   }
 
   get<K extends keyof T>(key: K): T[K] {
-    return this.#data[key];
+    return Object.hasOwn(this.#data, key) ? this.#data[key] : (undefined as T[K]);
   }
 
   set<K extends keyof T>(key: K, value: T[K]): void {

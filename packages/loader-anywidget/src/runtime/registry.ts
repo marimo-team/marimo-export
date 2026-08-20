@@ -1,10 +1,11 @@
 import type { AnyModel, AnyWidget, ResolvedWidget } from "@anywidget/types";
 
-import { cloneModelState, parseDataUrl, type AnyWidgetSnapshot, type EsmSpec } from "../payload.js";
+import { cloneModelState, type AnyWidgetSnapshot, type EsmSpec } from "../payload.js";
 import { abortError, combineAbortSignals, raceAbort } from "./abort.js";
-import { WidgetBinding, resolveAnyWidgetModule } from "./binding.js";
+import { WidgetBinding } from "./binding.js";
 import { createHost, type WidgetResolver } from "./host.js";
 import { type ModelResolver, type ModelState, StaticModel } from "./model.js";
+import { loadPageAnyWidget } from "./module-cache.js";
 
 interface BindingEntry {
   readonly controller: AbortController;
@@ -88,8 +89,6 @@ export class StaticRegistry implements ModelResolver, WidgetResolver {
   readonly #runtimes = new Map<string, ViewRuntime>();
   readonly #bindings = new Map<string, BindingEntry>();
   readonly #bindingOrder: WidgetBinding[] = [];
-  readonly #modulePromises = new Map<string, Map<string, Promise<AnyWidget>>>();
-  readonly #objectUrls = new Set<string>();
   #disposePromise: Promise<void> | undefined;
   #disposing = false;
 
@@ -214,38 +213,7 @@ export class StaticRegistry implements ModelResolver, WidgetResolver {
 
   async #loadWidget(spec: EsmSpec): Promise<AnyWidget> {
     if (this.#disposing) throw abortError("AnyWidget registry was disposed.");
-    let modulesByUrl = this.#modulePromises.get(spec.hash);
-    const existing = modulesByUrl?.get(spec.url);
-    if (existing !== undefined) return existing;
-    modulesByUrl ??= new Map();
-    this.#modulePromises.set(spec.hash, modulesByUrl);
-    const promise = this.#importModule(spec)
-      .then((module) => resolveAnyWidgetModule(module, spec.url))
-      .catch((error) => {
-        const current = this.#modulePromises.get(spec.hash);
-        if (current?.get(spec.url) === promise) {
-          current.delete(spec.url);
-          if (current.size === 0) this.#modulePromises.delete(spec.hash);
-        }
-        throw error;
-      });
-    modulesByUrl.set(spec.url, promise);
-    return promise;
-  }
-
-  async #importModule(spec: EsmSpec): Promise<unknown> {
-    if (this.#disposing) throw abortError("AnyWidget registry was disposed.");
-    const embedded = this.#snapshot.files[spec.url];
-    let moduleUrl = spec.url;
-    if (embedded !== undefined) {
-      moduleUrl = URL.createObjectURL(dataUrlToBlob(embedded));
-      this.#objectUrls.add(moduleUrl);
-    }
-    // Keep the runtime URL opaque to each supported bundler so the browser
-    // performs the import when this mount requests it.
-    return import(
-      /* @vite-ignore */ /* webpackIgnore: true */ /* turbopackIgnore: true */ moduleUrl
-    );
+    return loadPageAnyWidget(spec, this.#snapshot.files);
   }
 
   #runtime(modelId: string): ViewRuntime {
@@ -300,30 +268,8 @@ export class StaticRegistry implements ModelResolver, WidgetResolver {
       for (const mount of runtime.styleMounts.values()) mount.dispose();
       runtime.styleMounts.clear();
     }
-    // Revoke object URLs immediately. Waiting for their imports would make disposal
-    // depend on uncancellable top-level await in notebook-authored JavaScript.
-    for (const url of this.#objectUrls) URL.revokeObjectURL(url);
-    this.#objectUrls.clear();
-    this.#modulePromises.clear();
     if (errors.length > 0) throw new AggregateError(errors, "AnyWidget cleanup failed.");
   }
-}
-
-function dataUrlToBlob(dataUrl: string): Blob {
-  const { body, isBase64, mediaType } = parseDataUrl(dataUrl, "AnyWidget ESM data URL");
-  // Snapshot validation completes before registry construction, so decoding
-  // cannot begin until the embedded data URL has passed payload validation.
-  const bytes = isBase64 ? base64Bytes(body) : new TextEncoder().encode(decodeURIComponent(body));
-  return new Blob([bytes], { type: mediaType });
-}
-
-function base64Bytes(value: string): Uint8Array<ArrayBuffer> {
-  const binary = atob(value);
-  const bytes = new Uint8Array(binary.length);
-  for (let index = 0; index < binary.length; index += 1) {
-    bytes[index] = binary.charCodeAt(index);
-  }
-  return bytes;
 }
 
 function createStyleMount(root: Document | ShadowRoot, css: string): StyleMount {

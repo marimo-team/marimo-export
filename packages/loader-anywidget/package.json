@@ -6,6 +6,9 @@
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts"
+  },
   "scripts": {
     "build": "vp pack",
     "check": "vp check",
@@ -14,11 +17,9 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@anywidget/types": "catalog:",
-    "@marimo-team/marimo-export": "workspace:*"
+    "@anywidget/types": "catalog:"
   },
   "devDependencies": {
-    "@msgpack/msgpack": "catalog:",
     "@vitest/browser-playwright": "catalog:",
     "playwright": "catalog:",
     "typescript": "catalog:",
