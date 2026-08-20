@@ -184,9 +184,28 @@ def json_object(value: object, path: str = "value") -> JsonObject:
 def portable_json_object(value: object, path: str = "value") -> JsonObject:
     """Return a JSON object whose numbers preserve ECMAScript value identity."""
 
-    parsed = json_object(value, path)
-    _validate_portable_numbers(parsed, path)
+    parsed = portable_json_value(value, path)
+    if not isinstance(parsed, dict):
+        raise TypeError(f"{path} must be an object")
     return parsed
+
+
+def portable_json_value(value: object, path: str = "value") -> JsonValue:
+    """Return detached JSON with ECMAScript-safe number identity."""
+
+    parsed = json_value(value, path)
+    _validate_portable_numbers(parsed, path)
+    return _normalize_portable_zero(parsed)
+
+
+def _normalize_portable_zero(value: JsonValue) -> JsonValue:
+    if isinstance(value, float) and value == 0:
+        return 0
+    if isinstance(value, list):
+        return [_normalize_portable_zero(item) for item in value]
+    if isinstance(value, dict):
+        return {key: _normalize_portable_zero(item) for key, item in value.items()}
+    return value
 
 
 def _validate_portable_numbers(value: JsonValue, path: str) -> None:
@@ -265,10 +284,14 @@ def json_equal(left: JsonValue, right: JsonValue) -> bool:
     return True
 
 
-def canonical_bytes(value: object) -> bytes:
+def canonical_bytes(
+    value: object,
+    *,
+    max_values: int = _MAX_JSON_VALUES,
+) -> bytes:
     """Serialize a portable value with the export's canonical JSON rules."""
 
-    parsed = json_value(value)
+    parsed = json_value(value, max_values=max_values)
     chunks: list[str] = []
     _write_canonical(parsed, chunks)
     return "".join(chunks).encode("utf-8")

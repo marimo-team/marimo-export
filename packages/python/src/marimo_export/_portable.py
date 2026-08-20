@@ -1,13 +1,15 @@
 from __future__ import annotations
 
+from marimo_export._format import edge_whitespace
+
 MAX_ASSET_KEY_UTF8_BYTES = 1024
 MAX_PORTABLE_BASENAME_UTF8_BYTES = 255
 
 _TRUE_END = r"(?![\s\S])"
 _UNICODE_SCALAR_LOOKAHEAD = r"(?![\s\S]*[\uD800-\uDFFF])"
-_PYTHON_WHITESPACE = (
+_PORTABLE_EDGE_WHITESPACE = (
     r"\u0009-\u000d\u001c-\u0020\u0085\u00a0\u1680"
-    r"\u2000-\u200a\u2028\u2029\u202f\u205f\u3000"
+    r"\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff"
 )
 _WINDOWS_RESERVED_CHARACTERS = frozenset('<>:"/\\|?*')
 _WINDOWS_DEVICE_BASENAMES = frozenset(
@@ -30,8 +32,8 @@ _WINDOWS_DEVICE_SCHEMA = (
     r"[Cc][Oo][Mm][1-9¹²³]|[Ll][Pp][Tt][1-9¹²³])"
 )
 _PORTABLE_COMPONENT_SCHEMA = (
-    rf"(?![{_PYTHON_WHITESPACE}])"
-    rf"(?![^/]*[{_PYTHON_WHITESPACE}](?:/|{_TRUE_END}))"
+    rf"(?![{_PORTABLE_EDGE_WHITESPACE}])"
+    rf"(?![^/]*[{_PORTABLE_EDGE_WHITESPACE}](?:/|{_TRUE_END}))"
     rf"(?!\.{{1,2}}(?:/|{_TRUE_END}))"
     rf"(?!{_WINDOWS_DEVICE_SCHEMA}[ .]*(?:\.[^/]*)?(?:/|{_TRUE_END}))"
     rf"(?![^/]*[. ](?:/|{_TRUE_END}))"
@@ -103,7 +105,7 @@ def _validate_portable_component(value: str, label: str) -> None:
     basename = value.split(".", 1)[0].rstrip(" .").upper()
     if (
         len(value.encode("utf-8")) > MAX_PORTABLE_BASENAME_UTF8_BYTES
-        or value != value.strip()
+        or edge_whitespace(value)
         or any(
             ord(character) < 32
             or ord(character) == 127

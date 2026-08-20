@@ -59,6 +59,12 @@ class TransportError(MarimoExportError):
     code = "transport_failed"
 
 
+class CaptureLimitError(TransportError):
+    """A capture transfer exceeds its caller's declared resource limits."""
+
+    code = "capture_limit_exceeded"
+
+
 class SessionError(MarimoExportError):
     """A running marimo session could not be selected or used."""
 
@@ -69,6 +75,12 @@ class NotebookExportError(MarimoExportError):
     """A notebook export is missing, malformed, or cannot be read."""
 
     code = "export_invalid"
+
+
+class ExportUnavailableError(MarimoExportError):
+    """A valid export cannot currently be read from its storage."""
+
+    code = "export_unavailable"
 
 
 class IntegrityError(NotebookExportError):

@@ -2,36 +2,45 @@ from __future__ import annotations
 
 import math
 import os
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, cast
 
 import msgspec
 import pytest
-from marimo._save.stubs import BlobAsset
 from marimo_export import open_export
-from marimo_export._json import sha256_bytes
-from marimo_export.errors import IntegrityError, NotebookExportError
-from marimo_export.export import (
+from marimo_export._json import canonical_bytes, sha256_bytes
+from marimo_export._marimo.blob import to_native_blob_asset
+from marimo_export.descriptors import (
     ArrowDescriptor,
     AssetRef,
     BlobAssetDescriptor,
-    ExportIndex,
-    NotebookProvenance,
+    JsonDescriptor,
+    MarimoOutputDescriptor,
     NumpyDescriptor,
-    ProducerProvenance,
     Provenance,
     ScalarDescriptor,
-    StateEntry,
     asset_path,
 )
+from marimo_export.errors import (
+    ExportUnavailableError,
+    IntegrityError,
+    NotebookExportError,
+)
+from marimo_export.exporters._runtime import blob as blob_runtime
+from marimo_export.index import (
+    ControlBinding,
+    ExportIndex,
+    NotebookProvenance,
+    ProducerProvenance,
+    StateEntry,
+)
+from marimo_export.outputs import BlobAsset
+from marimo_export.wire import state_fingerprint
 
 
-def _provenance(name: str, *, asset: bool = True) -> Provenance:
-    return Provenance(
-        cache_key=f"cell_cache/O_{name}.json",
-        return_reference=f"cell_cache/{name}/return.bin" if asset else None,
-        python_type=f"example.{name}",
-    )
+def _provenance(name: str) -> Provenance:
+    return Provenance(python_type=f"example.{name}")
 
 
 def _npy(values: tuple[int, ...]) -> bytes:
@@ -64,16 +73,18 @@ def _export(root: Path) -> tuple[Path, ExportIndex, dict[str, bytes]]:
     npy = _npy((1, 2, 3))
     arrow = _arrow()
     blob = msgspec.msgpack.encode(
-        BlobAsset(
-            data=b'{"mark":"line"}',
-            media_type="application/vnd.vegalite.v6+json",
-            filename="chart.json",
-            metadata={"schema_major": 6},
+        to_native_blob_asset(
+            blob_runtime.json(
+                {"mark": "line"},
+                media_type="application/vnd.vegalite.v6+json",
+                filename="chart.json",
+                metadata={"schema_major": 6},
+            )
         )
     )
     assets = {"array": npy, "table": arrow, "chart": blob}
     descriptors = {
-        "count": ScalarDescriptor(value=3, provenance=_provenance("count", asset=False)),
+        "count": ScalarDescriptor(value=3, provenance=_provenance("count")),
         "array": NumpyDescriptor(
             asset=AssetRef(sha256_bytes(npy), len(npy)),
             provenance=_provenance("array"),
@@ -90,26 +101,47 @@ def _export(root: Path) -> tuple[Path, ExportIndex, dict[str, bytes]]:
             metadata={"schema_major": 6},
         ),
     }
+    baseline_inputs = {
+        "chart_width": 800,
+        "symbols_selector": ["AAPL", "CRWV"],
+    }
+    msft_inputs = {"chart_width": 800, "symbols_selector": ["MSFT"]}
+    baseline_fingerprint = state_fingerprint(baseline_inputs)
+    msft_fingerprint = state_fingerprint(msft_inputs)
     index = ExportIndex(
+        spec_sha256="d" * 64,
+        default_state=baseline_fingerprint,
         notebook=NotebookProvenance(filename="finance.py", document_sha256="a" * 64),
-        producer=ProducerProvenance(marimo="0.23.15", marimo_export="1.0.0"),
+        producer=ProducerProvenance(
+            marimo="0.23.15",
+            marimo_export="1.0.0",
+            implementation_sha256="c" * 64,
+        ),
         inputs=("chart_width", "symbols_selector"),
+        control_bindings={
+            "cell-selector-0": ControlBinding(
+                input="symbols_selector",
+                path=(),
+            )
+        },
         outputs=("count", "array", "table", "chart"),
+        aliases={
+            "baseline": baseline_fingerprint,
+            "leaders": baseline_fingerprint,
+            "msft": msft_fingerprint,
+        },
         states={
-            "baseline": StateEntry(
-                inputs={
-                    "chart_width": 800,
-                    "symbols_selector": ["AAPL", "CRWV"],
-                },
+            baseline_fingerprint: StateEntry(
+                inputs=baseline_inputs,
                 outputs=descriptors,
             ),
-            "msft": StateEntry(
-                inputs={"chart_width": 800, "symbols_selector": ["MSFT"]},
+            msft_fingerprint: StateEntry(
+                inputs=msft_inputs,
                 outputs={
                     **descriptors,
                     "count": ScalarDescriptor(
                         value=1,
-                        provenance=_provenance("count-msft", asset=False),
+                        provenance=_provenance("count-msft"),
                     ),
                 },
             ),
@@ -136,11 +168,23 @@ def test_reader_opens_resolves_and_reads_all_codec_payloads(tmp_path: Path) -> N
     baseline = export.state("baseline")
 
     assert export.path == root.absolute()
+    assert export.identity == sha256_bytes(index.to_bytes())
     assert export.input_names == ("chart_width", "symbols_selector")
+    assert export.control_bindings == {
+        "cell-selector-0": ControlBinding(input="symbols_selector", path=())
+    }
+    with pytest.raises(TypeError):
+        cast(dict[str, ControlBinding], export.control_bindings)["other"] = ControlBinding(
+            input="symbols_selector",
+            path=(),
+        )
     assert export.output_names == ("count", "array", "table", "chart")
     assert export.notebook == index.notebook
     assert export.producer == index.producer
-    assert tuple(state.name for state in export.states()) == ("baseline", "msft")
+    assert tuple(state.fingerprint for state in export.states()) == tuple(sorted(index.states))
+    assert baseline.aliases == ("baseline", "leaders")
+    assert export.state("leaders") is baseline
+    assert export.state_by_fingerprint(baseline.fingerprint) is baseline
     assert baseline.inputs == {
         "chart_width": 800,
         "symbols_selector": ("AAPL", "CRWV"),
@@ -180,7 +224,7 @@ def test_state_resolution_is_exact_and_immutable(tmp_path: Path) -> None:
     with pytest.raises(AttributeError, match="immutable"):
         cast(Any, export).path = tmp_path
     with pytest.raises(AttributeError, match="immutable"):
-        cast(Any, baseline).name = "changed"
+        cast(Any, baseline).aliases = ("changed",)
     with pytest.raises(AttributeError, match="immutable"):
         cast(Any, baseline.output("count")).name = "changed"
     with pytest.raises(NotebookExportError) as raised:
@@ -191,6 +235,70 @@ def test_state_resolution_is_exact_and_immutable(tmp_path: Path) -> None:
     assert raised.value.code == "state_unavailable"
 
 
+def test_public_reader_objects_reject_slot_deletion_and_reset(tmp_path: Path) -> None:
+    root, _, _ = _export(tmp_path / "export")
+    export = open_export(root)
+    state = export.state("baseline")
+    output = state.output("count")
+
+    for value, attribute, replacement in (
+        (export, "_path", tmp_path),
+        (state, "aliases", ("forged",)),
+        (output, "name", "forged"),
+    ):
+        original = getattr(value, attribute)
+        with pytest.raises(AttributeError, match=f"{type(value).__name__} is immutable"):
+            delattr(value, attribute)
+        with pytest.raises(AttributeError, match=f"{type(value).__name__} is immutable"):
+            setattr(value, attribute, replacement)
+        assert getattr(value, attribute) == original
+
+
+def test_reader_json_values_and_descriptors_are_recursively_immutable(tmp_path: Path) -> None:
+    fingerprint = state_fingerprint({})
+    index = ExportIndex(
+        spec_sha256="d" * 64,
+        default_state=fingerprint,
+        notebook=NotebookProvenance(filename=None, document_sha256="a" * 64),
+        producer=ProducerProvenance(
+            marimo="0.23.15",
+            marimo_export="1.0.0",
+            implementation_sha256="c" * 64,
+        ),
+        inputs=(),
+        control_bindings={},
+        outputs=("value",),
+        aliases={"state": fingerprint},
+        states={
+            fingerprint: StateEntry(
+                inputs={},
+                outputs={
+                    "value": JsonDescriptor(
+                        value={"nested": {"count": 1}, "items": ["one"]},
+                        provenance=_provenance("json"),
+                    )
+                },
+            )
+        },
+    )
+    root = tmp_path / "export"
+    root.mkdir()
+    (root / "index.json").write_bytes(index.to_bytes())
+
+    output = open_export(root).state("state").output("value")
+    with pytest.raises(TypeError):
+        cast(Any, output.json())["nested"]["count"] = 2
+    with pytest.raises(TypeError):
+        cast(Any, cast(JsonDescriptor, output.descriptor).value)["items"][0] = "changed"
+
+    value = cast(Mapping[str, Any], output.json())
+    assert value["nested"] == {"count": 1}
+    assert cast(JsonDescriptor, output.descriptor).to_value()["value"] == {
+        "items": ["one"],
+        "nested": {"count": 1},
+    }
+
+
 def test_named_lookup_errors_are_typed(tmp_path: Path) -> None:
     root, _, _ = _export(tmp_path / "export")
     export = open_export(root)
@@ -198,6 +306,13 @@ def test_named_lookup_errors_are_typed(tmp_path: Path) -> None:
     with pytest.raises(NotebookExportError) as raised:
         export.state("missing")
     assert raised.value.code == "state_not_found"
+
+    with pytest.raises(NotebookExportError) as raised:
+        export.state_by_fingerprint("f" * 64)
+    assert raised.value.code == "state_not_found"
+
+    with pytest.raises(TypeError, match="lowercase SHA-256"):
+        export.state_by_fingerprint("baseline")
 
     with pytest.raises(NotebookExportError) as raised:
         export.state("baseline").output("missing")
@@ -230,7 +345,10 @@ def test_open_reads_only_the_index(tmp_path: Path) -> None:
 
 def test_asset_digest_is_verified_before_codec_decode(tmp_path: Path) -> None:
     root, index, _ = _export(tmp_path / "export")
-    descriptor = cast(NumpyDescriptor, index.states["baseline"].outputs["array"])
+    descriptor = cast(
+        NumpyDescriptor,
+        index.states[index.aliases["baseline"]].outputs["array"],
+    )
     path = root / asset_path(descriptor.codec, descriptor.asset.sha256)
     data = path.read_bytes()
     path.write_bytes(data[:-1] + bytes([data[-1] ^ 1]))
@@ -241,7 +359,10 @@ def test_asset_digest_is_verified_before_codec_decode(tmp_path: Path) -> None:
 
 def test_asset_size_is_verified_before_digest(tmp_path: Path) -> None:
     root, index, _ = _export(tmp_path / "export")
-    descriptor = cast(NumpyDescriptor, index.states["baseline"].outputs["array"])
+    descriptor = cast(
+        NumpyDescriptor,
+        index.states[index.aliases["baseline"]].outputs["array"],
+    )
     path = root / asset_path(descriptor.codec, descriptor.asset.sha256)
     path.write_bytes(path.read_bytes()[:-1])
 
@@ -251,14 +372,19 @@ def test_asset_size_is_verified_before_digest(tmp_path: Path) -> None:
 
 def test_blob_envelope_must_match_its_descriptor(tmp_path: Path) -> None:
     root, index, _ = _export(tmp_path / "export")
-    descriptor = cast(BlobAssetDescriptor, index.states["baseline"].outputs["chart"])
+    descriptor = cast(
+        BlobAssetDescriptor,
+        index.states[index.aliases["baseline"]].outputs["chart"],
+    )
     path = root / asset_path(descriptor.codec, descriptor.asset.sha256)
     changed = msgspec.msgpack.encode(
-        BlobAsset(
-            data=b'{"mark":"line"}',
-            media_type="image/png",
-            filename="chart.json",
-            metadata={"schema_major": 6},
+        to_native_blob_asset(
+            BlobAsset(
+                data=b'{"mark":"line"}',
+                media_type="image/png",
+                filename="chart.json",
+                metadata={"schema_major": 6},
+            )
         )
     )
     path.write_bytes(changed)
@@ -271,7 +397,7 @@ def test_blob_envelope_must_match_its_descriptor(tmp_path: Path) -> None:
     old_path = path
     new_descriptor = cast(
         BlobAssetDescriptor,
-        changed_index.states["baseline"].outputs["chart"],
+        changed_index.states[changed_index.aliases["baseline"]].outputs["chart"],
     )
     new_path = root / asset_path(new_descriptor.codec, new_descriptor.asset.sha256)
     old_path.rename(new_path)
@@ -291,6 +417,72 @@ def test_verify_rejects_undeclared_assets(tmp_path: Path) -> None:
     assert raised.value.code == "asset_undeclared"
 
 
+def test_verify_rejects_an_incomplete_marimo_output_snapshot(tmp_path: Path) -> None:
+    snapshot = canonical_bytes(
+        {
+            "schema": "marimo.output.v1",
+            "projectionSha256": "b" * 64,
+            "ownerCellId": "cell-summary",
+            "resources": {
+                "functions": {},
+                "modelNotifications": [],
+                "uiValues": {},
+            },
+        }
+    )
+    descriptor = MarimoOutputDescriptor(
+        asset=AssetRef(sha256_bytes(snapshot), len(snapshot)),
+        provenance=_provenance("snapshot"),
+    )
+    fingerprint = state_fingerprint({})
+    index = ExportIndex(
+        spec_sha256="d" * 64,
+        default_state=fingerprint,
+        notebook=NotebookProvenance(filename="notebook.py", document_sha256="a" * 64),
+        producer=ProducerProvenance(
+            marimo="0.24.0",
+            marimo_export="0.0.0",
+            implementation_sha256="c" * 64,
+        ),
+        inputs=(),
+        control_bindings={},
+        outputs=("view",),
+        aliases={"baseline": fingerprint},
+        states={
+            fingerprint: StateEntry(inputs={}, outputs={"view": descriptor}),
+        },
+    )
+    root = tmp_path / "export"
+    root.mkdir()
+    asset = root / asset_path(descriptor.codec, descriptor.asset.sha256)
+    asset.parent.mkdir()
+    asset.write_bytes(snapshot)
+    (root / "index.json").write_bytes(index.to_bytes())
+
+    with pytest.raises(IntegrityError) as raised:
+        open_export(root).verify()
+
+    assert raised.value.code == "asset_invalid"
+
+
+def test_verify_reports_transient_asset_entry_inspection_as_unavailable(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root, _index, _assets = _export(tmp_path / "export")
+    entry = next((root / "assets").iterdir())
+    native_lstat = Path.lstat
+
+    def unavailable(path: Path, *args: object, **kwargs: object):
+        if path == entry:
+            raise PermissionError("asset unavailable")
+        return native_lstat(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "lstat", unavailable)
+    with pytest.raises(ExportUnavailableError):
+        open_export(root).verify()
+
+
 @pytest.mark.skipif(os.name != "posix", reason="requires POSIX symlinks")
 def test_reader_rejects_symlinked_roots_and_assets(tmp_path: Path) -> None:
     root, index, _ = _export(tmp_path / "export")
@@ -300,7 +492,10 @@ def test_reader_rejects_symlinked_roots_and_assets(tmp_path: Path) -> None:
     with pytest.raises(NotebookExportError, match="real directory"):
         open_export(linked_root)
 
-    descriptor = cast(NumpyDescriptor, index.states["baseline"].outputs["array"])
+    descriptor = cast(
+        NumpyDescriptor,
+        index.states[index.aliases["baseline"]].outputs["array"],
+    )
     path = root / asset_path(descriptor.codec, descriptor.asset.sha256)
     target = tmp_path / "array.npy"
     path.rename(target)
@@ -321,6 +516,7 @@ def test_open_rejects_noncanonical_index_bytes(tmp_path: Path) -> None:
 
 
 def test_special_scalars_round_trip_through_reader(tmp_path: Path) -> None:
+    fingerprint = state_fingerprint({})
     values = {
         "big": 2**63,
         "nan": math.nan,
@@ -329,17 +525,25 @@ def test_special_scalars_round_trip_through_reader(tmp_path: Path) -> None:
     }
     for name, value in values.items():
         index = ExportIndex(
+            spec_sha256="d" * 64,
+            default_state=fingerprint,
             notebook=NotebookProvenance(filename=None, document_sha256="a" * 64),
-            producer=ProducerProvenance(marimo="0.23.15", marimo_export="1.0.0"),
+            producer=ProducerProvenance(
+                marimo="0.23.15",
+                marimo_export="1.0.0",
+                implementation_sha256="c" * 64,
+            ),
             inputs=(),
+            control_bindings={},
             outputs=("value",),
+            aliases={"state": fingerprint},
             states={
-                "state": StateEntry(
+                fingerprint: StateEntry(
                     inputs={},
                     outputs={
                         "value": ScalarDescriptor(
                             value=value,
-                            provenance=_provenance(name, asset=False),
+                            provenance=_provenance(name),
                         )
                     },
                 )

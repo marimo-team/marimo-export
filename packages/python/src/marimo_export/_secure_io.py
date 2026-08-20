@@ -1,18 +1,22 @@
 from __future__ import annotations
 
+import errno
 import io
 import os
 import stat
 from collections.abc import Callable
 from contextlib import suppress
 from pathlib import Path
-from typing import NoReturn
 
 _READ_BUFFER_BYTES = 64 * 1024
 
 
 class SecureReadError(OSError):
     """Base error for a verified export file read."""
+
+
+class SecureReadUnavailableError(SecureReadError):
+    """A secure export read failed because its storage is unavailable."""
 
 
 class SecureReadLimitError(SecureReadError):
@@ -366,18 +370,21 @@ def _translate_read_errors(read: Callable[[], bytes]) -> bytes:
         raise
     except ValueError as error:
         raise SecureReadError(str(error)) from error
-    except (OSError, OverflowError, MemoryError) as error:
-        _raise_secure_read_error(error)
-
-
-def _raise_secure_read_error(error: BaseException) -> NoReturn:
-    raise SecureReadError("file could not be read securely") from error
+    except (PermissionError, TimeoutError, BlockingIOError) as error:
+        raise SecureReadUnavailableError("file storage is unavailable") from error
+    except (OverflowError, MemoryError) as error:
+        raise SecureReadUnavailableError("file resources are unavailable") from error
+    except OSError as error:
+        if error.errno in {errno.ENOENT, errno.ENOTDIR, errno.EISDIR, errno.ELOOP}:
+            raise SecureReadError("export file structure is invalid") from error
+        raise SecureReadUnavailableError("file storage is unavailable") from error
 
 
 __all__ = [
     "SecureFileSizeError",
     "SecureReadError",
     "SecureReadLimitError",
+    "SecureReadUnavailableError",
     "read_export_asset",
     "read_export_index",
 ]

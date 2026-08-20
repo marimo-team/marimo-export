@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import math
+from hashlib import sha256
+from typing import cast
 
 import pytest
 from marimo_export._json import (
@@ -9,6 +11,13 @@ from marimo_export._json import (
     decode_json_object,
     json_equal,
     json_value,
+)
+from marimo_export.wire import (
+    canonical_json_bytes,
+    canonical_json_sha256,
+    parse_canonical_json,
+    portable_json,
+    state_fingerprint,
 )
 
 
@@ -101,3 +110,64 @@ def test_json_diagnostics_are_bounded_and_escape_controls() -> None:
     assert r"\x1b" in message
     assert "\x1b" not in message
     assert len(message) < 1024
+
+
+def test_public_portable_json_api_detaches_and_fingerprints_vectors() -> None:
+    source = {"items": [1, -0.0], "label": "ready"}
+    portable = portable_json(source, "inputs")
+    source["items"].append(2)
+
+    assert portable == {"items": [1, 0], "label": "ready"}
+    encoded = b'{"items":[1,0],"label":"ready"}'
+    assert canonical_json_bytes(portable) == encoded
+    assert canonical_json_sha256(portable) == sha256(encoded).hexdigest()
+    assert state_fingerprint(cast(dict[str, object], portable)) == sha256(encoded).hexdigest()
+
+    with pytest.raises(ValueError, match="JavaScript safe range"):
+        portable_json({"large": 2**53 + 1})
+
+
+def test_parse_canonical_json_accepts_exact_text_and_returns_detached_values() -> None:
+    encoded = b'{"items":[1,0],"label":"ready"}'
+    for source in (
+        encoded.decode(),
+        encoded,
+        bytearray(encoded),
+        memoryview(encoded),
+    ):
+        assert parse_canonical_json(source, "observation") == {
+            "items": [1, 0],
+            "label": "ready",
+        }
+
+    mutable_source = bytearray(encoded)
+    first = cast(dict[str, JsonValue], parse_canonical_json(mutable_source))
+    mutable_source[:] = b"null"
+    items = cast(list[JsonValue], first["items"])
+    items.append(2)
+
+    assert parse_canonical_json(encoded) == {"items": [1, 0], "label": "ready"}
+    assert parse_canonical_json(b'["symbol","width"]') == ["symbol", "width"]
+
+
+def test_parse_canonical_json_rejects_noncanonical_and_nonportable_values() -> None:
+    for encoded in (
+        b' {"items":[1,0],"label":"ready"}',
+        b'{"label":"ready","items":[1,0]}',
+        b'{"items":[1.0],"label":"ready"}',
+        b'{"items":[-0],"label":"ready"}',
+    ):
+        with pytest.raises(ValueError, match="canonical portable JSON"):
+            parse_canonical_json(encoded, "observation")
+
+    with pytest.raises(ValueError, match="JavaScript safe range"):
+        parse_canonical_json(b"9007199254740992", "observation")
+    with pytest.raises(ValueError, match="duplicate key"):
+        parse_canonical_json(b'{"value":1,"value":2}', "observation")
+    with pytest.raises(ValueError, match="UTF-8"):
+        parse_canonical_json(b"\xff", "observation")
+
+    backing = bytearray(len(b"[1,2]") * 2)
+    backing[::2] = b"[1,2]"
+    with pytest.raises(TypeError, match="C-contiguous"):
+        parse_canonical_json(memoryview(backing)[::2], "observation")

@@ -1,43 +1,58 @@
 from __future__ import annotations
 
 import ast
+import errno
 import os
 import stat
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from types import MappingProxyType
-from typing import cast
+from typing import NoReturn, cast
 
+import marimo_export._snapshot as _snapshot
 from marimo_export._blob_asset import BlobAssetEnvelope, decode_blob_asset
-from marimo_export._json import JsonObject, JsonValue, canonical_bytes
+from marimo_export._json import (
+    JsonObject,
+    JsonValue,
+    canonical_bytes,
+    sha256_bytes,
+)
 from marimo_export._limits import MAX_EXPORT_ASSET_BYTES, MAX_EXPORT_CLOSURE_BYTES
-from marimo_export._marimo.blob import BlobAsset
 from marimo_export._secure_io import (
     SecureReadError,
+    SecureReadUnavailableError,
     read_export_asset,
     read_export_index,
 )
+from marimo_export.descriptors import (
+    ArrowDescriptor,
+    BlobAssetDescriptor,
+    JsonDescriptor,
+    MarimoCellDescriptor,
+    MarimoOutputDescriptor,
+    NumpyDescriptor,
+    OutputDescriptor,
+    ScalarDescriptor,
+    ScalarValue,
+    asset_path,
+)
 from marimo_export.errors import (
+    ExportUnavailableError,
     IntegrityError,
     NotebookExportError,
     StateUnavailableError,
 )
-from marimo_export.export import (
-    ArrowDescriptor,
-    BlobAssetDescriptor,
+from marimo_export.index import (
+    ControlBinding,
     ExportIndex,
     NotebookProvenance,
-    NumpyDescriptor,
-    OutputDescriptor,
     ProducerProvenance,
-    ScalarDescriptor,
-    ScalarValue,
     StateEntry,
-    asset_path,
-    state_fingerprint,
 )
+from marimo_export.outputs import BlobAsset
 from marimo_export.spec import FrozenJsonObject, FrozenJsonValue, StrPath
+from marimo_export.wire import state_fingerprint
 
 _MAX_INDEX_BYTES = 16 * 1024 * 1024
 _NPY_MAX_HEADER_BYTES = 1024 * 1024
@@ -54,6 +69,10 @@ class _Immutable:
             return
         raise AttributeError(f"{type(self).__name__} is immutable")
 
+    def __delattr__(self, name: str) -> None:
+        del name
+        raise AttributeError(f"{type(self).__name__} is immutable")
+
 
 @dataclass(frozen=True, slots=True)
 class VerificationResult:
@@ -61,6 +80,12 @@ class VerificationResult:
     outputs: int
     assets: int
     bytes_verified: int
+
+    def __post_init__(self) -> None:
+        for name in ("states", "outputs", "assets", "bytes_verified"):
+            value = getattr(self, name)
+            if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+                raise ValueError(f"verification result {name} must be a nonnegative integer")
 
     def to_dict(self) -> JsonObject:
         return {
@@ -74,17 +99,32 @@ class VerificationResult:
 class NotebookExport(_Immutable):
     """An immutable local export opened from canonical `index.json`."""
 
-    __slots__ = ("_index", "_path", "_states", "_vectors")
+    __slots__ = ("_aliases", "_identity", "_index", "_path", "_states", "_vectors")
 
-    def __init__(self, path: Path, index: ExportIndex) -> None:
+    def __init__(self, path: Path, index: ExportIndex, identity: str) -> None:
         self._path = path
         self._index = index
+        self._identity = identity
+        aliases_by_fingerprint: dict[str, list[str]] = {
+            fingerprint: [] for fingerprint in index.states
+        }
+        for alias, fingerprint in sorted(index.aliases.items()):
+            aliases_by_fingerprint[fingerprint].append(alias)
         self._states = {
-            name: ExportState(self, name, entry) for name, entry in sorted(index.states.items())
+            fingerprint: ExportState(
+                self,
+                fingerprint,
+                tuple(aliases_by_fingerprint[fingerprint]),
+                entry,
+            )
+            for fingerprint, entry in sorted(index.states.items())
+        }
+        self._aliases = {
+            alias: self._states[fingerprint] for alias, fingerprint in sorted(index.aliases.items())
         }
         self._vectors = {
-            canonical_bytes(entry.inputs): self._states[name]
-            for name, entry in index.states.items()
+            canonical_bytes(entry.inputs): self._states[fingerprint]
+            for fingerprint, entry in index.states.items()
         }
 
     @property
@@ -92,8 +132,30 @@ class NotebookExport(_Immutable):
         return self._path
 
     @property
+    def identity(self) -> str:
+        """SHA-256 of the canonical `index.json` bytes."""
+
+        return self._identity
+
+    @property
+    def spec_sha256(self) -> str:
+        """SHA-256 of the canonical export specification used by the producer."""
+
+        return self._index.spec_sha256
+
+    @property
+    def default_state(self) -> ExportState:
+        """Return the state selected as the export's initial state."""
+
+        return self._states[self._index.default_state]
+
+    @property
     def input_names(self) -> tuple[str, ...]:
         return self._index.inputs
+
+    @property
+    def control_bindings(self) -> Mapping[str, ControlBinding]:
+        return self._index.control_bindings
 
     @property
     def output_names(self) -> tuple[str, ...]:
@@ -110,16 +172,35 @@ class NotebookExport(_Immutable):
     def states(self) -> tuple[ExportState, ...]:
         return tuple(self._states.values())
 
-    def state(self, name: str) -> ExportState:
-        if not isinstance(name, str):
-            raise TypeError("state name must be a string")
+    def state(self, alias: str) -> ExportState:
+        if not isinstance(alias, str):
+            raise TypeError("state alias must be a string")
         try:
-            return self._states[name]
+            return self._aliases[alias]
         except KeyError as error:
             raise NotebookExportError(
-                f"export state {name!r} was not found",
+                f"export state alias {alias!r} was not found",
                 code="state_not_found",
-                details={"name": name, "available": list(self._states)[:16]},
+                details={"alias": alias, "available": list(self._aliases)[:16]},
+            ) from error
+
+    def state_by_fingerprint(self, fingerprint: str) -> ExportState:
+        if (
+            not isinstance(fingerprint, str)
+            or len(fingerprint) != 64
+            or any(character not in "0123456789abcdef" for character in fingerprint)
+        ):
+            raise TypeError("state fingerprint must be a lowercase SHA-256 digest")
+        try:
+            return self._states[fingerprint]
+        except KeyError as error:
+            raise NotebookExportError(
+                f"export state fingerprint {fingerprint!r} was not found",
+                code="state_not_found",
+                details={
+                    "fingerprint": fingerprint,
+                    "available": list(self._states)[:16],
+                },
             ) from error
 
     def resolve(self, inputs: Mapping[str, JsonValue]) -> ExportState:
@@ -138,7 +219,7 @@ class NotebookExport(_Immutable):
         verified: set[tuple[str, str]] = set()
         total = 0
         for _, _, descriptor in self._index.descriptor_entries():
-            if isinstance(descriptor, ScalarDescriptor):
+            if isinstance(descriptor, (ScalarDescriptor, JsonDescriptor)):
                 continue
             identity = (descriptor.codec, descriptor.asset.sha256)
             if identity in verified:
@@ -156,17 +237,25 @@ class NotebookExport(_Immutable):
 
 
 class ExportState(_Immutable):
-    __slots__ = ("_entry", "_inputs", "_notebook_export", "_outputs", "fingerprint", "name")
+    __slots__ = (
+        "_entry",
+        "_inputs",
+        "_notebook_export",
+        "_outputs",
+        "aliases",
+        "fingerprint",
+    )
 
     def __init__(
         self,
         notebook_export: NotebookExport,
-        name: str,
+        fingerprint: str,
+        aliases: tuple[str, ...],
         entry: StateEntry,
     ) -> None:
         self._notebook_export = notebook_export
-        self.name = name
-        self.fingerprint = entry.fingerprint
+        self.fingerprint = fingerprint
+        self.aliases = aliases
         self._entry = entry
         self._inputs = cast(FrozenJsonObject, _freeze(entry.inputs))
         self._outputs = {
@@ -256,8 +345,18 @@ class ExportOutput(_Immutable):
             )
         return self._descriptor.value
 
+    def json(self) -> FrozenJsonValue:
+        """Return one immutable JSON projection value."""
+
+        if not isinstance(self._descriptor, JsonDescriptor):
+            raise NotebookExportError(
+                f"output {self.name!r} does not use the JSON codec",
+                code="codec_invalid",
+            )
+        return cast(FrozenJsonValue, self._descriptor.value)
+
     def asset_bytes(self) -> bytes:
-        if isinstance(self._descriptor, ScalarDescriptor):
+        if isinstance(self._descriptor, (ScalarDescriptor, JsonDescriptor)):
             raise NotebookExportError(
                 f"output {self.name!r} has no asset bytes",
                 code="codec_invalid",
@@ -287,6 +386,16 @@ def open_export(path: StrPath) -> NotebookExport:
     root = _export_root(path)
     try:
         data = read_export_index(root, max_bytes=_MAX_INDEX_BYTES)
+    except SecureReadUnavailableError as error:
+        raise ExportUnavailableError(
+            f"export index storage is unavailable: {error}",
+            details={"path": str(root)},
+        ) from error
+    except (PermissionError, TimeoutError, MemoryError) as error:
+        raise ExportUnavailableError(
+            "export index storage is unavailable",
+            details={"path": str(root)},
+        ) from error
     except SecureReadError as error:
         raise NotebookExportError(
             f"could not read export index: {error}",
@@ -304,7 +413,7 @@ def open_export(path: StrPath) -> NotebookExport:
             f"export asset exceeds {MAX_EXPORT_ASSET_BYTES} bytes",
             code="export_invalid",
         )
-    return NotebookExport(root, index)
+    return NotebookExport(root, index, sha256_bytes(data))
 
 
 def _export_root(path: StrPath) -> Path:
@@ -313,11 +422,14 @@ def _export_root(path: StrPath) -> Path:
     requested = Path(path).expanduser().absolute()
     try:
         inspected = requested.lstat()
-    except OSError as error:
-        raise NotebookExportError(
-            f"export directory is unavailable: {requested}",
+    except (OSError, MemoryError) as error:
+        _raise_path_inspection_error(
+            error,
+            path=requested,
+            invalid="export directory is missing or structurally invalid",
+            unavailable="export directory storage is unavailable",
             code="export_invalid",
-        ) from error
+        )
     if stat.S_ISLNK(inspected.st_mode) or not stat.S_ISDIR(inspected.st_mode):
         raise NotebookExportError(
             "export root must be a real directory",
@@ -325,11 +437,19 @@ def _export_root(path: StrPath) -> Path:
         )
     try:
         return requested.resolve(strict=True)
-    except (OSError, RuntimeError) as error:
+    except RuntimeError as error:
         raise NotebookExportError(
-            f"export directory is unavailable: {requested}",
+            f"export directory is structurally invalid: {requested}",
             code="export_invalid",
         ) from error
+    except (OSError, MemoryError) as error:
+        _raise_path_inspection_error(
+            error,
+            path=requested,
+            invalid="export directory is missing or structurally invalid",
+            unavailable="export directory storage is unavailable",
+            code="export_invalid",
+        )
 
 
 def _complete_inputs(
@@ -362,8 +482,8 @@ def _complete_inputs(
 
 
 def _read_asset(path: Path, descriptor: OutputDescriptor) -> bytes:
-    if isinstance(descriptor, ScalarDescriptor):
-        raise TypeError("scalar descriptors have no assets")
+    if isinstance(descriptor, (ScalarDescriptor, JsonDescriptor)):
+        raise TypeError("inline descriptors have no assets")
     relative = asset_path(descriptor.codec, descriptor.asset.sha256)
     try:
         data = read_export_asset(
@@ -372,6 +492,16 @@ def _read_asset(path: Path, descriptor: OutputDescriptor) -> bytes:
             expected_size=descriptor.asset.size,
             max_bytes=MAX_EXPORT_ASSET_BYTES,
         )
+    except SecureReadUnavailableError as error:
+        raise ExportUnavailableError(
+            f"export asset storage is unavailable: {relative}",
+            details={"path": relative},
+        ) from error
+    except (PermissionError, TimeoutError, MemoryError) as error:
+        raise ExportUnavailableError(
+            f"export asset storage is unavailable: {relative}",
+            details={"path": relative},
+        ) from error
     except SecureReadError as error:
         raise IntegrityError(
             f"could not read export asset {relative}: {error}",
@@ -395,6 +525,20 @@ def _validate_asset(descriptor: OutputDescriptor, data: bytes) -> None:
         _validate_arrow(data)
     elif isinstance(descriptor, BlobAssetDescriptor):
         _validated_blob(descriptor, data)
+    elif isinstance(descriptor, MarimoOutputDescriptor):
+        _validate_snapshot(data, "marimo.output.v1")
+    elif isinstance(descriptor, MarimoCellDescriptor):
+        _validate_snapshot(data, "marimo.cell.v1")
+
+
+def _validate_snapshot(data: bytes, schema: _snapshot.SnapshotSchema) -> None:
+    try:
+        _snapshot.validate_snapshot(data, schema)
+    except (TypeError, ValueError) as error:
+        raise IntegrityError(
+            f"{schema} snapshot is invalid: {error}",
+            code="asset_invalid",
+        ) from error
 
 
 def _validated_blob(
@@ -502,11 +646,14 @@ def _verify_asset_directory(root: Path, declared: set[str]) -> None:
                 code="asset_invalid",
             ) from None
         return
-    except OSError as error:
-        raise NotebookExportError(
-            "export assets directory is unavailable",
+    except (OSError, MemoryError) as error:
+        _raise_path_inspection_error(
+            error,
+            path=directory,
+            invalid="export assets directory is missing or structurally invalid",
+            unavailable="export assets directory storage is unavailable",
             code="asset_invalid",
-        ) from error
+        )
     if stat.S_ISLNK(inspected.st_mode) or not stat.S_ISDIR(inspected.st_mode):
         raise NotebookExportError(
             "export assets path must be a real directory",
@@ -515,20 +662,26 @@ def _verify_asset_directory(root: Path, declared: set[str]) -> None:
     expected = {Path(path).name for path in declared}
     try:
         entries = tuple(directory.iterdir())
-    except OSError as error:
-        raise NotebookExportError(
-            "export assets directory could not be enumerated",
+    except (OSError, MemoryError) as error:
+        _raise_path_inspection_error(
+            error,
+            path=directory,
+            invalid="export assets directory could not be enumerated",
+            unavailable="export assets directory storage is unavailable",
             code="asset_invalid",
-        ) from error
+        )
     actual: set[str] = set()
     for entry in entries:
         try:
             entry_stat = entry.lstat()
-        except OSError as error:
-            raise NotebookExportError(
-                "export asset could not be inspected",
+        except (OSError, MemoryError) as error:
+            _raise_path_inspection_error(
+                error,
+                path=entry,
+                invalid="export asset is missing or structurally invalid",
+                unavailable="export asset storage is unavailable",
                 code="asset_invalid",
-            ) from error
+            )
         if stat.S_ISLNK(entry_stat.st_mode) or not stat.S_ISREG(entry_stat.st_mode):
             raise NotebookExportError(
                 f"export contains an undeclared asset entry: {entry.name}",
@@ -542,6 +695,27 @@ def _verify_asset_directory(root: Path, declared: set[str]) -> None:
             code="asset_undeclared",
             details={"assets": undeclared[:16]},
         )
+
+
+def _raise_path_inspection_error(
+    error: OSError | MemoryError,
+    *,
+    path: Path,
+    invalid: str,
+    unavailable: str,
+    code: str,
+) -> NoReturn:
+    if isinstance(error, OSError) and error.errno in {
+        errno.ENOENT,
+        errno.ENOTDIR,
+        errno.EISDIR,
+        errno.ELOOP,
+    }:
+        raise NotebookExportError(invalid, code=code) from error
+    raise ExportUnavailableError(
+        unavailable,
+        details={"path": str(path)},
+    ) from error
 
 
 def _freeze(value: object) -> FrozenJsonValue:

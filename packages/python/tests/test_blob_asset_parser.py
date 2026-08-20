@@ -4,8 +4,9 @@ from typing import cast
 
 import msgspec
 import pytest
-from marimo._save.stubs import BlobAsset
 from marimo_export._blob_asset import BlobAssetEnvelope, decode_blob_asset
+from marimo_export._marimo.blob import to_native_blob_asset
+from marimo_export.outputs import BlobAsset
 
 
 def _encoded(
@@ -16,12 +17,31 @@ def _encoded(
     metadata: dict[str, object] | None = None,
 ) -> bytes:
     return msgspec.msgpack.encode(
-        BlobAsset(
-            data=data,
-            media_type=media_type,
-            filename=filename,
-            metadata={"rows": 1} if metadata is None else metadata,
+        to_native_blob_asset(
+            BlobAsset(
+                data=data,
+                media_type=media_type,
+                filename=filename,
+                metadata={"rows": 1} if metadata is None else metadata,
+            )
         )
+    )
+
+
+def _raw_encoded(
+    *,
+    data: object = b'{"answer":42}',
+    media_type: object = "application/json",
+    filename: object = "summary.json",
+    metadata: object = None,
+) -> bytes:
+    return msgspec.msgpack.encode(
+        {
+            "data": data,
+            "media_type": media_type,
+            "filename": filename,
+            "metadata": {"rows": 1} if metadata is None else metadata,
+        }
     )
 
 
@@ -51,7 +71,7 @@ def test_decode_blob_asset_validates_portable_metadata() -> None:
         {1: "not a string key"},
     ):
         with pytest.raises(ValueError, match="portable JSON"):
-            decode_blob_asset(_encoded(metadata=cast(dict[str, object], invalid)))
+            decode_blob_asset(_raw_encoded(metadata=cast(dict[str, object], invalid)))
 
 
 def test_decode_blob_asset_requires_the_native_envelope_shape() -> None:
@@ -85,7 +105,7 @@ def test_decode_blob_asset_rejects_invalid_public_fields() -> None:
         ("application/json", "CON"),
     ):
         with pytest.raises(ValueError):
-            decode_blob_asset(_encoded(media_type=media_type, filename=filename))
+            decode_blob_asset(_raw_encoded(media_type=media_type, filename=filename))
 
 
 def test_decode_blob_asset_enforces_the_envelope_limit() -> None:

@@ -1,0 +1,47 @@
+[
+  {
+    "name": "accepts an IPv6 HTTP module host",
+    "url": "https://[2001:db8::1]/widget.js",
+    "valid": true
+  },
+  {
+    "name": "rejects a bracketed non-IPv6 module host",
+    "url": "https://[v1.a]/widget.js",
+    "valid": false
+  },
+  {
+    "name": "accepts a Unicode IDNA module host",
+    "url": "https://bücher.example/widget.js",
+    "valid": true
+  },
+  {
+    "name": "accepts an ASCII IDNA module host",
+    "url": "https://xn--bcher-kva.example/widget.js",
+    "valid": true
+  },
+  {
+    "name": "accepts a Unicode sharp-s IDNA module host",
+    "url": "https://faß.de/widget.js",
+    "valid": true
+  },
+  {
+    "name": "accepts a sharp-s IDNA A-label module host",
+    "url": "https://xn--fa-hia.de/widget.js",
+    "valid": true
+  },
+  {
+    "name": "rejects an IDNA module host containing a joiner",
+    "url": "https://a\u200db.example/widget.js",
+    "valid": false
+  },
+  {
+    "name": "rejects an IDNA module host with a leading combining mark",
+    "url": "https://\u0301a.example/widget.js",
+    "valid": false
+  },
+  {
+    "name": "rejects a scoped IPv6 module host",
+    "url": "https://[fe80::1%25eth0]/widget.js",
+    "valid": false
+  }
+]
