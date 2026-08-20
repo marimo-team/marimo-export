@@ -34,16 +34,23 @@ async def kernel_lifespan(_: None) -> AsyncIterator[None]:
     from marimo._runtime.context import get_context
     from marimo._runtime.context.kernel_context import KernelRuntimeContext
 
-    from marimo_export._marimo.compat.cache import managed_cache_compat
+    from marimo_export._marimo.compat.cache.patch import managed_cache_compat
+    from marimo_export._marimo.compat.cache.probe import require_cache_capabilities
+    from marimo_export._marimo.compat.inspection import install_parent_stop_provenance
 
     context = get_context()
     if not isinstance(context, KernelRuntimeContext):
         raise RuntimeError("managed cache integration requires a file-backed marimo kernel")
-    with managed_cache_compat(context._kernel._hooks):
-        from pathlib import Path
+    require_cache_capabilities()
+    release_stop_provenance = install_parent_stop_provenance(context)
+    try:
+        with managed_cache_compat(context._kernel._hooks, context.graph):
+            from pathlib import Path
 
-        Path(activation_path).write_text(activation_token, encoding="utf-8")
-        yield
+            Path(activation_path).write_text(activation_token, encoding="utf-8")
+            yield
+    finally:
+        release_stop_provenance()
 
 
 __all__ = ["kernel_lifespan"]

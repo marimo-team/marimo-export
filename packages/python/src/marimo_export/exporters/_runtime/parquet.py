@@ -3,8 +3,8 @@ from __future__ import annotations
 from io import BytesIO
 from typing import Any, Literal
 
-from marimo_export._marimo.blob import BlobAsset
 from marimo_export.exporters._optional import optional
+from marimo_export.outputs import BlobAsset
 
 Compression = Literal["snappy", "none", "gzip", "brotli", "lz4", "zstd"]
 _COMPRESSIONS = frozenset({"snappy", "none", "gzip", "brotli", "lz4", "zstd"})

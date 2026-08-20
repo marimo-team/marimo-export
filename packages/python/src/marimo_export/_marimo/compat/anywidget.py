@@ -277,7 +277,10 @@ def _canonical_esm_spec(
     digest = hashlib.sha256(contents).hexdigest()
     url = f"./@file/{len(contents)}-anywidget-{digest}.js"
     media_type = mimetypes.guess_type(url)[0] or "text/javascript"
-    files[url] = build_data_url(media_type, base64.b64encode(contents))
+    files[url.removeprefix(".")] = build_data_url(
+        media_type,
+        base64.b64encode(contents),
+    )
     return EsmSpec(url=url, hash=spec.hash)
 
 

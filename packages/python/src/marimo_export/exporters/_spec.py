@@ -16,10 +16,11 @@ FrozenOption: TypeAlias = (
 
 @dataclass(frozen=True, slots=True, init=False)
 class ExporterSpec:
-    """Select an importable conversion and its portable keyword options."""
+    """Select an importable conversion, options, and source dependencies."""
 
     name: str
     options: Mapping[str, FrozenOption]
+    dependencies: tuple[str, ...]
     _wire: JsonValue = field(repr=False)
 
     def __init__(
@@ -27,11 +28,13 @@ class ExporterSpec:
         name: str,
         *,
         options: Mapping[str, JsonValue] | None = None,
+        dependencies: tuple[str, ...] = (),
     ) -> None:
         try:
-            normalized_name, normalized_options = normalize_exporter(
+            normalized_name, normalized_options, normalized_dependencies = normalize_exporter(
                 name,
                 {} if options is None else options,
+                dependencies,
             )
         except (TypeError, ValueError) as error:
             raise SpecError(
@@ -40,8 +43,12 @@ class ExporterSpec:
             ) from error
         wire: JsonValue = (
             normalized_name
-            if not normalized_options
-            else {"name": normalized_name, "options": normalized_options}
+            if ":" not in normalized_name and not normalized_options and not normalized_dependencies
+            else {
+                "name": normalized_name,
+                "options": normalized_options,
+                "dependencies": list(normalized_dependencies),
+            }
         )
         object.__setattr__(self, "name", normalized_name)
         object.__setattr__(
@@ -49,6 +56,7 @@ class ExporterSpec:
             "options",
             MappingProxyType({key: _freeze(value) for key, value in normalized_options.items()}),
         )
+        object.__setattr__(self, "dependencies", normalized_dependencies)
         object.__setattr__(self, "_wire", wire)
 
     @classmethod
@@ -58,6 +66,12 @@ class ExporterSpec:
         if isinstance(value, ExporterSpec):
             return value
         if isinstance(value, str):
+            if ":" in value:
+                raise SpecError(
+                    "invalid exporter: custom exporter objects must declare "
+                    "'name', 'options', and 'dependencies'",
+                    code="spec_exporter_invalid",
+                )
             return cls(value)
         try:
             document = json_object(value, "exporter")
@@ -66,19 +80,26 @@ class ExporterSpec:
                 f"invalid exporter: {error}",
                 code="spec_exporter_invalid",
             ) from error
-        if set(document) != {"name", "options"}:
+        if set(document) != {"name", "options", "dependencies"}:
             raise SpecError(
-                "invalid exporter: object must contain exactly 'name' and 'options'",
+                "invalid exporter: object must contain exactly "
+                "'name', 'options', and 'dependencies'",
                 code="spec_exporter_invalid",
             )
         name = document["name"]
         options = document["options"]
-        if not isinstance(name, str) or not isinstance(options, dict):
+        dependencies = document["dependencies"]
+        if (
+            not isinstance(name, str)
+            or not isinstance(options, dict)
+            or not isinstance(dependencies, list)
+        ):
             raise SpecError(
-                "invalid exporter: 'name' must be a string and 'options' must be an object",
+                "invalid exporter: 'name' must be a string, 'options' must be an object, "
+                "and 'dependencies' must be an array",
                 code="spec_exporter_invalid",
             )
-        return cls(name, options=options)
+        return cls(name, options=options, dependencies=tuple(dependencies))
 
     def to_value(self) -> JsonValue:
         """Return the normalized wire value."""
@@ -86,10 +107,21 @@ class ExporterSpec:
         return json_value(self._wire, "exporter")
 
 
-def importable(name: str, **options: JsonValue) -> ExporterSpec:
-    """Select an importable callable using ``module:symbol`` syntax."""
+def importable(
+    name: str,
+    *,
+    options: Mapping[str, JsonValue] | None = None,
+    dependencies: tuple[str, ...] = (),
+) -> ExporterSpec:
+    """Select a non-cacheable importable callable and its source modules."""
 
-    return ExporterSpec(name, options=options)
+    exporter = ExporterSpec(name, options=options, dependencies=dependencies)
+    if ":" not in exporter.name:
+        raise SpecError(
+            "invalid exporter: importable() requires a 'module:symbol' name",
+            code="spec_exporter_invalid",
+        )
+    return exporter
 
 
 def builtin(name: str, options: Mapping[str, JsonValue] | None = None) -> ExporterSpec:

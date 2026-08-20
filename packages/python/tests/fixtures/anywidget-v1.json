@@ -2,7 +2,7 @@
   "schema": "marimo-export.anywidget.v1",
   "rootModelId": "model-0",
   "files": {
-    "./@file/root.js": "data:text/javascript;base64,ZXhwb3J0IGRlZmF1bHQge30="
+    "/@file/root.js": "data:text/javascript;base64,ZXhwb3J0IGRlZmF1bHQge30="
   },
   "modelNotifications": [
     {

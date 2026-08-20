@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from marimo_export._marimo.anywidget import create_anywidget_capture
-from marimo_export._marimo.blob import BlobAsset
 from marimo_export.exporters._anywidget_payload import validate_anywidget_payload
+from marimo_export.outputs import BlobAsset
 
 _MEDIA_TYPE = "application/vnd.marimo-export.anywidget.v1+json"
 

@@ -5,22 +5,24 @@ from collections.abc import Callable
 from typing import Any, cast
 
 import pytest
-from marimo_export import BlobAsset
 from marimo_export.errors import SpecError
 from marimo_export.exporters import ExporterSpec, altair, anywidget, blob, importable, parquet
 from marimo_export.exporters._runtime import altair as altair_runtime
 from marimo_export.exporters._runtime import blob as blob_runtime
 from marimo_export.exporters._runtime import parquet as parquet_runtime
+from marimo_export.outputs import BlobAsset
 
 
 def test_builtin_and_importable_factories_construct_normalized_descriptors() -> None:
     assert altair.vegalite() == ExporterSpec("altair.vegalite")
     assert altair.png(scale=2).to_value() == {
+        "dependencies": [],
         "name": "altair.png",
         "options": {"scale": 2},
     }
     assert anywidget.bundle().to_value() == "anywidget.bundle"
     assert parquet.table(filename="prices.parquet").to_value() == {
+        "dependencies": [],
         "name": "parquet.table",
         "options": {
             "compression": "snappy",
@@ -28,6 +30,7 @@ def test_builtin_and_importable_factories_construct_normalized_descriptors() -> 
         },
     }
     assert blob.json(metadata={"kind": "configuration"}).to_value() == {
+        "dependencies": [],
         "name": "blob.json",
         "options": {
             "filename": None,
@@ -35,9 +38,21 @@ def test_builtin_and_importable_factories_construct_normalized_descriptors() -> 
             "metadata": {"kind": "configuration"},
         },
     }
-    assert importable("acme.exports:encode", level=3).to_value() == {
+    custom = importable(
+        "acme.exports:encode",
+        options={"level": 3},
+        dependencies=("acme.models", "acme.transforms"),
+    )
+    assert custom.dependencies == ("acme.models", "acme.transforms")
+    assert custom.to_value() == {
+        "dependencies": ["acme.models", "acme.transforms"],
         "name": "acme.exports:encode",
         "options": {"level": 3},
+    }
+    assert importable("acme.exports:encode").to_value() == {
+        "dependencies": [],
+        "name": "acme.exports:encode",
+        "options": {},
     }
 
 
@@ -46,7 +61,22 @@ def test_builtin_and_importable_factories_construct_normalized_descriptors() -> 
     [
         lambda: ExporterSpec("unknown"),
         lambda: importable("acme.exports:encode.value"),
-        lambda: importable("acme.exports:encode", **{"not-valid": 1}),
+        lambda: importable("altair.vegalite"),
+        lambda: importable("acme.exports:encode", options={"not-valid": 1}),
+        lambda: importable(
+            "acme.exports:encode",
+            dependencies=("acme.transforms", "acme.models"),
+        ),
+        lambda: importable(
+            "acme.exports:encode",
+            dependencies=("acme.models", "acme.models"),
+        ),
+        lambda: importable("acme.exports:encode", dependencies=("acme:models",)),
+        lambda: importable(
+            "acme.exports:encode",
+            dependencies=cast(Any, ["acme.models"]),
+        ),
+        lambda: ExporterSpec("altair.vegalite", dependencies=("acme.models",)),
         lambda: altair.png(scale=0),
         lambda: parquet.table(compression=cast(Any, "zip")),
     ],
@@ -60,7 +90,12 @@ def test_invalid_exporter_contracts_fail_during_spec_construction(
     assert raised.value.code == "spec_exporter_invalid"
 
 
-def test_blob_and_vegalite_runtime_exporters_return_native_blob_assets() -> None:
+def test_importable_accepts_options_through_one_mapping() -> None:
+    with pytest.raises(TypeError, match="unexpected keyword"):
+        cast(Any, importable)("acme.exports:encode", level=3)
+
+
+def test_blob_and_vegalite_runtime_exporters_return_public_blob_assets() -> None:
     document = blob_runtime.json(
         {"b": 1, "a": 2},
         filename="config.json",

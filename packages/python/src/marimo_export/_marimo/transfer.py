@@ -5,21 +5,24 @@ import re
 import threading
 import time
 from collections.abc import Callable, Iterable
-from contextlib import suppress
 from dataclasses import dataclass
 from typing import Any, Protocol, cast
 from urllib.parse import urlsplit
 from uuid import uuid4
 
+from marimo_export._diagnostics import record_cleanup_failure
 from marimo_export._json import JsonObject
+from marimo_export._limits import MAX_EXPORT_ASSET_BYTES, MAX_EXPORT_CLOSURE_BYTES
 from marimo_export._marimo.capabilities import NativeReceipt, TransferRuntime
+from marimo_export.descriptors import JsonDescriptor, OutputCodec, ScalarDescriptor
 from marimo_export.errors import IntegrityError
-from marimo_export.export import OutputCodec, ScalarDescriptor
 
 _DEFAULT_TTL_SECONDS = 5 * 60.0
 _MAX_TTL_SECONDS = 30 * 60.0
 _CLEANUP_RETRY_SECONDS = 1.0
 _MAX_ASSETS_PER_TICKET = 4096
+_MAX_ACTIVE_TICKETS = 64
+_MAX_ACTIVE_TRANSFER_BYTES = 2 * MAX_EXPORT_CLOSURE_BYTES
 _MAX_VIRTUAL_FILE_URL_LENGTH = 2048
 _TICKET_ID = re.compile(r"[0-9a-f]{32}")
 
@@ -82,6 +85,7 @@ class _Lease:
     registry: _VirtualFileRegistry
     files: list[_VirtualFile]
     deadline: float
+    byte_count: int
 
 
 _LOCK = threading.RLock()
@@ -107,6 +111,8 @@ def create_ticket(
 
     with _LOCK:
         _sweep_expired_locked(_monotonic())
+        ticket_bytes = sum(len(payload) for _codec, _digest, payload in unique)
+        _admit_ticket_locked(ticket_bytes)
         files: list[_VirtualFile] = []
         assets: list[TransferAsset] = []
         ticket_id: str | None = None
@@ -134,6 +140,7 @@ def create_ticket(
                 registry=registry,
                 files=files,
                 deadline=deadline,
+                byte_count=ticket_bytes,
             )
             _schedule_locked()
             return TransferTicket(
@@ -141,13 +148,27 @@ def create_ticket(
                 expires_at_ms=int((_wall_time() + ttl) * 1000),
                 assets=tuple(assets),
             )
-        except Exception as error:
+        except BaseException as error:
             if ticket_id is not None:
                 _TICKETS.pop(ticket_id, None)
             cleanup_errors = _remove_files(registry, files)
+            if cleanup_errors:
+                recovery_id = ticket_id or _allocate_ticket_id_locked()
+                _TICKETS[recovery_id] = _Lease(
+                    registry=registry,
+                    files=[virtual_file for virtual_file, _ in cleanup_errors],
+                    deadline=_monotonic() + _CLEANUP_RETRY_SECONDS,
+                    byte_count=sum(len(virtual_file.buffer) for virtual_file, _ in cleanup_errors),
+                )
+                for _virtual_file, cleanup_error in cleanup_errors:
+                    record_cleanup_failure(error, "transfer registration cleanup", cleanup_error)
             if _TICKETS:
-                with suppress(Exception):
+                try:
                     _schedule_locked()
+                except BaseException as schedule_error:
+                    record_cleanup_failure(error, "transfer cleanup scheduling", schedule_error)
+            if not isinstance(error, Exception):
+                raise
             if isinstance(error, IntegrityError) and not cleanup_errors:
                 raise
             raise IntegrityError("failed to register export assets") from error
@@ -167,11 +188,28 @@ def release(ticket_id: str) -> bool:
         if errors:
             lease.files = [virtual_file for virtual_file, _ in errors]
             lease.deadline = _monotonic() + _CLEANUP_RETRY_SECONDS
+            lease.byte_count = sum(len(virtual_file.buffer) for virtual_file, _ in errors)
             _TICKETS[ticket_id] = lease
-            _schedule_locked()
+            primary = next(
+                (
+                    cleanup_error
+                    for _virtual_file, cleanup_error in errors
+                    if not isinstance(cleanup_error, Exception)
+                ),
+                errors[0][1],
+            )
+            for _virtual_file, cleanup_error in errors:
+                if cleanup_error is not primary:
+                    record_cleanup_failure(primary, "transfer release cleanup", cleanup_error)
+            try:
+                _schedule_locked()
+            except BaseException as schedule_error:
+                record_cleanup_failure(primary, "transfer cleanup scheduling", schedule_error)
+            if not isinstance(primary, Exception):
+                raise primary
             raise IntegrityError(
                 f"failed to release {len(errors)} virtual file resource(s)"
-            ) from errors[0][1]
+            ) from primary
         _schedule_locked()
         return True
 
@@ -193,29 +231,55 @@ def _payloads(
     except TypeError as error:
         raise TypeError("receipts must be iterable") from error
     unique: dict[tuple[OutputCodec, str], bytes] = {}
+    unique_bytes = 0
     for receipt in materialized:
         if not isinstance(receipt, NativeReceipt):
             raise TypeError("receipts must contain NativeReceipt values")
-        if isinstance(receipt.descriptor, ScalarDescriptor):
+        if isinstance(receipt.descriptor, (ScalarDescriptor, JsonDescriptor)):
             if receipt.payload is not None:
-                raise IntegrityError("a scalar receipt cannot carry transfer bytes")
+                raise IntegrityError("an inline receipt cannot carry transfer bytes")
             continue
         payload = receipt.payload
         if not isinstance(payload, bytes) or not payload:
             raise IntegrityError("an asset receipt must carry nonempty bytes")
+        if len(payload) > MAX_EXPORT_ASSET_BYTES:
+            raise IntegrityError(
+                f"a transfer asset may contain at most {MAX_EXPORT_ASSET_BYTES} bytes"
+            )
         identity = (receipt.descriptor.codec, receipt.descriptor.asset.sha256)
         if len(payload) != receipt.descriptor.asset.size:
             raise IntegrityError("an asset receipt size disagrees with its descriptor")
         if hashlib.sha256(payload).hexdigest() != identity[1]:
             raise IntegrityError("an asset receipt digest disagrees with its descriptor")
-        previous = unique.setdefault(identity, payload)
-        if previous != payload:
+        previous = unique.get(identity)
+        if previous is None:
+            unique[identity] = payload
+            unique_bytes += len(payload)
+            if unique_bytes > MAX_EXPORT_CLOSURE_BYTES:
+                raise IntegrityError(
+                    f"a transfer ticket may contain at most {MAX_EXPORT_CLOSURE_BYTES} bytes"
+                )
+        elif previous != payload:
             raise IntegrityError(f"asset identity {identity!r} has conflicting bytes")
     if len(unique) > _MAX_ASSETS_PER_TICKET:
         raise IntegrityError(
             f"a transfer ticket may contain at most {_MAX_ASSETS_PER_TICKET} assets"
         )
     return tuple((codec, digest, payload) for (codec, digest), payload in sorted(unique.items()))
+
+
+def _admit_ticket_locked(ticket_bytes: int) -> None:
+    if len(_TICKETS) >= _MAX_ACTIVE_TICKETS:
+        raise IntegrityError(f"at most {_MAX_ACTIVE_TICKETS} transfer tickets may remain active")
+    active_bytes = _active_transfer_bytes_locked()
+    if ticket_bytes > _MAX_ACTIVE_TRANSFER_BYTES - active_bytes:
+        raise IntegrityError(
+            f"active transfer tickets may retain at most {_MAX_ACTIVE_TRANSFER_BYTES} bytes"
+        )
+
+
+def _active_transfer_bytes_locked() -> int:
+    return sum(lease.byte_count for lease in _TICKETS.values())
 
 
 def _validate_ttl(value: float) -> float:
@@ -279,12 +343,12 @@ def _validate_virtual_file(virtual_file: _VirtualFile, payload: bytes) -> None:
 def _remove_files(
     registry: _VirtualFileRegistry,
     files: Iterable[_VirtualFile],
-) -> list[tuple[_VirtualFile, Exception]]:
-    errors: list[tuple[_VirtualFile, Exception]] = []
+) -> list[tuple[_VirtualFile, BaseException]]:
+    errors: list[tuple[_VirtualFile, BaseException]] = []
     for virtual_file in files:
         try:
             registry.remove(virtual_file)
-        except Exception as error:
+        except BaseException as error:
             errors.append((virtual_file, error))
     return errors
 
@@ -300,6 +364,7 @@ def _sweep_expired_locked(now: float) -> int:
         if errors:
             lease.files = [virtual_file for virtual_file, _ in errors]
             lease.deadline = now + _CLEANUP_RETRY_SECONDS
+            lease.byte_count = sum(len(virtual_file.buffer) for virtual_file, _ in errors)
             _TICKETS[ticket_id] = lease
             continue
         removed += 1

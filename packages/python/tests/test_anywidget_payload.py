@@ -8,6 +8,15 @@ import pytest
 from marimo_export.exporters._anywidget_payload import validate_anywidget_payload
 
 _FIXTURE = Path(__file__).parent / "fixtures" / "anywidget-v1.json"
+_HTTP_MODULE_URL_CASES = json.loads(
+    (
+        Path(__file__).resolve().parents[3]
+        / "tests"
+        / "fixtures"
+        / "export"
+        / "http-module-urls.json"
+    ).read_text()
+)
 
 
 def _document() -> dict[str, Any]:
@@ -96,6 +105,21 @@ def test_payload_accepts_self_contained_and_remote_modules() -> None:
         assert validate_anywidget_payload(_payload(document)).root_model_id == "model-0"
 
 
+@pytest.mark.parametrize(
+    "case",
+    _HTTP_MODULE_URL_CASES,
+    ids=[case["name"] for case in _HTTP_MODULE_URL_CASES],
+)
+def test_http_module_url_fixtures_match_anywidget_payload(case: dict[str, Any]) -> None:
+    document = _document()
+    document["modelNotifications"][0]["message"]["esm_spec"]["url"] = case["url"]
+    if case["valid"]:
+        assert validate_anywidget_payload(_payload(document)).root_model_id == "model-0"
+    else:
+        with pytest.raises(ValueError, match="invalid ESM URL"):
+            validate_anywidget_payload(_payload(document))
+
+
 def test_payload_rejects_missing_or_local_file_modules() -> None:
     missing = _document()
     missing["files"] = {}
@@ -108,7 +132,7 @@ def test_payload_rejects_missing_or_local_file_modules() -> None:
         validate_anywidget_payload(_payload(local_file))
 
     malformed = _document()
-    malformed["files"]["./@file/root.js"] = "data:text/javascript;base64,%%%"
+    malformed["files"]["/@file/root.js"] = "data:text/javascript;base64,%%%"
     with pytest.raises(ValueError, match="malformed base64 data"):
         validate_anywidget_payload(_payload(malformed))
 

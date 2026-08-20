@@ -4,6 +4,7 @@ import keyword
 import math
 from collections.abc import Mapping
 from dataclasses import dataclass
+from typing import cast
 
 from marimo_export._json import JsonObject, JsonValue, portable_json_object
 
@@ -50,21 +51,30 @@ _BUILTINS = {
     ),
 }
 _COMPRESSIONS = frozenset({"snappy", "none", "gzip", "brotli", "lz4", "zstd"})
+_MAX_CUSTOM_DEPENDENCIES = 256
+_MAX_MODULE_NAME_BYTES = 255
 
 
-def normalize_exporter(name: object, options: object) -> tuple[str, JsonObject]:
+def normalize_exporter(
+    name: object,
+    options: object,
+    dependencies: object,
+) -> tuple[str, JsonObject, tuple[str, ...]]:
     if not isinstance(name, str) or not name:
         raise TypeError("exporter name must be a non-empty string")
     parsed = portable_json_object(options, f"exporter {name!r} options")
+    parsed_dependencies = _normalize_dependencies(dependencies)
     if name in _BUILTINS:
-        return name, _normalize_builtin_options(name, parsed)
+        if parsed_dependencies:
+            raise ValueError(f"built-in exporter {name!r} does not accept dependencies")
+        return name, _normalize_builtin_options(name, parsed), ()
     _parse_import_reference(name)
     for option in parsed:
         if not option.isidentifier() or keyword.iskeyword(option):
             raise ValueError(
                 f"custom exporter option {option!r} must be a non-keyword Python identifier"
             )
-    return name, parsed
+    return name, parsed, parsed_dependencies
 
 
 def runtime_reference(name: str) -> ExporterDefinition:
@@ -169,15 +179,35 @@ def _parse_import_reference(value: str) -> tuple[str, str]:
     if value.count(":") != 1:
         raise ValueError(f"unknown exporter {value!r}; custom exporters use 'module:symbol'")
     module, symbol = value.split(":", maxsplit=1)
-    parts = module.split(".")
-    if (
-        not module
-        or any(not part.isidentifier() or keyword.iskeyword(part) for part in parts)
-        or not symbol.isidentifier()
-        or keyword.iskeyword(symbol)
-    ):
+    if not _is_module_name(module) or not symbol.isidentifier() or keyword.iskeyword(symbol):
         raise ValueError(f"custom exporter {value!r} must name an importable symbol")
     return module, symbol
+
+
+def _normalize_dependencies(value: object) -> tuple[str, ...]:
+    if not isinstance(value, tuple):
+        raise TypeError("custom exporter dependencies must be a tuple of module names")
+    dependencies = value
+    if len(dependencies) > _MAX_CUSTOM_DEPENDENCIES:
+        raise ValueError(
+            f"custom exporter dependencies must contain at most {_MAX_CUSTOM_DEPENDENCIES} modules"
+        )
+    for dependency in dependencies:
+        if not isinstance(dependency, str) or not _is_module_name(dependency):
+            raise ValueError(
+                f"custom exporter dependency {dependency!r} must name an importable module"
+            )
+    if dependencies != tuple(sorted(set(dependencies))):
+        raise ValueError("custom exporter dependencies must be sorted and unique")
+    return cast(tuple[str, ...], dependencies)
+
+
+def _is_module_name(value: str) -> bool:
+    return (
+        bool(value)
+        and len(value.encode("utf-8")) <= _MAX_MODULE_NAME_BYTES
+        and all(part.isidentifier() and not keyword.iskeyword(part) for part in value.split("."))
+    )
 
 
 __all__ = ["ExporterDefinition", "normalize_exporter", "runtime_reference"]

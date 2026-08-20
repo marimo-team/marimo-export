@@ -1,15 +1,12 @@
 from __future__ import annotations
 
 import copy
-import ipaddress
 import re
 from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, NoReturn, TypeAlias, cast
+from typing import NoReturn, TypeAlias, cast
 
-if TYPE_CHECKING:
-    from urllib.parse import SplitResult
-
+from marimo_export._http_url import validate_http_url_authority
 from marimo_export._json import JsonObject, JsonValue, decode_json_object
 
 ANYWIDGET_PAYLOAD_SCHEMA = "marimo-export.anywidget.v1"
@@ -17,8 +14,6 @@ ANYWIDGET_PAYLOAD_SCHEMA = "marimo-export.anywidget.v1"
 _BASE64_BODY = re.compile(r"[A-Za-z0-9+/]*")
 _BASE64_PARAMETER = re.compile(r";base64(?=;|,)", re.ASCII | re.IGNORECASE)
 _DATA_URL_PREFIX = re.compile(r"data:", re.ASCII | re.IGNORECASE)
-_INVALID_HTTP_URL_CHARACTER = re.compile(r"[\x00-\x20\x7f\\]")
-_HTTP_HOST = re.compile(r"[A-Za-z0-9._-]+")
 _MODEL_REF_PREFIXES = ("anywidget:", "IPY_MODEL_")
 _UNSAFE_PATH_KEYS = frozenset({"__proto__", "constructor", "prototype"})
 _MAX_SAFE_INTEGER = 2**53 - 1
@@ -255,7 +250,7 @@ def _path_token(value: object, model_id: str) -> PathToken:
         if 0 <= value <= _MAX_SAFE_INTEGER:
             return value
     elif isinstance(value, float):
-        float_value = cast(float, value)
+        float_value = float(value)
         if float_value.is_integer():
             token = int(float_value)
             if 0 <= token <= _MAX_SAFE_INTEGER:
@@ -316,7 +311,8 @@ def _validate_esm_spec(value: object, files: dict[str, str], model_id: str) -> b
     url_path = _diagnostic_path(model_path, " ESM URL")
     url = _non_empty_string(spec["url"], url_path)
     _non_empty_string(spec["hash"], _diagnostic_path(model_path, " ESM hash"))
-    if url in files:
+    embedded_key = url.removeprefix(".") if url.startswith("./@file/") else url
+    if embedded_key in files:
         return True
 
     if _DATA_URL_PREFIX.match(url) is not None:
@@ -331,52 +327,16 @@ def _validate_esm_spec(value: object, files: dict[str, str], model_id: str) -> b
         raise ValueError(f"{model_path} references missing virtual file {_quoted(url)}") from error
     protocol = parsed.scheme.lower()
     if protocol in {"http", "https"}:
-        _validate_http_url(url, parsed, model_id)
+        try:
+            validate_http_url_authority(url)
+        except ValueError as error:
+            _invalid_esm_url(url, model_id, error)
         return True
     if not protocol:
         raise ValueError(f"{model_path} references missing virtual file {_quoted(url)}")
     if protocol not in {"data", "http", "https"}:
         raise ValueError(f"{model_path} uses incompatible ESM URL protocol {_quoted(protocol)}")
     raise ValueError(f"{model_path} contains an invalid ESM URL {_quoted(url)}")
-
-
-def _validate_http_url(value: str, parsed: SplitResult, model_id: str) -> None:
-    if _INVALID_HTTP_URL_CHARACTER.search(value) is not None:
-        _invalid_esm_url(value, model_id)
-    try:
-        hostname = parsed.hostname
-        _ = parsed.port
-    except ValueError as error:
-        _invalid_esm_url(value, model_id, error)
-    if not hostname:
-        _invalid_esm_url(value, model_id)
-    if ":" in hostname:
-        try:
-            ipaddress.IPv6Address(hostname)
-        except ValueError as error:
-            _invalid_esm_url(value, model_id, error)
-        return
-    try:
-        ascii_hostname = hostname.encode("idna").decode("ascii")
-    except UnicodeError as error:
-        _invalid_esm_url(value, model_id, error)
-    if _HTTP_HOST.fullmatch(ascii_hostname) is None:
-        _invalid_esm_url(value, model_id)
-    for label in ascii_hostname.split("."):
-        if not label.lower().startswith("xn--"):
-            continue
-        try:
-            decoded = label.encode("ascii").decode("idna")
-            encoded = decoded.encode("idna").decode("ascii")
-        except UnicodeError as error:
-            _invalid_esm_url(value, model_id, error)
-        if encoded.lower() != label.lower():
-            _invalid_esm_url(value, model_id)
-    if ascii_hostname.replace(".", "").isdigit():
-        try:
-            ipaddress.IPv4Address(ascii_hostname)
-        except ValueError as error:
-            _invalid_esm_url(value, model_id, error)
 
 
 def _invalid_esm_url(

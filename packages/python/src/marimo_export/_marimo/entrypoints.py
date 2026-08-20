@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Any
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from marimo_export.observations import ObservationLedger
 
 
 def kernel_lifespan(value: None) -> Any:
@@ -13,4 +17,15 @@ def kernel_lifespan(value: None) -> Any:
     return construct(value)
 
 
-__all__ = ["kernel_lifespan"]
+def install_observation_ledger(
+    context: object,
+    ledger: ObservationLedger,
+) -> Callable[[], None]:
+    """Attach repository-backed observation recording to a Marimo kernel."""
+
+    from marimo_export._marimo.composition import install_observation_ledger as install
+
+    return install(context, ledger)
+
+
+__all__ = ["install_observation_ledger", "kernel_lifespan"]
