@@ -16,13 +16,14 @@ from collections.abc import Callable, Mapping
 from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
-from typing import BinaryIO, cast
+from typing import BinaryIO, Protocol, cast
 from urllib.parse import urlencode
 
-from marimo_export._diagnostics import safe_diagnostic
+from marimo_export._diagnostics import record_cleanup_failure, safe_diagnostic
 from marimo_export._json import JsonObject, json_object
 from marimo_export._remote.sse import SSEError, SSEParser
 from marimo_export.errors import TransportError
+from marimo_export.integration import _owned_session_environment
 
 _EVENT_LIMIT = 40 * 1024 * 1024
 _HTTP_RESPONSE_LIMIT = 1024 * 1024
@@ -35,12 +36,21 @@ _MANAGED_SNAPSHOT_ENV = "MARIMO_EXPORT_MANAGED_SNAPSHOT"
 _KERNEL_LIFESPAN_ALLOWLIST_ENV = "MARIMO_KERNEL_LIFESPAN_ALLOWLIST"
 _KERNEL_LIFESPAN_DENYLIST_ENV = "MARIMO_KERNEL_LIFESPAN_DENYLIST"
 _KERNEL_LIFESPAN_NAME = "marimo-export"
+_MARIMO_ANCESTOR_PID_ENV = "MARIMO_ANCESTOR_PID"
 
 
 @dataclass(frozen=True, slots=True)
 class _ActivationTimings:
     session_start_seconds: float
     initial_autorun_seconds: float
+
+
+class _ProcessTreeOwner(Protocol):
+    def terminate(self) -> None: ...
+
+    def wait(self, timeout: float) -> bool: ...
+
+    def close(self) -> None: ...
 
 
 class ManagedServer:
@@ -64,6 +74,7 @@ class ManagedServer:
         self._log_path = temporary_path / "server.log"
         self._log_file: BinaryIO = self._log_path.open("wb")
         self._process: subprocess.Popen[bytes] | None = None
+        self._windows_job: _ProcessTreeOwner | None = None
         self._stream: _SessionStream | None = None
         self._owned_groups: set[int] = set()
         self._activation_path = temporary_path / "kernel-cache-active"
@@ -76,10 +87,12 @@ class ManagedServer:
                 _MANAGED_CACHE_TOKEN_ENV: self._activation_token,
                 _MANAGED_SNAPSHOT_ENV: str(notebook),
                 _MANAGED_SOURCE_ENV: str(runtime_notebook or notebook),
+                _MARIMO_ANCESTOR_PID_ENV: str(os.getpid()),
                 "MARIMO_SKIP_UPDATE_CHECK": "1",
                 "NO_COLOR": "1",
             }
         )
+        environment.update(_owned_session_environment())
         try:
             _require_kernel_lifespan_policy(environment)
             self._process = subprocess.Popen(
@@ -90,8 +103,8 @@ class ManagedServer:
                     "edit",
                     str(notebook),
                     "--headless",
-                    "--token-password",
-                    self.access_token,
+                    "--token-password-file",
+                    "-",
                     "--no-skew-protection",
                     "--host",
                     "127.0.0.1",
@@ -100,30 +113,27 @@ class ManagedServer:
                 ],
                 cwd=notebook.parent,
                 env=environment,
-                stdin=subprocess.DEVNULL,
+                stdin=subprocess.PIPE,
                 stdout=self._log_file,
                 stderr=subprocess.STDOUT,
-                creationflags=(
-                    getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
-                    if sys.platform == "win32"
-                    else 0
-                ),
+                creationflags=_managed_creation_flags(),
                 start_new_session=sys.platform != "win32",
             )
-            if sys.platform != "win32":
+            if sys.platform == "win32":
+                self._windows_job = _own_windows_process_tree(self._process)
+            else:
                 self._owned_groups.add(self._process.pid)
+            self._send_access_token()
             self._wait_ready()
         except BaseException as error:
             try:
                 self._stop_process()
             except BaseException as cleanup_error:
-                error.add_note(
-                    f"managed process cleanup also failed: {type(cleanup_error).__name__}"
-                )
+                record_cleanup_failure(error, "managed process cleanup", cleanup_error)
             try:
                 self._close_files()
             except BaseException as cleanup_error:
-                error.add_note(f"managed file cleanup also failed: {type(cleanup_error).__name__}")
+                record_cleanup_failure(error, "managed file cleanup", cleanup_error)
             raise
 
     def activate(self) -> _ActivationTimings:
@@ -154,6 +164,23 @@ class ManagedServer:
             },
         )
         stream.wait_for_completed_run(completed_runs)
+        from marimo_export._client_protocol import _bridge_error
+        from marimo_export._remote.client import BridgeError, HttpKernelTransport
+
+        transport = HttpKernelTransport(
+            self.base_url,
+            access_token=self.access_token,
+            timeout=self.timeout,
+        )
+        try:
+            validation = transport.invoke(self.session_id, "validate_baseline", {})
+        except BridgeError as error:
+            raise _bridge_error(error) from error
+        if validation != {"valid": True}:
+            raise TransportError(
+                "the managed baseline validation returned an invalid response",
+                code="server_start_failed",
+            )
         self._record_owned_process_groups()
         return _ActivationTimings(
             session_start_seconds=session_start_seconds,
@@ -201,9 +228,7 @@ class ManagedServer:
             if cancellation is not None:
                 for failure in failures:
                     if failure is not cancellation:
-                        cancellation.add_note(
-                            f"managed cleanup also failed: {type(failure).__name__}"
-                        )
+                        record_cleanup_failure(cancellation, "managed cleanup", failure)
                 raise cancellation
             first_failure = failures[0]
             raise TransportError(
@@ -250,6 +275,52 @@ class ManagedServer:
                         return
             except (urllib.error.URLError, TimeoutError, OSError):
                 time.sleep(min(0.05, max(remaining, 0)))
+
+    def _send_access_token(self) -> None:
+        process = self._process
+        stream = None if process is None else process.stdin
+        if process is None or stream is None:
+            raise RuntimeError("managed process token input is unavailable")
+        primary: BaseException | None = None
+        try:
+            payload = f"{self.access_token}\n".encode()
+            if stream.write(payload) != len(payload):
+                raise BrokenPipeError("managed token input accepted a partial write")
+            stream.flush()
+        except BaseException as error:
+            if isinstance(error, Exception):
+                primary = TransportError(
+                    "the managed marimo server did not accept its access token",
+                    code="server_start_failed",
+                    details={
+                        "return_code": process.poll(),
+                        "log": self._logs(),
+                    },
+                )
+                primary.__cause__ = error
+            else:
+                primary = error
+        finally:
+            try:
+                stream.close()
+            except BaseException as error:
+                if primary is None:
+                    if isinstance(error, Exception):
+                        primary = TransportError(
+                            "the managed marimo token input could not be closed",
+                            code="server_start_failed",
+                            details={
+                                "return_code": process.poll(),
+                                "log": self._logs(),
+                            },
+                        )
+                        primary.__cause__ = error
+                    else:
+                        primary = error
+                else:
+                    record_cleanup_failure(primary, "managed token input cleanup", error)
+        if primary is not None:
+            raise primary
 
     def _post_json(
         self,
@@ -330,13 +401,14 @@ class ManagedServer:
 
     def _stop_process(self, owned_groups: set[int] | None = None) -> None:
         process = self._process
-        if process is None:
+        tree_owner = getattr(self, "_windows_job", None)
+        if process is None and tree_owner is None:
             return
         failures: list[BaseException] = []
-        reaped = False
+        reaped = process is None
 
         def is_running() -> bool:
-            if reaped:
+            if reaped or process is None:
                 return False
             try:
                 return process.poll() is None
@@ -345,7 +417,7 @@ class ManagedServer:
                 return True
 
         groups = owned_groups
-        if groups is None:
+        if groups is None and process is not None:
             groups = set(getattr(self, "_owned_groups", set()))
             try:
                 groups.update(self._owned_process_groups())
@@ -353,12 +425,25 @@ class ManagedServer:
                 failures.append(error)
                 if sys.platform != "win32":
                     groups.add(process.pid)
-        if sys.platform == "win32" and is_running():
+        if groups is None:
+            groups = set()
+        tree_terminated = False
+        if sys.platform == "win32" and tree_owner is not None:
             try:
-                self._terminate_windows_tree(process)
+                tree_owner.terminate()
+                tree_terminated = True
             except BaseException as error:
                 failures.append(error)
-        if is_running():
+            if tree_terminated:
+                try:
+                    if not tree_owner.wait(min(self.timeout, 5.0)):
+                        raise TransportError(
+                            "the managed marimo process tree did not stop",
+                            code="server_shutdown_failed",
+                        )
+                except BaseException as error:
+                    failures.append(error)
+        if process is not None and is_running():
             try:
                 self._signal_process(process, force=False)
             except BaseException as error:
@@ -370,7 +455,7 @@ class ManagedServer:
                 pass
             except BaseException as error:
                 failures.append(error)
-        if is_running():
+        if process is not None and is_running():
             try:
                 self._signal_process(process, force=True)
             except BaseException as error:
@@ -382,7 +467,7 @@ class ManagedServer:
                 pass
             except BaseException as error:
                 failures.append(error)
-        if sys.platform != "win32":
+        if sys.platform != "win32" and process is not None:
             try:
                 self._kill_owned_process_groups(groups)
             except BaseException as error:
@@ -395,15 +480,23 @@ class ManagedServer:
                     pass
                 except BaseException as error:
                     failures.append(error)
-        if is_running():
-            failures.append(
-                TransportError(
-                    "the managed marimo process did not stop",
-                    code="server_shutdown_failed",
+        if process is not None:
+            if is_running():
+                failures.append(
+                    TransportError(
+                        "the managed marimo process did not stop",
+                        code="server_shutdown_failed",
+                    )
                 )
-            )
-        else:
-            self._process = None
+            else:
+                self._process = None
+        if tree_owner is not None:
+            try:
+                tree_owner.close()
+            except BaseException as error:
+                failures.append(error)
+            else:
+                self._windows_job = None
         if failures:
             cancellation = next(
                 (failure for failure in failures if not isinstance(failure, Exception)),
@@ -412,9 +505,7 @@ class ManagedServer:
             if cancellation is not None:
                 for failure in failures:
                     if failure is not cancellation:
-                        cancellation.add_note(
-                            f"managed process cleanup also failed: {type(failure).__name__}"
-                        )
+                        record_cleanup_failure(cancellation, "managed process cleanup", failure)
                 raise cancellation
             first_failure = failures[0]
             raise TransportError(
@@ -520,8 +611,10 @@ class ManagedServer:
             if cancellation is not None:
                 for failure in failures:
                     if failure is not cancellation:
-                        cancellation.add_note(
-                            f"managed process group cleanup also failed: {type(failure).__name__}"
+                        record_cleanup_failure(
+                            cancellation,
+                            "managed process group cleanup",
+                            failure,
                         )
                 raise cancellation
             raise TransportError(
@@ -562,37 +655,6 @@ class ManagedServer:
                 live.add(group_id)
         return live
 
-    def _terminate_windows_tree(
-        self,
-        process: subprocess.Popen[bytes],
-    ) -> None:
-        try:
-            terminated = subprocess.run(
-                [
-                    "taskkill",
-                    "/PID",
-                    str(process.pid),
-                    "/T",
-                    "/F",
-                ],
-                check=False,
-                stdin=subprocess.DEVNULL,
-                stdout=self._log_file,
-                stderr=subprocess.STDOUT,
-                timeout=min(self.timeout, 5.0),
-            )
-        except (OSError, subprocess.TimeoutExpired) as error:
-            raise TransportError(
-                "the managed marimo process tree could not be stopped",
-                code="server_shutdown_failed",
-            ) from error
-        if terminated.returncode != 0:
-            raise TransportError(
-                "the managed marimo process tree could not be stopped",
-                code="server_shutdown_failed",
-                details={"return_code": terminated.returncode},
-            )
-
     @staticmethod
     def _signal_process(
         process: subprocess.Popen[bytes],
@@ -614,7 +676,16 @@ class ManagedServer:
     def _close_files(self) -> None:
         if not self._log_file.closed:
             self._log_file.close()
-        self._temporary.cleanup()
+        deadline = time.monotonic() + min(self.timeout, 1.0)
+        while True:
+            try:
+                self._temporary.cleanup()
+                return
+            except PermissionError:
+                remaining = deadline - time.monotonic()
+                if sys.platform != "win32" or remaining <= 0:
+                    raise
+                time.sleep(min(remaining, 0.01))
 
     def _logs(self) -> str:
         try:
@@ -637,6 +708,7 @@ class _SessionStream:
         self._cell_ids: tuple[str, ...] = ()
         self._codes: tuple[str, ...] = ()
         self._completed_runs = 0
+        self._activity_generation = 0
         self._cell_statuses: dict[str, str] = {}
         self._failure: BaseException | None = None
         self._closed = threading.Event()
@@ -713,12 +785,16 @@ class _SessionStream:
     def _wait(self, predicate: Callable[[], bool], label: str) -> None:
         deadline = time.monotonic() + self._timeout
         with self._condition:
+            activity_generation = self._activity_generation
             while not predicate():
                 if self._failure is not None:
                     raise TransportError(
                         f"the managed marimo {label} stream failed",
                         code="server_start_failed",
                     ) from self._failure
+                if self._activity_generation != activity_generation:
+                    activity_generation = self._activity_generation
+                    deadline = time.monotonic() + self._timeout
                 remaining = deadline - time.monotonic()
                 if remaining <= 0:
                     raise TransportError(
@@ -758,6 +834,7 @@ class _SessionStream:
         operation = value.get("op")
         data = value.get("data")
         with self._condition:
+            accepted = False
             if operation == "kernel-ready":
                 cell_ids = data.get("cell_ids") if isinstance(data, dict) else None
                 codes = data.get("codes") if isinstance(data, dict) else None
@@ -771,6 +848,7 @@ class _SessionStream:
                     self._cell_ids = tuple(cell_ids)
                     self._codes = tuple(codes)
                     self._kernel_ready = True
+                    accepted = True
                 else:
                     self._failure = ValueError("kernel-ready cells are invalid")
             elif operation == "cell-op" and isinstance(data, dict):
@@ -778,9 +856,31 @@ class _SessionStream:
                 status = data.get("status")
                 if isinstance(cell_id, str) and isinstance(status, str):
                     self._cell_statuses[cell_id] = status
+                    accepted = True
             elif operation == "completed-run":
                 self._completed_runs += 1
+                accepted = True
+            if accepted:
+                self._activity_generation += 1
             self._condition.notify_all()
+
+
+def _managed_creation_flags() -> int:
+    if sys.platform != "win32":
+        return 0
+    return getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0) | getattr(
+        subprocess,
+        "CREATE_SUSPENDED",
+        0x00000004,
+    )
+
+
+def _own_windows_process_tree(
+    process: subprocess.Popen[bytes],
+) -> _ProcessTreeOwner:
+    from marimo_export._remote.windows_job import WindowsJob
+
+    return WindowsJob.create_for_process(process.pid)
 
 
 def _free_port() -> int:

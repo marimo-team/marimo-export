@@ -13,14 +13,14 @@ from typing import Protocol, TypeGuard, cast
 from urllib.parse import SplitResult, unquote, urljoin, urlsplit
 
 from marimo_export._diagnostics import safe_diagnostic
-from marimo_export._identity import implementation_identity
+from marimo_export._identity import ImplementationDriftError, require_implementation_stable
 from marimo_export._json import JsonObject, JsonValue, decode_json, json_object
 from marimo_export.errors import TransportError
 
 from .auth import auth_headers, parse_server_address
 from .sse import SSEError, SSEEvent, SSEParser
 
-BRIDGE_SCHEMA = "marimo-export.bridge.v2"
+BRIDGE_SCHEMA = "marimo-export.bridge.v1"
 
 _CHUNK_BYTES = 64 * 1024
 _DEFAULT_MAX_EVENT_BYTES = 40 * 1024 * 1024
@@ -31,7 +31,9 @@ _STDOUT_CHUNK_CHARS = 64 * 1024
 _STDERR_HEAD_CHARS = 2048
 _STDERR_TAIL_CHARS = 4096
 _STDERR_DIAGNOSTIC_CHARS = 8192
-_OPERATIONS = frozenset({"inspect", "capture", "release"})
+_OPERATIONS = frozenset(
+    {"validate_baseline", "inspect", "observe_inputs", "plan", "capture", "release"}
+)
 
 
 @dataclass(frozen=True)
@@ -228,16 +230,20 @@ class HttpKernelTransport:
     ) -> dict[str, object]:
         _validate_session_id(session_id)
         if operation not in _OPERATIONS:
-            raise ValueError("operation must be inspect, capture, or release.")
+            raise ValueError(
+                "operation must be validate_baseline, inspect, observe_inputs, plan, "
+                "capture, or release."
+            )
         if not isinstance(params, Mapping):
             raise TypeError("params must be a mapping.")
 
         request_id = secrets.token_hex(16)
         marker = f"__MARIMO_EXPORT_{secrets.token_hex(24)}__:"
+        client_identity = _require_client_implementation()
         request_value = {
             "schema": BRIDGE_SCHEMA,
             "client_version": _package_version(),
-            "client_identity": implementation_identity(),
+            "client_identity": client_identity,
             "request_id": request_id,
             "operation": operation,
             "params": dict(params),
@@ -286,7 +292,9 @@ class HttpKernelTransport:
             envelope = self._read_execution(response, marker)
         finally:
             response.close()
-        return self._parse_envelope(envelope, request_id)
+        data = self._parse_envelope(envelope, request_id)
+        _require_client_implementation()
+        return data
 
     def download_asset(
         self,
@@ -801,3 +809,14 @@ def _package_version() -> str:
         return version("marimo-export")
     except PackageNotFoundError:
         return "0+unknown"
+
+
+def _require_client_implementation() -> str:
+    try:
+        return require_implementation_stable()
+    except ImplementationDriftError as error:
+        raise TransportError(
+            str(error),
+            code="implementation_changed",
+            details={"loaded": error.loaded, "current": error.current},
+        ) from error

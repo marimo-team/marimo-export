@@ -9,15 +9,20 @@ from collections.abc import Callable
 from importlib.metadata import version
 from typing import Any, cast
 
+import marimo_export._marimo.bridge as bridge_module
+import marimo_export._remote.client as remote_client
 import pytest
+from marimo_export._execution import Baseline
+from marimo_export._identity import ImplementationDriftError, implementation_identity
 from marimo_export._marimo.bridge import dispatch_json
+from marimo_export._marimo.capabilities import MarimoCapabilities
 from marimo_export._remote.client import (
     BRIDGE_SCHEMA,
     BridgeError,
     HttpKernelTransport,
     SessionInfo,
 )
-from marimo_export.errors import TransportError
+from marimo_export.errors import SessionError, TransportError
 
 
 class Response:
@@ -144,6 +149,99 @@ def test_invoke_posts_correlated_bridge_request_once() -> None:
     assert headers["marimo-session-id"] == "session-1"
 
 
+def test_transport_rejects_operation_outside_the_bridge_contract() -> None:
+    transport = HttpKernelTransport(
+        "https://marimo.test/",
+        _opener=Opener(lambda _request: Response(b"")),
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="validate_baseline, inspect, observe_inputs, plan, capture, or release",
+    ):
+        transport.invoke("session-1", "unknown", {})
+
+
+@pytest.mark.asyncio
+async def test_bridge_rejects_operation_outside_the_contract() -> None:
+    response = json.loads(
+        await dispatch_json(
+            json.dumps(
+                {
+                    "schema": BRIDGE_SCHEMA,
+                    "client_version": version("marimo-export"),
+                    "client_identity": implementation_identity(),
+                    "request_id": "request-invalid-operation",
+                    "operation": "unknown",
+                    "params": {},
+                }
+            )
+        )
+    )
+
+    assert response["ok"] is False
+    assert response["error"] == {
+        "code": "session_error",
+        "message": (
+            "bridge operation must be validate_baseline, inspect, observe_inputs, "
+            "plan, capture, or release"
+        ),
+    }
+
+
+def test_invoke_rejects_loaded_source_drift_before_request(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    opener = Opener(lambda _request: (_ for _ in ()).throw(AssertionError("request sent")))
+    transport = HttpKernelTransport("https://marimo.test/", _opener=opener)
+
+    def drift() -> str:
+        raise ImplementationDriftError("a" * 64, "b" * 64)
+
+    monkeypatch.setattr(remote_client, "require_implementation_stable", drift)
+
+    with pytest.raises(TransportError, match="restart") as raised:
+        transport.invoke("session-1", "inspect", {})
+
+    assert raised.value.code == "implementation_changed"
+    assert opener.requests == []
+
+
+def test_invoke_rejects_source_drift_after_bridge_response(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def respond(request: urllib.request.Request) -> Response:
+        bridge_request, marker = decode_execute_request(request)
+        return scratchpad_response(
+            marker,
+            {
+                "schema": BRIDGE_SCHEMA,
+                "request_id": bridge_request["request_id"],
+                "ok": True,
+                "data": {"filename": "notebook.py"},
+            },
+        )
+
+    opener = Opener(respond)
+    transport = HttpKernelTransport("https://marimo.test/", _opener=opener)
+    calls = 0
+
+    def stable_then_drift() -> str:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return "a" * 64
+        raise ImplementationDriftError("a" * 64, "b" * 64)
+
+    monkeypatch.setattr(remote_client, "require_implementation_stable", stable_then_drift)
+
+    with pytest.raises(TransportError, match="restart") as raised:
+        transport.invoke("session-1", "inspect", {})
+
+    assert raised.value.code == "implementation_changed"
+    assert len(opener.requests) == 1
+
+
 @pytest.mark.asyncio
 async def test_bridge_rejects_a_stale_development_implementation() -> None:
     response = json.loads(
@@ -163,6 +261,45 @@ async def test_bridge_rejects_a_stale_development_implementation() -> None:
 
     assert response["ok"] is False
     assert response["error"]["code"] == "bridge_version_mismatch"
+
+
+@pytest.mark.asyncio
+async def test_inspection_rejects_source_drift_before_return(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class Runtime:
+        @staticmethod
+        def require_capabilities() -> MarimoCapabilities:
+            return MarimoCapabilities("test", ())
+
+        @staticmethod
+        async def inspect_baseline() -> Baseline:
+            return Baseline(
+                definitions={},
+                cells=(),
+                document_sha256="d" * 64,
+                filename="notebook.py",
+            )
+
+        @staticmethod
+        def runtime_path() -> str:
+            return "/notebook.py"
+
+    calls = 0
+
+    def stable_then_drift() -> str:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return "a" * 64
+        raise ImplementationDriftError("a" * 64, "b" * 64)
+
+    monkeypatch.setattr(bridge_module, "require_implementation_stable", stable_then_drift)
+
+    with pytest.raises(SessionError) as raised:
+        await bridge_module._inspect(cast(Any, Runtime()))
+
+    assert raised.value.code == "implementation_changed"
 
 
 def test_invoke_reads_a_bridge_response_larger_than_one_stdout_write() -> None:
