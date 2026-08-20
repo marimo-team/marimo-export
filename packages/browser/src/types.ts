@@ -1,30 +1,32 @@
-export type JsonPrimitive = string | number | boolean | null;
+import { portableJsonObject } from "@marimo-team/portable-json";
+import type { JsonObject, JsonValue } from "@marimo-team/portable-json";
 
-export type JsonValue = JsonPrimitive | readonly JsonValue[] | JsonObject;
+export type { JsonObject, JsonPrimitive, JsonValue } from "@marimo-team/portable-json";
 
-export interface JsonObject {
-  readonly [key: string]: JsonValue;
-}
+const NOTEBOOK_EXPORT_ERROR_BRAND = Symbol.for("@marimo-team/marimo-export.NotebookExportError.v1");
+const NOTEBOOK_EXPORT_ERROR_CODES = [
+  "abort",
+  "asset_invalid",
+  "decode_failed",
+  "integrity_failed",
+  "loader_ambiguous",
+  "loader_invalid",
+  "loader_unavailable",
+  "output_not_found",
+  "output_representation_changed",
+  "export_invalid",
+  "export_noncanonical",
+  "read_failed",
+  "read_limit_exceeded",
+  "state_input_invalid",
+  "state_not_found",
+  "state_unavailable",
+] as const;
+const NOTEBOOK_EXPORT_ERROR_CODE_SET: ReadonlySet<string> = new Set(NOTEBOOK_EXPORT_ERROR_CODES);
 
 export type ScalarValue = null | boolean | string | number | bigint;
 
-export type NotebookExportErrorCode =
-  | "abort"
-  | "asset_invalid"
-  | "decode_failed"
-  | "integrity_failed"
-  | "loader_ambiguous"
-  | "loader_invalid"
-  | "loader_unavailable"
-  | "output_not_found"
-  | "output_representation_changed"
-  | "export_invalid"
-  | "export_noncanonical"
-  | "read_failed"
-  | "read_limit_exceeded"
-  | "state_input_invalid"
-  | "state_not_found"
-  | "state_unavailable";
+export type NotebookExportErrorCode = (typeof NOTEBOOK_EXPORT_ERROR_CODES)[number];
 
 export class NotebookExportError extends Error {
   readonly code: NotebookExportErrorCode;
@@ -36,11 +38,41 @@ export class NotebookExportError extends Error {
     message: string,
     options: { readonly cause?: unknown; readonly details?: JsonObject } = {},
   ) {
+    if (typeof code !== "string" || !NOTEBOOK_EXPORT_ERROR_CODE_SET.has(code)) {
+      throw new TypeError("NotebookExportError code must be a known code.");
+    }
+    if (typeof message !== "string") {
+      throw new TypeError("NotebookExportError message must be a string.");
+    }
     super(message, options.cause === undefined ? undefined : { cause: options.cause });
+    Object.defineProperty(this, NOTEBOOK_EXPORT_ERROR_BRAND, { value: true });
     this.name = "NotebookExportError";
     this.code = code;
     this.cause = options.cause;
-    this.details = options.details === undefined ? undefined : freezeJsonObject(options.details);
+    this.details = options.details === undefined ? undefined : portableJsonObject(options.details);
+    Object.freeze(this);
+  }
+}
+
+export function isNotebookExportError(value: unknown): value is NotebookExportError {
+  if (value === null || typeof value !== "object") return false;
+  try {
+    const error = value as Readonly<Record<PropertyKey, unknown>>;
+    const code = error.code;
+    const details = error.details;
+    if (
+      error[NOTEBOOK_EXPORT_ERROR_BRAND] !== true ||
+      error.name !== "NotebookExportError" ||
+      typeof error.message !== "string" ||
+      typeof code !== "string" ||
+      !NOTEBOOK_EXPORT_ERROR_CODE_SET.has(code)
+    ) {
+      return false;
+    }
+    if (details !== undefined) portableJsonObject(details, "NotebookExportError.details");
+    return true;
+  } catch {
+    return false;
   }
 }
 
@@ -52,11 +84,31 @@ export interface NotebookProvenance {
 export interface ProducerProvenance {
   readonly marimo: string;
   readonly marimoExport: string;
+  readonly implementationSha256: string;
+}
+
+export interface ControlIndexStep {
+  readonly kind: "index";
+  readonly value: number;
+}
+
+export interface ControlKeyStep {
+  readonly kind: "key";
+  readonly value: string;
+}
+
+export interface ControlElementStep {
+  readonly kind: "element";
+}
+
+export type ControlPathStep = ControlIndexStep | ControlKeyStep | ControlElementStep;
+
+export interface ControlBinding {
+  readonly input: string;
+  readonly path: readonly ControlPathStep[];
 }
 
 export interface Provenance {
-  readonly cacheKey: string;
-  readonly returnReference: string | null;
   readonly pythonType: string;
 }
 
@@ -70,6 +122,27 @@ export interface ScalarDescriptor {
   readonly mediaType: "application/vnd.marimo.scalar.v1+json";
   readonly provenance: Provenance;
   readonly value: ScalarValue;
+}
+
+export interface JsonDescriptor {
+  readonly codec: "marimo.json.v1";
+  readonly mediaType: "application/vnd.marimo.json.v1+json";
+  readonly provenance: Provenance;
+  readonly value: JsonValue;
+}
+
+export interface MarimoOutputDescriptor {
+  readonly codec: "marimo.output.v1";
+  readonly mediaType: "application/vnd.marimo.output.v1+json";
+  readonly provenance: Provenance;
+  readonly asset: AssetDescriptor;
+}
+
+export interface MarimoCellDescriptor {
+  readonly codec: "marimo.cell.v1";
+  readonly mediaType: "application/vnd.marimo.cell.v1+json";
+  readonly provenance: Provenance;
+  readonly asset: AssetDescriptor;
 }
 
 export interface NumpyDescriptor {
@@ -97,6 +170,9 @@ export interface BlobAssetDescriptor {
 
 export type OutputDescriptor =
   | ScalarDescriptor
+  | JsonDescriptor
+  | MarimoOutputDescriptor
+  | MarimoCellDescriptor
   | NumpyDescriptor
   | ArrowDescriptor
   | BlobAssetDescriptor;
@@ -118,6 +194,9 @@ export interface BlobAsset {
 
 export interface OutputPayloadMap {
   readonly "marimo.scalar.v1": ScalarValue;
+  readonly "marimo.json.v1": JsonValue;
+  readonly "marimo.output.v1": Uint8Array;
+  readonly "marimo.cell.v1": Uint8Array;
   readonly "numpy.npy.v1": Uint8Array;
   readonly "apache.arrow.file.v1": Uint8Array;
   readonly "marimo.blob-asset.msgpack.v1": BlobAsset;
@@ -127,13 +206,19 @@ export type OutputCodec = keyof OutputPayloadMap;
 
 export type DescriptorFor<C extends OutputCodec> = C extends "marimo.scalar.v1"
   ? ScalarDescriptor
-  : C extends "numpy.npy.v1"
-    ? NumpyDescriptor
-    : C extends "apache.arrow.file.v1"
-      ? ArrowDescriptor
-      : C extends "marimo.blob-asset.msgpack.v1"
-        ? BlobAssetDescriptor
-        : never;
+  : C extends "marimo.json.v1"
+    ? JsonDescriptor
+    : C extends "marimo.output.v1"
+      ? MarimoOutputDescriptor
+      : C extends "marimo.cell.v1"
+        ? MarimoCellDescriptor
+        : C extends "numpy.npy.v1"
+          ? NumpyDescriptor
+          : C extends "apache.arrow.file.v1"
+            ? ArrowDescriptor
+            : C extends "marimo.blob-asset.msgpack.v1"
+              ? BlobAssetDescriptor
+              : never;
 
 export interface OutputLoader<C extends OutputCodec, T> {
   readonly codec: C;
@@ -182,20 +267,24 @@ export interface VerificationResult {
 
 export interface NotebookExport {
   readonly base: URL;
+  readonly identity: string;
+  readonly specSha256: string;
+  readonly defaultState: ExportState;
   readonly notebook: NotebookProvenance;
   readonly producer: ProducerProvenance;
   readonly inputNames: readonly string[];
+  readonly controlBindings: Readonly<Record<string, ControlBinding>>;
   readonly outputNames: readonly string[];
   states(): readonly ExportState[];
-  state(name: string): ExportState;
+  state(alias: string): ExportState;
   resolve(inputs: JsonObject): ExportState;
   verify(options?: VerifyOptions): Promise<VerificationResult>;
 }
 
 export interface ExportState {
   readonly notebookExport: NotebookExport;
-  readonly name: string;
   readonly fingerprint: string;
+  readonly aliases: readonly string[];
   readonly inputs: JsonObject;
   outputs(): readonly ExportOutput[];
   output(name: string): ExportOutput;
@@ -222,16 +311,4 @@ export interface MountableValue {
       readonly signal?: AbortSignal;
     },
   ): Promise<MountedView>;
-}
-
-export function freezeJsonObject(value: JsonObject): JsonObject {
-  return Object.freeze(
-    Object.fromEntries(Object.entries(value).map(([key, item]) => [key, freezeJsonValue(item)])),
-  );
-}
-
-export function freezeJsonValue(value: JsonValue): JsonValue {
-  if (Array.isArray(value)) return Object.freeze(value.map(freezeJsonValue));
-  if (typeof value === "object" && value !== null) return freezeJsonObject(value as JsonObject);
-  return value;
 }

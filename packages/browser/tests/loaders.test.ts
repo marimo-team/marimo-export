@@ -80,9 +80,7 @@ describe("OutputLoader", () => {
           mediaType: "image/png",
           metadata: {},
           provenance: {
-            cacheKey: "cache",
             pythonType: "BlobAsset",
-            returnReference: "return.bin",
           },
         },
         {

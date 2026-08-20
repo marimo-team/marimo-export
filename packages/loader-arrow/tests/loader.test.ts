@@ -9,9 +9,7 @@ const descriptor: ArrowDescriptor = {
   codec: "apache.arrow.file.v1",
   mediaType: "application/vnd.apache.arrow.file",
   provenance: {
-    cacheKey: "cell_cache/O_table.json",
     pythonType: "polars.dataframe.frame.DataFrame",
-    returnReference: "cell_cache/O_table/return.arrow",
   },
 };
 const mediaType: MediaType = {

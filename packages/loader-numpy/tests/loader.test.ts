@@ -6,7 +6,7 @@ const descriptor = {
   asset: { sha256: "a".repeat(64), size: 0 },
   codec: "numpy.npy.v1",
   mediaType: "application/x-npy",
-  provenance: { cacheKey: "cache", pythonType: "numpy.ndarray", returnReference: "return.npy" },
+  provenance: { pythonType: "numpy.ndarray" },
 } as const;
 const mediaType = {
   raw: "application/x-npy",

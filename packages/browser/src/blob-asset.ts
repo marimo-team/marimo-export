@@ -1,10 +1,11 @@
 import { decode } from "@msgpack/msgpack";
+import { portableJsonObject } from "@marimo-team/portable-json";
 
 import { parseMediaType } from "./media-type.js";
-import { canonicalJson, portableJsonObject } from "./schema.js";
+import { canonicalJson } from "./schema.js";
 import { validateCanonicalMessagePack } from "./strict-msgpack.js";
 import type { BlobAsset, BlobAssetDescriptor } from "./types.js";
-import { NotebookExportError } from "./types.js";
+import { isNotebookExportError, NotebookExportError } from "./types.js";
 
 const EXPECTED_FIELDS = ["data", "media_type", "filename", "metadata"];
 
@@ -49,7 +50,7 @@ export function decodeBlobAsset(bytes: Uint8Array, descriptor: BlobAssetDescript
       metadata,
     });
   } catch (error) {
-    if (error instanceof NotebookExportError && error.code === "asset_invalid") throw error;
+    if (isNotebookExportError(error) && error.code === "asset_invalid") throw error;
     throw new NotebookExportError("asset_invalid", "BlobAsset envelope validation failed.", {
       cause: error,
       details: { outputCodec: descriptor.codec, mediaType: descriptor.mediaType },

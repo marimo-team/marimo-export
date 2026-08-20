@@ -1,72 +1,111 @@
+import { portableJsonObject, portableJsonValue } from "@marimo-team/portable-json";
+import type { JsonObject, JsonValue } from "@marimo-team/portable-json";
+
 import { parseMediaType } from "./media-type.js";
 import type {
   ArrowDescriptor,
   AssetDescriptor,
   BlobAssetDescriptor,
-  JsonObject,
-  JsonValue,
+  ControlBinding,
+  JsonDescriptor,
   NotebookProvenance,
   NumpyDescriptor,
+  MarimoCellDescriptor,
+  MarimoOutputDescriptor,
   OutputDescriptor,
   ProducerProvenance,
   Provenance,
   ScalarDescriptor,
   ScalarValue,
 } from "./types.js";
-import { NotebookExportError, freezeJsonObject, freezeJsonValue } from "./types.js";
+import { isNotebookExportError, NotebookExportError } from "./types.js";
 
 const encoder = new TextEncoder();
 const SHA256 = /^[0-9a-f]{64}$/u;
 const BIGINT = /^(?:0|-[1-9][0-9]*|[1-9][0-9]*)$/u;
 const MAX_SAFE_INTEGER = Number.MAX_SAFE_INTEGER;
 const MAX_EXPORT_NAME_BYTES = 255;
+const MAX_CONTROL_ID_BYTES = 1_024;
+const MAX_CONTROL_PATH_STEPS = 256;
 const MAX_PROVENANCE_BYTES = 2_048;
 const MAX_ASSET_SIZE = 2_147_483_647;
 const MAX_METADATA_BYTES = 256 * 1024;
-const MAX_JSON_DEPTH = 256;
 const WINDOWS_RESERVED = /[<>:"/\\|?*]/u;
 const WINDOWS_DEVICE = /^(?:CON|CONIN\$|CONOUT\$|PRN|AUX|NUL|COM[1-9¹²³]|LPT[1-9¹²³])$/iu;
-
+const EDGE_WHITESPACE: ReadonlySet<number> = new Set([
+  0x0009, 0x000a, 0x000b, 0x000c, 0x000d, 0x001c, 0x001d, 0x001e, 0x001f, 0x0020, 0x0085, 0x00a0,
+  0x1680, 0x2000, 0x2001, 0x2002, 0x2003, 0x2004, 0x2005, 0x2006, 0x2007, 0x2008, 0x2009, 0x200a,
+  0x2028, 0x2029, 0x202f, 0x205f, 0x3000, 0xfeff,
+]);
 export interface ParsedState {
-  readonly fingerprint: string;
   readonly inputs: JsonObject;
   readonly outputs: Readonly<Record<string, OutputDescriptor>>;
 }
 
 export interface ParsedExportIndex {
+  readonly specSha256: string;
+  readonly defaultState: string;
   readonly notebook: NotebookProvenance;
   readonly producer: ProducerProvenance;
   readonly inputs: readonly string[];
+  readonly controlBindings: Readonly<Record<string, ControlBinding>>;
   readonly outputs: readonly string[];
+  readonly aliases: Readonly<Record<string, string>>;
   readonly states: Readonly<Record<string, ParsedState>>;
 }
 
 export function parseExportIndex(input: unknown): ParsedExportIndex {
   try {
     const root = strictRecord(input, "export", [
+      "aliases",
+      "control_bindings",
+      "default_state",
       "inputs",
       "notebook",
       "outputs",
       "producer",
       "schema",
+      "spec_sha256",
       "states",
     ]);
     literal(root.schema, "marimo-export.export.v1", "export.schema");
+    const specSha256 = digest(root.spec_sha256, "export.spec_sha256");
+    const defaultState = digest(root.default_state, "export.default_state");
     const notebook = parseNotebook(root.notebook);
     const producer = parseProducer(root.producer);
-    const inputs = nameArray(root.inputs, "export.inputs", false);
+    const inputs = opaqueNameArray(root.inputs, "export.inputs");
     const outputs = nameArray(root.outputs, "export.outputs", true);
     const inputSet = new Set(inputs);
+    const controlBindingRecord = record(root.control_bindings, "export.control_bindings");
+    const controlBindings = Object.freeze(
+      Object.fromEntries(
+        Object.entries(controlBindingRecord).map(([objectId, binding]) => {
+          const controlId = boundedPrintable(
+            objectId,
+            "export.control_bindings key",
+            MAX_CONTROL_ID_BYTES,
+          );
+          return [
+            controlId,
+            parseControlBinding(
+              binding,
+              `export.control_bindings[${JSON.stringify(controlId)}]`,
+              inputSet,
+            ),
+          ];
+        }),
+      ),
+    );
     const outputSet = new Set(outputs);
     const statesRecord = record(root.states, "export.states");
     if (Object.keys(statesRecord).length === 0) fail("export.states must not be empty");
 
     const states = Object.freeze(
       Object.fromEntries(
-        Object.entries(statesRecord).map(([name, value]) => {
-          const stateName = exportName(name, "export.states key");
-          const path = `export.states[${JSON.stringify(stateName)}]`;
-          const state = strictRecord(value, path, ["fingerprint", "inputs", "outputs"]);
+        Object.entries(statesRecord).map(([key, value]) => {
+          const fingerprint = digest(key, "export.states key");
+          const path = `export.states[${JSON.stringify(fingerprint)}]`;
+          const state = strictRecord(value, path, ["inputs", "outputs"]);
           const stateInputs = portableJsonObject(state.inputs, `${path}.inputs`);
           requireExactKeys(stateInputs, inputSet, `${path}.inputs`);
           const outputRecord = record(state.outputs, `${path}.outputs`);
@@ -80,9 +119,8 @@ export function parseExportIndex(input: unknown): ParsedExportIndex {
             ),
           );
           return [
-            stateName,
+            fingerprint,
             Object.freeze({
-              fingerprint: digest(state.fingerprint, `${path}.fingerprint`),
               inputs: stateInputs,
               outputs: parsedOutputs,
             }),
@@ -90,19 +128,40 @@ export function parseExportIndex(input: unknown): ParsedExportIndex {
         }),
       ),
     );
+    const aliasesRecord = record(root.aliases, "export.aliases");
+    const aliases = Object.freeze(
+      Object.fromEntries(
+        Object.entries(aliasesRecord).map(([name, value]) => {
+          const alias = exportName(name, "export.aliases key");
+          const fingerprint = digest(value, `export.aliases[${JSON.stringify(alias)}]`);
+          if (!Object.hasOwn(states, fingerprint)) {
+            fail(
+              `export.aliases[${JSON.stringify(alias)}] references an unknown state fingerprint`,
+            );
+          }
+          return [alias, fingerprint];
+        }),
+      ),
+    );
+    if (!Object.hasOwn(states, defaultState)) {
+      fail("export.default_state must reference a declared state fingerprint");
+    }
 
-    validateStateVectors(states);
     validateRepresentations(states, outputs);
     validateAssets(states);
     return Object.freeze({
+      specSha256,
+      defaultState,
       notebook,
       producer,
       inputs,
+      controlBindings,
       outputs,
+      aliases,
       states,
     });
   } catch (error) {
-    if (error instanceof NotebookExportError) throw error;
+    if (isNotebookExportError(error)) throw error;
     throw new NotebookExportError("export_invalid", boundedMessage(error), { cause: error });
   }
 }
@@ -118,8 +177,16 @@ function parseNotebook(input: unknown): NotebookProvenance {
 }
 
 function parseProducer(input: unknown): ProducerProvenance {
-  const value = strictRecord(input, "export.producer", ["marimo", "marimo_export"]);
+  const value = strictRecord(input, "export.producer", [
+    "implementation_sha256",
+    "marimo",
+    "marimo_export",
+  ]);
   return Object.freeze({
+    implementationSha256: digest(
+      value.implementation_sha256,
+      "export.producer.implementation_sha256",
+    ),
     marimo: boundedPrintable(value.marimo, "export.producer.marimo", MAX_EXPORT_NAME_BYTES),
     marimoExport: boundedPrintable(
       value.marimo_export,
@@ -129,21 +196,107 @@ function parseProducer(input: unknown): ProducerProvenance {
   });
 }
 
+function parseControlBinding(
+  input: unknown,
+  path: string,
+  inputNames: ReadonlySet<string>,
+): ControlBinding {
+  const value = strictRecord(input, path, ["input", "path"]);
+  const inputName = opaqueInputName(value.input, `${path}.input`);
+  if (!inputNames.has(inputName)) fail(`${path}.input must name a declared input`);
+  if (!Array.isArray(value.path) || value.path.length > MAX_CONTROL_PATH_STEPS) {
+    fail(`${path}.path must be an array of at most ${MAX_CONTROL_PATH_STEPS} steps`);
+  }
+  return Object.freeze({
+    input: inputName,
+    path: Object.freeze(
+      value.path.map((step, index) => parseControlPathStep(step, `${path}.path[${index}]`)),
+    ),
+  });
+}
+
+function parseControlPathStep(input: unknown, path: string): ControlBinding["path"][number] {
+  const value = record(input, path);
+  if (value.kind === "element") {
+    exactFields(value, ["kind"], path);
+    return Object.freeze({ kind: "element" });
+  }
+  if (value.kind === "index") {
+    exactFields(value, ["kind", "value"], path);
+    if (typeof value.value !== "number" || !Number.isSafeInteger(value.value) || value.value < 0) {
+      fail(`${path}.value must be a nonnegative safe integer`);
+    }
+    return Object.freeze({ kind: "index", value: value.value });
+  }
+  if (value.kind === "key") {
+    exactFields(value, ["kind", "value"], path);
+    if (typeof value.value !== "string") fail(`${path}.value must be a string`);
+    unicodeScalar(value.value, `${path}.value`);
+    if (encoder.encode(value.value).byteLength > MAX_CONTROL_ID_BYTES) {
+      fail(`${path}.value exceeds ${MAX_CONTROL_ID_BYTES} UTF-8 bytes`);
+    }
+    return Object.freeze({ kind: "key", value: value.value });
+  }
+  fail(`${path}.kind must be index, key, or element`);
+}
+
 function parseDescriptor(input: unknown, outputName: string): OutputDescriptor {
   const value = record(input, `output ${JSON.stringify(outputName)}`);
   const codec = value.codec;
   if (codec === "marimo.scalar.v1") return parseScalar(value, outputName);
+  if (codec === "marimo.json.v1") return parseJson(value, outputName);
+  if (codec === "marimo.output.v1") return parseMarimoOutput(value, outputName);
+  if (codec === "marimo.cell.v1") return parseMarimoCell(value, outputName);
   if (codec === "numpy.npy.v1") return parseNumpy(value, outputName);
   if (codec === "apache.arrow.file.v1") return parseArrow(value, outputName);
   if (codec === "marimo.blob-asset.msgpack.v1") return parseBlobAsset(value, outputName);
   fail(`output ${JSON.stringify(outputName)} has an unknown codec`);
 }
 
+function parseJson(value: Record<string, unknown>, outputName: string): JsonDescriptor {
+  const path = `output ${JSON.stringify(outputName)}`;
+  exactFields(value, ["codec", "media_type", "provenance", "value"], path);
+  literal(value.media_type, "application/vnd.marimo.json.v1+json", `${path}.media_type`);
+  return Object.freeze({
+    codec: "marimo.json.v1",
+    mediaType: "application/vnd.marimo.json.v1+json",
+    provenance: parseProvenance(value.provenance, path),
+    value: portableJsonValue(value.value, `${path}.value`),
+  });
+}
+
+function parseMarimoOutput(
+  value: Record<string, unknown>,
+  outputName: string,
+): MarimoOutputDescriptor {
+  const path = `output ${JSON.stringify(outputName)}`;
+  exactFields(value, ["asset", "codec", "media_type", "provenance"], path);
+  literal(value.media_type, "application/vnd.marimo.output.v1+json", `${path}.media_type`);
+  return Object.freeze({
+    codec: "marimo.output.v1",
+    mediaType: "application/vnd.marimo.output.v1+json",
+    provenance: parseProvenance(value.provenance, path),
+    asset: parseAsset(value.asset, path),
+  });
+}
+
+function parseMarimoCell(value: Record<string, unknown>, outputName: string): MarimoCellDescriptor {
+  const path = `output ${JSON.stringify(outputName)}`;
+  exactFields(value, ["asset", "codec", "media_type", "provenance"], path);
+  literal(value.media_type, "application/vnd.marimo.cell.v1+json", `${path}.media_type`);
+  return Object.freeze({
+    codec: "marimo.cell.v1",
+    mediaType: "application/vnd.marimo.cell.v1+json",
+    provenance: parseProvenance(value.provenance, path),
+    asset: parseAsset(value.asset, path),
+  });
+}
+
 function parseScalar(value: Record<string, unknown>, outputName: string): ScalarDescriptor {
   const path = `output ${JSON.stringify(outputName)}`;
   exactFields(value, ["codec", "media_type", "provenance", "value"], path);
   literal(value.media_type, "application/vnd.marimo.scalar.v1+json", `${path}.media_type`);
-  const provenance = parseProvenance(value.provenance, path, false);
+  const provenance = parseProvenance(value.provenance, path);
   return Object.freeze({
     codec: "marimo.scalar.v1",
     mediaType: "application/vnd.marimo.scalar.v1+json",
@@ -159,7 +312,7 @@ function parseNumpy(value: Record<string, unknown>, outputName: string): NumpyDe
   return Object.freeze({
     codec: "numpy.npy.v1",
     mediaType: "application/x-npy",
-    provenance: parseProvenance(value.provenance, path, true),
+    provenance: parseProvenance(value.provenance, path),
     asset: parseAsset(value.asset, path),
   });
 }
@@ -171,7 +324,7 @@ function parseArrow(value: Record<string, unknown>, outputName: string): ArrowDe
   return Object.freeze({
     codec: "apache.arrow.file.v1",
     mediaType: "application/vnd.apache.arrow.file",
-    provenance: parseProvenance(value.provenance, path, true),
+    provenance: parseProvenance(value.provenance, path),
     asset: parseAsset(value.asset, path),
   });
 }
@@ -192,24 +345,15 @@ function parseBlobAsset(value: Record<string, unknown>, outputName: string): Blo
     mediaType: value.media_type,
     filename,
     metadata,
-    provenance: parseProvenance(value.provenance, path, true),
+    provenance: parseProvenance(value.provenance, path),
     asset: parseAsset(value.asset, path),
   });
 }
 
-function parseProvenance(input: unknown, parent: string, asset: boolean): Provenance {
+function parseProvenance(input: unknown, parent: string): Provenance {
   const path = `${parent}.provenance`;
-  const value = strictRecord(input, path, ["cache_key", "python_type", "return_reference"]);
-  const reference =
-    value.return_reference === null
-      ? null
-      : opaqueReference(value.return_reference, `${path}.return_reference`);
-  if (asset === (reference === null)) {
-    fail(`${path}.return_reference ${asset ? "must be present" : "must be null"}`);
-  }
+  const value = strictRecord(input, path, ["python_type"]);
   return Object.freeze({
-    cacheKey: opaqueReference(value.cache_key, `${path}.cache_key`),
-    returnReference: reference,
     pythonType: boundedPrintable(value.python_type, `${path}.python_type`, MAX_PROVENANCE_BYTES),
   });
 }
@@ -260,18 +404,6 @@ function parseScalarValue(input: unknown): ScalarValue {
   fail("scalar tag type must be bigint or float");
 }
 
-function validateStateVectors(states: Readonly<Record<string, ParsedState>>): void {
-  const vectors = new Map<string, string>();
-  for (const [name, state] of Object.entries(states)) {
-    const key = canonicalJson(state.inputs);
-    const other = vectors.get(key);
-    if (other !== undefined) {
-      fail(`export states ${JSON.stringify(other)} and ${JSON.stringify(name)} have equal inputs`);
-    }
-    vectors.set(key, name);
-  }
-}
-
 function validateRepresentations(
   states: Readonly<Record<string, ParsedState>>,
   outputNames: readonly string[],
@@ -299,7 +431,9 @@ function validateAssets(states: Readonly<Record<string, ParsedState>>): void {
   let total = 0;
   for (const state of Object.values(states)) {
     for (const descriptor of Object.values(state.outputs)) {
-      if (descriptor.codec === "marimo.scalar.v1") continue;
+      if (descriptor.codec === "marimo.scalar.v1" || descriptor.codec === "marimo.json.v1") {
+        continue;
+      }
       const identity = `${descriptor.codec}\0${descriptor.asset.sha256}`;
       const facts =
         descriptor.codec === "marimo.blob-asset.msgpack.v1"
@@ -317,44 +451,6 @@ function validateAssets(states: Readonly<Record<string, ParsedState>>): void {
       }
     }
   }
-}
-
-export function portableJsonObject(input: unknown, path: string): JsonObject {
-  const value = portableJsonValue(input, path, 0);
-  if (Array.isArray(value) || value === null || typeof value !== "object") {
-    fail(`${path} must be an object`);
-  }
-  return value as JsonObject;
-}
-
-function portableJsonValue(input: unknown, path: string, depth: number): JsonValue {
-  if (depth > MAX_JSON_DEPTH) fail(`${path} exceeds the maximum JSON depth`);
-  if (input === null || typeof input === "boolean") return input;
-  if (typeof input === "string") {
-    unicodeScalar(input, path);
-    return input;
-  }
-  if (typeof input === "number") {
-    if (!Number.isFinite(input)) fail(`${path} must be finite`);
-    if (Number.isInteger(input) && !Number.isSafeInteger(input)) {
-      fail(`${path} integer exceeds the safe range`);
-    }
-    return Object.is(input, -0) ? 0 : input;
-  }
-  if (Array.isArray(input)) {
-    return Object.freeze(
-      input.map((item, index) => portableJsonValue(item, `${path}[${index}]`, depth + 1)),
-    );
-  }
-  const value = record(input, path);
-  return Object.freeze(
-    Object.fromEntries(
-      Object.entries(value).map(([key, item]) => {
-        unicodeScalar(key, `${path} key`);
-        return [key, portableJsonValue(item, `${path}.${key}`, depth + 1)];
-      }),
-    ),
-  );
 }
 
 export function canonicalJson(value: JsonValue): string {
@@ -441,6 +537,22 @@ function nameArray(input: unknown, path: string, nonempty: boolean): readonly st
   return Object.freeze(values);
 }
 
+function opaqueNameArray(input: unknown, path: string): readonly string[] {
+  if (!Array.isArray(input)) fail(`${path} must be an array`);
+  const values = input.map((name, index) => opaqueInputName(name, `${path}[${index}]`));
+  if (new Set(values).size !== values.length) fail(`${path} must contain unique names`);
+  return Object.freeze(values);
+}
+
+export function opaqueInputName(input: unknown, path: string): string {
+  if (typeof input !== "string") fail(`${path} must be a string`);
+  unicodeScalar(input, path);
+  if (input.length === 0 || encoder.encode(input).byteLength > MAX_EXPORT_NAME_BYTES) {
+    fail(`${path} must be a bounded nonempty UTF-8 string`);
+  }
+  return input;
+}
+
 function exportName(input: unknown, path: string): string {
   return boundedPrintable(input, path, MAX_EXPORT_NAME_BYTES);
 }
@@ -450,7 +562,7 @@ function boundedPrintable(input: unknown, path: string, maxBytes: number): strin
   unicodeScalar(input, path);
   if (
     input.length === 0 ||
-    input !== input.trim() ||
+    hasEdgeWhitespace(input) ||
     hasControl(input) ||
     encoder.encode(input).byteLength > maxBytes
   ) {
@@ -459,12 +571,11 @@ function boundedPrintable(input: unknown, path: string, maxBytes: number): strin
   return input;
 }
 
-function opaqueReference(input: unknown, path: string): string {
-  const value = boundedPrintable(input, path, MAX_PROVENANCE_BYTES);
-  if (value.startsWith("/") || /^[A-Za-z]:[\\/]/u.test(value) || value.startsWith("\\\\")) {
-    fail(`${path} must be a store-relative opaque identifier`);
-  }
-  return value;
+function hasEdgeWhitespace(value: string): boolean {
+  return (
+    EDGE_WHITESPACE.has(value.charCodeAt(0)) ||
+    EDGE_WHITESPACE.has(value.charCodeAt(value.length - 1))
+  );
 }
 
 function portableBasename(input: unknown, path: string): string {
@@ -475,7 +586,7 @@ function portableBasename(input: unknown, path: string): string {
     input.length === 0 ||
     input === "." ||
     input === ".." ||
-    input !== input.trim() ||
+    hasEdgeWhitespace(input) ||
     input.endsWith(".") ||
     hasControl(input) ||
     WINDOWS_RESERVED.test(input) ||
@@ -522,12 +633,4 @@ function fail(message: string): never {
     "export_invalid",
     message.length > 2_048 ? `${message.slice(0, 2_045)}...` : message,
   );
-}
-
-export function cloneFrozenJsonObject(value: JsonObject): JsonObject {
-  return freezeJsonObject(value);
-}
-
-export function cloneFrozenJsonValue(value: JsonValue): JsonValue {
-  return freezeJsonValue(value);
 }

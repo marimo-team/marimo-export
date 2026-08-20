@@ -6,7 +6,8 @@ export {
   scalarLoader,
 } from "./loader.js";
 export { openExport } from "./export.js";
-export { NotebookExportError } from "./types.js";
+export { parseMarimoCellSnapshot, parseMarimoOutputSnapshot } from "./marimo-snapshot.js";
+export { isNotebookExportError, NotebookExportError } from "./types.js";
 
 export type {
   AnyOutputLoader,
@@ -16,12 +17,20 @@ export type {
   BlobAssetDescriptor,
   BlobAssetLoadInput,
   BlobAssetLoader,
+  ControlBinding,
+  ControlElementStep,
+  ControlIndexStep,
+  ControlKeyStep,
+  ControlPathStep,
   DescriptorFor,
   JsonObject,
+  JsonDescriptor,
   JsonPrimitive,
   JsonValue,
   LoadOptions,
   MediaType,
+  MarimoCellDescriptor,
+  MarimoOutputDescriptor,
   MountedView,
   MountableValue,
   NotebookProvenance,
@@ -42,3 +51,21 @@ export type {
   VerificationResult,
   VerifyOptions,
 } from "./types.js";
+
+export type {
+  MarimoBufferPath,
+  MarimoBufferPathToken,
+  MarimoCellChannel,
+  MarimoCellIdentity,
+  MarimoCellOutput,
+  MarimoCellSnapshot,
+  MarimoEsmSpec,
+  MarimoModelCloseMessage,
+  MarimoModelCustomMessage,
+  MarimoModelLifecycleMessage,
+  MarimoModelLifecycleNotification,
+  MarimoModelOpenMessage,
+  MarimoModelUpdateMessage,
+  MarimoOutputSnapshot,
+  MarimoReplayResources,
+} from "./marimo-snapshot.js";

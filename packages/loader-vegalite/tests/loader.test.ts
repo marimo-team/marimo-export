@@ -51,6 +51,24 @@ describe("vegaLiteLoader", () => {
     expect(host.lastContainer().removeClasses).toHaveBeenCalledWith("vega-embed", "has-actions");
   });
 
+  test("keeps disposal idempotent when renderer finalization fails", async () => {
+    const failure = new Error("renderer finalization failed");
+    const throwingFinalize = vi.fn(() => {
+      throw failure;
+    });
+    const format = await fixture(encoder.encode(JSON.stringify({ mark: "point" })));
+    const chart = await format.load(vegaLiteLoader());
+    const host = testHost();
+    embed.mockResolvedValueOnce({ finalize: throwingFinalize });
+    const mounted = await chart.mount(host.element);
+
+    expect(() => mounted.dispose()).toThrow(failure);
+    expect(() => mounted.dispose()).not.toThrow();
+    expect(throwingFinalize).toHaveBeenCalledOnce();
+    expect(host.replaceChildren).toHaveBeenCalledOnce();
+    expect(host.childCount()).toBe(0);
+  });
+
   test("does not clear a newer mount when a cancelled embed resolves late", async () => {
     const spec = { mark: "point", data: { values: [] } };
     const firstFinalize = vi.fn();
@@ -118,14 +136,21 @@ async function fixture(
   const sha256 = await digest(envelope);
   const fingerprint = await digest(encoder.encode("{}"));
   const index = {
+    aliases: { current: fingerprint },
+    control_bindings: {},
+    default_state: fingerprint,
     inputs: [],
     notebook: { filename: "fixture.py", document_sha256: "a".repeat(64) },
     outputs: ["chart"],
-    producer: { marimo: "0.24.0", marimo_export: "0.0.0" },
+    producer: {
+      implementation_sha256: "c".repeat(64),
+      marimo: "0.24.0",
+      marimo_export: "0.0.0",
+    },
     schema: "marimo-export.export.v1",
+    spec_sha256: "b".repeat(64),
     states: {
-      current: {
-        fingerprint,
+      [fingerprint]: {
         inputs: {},
         outputs: {
           chart: {
@@ -135,9 +160,7 @@ async function fixture(
             media_type: mediaType,
             metadata: {},
             provenance: {
-              cache_key: "cell_cache/O_chart.json",
-              python_type: "marimo._save.cache.BlobAsset",
-              return_reference: "cell_cache/O_chart/return.bin",
+              python_type: "marimo_export.outputs.BlobAsset",
             },
           },
         },

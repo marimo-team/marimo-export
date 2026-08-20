@@ -18,6 +18,8 @@ export async function exportFixture(
     readonly blobMetadata?: Record<string, unknown>;
     readonly blobMediaType?: string;
     readonly blobFilename?: string | null;
+    readonly basePath?: string;
+    readonly inputs?: readonly [string, string];
     readonly indexTransform?: (index: Record<string, unknown>) => void;
   } = {},
 ): Promise<Fixture> {
@@ -37,19 +39,21 @@ export async function exportFixture(
   const blobDigest = await digest(envelope);
   const npyDigest = await digest(npy);
   const arrowDigest = await digest(arrow);
-  const inputs = ["symbol", "width"];
+  const inputs = options.inputs ?? (["symbol", "width"] as const);
   const outputs = ["count", "array", "table", "view"];
   const definitions = [
-    ["zeta", { symbol: "MSFT", width: 640 }, 2],
-    ["alpha", { symbol: "AAPL", width: 800 }, 1],
+    ["zeta", { [inputs[0]]: "MSFT", [inputs[1]]: 640 }, 2],
+    ["alpha", { [inputs[0]]: "AAPL", [inputs[1]]: 800 }, 1],
   ] as const;
   const fingerprints = await Promise.all(
     definitions.map(([, vector]) => digest(encoder.encode(canonicalJson(vector)))),
   );
+  const aliases: Record<string, string> = {};
   const states: Record<string, unknown> = {};
   definitions.forEach(([name, vector, count], index) => {
-    states[name] = {
-      fingerprint: fingerprints[index]!,
+    const fingerprint = fingerprints[index]!;
+    aliases[name] = fingerprint;
+    states[fingerprint] = {
       inputs: vector,
       outputs: {
         count: scalar(count),
@@ -66,17 +70,28 @@ export async function exportFixture(
           filename: blobFilename,
           media_type: blobMediaType,
           metadata: blobMetadata,
-          provenance: provenance("view", true),
+          provenance: provenance(),
         },
       },
     };
   });
+  aliases.first = fingerprints[1]!;
   const index: Record<string, unknown> = {
+    aliases,
+    control_bindings: {
+      "cell-symbol-0": { input: inputs[0], path: [] },
+    },
+    default_state: fingerprints[1]!,
     inputs,
     notebook: { document_sha256: "a".repeat(64), filename: "finance.py" },
     outputs,
-    producer: { marimo: "0.23.15", marimo_export: "1.0.0" },
+    producer: {
+      implementation_sha256: "c".repeat(64),
+      marimo: "0.23.15",
+      marimo_export: "1.0.0",
+    },
     schema: "marimo-export.export.v1",
+    spec_sha256: "d".repeat(64),
     states,
   };
   options.indexTransform?.(index);
@@ -87,11 +102,13 @@ export async function exportFixture(
     [`assets/${blobDigest}.bin`, envelope],
   ]);
   const requests: string[] = [];
+  const basePath = options.basePath ?? "/stocks/";
   const fetch: typeof globalThis.fetch = async (input, init) => {
     if (init?.signal?.aborted) throw init.signal.reason;
     const url = input instanceof Request ? input.url : input.toString();
     requests.push(url);
-    const path = new URL(url).pathname.split("/stocks/")[1];
+    const pathname = new URL(url).pathname;
+    const path = pathname.startsWith(basePath) ? pathname.slice(basePath.length) : undefined;
     if (path === "index.json") return new Response(indexBytes);
     const value = path === undefined ? undefined : assets.get(path);
     return value === undefined ? new Response(null, { status: 404 }) : new Response(value.slice());
@@ -103,7 +120,7 @@ export function scalar(value: unknown): Record<string, unknown> {
   return {
     codec: "marimo.scalar.v1",
     media_type: "application/vnd.marimo.scalar.v1+json",
-    provenance: provenance("count", false),
+    provenance: provenance(),
     value,
   };
 }
@@ -118,16 +135,12 @@ function assetDescriptor(
     asset: { sha256, size },
     codec,
     media_type: mediaType,
-    provenance: provenance(codec, true),
+    provenance: provenance(),
   };
 }
 
-function provenance(name: string, asset: boolean): Record<string, unknown> {
-  return {
-    cache_key: `cell_cache/O_${name}.json`,
-    python_type: "fixture.Value",
-    return_reference: asset ? `cell_cache/${name}/return.bin` : null,
-  };
+function provenance(): Record<string, unknown> {
+  return { python_type: "fixture.Value" };
 }
 
 export async function digest(bytes: Uint8Array): Promise<string> {

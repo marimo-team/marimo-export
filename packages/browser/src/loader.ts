@@ -14,6 +14,9 @@ import { NotebookExportError } from "./types.js";
 
 const CODECS = new Set<OutputCodec>([
   "marimo.scalar.v1",
+  "marimo.json.v1",
+  "marimo.output.v1",
+  "marimo.cell.v1",
   "numpy.npy.v1",
   "apache.arrow.file.v1",
   "marimo.blob-asset.msgpack.v1",

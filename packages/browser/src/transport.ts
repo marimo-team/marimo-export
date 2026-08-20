@@ -1,4 +1,5 @@
-import { NotebookExportError } from "./types.js";
+import { isAbortError } from "./abort.js";
+import { isNotebookExportError, NotebookExportError } from "./types.js";
 
 const MAX_DIAGNOSTIC_PATH = 256;
 
@@ -26,10 +27,18 @@ export function normalizeBase(base: string | URL): URL {
   if (url.username !== "" || url.password !== "") {
     throw new TypeError("Export base URL must not contain user information.");
   }
-  if (url.search !== "" || url.hash !== "") {
-    throw new TypeError("Export base URL must not contain a query or fragment.");
-  }
+  if (url.hash !== "") throw new TypeError("Export base URL must not contain a fragment.");
   if (!url.pathname.endsWith("/")) url.pathname += "/";
+  return url;
+}
+
+export function resolveExportUrl(base: URL | string, path: string): URL {
+  if (typeof path !== "string" || path.length === 0 || path.includes("?") || path.includes("#")) {
+    throw new TypeError("Export object path must be a non-empty path without a query or fragment.");
+  }
+  const normalized = base instanceof URL ? base : new URL(base);
+  const url = new URL(path, normalized);
+  url.search = normalized.search;
   return url;
 }
 
@@ -38,6 +47,7 @@ export async function fetchBytes(
   url: URL,
   path: string,
   options: {
+    readonly cache?: RequestCache;
     readonly maxBytes: number;
     readonly signal?: AbortSignal;
     readonly expectedBytes?: number;
@@ -46,7 +56,10 @@ export async function fetchBytes(
   throwIfAborted(options.signal);
   let response: Response;
   try {
-    response = await fetcher(url, options.signal === undefined ? {} : { signal: options.signal });
+    response = await fetcher(url, {
+      ...(options.cache === undefined ? {} : { cache: options.cache }),
+      ...(options.signal === undefined ? {} : { signal: options.signal }),
+    });
   } catch (error) {
     throwReadError(error, options.signal, path);
   }
@@ -96,7 +109,7 @@ export async function fetchBytes(
     }
     return bytes;
   } catch (error) {
-    if (error instanceof NotebookExportError) throw error;
+    if (isNotebookExportError(error)) throw error;
     throwReadError(error, options.signal, path);
   }
 }
@@ -117,12 +130,16 @@ async function readBody(
   const reader = response.body.getReader();
   let buffer = new Uint8Array(Math.min(64 * 1024, maxBytes));
   let size = 0;
+  let pendingRead: Promise<ReadableStreamReadResult<Uint8Array>> | undefined;
+  let deferredRelease = false;
   try {
     while (true) {
       throwIfAborted(signal);
       // Response chunks must remain ordered.
+      pendingRead = reader.read();
       // oxlint-disable-next-line no-await-in-loop
-      const next = await reader.read();
+      const next = await waitForRead(pendingRead, reader, signal);
+      pendingRead = undefined;
       if (next.done) break;
       const chunk = next.value;
       if (chunk.byteLength > maxBytes - size) {
@@ -141,12 +158,45 @@ async function readBody(
     }
   } catch (error) {
     void reader.cancel(error).catch(() => undefined);
+    if (pendingRead !== undefined) {
+      deferredRelease = true;
+      void pendingRead
+        .finally(() => {
+          reader.releaseLock();
+        })
+        .catch(() => undefined);
+    }
     throw error;
   } finally {
-    reader.releaseLock();
+    if (!deferredRelease) reader.releaseLock();
   }
   throwIfAborted(signal);
   return buffer.slice(0, size);
+}
+
+async function waitForRead(
+  read: Promise<ReadableStreamReadResult<Uint8Array>>,
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  signal: AbortSignal | undefined,
+): Promise<ReadableStreamReadResult<Uint8Array>> {
+  if (signal === undefined) return read;
+  throwIfAborted(signal);
+  let abort: (() => void) | undefined;
+  const aborted = new Promise<never>((_resolve, reject) => {
+    abort = () => {
+      const error = new NotebookExportError("abort", "Export operation was aborted.", {
+        cause: signal.reason,
+      });
+      void reader.cancel(signal.reason).catch(() => undefined);
+      reject(error);
+    };
+    signal.addEventListener("abort", abort, { once: true });
+  });
+  try {
+    return await Promise.race([read, aborted]);
+  } finally {
+    if (abort !== undefined) signal.removeEventListener("abort", abort);
+  }
 }
 
 function decodedContentLength(response: Response): number | undefined {
@@ -181,7 +231,7 @@ function throwIfAborted(signal: AbortSignal | undefined): void {
 }
 
 function throwReadError(error: unknown, signal: AbortSignal | undefined, path: string): never {
-  if (signal?.aborted || (error instanceof DOMException && error.name === "AbortError")) {
+  if (signal?.aborted || isAbortError(error)) {
     throw new NotebookExportError("abort", "Export operation was aborted.", { cause: error });
   }
   throw new NotebookExportError("read_failed", `Failed to read export object ${quotePath(path)}.`, {

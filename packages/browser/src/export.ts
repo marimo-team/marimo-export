@@ -1,20 +1,15 @@
+import { isAbortError } from "./abort.js";
 import { decodeBlobAsset } from "./blob-asset.js";
 import { sha256Hex, validateNativeFile, verifyBytes } from "./integrity.js";
 import { resolveOutputLoader } from "./loader.js";
 import { parseMediaType } from "./media-type.js";
-import {
-  canonicalJson,
-  compareUnicodeScalarStrings,
-  parseExportIndex,
-  portableJsonObject,
-} from "./schema.js";
+import { parseStrictJson, portableJsonObject } from "@marimo-team/portable-json";
+import type { JsonObject, JsonValue } from "@marimo-team/portable-json";
+import { canonicalJson, compareUnicodeScalarStrings, parseExportIndex } from "./schema.js";
 import type { ParsedExportIndex, ParsedState } from "./schema.js";
-import { parseStrictJson } from "./strict-json.js";
-import { fetchBytes, normalizeBase } from "./transport.js";
+import { fetchBytes, normalizeBase, resolveExportUrl } from "./transport.js";
 import type {
   AnyOutputLoader,
-  JsonObject,
-  JsonValue,
   LoadOptions,
   OpenExportOptions,
   OutputCodec,
@@ -27,7 +22,7 @@ import type {
   VerificationResult,
   VerifyOptions,
 } from "./types.js";
-import { NotebookExportError } from "./types.js";
+import { isNotebookExportError, NotebookExportError } from "./types.js";
 
 const INDEX_MAX_BYTES = 16 * 1024 * 1024;
 const INDEX_MAX_VALUES = 2_000_000;
@@ -45,14 +40,20 @@ export async function openExport(
   const normalized = normalizeBase(base);
   const fetcher = options.fetch ?? globalThis.fetch;
   if (typeof fetcher !== "function") throw new TypeError("A fetch implementation is required.");
-  const bytes = await fetchBytes(fetcher, new URL("index.json", normalized), "index.json", {
-    maxBytes: INDEX_MAX_BYTES,
-    ...(options.signal === undefined ? {} : { signal: options.signal }),
-  });
+  const bytes = await fetchBytes(
+    fetcher,
+    resolveExportUrl(normalized, "index.json"),
+    "index.json",
+    {
+      maxBytes: INDEX_MAX_BYTES,
+      ...(options.signal === undefined ? {} : { signal: options.signal }),
+    },
+  );
   const wire = decodeCanonicalIndex(bytes);
   const parsed = parseExportIndex(wire);
+  const identity = await sha256Hex(bytes);
   await validateFingerprints(parsed, options.signal);
-  return new NotebookExportValue(normalized, parsed, fetcher);
+  return new NotebookExportValue(normalized, identity, parsed, fetcher);
 }
 
 function decodeCanonicalIndex(bytes: Uint8Array): unknown {
@@ -68,7 +69,7 @@ function decodeCanonicalIndex(bytes: Uint8Array): unknown {
   try {
     canonical = encoder.encode(canonicalJson(value as JsonValue));
   } catch (error) {
-    if (error instanceof NotebookExportError) throw error;
+    if (isNotebookExportError(error)) throw error;
     throw new NotebookExportError("export_invalid", "Export index JSON is invalid.", {
       cause: error,
     });
@@ -83,17 +84,17 @@ async function validateFingerprints(
   index: ParsedExportIndex,
   signal: AbortSignal | undefined,
 ): Promise<void> {
-  for (const [name, state] of Object.entries(index.states)) {
+  for (const [fingerprint, state] of Object.entries(index.states)) {
     throwIfAborted(signal);
     // Keep hashing bounded when exports contain many states.
     // oxlint-disable-next-line no-await-in-loop
     const actual = await sha256Hex(encoder.encode(canonicalJson(state.inputs)));
     throwIfAborted(signal);
-    if (actual !== state.fingerprint) {
+    if (actual !== fingerprint) {
       throw new NotebookExportError(
         "export_invalid",
-        `State ${JSON.stringify(name)} fingerprint does not match its inputs.`,
-        { details: { state: name } },
+        `State fingerprint ${fingerprint} does not match its inputs.`,
+        { details: { fingerprint } },
       );
     }
   }
@@ -101,28 +102,64 @@ async function validateFingerprints(
 
 class NotebookExportValue implements NotebookExport {
   readonly #baseHref: string;
+  readonly identity: string;
+  readonly specSha256: string;
+  readonly defaultState: ExportStateValue;
   readonly notebook: ParsedExportIndex["notebook"];
   readonly producer: ParsedExportIndex["producer"];
   readonly inputNames: readonly string[];
+  readonly controlBindings: ParsedExportIndex["controlBindings"];
   readonly outputNames: readonly string[];
   readonly #states: readonly ExportStateValue[];
-  readonly #statesByName: ReadonlyMap<string, ExportStateValue>;
+  readonly #statesByAlias: ReadonlyMap<string, ExportStateValue>;
   readonly #statesByInputs: ReadonlyMap<string, ExportStateValue>;
   readonly #reader: AssetReader;
 
-  constructor(base: URL, index: ParsedExportIndex, fetcher: typeof globalThis.fetch) {
+  constructor(
+    base: URL,
+    identity: string,
+    index: ParsedExportIndex,
+    fetcher: typeof globalThis.fetch,
+  ) {
     this.#baseHref = base.href;
+    this.identity = identity;
+    this.specSha256 = index.specSha256;
     this.notebook = index.notebook;
     this.producer = index.producer;
     this.inputNames = index.inputs;
+    this.controlBindings = index.controlBindings;
     this.outputNames = index.outputs;
     this.#reader = new AssetReader(this.#baseHref, fetcher);
+    const aliasesByFingerprint = new Map<string, string[]>(
+      Object.keys(index.states).map((fingerprint) => [fingerprint, []]),
+    );
+    for (const [alias, fingerprint] of Object.entries(index.aliases).sort(([left], [right]) =>
+      compareUnicodeScalarStrings(left, right),
+    )) {
+      aliasesByFingerprint.get(fingerprint)!.push(alias);
+    }
     this.#states = Object.freeze(
       Object.entries(index.states)
         .sort(([left], [right]) => compareUnicodeScalarStrings(left, right))
-        .map(([name, state]) => new ExportStateValue(this, name, state, this.#reader)),
+        .map(
+          ([fingerprint, state]) =>
+            new ExportStateValue(
+              this,
+              fingerprint,
+              Object.freeze(aliasesByFingerprint.get(fingerprint)!),
+              state,
+              this.#reader,
+            ),
+        ),
     );
-    this.#statesByName = new Map(this.#states.map((state) => [state.name, state]));
+    const statesByFingerprint = new Map(this.#states.map((state) => [state.fingerprint, state]));
+    this.defaultState = statesByFingerprint.get(index.defaultState)!;
+    this.#statesByAlias = new Map(
+      Object.entries(index.aliases).map(([alias, fingerprint]) => [
+        alias,
+        statesByFingerprint.get(fingerprint)!,
+      ]),
+    );
     this.#statesByInputs = new Map(
       this.#states.map((state) => [canonicalJson(state.inputs), state]),
     );
@@ -137,16 +174,16 @@ class NotebookExportValue implements NotebookExport {
     return this.#states;
   }
 
-  state(name: string): ExportState {
-    const state = this.#statesByName.get(name);
+  state(alias: string): ExportState {
+    const state = this.#statesByAlias.get(alias);
     if (state === undefined) {
       throw new NotebookExportError(
         "state_not_found",
-        `State ${JSON.stringify(name)} was not found.`,
+        `State alias ${JSON.stringify(alias)} was not found.`,
         {
           details: {
-            requested: String(name).slice(0, 255),
-            available: this.#states.slice(0, 16).map((item) => item.name),
+            requested: String(alias).slice(0, 255),
+            available: [...this.#statesByAlias.keys()].slice(0, 16),
           },
         },
       );
@@ -204,21 +241,22 @@ class NotebookExportValue implements NotebookExport {
 
 class ExportStateValue implements ExportState {
   readonly notebookExport: NotebookExportValue;
-  readonly name: string;
   readonly fingerprint: string;
+  readonly aliases: readonly string[];
   readonly inputs: JsonObject;
   readonly #outputs: readonly ExportOutputValue[];
   readonly #outputsByName: ReadonlyMap<string, ExportOutputValue>;
 
   constructor(
     notebookExport: NotebookExportValue,
-    name: string,
+    fingerprint: string,
+    aliases: readonly string[],
     state: ParsedState,
     reader: AssetReader,
   ) {
     this.notebookExport = notebookExport;
-    this.name = name;
-    this.fingerprint = state.fingerprint;
+    this.fingerprint = fingerprint;
+    this.aliases = aliases;
     this.inputs = state.inputs;
     this.#outputs = Object.freeze(
       notebookExport.outputNames.map(
@@ -315,19 +353,26 @@ class ExportOutputValue implements ExportOutput {
         readonly signal?: AbortSignal;
       }): unknown;
     };
-    const result = Promise.resolve(
-      call.load({
-        descriptor: this.descriptor,
-        mediaType: this.mediaType,
-        payload,
-        ...(options.signal === undefined ? {} : { signal: options.signal }),
-      }),
-    );
-    return (await waitForLoader(result, options.signal)) as T;
+    try {
+      const result = Promise.resolve(
+        call.load({
+          descriptor: this.descriptor,
+          mediaType: this.mediaType,
+          payload,
+          ...(options.signal === undefined ? {} : { signal: options.signal }),
+        }),
+      );
+      return (await waitForLoader(result, options.signal)) as T;
+    } catch (error) {
+      throwLoaderError(error, options.signal, this);
+    }
   }
 }
 
-type AssetOutputDescriptor = Exclude<OutputDescriptor, { readonly codec: "marimo.scalar.v1" }>;
+type AssetOutputDescriptor = Exclude<
+  OutputDescriptor,
+  { readonly codec: "marimo.scalar.v1" | "marimo.json.v1" }
+>;
 
 class AssetReader {
   readonly #baseHref: string;
@@ -344,6 +389,7 @@ class AssetReader {
   ): Promise<OutputPayloadMap[OutputCodec]> {
     throwIfAborted(options.signal);
     if (descriptor.codec === "marimo.scalar.v1") return descriptor.value;
+    if (descriptor.codec === "marimo.json.v1") return descriptor.value;
     if (descriptor.asset.size > options.maxBytes) {
       throw new NotebookExportError(
         "read_limit_exceeded",
@@ -357,7 +403,8 @@ class AssetReader {
       );
     }
     const path = assetPath(descriptor.codec, descriptor.asset.sha256);
-    const bytes = await fetchBytes(this.#fetch, new URL(path, this.#baseHref), path, {
+    const bytes = await fetchBytes(this.#fetch, resolveExportUrl(this.#baseHref, path), path, {
+      cache: "force-cache",
       maxBytes: options.maxBytes,
       expectedBytes: descriptor.asset.size,
       ...(options.signal === undefined ? {} : { signal: options.signal }),
@@ -374,8 +421,13 @@ class AssetReader {
 }
 
 function assetPath(codec: AssetOutputDescriptor["codec"], digest: string): string {
-  const extension =
-    codec === "numpy.npy.v1" ? "npy" : codec === "apache.arrow.file.v1" ? "arrow" : "bin";
+  const extension = (() => {
+    if (codec === "marimo.output.v1") return "output.json";
+    if (codec === "marimo.cell.v1") return "cell.json";
+    if (codec === "numpy.npy.v1") return "npy";
+    if (codec === "apache.arrow.file.v1") return "arrow";
+    return "bin";
+  })();
   return `assets/${digest}.${extension}`;
 }
 
@@ -385,7 +437,12 @@ function uniqueAssets(
   const values = new Map<string, { readonly descriptor: AssetOutputDescriptor }>();
   for (const state of states) {
     for (const output of state.outputs()) {
-      if (output.descriptor.codec === "marimo.scalar.v1") continue;
+      if (
+        output.descriptor.codec === "marimo.scalar.v1" ||
+        output.descriptor.codec === "marimo.json.v1"
+      ) {
+        continue;
+      }
       const descriptor = output.descriptor as AssetOutputDescriptor;
       values.set(`${descriptor.codec}\0${descriptor.asset.sha256}`, { descriptor });
     }
@@ -453,6 +510,27 @@ async function waitForLoader<T>(promise: Promise<T>, signal: AbortSignal | undef
   } finally {
     if (abort !== undefined) signal.removeEventListener("abort", abort);
   }
+}
+
+function throwLoaderError(
+  error: unknown,
+  signal: AbortSignal | undefined,
+  output: ExportOutputValue,
+): never {
+  if (isNotebookExportError(error)) throw error;
+  if (signal?.aborted || isAbortError(error)) {
+    throw new NotebookExportError("abort", "Export output loading was aborted.", {
+      cause: signal?.aborted ? signal.reason : error,
+    });
+  }
+  throw new NotebookExportError("decode_failed", "OutputLoader decoding failed.", {
+    cause: error,
+    details: {
+      output: output.name,
+      codec: output.codec,
+      mediaType: output.mediaType.raw,
+    },
+  });
 }
 
 function throwIfAborted(signal: AbortSignal | undefined): void {

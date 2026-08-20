@@ -85,9 +85,9 @@ async function loadChart(
         result,
         dispose() {
           if (disposed) return;
+          disposed = true;
           try {
             result.finalize();
-            disposed = true;
           } finally {
             clearMount(container);
           }
