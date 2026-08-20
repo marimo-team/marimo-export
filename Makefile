@@ -2,9 +2,10 @@ SHELL := /bin/bash
 .SHELLFLAGS := -eu -o pipefail -c
 .DEFAULT_GOAL := help
 
-.PHONY: help bootstrap format lint typecheck test build docs-build docs-serve check
+.PHONY: help bootstrap format lint typecheck test build docs-build docs-serve check package
 
 FORMAT_PATHS := \
+	.pnpmfile.mjs \
 	.github \
 	apps \
 	development_docs \
@@ -21,8 +22,11 @@ FORMAT_PATHS := \
 	pyproject.toml \
 	tsconfig.base.json \
 	vite.config.ts
-LINT_PATHS := apps examples packages vite.config.ts
+LINT_PATHS := .pnpmfile.mjs apps examples packages vite.config.ts
 PYTHON_PATHS := packages/python scripts skills
+DIST_DIR := $(CURDIR)/dist
+PYTHON_DIST_DIR := $(DIST_DIR)/python
+NPM_DIST_DIR := $(DIST_DIR)/npm
 
 help: ## List development targets.
 	@awk 'BEGIN {FS = ":.*## "} /^[a-zA-Z0-9_-]+:.*## / {printf "  %-12s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -55,6 +59,23 @@ build: ## Build Python, npm, docs, and example packages.
 	test -s apps/docs/.vitepress/dist/llms-full.txt
 	uv build --package marimo-export --clear --no-sources
 
+package: ## Build and verify Python and npm release artifacts.
+	rm -rf "$(DIST_DIR)"
+	mkdir -p "$(PYTHON_DIST_DIR)/from-sdist" "$(NPM_DIST_DIR)"
+	pnpm --filter @marimo-team/portable-json build
+	pnpm --filter @marimo-team/marimo-export build
+	@set -eu; \
+		version=$$(uv version --package marimo-export --short); \
+		(cd packages/portable-json && pnpm --config.ignore-scripts=true pack \
+			--out "$(NPM_DIST_DIR)/marimo-team-portable-json-$$version.tgz"); \
+		(cd packages/browser && pnpm --config.ignore-scripts=true pack \
+			--out "$(NPM_DIST_DIR)/marimo-team-marimo-export-$$version.tgz")
+	uv build --package marimo-export --out-dir "$(PYTHON_DIST_DIR)" --no-sources
+	uvx twine check "$(PYTHON_DIST_DIR)"/*.whl "$(PYTHON_DIST_DIR)"/*.tar.gz
+	uv build --wheel "$(PYTHON_DIST_DIR)"/*.tar.gz \
+		--out-dir "$(PYTHON_DIST_DIR)/from-sdist"
+	./scripts/verify-dist.sh
+
 docs-build: ## Build the public documentation site.
 	pnpm --filter @marimo-team/marimo-export-docs build
 	test -s apps/docs/.vitepress/dist/llms.txt
@@ -70,6 +91,7 @@ check: ## Run the complete local quality gate.
 	@$(MAKE) --no-print-directory typecheck
 	@$(MAKE) --no-print-directory test
 	@$(MAKE) --no-print-directory build
+	pnpm --filter @marimo-team/portable-json test:package
 	pnpm --filter @marimo-team/marimo-export test:package
 	@set -eu; \
 		wheel=$$(printf '%s\n' ./dist/marimo_export-*.whl); \
