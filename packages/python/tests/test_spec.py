@@ -12,13 +12,18 @@ from jsonschema import Draft202012Validator
 from marimo_export import ExportSpec, OutputSpec
 from marimo_export.errors import SpecError
 from marimo_export.exporters import altair, importable, parquet
-from marimo_export.spec import SPEC_SCHEMA
+from marimo_export.spec import (
+    SPEC_SCHEMA,
+    CellSource,
+    RenderedOutputSource,
+    ValueSource,
+)
 
 
 def _value() -> dict[str, Any]:
     return {
         "schema": SPEC_SCHEMA,
-        "inputs": ["chart_width", "symbols_selector"],
+        "default_state": "baseline",
         "states": {
             "baseline": {},
             "msft": {"symbols_selector": ["MSFT"]},
@@ -26,8 +31,9 @@ def _value() -> dict[str, Any]:
         },
         "outputs": {
             "prices": {
-                "source": "df",
+                "source": {"kind": "value", "selector": "df"},
                 "exporter": {
+                    "dependencies": [],
                     "name": "parquet.table",
                     "options": {
                         "compression": "snappy",
@@ -36,7 +42,7 @@ def _value() -> dict[str, Any]:
                 },
             },
             "chart": {
-                "source": "symbols_chart",
+                "source": {"kind": "value", "selector": "symbols_chart"},
                 "exporter": "altair.vegalite",
             },
         },
@@ -45,21 +51,18 @@ def _value() -> dict[str, Any]:
 
 def test_programmatic_and_wire_construction_have_one_contract() -> None:
     programmatic = ExportSpec(
-        inputs=("chart_width", "symbols_selector"),
+        default_state="baseline",
         states={
             "baseline": {},
             "msft": {"symbols_selector": ["MSFT"]},
             "compact": {"chart_width": 480},
         },
         outputs={
-            "prices": OutputSpec(
-                source="df",
-                exporter=parquet.table(filename="prices.parquet"),
+            "prices": OutputSpec.value(
+                "df",
+                parquet.table(filename="prices.parquet"),
             ),
-            "chart": OutputSpec(
-                source="symbols_chart",
-                exporter=altair.vegalite(),
-            ),
+            "chart": OutputSpec.value("symbols_chart", altair.vegalite()),
         },
     )
 
@@ -72,9 +75,9 @@ def test_spec_copies_and_freezes_authored_values() -> None:
     symbols = ["MSFT"]
     states = {"msft": {"symbols_selector": symbols}}
     spec = ExportSpec(
-        inputs=("symbols_selector",),
+        default_state="msft",
         states=states,
-        outputs={"chart": OutputSpec(source="chart")},
+        outputs={"chart": OutputSpec.value("chart")},
     )
     symbols.append("AAPL")
     states["msft"]["symbols_selector"] = ["NVDA"]
@@ -95,6 +98,36 @@ def test_json_schema_accepts_the_wire_contract() -> None:
     Draft202012Validator(schema).validate(_value())
     assert schema["$schema"] == "https://json-schema.org/draft/2020-12/schema"
     assert schema["additionalProperties"] is False
+    assert set(cast(list[str], schema["required"])) == {
+        "schema",
+        "default_state",
+        "states",
+        "outputs",
+    }
+    assert set(cast(dict[str, Any], schema["properties"])) == {
+        "schema",
+        "default_state",
+        "states",
+        "outputs",
+    }
+    definitions = cast(dict[str, Any], schema["$defs"])
+    exporter_schema = cast(dict[str, Any], definitions["exporter"])
+    assert set(exporter_schema["required"]) == {"name", "options", "dependencies"}
+
+
+def test_spec_canonicalizes_state_and_output_order() -> None:
+    spec = ExportSpec(
+        default_state="z-state",
+        states={"z-state": {"choice": "z"}, "a-state": {"choice": "a"}},
+        outputs={
+            "z-output": OutputSpec.value("choice"),
+            "a-output": OutputSpec.output("choice"),
+        },
+    )
+
+    assert tuple(spec.states) == ("a-state", "z-state")
+    assert tuple(spec.outputs) == ("a-output", "z-output")
+    assert ExportSpec.from_value(spec.to_value()) == spec
 
 
 def test_spec_rejects_invalid_root_contracts() -> None:
@@ -104,17 +137,21 @@ def test_spec_rejects_invalid_root_contracts() -> None:
     empty_states = _value()
     empty_states["states"] = {}
 
-    unknown_input = _value()
-    unknown_input["states"]["bad"] = {"interval": "1d"}
+    missing_default = _value()
+    del missing_default["default_state"]
 
-    duplicate_input = _value()
-    duplicate_input["inputs"].append("chart_width")
+    unknown_default = _value()
+    unknown_default["default_state"] = "missing"
+
+    previous_shape = _value()
+    previous_shape["inputs"] = ["chart_width", "symbols_selector"]
 
     for value, code in (
         (unexpected, "spec_invalid"),
         (empty_states, "spec_value_invalid"),
-        (unknown_input, "spec_state_input_unknown"),
-        (duplicate_input, "spec_invalid"),
+        (missing_default, "spec_invalid"),
+        (unknown_default, "spec_invalid"),
+        (previous_shape, "spec_invalid"),
     ):
         with pytest.raises(SpecError) as raised:
             ExportSpec.from_value(value)
@@ -122,13 +159,35 @@ def test_spec_rejects_invalid_root_contracts() -> None:
 
 
 def test_output_sources_and_exporters_are_validated_at_construction() -> None:
-    for source in ("", "a.b", "x" * 256):
+    for source in ("", "a()", "a['key']", "x" * 2_049):
         with pytest.raises(SpecError) as raised:
-            OutputSpec(source=source)
+            OutputSpec.value(source)
         assert raised.value.code == "spec_output_invalid"
+
+    value_source = OutputSpec.value('report.rows[0]["value"]').source
+    output_source = OutputSpec.output("report.chart").source
+    named_cell = OutputSpec.cell("summary").source
+    identified_cell = OutputSpec.cell(id="runtime-cell").source
+    assert isinstance(value_source, ValueSource) and value_source.selector.path
+    assert isinstance(output_source, RenderedOutputSource)
+    assert output_source.selector.root == "report"
+    assert isinstance(named_cell, CellSource) and named_cell.value == "summary"
+    assert isinstance(identified_cell, CellSource) and identified_cell.value == "runtime-cell"
+    with pytest.raises(TypeError):
+        OutputSpec.cell()
+    with pytest.raises(TypeError):
+        OutputSpec.cell("summary", id="runtime-cell")
+    with pytest.raises(TypeError):
+        OutputSpec(source=cast(Any, "chart"))
+    with pytest.raises(SpecError):
+        OutputSpec.output("chart").__class__(
+            source=OutputSpec.output("chart").source,
+            exporter=altair.vegalite(),
+        )
 
     value = _value()
     value["outputs"]["chart"]["exporter"] = {
+        "dependencies": [],
         "name": "altair.vegalite",
         "options": {"unexpected": True},
     }
@@ -139,15 +198,14 @@ def test_output_sources_and_exporters_are_validated_at_construction() -> None:
 
 def test_programmatic_constructor_rejects_ambiguous_shorthands() -> None:
     with pytest.raises(TypeError):
-        ExportSpec(
-            inputs=cast(Any, "chart_width"),
+        cast(Any, ExportSpec)(
             states={"baseline": {}},
-            outputs={"chart": OutputSpec(source="chart")},
+            outputs={"chart": OutputSpec.value("chart")},
         )
 
     with pytest.raises(TypeError):
         ExportSpec(
-            inputs=(),
+            default_state="baseline",
             states={"baseline": {}},
             outputs=cast(Any, {"chart": {"source": "chart"}}),
         )
@@ -155,12 +213,16 @@ def test_programmatic_constructor_rejects_ambiguous_shorthands() -> None:
 
 def test_custom_importable_exporter_uses_the_wire_contract() -> None:
     spec = ExportSpec(
-        inputs=(),
+        default_state="baseline",
         states={"baseline": {}},
         outputs={
-            "summary": OutputSpec(
-                source="result",
-                exporter=importable("acme.exports:encode", level=3),
+            "summary": OutputSpec.value(
+                "result",
+                importable(
+                    "acme.exports:encode",
+                    options={"level": 3},
+                    dependencies=("acme.models",),
+                ),
             )
         },
     )
@@ -168,12 +230,40 @@ def test_custom_importable_exporter_uses_the_wire_contract() -> None:
     assert spec.to_value()["outputs"] == {
         "summary": {
             "exporter": {
+                "dependencies": ["acme.models"],
                 "name": "acme.exports:encode",
                 "options": {"level": 3},
             },
-            "source": "result",
+            "source": {"kind": "value", "selector": "result"},
         }
     }
+
+
+def test_exporter_wire_requires_sorted_explicit_dependencies() -> None:
+    missing = _value()
+    missing["outputs"]["prices"]["exporter"].pop("dependencies")
+
+    unsorted = _value()
+    unsorted["outputs"]["prices"]["exporter"] = {
+        "dependencies": ["acme.transforms", "acme.models"],
+        "name": "acme.exports:encode",
+        "options": {},
+    }
+
+    invalid = _value()
+    invalid["outputs"]["prices"]["exporter"] = {
+        "dependencies": ["acme:models"],
+        "name": "acme.exports:encode",
+        "options": {},
+    }
+
+    custom_shorthand = _value()
+    custom_shorthand["outputs"]["prices"]["exporter"] = "acme.exports:encode"
+
+    for value in (missing, unsorted, invalid, custom_shorthand):
+        with pytest.raises(SpecError) as raised:
+            ExportSpec.from_value(value)
+        assert raised.value.code == "spec_exporter_invalid"
 
 
 def test_export_names_and_state_values_use_the_portable_grammar() -> None:
@@ -194,8 +284,9 @@ def test_export_names_and_state_values_use_the_portable_grammar() -> None:
 def test_json_file_rejects_duplicate_keys(tmp_path: Path) -> None:
     path = tmp_path / "stocks.json"
     path.write_text(
-        '{"schema":"marimo-export.spec.v1","inputs":[],"states":{"one":{},"one":{}},'
-        '"outputs":{"result":{"source":"result"}}}',
+        '{"schema":"marimo-export.spec.v1","default_state":"one",'
+        '"states":{"one":{},"one":{}},'
+        '"outputs":{"result":{"source":{"kind":"value","selector":"result"}}}}',
         encoding="utf-8",
     )
 
@@ -203,30 +294,48 @@ def test_json_file_rejects_duplicate_keys(tmp_path: Path) -> None:
         ExportSpec.from_file(path)
 
 
+def test_json_file_decodes_custom_exporter_dependencies(tmp_path: Path) -> None:
+    value = _value()
+    value["outputs"]["prices"]["exporter"] = {
+        "dependencies": ["acme.models"],
+        "name": "acme.exports:encode",
+        "options": {"level": 3},
+    }
+    path = tmp_path / "stocks.json"
+    path.write_text(json.dumps(value), encoding="utf-8")
+
+    exporter = ExportSpec.from_file(path).outputs["prices"].exporter
+
+    assert exporter is not None
+    assert exporter.options == {"level": 3}
+    assert exporter.dependencies == ("acme.models",)
+
+
 def test_yaml_file_decodes_the_same_contract(tmp_path: Path) -> None:
     path = tmp_path / "stocks.yaml"
     path.write_text(
         """
 schema: marimo-export.spec.v1
-inputs: [chart_width]
+default_state: full
 states:
   full: {}
   compact:
     chart_width: 480
 outputs:
   chart:
-    source: chart
+    source: {kind: value, selector: chart}
     exporter:
       name: altair.png
       options:
         scale: 2
+      dependencies: []
 """.lstrip(),
         encoding="utf-8",
     )
 
     spec = ExportSpec.from_file(path)
 
-    assert spec.inputs == ("chart_width",)
+    assert spec.default_state == "full"
     assert spec.states["compact"]["chart_width"] == 480
     assert spec.outputs["chart"].exporter == altair.png(scale=2)
 
@@ -236,11 +345,11 @@ def test_yaml_rejects_aliases(tmp_path: Path) -> None:
     path.write_text(
         """
 schema: marimo-export.spec.v1
-inputs: []
+default_state: base
 states:
   base: &base {}
   copy: *base
-outputs: {result: {source: result}}
+outputs: {result: {source: {kind: value, selector: result}}}
 """.lstrip(),
         encoding="utf-8",
     )
