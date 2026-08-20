@@ -1,0 +1,62 @@
+{
+  "name": "@marimo-team/portable-json",
+  "version": "0.1.0",
+  "description": "Validate and parse JSON values with portable Python and JavaScript semantics",
+  "homepage": "https://marimo-team.github.io/marimo-export/",
+  "bugs": {
+    "url": "https://github.com/marimo-team/marimo-export/issues"
+  },
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/marimo-team/marimo-export.git",
+    "directory": "packages/portable-json"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts",
+    "./zod": "./src/zod.ts",
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.mts",
+        "import": "./dist/index.mjs"
+      },
+      "./zod": {
+        "types": "./dist/zod.d.mts",
+        "import": "./dist/zod.mjs"
+      },
+      "./package.json": "./package.json"
+    },
+    "access": "public"
+  },
+  "scripts": {
+    "build": "vp pack",
+    "check": "vp check",
+    "prepack": "vp pack",
+    "test": "vp test",
+    "test:package": "vp pack && node tests/packed-install.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "typescript": "catalog:",
+    "vite-plus": "catalog:",
+    "zod": "4.3.6"
+  },
+  "peerDependencies": {
+    "zod": "^4.3.6"
+  },
+  "peerDependenciesMeta": {
+    "zod": {
+      "optional": true
+    }
+  }
+}
