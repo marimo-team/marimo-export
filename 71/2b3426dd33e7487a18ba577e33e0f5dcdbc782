@@ -1,0 +1,44 @@
+packages/browser/src/loader/parquet.ts
+  s_84434b42698f4e::t_84a771b7d25e66 1-2
+packages/loader-numpy/src/index.ts
+  s_84434b42698f4e::t_b101058479e91e 220-226
+  s_84434b42698f4e::t_8c142f4f4d0922 32-37,90,228,233,241
+packages/browser/src/loader/vegalite.ts
+  s_84434b42698f4e::t_84a771b7d25e66 1-7
+packages/loader-vegalite/src/index.ts
+  s_84434b42698f4e::t_8c142f4f4d0922 4,55,57,60,73,148-150
+  s_84434b42698f4e::t_84a771b7d25e66 28-29,32-39,44,52,71
+  s_84434b42698f4e::t_694255c40c80e7 1,27
+  s_84434b42698f4e::t_b101058479e91e 56
+packages/loader-arrow/tests/loader.test.ts
+  s_84434b42698f4e::t_44d83a3a055a4b 7-13,31-43
+packages/loader-parquet/tests/loader.test.ts
+  s_84434b42698f4e::t_585af2a98b1619 4,22
+  s_84434b42698f4e::t_fd71178e8c76fa 2,5,7,11-12,19,23,30-31,33,38,69-70
+packages/loader-parquet/src/index.ts
+  s_84434b42698f4e::t_84a771b7d25e66 28-31,36-43,50
+  s_84434b42698f4e::t_8c142f4f4d0922 13-27,35
+packages/loader-numpy/tests/loader.test.ts
+  s_84434b42698f4e::t_fd71178e8c76fa 64-68
+packages/loader-vegalite/tests/loader.test.ts
+  s_84434b42698f4e::t_42efa819a83fbb 302-307
+  s_84434b42698f4e::t_26d87084796345 186-190,204,207,250,256,268,273,277-282,299-301,308-312
+  s_84434b42698f4e::t_2d4e8fcb851fb7 4-5,9-10,12-13,34,58,89,120,180-181,183,218,230,284,287-298
+  s_84434b42698f4e::t_1e9efeb8167940 6,36,60,74,80,85-86,100
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "712b3426dd33e7487a18ba577e33e0f5dcdbc782",
+  "prompts": {},
+  "sessions": {
+    "s_84434b42698f4e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a061f5-fe96-7e42-ae14-44b03f0596fa",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
