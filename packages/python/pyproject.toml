@@ -12,8 +12,8 @@ license-files = ["LICENSE"]
 authors = [{ name = "marimo team" }]
 requires-python = ">=3.10"
 dependencies = [
-  "cryptography==50.0.0",
-  "idna==3.18",
+  "cryptography==50.0.1",
+  "idna==3.19",
   "marimo==0.24.0",
   "msgspec>=0.20",
   "numpy>=1.23.5",
