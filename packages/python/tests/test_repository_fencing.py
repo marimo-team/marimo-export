@@ -258,10 +258,15 @@ def test_busy_renewal_expires_reservation_and_staging_fail_closed(
             attempted.set()
             raise RepositoryBusyError("catalog busy")
 
-        monkeypatch.setattr(repository._catalog, "renew_lifecycle", busy_heartbeat)
-        repository._leases._wake.set()
-        assert attempted.wait(timeout=2)
-        deadline = time.monotonic() + 2
+        with repository._leases._condition:
+            assert repository._leases._condition.wait_for(
+                lambda: not repository._leases._maintaining,
+                timeout=10,
+            )
+            monkeypatch.setattr(repository._catalog, "renew_lifecycle", busy_heartbeat)
+            repository._leases._wake.set()
+        assert attempted.wait(timeout=10)
+        deadline = time.monotonic() + 10
         while reservation.alive and time.monotonic() < deadline:
             time.sleep(0.01)
         assert not reservation.alive
