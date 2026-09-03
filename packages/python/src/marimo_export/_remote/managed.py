@@ -681,7 +681,7 @@ class ManagedServer:
             try:
                 self._temporary.cleanup()
                 return
-            except PermissionError:
+            except OSError:
                 remaining = deadline - time.monotonic()
                 if sys.platform != "win32" or remaining <= 0:
                     raise

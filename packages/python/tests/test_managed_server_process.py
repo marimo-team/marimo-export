@@ -505,8 +505,10 @@ def test_managed_token_input_cancellation_closes_stdin(
     assert not temporary_path.exists()
 
 
-def test_windows_file_cleanup_waits_for_terminated_process_handles(
+@pytest.mark.parametrize("failure", [PermissionError, NotADirectoryError])
+def test_windows_file_cleanup_retries_transient_directory_errors(
     monkeypatch: pytest.MonkeyPatch,
+    failure: type[OSError],
 ) -> None:
     attempts = 0
 
@@ -515,7 +517,7 @@ def test_windows_file_cleanup_waits_for_terminated_process_handles(
             nonlocal attempts
             attempts += 1
             if attempts == 1:
-                raise PermissionError("process handle is still closing")
+                raise failure("process handle is still closing")
 
     server = ManagedServer.__new__(ManagedServer)
     server._log_file = io.BytesIO()
