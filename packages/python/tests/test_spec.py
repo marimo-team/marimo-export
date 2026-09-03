@@ -15,8 +15,10 @@ from marimo_export.exporters import altair, importable, parquet
 from marimo_export.spec import (
     SPEC_SCHEMA,
     CellSource,
+    ExportSource,
+    JsonSource,
+    NativeSource,
     RenderedOutputSource,
-    ValueSource,
 )
 
 
@@ -31,7 +33,7 @@ def _value() -> dict[str, Any]:
         },
         "outputs": {
             "prices": {
-                "source": {"kind": "value", "selector": "df"},
+                "source": {"kind": "export", "selector": "df"},
                 "exporter": {
                     "dependencies": [],
                     "name": "parquet.table",
@@ -42,9 +44,11 @@ def _value() -> dict[str, Any]:
                 },
             },
             "chart": {
-                "source": {"kind": "value", "selector": "symbols_chart"},
+                "source": {"kind": "export", "selector": "symbols_chart"},
                 "exporter": "altair.vegalite",
             },
+            "summary": {"source": {"kind": "json", "selector": "summary"}},
+            "table": {"source": {"kind": "native", "selector": "table"}},
         },
     }
 
@@ -58,11 +62,13 @@ def test_programmatic_and_wire_construction_have_one_contract() -> None:
             "compact": {"chart_width": 480},
         },
         outputs={
-            "prices": OutputSpec.value(
+            "prices": OutputSpec.export(
                 "df",
                 parquet.table(filename="prices.parquet"),
             ),
-            "chart": OutputSpec.value("symbols_chart", altair.vegalite()),
+            "chart": OutputSpec.export("symbols_chart", altair.vegalite()),
+            "summary": OutputSpec.json("summary"),
+            "table": OutputSpec.native("table"),
         },
     )
 
@@ -77,7 +83,7 @@ def test_spec_copies_and_freezes_authored_values() -> None:
     spec = ExportSpec(
         default_state="msft",
         states=states,
-        outputs={"chart": OutputSpec.value("chart")},
+        outputs={"chart": OutputSpec.json("chart")},
     )
     symbols.append("AAPL")
     states["msft"]["symbols_selector"] = ["NVDA"]
@@ -120,7 +126,7 @@ def test_spec_canonicalizes_state_and_output_order() -> None:
         default_state="z-state",
         states={"z-state": {"choice": "z"}, "a-state": {"choice": "a"}},
         outputs={
-            "z-output": OutputSpec.value("choice"),
+            "z-output": OutputSpec.json("choice"),
             "a-output": OutputSpec.output("choice"),
         },
     )
@@ -146,12 +152,16 @@ def test_spec_rejects_invalid_root_contracts() -> None:
     previous_shape = _value()
     previous_shape["inputs"] = ["chart_width", "symbols_selector"]
 
+    previous_schema = _value()
+    previous_schema["schema"] = "marimo-export.spec.v1"
+
     for value, code in (
         (unexpected, "spec_invalid"),
         (empty_states, "spec_value_invalid"),
         (missing_default, "spec_invalid"),
         (unknown_default, "spec_invalid"),
         (previous_shape, "spec_invalid"),
+        (previous_schema, "spec_invalid"),
     ):
         with pytest.raises(SpecError) as raised:
             ExportSpec.from_value(value)
@@ -159,16 +169,22 @@ def test_spec_rejects_invalid_root_contracts() -> None:
 
 
 def test_output_sources_and_exporters_are_validated_at_construction() -> None:
+    assert not hasattr(OutputSpec, "value")
+
     for source in ("", "a()", "a['key']", "x" * 2_049):
         with pytest.raises(SpecError) as raised:
-            OutputSpec.value(source)
+            OutputSpec.json(source)
         assert raised.value.code == "spec_output_invalid"
 
-    value_source = OutputSpec.value('report.rows[0]["value"]').source
+    json_source = OutputSpec.json('report.rows[0]["value"]').source
+    native_source = OutputSpec.native("report.table").source
+    export_source = OutputSpec.export("report.chart", altair.vegalite()).source
     output_source = OutputSpec.output("report.chart").source
     named_cell = OutputSpec.cell("summary").source
     identified_cell = OutputSpec.cell(id="runtime-cell").source
-    assert isinstance(value_source, ValueSource) and value_source.selector.path
+    assert isinstance(json_source, JsonSource) and json_source.selector.path
+    assert isinstance(native_source, NativeSource)
+    assert isinstance(export_source, ExportSource)
     assert isinstance(output_source, RenderedOutputSource)
     assert output_source.selector.root == "report"
     assert isinstance(named_cell, CellSource) and named_cell.value == "summary"
@@ -180,10 +196,12 @@ def test_output_sources_and_exporters_are_validated_at_construction() -> None:
     with pytest.raises(TypeError):
         OutputSpec(source=cast(Any, "chart"))
     with pytest.raises(SpecError):
-        OutputSpec.output("chart").__class__(
-            source=OutputSpec.output("chart").source,
+        OutputSpec.json("chart").__class__(
+            source=OutputSpec.json("chart").source,
             exporter=altair.vegalite(),
         )
+    with pytest.raises(SpecError):
+        OutputSpec(source=OutputSpec.export("chart", altair.vegalite()).source)
 
     value = _value()
     value["outputs"]["chart"]["exporter"] = {
@@ -200,7 +218,7 @@ def test_programmatic_constructor_rejects_ambiguous_shorthands() -> None:
     with pytest.raises(TypeError):
         cast(Any, ExportSpec)(
             states={"baseline": {}},
-            outputs={"chart": OutputSpec.value("chart")},
+            outputs={"chart": OutputSpec.json("chart")},
         )
 
     with pytest.raises(TypeError):
@@ -216,7 +234,7 @@ def test_custom_importable_exporter_uses_the_wire_contract() -> None:
         default_state="baseline",
         states={"baseline": {}},
         outputs={
-            "summary": OutputSpec.value(
+            "summary": OutputSpec.export(
                 "result",
                 importable(
                     "acme.exports:encode",
@@ -234,7 +252,7 @@ def test_custom_importable_exporter_uses_the_wire_contract() -> None:
                 "name": "acme.exports:encode",
                 "options": {"level": 3},
             },
-            "source": {"kind": "value", "selector": "result"},
+            "source": {"kind": "export", "selector": "result"},
         }
     }
 
@@ -284,9 +302,9 @@ def test_export_names_and_state_values_use_the_portable_grammar() -> None:
 def test_json_file_rejects_duplicate_keys(tmp_path: Path) -> None:
     path = tmp_path / "stocks.json"
     path.write_text(
-        '{"schema":"marimo-export.spec.v1","default_state":"one",'
+        '{"schema":"marimo-export.spec.v2","default_state":"one",'
         '"states":{"one":{},"one":{}},'
-        '"outputs":{"result":{"source":{"kind":"value","selector":"result"}}}}',
+        '"outputs":{"result":{"source":{"kind":"json","selector":"result"}}}}',
         encoding="utf-8",
     )
 
@@ -315,7 +333,7 @@ def test_yaml_file_decodes_the_same_contract(tmp_path: Path) -> None:
     path = tmp_path / "stocks.yaml"
     path.write_text(
         """
-schema: marimo-export.spec.v1
+schema: marimo-export.spec.v2
 default_state: full
 states:
   full: {}
@@ -323,7 +341,7 @@ states:
     chart_width: 480
 outputs:
   chart:
-    source: {kind: value, selector: chart}
+    source: {kind: export, selector: chart}
     exporter:
       name: altair.png
       options:
@@ -344,12 +362,12 @@ def test_yaml_rejects_aliases(tmp_path: Path) -> None:
     path = tmp_path / "stocks.yml"
     path.write_text(
         """
-schema: marimo-export.spec.v1
+schema: marimo-export.spec.v2
 default_state: base
 states:
   base: &base {}
   copy: *base
-outputs: {result: {source: {kind: value, selector: result}}}
+outputs: {result: {source: {kind: json, selector: result}}}
 """.lstrip(),
         encoding="utf-8",
     )

@@ -63,7 +63,7 @@ if __name__ == "__main__":
         spec=ExportSpec(
             default_state="baseline",
             states={"baseline": {}, "raised": {"counter": {"count": 7}}},
-            outputs={"summary": OutputSpec.value("summary")},
+            outputs={"summary": OutputSpec.json("summary")},
         ),
         output=tmp_path / "export",
         timeout=30,
@@ -119,7 +119,7 @@ if __name__ == "__main__":
             spec=ExportSpec(
                 default_state="enabled",
                 states={"enabled": {"toggle": {"flag": 1}}},
-                outputs={"flag": OutputSpec.value("flag")},
+                outputs={"flag": OutputSpec.json("flag")},
             ),
             output=output,
             timeout=30,
@@ -174,7 +174,7 @@ if __name__ == "__main__":
             default_state="baseline",
             states={"baseline": {}},
             outputs={
-                "widget": OutputSpec.value(
+                "widget": OutputSpec.export(
                     "widget",
                     anywidget_exporter.bundle(),
                 )
@@ -227,7 +227,7 @@ if __name__ == "__main__":
         default_state="baseline",
         states={"baseline": {}},
         outputs={
-            "widget": OutputSpec.value(
+            "widget": OutputSpec.export(
                 "widget",
                 anywidget_exporter.bundle(),
             )

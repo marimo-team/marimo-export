@@ -14,7 +14,7 @@ def _spec() -> ExportSpec:
     return ExportSpec(
         default_state="baseline",
         states={"baseline": {}},
-        outputs={"answer": OutputSpec.value("answer")},
+        outputs={"answer": OutputSpec.json("answer")},
     )
 
 

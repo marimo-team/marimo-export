@@ -176,11 +176,27 @@ def has_cache_scope(graph: Any) -> bool:
 
 
 def _rerun_unavailable_attempt(attempt: Cache) -> Cache:
-    if not attempt.hit or not any(
-        isinstance(value, (UIElementStub, UnhashableStub)) for value in attempt.defs.values()
+    if not attempt.hit or not (
+        any(_contains_unavailable(value) for value in attempt.defs.values())
+        or _contains_unavailable(attempt.meta.get("return"))
     ):
         return attempt
     return _empty_attempt(attempt)
+
+
+def _contains_unavailable(value: object, seen: set[int] | None = None) -> bool:
+    if isinstance(value, (UIElementStub, UnhashableStub)):
+        return True
+    if not isinstance(value, (dict, list, set, tuple)):
+        return False
+    if seen is None:
+        seen = set()
+    identity = id(value)
+    if identity in seen:
+        return False
+    seen.add(identity)
+    values = value.values() if isinstance(value, dict) else value
+    return any(_contains_unavailable(item, seen) for item in values)
 
 
 def _empty_attempt(attempt: Cache) -> Cache:

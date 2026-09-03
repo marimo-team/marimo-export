@@ -29,10 +29,11 @@ def _custom_exporter_plan(
     *,
     dependencies: tuple[str, ...] = (),
 ) -> ExecutionPlan:
+    exporter = importable(f"{module_name}:{symbol}", dependencies=dependencies)
     planned_output = PlannedOutput(
         name="summary",
-        source=OutputSpec.value("value").source,
-        exporter=importable(f"{module_name}:{symbol}", dependencies=dependencies),
+        source=OutputSpec.export("value", exporter).source,
+        exporter=exporter,
     )
     return ExecutionPlan(
         states=(

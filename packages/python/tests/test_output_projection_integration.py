@@ -42,7 +42,7 @@ if __name__ == "__main__":
         default_state="baseline",
         states={"baseline": {}},
         outputs={
-            "count": OutputSpec.value('report["summary"].count'),
+            "count": OutputSpec.json('report["summary"].count'),
             "slider": OutputSpec.output("slider"),
             "view": OutputSpec.output('report["view"]'),
         },
@@ -324,7 +324,7 @@ if __name__ == "__main__":
             default_state="baseline",
             states={"baseline": {}},
             outputs={
-                "literal": OutputSpec.value("literal_cell_id"),
+                "literal": OutputSpec.json("literal_cell_id"),
                 "rendered": OutputSpec.output("literal_cell_id"),
             },
         ),
@@ -390,7 +390,7 @@ if __name__ == "__main__":
             states={"baseline": {}},
             outputs={
                 "first": OutputSpec.output("first"),
-                "plain_value": OutputSpec.value("plain"),
+                "plain_value": OutputSpec.json("plain"),
                 "plain": OutputSpec.output("plain"),
                 "second": OutputSpec.output("second"),
             },

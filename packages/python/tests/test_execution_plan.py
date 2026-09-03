@@ -85,7 +85,7 @@ def _spec() -> ExportSpec:
             "baseline": {},
             "focus": {"selector": ["MSFT"]},
         },
-        outputs={"prices": OutputSpec.value("df")},
+        outputs={"prices": OutputSpec.native("df")},
     )
 
 
@@ -185,7 +185,7 @@ def test_equal_normalized_vectors_share_one_state_and_retain_every_alias() -> No
     spec = ExportSpec(
         default_state="two",
         states={"one": {}, "two": {"symbols": ["AAPL", "MSFT"]}},
-        outputs={"prices": OutputSpec.value("df")},
+        outputs={"prices": OutputSpec.native("df")},
     )
 
     plan = create_execution_plan(spec, _baseline())
@@ -204,7 +204,7 @@ def test_inputs_are_inferred_from_selected_output_dependencies_and_state_keys() 
     spec = ExportSpec(
         default_state="baseline",
         states={"baseline": {}, "wide": {"symbols": ["MSFT"]}},
-        outputs={"prices": OutputSpec.value("df")},
+        outputs={"prices": OutputSpec.native("df")},
     )
 
     plan = create_execution_plan(spec, _baseline())
@@ -248,7 +248,7 @@ def test_output_ui_infers_dependencies_without_becoming_an_input() -> None:
     spec = ExportSpec(
         default_state="baseline",
         states={"baseline": {}},
-        outputs={"widget": OutputSpec.value("binary_widget")},
+        outputs={"widget": OutputSpec.json("binary_widget")},
     )
 
     plan = create_execution_plan(spec, baseline)
@@ -261,7 +261,7 @@ def test_nonportable_ui_authored_as_an_input_is_rejected() -> None:
     spec = ExportSpec(
         default_state="baseline",
         states={"baseline": {"binary_widget": {}}},
-        outputs={"widget": OutputSpec.value("binary_widget")},
+        outputs={"widget": OutputSpec.json("binary_widget")},
     )
 
     with pytest.raises(SpecError) as raised:
@@ -285,7 +285,7 @@ def test_selected_ui_output_is_inferred_as_its_direct_control_root() -> None:
     spec = ExportSpec(
         default_state="baseline",
         states={"baseline": {}},
-        outputs={"selector": OutputSpec.value("selector")},
+        outputs={"selector": OutputSpec.json("selector")},
     )
 
     plan = create_execution_plan(spec, baseline)
@@ -325,7 +325,7 @@ def test_selected_ui_output_uses_the_canonical_alias_root() -> None:
     spec = ExportSpec(
         default_state="baseline",
         states={"baseline": {}},
-        outputs={"child": OutputSpec.value("child")},
+        outputs={"child": OutputSpec.json("child")},
     )
 
     plan = create_execution_plan(spec, baseline)
@@ -365,7 +365,7 @@ def test_selected_ui_output_uses_the_composite_control_owner() -> None:
     spec = ExportSpec(
         default_state="baseline",
         states={"baseline": {}},
-        outputs={"child": OutputSpec.value("child")},
+        outputs={"child": OutputSpec.json("child")},
     )
 
     plan = create_execution_plan(spec, baseline)
@@ -405,7 +405,7 @@ def test_unknown_state_input_is_rejected_during_planning() -> None:
     spec = ExportSpec(
         default_state="baseline",
         states={"baseline": {"missing": 1}},
-        outputs={"prices": OutputSpec.value("df")},
+        outputs={"prices": OutputSpec.native("df")},
     )
 
     with pytest.raises(SpecError) as raised:
@@ -419,7 +419,7 @@ def test_output_cell_reads_state_and_source_without_definitions() -> None:
     code = output_cell_code(
         PlannedOutput(
             name='chart "main"',
-            source=OutputSpec.value("symbols_chart").source,
+            source=OutputSpec.json("symbols_chart").source,
             exporter=None,
         ),
         "marimo_export_state_0123456789abcdef",
@@ -440,7 +440,7 @@ def test_exporter_output_cell_is_a_deterministic_marimo_leaf() -> None:
     code = output_cell_code(
         PlannedOutput(
             name="snapshot",
-            source=OutputSpec.value("performance", altair.png(scale=2)).source,
+            source=OutputSpec.export("performance", altair.png(scale=2)).source,
             exporter=altair.png(scale=2),
         ),
         "marimo_export_state_0123456789abcdef",
@@ -495,7 +495,7 @@ def test_custom_exporter_output_cell_uses_an_explicit_importable_callable() -> N
     code = output_cell_code(
         PlannedOutput(
             name="summary",
-            source=OutputSpec.value(
+            source=OutputSpec.export(
                 "result",
                 importable(
                     "acme.exports:encode",
@@ -579,7 +579,7 @@ def test_rendered_and_complete_cell_leaves_embed_the_implementation_identity() -
 def test_projection_runtime_identities_change_the_native_cell_hash() -> None:
     planned = PlannedOutput(
         name="summary",
-        source=OutputSpec.value("result").source,
+        source=OutputSpec.json("result").source,
         exporter=None,
     )
     identities = (

@@ -19,12 +19,14 @@ from marimo_export.errors import SessionError, SpecError
 from marimo_export.index import ControlBinding, ControlPathStep
 from marimo_export.spec import (
     CellSource,
+    ExportSource,
     FrozenJsonObject,
     FrozenJsonValue,
+    JsonSource,
+    NativeSource,
     OutputSpec,
     RenderedOutputSource,
     StrPath,
-    ValueSource,
 )
 
 
@@ -265,7 +267,10 @@ class SessionDescription:
             if not isinstance(output_name, str) or not isinstance(output, OutputSpec):
                 raise TypeError("outputs must map names to OutputSpec values")
             source = output.source
-            if isinstance(source, (ValueSource, RenderedOutputSource)):
+            if isinstance(
+                source,
+                (JsonSource, NativeSource, ExportSource, RenderedOutputSource),
+            ):
                 root = source.selector.root
                 definition = definitions.get(root)
                 if definition is None:

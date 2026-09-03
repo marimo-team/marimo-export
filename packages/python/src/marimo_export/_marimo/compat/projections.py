@@ -6,6 +6,7 @@ from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
+from io import BytesIO
 from typing import TYPE_CHECKING, Any, cast
 
 from marimo_export._diagnostics import record_cleanup_failure
@@ -18,6 +19,7 @@ from marimo_export._json import (
     json_value,
 )
 from marimo_export.descriptors import (
+    ARROW_MEDIA_TYPE,
     JSON_MEDIA_TYPE,
     MARIMO_CELL_MEDIA_TYPE,
     MARIMO_OUTPUT_MEDIA_TYPE,
@@ -40,6 +42,13 @@ class ProjectionRecording:
 _CURRENT_RECORDING: ContextVar[ProjectionRecording | None] = ContextVar(
     "marimo_export_projection_recording",
     default=None,
+)
+_NATIVE_ARROW_SCHEMA = "marimo-export.native-arrow.v1"
+_POLARS_TYPES = frozenset(
+    {
+        "polars.dataframe.frame.DataFrame",
+        "polars.series.series.Series",
+    }
 )
 
 
@@ -177,6 +186,50 @@ def capture_json_value(
         data=canonical_bytes(value),
         media_type=JSON_MEDIA_TYPE,
         metadata={"schema": "marimo.json.v1"},
+    )
+
+
+def capture_native_value(
+    root: object,
+    path: tuple[tuple[str, str | int], ...],
+) -> object:
+    """Return one value through a supported native cache representation."""
+
+    value = resolve_value_path(root, path)
+    if value is None or isinstance(value, (bool, str, int, float)):
+        return value
+    try:
+        portable = json_value(value, "native JSON projection")
+    except (TypeError, ValueError):
+        arrow = _native_arrow_value(value)
+        return value if arrow is None else arrow
+
+    from marimo._save.stubs import BlobAsset
+
+    return BlobAsset(
+        data=canonical_bytes(portable),
+        media_type=JSON_MEDIA_TYPE,
+        metadata={"schema": "marimo.json.v1"},
+    )
+
+
+def _native_arrow_value(value: object) -> object | None:
+    python_type = f"{type(value).__module__}.{type(value).__qualname__}"
+    if python_type not in _POLARS_TYPES:
+        return None
+    frame = cast(Any, value).to_frame() if python_type.endswith(".Series") else value
+    buffer = BytesIO()
+    cast(Any, frame).write_ipc_stream(buffer, compression="uncompressed")
+
+    from marimo._save.stubs import BlobAsset
+
+    return BlobAsset(
+        data=buffer.getvalue(),
+        media_type=ARROW_MEDIA_TYPE,
+        metadata={
+            "python_type": python_type,
+            "schema": _NATIVE_ARROW_SCHEMA,
+        },
     )
 
 
@@ -413,6 +466,7 @@ __all__ = [
     "capture_json_value",
     "capture_materialized_cell",
     "capture_materialized_output",
+    "capture_native_value",
     "materialize_complete_cell",
     "materialize_projection_tokens",
     "materialize_rendered_output",

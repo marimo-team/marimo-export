@@ -88,7 +88,7 @@ if __name__ == "__main__":
         spec=ExportSpec(
             default_state="baseline",
             states={"baseline": {}},
-            outputs={"startup": OutputSpec.value("startup")},
+            outputs={"startup": OutputSpec.json("startup")},
         ),
         output=tmp_path / "export",
         timeout=30,
@@ -138,7 +138,7 @@ if __name__ == "__main__":
         spec=ExportSpec(
             default_state="baseline",
             states={"baseline": {}},
-            outputs={"visibility": OutputSpec.value("visibility")},
+            outputs={"visibility": OutputSpec.json("visibility")},
         ),
         output=tmp_path / "export",
         timeout=30,
@@ -183,7 +183,7 @@ def test_managed_build_rejects_extension_policy_before_notebook_execution(
             spec=ExportSpec(
                 default_state="baseline",
                 states={"baseline": {}},
-                outputs={"value": OutputSpec.value("value")},
+                outputs={"value": OutputSpec.json("value")},
             ),
             output=tmp_path / "export",
         )

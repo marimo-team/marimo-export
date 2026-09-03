@@ -39,7 +39,7 @@ if __name__ == "__main__":
             default_state="selected",
             states={"selected": {"amount": 4}},
             outputs={
-                "value": OutputSpec.value("amount"),
+                "value": OutputSpec.json("amount"),
                 "cell": OutputSpec.cell("inputs"),
             },
         ),
@@ -89,7 +89,7 @@ if __name__ == "__main__":
             default_state="selected",
             states={"selected": {"amount": 4}},
             outputs={
-                "value": OutputSpec.value("amount"),
+                "value": OutputSpec.json("amount"),
                 "cell": OutputSpec.cell("inputs"),
             },
         ),
@@ -138,7 +138,7 @@ if __name__ == "__main__":
             default_state="selected",
             states={"selected": {"amount": 4}},
             outputs={
-                "value": OutputSpec.value("amount"),
+                "value": OutputSpec.json("amount"),
                 "cell": OutputSpec.cell("inputs"),
             },
         ),
@@ -191,7 +191,7 @@ if __name__ == "__main__":
                 default_state="selected",
                 states={"selected": {"scale": 2}},
                 outputs={
-                    "value": OutputSpec.value("answer"),
+                    "value": OutputSpec.json("answer"),
                     "cell": OutputSpec.cell("inputs"),
                 },
             ),

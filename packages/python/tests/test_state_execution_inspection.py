@@ -130,7 +130,7 @@ if __name__ == "__main__":
         "second_parent",
         "unrelated",
     )
-    assert description.inputs_for({"value": OutputSpec.value("result")}) == (
+    assert description.inputs_for({"value": OutputSpec.json("result")}) == (
         "alias",
         "parent",
     )

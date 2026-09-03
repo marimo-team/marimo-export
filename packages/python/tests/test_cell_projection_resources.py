@@ -1,13 +1,42 @@
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, cast
+from uuid import UUID
 
 import pytest
 from export_integration_support import build
 from marimo_export import ExportSpec, OutputSpec, open_export
 from marimo_export._json import decode_json_object
+from marimo_export._marimo.compat.replay import _resolve_ui_object_id
 from marimo_export.errors import ExecutionError, OutputError
+
+
+def test_complete_cell_resolves_one_external_scratch_ui_alias() -> None:
+    external = UUID("12345678-1234-4234-8234-123456789abc")
+    scoped = f"{external}PKri-0"
+    registry = SimpleNamespace(
+        _objects={scoped: object()},
+        _constructing_cells={scoped: f"{external}PKri"},
+    )
+
+    assert _resolve_ui_object_id(registry, "__scratch__-0", "PKri") == scoped
+
+
+def test_complete_cell_rejects_missing_or_ambiguous_scratch_ui_aliases() -> None:
+    first = UUID("12345678-1234-4234-8234-123456789abc")
+    second = UUID("87654321-4321-4321-8321-cba987654321")
+    candidates = [f"{scope}PKri-0" for scope in (first, second)]
+    registry = SimpleNamespace(
+        _objects={candidate: object() for candidate in candidates},
+        _constructing_cells={candidate: candidate.removesuffix("-0") for candidate in candidates},
+    )
+
+    with pytest.raises(KeyError):
+        _resolve_ui_object_id(SimpleNamespace(_objects={}), "__scratch__-0", "PKri")
+    with pytest.raises(KeyError):
+        _resolve_ui_object_id(registry, "__scratch__-0", "PKri")
 
 
 def test_output_and_cell_snapshots_scope_shared_widget_and_control_graphs(
@@ -196,13 +225,13 @@ if __name__ == "__main__":
         ExportSpec(
             default_state="revealed",
             states={"revealed": {"reveal": 1}},
-            outputs={"value": OutputSpec.value("metric")},
+            outputs={"value": OutputSpec.json("metric")},
         ),
         ExportSpec(
             default_state="revealed",
             states={"revealed": {"reveal": 1}},
             outputs={
-                "value": OutputSpec.value("metric"),
+                "value": OutputSpec.json("metric"),
                 "output": OutputSpec.output("filters"),
                 "cell": OutputSpec.cell("filters_control"),
             },

@@ -113,6 +113,37 @@ def test_unavailable_cache_hit_becomes_a_reported_miss() -> None:
     assert retry.defs == {"value": None}
 
 
+def test_cold_cache_attempt_keeps_a_nested_unavailable_return() -> None:
+    unavailable = UnhashableStub(var_name="return", error_msg="unavailable")
+    attempt = RuntimeCache(
+        defs={"value": 1},
+        hash="a" * 64,
+        cache_type="Pure",
+        stateful_refs=set(),
+        hit=False,
+        meta={"return": {"nested": [unavailable]}},
+    )
+
+    assert _rerun_unavailable_attempt(attempt) is attempt
+
+
+def test_warm_cache_attempt_reruns_a_nested_unavailable_return() -> None:
+    unavailable = UnhashableStub(var_name="return", error_msg="unavailable")
+    attempt = RuntimeCache(
+        defs={"value": 1},
+        hash="a" * 64,
+        cache_type="Pure",
+        stateful_refs=set(),
+        hit=True,
+        meta={"return": {"nested": [unavailable]}},
+    )
+
+    retry = _rerun_unavailable_attempt(attempt)
+
+    assert not retry.hit
+    assert retry.defs == {"value": None}
+
+
 def test_cache_write_barrier_precedes_dependent_post_execution_work(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -82,7 +82,7 @@ if __name__ == "__main__":
         ExportSpec(
             default_state="baseline",
             states={"baseline": {}},
-            outputs={"answer": OutputSpec.value("answer")},
+            outputs={"answer": OutputSpec.json("answer")},
         ),
         output,
     )
@@ -139,7 +139,7 @@ if __name__ == "__main__":
             ExportSpec(
                 default_state="open",
                 states={"open": {"gate": 0}, "blocked": {"gate": 1}},
-                outputs={"answer": OutputSpec.value("result")},
+                outputs={"answer": OutputSpec.json("result")},
             ),
             output,
         )
@@ -200,7 +200,7 @@ if __name__ == "__main__":
     spec = ExportSpec(
         default_state="one",
         states={"one": {"x": 1}, "two": {"x": 2}},
-        outputs={"snapshot": OutputSpec.value("snapshot")},
+        outputs={"snapshot": OutputSpec.json("snapshot")},
     )
     server = ManagedServer(notebook, timeout=30)
     try:
@@ -255,7 +255,7 @@ if __name__ == "__main__":
         spec=ExportSpec(
             default_state="baseline",
             states={"baseline": {}},
-            outputs={"total": OutputSpec.value("total")},
+            outputs={"total": OutputSpec.json("total")},
         ),
         output=tmp_path / "accepted",
         timeout=30,
@@ -269,7 +269,7 @@ if __name__ == "__main__":
                 spec=ExportSpec(
                     default_state="baseline",
                     states={"baseline": {name: 0}},
-                    outputs={"value": OutputSpec.value(name)},
+                    outputs={"value": OutputSpec.json(name)},
                 ),
                 output=tmp_path / name,
                 timeout=30,
@@ -323,7 +323,7 @@ def describe(value):
         default_state="baseline",
         states={"baseline": {}},
         outputs={
-            "cache": OutputSpec.value(
+            "cache": OutputSpec.export(
                 "value",
                 importable("cache_probe:describe"),
             )

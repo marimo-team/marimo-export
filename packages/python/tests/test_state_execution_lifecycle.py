@@ -69,7 +69,7 @@ def fail_on_two(value):
         default_state="one",
         states={"one": {"x": 1}, "two": {"x": 2}, "three": {"x": 3}},
         outputs={
-            "children": OutputSpec.value(
+            "children": OutputSpec.export(
                 "x",
                 importable("export_exports:count_children"),
             )
@@ -79,7 +79,7 @@ def fail_on_two(value):
         default_state="one",
         states={"one": {"x": 1}, "two": {"x": 2}},
         outputs={
-            "value": OutputSpec.value(
+            "value": OutputSpec.export(
                 "x",
                 importable("export_exports:fail_on_two"),
             )
@@ -147,7 +147,7 @@ if __name__ == "__main__":
     spec = ExportSpec(
         default_state="one",
         states={"one": {"x": 1}, "two": {"x": 2}},
-        outputs={"result": OutputSpec.value("result")},
+        outputs={"result": OutputSpec.json("result")},
     )
 
     _capture(notebook, spec, tmp_path / "export")
@@ -190,7 +190,7 @@ if __name__ == "__main__":
     spec = ExportSpec(
         default_state="failure",
         states={"failure": {"selector": ["fail"]}},
-        outputs={"stable": OutputSpec.value("stable")},
+        outputs={"stable": OutputSpec.json("stable")},
     )
     output = tmp_path / "export"
 
@@ -231,7 +231,7 @@ if __name__ == "__main__":
     spec = ExportSpec(
         default_state="failure",
         states={"failure": {"selector": 2}},
-        outputs={"stable": OutputSpec.value("stable")},
+        outputs={"stable": OutputSpec.json("stable")},
     )
     output = tmp_path / "export"
 

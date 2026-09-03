@@ -94,7 +94,7 @@ def test_native_receipt_uses_the_bytes_seen_by_the_snapshot() -> None:
         output="array",
         planned_output=PlannedOutput(
             name="array",
-            source=OutputSpec.value("array").source,
+            source=OutputSpec.native("array").source,
             exporter=None,
         ),
         disposition="hit",
@@ -167,13 +167,14 @@ def test_scalar_receipt_rejects_live_value_divergence_from_signed_manifest() -> 
 def test_native_cache_return_variants_map_to_one_descriptor_shape() -> None:
     value_output = PlannedOutput(
         name="value",
-        source=OutputSpec.value("value").source,
+        source=OutputSpec.native("value").source,
         exporter=None,
     )
+    blob_exporter = importable("example:encode")
     blob_output = PlannedOutput(
         name="blob",
-        source=OutputSpec.value("value").source,
-        exporter=importable("example:encode"),
+        source=OutputSpec.export("value", blob_exporter).source,
+        exporter=blob_exporter,
     )
 
     scalar = native_receipt(

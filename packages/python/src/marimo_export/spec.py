@@ -38,7 +38,7 @@ from marimo_export.errors import SpecError
 from marimo_export.exporters._spec import ExporterSpec
 from marimo_export.wire import FrozenJsonObject, FrozenJsonValue
 
-SPEC_SCHEMA = "marimo-export.spec.v1"
+SPEC_SCHEMA = "marimo-export.spec.v2"
 
 StrPath: TypeAlias = str | os.PathLike[str]
 
@@ -180,8 +180,18 @@ class _ExporterWire(_WireModel):
         return values
 
 
-class _ValueSourceWire(_WireModel):
-    kind: Literal["value"]
+class _JsonSourceWire(_WireModel):
+    kind: Literal["json"]
+    selector: _UnicodeStringWire
+
+
+class _NativeSourceWire(_WireModel):
+    kind: Literal["native"]
+    selector: _UnicodeStringWire
+
+
+class _ExportSourceWire(_WireModel):
+    kind: Literal["export"]
     selector: _UnicodeStringWire
 
 
@@ -197,7 +207,11 @@ class _CellSourceWire(_WireModel):
 
 
 _OutputSourceWire = Annotated[
-    _ValueSourceWire | _RenderedOutputSourceWire | _CellSourceWire,
+    _JsonSourceWire
+    | _NativeSourceWire
+    | _ExportSourceWire
+    | _RenderedOutputSourceWire
+    | _CellSourceWire,
     Field(discriminator="kind"),
 ]
 
@@ -210,8 +224,8 @@ class _OutputWire(_WireModel):
 
     @model_validator(mode="after")
     def _exporter_matches_source(self) -> _OutputWire:
-        if self.exporter is not None and self.source.kind != "value":
-            raise ValueError("exporters require a value source")
+        if (self.exporter is not None) != (self.source.kind == "export"):
+            raise ValueError("export sources require exactly one exporter")
         return self
 
 
@@ -225,11 +239,11 @@ class _SpecWire(_WireModel):
         title="marimo-export specification",
         json_schema_extra={
             "$schema": "https://json-schema.org/draft/2020-12/schema",
-            "$id": "https://marimo.io/schemas/marimo-export/spec.v1.json",
+            "$id": "https://marimo.io/schemas/marimo-export/spec.v2.json",
         },
     )
 
-    schema_: Literal["marimo-export.spec.v1"] = Field(alias="schema")
+    schema_: Literal["marimo-export.spec.v2"] = Field(alias="schema")
     default_state: _ExportNameWire
     states: dict[_ExportNameWire, dict[_IdentifierWire, _PortableValueWire]] = Field(min_length=1)
     outputs: dict[_ExportNameWire, _OutputWire] = Field(min_length=1)
@@ -248,7 +262,9 @@ class _SpecSchemaGenerator(GenerateJsonSchema):
         "_IdentifierWire": "python_identifier",
         "_ModuleNameWire": "python_module_name",
         "_PortableValueWire": "portable_input_value",
-        "_ValueSourceWire": "value_source",
+        "_JsonSourceWire": "json_source",
+        "_NativeSourceWire": "native_source",
+        "_ExportSourceWire": "export_source",
         "_RenderedOutputSourceWire": "rendered_output_source",
         "_CellSourceWire": "cell_source",
         "_OutputWire": "output",
@@ -261,8 +277,20 @@ class _SpecSchemaGenerator(GenerateJsonSchema):
 
 
 @dataclass(frozen=True, slots=True)
-class ValueSource:
-    kind: Literal["value"]
+class JsonSource:
+    kind: Literal["json"]
+    selector: ValueSelector
+
+
+@dataclass(frozen=True, slots=True)
+class NativeSource:
+    kind: Literal["native"]
+    selector: ValueSelector
+
+
+@dataclass(frozen=True, slots=True)
+class ExportSource:
+    kind: Literal["export"]
     selector: ValueSelector
 
 
@@ -279,7 +307,9 @@ class CellSource:
     value: str
 
 
-OutputSource: TypeAlias = ValueSource | RenderedOutputSource | CellSource
+OutputSource: TypeAlias = (
+    JsonSource | NativeSource | ExportSource | RenderedOutputSource | CellSource
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -290,35 +320,53 @@ class OutputSpec:
     exporter: ExporterSpec | None = None
 
     def __post_init__(self) -> None:
-        if not isinstance(self.source, (ValueSource, RenderedOutputSource, CellSource)):
-            raise TypeError("source must be a value, output, or cell source")
-        if isinstance(self.source, (ValueSource, RenderedOutputSource)) and not isinstance(
+        if not isinstance(
+            self.source,
+            (JsonSource, NativeSource, ExportSource, RenderedOutputSource, CellSource),
+        ):
+            raise TypeError("source must be a JSON, native, export, output, or cell source")
+        if isinstance(
+            self.source,
+            (JsonSource, NativeSource, ExportSource, RenderedOutputSource),
+        ) and not isinstance(
             self.source.selector,
             ValueSelector,
         ):
-            raise TypeError("value and output sources require a ValueSelector")
+            raise TypeError("selected sources require a ValueSelector")
         if isinstance(self.source, CellSource):
             if self.source.by not in {"name", "id"}:
                 raise ValueError("cell source by must be name or id")
             _validate_cell_value(self.source.value, self.source.by)
         if self.exporter is not None and not isinstance(self.exporter, ExporterSpec):
             raise TypeError("exporter must be an ExporterSpec or None")
-        if self.exporter is not None and not isinstance(self.source, ValueSource):
+        if (self.exporter is not None) != isinstance(self.source, ExportSource):
             raise SpecError(
-                "exporters require a value source",
+                "export sources require exactly one exporter",
                 code="spec_output_invalid",
             )
 
     @classmethod
-    def value(
-        cls,
-        selector: str,
-        exporter: ExporterSpec | None = None,
-    ) -> OutputSpec:
-        """Select a JSON value or apply one explicit exporter."""
+    def json(cls, selector: str) -> OutputSpec:
+        """Select one canonical portable JSON value."""
 
         return cls(
-            source=ValueSource(kind="value", selector=ValueSelector.parse(selector)),
+            source=JsonSource(kind="json", selector=ValueSelector.parse(selector)),
+        )
+
+    @classmethod
+    def native(cls, selector: str) -> OutputSpec:
+        """Select one cache-native scalar, JSON value, array, table, or blob."""
+
+        return cls(
+            source=NativeSource(kind="native", selector=ValueSelector.parse(selector)),
+        )
+
+    @classmethod
+    def export(cls, selector: str, exporter: ExporterSpec) -> OutputSpec:
+        """Convert one selected value through an explicit exporter."""
+
+        return cls(
+            source=ExportSource(kind="export", selector=ValueSelector.parse(selector)),
             exporter=exporter,
         )
 
@@ -541,8 +589,12 @@ def _freeze(value: JsonValue) -> FrozenJsonValue:
 
 
 def _source_from_wire(source: _OutputSourceWire) -> OutputSource:
-    if isinstance(source, _ValueSourceWire):
-        return ValueSource(kind="value", selector=ValueSelector.parse(source.selector))
+    if isinstance(source, _JsonSourceWire):
+        return JsonSource(kind="json", selector=ValueSelector.parse(source.selector))
+    if isinstance(source, _NativeSourceWire):
+        return NativeSource(kind="native", selector=ValueSelector.parse(source.selector))
+    if isinstance(source, _ExportSourceWire):
+        return ExportSource(kind="export", selector=ValueSelector.parse(source.selector))
     if isinstance(source, _RenderedOutputSourceWire):
         return RenderedOutputSource(
             kind="output",
@@ -552,8 +604,12 @@ def _source_from_wire(source: _OutputSourceWire) -> OutputSource:
 
 
 def _source_to_value(source: OutputSource) -> JsonObject:
-    if isinstance(source, ValueSource):
-        return {"kind": "value", "selector": source.selector.source}
+    if isinstance(source, JsonSource):
+        return {"kind": "json", "selector": source.selector.source}
+    if isinstance(source, NativeSource):
+        return {"kind": "native", "selector": source.selector.source}
+    if isinstance(source, ExportSource):
+        return {"kind": "export", "selector": source.selector.source}
     if isinstance(source, RenderedOutputSource):
         return {"kind": "output", "selector": source.selector.source}
     return {"kind": "cell", "by": source.by, "value": source.value}

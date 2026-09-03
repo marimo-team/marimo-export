@@ -628,11 +628,18 @@ def _validate_npy(data: bytes) -> None:
 
 
 def _validate_arrow(data: bytes) -> None:
-    if len(data) < 16 or data[:6] != b"ARROW1" or data[-6:] != b"ARROW1":
-        raise IntegrityError("Arrow asset has invalid file framing", code="asset_invalid")
-    footer_length = int.from_bytes(data[-10:-6], "little")
-    if footer_length <= 0 or footer_length > len(data) - 16:
-        raise IntegrityError("Arrow asset has an invalid footer length", code="asset_invalid")
+    if len(data) >= 16 and data[:6] == b"ARROW1" and data[-6:] == b"ARROW1":
+        footer_length = int.from_bytes(data[-10:-6], "little")
+        if footer_length <= 0 or footer_length > len(data) - 16:
+            raise IntegrityError("Arrow asset has an invalid footer length", code="asset_invalid")
+        return
+    if (
+        len(data) >= 16
+        and data[:4] == b"\xff\xff\xff\xff"
+        and data[-8:] == (b"\xff\xff\xff\xff\x00\x00\x00\x00")
+    ):
+        return
+    raise IntegrityError("Arrow asset has invalid IPC framing", code="asset_invalid")
 
 
 def _verify_asset_directory(root: Path, declared: set[str]) -> None:

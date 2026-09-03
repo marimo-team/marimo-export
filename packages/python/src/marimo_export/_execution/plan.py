@@ -26,10 +26,12 @@ from marimo_export.index import ControlBinding, ControlPathStep
 from marimo_export.planning import output_plan_sha256
 from marimo_export.spec import (
     CellSource,
+    ExportSource,
     ExportSpec,
+    JsonSource,
+    NativeSource,
     OutputSource,
     RenderedOutputSource,
-    ValueSource,
 )
 
 if TYPE_CHECKING:
@@ -716,7 +718,7 @@ def output_cell_code(
         return "\n".join(lines)
     selector = source.selector
     path = tuple((step.kind, step.key) for step in selector.path)
-    if planned_output.exporter is None:
+    if isinstance(source, JsonSource):
         if exporter_identity is not None or exporter_token is not None:
             raise ValueError("JSON outputs cannot have an exporter identity")
         lines.extend(
@@ -728,6 +730,20 @@ def output_cell_code(
             ]
         )
         return "\n".join(lines)
+    if isinstance(source, NativeSource):
+        if exporter_identity is not None or exporter_token is not None:
+            raise ValueError("native outputs cannot have an exporter identity")
+        lines.extend(
+            [
+                "from marimo_export._marimo.compat.projections import "
+                "capture_native_value as _marimo_export_capture_native",
+                "",
+                f"_marimo_export_capture_native({selector.root}, {path!r})",
+            ]
+        )
+        return "\n".join(lines)
+    if not isinstance(source, ExportSource) or planned_output.exporter is None:
+        raise ValueError("export source has no exporter")
     if (
         not isinstance(exporter_identity, str)
         or len(exporter_identity) != 64
@@ -839,8 +855,12 @@ def _state_token_name(
 
 def _planned_source_value(planned_output: PlannedOutput) -> JsonObject:
     source = planned_output.source
-    if isinstance(source, ValueSource):
-        return {"kind": "value", "selector": source.selector.source}
+    if isinstance(source, JsonSource):
+        return {"kind": "json", "selector": source.selector.source}
+    if isinstance(source, NativeSource):
+        return {"kind": "native", "selector": source.selector.source}
+    if isinstance(source, ExportSource):
+        return {"kind": "export", "selector": source.selector.source}
     if isinstance(source, RenderedOutputSource):
         return {"kind": "output", "selector": source.selector.source}
     cell = planned_output.cell

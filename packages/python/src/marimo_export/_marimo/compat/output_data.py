@@ -327,10 +327,11 @@ def output_references(
     mimetype: str,
     value: object,
     available_models: frozenset[str],
-) -> tuple[set[str], set[str], set[str]]:
+) -> tuple[set[str], set[str], set[str], dict[str, str]]:
     models: set[str] = set()
     object_ids: set[str] = set()
     random_ids: set[str] = set()
+    ui_random_ids: dict[str, str] = {}
     if mimetype in _HTML_MIMETYPES and isinstance(value, str):
         _collect_html_references(
             value,
@@ -339,6 +340,7 @@ def output_references(
             object_ids,
             random_ids,
         )
+        _merge_ui_random_ids(ui_random_ids, _ui_random_id_pairs(value))
     elif mimetype == _WIDGET_VIEW_MIMETYPE and isinstance(value, dict):
         _collect_widget_view_reference(
             cast(Mapping[object, object], value),
@@ -358,6 +360,7 @@ def output_references(
                         object_ids,
                         random_ids,
                     )
+                    _merge_ui_random_ids(ui_random_ids, _ui_random_id_pairs(html))
                 widget = entries.get(_WIDGET_VIEW_MIMETYPE)
                 if isinstance(widget, dict):
                     _collect_widget_view_reference(
@@ -365,7 +368,36 @@ def output_references(
                         available_models,
                         models,
                     )
-    return models, object_ids, random_ids
+    return models, object_ids, random_ids, ui_random_ids
+
+
+class _UiReferenceCollector(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__()
+        self.pairs: dict[str, str] = {}
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag.lower() != "marimo-ui-element":
+            return
+        values = {name.lower(): value for name, value in attrs}
+        object_id = values.get("object-id")
+        random_id = values.get("random-id")
+        if object_id is not None and random_id is not None:
+            _merge_ui_random_ids(self.pairs, {object_id: random_id})
+
+
+def _ui_random_id_pairs(value: str) -> dict[str, str]:
+    parser = _UiReferenceCollector()
+    parser.feed(value)
+    parser.close()
+    return parser.pairs
+
+
+def _merge_ui_random_ids(target: dict[str, str], incoming: Mapping[str, str]) -> None:
+    for object_id, random_id in incoming.items():
+        previous = target.setdefault(object_id, random_id)
+        if previous != random_id:
+            raise ValueError(f"UI object {object_id!r} has conflicting random IDs")
 
 
 def _collect_html_references(

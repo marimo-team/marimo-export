@@ -54,7 +54,7 @@ def _spec(*, default_state: str = "focus") -> ExportSpec:
             "same-baseline": {"selector": "AAPL"},
             "focus": {"selector": "MSFT"},
         },
-        outputs={"result": OutputSpec.value("result")},
+        outputs={"result": OutputSpec.json("result")},
     )
 
 
@@ -112,7 +112,7 @@ def test_output_plan_identity_uses_only_authored_output_declarations() -> None:
     changed_states = ExportSpec(
         default_state="other",
         states={"other": {"selector": "GOOGL"}},
-        outputs={"result": OutputSpec.value("result")},
+        outputs={"result": OutputSpec.json("result")},
     )
     changed_output = ExportSpec(
         default_state="baseline",

@@ -114,7 +114,7 @@ def test_live_capture_forces_custom_output_and_requires_restart_after_source_dri
         default_state="baseline",
         states={"baseline": {}},
         outputs={
-            "summary": OutputSpec.value(
+            "summary": OutputSpec.export(
                 "answer",
                 importable(
                     "export_exports:encode",
@@ -163,7 +163,7 @@ def test_capture_sideloads_an_importable_callable(
         default_state="baseline",
         states={"baseline": {}},
         outputs={
-            "summary": OutputSpec.value(
+            "summary": OutputSpec.export(
                 "answer",
                 importable(
                     "export_exports:encode",
@@ -212,7 +212,7 @@ def encode(value):
         default_state="baseline",
         states={"baseline": {}},
         outputs={
-            "summary": OutputSpec.value(
+            "summary": OutputSpec.export(
                 "answer",
                 importable("export_exports:encode"),
             )
@@ -271,7 +271,7 @@ if __name__ == "__main__":
         default_state="baseline",
         states={"baseline": {}},
         outputs={
-            "summary": OutputSpec.value(
+            "summary": OutputSpec.export(
                 "answer",
                 importable(
                     "export_exports:encode",

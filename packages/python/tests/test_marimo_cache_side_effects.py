@@ -31,7 +31,7 @@ if __name__ == "__main__":
         spec=ExportSpec(
             default_state="baseline",
             states={"baseline": {}},
-            outputs={"answer": OutputSpec.value("answer")},
+            outputs={"answer": OutputSpec.json("answer")},
         ),
         output=tmp_path / "export",
         timeout=30,

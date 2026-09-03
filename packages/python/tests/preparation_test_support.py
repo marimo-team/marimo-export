@@ -282,7 +282,7 @@ def _spec(*, states: dict[str, JsonObject] | None = None) -> ExportSpec:
     return ExportSpec(
         default_state="baseline",
         states=states or {"baseline": {"choice": "A"}, "other": {"choice": "B"}},
-        outputs={"answer": OutputSpec.value("answer")},
+        outputs={"answer": OutputSpec.json("answer")},
     )
 
 

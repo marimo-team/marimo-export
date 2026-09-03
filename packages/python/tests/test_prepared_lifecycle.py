@@ -342,7 +342,7 @@ def test_live_sparse_baseline_change_replaces_nonmatching_exact_artifact(tmp_pat
     spec = ExportSpec(
         default_state="baseline",
         states={"baseline": {}},
-        outputs={"answer": OutputSpec.value("answer")},
+        outputs={"answer": OutputSpec.json("answer")},
     )
     producer = _producer(tmp_path / "notebook.py")
     identity = RepositoryIdentity(

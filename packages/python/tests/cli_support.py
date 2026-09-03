@@ -79,13 +79,13 @@ def result(path: Path) -> ExportResult:
 
 def spec(path: Path) -> Path:
     path.write_text(
-        "schema: marimo-export.spec.v1\n"
+        "schema: marimo-export.spec.v2\n"
         "default_state: baseline\n"
         "states:\n"
         "  baseline: {}\n"
         "outputs:\n"
         "  count:\n"
-        "    source: {kind: value, selector: count}\n",
+        "    source: {kind: json, selector: count}\n",
         encoding="utf-8",
     )
     return path

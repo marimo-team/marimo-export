@@ -89,7 +89,7 @@ if __name__ == "__main__":
         default_state="baseline",
         states={"baseline": {}},
         outputs={
-            "literal": OutputSpec.value("literal_cell_id"),
+            "literal": OutputSpec.json("literal_cell_id"),
             "report": OutputSpec.cell("report"),
         },
     )
@@ -245,7 +245,7 @@ if __name__ == "__main__":
         default_state="baseline",
         states={"baseline": {}},
         outputs={
-            "value": OutputSpec.value("value"),
+            "value": OutputSpec.json("value"),
             "output": OutputSpec.output("view"),
             "cell": OutputSpec.cell("report"),
         },
@@ -306,7 +306,7 @@ if __name__ == "__main__":
         default_state="baseline",
         states={"baseline": {}},
         outputs={
-            "value": OutputSpec.value("value"),
+            "value": OutputSpec.json("value"),
             "output": OutputSpec.output("view"),
             "cell": OutputSpec.cell("report"),
         },
@@ -349,7 +349,7 @@ def test_value_projection_refreshes_cached_external_ancestor_closure(tmp_path: P
     spec = ExportSpec(
         default_state="baseline",
         states={"baseline": {}},
-        outputs={"value": OutputSpec.value("summary")},
+        outputs={"value": OutputSpec.json("summary")},
     )
     source.write_text("first", encoding="utf-8")
     build(notebook, spec=spec, output=tmp_path / "first", timeout=30)
@@ -423,7 +423,7 @@ def test_shared_projection_owner_forces_cached_ancestor_closure_once(tmp_path: P
         default_state="baseline",
         states={"baseline": {}},
         outputs={
-            "value": OutputSpec.value("summary"),
+            "value": OutputSpec.json("summary"),
             "output": OutputSpec.output("view"),
             "cell": OutputSpec.cell("report"),
         },
@@ -499,7 +499,7 @@ if __name__ == "__main__":
         states={"baseline": {}},
         outputs={
             "source": OutputSpec.cell("source_cell"),
-            "value": OutputSpec.value("summary"),
+            "value": OutputSpec.json("summary"),
             "output": OutputSpec.output("view"),
         },
     )

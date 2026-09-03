@@ -19,7 +19,9 @@ from marimo_export._marimo.capabilities import (
 from marimo_export._marimo.compat.cache.attempts import CacheAttemptLog, NativeCacheAttempt
 from marimo_export._marimo.compat.cache.receipts import read_cached_return
 from marimo_export._marimo.compat.inspection import _python_type
+from marimo_export._marimo.compat.projections import _NATIVE_ARROW_SCHEMA
 from marimo_export.descriptors import (
+    ARROW_MEDIA_TYPE,
     JSON_MEDIA_TYPE,
     MARIMO_CELL_MEDIA_TYPE,
     MARIMO_OUTPUT_MEDIA_TYPE,
@@ -36,7 +38,7 @@ from marimo_export.descriptors import (
 )
 from marimo_export.errors import CodecError, OutputError
 from marimo_export.outputs import BlobAsset
-from marimo_export.spec import CellSource, RenderedOutputSource, ValueSource
+from marimo_export.spec import CellSource, JsonSource, NativeSource, RenderedOutputSource
 
 _BLOB_ASSET_PYTHON_TYPE = f"{BlobAsset.__module__}.{BlobAsset.__qualname__}"
 
@@ -135,13 +137,26 @@ def native_receipt(
         asset = AssetRef(sha256=hashlib.sha256(payload).hexdigest(), size=len(payload))
         data = cached.data
         source = planned_output.source
-        if isinstance(source, ValueSource) and planned_output.exporter is None:
-            if cached.media_type != JSON_MEDIA_TYPE:
-                raise CodecError(
-                    f"output {output!r} has an invalid JSON projection media type",
-                    code="codec_invalid",
-                    details={"output": output},
-                )
+        if (
+            isinstance(source, NativeSource)
+            and cached.media_type == ARROW_MEDIA_TYPE
+            and set(cached.metadata) == {"python_type", "schema"}
+            and cached.metadata["schema"] == _NATIVE_ARROW_SCHEMA
+            and isinstance(cached.metadata["python_type"], str)
+        ):
+            payload = data
+            asset = AssetRef(sha256=hashlib.sha256(payload).hexdigest(), size=len(payload))
+            descriptor = ArrowDescriptor(
+                asset=asset,
+                provenance=Provenance(python_type=cached.metadata["python_type"]),
+            )
+            return NativeReceipt(
+                output=output,
+                descriptor=descriptor,
+                payload=payload,
+                disposition=disposition,
+            )
+        if isinstance(source, (JsonSource, NativeSource)) and cached.media_type == JSON_MEDIA_TYPE:
             try:
                 value = decode_json(data, f"output {output!r} JSON projection")
             except (TypeError, ValueError) as error:
@@ -155,6 +170,12 @@ def native_receipt(
                 descriptor=JsonDescriptor(value=value, provenance=provenance),
                 payload=None,
                 disposition=disposition,
+            )
+        if isinstance(source, JsonSource) and cached.media_type != JSON_MEDIA_TYPE:
+            raise CodecError(
+                f"output {output!r} has an invalid JSON projection media type",
+                code="codec_invalid",
+                details={"output": output},
             )
         if isinstance(source, RenderedOutputSource):
             return _snapshot_receipt(

@@ -46,7 +46,7 @@ if __name__ == "__main__":
         states={"selected": {"scale": 3}},
         outputs={
             "controls": OutputSpec.cell("controls"),
-            "metric": OutputSpec.value("metric"),
+            "metric": OutputSpec.json("metric"),
         },
     )
 
@@ -113,7 +113,7 @@ if __name__ == "__main__":
         default_state="selected",
         states={"selected": {"scale": 3}},
         outputs={
-            "value": OutputSpec.value("summary"),
+            "value": OutputSpec.json("summary"),
             "output": OutputSpec.output("summary"),
             "cell": OutputSpec.cell("report"),
         },
@@ -188,7 +188,7 @@ if __name__ == "__main__":
     spec = ExportSpec(
         default_state="selected",
         states={"selected": {"slider": 3}},
-        outputs={"metric": OutputSpec.value("metric")},
+        outputs={"metric": OutputSpec.json("metric")},
     )
 
     with open_notebook(notebook, timeout=30) as producer:

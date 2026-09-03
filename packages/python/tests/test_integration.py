@@ -68,7 +68,7 @@ def _spec() -> ExportSpec:
     return ExportSpec(
         default_state="baseline",
         states={"baseline": {}},
-        outputs={"owned": OutputSpec.value("owned")},
+        outputs={"owned": OutputSpec.json("owned")},
     )
 
 
@@ -229,7 +229,7 @@ if __name__ == "__main__":
     spec = ExportSpec(
         default_state="baseline",
         states={"baseline": {"dataset_picker": ["Two Moons"]}},
-        outputs={"selected": OutputSpec.value("selected")},
+        outputs={"selected": OutputSpec.json("selected")},
     )
 
     description = inspect_notebook(notebook, timeout=30)

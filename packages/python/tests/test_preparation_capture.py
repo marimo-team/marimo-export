@@ -44,7 +44,7 @@ def test_single_state_capture_spec_preserves_the_complete_planned_vector() -> No
             "ai_buildout": {"symbols_selector": ["CRWV", "MSFT", "GOOGL"]},
             "weekly": {"interval": "1wk"},
         },
-        outputs={"answer": OutputSpec.value("answer")},
+        outputs={"answer": OutputSpec.json("answer")},
     )
 
     captured = single_state_spec(spec, state)
