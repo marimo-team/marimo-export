@@ -53,7 +53,15 @@ const llmsPlugins = vitePlugins(
     sidebar: llmsNavigation,
   }),
 );
-const viteConfig: UserConfig["vite"] = { plugins: llmsPlugins, publicDir };
+const viteConfig: UserConfig["vite"] = {
+  plugins: llmsPlugins,
+  publicDir,
+  server: {
+    host: "127.0.0.1",
+    port: Number(process.env.PORT ?? 54173),
+    strictPort: true,
+  },
+};
 
 export default defineConfig({
   base: basePath ? `${basePath}/` : "/",

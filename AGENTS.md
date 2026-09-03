@@ -6,7 +6,7 @@ export for applications, agents, Python, and custom clients.
 
 ## Commands
 
-Use Python 3.12 for local development with Node 22.18, pnpm 11.15.1, uv,
+Use Python 3.12 for local development with Node 24.14.1, pnpm 11.15.1, uv,
 and Vite+. CI verifies the Python package on 3.10 through 3.14 on Ubuntu and
 Windows.
 
@@ -19,7 +19,7 @@ Windows.
 | Test                | `make test`       | Python, browser, loader, skill, and app tests pass         |
 | Build               | `make build`      | Python, npm, docs, and example packages build              |
 | Build docs          | `make docs-build` | VitePress site and LLM text bundles build                  |
-| Serve docs          | `make docs-serve` | Documentation runs at `127.0.0.1:54173`                    |
+| Serve docs          | `make docs-serve` | Portless prints the workspace-specific documentation URL   |
 | Package             | `make package`    | Python and npm release artifacts pass isolated smoke tests |
 | Complete local gate | `make check`      | Format, lint, types, tests, builds, and package smoke pass |
 

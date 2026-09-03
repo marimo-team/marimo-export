@@ -7,16 +7,22 @@
     "build": "node scripts/check-navigation.mjs && vitepress build && node scripts/check-built-docs.mjs",
     "check:built": "node scripts/check-built-docs.mjs",
     "check:navigation": "node scripts/check-navigation.mjs",
-    "dev": "vitepress dev --host 127.0.0.1 --port 54173 --strictPort",
+    "dev": "portless",
+    "dev:server": "vitepress dev",
     "preview": "vitepress preview --host 127.0.0.1 --port 54173 --strictPort",
     "test": "node scripts/check-navigation.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {
     "@types/node": "catalog:",
+    "portless": "catalog:",
     "typescript": "catalog:",
     "vitepress": "catalog:",
     "vitepress-plugin-llms": "1.13.2",
     "vue": "catalog:"
+  },
+  "portless": {
+    "name": "docs.marimo-export",
+    "script": "dev:server"
   }
 }

@@ -80,6 +80,14 @@ make docs-build
 make docs-serve
 ```
 
+[Portless](https://portless.sh/) assigns the VitePress server an available port
+and exposes it at `https://docs.marimo-export.localhost/`. Linked Git worktrees
+receive a branch prefix, so each running workspace has its own URL. Use the URL
+printed by `make docs-serve`. On its first HTTPS run, Portless may request local
+administrator access to bind port 443 and trust its local certificate authority.
+
+The development server uses an empty deployment base.
+
 In the browser, check:
 
 - introduction, concept, guide, and reference routes
