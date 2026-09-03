@@ -106,7 +106,7 @@ fi
         "PATH": f"{commands}{os.pathsep}{os.environ['PATH']}",
     }
     return subprocess.run(
-        [str(ROOT / "scripts/check-release.sh")],
+        ["bash", str(ROOT / "scripts/check-release.sh")],
         cwd=root,
         env=environment,
         capture_output=True,
