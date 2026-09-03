@@ -28,12 +28,17 @@ PYTHON_PATHS := packages/python scripts skills
 DIST_DIR := $(CURDIR)/dist
 PYTHON_DIST_DIR := $(DIST_DIR)/python
 NPM_DIST_DIR := $(DIST_DIR)/npm
+PNPM_BIN := $(CURDIR)/node_modules/.bin
+export PATH := $(PNPM_BIN):$(PATH)
+# The local wrapper selects pnpm's managed Node runtime. A nested `pnpm exec`
+# exposes a relative Node shim that Vite+ 0.2.4 cannot use for child tools.
+VP := $(PNPM_BIN)/vp
 
 help: ## List development targets.
 	@awk 'BEGIN {FS = ":.*## "} /^[a-zA-Z0-9_-]+:.*## / {printf "  %-12s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
 format: ## Format Python, TypeScript, and documentation source.
-	pnpm exec vp fmt $(FORMAT_PATHS)
+	$(VP) fmt $(FORMAT_PATHS)
 	uv run ruff format $(PYTHON_PATHS)
 
 bootstrap: ## Install the locked Python and TypeScript workspaces.
@@ -42,24 +47,24 @@ bootstrap: ## Install the locked Python and TypeScript workspaces.
 
 _anti-slop-check:
 	node --test --test-concurrency=1 tools/oxlint/anti-slop/test/*.test.ts tools/oxlint/anti-slop/test/compatibility/*.test.ts
-	pnpm exec tsc -p tools/oxlint/anti-slop/tsconfig.json --noEmit
+	tsc -p tools/oxlint/anti-slop/tsconfig.json --noEmit
 
 lint: _anti-slop-check ## Check Python and TypeScript source.
-	pnpm exec vp lint --deny-warnings $(LINT_PATHS)
+	$(VP) lint --deny-warnings $(LINT_PATHS)
 	uv run ruff check $(PYTHON_PATHS)
 
 typecheck: ## Type-check every Python and TypeScript package.
-	pnpm exec vp run -r typecheck
+	$(VP) run -r typecheck
 	uv run --group test ty check packages/python
 
 test: ## Run Python, browser core, loader, skill, and example tests.
-	pnpm exec vp run -r test
+	$(VP) run -r test
 	uv run --group test --all-extras pytest -q \
 		packages/python/tests \
 		skills/notebook-to-static-app/tests
 
 build: ## Build Python, npm, docs, and example packages.
-	pnpm exec vp run -r build
+	$(VP) run -r build
 	test -s apps/docs/.vitepress/dist/llms.txt
 	test -s apps/docs/.vitepress/dist/llms-full.txt
 	uv build --package marimo-export --clear --no-sources
@@ -90,7 +95,7 @@ docs-serve: ## Serve public documentation at http://127.0.0.1:4173/.
 	pnpm --filter @marimo-team/marimo-export-docs dev
 
 check: ## Run the complete local quality gate.
-	pnpm exec vp fmt --check $(FORMAT_PATHS)
+	$(VP) fmt --check $(FORMAT_PATHS)
 	uv run ruff format --check $(PYTHON_PATHS)
 	@$(MAKE) --no-print-directory lint
 	@$(MAKE) --no-print-directory typecheck
