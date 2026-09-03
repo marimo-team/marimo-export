@@ -1,0 +1,21 @@
+packages/python/tests/test_managed_server_process.py
+  s_84434b42698f4e::t_c0836551eec442 508-509,511,520
+packages/python/src/marimo_export/_remote/managed.py
+  s_84434b42698f4e::t_c0836551eec442 684
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "58dfabe0cf5def47bd8bc5d567c9e1554fbc6808",
+  "prompts": {},
+  "sessions": {
+    "s_84434b42698f4e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a061f5-fe96-7e42-ae14-44b03f0596fa",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
