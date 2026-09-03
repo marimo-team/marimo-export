@@ -1,0 +1,20 @@
+apps/docs/scripts/check-built-docs.mjs
+  s_3426f5ec522a31::t_84b8b18af0a54c 64-70,89,91-93,107-116
+  s_3426f5ec522a31::t_fd03304421fee5 90
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "ae2815bcdd15e2797d9bc2f16a9a4bbc518de944",
+  "prompts": {},
+  "sessions": {
+    "s_3426f5ec522a31": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a068e0-c121-7012-9f7b-8700f51de35e",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
