@@ -1,27 +1,57 @@
 name: GitHub Pages
 
 on:
+  pull_request: {}
   push:
     branches:
       - main
   workflow_dispatch: {}
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
 
 jobs:
-  build:
+  changes:
+    name: Changes
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-
     permissions:
       contents: read
-      pages: write
-
+      pull-requests: read
+    outputs:
+      documentation: ${{ steps.filter.outputs.documentation }}
+      pages: ${{ steps.filter.outputs.pages }}
     steps:
       - name: Check out repository
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Classify changed files
+        id: filter
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        with:
+          filters: .github/filters.yml
+          predicate-quantifier: some-with-excludes
+
+  documentation:
+    name: Documentation contracts
+    needs: changes
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      needs.changes.outputs.documentation == 'true' ||
+      needs.changes.outputs.pages == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          persist-credentials: false
 
       - name: Set up Vite+
         uses: voidzero-dev/setup-vp@1b32467adbe183473499fd9d5d372c3ed9641754 # v1.18.0
@@ -32,14 +62,67 @@ jobs:
           run-install: |
             - args: ['--frozen-lockfile']
 
+      - name: Enable pnpm
+        run: corepack enable pnpm
+
+      - name: Check documentation formatting
+        run: >-
+          ./node_modules/.bin/vp fmt --check
+          README.md
+          AGENTS.md
+          CLAUDE.md
+          LICENSE
+          apps/docs
+          development_docs
+          docs
+          examples
+          packages/*/LICENSE
+          packages/*/README.md
+          skills
+
+      - name: Test documentation navigation
+        run: pnpm --filter @marimo-team/marimo-export-docs test
+
+      - name: Type-check documentation sources
+        run: pnpm --filter @marimo-team/marimo-export-docs typecheck
+
+  build:
+    needs: [changes, documentation]
+    if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.pages == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    permissions:
+      contents: read
+      pages: write
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Vite+
+        uses: voidzero-dev/setup-vp@1b32467adbe183473499fd9d5d372c3ed9641754 # v1.18.0
+        with:
+          version: 0.2.4
+          sfw: true
+          cache: true
+          run-install: |
+            - args: ['--frozen-lockfile']
+
+      - name: Enable pnpm
+        run: corepack enable pnpm
+
       - name: Configure GitHub Pages
+        if: github.event_name != 'pull_request'
         id: pages
         uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6
 
       - name: Build docs
         env:
           BASE_PATH: ${{ steps.pages.outputs.base_path }}
-        run: vp exec -F @marimo-team/marimo-export-docs -- vitepress build
+        run: ./node_modules/.bin/vp exec -F @marimo-team/marimo-export-docs -- vitepress build
 
       - name: Verify docs base path
         env:
@@ -47,11 +130,13 @@ jobs:
         run: node apps/docs/scripts/check-built-docs.mjs
 
       - name: Upload GitHub Pages artifact
+        if: github.event_name != 'pull_request'
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5
         with:
           path: apps/docs/.vitepress/dist
 
   deploy:
+    if: github.event_name != 'pull_request'
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 10
