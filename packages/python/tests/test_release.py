@@ -261,6 +261,19 @@ def test_publish_workflow_coordinates_python_and_browser_distributions() -> None
     assert jobs["release-notes"]["needs"] == ["verify-npm", "verify-pypi"]
 
 
+def test_publish_workflow_installs_the_browser_used_by_release_tests() -> None:
+    _source, workflow = _workflow()
+    build = workflow["jobs"]["build"]
+    browser = _step(build, "Install AnyWidget test browser")
+    release_gate = _step(build, "Run release gate")
+
+    assert browser["run"] == (
+        "pnpm --filter @marimo-export/internal-loader-anywidget exec playwright install "
+        "--with-deps --only-shell chromium"
+    )
+    assert build["steps"].index(browser) < build["steps"].index(release_gate)
+
+
 def test_publish_workflow_scopes_oidc_to_attestation_and_registry_jobs() -> None:
     source, workflow = _workflow()
     jobs = workflow["jobs"]
