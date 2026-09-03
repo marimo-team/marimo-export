@@ -3,6 +3,7 @@ SHELL := /bin/bash
 .DEFAULT_GOAL := help
 
 .PHONY: help bootstrap format lint typecheck test build docs-build docs-serve check package
+.PHONY: _anti-slop-check
 
 FORMAT_PATHS := \
 	.pnpmfile.mjs \
@@ -39,7 +40,11 @@ bootstrap: ## Install the locked Python and TypeScript workspaces.
 	uv sync --all-packages --all-groups --all-extras --locked
 	pnpm install --frozen-lockfile
 
-lint: ## Check Python and TypeScript source.
+_anti-slop-check:
+	node --test --test-concurrency=1 tools/oxlint/anti-slop/test/*.test.ts tools/oxlint/anti-slop/test/compatibility/*.test.ts
+	pnpm exec tsc -p tools/oxlint/anti-slop/tsconfig.json --noEmit
+
+lint: _anti-slop-check ## Check Python and TypeScript source.
 	pnpm exec vp lint --deny-warnings $(LINT_PATHS)
 	uv run ruff check $(PYTHON_PATHS)
 

@@ -1,5 +1,7 @@
 import { defineConfig } from "vite-plus";
 
+import { antiSlopIgnorePatterns, antiSlopRules } from "./tools/oxlint/anti-slop/preset.ts";
+
 const generated = [
   "**/dist/**",
   "**/node_modules/**",
@@ -7,12 +9,14 @@ const generated = [
   "tests/fixtures/export/*.json",
 ];
 
+const ignored = [...generated, ...antiSlopIgnorePatterns];
+
 export default defineConfig({
   staged: {
     "*": "vp check --fix",
   },
   fmt: {
-    ignorePatterns: generated,
+    ignorePatterns: ignored,
     printWidth: 100,
   },
   lint: {
@@ -20,8 +24,11 @@ export default defineConfig({
       correctness: "error",
       perf: "error",
     },
-    ignorePatterns: generated,
-    jsPlugins: [{ name: "vite-plus", specifier: "vite-plus/oxlint-plugin" }],
+    ignorePatterns: ignored,
+    jsPlugins: [
+      { name: "anti-slop", specifier: "./tools/oxlint/anti-slop/index.ts" },
+      { name: "vite-plus", specifier: "vite-plus/oxlint-plugin" },
+    ],
     options: {
       denyWarnings: true,
       reportUnusedDisableDirectives: "error",
@@ -30,6 +37,7 @@ export default defineConfig({
     },
     plugins: ["typescript", "unicorn", "import"],
     rules: {
+      ...antiSlopRules,
       "typescript/consistent-type-imports": [
         "error",
         { fixStyle: "separate-type-imports", prefer: "type-imports" },

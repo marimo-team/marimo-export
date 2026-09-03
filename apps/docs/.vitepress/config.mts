@@ -44,18 +44,24 @@ const introductionItems = [
   { text: "marimo-export", link: "/" },
   { text: "How notebook exports work", link: "/overview" },
 ];
-// SAFETY: vitepress-plugin-llms returns two Vite plugins whose standard hooks
-// are loaded by the pinned VitePress release during every documentation build.
-const llmsPlugins = llmstxt({
-  domain: llmsDomain,
-  excludeIndexPage: false,
-  sidebar: [
-    { text: "Introduction", items: introductionItems },
-    { text: "Guide", items: guideItems },
-    { text: "Reference", items: referenceItems },
-  ],
-}) as unknown as [Plugin, Plugin];
+const llmsPlugins = vitePlugins(
+  llmstxt({
+    domain: llmsDomain,
+    excludeIndexPage: false,
+    sidebar: [
+      { text: "Introduction", items: introductionItems },
+      { text: "Guide", items: guideItems },
+      { text: "Reference", items: referenceItems },
+    ],
+  }),
+);
 const viteConfig: UserConfig["vite"] = { plugins: llmsPlugins, publicDir };
+
+function vitePlugins<Value>(value: Value): [Plugin, Plugin] {
+  // SAFETY: vitepress-plugin-llms returns two Vite plugins whose standard hooks
+  // are loaded by the pinned VitePress release during every documentation build.
+  return value as [Plugin, Plugin];
+}
 
 export default defineConfig({
   base: basePath ? `${basePath}/` : "/",
