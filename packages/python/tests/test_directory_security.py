@@ -159,29 +159,32 @@ def test_directory_transaction_preserves_preexisting_acl_across_move_on_macos(
     assert output.joinpath("index.html").read_text(encoding="utf-8") == "new"
 
 
-@pytest.mark.skipif(
-    not hasattr(os, "chflags") or not hasattr(stat, "UF_NODUMP"),
-    reason="BSD root flags unavailable",
-)
 @pytest.mark.parametrize("transaction", ["exchange", "fallback"])
 def test_directory_transaction_rejects_root_flag_drift(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     transaction: str,
 ) -> None:
+    change_flags = getattr(os, "chflags", None)
+    no_dump = getattr(stat, "UF_NODUMP", None)
+    if not callable(change_flags) or not isinstance(no_dump, int):
+        pytest.skip("BSD root flags unavailable")
+
     output = tmp_path / "site"
     output.mkdir()
     _transaction(monkeypatch, tmp_path, transaction)
-    original_flags = output.stat().st_flags
+    original_flags = getattr(output.stat(), "st_flags", None)
+    if not isinstance(original_flags, int):
+        pytest.skip("BSD root flags unavailable")
 
     with stage(output, replace=True) as staged:
         staged.path.joinpath("index.html").write_text("new", encoding="utf-8")
-        os.chflags(output, original_flags ^ stat.UF_NODUMP)
+        change_flags(output, original_flags ^ no_dump)
         with pytest.raises(NotebookExportError) as raised:
             staged.commit()
 
     assert raised.value.code == "destination_changed"
-    os.chflags(output, original_flags)
+    change_flags(output, original_flags)
 
 
 @pytest.mark.skipif(os.name != "nt", reason="Windows DACL contract")
