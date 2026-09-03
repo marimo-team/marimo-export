@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import sqlite3
+import stat
 import time
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -24,8 +25,6 @@ def maintenance_lock(root: Path, *, timeout_seconds: float = 10.0) -> Iterator[N
     """Serialize artifact filesystem mutations without blocking catalog heartbeats."""
 
     path = root / "maintenance.sqlite3"
-    if path.is_symlink():
-        raise OSError(f"Repository maintenance lock is a symlink: {path}")
     connection = _connect(path, timeout_seconds=timeout_seconds)
     begun = False
     try:
@@ -55,7 +54,7 @@ def _connect(path: Path, *, timeout_seconds: float) -> sqlite3.Connection:
     deadline = time.monotonic() + max(0.001, timeout_seconds)
     schema_attempt = 0
     while schema_attempt < 2:
-        before = path.stat() if path.exists() and not path.is_symlink() else None
+        before = _lock_stat(path)
         bounded = max(0.001, deadline - time.monotonic())
         connection = sqlite3.connect(path, timeout=bounded, isolation_level=None)
         try:
@@ -78,7 +77,7 @@ def _connect(path: Path, *, timeout_seconds: float) -> sqlite3.Connection:
             return connection
         except _InvalidMaintenanceSchema:
             connection.close()
-            after = path.stat() if path.exists() and not path.is_symlink() else None
+            after = _lock_stat(path)
             if before is not None and after is not None and os.path.samestat(before, after):
                 _discard_corrupt_lock(path, expected=before, deadline=deadline)
             schema_attempt += 1
@@ -97,11 +96,21 @@ def _connect(path: Path, *, timeout_seconds: float) -> sqlite3.Connection:
                 raise RepositoryUnavailableError(
                     "The export repository maintenance lock is unavailable."
                 ) from error
-            after = path.stat() if path.exists() and not path.is_symlink() else None
+            after = _lock_stat(path)
             if before is not None and after is not None and os.path.samestat(before, after):
                 _discard_corrupt_lock(path, expected=before, deadline=deadline)
             schema_attempt += 1
     raise RepositoryUnavailableError("The export repository maintenance lock is unavailable.")
+
+
+def _lock_stat(path: Path) -> os.stat_result | None:
+    try:
+        inspected = path.lstat()
+    except FileNotFoundError:
+        return None
+    if stat.S_ISLNK(inspected.st_mode):
+        raise OSError(f"Repository maintenance lock is a symlink: {path}")
+    return inspected
 
 
 def _discard_corrupt_lock(

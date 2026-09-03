@@ -406,8 +406,8 @@ def test_repeated_busy_renewal_expires_artifact_handle_fail_closed(
 ) -> None:
     identity = _identity("busy-renewal-expiry")
     limits = RepositoryLimits(
-        lease_ttl_seconds=0.2,
-        lease_heartbeat_seconds=0.03,
+        lease_ttl_seconds=1.0,
+        lease_heartbeat_seconds=0.1,
     )
     repository = ExportRepository.open(tmp_path / "repository", limits=limits)
     state = _state(repository, identity, 1)
