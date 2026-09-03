@@ -1,0 +1,56 @@
+skills/notebook-to-static-app/references/contracts.md
+  s_84434b42698f4e::t_927178f40f1bcf 63-66
+  s_84434b42698f4e::t_fa6c321106fedd 18,20,23
+  s_84434b42698f4e::t_20edcdd8792007 8
+docs/reference/export-spec.md
+  s_84434b42698f4e::t_a721791141bcc2 3
+  s_84434b42698f4e::t_d2eb05e44fc895 111
+  s_84434b42698f4e::t_26a9e2e9ddc9ab 214-215
+  s_84434b42698f4e::t_fa6c321106fedd 22,28,97
+  s_84434b42698f4e::t_20edcdd8792007 12,38
+  s_84434b42698f4e::t_892f39d953edda 210
+  s_84434b42698f4e::t_44bdc42c665b51 92,94,100-110,112-121,142,211
+docs/reference/python-api.md
+  s_84434b42698f4e::t_44bdc42c665b51 54,71-75
+  s_84434b42698f4e::t_26a9e2e9ddc9ab 57-58
+  s_84434b42698f4e::t_892f39d953edda 53
+development_docs/architecture/product-and-export.md
+  s_84434b42698f4e::t_44bdc42c665b51 44,46-48,52-57
+docs/reference/representations.md
+  s_84434b42698f4e::t_fa6c321106fedd 133
+  s_84434b42698f4e::t_927178f40f1bcf 12-26
+  s_84434b42698f4e::t_44bdc42c665b51 27
+docs/guide/choose-states.md
+  s_84434b42698f4e::t_927178f40f1bcf 105-107
+  s_84434b42698f4e::t_fa6c321106fedd 23,25,28,137,151
+  s_84434b42698f4e::t_6be8a9cb3fc14e 111-113
+  s_84434b42698f4e::t_20edcdd8792007 12
+skills/notebook-to-static-app/references/workflow.md
+  s_84434b42698f4e::t_20edcdd8792007 42
+  s_84434b42698f4e::t_fa6c321106fedd 48
+development_docs/architecture/studio-integration.md
+  s_84434b42698f4e::t_099886ebc3dc2a 194-198
+  s_84434b42698f4e::t_02234f0e0b62b5 9-10,50,58-59,68-69,71-72,79-80,208-210,252-255
+docs/overview.md
+  s_84434b42698f4e::t_20edcdd8792007 22
+  s_84434b42698f4e::t_fa6c321106fedd 30
+README.md
+  s_84434b42698f4e::t_fa6c321106fedd 29,31
+  s_84434b42698f4e::t_20edcdd8792007 21
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "9423709b06b496b962f4192430c3ade8ecae1a46",
+  "prompts": {},
+  "sessions": {
+    "s_84434b42698f4e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a061f5-fe96-7e42-ae14-44b03f0596fa",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
