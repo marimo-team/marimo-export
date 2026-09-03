@@ -1,0 +1,24 @@
+packages/python/tests/test_protocol_fixtures.py
+  s_84434b42698f4e::t_c4efa2d82b1cae 18,25,33,36,84,103,122,127,146,162,177
+  s_84434b42698f4e::t_ce25cd6ef508df 126,128
+.gitattributes
+  s_84434b42698f4e::t_ce25cd6ef508df 1
+packages/python/tests/test_anywidget_payload.py
+  s_84434b42698f4e::t_ce25cd6ef508df 18,23
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "1aab70fb7fa8902d3b0947dd3977bac23c890387",
+  "prompts": {},
+  "sessions": {
+    "s_84434b42698f4e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a061f5-fe96-7e42-ae14-44b03f0596fa",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
