@@ -24,7 +24,7 @@ catalog:
   oxlint-tsgolint: 7.0.2001
   playwright: 1.62.1
   portless: 0.15.5
-  typescript: ^6.0.3
+  typescript: ^7.0.0
   vega-embed: ^7.2.0
   vite: npm:@voidzero-dev/vite-plus-core@0.3.0
   vite-plus: 0.3.0
