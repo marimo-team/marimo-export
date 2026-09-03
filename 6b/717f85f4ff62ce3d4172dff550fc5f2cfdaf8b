@@ -1,0 +1,103 @@
+tools/oxlint/anti-slop/rules/no-widen-then-assert.ts
+  s_84434b42698f4e::t_73fc93512cc79d 1-1142
+tools/oxlint/anti-slop/package.json
+  s_84434b42698f4e::t_d7daee53e74bbf 1-4
+tools/oxlint/anti-slop/test/no-chained-type-assertions.test.ts
+  s_84434b42698f4e::t_83d7b9d6147138 1-85
+tools/oxlint/anti-slop/test/no-known-value-widening.test.ts
+  s_84434b42698f4e::t_6c380cf155fc68 1-333
+tools/oxlint/anti-slop/test/no-object-parameters.test.ts
+  s_84434b42698f4e::t_d11ed9abc953b3 1-157
+tools/oxlint/anti-slop/rules/no-unknown-returns.ts
+  s_84434b42698f4e::t_84f22e3e934ef8 1-62
+tools/oxlint/anti-slop/rules/no-conditional-empty-object-spread.ts
+  s_84434b42698f4e::t_e2717a19361298 1-164
+vite.config.ts
+  s_84434b42698f4e::t_889d8795d7016d 3-4,12-13,19,27-31,40
+tools/oxlint/anti-slop/test/no-unknown-type-aliases.test.ts
+  s_84434b42698f4e::t_e3538c9eec6ad2 1-100
+tools/oxlint/anti-slop/test/type-environment.test.ts
+  s_84434b42698f4e::t_e1ef573a2099b8 1-85
+tools/oxlint/anti-slop/test/no-reflect-get.test.ts
+  s_84434b42698f4e::t_d09d49da8497d8 1-61
+tools/oxlint/anti-slop/shared/value-reference.ts
+  s_84434b42698f4e::t_00e54d6083126f 1-166
+tools/oxlint/anti-slop/rules/no-chained-type-assertions.ts
+  s_84434b42698f4e::t_21ff8b7e3ae1c5 1-171
+tools/oxlint/anti-slop/test/require-safety-comment-for-type-assertion.test.ts
+  s_84434b42698f4e::t_713b2e29b200c3 1-64
+tools/oxlint/anti-slop/rules/no-module-mocking.ts
+  s_84434b42698f4e::t_f3454c6e6119ff 1-207
+tools/oxlint/anti-slop/rules/no-unknown-parameters.ts
+  s_84434b42698f4e::t_95bd2f7a340ef5 1-100
+tools/oxlint/anti-slop/test/no-unknown-returns.test.ts
+  s_84434b42698f4e::t_91c37645814da2 1-114
+tools/oxlint/anti-slop/test/no-runtime-typeof.test.ts
+  s_84434b42698f4e::t_b9349b0ecb6c49 1-51
+tools/oxlint/anti-slop/test/rule-tester.ts
+  s_84434b42698f4e::t_114b9dd8263b0f 1-19
+tools/oxlint/anti-slop/rules/no-unknown-type-aliases.ts
+  s_84434b42698f4e::t_f308e47e448716 1-39
+tools/oxlint/anti-slop/rules/no-reflect-get.ts
+  s_84434b42698f4e::t_873df832db5375 1-28
+tools/oxlint/anti-slop/shared/type-environment.ts
+  s_84434b42698f4e::t_554abe52862a55 1-1086
+tools/oxlint/anti-slop/shared/reflect-method.ts
+  s_84434b42698f4e::t_26c6ada33517e2 1-119
+tools/oxlint/anti-slop/test/no-module-mocking.test.ts
+  s_84434b42698f4e::t_5a1b211ddc12f6 1-88
+tools/oxlint/anti-slop/rules/require-safety-comment-for-type-assertion.ts
+  s_84434b42698f4e::t_e4cee04cc916b4 1-185
+tools/oxlint/anti-slop/test/no-widen-then-assert.test.ts
+  s_84434b42698f4e::t_b81ec95bffe4f9 1-151
+tools/oxlint/anti-slop/test/no-unsafe-dictionary-type.test.ts
+  s_84434b42698f4e::t_774239473ed61e 1-139
+tools/oxlint/anti-slop/rules/no-object-parameters.ts
+  s_84434b42698f4e::t_07490e156d0a55 1-91
+Makefile
+  s_84434b42698f4e::t_889d8795d7016d 6,43-47
+tools/oxlint/anti-slop/test/no-unknown-parameters.test.ts
+  s_84434b42698f4e::t_77b3de14d80ac8 1-72
+tools/oxlint/anti-slop/shared/dictionary-types.ts
+  s_84434b42698f4e::t_5b18bbccac79a6 1-1474
+tools/oxlint/anti-slop/preset.ts
+  s_84434b42698f4e::t_fdf0761955e0fa 1-25
+tools/oxlint/anti-slop/rules/no-reflect-apply.ts
+  s_84434b42698f4e::t_fd0dfd588b4eae 1-28
+tools/oxlint/anti-slop/rules/no-unsafe-dictionary-type.ts
+  s_84434b42698f4e::t_e2eab682209b23 1-139
+tools/oxlint/anti-slop/tsconfig.json
+  s_84434b42698f4e::t_3d3ae983cf671c 1-22
+tools/oxlint/anti-slop/shared/lexical-type-parameters.ts
+  s_84434b42698f4e::t_81c7b06e7219ff 1-59
+tools/oxlint/anti-slop/index.ts
+  s_84434b42698f4e::t_f7233fba66c8e0 1-43
+tools/oxlint/anti-slop/rules/no-known-value-widening.ts
+  s_84434b42698f4e::t_7c4a13d3b281f6 1-330
+apps/docs/.vitepress/config.mts
+  s_84434b42698f4e::t_9d99c5fac466b6 47-57,60-64
+tools/oxlint/anti-slop/test/no-conditional-empty-object-spread.test.ts
+  s_84434b42698f4e::t_c7fa483e51162e 1-90
+tools/oxlint/anti-slop/test/no-reflect-apply.test.ts
+  s_84434b42698f4e::t_c32e973e05e83e 1-31
+tools/oxlint/anti-slop/rules/no-runtime-typeof.ts
+  s_84434b42698f4e::t_542643466b129a 1-71
+tools/oxlint/anti-slop/test/catalog.test.ts
+  s_84434b42698f4e::t_ef3aa4cf797acf 1-17
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "6b717f85f4ff62ce3d4172dff550fc5f2cfdaf8b",
+  "prompts": {},
+  "sessions": {
+    "s_84434b42698f4e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a061f5-fe96-7e42-ae14-44b03f0596fa",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
