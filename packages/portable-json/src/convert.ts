@@ -1,4 +1,4 @@
-import type { JsonObject, JsonValue, UnparsedJsonValue } from "./types.js";
+import type { JsonObject, JsonValue } from "./types.js";
 import { MAX_JSON_DEPTH, MAX_JSON_VALUES } from "./types.js";
 
 const MAX_DIAGNOSTIC_PATH = 512;
@@ -10,22 +10,21 @@ interface ConversionState {
 }
 
 /** Return a detached portable JSON value. */
-export function portableJsonValue(input: UnparsedJsonValue, path = "value"): JsonValue {
-  if (typeof path !== "string") throw new TypeError("JSON path must be a string.");
+export function portableJsonValue<Input>(input: Input, path = "value"): JsonValue {
   return convertValue(input, path, 0, { active: new WeakSet(), count: 0 });
 }
 
 /** Return a detached portable JSON object. */
-export function portableJsonObject(input: UnparsedJsonValue, path = "value"): JsonObject {
+export function portableJsonObject<Input>(input: Input, path = "value"): JsonObject {
   const value = portableJsonValue(input, path);
-  if (Array.isArray(value) || value === null || typeof value !== "object") {
+  if (!isJsonObject(value)) {
     throw new TypeError(`${path} must be an object.`);
   }
-  return value as JsonObject;
+  return value;
 }
 
-function convertValue(
-  input: UnparsedJsonValue,
+function convertValue<Input>(
+  input: Input,
   path: string,
   depth: number,
   state: ConversionState,
@@ -34,9 +33,10 @@ function convertValue(
     throw new TypeError(`${path} exceeds the maximum JSON nesting depth.`);
   }
   countValue(state, path);
-  if (input === null || typeof input === "boolean") return input;
-  if (typeof input === "string") return unicodeScalar(input, path);
-  if (typeof input === "number") return portableNumber(input, path);
+  if (input === null) return null;
+  if (isBoolean(input)) return input;
+  if (isString(input)) return unicodeScalar(input, path);
+  if (isNumber(input)) return portableNumber(input, path);
   if (Array.isArray(input)) return convertArray(input, path, depth, state);
   if (!isJsonObject(input)) {
     throw new TypeError(`${path} must be JSON-compatible.`);
@@ -44,8 +44,8 @@ function convertValue(
   return convertObject(input, path, depth, state);
 }
 
-function convertArray(
-  input: readonly UnparsedJsonValue[],
+function convertArray<Input>(
+  input: readonly Input[],
   path: string,
   depth: number,
   state: ConversionState,
@@ -68,8 +68,8 @@ function convertArray(
   }
 }
 
-function convertObject(
-  input: Readonly<Record<string, UnparsedJsonValue>>,
+function convertObject<Input extends object>(
+  input: Input,
   path: string,
   depth: number,
   state: ConversionState,
@@ -91,7 +91,11 @@ function convertObject(
   }
 }
 
-function enterContainer(value: object, path: string, state: ConversionState): void {
+function enterContainer<Value extends object>(
+  value: Value,
+  path: string,
+  state: ConversionState,
+): void {
   if (state.active.has(value)) throw new TypeError(`${path} contains a cyclic container.`);
   state.active.add(value);
 }
@@ -129,10 +133,21 @@ function unicodeScalar(value: string, path: string): string {
   return value;
 }
 
-function isJsonObject(value: unknown): value is Readonly<Record<string, UnparsedJsonValue>> {
+function isBoolean<Value>(value: Value): value is Value & boolean {
+  return Object.prototype.toString.call(value) === "[object Boolean]";
+}
+
+function isString<Value>(value: Value): value is Value & string {
+  return Object.prototype.toString.call(value) === "[object String]";
+}
+
+function isNumber<Value>(value: Value): value is Value & number {
+  return Object.prototype.toString.call(value) === "[object Number]";
+}
+
+function isJsonObject<Value>(value: Value): value is Value & JsonObject {
   return (
     value !== null &&
-    typeof value === "object" &&
     !Array.isArray(value) &&
     Object.prototype.toString.call(value) === "[object Object]"
   );

@@ -9,6 +9,7 @@ import {
   portableJsonObject,
   portableJsonValue,
 } from "../src/index.js";
+import type { JsonValue } from "../src/index.js";
 
 describe("portable JSON conversion", () => {
   test("detaches and freezes values while preserving shared aliases", () => {
@@ -49,7 +50,7 @@ describe("portable JSON conversion", () => {
   });
 
   test("enforces depth and value limits", () => {
-    let deep: unknown = null;
+    let deep: JsonValue = null;
     for (let depth = 0; depth <= MAX_JSON_DEPTH; depth += 1) {
       deep = Object.fromEntries([["child", deep]]);
     }
@@ -65,10 +66,11 @@ describe("portable JSON conversion", () => {
     sparse[1] = "ready";
     const hugeSparse: unknown[] = [];
     hugeSparse.length = MAX_JSON_VALUES + 1;
-    const overridden = [1, 2] as number[] & { map: () => never };
-    overridden.map = () => {
-      throw new Error("array map must not run");
-    };
+    const overridden = Object.assign([1, 2], {
+      map: () => {
+        throw new Error("array map must not run");
+      },
+    });
 
     expect(() => portableJsonValue(sparse)).toThrow("must be present");
     expect(() => portableJsonValue(hugeSparse)).toThrow("maximum JSON value count");

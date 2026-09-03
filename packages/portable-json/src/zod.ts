@@ -82,15 +82,14 @@ export const losslessRecordSchema = <
     return Object.freeze(Object.fromEntries(entries));
   });
 
-function isObjectRecord(value: unknown): value is Readonly<Record<string, unknown>> {
+function isObjectRecord<Value>(value: Value): value is Value & object {
   return (
     value !== null &&
-    typeof value === "object" &&
     !Array.isArray(value) &&
     Object.prototype.toString.call(value) === "[object Object]"
   );
 }
 
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : "Expected a portable JSON value";
+function errorMessage(cause: unknown): string {
+  return cause instanceof Error ? cause.message : "Expected a portable JSON value";
 }

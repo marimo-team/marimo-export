@@ -6,13 +6,13 @@ const MAX_JSON_DIAGNOSTIC_STRING = 256;
 const MAX_JSON_NUMBER_LEXEME_BYTES = 1_024;
 
 /** Parse one JSON value while rejecting duplicate object keys at every depth. */
-export function parseStrictJson(text: string, maximumValues?: number): unknown {
-  if (typeof text !== "string") throw new TypeError("JSON source must be a string.");
+export function parseStrictJson(text: string, maximumValues?: number): JsonValue {
   const scanner = new JsonScanner(text, jsonValueLimit(maximumValues));
   scanner.value(0);
   scanner.whitespace();
   if (!scanner.done) scanner.fail("Unexpected content after the JSON value");
-  return JSON.parse(text) as unknown;
+  // SAFETY: JsonScanner accepted one complete JSON value before JSON.parse reads the same text.
+  return JSON.parse(text) as JsonValue;
 }
 
 /** Parse strict JSON and return a detached portable value. */
@@ -116,7 +116,9 @@ class JsonScanner {
       const code = this.#text.charCodeAt(this.#offset);
       if (code === 0x22) {
         this.#offset += 1;
-        return decode ? (JSON.parse(this.#text.slice(start, this.#offset)) as string) : undefined;
+        if (!decode) return undefined;
+        // SAFETY: The scanner has consumed exactly one quoted JSON string.
+        return JSON.parse(this.#text.slice(start, this.#offset)) as string;
       }
       if (code < 0x20) this.fail("Unescaped control character in a string");
       if (code === 0x5c) {

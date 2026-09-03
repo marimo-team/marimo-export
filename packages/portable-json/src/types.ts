@@ -8,5 +8,3 @@ export type JsonValue = JsonPrimitive | readonly JsonValue[] | JsonObject;
 export interface JsonObject {
   readonly [key: string]: JsonValue;
 }
-
-export type UnparsedJsonValue = unknown;
