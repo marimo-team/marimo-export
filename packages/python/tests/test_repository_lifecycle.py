@@ -112,8 +112,8 @@ def test_active_leases_protect_artifacts_then_lru_prunes_them(tmp_path: Path) ->
         retained_generations=1,
         retained_generations_per_identity=1,
         retained_prepared_states=1,
-        lease_ttl_seconds=0.5,
-        lease_heartbeat_seconds=0.05,
+        lease_ttl_seconds=2.0,
+        lease_heartbeat_seconds=0.1,
     )
     root = tmp_path / "repository"
     first_identity = _identity("first")
@@ -295,8 +295,8 @@ def test_staging_lease_releases_only_after_confirmed_removal(
 def test_close_is_bounded_when_catalog_release_is_blocked(tmp_path: Path) -> None:
     root = tmp_path / "repository"
     limits = RepositoryLimits(
-        lease_ttl_seconds=0.2,
-        lease_heartbeat_seconds=0.05,
+        lease_ttl_seconds=1.0,
+        lease_heartbeat_seconds=0.1,
     )
     identity = _identity("blocked-close")
     repository = ExportRepository.open(root, limits=limits)
@@ -316,9 +316,12 @@ def test_close_is_bounded_when_catalog_release_is_blocked(tmp_path: Path) -> Non
         connection.rollback()
         connection.close()
     assert time.monotonic() - started < 2
-    time.sleep(0.25)
-    with ExportRepository.open(root, limits=limits):
-        assert not staged.path.exists()
+    deadline = time.monotonic() + limits.lease_ttl_seconds + 2
+    while staged.path.exists() and time.monotonic() < deadline:
+        with ExportRepository.open(root, limits=limits):
+            pass
+        time.sleep(0.05)
+    assert not staged.path.exists()
 
 
 def test_failed_retired_artifact_removal_remains_accounted(
@@ -374,8 +377,8 @@ def test_heartbeat_failure_surfaces_through_public_operations(
 ) -> None:
     identity = _identity("heartbeat-failure")
     limits = RepositoryLimits(
-        lease_ttl_seconds=0.5,
-        lease_heartbeat_seconds=0.05,
+        lease_ttl_seconds=2.0,
+        lease_heartbeat_seconds=0.1,
     )
     repository = ExportRepository.open(tmp_path / "repository", limits=limits)
     state = _state(repository, identity, 1)
@@ -437,8 +440,8 @@ def test_delayed_success_after_deadline_does_not_revive_artifact_lease(
 ) -> None:
     identity = _identity("delayed-artifact-renewal")
     limits = RepositoryLimits(
-        lease_ttl_seconds=0.5,
-        lease_heartbeat_seconds=0.35,
+        lease_ttl_seconds=2.0,
+        lease_heartbeat_seconds=1.5,
     )
     repository = ExportRepository.open(tmp_path / "repository", limits=limits)
     state = _state(repository, identity, 1)
@@ -459,7 +462,7 @@ def test_delayed_success_after_deadline_does_not_revive_artifact_lease(
     monkeypatch.setattr(repository._catalog, "renew_lifecycle", delayed_renewal)
     assert entered.wait(timeout=2)
     try:
-        deadline = time.monotonic() + 2
+        deadline = time.monotonic() + limits.lease_ttl_seconds + 2
         while state.alive and time.monotonic() < deadline:
             time.sleep(0.01)
     finally:
@@ -550,8 +553,8 @@ def test_delayed_success_after_deadline_does_not_revive_staging_lease(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     limits = RepositoryLimits(
-        lease_ttl_seconds=0.5,
-        lease_heartbeat_seconds=0.35,
+        lease_ttl_seconds=2.0,
+        lease_heartbeat_seconds=1.5,
     )
     repository = ExportRepository.open(tmp_path / "repository", limits=limits)
     staged = repository._artifacts.new_staging()
@@ -573,7 +576,7 @@ def test_delayed_success_after_deadline_does_not_revive_staging_lease(
     monkeypatch.setattr(repository._catalog, "renew_lifecycle", delayed_renewal)
     assert entered.wait(timeout=2)
     try:
-        deadline = time.monotonic() + 2
+        deadline = time.monotonic() + limits.lease_ttl_seconds + 2
         while relative in repository._leases._staging and time.monotonic() < deadline:
             with repository._leases._condition:
                 repository._leases._expire_unconfirmed_lifecycle()
@@ -593,8 +596,8 @@ def test_release_during_heartbeat_renewal_removes_renewed_lease(
 ) -> None:
     identity = _identity("renewal-race")
     limits = RepositoryLimits(
-        lease_ttl_seconds=0.5,
-        lease_heartbeat_seconds=0.05,
+        lease_ttl_seconds=2.0,
+        lease_heartbeat_seconds=0.1,
     )
     with ExportRepository.open(tmp_path / "repository", limits=limits) as repository:
         state = _state(repository, identity, 1)

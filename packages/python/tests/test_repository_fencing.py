@@ -187,8 +187,8 @@ def test_acquisition_timeout_does_not_expire_owned_reservation(tmp_path: Path) -
 def test_lost_reservation_renewal_poison_stops_next_stage(tmp_path: Path) -> None:
     root = tmp_path / "repository"
     limits = RepositoryLimits(
-        lease_ttl_seconds=0.3,
-        lease_heartbeat_seconds=0.05,
+        lease_ttl_seconds=2.0,
+        lease_heartbeat_seconds=0.1,
     )
     identity = _identity("lost-renewal")
     with ExportRepository.open(root, limits=limits) as repository:
@@ -223,8 +223,8 @@ def test_busy_renewal_expires_reservation_and_staging_fail_closed(
 ) -> None:
     root = tmp_path / "repository"
     limits = RepositoryLimits(
-        lease_ttl_seconds=0.4,
-        lease_heartbeat_seconds=0.05,
+        lease_ttl_seconds=1.0,
+        lease_heartbeat_seconds=0.1,
     )
     identity = _identity("busy-lifecycle-expiry")
     repository = ExportRepository.open(root, limits=limits)
@@ -292,8 +292,8 @@ def test_delayed_success_after_deadline_does_not_revive_reservation(
 ) -> None:
     root = tmp_path / "repository"
     limits = RepositoryLimits(
-        lease_ttl_seconds=0.5,
-        lease_heartbeat_seconds=0.35,
+        lease_ttl_seconds=2.0,
+        lease_heartbeat_seconds=1.5,
     )
     identity = _identity("delayed-reservation-renewal")
     repository = ExportRepository.open(root, limits=limits)
@@ -325,7 +325,7 @@ def test_delayed_success_after_deadline_does_not_revive_reservation(
         monkeypatch.setattr(repository._catalog, "renew_lifecycle", delayed_renewal)
         assert entered.wait(timeout=2)
         try:
-            deadline = time.monotonic() + 2
+            deadline = time.monotonic() + limits.lease_ttl_seconds + 2
             while reservation.alive and time.monotonic() < deadline:
                 time.sleep(0.01)
         finally:

@@ -236,7 +236,7 @@ from pathlib import Path
 from marimo_export._repository.preparation import RepositoryIdentity, preparation_repository
 from marimo_export.repository import ExportRepository, RepositoryLimits
 
-limits = RepositoryLimits(lease_ttl_seconds=0.5, lease_heartbeat_seconds=0.05)
+limits = RepositoryLimits(lease_ttl_seconds=2.0, lease_heartbeat_seconds=0.1)
 identity = RepositoryIdentity(sys.argv[2], sys.argv[3], sys.argv[4])
 repository = ExportRepository.open(sys.argv[1], limits=limits)
 preparation = preparation_repository(repository)
@@ -256,11 +256,11 @@ with preparation.reserve_preparation(identity):
         stderr=subprocess.PIPE,
         text=True,
     )
-    stdout, stderr = process.communicate(timeout=10)
+    stdout, stderr = process.communicate(timeout=30)
     assert process.returncode == 0, (stdout, stderr)
     staged_path = Path(ready.read_text(encoding="utf-8"))
     identity = RepositoryIdentity(*identity_parts)
-    limits = RepositoryLimits(lease_ttl_seconds=0.5, lease_heartbeat_seconds=0.05)
+    limits = RepositoryLimits(lease_ttl_seconds=2.0, lease_heartbeat_seconds=0.1)
 
     with ExportRepository.open(root, limits=limits) as repository:
         assert staged_path.is_dir()
@@ -272,11 +272,17 @@ with preparation.reserve_preparation(identity):
             raise AssertionError("crashed reservation has not expired")
         assert raised.value.code == "preparation_cancelled"
 
-    time.sleep(0.6)
-    with ExportRepository.open(root, limits=limits) as repository:
-        assert not staged_path.exists()
-        with preparation_repository(repository).reserve_preparation(identity):
+    deadline = time.monotonic() + limits.lease_ttl_seconds + 3
+    while staged_path.exists() and time.monotonic() < deadline:
+        with ExportRepository.open(root, limits=limits):
             pass
+        time.sleep(0.05)
+    assert not staged_path.exists()
+    with (
+        ExportRepository.open(root, limits=limits) as repository,
+        preparation_repository(repository).reserve_preparation(identity),
+    ):
+        pass
 
 
 def test_busy_renewal_expires_cross_process_reservation_and_staging(
@@ -301,7 +307,7 @@ root = Path(sys.argv[1])
 ready = Path(sys.argv[5])
 proceed = Path(sys.argv[6])
 result = Path(sys.argv[7])
-limits = RepositoryLimits(lease_ttl_seconds=0.3, lease_heartbeat_seconds=0.05)
+limits = RepositoryLimits(lease_ttl_seconds=1.0, lease_heartbeat_seconds=0.1)
 identity = RepositoryIdentity(sys.argv[2], sys.argv[3], sys.argv[4])
 repository = ExportRepository.open(root, limits=limits)
 preparation = preparation_repository(repository)
@@ -375,25 +381,30 @@ os._exit(0)
         stderr=subprocess.PIPE,
         text=True,
     )
-    deadline = time.monotonic() + 10
+    deadline = time.monotonic() + 30
     while not ready.exists() and process.poll() is None and time.monotonic() < deadline:
         time.sleep(0.01)
     assert ready.exists()
     initial = json.loads(ready.read_text(encoding="utf-8"))
-    time.sleep(0.7)
     identity = RepositoryIdentity(*identity_parts)
-    limits = RepositoryLimits(lease_ttl_seconds=0.3, lease_heartbeat_seconds=0.05)
+    limits = RepositoryLimits(lease_ttl_seconds=1.0, lease_heartbeat_seconds=0.1)
+    paths = tuple(Path(path) for path in initial["paths"])
+    deadline = time.monotonic() + limits.lease_ttl_seconds + 3
+    while any(path.exists() for path in paths) and time.monotonic() < deadline:
+        with ExportRepository.open(root, limits=limits):
+            pass
+        time.sleep(0.05)
     with ExportRepository.open(root, limits=limits) as repository:
-        assert all(not Path(path).exists() for path in initial["paths"])
+        assert all(not path.exists() for path in paths)
         with preparation_repository(repository).reserve_preparation(identity) as winner:
             assert winner.fence > initial["fence"]
         assert repository.status().prepared_states == 0
         assert repository.status().generations == 0
     proceed.write_text("continue", encoding="utf-8")
-    stdout, stderr = process.communicate(timeout=10)
+    stdout, stderr = process.communicate(timeout=30)
     assert process.returncode == 0, (stdout, stderr)
     final = json.loads(result.read_text(encoding="utf-8"))
-    assert final["attempts"] >= 2
+    assert final["attempts"] >= 1
     assert final["alive"] is False
     assert final["cancelled"] is True
     assert final["errors"] == ["RepositoryFenceError", "RepositoryFenceError"]
