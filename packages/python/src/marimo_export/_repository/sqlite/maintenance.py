@@ -83,6 +83,15 @@ def _connect(path: Path, *, timeout_seconds: float) -> sqlite3.Connection:
             schema_attempt += 1
         except sqlite3.DatabaseError as error:
             connection.close()
+            after = _lock_stat(path)
+            if before is None or after is None or not os.path.samestat(before, after):
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise RepositoryUnavailableError(
+                        "The export repository maintenance lock is unavailable."
+                    ) from error
+                time.sleep(min(0.01, remaining))
+                continue
             message = str(error).lower()
             if any(term in message for term in ("locked", "busy")):
                 remaining = deadline - time.monotonic()
@@ -96,7 +105,6 @@ def _connect(path: Path, *, timeout_seconds: float) -> sqlite3.Connection:
                 raise RepositoryUnavailableError(
                     "The export repository maintenance lock is unavailable."
                 ) from error
-            after = _lock_stat(path)
             if before is not None and after is not None and os.path.samestat(before, after):
                 _discard_corrupt_lock(path, expected=before, deadline=deadline)
             schema_attempt += 1

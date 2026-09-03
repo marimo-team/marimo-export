@@ -10,7 +10,9 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from hashlib import sha256
 from pathlib import Path
+from typing import Any
 
+import marimo_export._repository.sqlite.maintenance as maintenance_module
 import pytest
 from marimo_export._repository.artifacts import ArtifactRepository
 from marimo_export._repository.models import RepositoryBusyError
@@ -528,6 +530,45 @@ def test_concurrent_open_recovers_wrong_maintenance_schema(tmp_path: Path) -> No
 
     with ThreadPoolExecutor(max_workers=4) as executor:
         assert list(executor.map(open_once, range(8))) == [0] * 8
+
+
+def test_maintenance_connection_retries_when_database_identity_changes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    path = tmp_path / "maintenance.sqlite3"
+    native_connect = sqlite3.connect
+    with native_connect(path):
+        pass
+    attempts = 0
+
+    class ReplacedConnection:
+        def execute(self, statement: str) -> Any:
+            if statement.startswith("PRAGMA busy_timeout"):
+                return self
+            path.unlink()
+            raise sqlite3.OperationalError("disk I/O error")
+
+        def close(self) -> None:
+            pass
+
+    def connect(*args: Any, **kwargs: Any) -> sqlite3.Connection | ReplacedConnection:
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            return ReplacedConnection()
+        return native_connect(*args, **kwargs)
+
+    monkeypatch.setattr(maintenance_module.sqlite3, "connect", connect)
+
+    connection = maintenance_module._connect(path, timeout_seconds=1)
+    try:
+        assert tuple(
+            row[1] for row in connection.execute('PRAGMA table_info("maintenance_lock")')
+        ) == ("singleton",)
+    finally:
+        connection.close()
+    assert attempts == 2
 
 
 @pytest.mark.skipif(os.name != "nt", reason="Windows open-handle replacement contract")
