@@ -111,7 +111,6 @@ class StateChild:
     runner: Any
     context: Any
     internal: Any
-    authored_cell_ids: tuple[Any, ...]
     cell_ids: Mapping[str, Any]
     source_cell_ids: Mapping[Any, str]
     output_cell_ids: Mapping[str, Any]
@@ -256,7 +255,6 @@ def open_state_child(
                 runner=runner,
                 context=runner._runtime_context,
                 internal=internal,
-                authored_cell_ids=authored_cell_ids,
                 cell_ids=cell_ids,
                 source_cell_ids={
                     runtime_id: source_id for source_id, runtime_id in cell_ids.items()

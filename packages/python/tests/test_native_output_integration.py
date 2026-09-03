@@ -68,6 +68,112 @@ def test_native_outputs_preserve_json_and_cache_native_values_across_warm_builds
     assert second.cache_activity.projection_hits == 4
 
 
+def test_different_output_plans_reuse_the_native_authored_cell_cache(
+    tmp_path: Path,
+) -> None:
+    notebook = tmp_path / "notebook.py"
+    counter = tmp_path / "runs.txt"
+    notebook.write_text(
+        f"""
+import marimo
+
+app = marimo.App()
+
+
+@app.cell
+def _():
+    from pathlib import Path
+    counter = Path({str(counter)!r})
+    runs = int(counter.read_text()) + 1 if counter.exists() else 1
+    counter.write_text(str(runs))
+    value = 42
+    return (value,)
+
+
+if __name__ == "__main__":
+    app.run()
+""".lstrip(),
+        encoding="utf-8",
+    )
+    first_spec = ExportSpec(
+        default_state="baseline",
+        states={"baseline": {}},
+        outputs={"first": OutputSpec.native("value")},
+    )
+    second_spec = ExportSpec(
+        default_state="baseline",
+        states={"baseline": {}},
+        outputs={"second": OutputSpec.native("value")},
+    )
+
+    first = build(notebook, spec=first_spec, output=tmp_path / "first", timeout=30)
+    second = build(notebook, spec=second_spec, output=tmp_path / "second", timeout=30)
+
+    assert counter.read_text(encoding="utf-8") == "1"
+    assert first.cache_activity.authored_hits == 1
+    assert second.cache_activity.authored_hits == 1
+    assert open_export(second.path).state("baseline").output("second").scalar() == 42
+
+
+def test_different_output_plans_reuse_every_prepared_ui_state(
+    tmp_path: Path,
+) -> None:
+    notebook = tmp_path / "notebook.py"
+    counter = tmp_path / "runs.txt"
+    notebook.write_text(
+        f"""
+import marimo
+
+app = marimo.App()
+
+
+@app.cell
+def controls():
+    import marimo as mo
+    scale = mo.ui.slider(1, 5, value=1)
+    return (scale,)
+
+
+@app.cell
+def report(scale):
+    from pathlib import Path
+    counter = Path({str(counter)!r})
+    runs = int(counter.read_text()) + 1 if counter.exists() else 1
+    counter.write_text(str(runs))
+    value = scale.value * 10
+    return (value,)
+
+
+if __name__ == "__main__":
+    app.run()
+""".lstrip(),
+        encoding="utf-8",
+    )
+
+    def spec(output: str) -> ExportSpec:
+        return ExportSpec(
+            default_state="one",
+            states={"one": {"scale": 1}, "three": {"scale": 3}},
+            outputs={output: OutputSpec.native("value")},
+        )
+
+    build(notebook, spec=spec("first"), output=tmp_path / "first", timeout=30)
+    runs_after_first_plan = counter.read_text(encoding="utf-8")
+    second = build(
+        notebook,
+        spec=spec("second"),
+        output=tmp_path / "second",
+        timeout=30,
+    )
+
+    assert runs_after_first_plan == "2"
+    assert counter.read_text(encoding="utf-8") == runs_after_first_plan
+    assert second.cache_activity.authored_hits >= 2
+    opened = open_export(second.path)
+    assert opened.state("one").output("second").scalar() == 10
+    assert opened.state("three").output("second").scalar() == 30
+
+
 def test_native_output_rejects_a_pickle_representation(tmp_path: Path) -> None:
     notebook = tmp_path / "unsupported.py"
     notebook.write_text(

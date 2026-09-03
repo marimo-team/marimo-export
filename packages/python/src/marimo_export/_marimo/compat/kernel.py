@@ -1,7 +1,6 @@
 """Compose private marimo kernel capabilities."""
 
 from marimo_export._marimo.compat.cache.barrier import flush_native_caches
-from marimo_export._marimo.compat.cache.lifecycle import consume_parent_live_cells
 from marimo_export._marimo.compat.execution import execute_state
 from marimo_export._marimo.compat.exporters import prepared_exporters
 from marimo_export._marimo.compat.inspection import (
@@ -33,7 +32,6 @@ class PrivateKernelRuntime:
     observe_inputs = staticmethod(observe_inputs)
     declared_ui_values = staticmethod(declared_ui_values)
     prepared_exporters = staticmethod(prepared_exporters)
-    consume_parent_live_cells = staticmethod(consume_parent_live_cells)
     flush_native_caches = staticmethod(flush_native_caches)
     execute_state = staticmethod(execute_state)
 

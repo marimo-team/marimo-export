@@ -69,7 +69,7 @@ if __name__ == "__main__":
     assert (
         second.cache_activity.authored_hits,
         second.cache_activity.authored_misses,
-    ) == (0, 2)
+    ) == (1, 1)
 
 
 def test_nondefault_ui_state_executes_projected_cells_once_in_final_phase(

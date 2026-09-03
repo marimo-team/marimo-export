@@ -22,12 +22,19 @@ app = marimo.App()
 
 
 @app.cell
-def source_cell():
+def watched_source():
+    import marimo as _mo
+    source_file = _mo.watch.file({str(source)!r})
+    return (source_file,)
+
+
+@app.cell
+def source_cell(source_file):
     from pathlib import Path as SourcePath
     source_counter = SourcePath({str(upstream_counter)!r})
     source_runs = int(source_counter.read_text()) + 1 if source_counter.exists() else 1
     source_counter.write_text(str(source_runs))
-    source_value = SourcePath({str(source)!r}).read_text()
+    source_value = source_file.read_text()
     return (source_value,)
 
 
@@ -125,7 +132,7 @@ if __name__ == "__main__":
     assert (
         second.cache_activity.authored_hits,
         second.cache_activity.authored_misses,
-    ) == (0, 2)
+    ) == (1, 1)
 
 
 def test_complete_cell_force_uses_the_final_requested_state_cache_disposition(
@@ -274,7 +281,7 @@ if __name__ == "__main__":
     assert first_cell != second_cell
 
 
-def test_same_document_external_change_invalidates_all_projection_receipts(
+def test_same_document_native_file_change_invalidates_all_projection_receipts(
     tmp_path: Path,
 ) -> None:
     notebook = tmp_path / "notebook.py"
@@ -287,10 +294,16 @@ app = marimo.App()
 
 
 @app.cell
-def report():
+def watched_source():
+    import marimo as _mo
+    source_file = _mo.watch.file({str(source)!r})
+    return (source_file,)
+
+
+@app.cell
+def report(source_file):
     import marimo as mo
-    from pathlib import Path
-    value = Path({str(source)!r}).read_text()
+    value = source_file.read_text()
     print(value)
     view = mo.md(value)
     view
@@ -335,7 +348,7 @@ if __name__ == "__main__":
     assert first_cell != second_cell
 
 
-def test_value_projection_refreshes_cached_external_ancestor_closure(tmp_path: Path) -> None:
+def test_value_projection_uses_native_file_invalidation(tmp_path: Path) -> None:
     notebook = tmp_path / "notebook.py"
     source = tmp_path / "value.txt"
     upstream_counter = tmp_path / "upstream-runs.txt"
@@ -365,10 +378,10 @@ def test_value_projection_refreshes_cached_external_ancestor_closure(tmp_path: P
     assert (
         second.cache_activity.authored_hits,
         second.cache_activity.authored_misses,
-    ) == (0, 2)
+    ) == (2, 1)
 
 
-def test_rendered_projection_refreshes_cached_external_ancestor_closure(tmp_path: Path) -> None:
+def test_rendered_projection_uses_native_file_invalidation(tmp_path: Path) -> None:
     notebook = tmp_path / "notebook.py"
     source = tmp_path / "value.txt"
     upstream_counter = tmp_path / "upstream-runs.txt"
@@ -405,10 +418,12 @@ def test_rendered_projection_refreshes_cached_external_ancestor_closure(tmp_path
     assert (
         second.cache_activity.authored_hits,
         second.cache_activity.authored_misses,
-    ) == (0, 2)
+    ) == (2, 1)
 
 
-def test_shared_projection_owner_forces_cached_ancestor_closure_once(tmp_path: Path) -> None:
+def test_shared_projection_owner_keeps_complete_cell_live_after_native_file_change(
+    tmp_path: Path,
+) -> None:
     notebook = tmp_path / "notebook.py"
     source = tmp_path / "value.txt"
     upstream_counter = tmp_path / "upstream-runs.txt"
@@ -446,7 +461,7 @@ def test_shared_projection_owner_forces_cached_ancestor_closure_once(tmp_path: P
     )
 
     assert upstream_counter.read_text(encoding="utf-8") == "1"
-    assert downstream_counter.read_text(encoding="utf-8") == "1"
+    assert downstream_counter.read_text(encoding="utf-8") == "2"
     assert state.output("value").json() == "summary=second"
     assert "summary=second" in output["output"]["data"]
     assert "summary=second" in cell["output"]["data"]
@@ -454,7 +469,7 @@ def test_shared_projection_owner_forces_cached_ancestor_closure_once(tmp_path: P
     assert (
         second.cache_activity.authored_hits,
         second.cache_activity.authored_misses,
-    ) == (0, 2)
+    ) == (1, 2)
 
 
 def test_forced_complete_cell_refreshes_stale_descendant_projections(

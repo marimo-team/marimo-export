@@ -243,7 +243,6 @@ async def _capture(spec: ExportSpec, adapters: KernelAdapters) -> JsonObject:
     output_materialization_seconds = 0.0
     state_cleanup_seconds = 0.0
     with runtime.prepared_exporters(plan, baseline) as exporter_identities:
-        parent_live_cells = runtime.consume_parent_live_cells()
         runtime.flush_native_caches()
         primary: BaseException | None = None
         try:
@@ -254,8 +253,6 @@ async def _capture(spec: ExportSpec, adapters: KernelAdapters) -> JsonObject:
                     exporter_identities,
                     implementation_sha256,
                     producer_identity,
-                    parent_live_cells,
-                    plan.baseline_fingerprint,
                 )
                 receipts.extend(executed.receipts)
                 _merge_control_bindings(control_bindings, executed.control_bindings)

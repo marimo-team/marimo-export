@@ -10,7 +10,6 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Any
 
-from marimo_export._cell_ids import canonical_cell_id
 from marimo_export._execution.plan import ExecutionPlan, NormalizedState
 from marimo_export._json import (
     JsonValue,
@@ -41,14 +40,11 @@ from marimo_export.spec import CellSource
 @dataclass(frozen=True, slots=True)
 class _StateRunPlan:
     available_cells: frozenset[Any]
-    authored_cells: frozenset[Any]
     complete_cell_owners: frozenset[Any]
     execution_order: tuple[Any, ...]
-    fresh_child_cells: frozenset[Any]
     output_cells: frozenset[Any]
     output_dependencies: Mapping[str, frozenset[Any]]
     output_owners: Mapping[str, Any]
-    projected_ancestors: frozenset[Any]
     transient_cache_cells: frozenset[Any]
     ui_input_cells: frozenset[Any]
     ui_update_batches: tuple[tuple[Any, tuple[str, ...]], ...]
@@ -74,8 +70,6 @@ async def execute_state(
     exporters: Mapping[str, PreparedExporter],
     implementation_sha256: str,
     producer_identity: str,
-    parent_live_cells: frozenset[str],
-    parent_state_fingerprint: str,
 ) -> StateExecution:
     """Execute one state run through marimo's graph and cell cache."""
 
@@ -98,8 +92,6 @@ async def execute_state(
                 child=state_child,
                 state=state,
                 plan=plan,
-                parent_live_cells=parent_live_cells,
-                parent_state_fingerprint=parent_state_fingerprint,
             )
             with track_notebook_cache(
                 state_child.runner._kernel.graph,
@@ -142,8 +134,6 @@ def _plan_state_run(
     child: StateChild,
     state: NormalizedState,
     plan: ExecutionPlan,
-    parent_live_cells: frozenset[str],
-    parent_state_fingerprint: str,
 ) -> _StateRunPlan:
     from marimo._runtime.dataflow import prune_cells_for_overrides, transitive_closure
     from marimo._types.ids import CellId_t
@@ -163,7 +153,6 @@ def _plan_state_run(
         for cell_id in execution_order
         if cell_id not in output_cells and not child.internal.graph.is_disabled(cell_id)
     )
-    projected_owners: set[CellId_t] = set()
     complete_cell_owners: set[CellId_t] = set()
     output_owners: dict[str, CellId_t] = {}
     for output, planned_output in plan.planned_outputs.items():
@@ -175,34 +164,16 @@ def _plan_state_run(
                 code="output_execution_failed",
             )
         runtime_cell_id = CellId_t(runtime_id)
-        projected_owners.add(runtime_cell_id)
         output_owners[output] = runtime_cell_id
         if isinstance(planned_output.source, CellSource):
             complete_cell_owners.add(runtime_cell_id)
-    projected_ancestors = frozenset(
-        transitive_closure(
-            graph,
-            projected_owners,
-            children=False,
-        )
-    )
-    matching_parent_live_cells = (
-        parent_live_cells if state.fingerprint == parent_state_fingerprint else frozenset()
-    )
-    fresh_child_cells = frozenset(
-        CellId_t(child.cell_ids[canonical_cell_id(cell_id)])
-        for cell_id in matching_parent_live_cells
-        if canonical_cell_id(cell_id) in child.cell_ids
-    )
     ui_input_cells = frozenset(
         cell_id for name in state.ui_updates for cell_id in graph.get_defining_cells(name)
     )
     return _StateRunPlan(
         available_cells=available_cells,
-        authored_cells=frozenset(child.authored_cell_ids),
         complete_cell_owners=frozenset(complete_cell_owners),
         execution_order=execution_order,
-        fresh_child_cells=fresh_child_cells,
         output_cells=output_cells,
         output_dependencies={
             output: frozenset(
@@ -215,7 +186,6 @@ def _plan_state_run(
             for output, owner_cell_id in output_owners.items()
         },
         output_owners=output_owners,
-        projected_ancestors=projected_ancestors,
         transient_cache_cells=frozenset(
             {
                 *output_cells,
@@ -227,20 +197,11 @@ def _plan_state_run(
     )
 
 
-def _forced_projection_cells(
-    child: StateChild,
+def _live_complete_cell_owners(
     run_plan: _StateRunPlan,
     cells: set[Any],
 ) -> frozenset[Any]:
-    graph = child.runner._kernel.graph
-    return frozenset(
-        cell_id
-        for cell_id in cells
-        if cell_id in run_plan.projected_ancestors
-        and cell_id in run_plan.authored_cells
-        and (cell_id not in run_plan.fresh_child_cells or cell_id in run_plan.complete_cell_owners)
-        and not graph.is_disabled(cell_id)
-    )
+    return frozenset(cells & run_plan.complete_cell_owners)
 
 
 async def _execute_inputs(
@@ -271,7 +232,7 @@ async def _execute_inputs(
                 dependency_started = time.monotonic()
                 with force_cache_misses(
                     graph,
-                    _forced_projection_cells(child, run_plan, initialization_cells),
+                    _live_complete_cell_owners(run_plan, initialization_cells),
                 ):
                     await run_state_child(runner, initialization_cells)
                 dependency_seconds += time.monotonic() - dependency_started
@@ -296,7 +257,7 @@ async def _execute_inputs(
         available_cells = set(run_plan.available_cells)
         with force_cache_misses(
             graph,
-            _forced_projection_cells(child, run_plan, available_cells),
+            _live_complete_cell_owners(run_plan, available_cells),
         ):
             await run_state_child(runner, available_cells)
         dependency_seconds = time.monotonic() - dependency_started
@@ -326,13 +287,7 @@ async def _execute_inputs(
             if graph.cells[cell_id].stale and not graph.is_disabled(cell_id)
         )
     reactive_cells.difference_update(run_plan.ui_input_cells)
-    final_forced = frozenset(
-        cell_id
-        for cell_id in reactive_cells
-        if cell_id in run_plan.projected_ancestors
-        and cell_id in run_plan.authored_cells
-        and not graph.is_disabled(cell_id)
-    )
+    final_forced = _live_complete_cell_owners(run_plan, reactive_cells)
     if reactive_cells:
         with force_cache_misses(graph, final_forced):
             await run_state_child(runner, reactive_cells)

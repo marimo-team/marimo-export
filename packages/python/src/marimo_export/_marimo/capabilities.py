@@ -140,8 +140,6 @@ class CachedStateExecutor(Protocol):
         exporters: Mapping[str, PreparedExporter],
         implementation_sha256: str,
         producer_identity: str,
-        parent_live_cells: frozenset[str],
-        parent_state_fingerprint: str,
     ) -> StateExecution: ...
 
 
@@ -165,8 +163,6 @@ class KernelRuntime(CachedStateExecutor, Protocol):
         plan: ExecutionPlan,
         baseline: Baseline,
     ) -> AbstractContextManager[Mapping[str, PreparedExporter]]: ...
-
-    def consume_parent_live_cells(self) -> frozenset[str]: ...
 
     def flush_native_caches(self) -> None: ...
 
