@@ -36,7 +36,7 @@ minimumReleaseAgeExclude:
   - "@marimo-team/*"
 
 overrides:
-  nanoid: 3.3.18
+  nanoid: 6.0.1
   postcss: 8.5.26
   vite: "catalog:"
   vitepress>vite: 8.2.0
