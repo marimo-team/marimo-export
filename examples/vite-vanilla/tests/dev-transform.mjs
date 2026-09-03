@@ -12,6 +12,8 @@ export const verifyDevelopmentTransform = async () => {
   const server = await createServer({
     root,
     logLevel: "silent",
+    // Programmatic transforms do not serve optimizer output, so skip background discovery.
+    optimizeDeps: { noDiscovery: true, include: [] },
   });
 
   try {

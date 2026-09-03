@@ -56,7 +56,7 @@ OutputCodec: TypeAlias = Literal[
     "apache.arrow.file.v1",
     "marimo.blob-asset.msgpack.v1",
 ]
-ScalarValue: TypeAlias = None | bool | str | int | float
+ScalarValue: TypeAlias = bool | str | int | float | None
 ScalarWireValue: TypeAlias = JsonValue
 
 _ASSET_EXTENSIONS: dict[str, str] = {

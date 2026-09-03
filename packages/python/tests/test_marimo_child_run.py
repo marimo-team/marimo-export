@@ -30,7 +30,7 @@ def test_state_child_cleanup_releases_after_teardown_cancellation() -> None:
     runner = Runner()
     child_context = object()
     parent = Parent(child_context)
-    finalizer = weakref.finalize(runner, parent.remove_child, child_context)
+    finalizer: Any = weakref.finalize(runner, parent.remove_child, child_context)
     finalizer.atexit = False
 
     def teardown() -> None:
@@ -106,7 +106,7 @@ def test_state_child_ownership_releases_after_recording_setup_failure(
     context = ChildContext()
     parent = Parent(context)
     runner = Runner(context)
-    finalizer = weakref.finalize(runner, parent.remove_child, context)
+    finalizer: Any = weakref.finalize(runner, parent.remove_child, context)
     finalizer.atexit = False
     monkeypatch.setattr(cache_barrier, "flush_native_caches", lambda: events.append("flush"))
 

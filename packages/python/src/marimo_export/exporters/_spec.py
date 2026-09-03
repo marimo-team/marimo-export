@@ -10,7 +10,7 @@ from marimo_export.errors import SpecError
 from marimo_export.exporters._definitions import normalize_exporter
 
 FrozenOption: TypeAlias = (
-    str | int | float | bool | None | tuple["FrozenOption", ...] | Mapping[str, "FrozenOption"]
+    str | int | float | bool | tuple["FrozenOption", ...] | Mapping[str, "FrozenOption"] | None
 )
 
 

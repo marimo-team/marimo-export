@@ -17,10 +17,10 @@ Run this example from a repository checkout with:
 | Requirement                                                  | Role                                                     |
 | ------------------------------------------------------------ | -------------------------------------------------------- |
 | [Git](https://git-scm.com/)                                  | Clones the repository                                    |
-| [Python 3.12](https://www.python.org/)                       | Runs the notebook and Python package                     |
+| [Python 3.14](https://www.python.org/)                       | Runs the notebook and Python package                     |
 | [uv](https://docs.astral.sh/uv/)                             | Installs locked Python dependencies and runs the CLI     |
 | [Node.js 22.18 or newer](https://nodejs.org/)                | Runs the TypeScript application tooling                  |
-| [pnpm 11.15.1](https://pnpm.io/)                             | Installs dependencies and runs the example scripts       |
+| [pnpm 11.25.0](https://pnpm.io/)                             | Installs dependencies and runs the example scripts       |
 | A POSIX shell and [Make](https://www.gnu.org/software/make/) | Run the repository targets                               |
 | HTTPS access to the Python and npm package registries        | Downloads dependencies that are absent from local caches |
 | HTTPS access to [Yahoo Finance](https://finance.yahoo.com/)  | Retrieves historical prices during preparation           |

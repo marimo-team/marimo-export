@@ -88,10 +88,7 @@ An abort-shaped loader failure becomes `abort` and retains its source as
 
 ```ts
 type PreparedExportErrorCode =
-  | "manifest_invalid"
-  | "manifest_read_failed"
-  | "query_ambiguous"
-  | "query_miss";
+  "manifest_invalid" | "manifest_read_failed" | "query_ambiguous" | "query_miss";
 
 class PreparedExportError extends Error {
   readonly code: PreparedExportErrorCode;

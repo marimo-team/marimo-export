@@ -85,13 +85,7 @@ cell always has outcome `completed`.
 
 ```ts
 type MarimoCellChannel =
-  | "stdout"
-  | "stderr"
-  | "stdin"
-  | "pdb"
-  | "output"
-  | "marimo-error"
-  | "media";
+  "stdout" | "stderr" | "stdin" | "pdb" | "output" | "marimo-error" | "media";
 
 interface MarimoCellOutput {
   readonly channel: MarimoCellChannel;

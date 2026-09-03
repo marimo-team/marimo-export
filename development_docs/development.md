@@ -1,7 +1,7 @@
 # Development
 
-The workspace pins Python 3.12 for local development with Node 24.14.1, pnpm
-11.15.1, uv, and Vite+. The root `devEngines.runtime` lets pnpm install the exact
+The workspace pins Python 3.14 for local development with Node 24.14.1, pnpm
+11.25.0, uv, and Vite+. The root `devEngines.runtime` lets pnpm install the exact
 Node runtime and records it in `pnpm-lock.yaml`. Package CI verifies Python 3.10
 through 3.14 on Ubuntu and Windows.
 

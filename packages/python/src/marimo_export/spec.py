@@ -149,13 +149,13 @@ _FiniteNumberWire = Annotated[
 ]
 _PortableValueWire = TypeAliasType(
     "_PortableValueWire",
-    None
-    | bool
+    bool
     | _UnicodeStringWire
     | _SafeIntegerWire
     | _FiniteNumberWire
     | list["_PortableValueWire"]
-    | dict[_UnicodeStringWire, "_PortableValueWire"],
+    | dict[_UnicodeStringWire, "_PortableValueWire"]
+    | None,
 )
 _PortableDomainWire = TypeAliasType(
     "_PortableDomainWire",

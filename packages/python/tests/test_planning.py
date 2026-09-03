@@ -135,7 +135,7 @@ def test_planned_state_is_immutable_and_matches_its_fingerprint() -> None:
 
     assert isinstance(state.inputs, MappingProxyType)
     with pytest.raises(TypeError):
-        state.inputs["selector"] = "MSFT"  # type: ignore[index]
+        state.inputs["selector"] = "MSFT"  # ty: ignore[invalid-assignment]
     with pytest.raises(ValueError, match="match its complete inputs"):
         PlannedState(
             aliases=("baseline",),

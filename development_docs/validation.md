@@ -6,7 +6,7 @@ boundaries.
 
 ## Supported Python environments
 
-Local development uses Python 3.12 from `.python-version`. The Python package
+Local development uses Python 3.14 from `.python-version`. The Python package
 supports 3.10 through 3.14.
 
 GitHub Actions classifies changed files before starting the quality, Python,
