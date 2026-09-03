@@ -421,14 +421,16 @@ def _data_url(filename: str, data: bytes) -> str:
     return f"data:{media_type};base64,{payload}"
 
 
-def _file_revision(details: os.stat_result) -> tuple[int, int, int, int, int]:
-    return (
+def _file_revision(details: os.stat_result) -> tuple[int, ...]:
+    content_revision = (
         details.st_dev,
         details.st_ino,
         details.st_size,
         details.st_mtime_ns,
-        details.st_ctime_ns,
     )
+    if os.name == "nt":
+        return content_revision
+    return (*content_revision, details.st_ctime_ns)
 
 
 __all__ = ["close_output_files"]

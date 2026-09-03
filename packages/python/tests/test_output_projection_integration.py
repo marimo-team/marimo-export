@@ -769,6 +769,38 @@ def test_public_file_mutation_during_inline_read_fails_closed(
         )
 
 
+def test_windows_path_and_handle_ctime_disagreement_is_not_content_drift(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import marimo_export._marimo.compat.file_closure as file_closure
+
+    path_details = SimpleNamespace(
+        st_dev=1,
+        st_ino=2,
+        st_size=3,
+        st_mtime_ns=4,
+        st_ctime_ns=5,
+    )
+    handle_details = SimpleNamespace(
+        st_dev=1,
+        st_ino=2,
+        st_size=3,
+        st_mtime_ns=4,
+        st_ctime_ns=4,
+    )
+    monkeypatch.setattr(file_closure.os, "name", "nt")
+
+    assert file_closure._file_revision(cast(Any, path_details)) == (
+        1,
+        2,
+        3,
+        4,
+    )
+    assert file_closure._file_revision(cast(Any, path_details)) == (
+        file_closure._file_revision(cast(Any, handle_details))
+    )
+
+
 @pytest.mark.parametrize(
     "html_source",
     (
