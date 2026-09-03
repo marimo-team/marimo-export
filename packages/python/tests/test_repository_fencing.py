@@ -451,7 +451,11 @@ def test_stale_heartbeat_cannot_shorten_fresh_staging_or_reservation(
         assert (
             repository._leases.claim_reservation(identity, timeout_seconds=1) == reservation.fence
         )
-        repository._leases.reserve_staging(relative, staged.path)
+        repository._leases.reserve_staging(
+            relative,
+            staged.path,
+            timeout_seconds=1,
+        )
         connection = sqlite3.connect(root / "catalog.sqlite3")
         try:
             fresh_reservation = int(

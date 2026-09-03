@@ -137,6 +137,48 @@ def test_active_leases_protect_artifacts_then_lru_prunes_them(tmp_path: Path) ->
         kept.close()
 
 
+def test_staging_acquisition_waits_within_operation_timeout(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = tmp_path / "repository"
+    with ExportRepository.open(root) as repository:
+        connection = sqlite3.connect(root / "catalog.sqlite3", isolation_level=None)
+        connection.execute("BEGIN IMMEDIATE")
+        connected = threading.Event()
+        finished = threading.Event()
+        staged: list[Path] = []
+        errors: list[BaseException] = []
+        native_connect = repository._catalog._connect
+
+        def observed_connect(*, timeout_seconds: float = 10) -> sqlite3.Connection:
+            candidate = native_connect(timeout_seconds=timeout_seconds)
+            connected.set()
+            return candidate
+
+        def create_staging() -> None:
+            try:
+                staged.append(repository._artifacts.new_staging(timeout_seconds=2))
+            except BaseException as error:
+                errors.append(error)
+            finally:
+                finished.set()
+
+        monkeypatch.setattr(repository._catalog, "_connect", observed_connect)
+        worker = threading.Thread(target=create_staging)
+        worker.start()
+        try:
+            assert connected.wait(timeout=2)
+            assert not finished.wait(timeout=0.5)
+        finally:
+            connection.rollback()
+            connection.close()
+        assert finished.wait(timeout=2)
+        worker.join()
+        assert not errors
+        repository._artifacts.discard_staging(staged.pop())
+
+
 def test_reservation_is_exclusive_across_repository_process_owners(tmp_path: Path) -> None:
     root = tmp_path / "repository"
     identity = _identity("reservation")

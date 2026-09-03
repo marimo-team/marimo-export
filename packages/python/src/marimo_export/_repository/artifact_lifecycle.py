@@ -42,12 +42,16 @@ _CATALOG_SNAPSHOT = re.compile(
 )
 
 
-def new_staging(context: ArtifactContext) -> Path:
+def new_staging(context: ArtifactContext, *, timeout_seconds: float) -> Path:
     root = private_directory(staging_root(context.root))
     path = private_directory(root / f"stage-{uuid4().hex}")
     relative = path.relative_to(context.root).as_posix()
     try:
-        context.leases.reserve_staging(relative, path)
+        context.leases.reserve_staging(
+            relative,
+            path,
+            timeout_seconds=timeout_seconds,
+        )
     except BaseException:
         remove_tree(path)
         raise

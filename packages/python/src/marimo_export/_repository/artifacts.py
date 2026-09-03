@@ -111,7 +111,10 @@ class ArtifactRepository:
 
     def new_staging(self, *, timeout_seconds: float = 10.0) -> Path:
         with self._maintenance(timeout_seconds=timeout_seconds):
-            return artifact_lifecycle.new_staging(self._context)
+            return artifact_lifecycle.new_staging(
+                self._context,
+                timeout_seconds=timeout_seconds,
+            )
 
     def discard_staging(self, path: Path) -> None:
         with self._maintenance():

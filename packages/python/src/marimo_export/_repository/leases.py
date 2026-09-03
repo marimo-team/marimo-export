@@ -159,14 +159,25 @@ class LeaseManager:
             self._pending_artifact_releases.pop(key, None)
         return ArtifactLease(self, key, _DETACHED if detached else _RETAINED)
 
-    def reserve_staging(self, relative: str, path: Path) -> None:
+    def reserve_staging(
+        self,
+        relative: str,
+        path: Path,
+        *,
+        timeout_seconds: float,
+    ) -> None:
         with self._condition:
             self._require_open()
             self._staging[relative] = path
             self._pending_staging_releases.discard(relative)
         expires_at_us = self.expiry()
         try:
-            self.catalog.acquire_staging(self.owner, relative, expires_at_us)
+            self.catalog.acquire_staging(
+                self.owner,
+                relative,
+                expires_at_us,
+                timeout_seconds,
+            )
         except BaseException:
             with self._condition:
                 self._staging.pop(relative, None)

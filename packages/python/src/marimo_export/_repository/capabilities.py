@@ -35,6 +35,7 @@ class LeaseCatalog(Protocol):
         owner: str,
         relative_path: str,
         expires_at_us: int,
+        timeout_seconds: float,
     ) -> None: ...
 
     def renew_lifecycle(

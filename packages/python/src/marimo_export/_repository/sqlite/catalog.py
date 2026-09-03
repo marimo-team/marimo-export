@@ -549,8 +549,9 @@ class SqliteCatalog:
         owner: str,
         relative_path: str,
         expires_at_us: int,
+        timeout_seconds: float,
     ) -> None:
-        with self.lease_write() as connection:
+        with self.write_timeout(timeout_seconds) as connection:
             leases.acquire_staging(
                 connection,
                 owner,
