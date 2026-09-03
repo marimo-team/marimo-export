@@ -1,0 +1,35 @@
+pnpm-workspace.yaml
+  s_9d1d2303fa1b37::t_48b05773221bfd 26
+package.json
+  s_9d1d2303fa1b37::t_48b05773221bfd 23
+packages/python/tests/test_js_toolchain.py
+  s_9d1d2303fa1b37::t_48b05773221bfd 19,28-29
+development_docs/development.md
+  s_9d1d2303fa1b37::t_48b05773221bfd 3
+development_docs/documentation.md
+  s_9d1d2303fa1b37::t_48b05773221bfd 83-90
+AGENTS.md
+  s_9d1d2303fa1b37::t_48b05773221bfd 9,22
+apps/docs/package.json
+  s_9d1d2303fa1b37::t_48b05773221bfd 10-11,18,23-26
+apps/docs/.vitepress/config.mts
+  s_9d1d2303fa1b37::t_48b05773221bfd 56-64
+Makefile
+  s_9d1d2303fa1b37::t_48b05773221bfd 96-97
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "be4d6ce6ab5b77c27f9696fb4265c4eaeb958c7e",
+  "prompts": {},
+  "sessions": {
+    "s_9d1d2303fa1b37": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a068e3-8a96-7e70-9aaf-92a97e9eb2fb",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
