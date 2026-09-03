@@ -53,7 +53,8 @@ def maintenance_lock(root: Path, *, timeout_seconds: float = 10.0) -> Iterator[N
 
 def _connect(path: Path, *, timeout_seconds: float) -> sqlite3.Connection:
     deadline = time.monotonic() + max(0.001, timeout_seconds)
-    for _attempt in range(2):
+    schema_attempt = 0
+    while schema_attempt < 2:
         before = path.stat() if path.exists() and not path.is_symlink() else None
         bounded = max(0.001, deadline - time.monotonic())
         connection = sqlite3.connect(path, timeout=bounded, isolation_level=None)
@@ -80,9 +81,18 @@ def _connect(path: Path, *, timeout_seconds: float) -> sqlite3.Connection:
             after = path.stat() if path.exists() and not path.is_symlink() else None
             if before is not None and after is not None and os.path.samestat(before, after):
                 _discard_corrupt_lock(path, expected=before, deadline=deadline)
+            schema_attempt += 1
         except sqlite3.DatabaseError as error:
             connection.close()
             message = str(error).lower()
+            if any(term in message for term in ("locked", "busy")):
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise RepositoryBusyError(
+                        "The export repository maintenance lock remained busy."
+                    ) from error
+                time.sleep(min(0.01, remaining))
+                continue
             if "malformed" not in message and "not a database" not in message:
                 raise RepositoryUnavailableError(
                     "The export repository maintenance lock is unavailable."
@@ -90,6 +100,7 @@ def _connect(path: Path, *, timeout_seconds: float) -> sqlite3.Connection:
             after = path.stat() if path.exists() and not path.is_symlink() else None
             if before is not None and after is not None and os.path.samestat(before, after):
                 _discard_corrupt_lock(path, expected=before, deadline=deadline)
+            schema_attempt += 1
     raise RepositoryUnavailableError("The export repository maintenance lock is unavailable.")
 
 

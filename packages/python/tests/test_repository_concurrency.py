@@ -12,6 +12,8 @@ from hashlib import sha256
 from pathlib import Path
 
 import pytest
+from marimo_export._repository.artifacts import ArtifactRepository
+from marimo_export._repository.models import RepositoryBusyError
 from marimo_export._repository.observations import observation_repository
 from marimo_export._repository.preparation import (
     RepositoryIdentity,
@@ -41,6 +43,46 @@ def test_concurrent_first_open_creates_one_valid_catalog(tmp_path: Path) -> None
         assert list(executor.map(open_once, range(16))) == [0] * 16
 
     with ExportRepository.open(root) as repository:
+        assert repository.status().generations == 0
+
+
+def test_concurrent_processes_open_one_repository(tmp_path: Path) -> None:
+    root = tmp_path / "repository"
+    source = """\
+import sys
+from pathlib import Path
+from marimo_export import ExportRepository
+
+with ExportRepository.open(Path(sys.argv[1])) as repository:
+    assert repository.status().generations == 0
+"""
+    processes = [
+        subprocess.Popen(
+            [sys.executable, "-c", source, str(root)],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        for _index in range(4)
+    ]
+    failures: list[str] = []
+    for process in processes:
+        _stdout, stderr = process.communicate(timeout=30)
+        if process.returncode != 0:
+            failures.append(stderr)
+    assert failures == []
+
+
+def test_open_defers_recovery_owned_by_another_process(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def busy(_repository: ArtifactRepository) -> None:
+        raise RepositoryBusyError("maintenance owned by another process")
+
+    monkeypatch.setattr(ArtifactRepository, "recover", busy)
+
+    with ExportRepository.open(tmp_path / "repository") as repository:
         assert repository.status().generations == 0
 
 

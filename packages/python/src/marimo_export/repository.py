@@ -4,6 +4,7 @@ import os
 import time
 import weakref
 from collections.abc import Mapping
+from contextlib import suppress
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -56,7 +57,10 @@ class ExportRepository:
             if replaced_catalogs:
                 self._artifacts.retire_catalog_snapshots(replaced_catalogs)
                 self._artifacts.retire_unindexed_artifacts()
-            self._recover()
+            # Another process may already be maintaining this repository.
+            # Reads validate selected artifacts and recover corrupt entries.
+            with suppress(RepositoryBusyError):
+                self._recover()
         except BaseException:
             self._leases.close()
             raise
