@@ -1,0 +1,80 @@
+packages/python/src/marimo_export/_marimo/transfer.py
+  s_50d55e3efa271d::t_93e3933ea285dc 198
+packages/loader-parquet/src/index.ts
+  s_84434b42698f4e::t_84a771b7d25e66 5,11-12,15,32-33,47-48,53
+packages/python/src/marimo_export/errors.py
+  s_36badbebc98a54::t_faba4069f7fe02 66-67,78-79,82,84-85,88,90-91,94,96-97,100,102-103,106
+packages/loader-anywidget/tests/loader.test.ts
+  s_84434b42698f4e::t_91d7eb11b7e2f9 7,207,158,168,225,234,241,248,255,262,268,281
+  s_84434b42698f4e::t_c4e1555d4af3b2 32,94,157,161,166-167,232,240,247,261,267,275,283
+packages/python/src/marimo_export/_json.py
+  s_0553c3864c0a2b::t_b02a10557eeea7 179-180,186,188,190-191,215-216,270,275-276,306-307,313,322,331
+  s_36badbebc98a54::t_b60bbd495ca0b1 650-651
+packages/loader-anywidget/src/index.ts
+  s_84434b42698f4e::t_a99d4f91bad784 67-68
+packages/loader-arrow/tests/loader.test.ts
+  s_84434b42698f4e::t_44d83a3a055a4b 9,11,29,35,38-39,41,43-44,47,50-52,57,61-62,64,68,70-73,75-79,81-83,89-90,92,94,105
+packages/python/tests/test_client.py
+  s_50d55e3efa271d::t_c1938c7086318e 84-85,224
+packages/python/tests/test_reader.py
+  s_0553c3864c0a2b::t_8be0a4d93f536e 18,20,26,24,72,125,256,341
+  s_0553c3864c0a2b::t_334aa3f3a21d01 46,92,103,108,114,147,178,323
+  s_0553c3864c0a2b::t_de230622d99cc6 117,145,257,267,269
+  s_36badbebc98a54::t_823a4aee5456a3 234-235,80,84,91,98,116,118,128,340
+  s_36badbebc98a54::t_a549d5adaed3e3 244-245,130-131,137,152,159,165-166,259
+  s_0553c3864c0a2b::t_5ca6fa8bd5ef1f 105,115
+  s_0553c3864c0a2b::t_fba8b9cb6593fc 194
+packages/python/tests/test_spec.py
+  s_36badbebc98a54::t_2cf695c7a22393 132,60,64
+  s_0553c3864c0a2b::t_3208f8425935f0 47,55-56,112,143,146,174,267
+  s_0553c3864c0a2b::t_f6ef21e8a5339a 76,78,134,261,266,270,275
+  s_0553c3864c0a2b::t_522b616b1b39b4 125,141
+  s_84434b42698f4e::t_c24c838c124963 147,240
+packages/loader-arrow/package.json
+  s_84434b42698f4e::t_f09b0fec89678a 12,15,25,32,36,41
+packages/loader-vegalite/src/index.ts
+  s_84434b42698f4e::t_84a771b7d25e66 152-153
+packages/loader-vegalite/tests/loader.test.ts
+  s_84434b42698f4e::t_26d87084796345 23,53,59,62,69,80,86,105,107,116,142,146,150,155,160,166,230-231,303-304
+  s_84434b42698f4e::t_2d4e8fcb851fb7 66,74,103,252,255
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "a3988c9680978e19034a207ede2f907dad0d3dee",
+  "prompts": {},
+  "sessions": {
+    "s_0553c3864c0a2b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a01457-511e-7fa0-b5b2-4e7f4b59a0d8",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    },
+    "s_36badbebc98a54": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0192c-d072-77a2-86c3-cdc5c0383d92",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    },
+    "s_50d55e3efa271d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019fa7f0-6202-7f10-b0c4-9fdfe7e6df62",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    },
+    "s_84434b42698f4e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a061f5-fe96-7e42-ae14-44b03f0596fa",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}

@@ -1,0 +1,58 @@
+skills/notebook-to-static-app/assets/app/vite.config.ts
+  s_50d55e3efa271d::t_1a317de29f2c9a 4
+skills/notebook-to-static-app/references/workflow.md
+  s_50d55e3efa271d::t_e33f06ad2aff29 1-7,21,24-28,49-50,53,55-60,63,72,74-75,77,79-80,93-96,100-102,106-108,120-121,123-127,129-132,134-135,142-143,147,149-157,172-173
+  s_50d55e3efa271d::t_db6e5d5268ba7c 23
+  s_50d55e3efa271d::t_5ce252a8b4cb05 113,116,118-119,128
+  s_50d55e3efa271d::t_8ddbab6de2237c 175,184
+skills/notebook-to-static-app/references/contracts.md
+  s_50d55e3efa271d::t_723038838dc4ce 97,99,107,132,139-140,143-144
+skills/notebook-to-static-app/SKILL.md
+  s_50d55e3efa271d::t_8ddbab6de2237c 107,90
+  s_50d55e3efa271d::t_e33f06ad2aff29 16-17,88,135,176
+  s_50d55e3efa271d::t_1f0b83fbdb4afe 63,126-127
+  s_50d55e3efa271d::t_5ce252a8b4cb05 91-92,94-98,100-104
+  s_860b9ed3243746::t_9c800b064e28bf 114
+  s_50d55e3efa271d::t_66787487ad694c 142-143
+skills/notebook-to-static-app/tests/test_scaffold_app.py
+  s_50d55e3efa271d::t_8003f4d1a855af 1-2,5-6,8-9,12-13,34-40,42-56,63-76,78-86,90-94,96-106
+  s_50d55e3efa271d::t_002760444b9284 3,14-26,30,32
+  s_50d55e3efa271d::t_139498b7a5de36 4
+  s_50d55e3efa271d::t_5a0578a817505a 10-11
+  s_50d55e3efa271d::t_4df6ddeea92eaf 27,41
+  s_50d55e3efa271d::t_db6e5d5268ba7c 57-62,77
+  s_50d55e3efa271d::t_718fe37a463dad 87
+  s_50d55e3efa271d::t_37d5bbe966dd3a 95
+skills/notebook-to-static-app/scripts/scaffold_app.py
+  s_50d55e3efa271d::t_1cf900d22a506a 344-345,17,29,33,35,44-48,52,54,57-72,74-77,79-92,94-95,97-101,103-109,111-113,150-151,225-246,257-260,277,291,346-362
+  s_50d55e3efa271d::t_016b54a98ce099 15-16,73,78,96,102,110,149,153-156,158,162-167,174-185,187
+  s_50d55e3efa271d::t_718fe37a463dad 19-20,22-23,309
+  s_50d55e3efa271d::t_4df6ddeea92eaf 145-148,152,159-161,168-173,189-200,202-203,205
+  s_50d55e3efa271d::t_b7084be862b3be 201
+skills/notebook-to-static-app/assets/app/index.html
+  s_50d55e3efa271d::t_1a317de29f2c9a 17
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "b905b25228640eecb263ac76a62c854c09f850e5",
+  "prompts": {},
+  "sessions": {
+    "s_50d55e3efa271d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019fa7f0-6202-7f10-b0c4-9fdfe7e6df62",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    },
+    "s_860b9ed3243746": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a01009-2e62-7942-9ff4-f99f89f623c2",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}

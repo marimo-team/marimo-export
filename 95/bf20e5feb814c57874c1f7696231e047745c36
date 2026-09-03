@@ -1,0 +1,28 @@
+README.md
+  s_36badbebc98a54::t_1102f00b3f4d1d 40,46,104,194,223,226,228,237
+  s_860b9ed3243746::t_ac1af50b2b1841 105,159,165,195
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "95bf20e5feb814c57874c1f7696231e047745c36",
+  "prompts": {},
+  "sessions": {
+    "s_36badbebc98a54": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0192c-d072-77a2-86c3-cdc5c0383d92",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    },
+    "s_860b9ed3243746": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a01009-2e62-7942-9ff4-f99f89f623c2",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}

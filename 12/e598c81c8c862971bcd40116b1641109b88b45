@@ -1,0 +1,20 @@
+packages/loader-anywidget/src/payload.ts
+  s_84434b42698f4e::t_59b2e8f60204ad 103,171,176,250,268,313,342,355,363,385,589,593
+  s_84434b42698f4e::t_96ac4219aa88bf 138-139,256-257,272-273,282-283,294-295,321-322,343,356,388-389,395-396,406-407,417-418,559-560,597-598,602-603
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "12e598c81c8c862971bcd40116b1641109b88b45",
+  "prompts": {},
+  "sessions": {
+    "s_84434b42698f4e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a061f5-fe96-7e42-ae14-44b03f0596fa",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}

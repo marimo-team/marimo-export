@@ -1,0 +1,148 @@
+packages/python/src/marimo_export/reader.py
+  s_0553c3864c0a2b::t_2b0985c62e22ca 14-16,21-22,115,117
+  s_0553c3864c0a2b::t_a0a26d260a54ab 40
+  s_0553c3864c0a2b::t_344321bfd80a3d 75
+  s_36badbebc98a54::t_4830c830bf65d7 125,128-129,133-134
+  s_0553c3864c0a2b::t_987aa3eeccfcb5 142
+  s_36badbebc98a54::t_142520f90f5911 609,611
+packages/python/src/marimo_export/_marimo/anywidget.py
+  s_50d55e3efa271d::t_dad0f96d919259 1,205-206,237-238,269-270,288-289,297-298
+packages/python/pyproject.toml
+  s_50d55e3efa271d::t_afec457dbbc6fc 33
+packages/python/src/marimo_export/_format.py
+  s_0553c3864c0a2b::t_ae03091e9f8bf8 1-4,6,10,27,30-31,40,45,48,50-52,60
+  s_0553c3864c0a2b::t_7002c532ae0495 35,38
+  s_36badbebc98a54::t_068d0afb3de3ca 41
+packages/python/tests/test_spec.py
+  s_36badbebc98a54::t_2cf695c7a22393 185
+  s_0553c3864c0a2b::t_3208f8425935f0 253,256,269,276,285,337,341
+  s_0553c3864c0a2b::t_82ee9bba4e6859 275
+packages/python/README.md
+  s_36badbebc98a54::t_1102f00b3f4d1d 135,268,305
+packages/loader-vegalite/tests/loader.test.ts
+  s_84434b42698f4e::t_26d87084796345 23,53,62,64,71,82,88,107,109,118,144,148,152,157,162,169,222-223,295-296
+  s_84434b42698f4e::t_2d4e8fcb851fb7 68,76,105,244,247
+packages/loader-vegalite/src/index.ts
+  s_84434b42698f4e::t_84a771b7d25e66 157-158
+packages/loader-anywidget/src/index.ts
+  s_84434b42698f4e::t_a99d4f91bad784 71-72
+apps/docs/.vitepress/config.mts
+  s_860b9ed3243746::t_3bfe6583b33c09 46
+  s_50d55e3efa271d::t_da3ee508bcdeb8 35,38-40
+packages/loader-anywidget/src/runtime/registry.ts
+  s_84434b42698f4e::t_71cbaddb566537 34-35
+development_docs/validation.md
+  s_36badbebc98a54::t_1102f00b3f4d1d 4,6,8,12-13,50-51,58,61,70,72-73,78-79,81-82,86-87,92,96,106,108,126,133,135,137,139,153,155-156,158,160,74-75,77,164
+  s_50d55e3efa271d::t_10cb44e627d45a 171-172,89,111
+packages/python/tests/test_blob_asset_parser.py
+  s_36badbebc98a54::t_6902e9d4e56de1 40,45,64,69,71
+packages/python/tests/test_json.py
+  s_0553c3864c0a2b::t_d80b20bb886515 315-316,320,328
+  s_0553c3864c0a2b::t_8c7d4c0019e7ff 331
+packages/python/src/marimo_export/errors.py
+  s_36badbebc98a54::t_faba4069f7fe02 62-63
+packages/python/src/marimo_export/_secure_io.py
+  s_36badbebc98a54::t_faba4069f7fe02 19
+Makefile
+  s_84434b42698f4e::t_889d8795d7016d 36
+  s_50d55e3efa271d::t_6bae9083a80fe0 30,33
+packages/python/src/marimo_export/spec.py
+  s_0553c3864c0a2b::t_e5f701fab532c9 111-112,114-115,141-142,145-146,194,196
+  s_84434b42698f4e::t_a5a81adb2dcd57 207,223-224,227,310,315-317,377,382-383
+  s_0553c3864c0a2b::t_920c035724b26a 230-231,234,237-238,251,306,330-331,337,351,355,363-364,376,389,393
+  s_0553c3864c0a2b::t_0fbcc830f7cbd8 438-439
+README.md
+  s_36badbebc98a54::t_1102f00b3f4d1d 10,18,20,57,90,96,105-106,108,110,119
+  s_860b9ed3243746::t_ac1af50b2b1841 50,58,65,75,81,91
+development_docs/architecture.md
+  s_36badbebc98a54::t_1102f00b3f4d1d 192,194,216,218,225,228,247,302,304,306,308,310,318,320,322,337,370
+  s_50d55e3efa271d::t_25841b92f3cd1c 287
+development_docs/development.md
+  s_36badbebc98a54::t_1102f00b3f4d1d 77-78,82-83,160,162,164,166,173,214,127
+  s_50d55e3efa271d::t_761e79d26305b7 228,230,234-235,238,141,200
+packages/browser/tests/fixture.ts
+  s_84434b42698f4e::t_8998e5453b85f5 19
+packages/browser/README.md
+  s_36badbebc98a54::t_1102f00b3f4d1d 28,49,51,53,60,78-79,87,90,96,100,103
+packages/python/src/marimo_export/_json.py
+  s_0553c3864c0a2b::t_b02a10557eeea7 183-184
+packages/loader-anywidget/src/runtime/binding.ts
+  s_84434b42698f4e::t_8525b03974d125 227-228,275-276
+.github/workflows/ci.yml
+  s_50d55e3efa271d::t_401424b274ec02 47,50,55,59,64,67
+  s_50d55e3efa271d::t_86f7c13013cc29 56-58,61-63
+  s_50d55e3efa271d::t_d220fe003f4333 69
+pnpm-workspace.yaml
+  s_50d55e3efa271d::t_da3ee508bcdeb8 5,7,20,25,29,35
+packages/browser/src/types.ts
+  s_84434b42698f4e::t_eda6874743a36d 4,7-8
+  s_84434b42698f4e::t_28b27d333f41aa 47-48
+packages/loader-anywidget/src/runtime/model-proxy.ts
+  s_84434b42698f4e::t_0ee5532befb9ab 6,11-12
+packages/loader-anywidget/tests/loader.test.ts
+  s_84434b42698f4e::t_91d7eb11b7e2f9 7,207,158,168,225,234,241,248,255,262,268,281
+  s_84434b42698f4e::t_c4e1555d4af3b2 32,94,157,161,166-167,232,240,247,261,267,275,283
+AGENTS.md
+  s_50d55e3efa271d::t_e3026adf30dfbf 18,20,22,24,42,49,53,63,65,71,104,106,113,115,117,119,122,124,126,128,140
+  s_36badbebc98a54::t_1102f00b3f4d1d 26,51
+packages/loader-anywidget/src/payload.ts
+  s_84434b42698f4e::t_59b2e8f60204ad 103,171,176,250,268,313,330,343,351,373,577,581
+  s_84434b42698f4e::t_96ac4219aa88bf 138-139,256-257,272-273,282-283,294-295,316-317,331,344,376-377,383-384,394-395,405-406,547-548,585-586,590-591
+packages/python/tests/test_reader.py
+  s_0553c3864c0a2b::t_8be0a4d93f536e 14-15,20
+  s_0553c3864c0a2b::t_334aa3f3a21d01 356
+  s_0553c3864c0a2b::t_fba8b9cb6593fc 381
+  s_0553c3864c0a2b::t_de230622d99cc6 421,435,474
+  s_36badbebc98a54::t_823a4aee5456a3 528,542,554,585-586
+  s_36badbebc98a54::t_a549d5adaed3e3 607-608,699,701
+pyproject.toml
+  s_50d55e3efa271d::t_dee004425a1948 19,22
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "7c6d10615d924ee1a559115f746474866c222058",
+  "prompts": {},
+  "sessions": {
+    "s_0553c3864c0a2b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a01457-511e-7fa0-b5b2-4e7f4b59a0d8",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    },
+    "s_36badbebc98a54": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0192c-d072-77a2-86c3-cdc5c0383d92",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    },
+    "s_50d55e3efa271d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019fa7f0-6202-7f10-b0c4-9fdfe7e6df62",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    },
+    "s_84434b42698f4e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a061f5-fe96-7e42-ae14-44b03f0596fa",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    },
+    "s_860b9ed3243746": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a01009-2e62-7942-9ff4-f99f89f623c2",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}

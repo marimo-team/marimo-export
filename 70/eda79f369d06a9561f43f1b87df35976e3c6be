@@ -1,0 +1,21 @@
+packages/python/tests/test_client.py
+  s_50d55e3efa271d::t_c1938c7086318e 84-85,233,281,288,290-291
+packages/python/src/marimo_export/_marimo/bridge.py
+  s_50d55e3efa271d::t_72b52b1dd1dca5 309
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "70eda79f369d06a9561f43f1b87df35976e3c6be",
+  "prompts": {},
+  "sessions": {
+    "s_50d55e3efa271d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019fa7f0-6202-7f10-b0c4-9fdfe7e6df62",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}

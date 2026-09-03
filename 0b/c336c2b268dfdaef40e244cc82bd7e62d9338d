@@ -1,0 +1,44 @@
+packages/loader-numpy/tests/loader.test.ts
+  s_84434b42698f4e::t_fd71178e8c76fa 64-68
+packages/browser/src/loader/parquet.ts
+  s_84434b42698f4e::t_84a771b7d25e66 1-2
+packages/loader-vegalite/src/index.ts
+  s_84434b42698f4e::t_84a771b7d25e66 17,20,47-48,105-106,124-125,130-131,140-141,28-29,32-39,44,52,71
+  s_84434b42698f4e::t_694255c40c80e7 1,27
+  s_84434b42698f4e::t_8c142f4f4d0922 4,55,57,60,73,148-150
+  s_84434b42698f4e::t_b101058479e91e 56
+packages/browser/src/loader/vegalite.ts
+  s_84434b42698f4e::t_84a771b7d25e66 1-7
+packages/loader-parquet/tests/loader.test.ts
+  s_84434b42698f4e::t_fd71178e8c76fa 2,5,7,11-12,19,23,30-31,33,38,69-70
+  s_84434b42698f4e::t_585af2a98b1619 4,22
+packages/loader-arrow/tests/loader.test.ts
+  s_84434b42698f4e::t_44d83a3a055a4b 4,6,29,48,52-53,55,59,61-64,66-70,72-74,80-81,83,85,96
+packages/loader-parquet/src/index.ts
+  s_84434b42698f4e::t_84a771b7d25e66 5,11-12,34,59-60,74-75,80,23,26-31,35-43,50
+  s_84434b42698f4e::t_8c142f4f4d0922 13-22,24-25
+packages/loader-vegalite/tests/loader.test.ts
+  s_84434b42698f4e::t_26d87084796345 21,51,95,99,103,108,113,119,192-193,264-265,62,69,186-190,204,207,250,256,268,273,277-282,287,290-291,295-296,299-301,304-305,308-313
+  s_84434b42698f4e::t_2d4e8fcb851fb7 214,217,56,4-5,9-10,12-13,34,58,89,120,180-181,183,218,230,284,288-289,292-294,297-298
+  s_84434b42698f4e::t_1e9efeb8167940 6,36,60,74,80,85-86,100
+  s_84434b42698f4e::t_42efa819a83fbb 302-303,306-307
+packages/loader-numpy/src/index.ts
+  s_84434b42698f4e::t_8c142f4f4d0922 32-37,90,227-228,233,241
+  s_84434b42698f4e::t_b101058479e91e 220-226
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "0bc336c2b268dfdaef40e244cc82bd7e62d9338d",
+  "prompts": {},
+  "sessions": {
+    "s_84434b42698f4e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a061f5-fe96-7e42-ae14-44b03f0596fa",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}

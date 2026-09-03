@@ -1,0 +1,22 @@
+packages/python/pyproject.toml
+  s_50d55e3efa271d::t_afec457dbbc6fc 33
+packages/python/src/marimo_export/_remote/managed.py
+  s_50d55e3efa271d::t_a3775d152a02f0 278-280,607,431,469,471,489,506,511,525-527,529-530,532,534,536-537,554,628,155,159,180,375,435,461
+  s_50d55e3efa271d::t_89a5c8a4152081 413,417,446,498,502
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "78c464db366e3e7aa0f591c29ea592fe4564929f",
+  "prompts": {},
+  "sessions": {
+    "s_50d55e3efa271d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019fa7f0-6202-7f10-b0c4-9fdfe7e6df62",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}

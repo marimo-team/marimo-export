@@ -1,0 +1,23 @@
+examples/vite-vanilla/src/main.ts
+  s_50d55e3efa271d::t_27ca0f70e94fea 239-241,422-423,181-185,187-193,196-197,200-203,210,212,214,216-218,220-222,224-225,227-230,232,246-256,424-430,454-456
+  s_50d55e3efa271d::t_d3d36a8ba189bd 167-169,204-206,211,213,215,242,244-245
+  s_50d55e3efa271d::t_a7739d5a56a11f 170-171,179-180,198,219,231
+  s_50d55e3efa271d::t_c7c520e0c0a5f3 172-178,207-209
+  s_50d55e3efa271d::t_f235265b448316 194-195,199
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "a7b9537d71c8f28bbd182ec4e532605bf98de54b",
+  "prompts": {},
+  "sessions": {
+    "s_50d55e3efa271d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019fa7f0-6202-7f10-b0c4-9fdfe7e6df62",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}

@@ -1,0 +1,20 @@
+packages/loader-anywidget/tests/loader.test.ts
+  s_84434b42698f4e::t_91d7eb11b7e2f9 6,139
+  s_84434b42698f4e::t_c4e1555d4af3b2 31,93,138
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "cc2aaf88c45c661e5ad5006857a40b382fa326da",
+  "prompts": {},
+  "sessions": {
+    "s_84434b42698f4e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a061f5-fe96-7e42-ae14-44b03f0596fa",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}

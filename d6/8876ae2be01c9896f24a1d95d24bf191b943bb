@@ -1,0 +1,23 @@
+skills/notebook-to-static-app/scripts/scaffold_app.py
+  s_50d55e3efa271d::t_1cf900d22a506a 242-243
+skills/notebook-to-static-app/references/contracts.md
+  s_50d55e3efa271d::t_723038838dc4ce 97,99
+skills/notebook-to-static-app/SKILL.md
+  s_50d55e3efa271d::t_8ddbab6de2237c 95
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "d68876ae2be01c9896f24a1d95d24bf191b943bb",
+  "prompts": {},
+  "sessions": {
+    "s_50d55e3efa271d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019fa7f0-6202-7f10-b0c4-9fdfe7e6df62",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}

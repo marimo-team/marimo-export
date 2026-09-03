@@ -1,0 +1,45 @@
+packages/python/tests/test_spec.py
+  s_36badbebc98a54::t_2cf695c7a22393 154,82,86,74,184,187,192-193
+  s_0553c3864c0a2b::t_3208f8425935f0 66,77-78,134,211,214,242,340,163-164,174,176,179,181-182,194,203-205
+  s_0553c3864c0a2b::t_f6ef21e8a5339a 98,100,156,334,339,343,348,161
+  s_0553c3864c0a2b::t_522b616b1b39b4 147,209,172
+  s_84434b42698f4e::t_c24c838c124963 215,313
+packages/python/src/marimo_export/spec.py
+  s_0553c3864c0a2b::t_e5f701fab532c9 114-115,88,189,406
+  s_0553c3864c0a2b::t_920c035724b26a 215-216,220,185,191,199,230,232,249,336,348,361,379,382,519,524,531,565,303
+  s_84434b42698f4e::t_a5a81adb2dcd57 223
+  s_0553c3864c0a2b::t_0fbcc830f7cbd8 399-400,76
+  s_0553c3864c0a2b::t_91b742bacae2ad 40,47,190,196,200,211,241,284,327,332,352,356,360,364,388,392,394,423-424,446-447,555,580-581,589-590
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "3236548f30355f738730ace5e09e867fbb771e59",
+  "prompts": {},
+  "sessions": {
+    "s_0553c3864c0a2b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a01457-511e-7fa0-b5b2-4e7f4b59a0d8",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    },
+    "s_36badbebc98a54": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0192c-d072-77a2-86c3-cdc5c0383d92",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    },
+    "s_84434b42698f4e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a061f5-fe96-7e42-ae14-44b03f0596fa",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}

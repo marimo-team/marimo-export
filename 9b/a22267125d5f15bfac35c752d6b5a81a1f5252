@@ -1,0 +1,42 @@
+packages/browser/src/loader.ts
+  s_84434b42698f4e::t_c2f1a43eb938a3 36,50,59,62,80,86,89,91,104,118
+  s_84434b42698f4e::t_0e6141d18681c2 120-121,128-129,166-167
+packages/browser/src/blob-asset.ts
+  s_84434b42698f4e::t_16b7d56f807efa 30,35,39,42
+packages/browser/tests/cross-language.test.ts
+  s_84434b42698f4e::t_e62d5ae39db9bb 26,31,50,74,82,93,114,123,128,135-136,142,144,147,152-153
+packages/browser/src/export.ts
+  s_84434b42698f4e::t_6342eb9ff72ad0 135,154
+  s_84434b42698f4e::t_0e6141d18681c2 534-535
+packages/browser/src/schema.ts
+  s_84434b42698f4e::t_4f1dd7cae99b11 511,524,201
+  s_84434b42698f4e::t_5d8f9aa335c33f 526,571,605,553
+packages/browser/tests/fixture.ts
+  s_84434b42698f4e::t_67c3a0eb297193 126-127,140-141,150,153
+packages/browser/src/types.ts
+  s_84434b42698f4e::t_eda6874743a36d 26
+  s_84434b42698f4e::t_28b27d333f41aa 82-83,109-110,113-114,118-119,125-126,153-154,160-161,169-170,179,186-187,193-194,203-204,206,222,232-233,237,239,244-246,249-251,253,255-256,259-260,266-267,282-283,292-293,301-302,305-306,314
+packages/loader-vegalite/src/index.ts
+  s_84434b42698f4e::t_84a771b7d25e66 152-153
+packages/loader-arrow/tests/loader.test.ts
+  s_84434b42698f4e::t_44d83a3a055a4b 4,6,22,28,32-33,35,39,41-44,46-50,52-54,60-61,63,65,76
+packages/loader-vegalite/tests/loader.test.ts
+  s_84434b42698f4e::t_26d87084796345 23,53,97,101,105,110,115,121,190-191,262-263,64,71
+  s_84434b42698f4e::t_2d4e8fcb851fb7 212,215,58
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "9ba22267125d5f15bfac35c752d6b5a81a1f5252",
+  "prompts": {},
+  "sessions": {
+    "s_84434b42698f4e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a061f5-fe96-7e42-ae14-44b03f0596fa",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}

@@ -1,0 +1,138 @@
+packages/browser/tests/value-types.test.ts
+  s_84434b42698f4e::t_009d7110e5b3a7 1,15,17,19,25
+  s_84434b42698f4e::t_403e3f4ede8f4e 2
+  s_84434b42698f4e::t_e86427994877fa 3-14,16,18,20-24,26-30
+packages/browser/tests/prepared-controller.test.ts
+  s_84434b42698f4e::t_30db483c713897 2,274-276,281-283
+  s_84434b42698f4e::t_2846d3fe17ad5f 78,80,109,277-280,284
+packages/browser/tests/prepared-fixture.ts
+  s_84434b42698f4e::t_78ef44c3cbd650 15-19,28,43,80,87,90,96-98,113,119-122,125,131-132,134,137-141
+  s_84434b42698f4e::t_30db483c713897 52-53
+  s_84434b42698f4e::t_905a61a5455d05 112,142-144
+packages/browser/src/media-type.ts
+  s_84434b42698f4e::t_a19c6ea5e70398 138,140
+packages/browser/src/prepared/refresh.ts
+  s_84434b42698f4e::t_03d989b7714471 46-47,41-45,54,72-75,164-166
+  s_84434b42698f4e::t_70df9d6357a34f 40
+packages/browser/src/prepared/control.ts
+  s_84434b42698f4e::t_27f5645fed3c96 5
+  s_84434b42698f4e::t_4f1dd7cae99b11 73
+packages/browser/src/export.ts
+  s_84434b42698f4e::t_6342eb9ff72ad0 161,180,26,36-38,41,46-49,53-54,71,76,85-86,96,254,333,366-369,371,373-379,402,424-431,466,473,536,540-541,543,547,557-559,562-564
+  s_84434b42698f4e::t_0e6141d18681c2 554-555,39-40,42-45,50-52,55-63,365,420,560-561,565-573
+  s_84434b42698f4e::t_4f1dd7cae99b11 556
+packages/browser/src/abort.ts
+  s_84434b42698f4e::t_3e643f44e0ff3f 1,4
+  s_84434b42698f4e::t_61567cbbf49d4e 2-3,6
+packages/browser/tests/fixture.ts
+  s_84434b42698f4e::t_67c3a0eb297193 133-134,142-143,152,155,9,12-13,30-31,156,162-164,170-173,175-179,182-183,190
+  s_84434b42698f4e::t_8998e5453b85f5 2,8,10-11,15,22-29,59,105,149,157-161,165-169,184
+  s_84434b42698f4e::t_905a61a5455d05 32,185-189
+  s_84434b42698f4e::t_a021b4594c6a79 45
+  s_84434b42698f4e::t_30db483c713897 86,92,103,126,132,141,144-145,174,180-181
+  s_84434b42698f4e::t_6033051ec10311 135
+packages/browser/tests/builtin-loaders.test.ts
+  s_84434b42698f4e::t_2ac29958b8f58e 5,38,61,64,79,115-117,120
+  s_84434b42698f4e::t_4c3f4e2aed0eae 100
+packages/browser/tests/export.test.ts
+  s_84434b42698f4e::t_67c3a0eb297193 12,46,316-318,326,337-345,480,496-504
+packages/browser/tests/marimo-snapshot.test.ts
+  s_84434b42698f4e::t_816ad22d9b77f8 5,255,276-277
+  s_84434b42698f4e::t_3cc934e5c3580b 251
+  s_84434b42698f4e::t_83e307324f8b7f 256-263
+packages/browser/src/prepared/errors.ts
+  s_84434b42698f4e::t_27f5645fed3c96 13,2,14-17,25,45,52
+  s_84434b42698f4e::t_ac41ea897fbe96 1
+  s_84434b42698f4e::t_ab695a602b34cc 30
+  s_84434b42698f4e::t_4f1dd7cae99b11 42-44
+packages/browser/src/prepared/state-selection.ts
+  s_84434b42698f4e::t_27f5645fed3c96 53-54,56-57,60,64-67,71,74
+packages/browser/src/value-types.ts
+  s_84434b42698f4e::t_742dd12e617c1b 1-2
+  s_84434b42698f4e::t_e86427994877fa 3-6,9,13,29,33,37-41,51-56
+  s_84434b42698f4e::t_fd4daa8d29f08c 7-8,10-12,22-23,28,30-32,34-36,42-43,48-50,57
+  s_84434b42698f4e::t_cfde102b6fa5a8 14-21
+  s_84434b42698f4e::t_5d8f9aa335c33f 24-27
+  s_84434b42698f4e::t_3e643f44e0ff3f 44-47
+packages/browser/src/prepared/query.ts
+  s_84434b42698f4e::t_9b90bd27fc493d 4,9
+packages/browser/src/prepared/state-port.ts
+  s_84434b42698f4e::t_27f5645fed3c96 122
+packages/browser/src/loader.ts
+  s_84434b42698f4e::t_c2f1a43eb938a3 37,47,57,60,78,85,88,90,103,117,86,189-198
+  s_84434b42698f4e::t_0e6141d18681c2 119-120,127-128,165-166,33-34,76,177,182-183,186-188,199
+  s_84434b42698f4e::t_28b27d333f41aa 8,31,49,75,79,81,134,178-181,185
+  s_84434b42698f4e::t_219b2e9fba591b 15
+  s_84434b42698f4e::t_4f1dd7cae99b11 45,52-54,184
+packages/browser/src/types.ts
+  s_84434b42698f4e::t_eda6874743a36d 28,33-35,46,64,67-70,72-75
+  s_84434b42698f4e::t_28b27d333f41aa 90-91,117-118,121-122,126-127,133-134,161-162,168-169,177-178,187,194-195,201-202,211-212,214,230,240-241,245,247,252-254,257-259,261,263-264,267-268,274-275,290-291,300-301,309-310,313-314,321,5,36-37,315-318,320
+  s_84434b42698f4e::t_3d327ac06913af 4,65
+  s_84434b42698f4e::t_99781c21846054 48,51
+packages/browser/src/integrity.ts
+  s_84434b42698f4e::t_44d83a3a055a4b 8,47-48,57,77,53-54,58-73
+  s_84434b42698f4e::t_27f5645fed3c96 18
+packages/browser/tests/prepared-manifest.test.ts
+  s_84434b42698f4e::t_2846d3fe17ad5f 13
+packages/browser/tests/export-errors.test.ts
+  s_84434b42698f4e::t_19ed4a7ba37fd4 40,43,130,177
+  s_84434b42698f4e::t_30db483c713897 41-42,44
+  s_84434b42698f4e::t_6033051ec10311 45
+packages/browser/tests/clean-workspace.mjs
+  s_84434b42698f4e::t_0304c168520102 45-47,64-67,69-71,73-74,76
+  s_84434b42698f4e::t_30db483c713897 68,72
+packages/browser/tests/export-names.test.ts
+  s_84434b42698f4e::t_ab9125167e3a2c 4-5,33,38-39,43-47
+  s_84434b42698f4e::t_30db483c713897 48-50
+packages/browser/src/prepared/manifest.ts
+  s_84434b42698f4e::t_70df9d6357a34f 144-145,165,146-148,156-158,167-169
+  s_84434b42698f4e::t_cfde102b6fa5a8 7,143,153,166
+  s_84434b42698f4e::t_9e19c2fd66066b 37-39,41-42,61,67-69,119-122,149,159,172
+  s_84434b42698f4e::t_d0e7043ad90035 40,175,177
+packages/browser/src/strict-msgpack.ts
+  s_84434b42698f4e::t_2a3d037cf306c9 4,168,195,209,223,230,237,244,252-253,255
+packages/browser/tests/packed-install.mjs
+  s_84434b42698f4e::t_0304c168520102 272,280-282
+packages/browser/tests/portable-filenames.test.ts
+  s_84434b42698f4e::t_c17a85ac84b05a 4,14
+  s_84434b42698f4e::t_ab9125167e3a2c 5,11-12,19-21,39-42
+  s_84434b42698f4e::t_905a61a5455d05 15-18
+packages/browser/src/blob-asset.ts
+  s_84434b42698f4e::t_16b7d56f807efa 32,38,43,46,51
+packages/browser/src/prepared/manifest-fetch.ts
+  s_84434b42698f4e::t_3367ebe481f861 22,25-27
+packages/browser/src/transport.ts
+  s_84434b42698f4e::t_2bbdabc0a020c7 36,59-62,233-235,238,243-244
+packages/browser/src/marimo-snapshot.ts
+  s_84434b42698f4e::t_6c88fcfdbbc670 5,172,178,184,188,199,210,241,290,306,371,379-380,383-384,390,414-415,422,425,439,443,450-451,457,463,469,472
+  s_84434b42698f4e::t_4f1dd7cae99b11 431
+  s_84434b42698f4e::t_f95dacdd0810fc 440,444-447
+packages/browser/src/prepared/cancellation.ts
+  s_84434b42698f4e::t_ac41ea897fbe96 3-4
+  s_84434b42698f4e::t_27f5645fed3c96 13-16
+packages/browser/src/schema.ts
+  s_84434b42698f4e::t_5d8f9aa335c33f 520,569,603,551,219,222,230,237,247,260,284,296,309,321,333,336,354,362,366,379-382,390,459-460,464,469-470,474,497,503-504,507,538,545-546,554,558-559,579-580,599-600,606,623-624,629-630
+  s_84434b42698f4e::t_4f1dd7cae99b11 202,201,220-221,272,494,510,519,526-530
+packages/browser/src/prepared/controller.ts
+  s_84434b42698f4e::t_27f5645fed3c96 152
+packages/browser/tests/cross-language.test.ts
+  s_84434b42698f4e::t_e62d5ae39db9bb 26,31,50,74,82,93,114,123,128,135-136,141,158-159,148-155,157,160-161,163-176,178-180
+  s_84434b42698f4e::t_30db483c713897 147
+  s_84434b42698f4e::t_64c0774c846b1c 177
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "c89bc434ce4f3dcf46051df6c72b6c94897e1bf8",
+  "prompts": {},
+  "sessions": {
+    "s_84434b42698f4e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a061f5-fe96-7e42-ae14-44b03f0596fa",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}

@@ -1,0 +1,89 @@
+packages/browser/src/loader/anywidget.ts
+  s_84434b42698f4e::t_a444d68f008d31 5,20
+  s_84434b42698f4e::t_b66683adb96b34 32
+  s_84434b42698f4e::t_71cbaddb566537 33
+packages/loader-anywidget/src/runtime/host.ts
+  s_84434b42698f4e::t_e1765e0d79bf3f 5,15-17
+  s_84434b42698f4e::t_e3c951d5ebe897 21
+packages/loader-anywidget/src/runtime/value-types.ts
+  s_84434b42698f4e::t_e86427994877fa 1-4,7,11,15,19-23,33-38
+  s_84434b42698f4e::t_198ac7edae5341 5-6,8-10,12-13,18,24-32,39
+  s_84434b42698f4e::t_59b2e8f60204ad 14,16-17
+packages/loader-anywidget/src/runtime/module-cache.ts
+  s_84434b42698f4e::t_6a305ab885c175 5,38,40,93,99,122,127,146-148
+packages/loader-anywidget/src/runtime/widget-ref.ts
+  s_84434b42698f4e::t_597e3896e7abb6 1-4
+packages/loader-anywidget/tests/payload.browser.test.ts
+  s_84434b42698f4e::t_91d7eb11b7e2f9 27-28
+packages/loader-anywidget/src/payload.ts
+  s_84434b42698f4e::t_59b2e8f60204ad 121,186,191,268,286,331,360,373,381,403,628,632,461-462,1-7,11,13-16,49-50,136,140,155,157,163,173,210-213,223-224,241,244,450,455,484,488-495,497-500,528,530,547,555,565,643-644,650,655-656,660-661,668-675
+  s_84434b42698f4e::t_96ac4219aa88bf 153-154,274-275,290-291,300-301,312-313,339-340,361,374,406-407,413-414,424-425,435-436,598-599,636-637,641-642,468-469,8,12,17,531,662-667
+  s_84434b42698f4e::t_4f1dd7cae99b11 144,470-474,572
+  s_84434b42698f4e::t_b46b9187093588 466
+packages/loader-anywidget/tests/prepared-graph.test.ts
+  s_84434b42698f4e::t_3fa41278584f39 12,19,27,33,286-287,292,304,321,377,381,432-438
+packages/loader-anywidget/tests/fixture.ts
+  s_84434b42698f4e::t_18cd07c7784684 3,8-9,11,26,51
+packages/loader-anywidget/tests/runtime.browser.test.ts
+  s_84434b42698f4e::t_f1d5684d491d8a 190-191,195,198-199,212,233,238,245,263,268,272,293,300,304,318,338,342,354,360,364,378,384,394,405,412,416,432,454-455,461-475
+packages/browser/tests/anywidget-loader.test.ts
+  s_84434b42698f4e::t_9e46557cdaa0e7 78
+packages/loader-anywidget/src/runtime/binding.ts
+  s_84434b42698f4e::t_8525b03974d125 227-228,278-279,5,11,21,24-25,28-29,31,39,51,89-90,102,106,127,172-173,176,225-226,231,233-236,280,288,290-291,293-295,300-301,305-306
+  s_50d55e3efa271d::t_8ed6a02107bfbe 1
+  s_84434b42698f4e::t_e1765e0d79bf3f 4,9,20,34,60,229-230,289,303-304
+  s_84434b42698f4e::t_d6de3fde4ddc84 8,69,281,292,296-299
+  s_84434b42698f4e::t_f46b1940f78755 302
+packages/loader-anywidget/src/runtime/registry.ts
+  s_84434b42698f4e::t_71cbaddb566537 36-37,38-41,48,76,78,108,113,119,186,189,313-314
+  s_84434b42698f4e::t_e1765e0d79bf3f 7,32,42-45
+  s_84434b42698f4e::t_4d6bf67c27df32 9,315,317
+  s_84434b42698f4e::t_3103dac6a31eca 139
+packages/loader-anywidget/tests/runtime.test.ts
+  s_84434b42698f4e::t_b7c7929ffbd770 69,160,200,238,279,285,314,351,370-372
+packages/loader-anywidget/src/runtime/model-proxy.ts
+  s_84434b42698f4e::t_0ee5532befb9ab 11,16-17,5-10,22,76,79,81-83
+  s_84434b42698f4e::t_f46b1940f78755 3
+  s_84434b42698f4e::t_e1765e0d79bf3f 18,70,80
+packages/loader-anywidget/src/index.ts
+  s_84434b42698f4e::t_a99d4f91bad784 61-62,47,51,58,64-70
+  s_84434b42698f4e::t_e1765e0d79bf3f 4,19
+  s_84434b42698f4e::t_71cbaddb566537 6,23,32,44,63
+packages/loader-anywidget/src/runtime/abort.ts
+  s_84434b42698f4e::t_f79dd460ba300e 1-4,7-12
+packages/loader-anywidget/src/runtime/prepared-graph.ts
+  s_84434b42698f4e::t_6672e057e4761d 205-207,268,312-313
+packages/loader-anywidget/src/runtime/model.ts
+  s_84434b42698f4e::t_198ac7edae5341 3-11,14-17,46,61-63,69-72,100,107,128-129
+  s_84434b42698f4e::t_e1765e0d79bf3f 12-13,18,25,47,125-127
+  s_84434b42698f4e::t_b46b9187093588 27
+  s_84434b42698f4e::t_4f1dd7cae99b11 66-68
+  s_84434b42698f4e::t_60e85852aa9f90 75
+packages/loader-anywidget/tests/loader.test.ts
+  s_84434b42698f4e::t_91d7eb11b7e2f9 12,178,51,116,133,150,162,13-14,75,196-200
+  s_84434b42698f4e::t_c4e1555d4af3b2 37,177,33,83,100,115,120-121,131-132,140,149,152-153,160-161,167,180,39-50
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "fd886fd1910d80bb70b6c8b8556f08c0d380ffa2",
+  "prompts": {},
+  "sessions": {
+    "s_50d55e3efa271d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019fa7f0-6202-7f10-b0c4-9fdfe7e6df62",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    },
+    "s_84434b42698f4e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a061f5-fe96-7e42-ae14-44b03f0596fa",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
