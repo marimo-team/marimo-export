@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
 from collections.abc import Callable
 from hashlib import sha256
@@ -70,6 +71,18 @@ def _write_command(path: Path, source: str) -> None:
     path.chmod(0o755)
 
 
+def _bash() -> str:
+    if os.name != "nt":
+        return "bash"
+    git = shutil.which("git")
+    if git is None:
+        raise RuntimeError("Git is required to locate Bash on Windows")
+    bash = Path(git).resolve().parents[1] / "bin" / "bash.exe"
+    if not bash.is_file():
+        raise RuntimeError("Git Bash is unavailable")
+    return str(bash)
+
+
 def _run_release_check(
     root: Path,
     workflow_commit: str,
@@ -106,7 +119,7 @@ fi
         "PATH": f"{commands}{os.pathsep}{os.environ['PATH']}",
     }
     return subprocess.run(
-        ["bash", str(ROOT / "scripts/check-release.sh")],
+        [_bash(), str(ROOT / "scripts/check-release.sh")],
         cwd=root,
         env=environment,
         capture_output=True,
