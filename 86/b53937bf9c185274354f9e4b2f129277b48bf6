@@ -1,0 +1,80 @@
+packages/python/tests/test_repository_lifecycle.py
+  s_75cdbfbd8ba16b::t_5d5a0f2c9eade0 8,320,397,979
+docs/guide/market-dashboard.md
+  s_75cdbfbd8ba16b::t_2de0b13ffec804 20,23
+apps/docs/scripts/check-built-docs.mjs
+  s_75cdbfbd8ba16b::t_014b2d0861cb59 67-70
+.github/workflows/ci.yml
+  s_75cdbfbd8ba16b::t_2de0b13ffec804 34,64,74
+skills/notebook-to-static-app/scripts/scaffold_app.py
+  s_75cdbfbd8ba16b::t_d77bea3f01c582 26,28,315,318
+packages/python/src/marimo_export/spec.py
+  s_75cdbfbd8ba16b::t_a95c4f77e0edeb 152,157-158
+.python-version
+  s_75cdbfbd8ba16b::t_2de0b13ffec804 1
+packages/python/src/marimo_export/descriptors.py
+  s_75cdbfbd8ba16b::t_a95c4f77e0edeb 59
+package.json
+  s_75cdbfbd8ba16b::t_2de0b13ffec804 27
+pyproject.toml
+  s_75cdbfbd8ba16b::t_2de0b13ffec804 8
+packages/browser/tests/packed-install.mjs
+  s_75cdbfbd8ba16b::t_18a497aba6fbf4 256
+development_docs/development.md
+  s_75cdbfbd8ba16b::t_2de0b13ffec804 3-4
+AGENTS.md
+  s_75cdbfbd8ba16b::t_2de0b13ffec804 9
+packages/python/tests/test_marimo_cache_patch.py
+  s_75cdbfbd8ba16b::t_5d5a0f2c9eade0 135,177
+packages/python/pyproject.toml
+  s_75cdbfbd8ba16b::t_2de0b13ffec804 15-16
+packages/portable-json/package.json
+  s_75cdbfbd8ba16b::t_2de0b13ffec804 52
+docs/reference/browser/snapshots.md
+  s_75cdbfbd8ba16b::t_d8640af1a5dbdc 88
+packages/python/tests/test_planning.py
+  s_75cdbfbd8ba16b::t_4becb8e49fe2aa 138
+packages/python/tests/test_repository_recovery.py
+  s_75cdbfbd8ba16b::t_5d5a0f2c9eade0 7,192
+Makefile
+  s_75cdbfbd8ba16b::t_2de0b13ffec804 34
+packages/browser/package.json
+  s_75cdbfbd8ba16b::t_5d6d1100e8460b 102
+packages/python/src/marimo_export/exporters/_spec.py
+  s_75cdbfbd8ba16b::t_a95c4f77e0edeb 13
+packages/python/tests/test_marimo_child_run.py
+  s_75cdbfbd8ba16b::t_5d5a0f2c9eade0 33,109
+docs/reference/browser/loaders.md
+  s_75cdbfbd8ba16b::t_d8640af1a5dbdc 113
+pnpm-workspace.yaml
+  s_75cdbfbd8ba16b::t_2de0b13ffec804 17,19,23,25,28-29,42
+  s_75cdbfbd8ba16b::t_5d6d1100e8460b 16,20-21,27,31
+docs/reference/browser/errors-and-limits.md
+  s_75cdbfbd8ba16b::t_d8640af1a5dbdc 91
+skills/notebook-to-static-app/tests/test_scaffold_app.py
+  s_75cdbfbd8ba16b::t_d77bea3f01c582 89
+apps/docs/package.json
+  s_75cdbfbd8ba16b::t_2de0b13ffec804 19
+development_docs/validation.md
+  s_75cdbfbd8ba16b::t_2de0b13ffec804 9
+.github/workflows/publish.yml
+  s_75cdbfbd8ba16b::t_2de0b13ffec804 31,34,123,151,182,185,213,217
+examples/vite-vanilla/tests/dev-transform.mjs
+  s_75cdbfbd8ba16b::t_e7e06f58254921 15-16
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "86b53937bf9c185274354f9e4b2f129277b48bf6",
+  "prompts": {},
+  "sessions": {
+    "s_75cdbfbd8ba16b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a068e4-dab0-7a01-8c4a-25843050646c",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
