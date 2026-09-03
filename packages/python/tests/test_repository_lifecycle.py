@@ -112,8 +112,6 @@ def test_active_leases_protect_artifacts_then_lru_prunes_them(tmp_path: Path) ->
         retained_generations=1,
         retained_generations_per_identity=1,
         retained_prepared_states=1,
-        lease_ttl_seconds=2.0,
-        lease_heartbeat_seconds=0.1,
     )
     root = tmp_path / "repository"
     first_identity = _identity("first")
