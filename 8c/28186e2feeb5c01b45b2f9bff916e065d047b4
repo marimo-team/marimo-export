@@ -1,0 +1,55 @@
+packages/portable-json/README.md
+  s_84434b42698f4e::t_ca84ce53e826f7 1,3-5,8,68-69
+development_docs/architecture/portable-json.md
+  s_84434b42698f4e::t_ca84ce53e826f7 101
+scripts/verify-npm.sh
+  s_84434b42698f4e::t_15284ab02f9a08 20,22,26
+scripts/verify_release_artifacts.py
+  s_84434b42698f4e::t_369ebd6fd6bd81 67-68,70,98-102,104,152-153,182-185,187,238-239
+  s_84434b42698f4e::t_2f54968411d9b9 154-160
+  s_84434b42698f4e::t_ae1ee352dd9339 161-164
+packages/python/tests/test_release.py
+  s_84434b42698f4e::t_03e8b3589a9c27 97,241,256-259
+development_docs/architecture/agents-and-delivery.md
+  s_84434b42698f4e::t_ca84ce53e826f7 109
+scripts/release.sh
+  s_84434b42698f4e::t_15284ab02f9a08 140
+scripts/smoke_npm_packages.mjs
+  s_84434b42698f4e::t_9ed9c2db22ca0e 6-8,96
+  s_84434b42698f4e::t_5c372715d7cd69 45
+.github/workflows/publish.yml
+  s_84434b42698f4e::t_dc272f1b36c15e 135
+development_docs/releasing.md
+  s_84434b42698f4e::t_d2eba6de11f993 4-5,15,23-26,28-31,33,36-38,59,67-69,89-90,117-118,120,122,124,134
+development_docs/architecture/studio-integration.md
+  s_84434b42698f4e::t_ca84ce53e826f7 26-27
+packages/browser/package.json
+  s_84434b42698f4e::t_2d69443c4abe92 3
+  s_84434b42698f4e::t_dc272f1b36c15e 105
+packages/portable-json/tests/packed-install.mjs
+  s_84434b42698f4e::t_dc94b676f1c329 120
+  s_84434b42698f4e::t_9de906b9ee09eb 123
+packages/portable-json/package.json
+  s_84434b42698f4e::t_dc272f1b36c15e 3-4
+  s_84434b42698f4e::t_dc94b676f1c329 38
+packages/python/pyproject.toml
+  s_84434b42698f4e::t_fd1568134b29d3 7
+packages/browser/vite.config.ts
+  s_84434b42698f4e::t_dc272f1b36c15e 9,11
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "8c28186e2feeb5c01b45b2f9bff916e065d047b4",
+  "prompts": {},
+  "sessions": {
+    "s_84434b42698f4e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a061f5-fe96-7e42-ae14-44b03f0596fa",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
