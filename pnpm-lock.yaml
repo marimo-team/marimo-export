@@ -40,8 +40,8 @@ catalogs:
       specifier: 1.62.1
       version: 1.62.1
     portless:
-      specifier: 0.15.5
-      version: 0.15.5
+      specifier: 0.15.6
+      version: 0.15.6
     typescript:
       specifier: ^6.0.3
       version: 6.0.3
@@ -63,8 +63,6 @@ overrides:
   postcss: 8.5.26
   vite: npm:@voidzero-dev/vite-plus-core@0.3.0
   vitepress>vite: 8.2.2
-
-pnpmfileChecksum: sha256-ivNfDYF+zMdce2qHSjvzQ/9YwzHf+013RUuiy6cgC/o=
 
 importers:
 
@@ -102,7 +100,7 @@ importers:
         version: 24.13.3
       portless:
         specifier: 'catalog:'
-        version: 0.15.5
+        version: 0.15.6
       typescript:
         specifier: 'catalog:'
         version: 6.0.3
@@ -2235,8 +2233,8 @@ packages:
     resolution: {integrity: sha512-LKWqWJRhstyYo9pGvgor/ivk2w94eSjE3RGVuzLGlr3NmD8bf7RcYGze1mNdEHRP6TRP6rMuDHk5t44hnTRyow==}
     engines: {node: '>=14.19.0'}
 
-  portless@0.15.5:
-    resolution: {integrity: sha512-zmJu4Q8/fY54oVUT/5NnmF4Ih8wTdCvCf6JCN783dRYl9mXkJBzXSckX2lztGCLIbM70varDjCudAbGKT73XPg==}
+  portless@0.15.6:
+    resolution: {integrity: sha512-uOAwWLF32rmyEGFASzSO0VOaqb/AQxFCCzyZbPGd82UNNOfIEvc09zy92nroNibE5HNfzV4oVB0ObKbPXgkM9A==}
     engines: {node: '>=24'}
     os: [darwin, linux, win32]
     hasBin: true
@@ -4262,7 +4260,7 @@ snapshots:
 
   pngjs@7.0.0: {}
 
-  portless@0.15.5: {}
+  portless@0.15.6: {}
 
   postcss@8.5.26:
     dependencies:
