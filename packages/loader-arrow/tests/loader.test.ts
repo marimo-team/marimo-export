@@ -4,6 +4,13 @@ import { describe, expect, test } from "vite-plus/test";
 
 import { arrowTableLoader } from "../src/index.js";
 
+const polarsStream = Uint8Array.from(
+  atob(
+    "/////6gAAAAEAAAA8v///xQAAAAEAAEAAAAKAAsACAAKAAQA+P///wwAAAAIAAgAAAAEAAIAAAA4AAAABAAAALz///8gAAAAEAAAAAgAAAABAwAAAAAAAPr///8CAAYABgAEAAUAAAB2YWx1ZQAAAOz///8sAAAAIAAAABgAAAABGAAAEAASAAQAEAARAAgAAAAMAAAAAAD8////BAAEAAgAAABjYXRlZ29yeQAAAAD/////yAAAAAQAAADs////gAAAAAAAAAAUAAAABAADAAwAEwAQABIADAAEAOb///8CAAAAAAAAAHQAAAAoAAAAFAAAAAAADgAYAAQADAAQAAAAFAABAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAEAAAAAAAAAAAAAAAAgAAAAIAAAAAAAAAAAAAAAAAAAACAAAAAAAAAAAAAAAAAAAAAwAAAG9uZQAAAAAAAAAAAAMAAAB0d28AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPg/AAAAAAAABEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD/////AAAAAA==",
+  ),
+  (character) => character.charCodeAt(0),
+);
+
 const descriptor: ArrowDescriptor = {
   asset: { sha256: "a".repeat(64), size: 0 },
   codec: "apache.arrow.file.v1",
@@ -21,6 +28,19 @@ const mediaType: MediaType = {
 };
 
 describe("arrowTableLoader", () => {
+  test("decodes an uncompressed Polars Arrow IPC stream", async () => {
+    const result = await arrowTableLoader().load({
+      descriptor,
+      mediaType,
+      payload: polarsStream,
+    });
+
+    expect(result.toArray()).toEqual([
+      { category: "one", value: 1.5 },
+      { category: "two", value: 2.5 },
+    ]);
+  });
+
   test("registers and decodes LZ4-compressed Arrow files", async () => {
     const input = tableFromArrays({
       category: ["one", "two", "three"],

@@ -1,5 +1,7 @@
+import type vegaEmbed from "vega-embed";
 import type { EmbedOptions, Result as VegaEmbedResult, VisualizationSpec } from "vega-embed";
 import { defineBlobAssetLoader } from "@marimo-team/marimo-export";
+import { portableJsonObject } from "@marimo-team/portable-json";
 import type {
   BlobAssetLoadInput,
   BlobAssetLoader,
@@ -22,13 +24,24 @@ export interface VegaLiteChart {
   mount(element: HTMLElement, options?: VegaLiteMountOptions): Promise<MountedVegaLite>;
 }
 
+export type VegaEmbed = typeof vegaEmbed;
+export type VegaEmbedLoader = () => Promise<VegaEmbed>;
+
 /** Load an exported Vega-Lite value and prepare it for browser mounting. */
 export function vegaLiteLoader(defaults: EmbedOptions = {}): BlobAssetLoader<VegaLiteChart> {
+  return vegaLiteLoaderWith(async () => (await import("vega-embed")).default, defaults);
+}
+
+/** @internal */
+export function vegaLiteLoaderWith(
+  loadEmbed: VegaEmbedLoader,
+  defaults: EmbedOptions = {},
+): BlobAssetLoader<VegaLiteChart> {
   const defaultOptions = { ...defaults };
   return defineBlobAssetLoader({
     mediaTypes: (mediaType) => MEDIA_TYPE.test(mediaType.essence),
     load(input) {
-      return loadChart(input, defaultOptions);
+      return loadChart(input, defaultOptions, loadEmbed);
     },
   });
 }
@@ -36,17 +49,15 @@ export function vegaLiteLoader(defaults: EmbedOptions = {}): BlobAssetLoader<Veg
 async function loadChart(
   input: BlobAssetLoadInput,
   defaults: VegaLiteMountOptions,
+  loadEmbed: VegaEmbedLoader,
 ): Promise<VegaLiteChart> {
   input.signal?.throwIfAborted();
-  const value: unknown = JSON.parse(
-    new TextDecoder("utf-8", { fatal: true }).decode(input.payload.data),
+  const template = portableJsonObject(
+    JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(input.payload.data)),
+    "Vega-Lite output",
   );
-  if (value === null || typeof value !== "object" || Array.isArray(value)) {
-    throw new TypeError("Vega-Lite output must contain a JSON object.");
-  }
   input.signal?.throwIfAborted();
-  const template = value as JsonObject;
-  const spec = freezeJson(structuredClone(template));
+  const spec = template;
   return Object.freeze({
     spec,
     async mount(element: HTMLElement, options: VegaLiteMountOptions = {}) {
@@ -57,13 +68,9 @@ async function loadChart(
       let embedTask: Promise<VegaEmbedResult> | undefined;
       let result: VegaEmbedResult;
       try {
-        const { default: embed } = await raceAbort(
-          import("vega-embed"),
-          signal,
-          "Vega-Lite mount was cancelled.",
-        );
+        const embed = await raceAbort(loadEmbed(), signal, "Vega-Lite mount was cancelled.");
         signal?.throwIfAborted();
-        embedTask = embed(container, structuredClone(template) as unknown as VisualizationSpec, {
+        embedTask = embed(container, visualizationSpec(template), {
           renderer: "canvas",
           ...defaults,
           ...embedOptions,
@@ -138,28 +145,7 @@ function clearMount(container: HTMLElement): void {
   container.remove();
 }
 
-function freezeJson<T extends JsonObject>(value: T): Readonly<T> {
-  for (const child of Object.values(value)) {
-    if (child !== null && typeof child === "object") {
-      if (Array.isArray(child)) {
-        freezeArray(child);
-      } else {
-        freezeJson(child as JsonObject);
-      }
-    }
-  }
-  return Object.freeze(value);
-}
-
-function freezeArray(value: readonly unknown[]): void {
-  for (const child of value) {
-    if (child !== null && typeof child === "object") {
-      if (Array.isArray(child)) {
-        freezeArray(child);
-      } else {
-        freezeJson(child as JsonObject);
-      }
-    }
-  }
-  Object.freeze(value);
+function visualizationSpec(value: VegaLiteSpec): VisualizationSpec {
+  // SAFETY: portableJsonObject validated the complete Vega-Lite JSON value before embedding.
+  return structuredClone(value) as VisualizationSpec;
 }

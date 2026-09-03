@@ -1,41 +1,41 @@
 import type { BlobAssetLoadInput } from "@marimo-team/marimo-export";
-import { beforeEach, describe, expect, test, vi } from "vite-plus/test";
+import { describe, expect, test, vi } from "vite-plus/test";
 
-import { parquetRowsLoader } from "../src/index.js";
+import type { ParquetObjectReader, ParquetRow } from "../src/index.js";
+import { parquetRowsLoaderWith } from "../src/index.js";
 
-const { read } = vi.hoisted(() => ({ read: vi.fn() }));
-
-vi.mock("hyparquet", () => ({ parquetReadObjects: read }));
-
-beforeEach(() => read.mockReset());
+const read = vi.fn<ParquetObjectReader>();
 
 describe("parquetRowsLoader", () => {
   test("selects Parquet media types and passes verified bytes to Hyparquet", async () => {
-    const loader = parquetRowsLoader({ columns: ["symbol"], rowStart: 1, rowEnd: 3 });
+    read.mockReset();
+    const loader = parquetRowsLoaderWith(read, { columns: ["symbol"], rowStart: 1, rowEnd: 3 });
     read.mockResolvedValueOnce([{ symbol: "AAPL" }]);
 
     const rows = await loader.load(input(new Uint8Array([80, 65, 82, 49])));
 
     expect(rows).toEqual([{ symbol: "AAPL" }]);
     expect(read).toHaveBeenCalledOnce();
-    const options = read.mock.calls[0]![0] as Record<string, unknown>;
+    const options = read.mock.calls[0]![0];
     expect(options).toMatchObject({ columns: ["symbol"], rowStart: 1, rowEnd: 3 });
     expect(options.file).toBeInstanceOf(ArrayBuffer);
-    expect(new Uint8Array(options.file as ArrayBuffer)).toEqual(new Uint8Array([80, 65, 82, 49]));
+    if (!(options.file instanceof ArrayBuffer)) throw new TypeError("Fixture file must be bytes.");
+    expect(new Uint8Array(options.file)).toEqual(new Uint8Array([80, 65, 82, 49]));
     expect(loader.accepts(input().descriptor, media("application/vnd.apache.parquet"))).toBe(true);
     expect(loader.accepts(input().descriptor, media("application/x-parquet"))).toBe(true);
     expect(loader.accepts(input().descriptor, media("application/octet-stream"))).toBe(false);
   });
 
   test("honors abort during decoding", async () => {
-    let resolve!: (rows: Record<string, unknown>[]) => void;
+    read.mockReset();
+    let resolve!: (rows: ParquetRow[]) => void;
     read.mockReturnValueOnce(
-      new Promise<Record<string, unknown>[]>((complete) => {
+      new Promise<ParquetRow[]>((complete) => {
         resolve = complete;
       }),
     );
     const during = new AbortController();
-    const pending = parquetRowsLoader().load({ ...input(), signal: during.signal });
+    const pending = parquetRowsLoaderWith(read).load({ ...input(), signal: during.signal });
     during.abort();
     await expect(pending).rejects.toMatchObject({ name: "AbortError" });
     resolve([]);
@@ -66,7 +66,8 @@ function input(data = new Uint8Array()): BlobAssetLoadInput {
 }
 
 function media(value: string) {
-  const [type, subtype] = value.split("/") as [string, string];
+  const [type, subtype] = value.split("/");
+  if (type === undefined || subtype === undefined) throw new TypeError("Media type is incomplete.");
   return {
     raw: value,
     essence: value,

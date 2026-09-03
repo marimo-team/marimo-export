@@ -10,17 +10,44 @@ export interface ParquetRowsLoaderOptions extends Omit<
   readonly compressors?: Compressors;
 }
 
+export type ParquetValue =
+  | null
+  | boolean
+  | number
+  | bigint
+  | string
+  | Date
+  | Uint8Array
+  | readonly ParquetValue[]
+  | ParquetRow;
+
+export interface ParquetRow {
+  readonly [column: string]: ParquetValue;
+}
+
+export type ParquetObjectReader = (
+  options: Omit<ParquetReadOptions, "onComplete">,
+) => Promise<ParquetRow[]>;
+
 /** Read a verified Parquet BlobAsset into row objects. */
 export function parquetRowsLoader(
   options: ParquetRowsLoaderOptions = {},
-): BlobAssetLoader<readonly Record<string, unknown>[]> {
+): BlobAssetLoader<readonly ParquetRow[]> {
+  return parquetRowsLoaderWith(parquetReadObjects, options);
+}
+
+/** @internal */
+export function parquetRowsLoaderWith(
+  readObjects: ParquetObjectReader,
+  options: ParquetRowsLoaderOptions = {},
+): BlobAssetLoader<readonly ParquetRow[]> {
   const defaults = { ...options };
   return defineBlobAssetLoader({
     mediaTypes: ["application/vnd.apache.parquet", "application/x-parquet"],
     async load({ payload, signal }) {
       signal?.throwIfAborted();
       const data = payload.data.slice();
-      const task = parquetReadObjects({
+      const task = readObjects({
         ...defaults,
         file: data.buffer,
       });

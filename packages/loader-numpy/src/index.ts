@@ -29,6 +29,12 @@ export interface NumpyArray {
   readonly fortranOrder: boolean;
 }
 
+interface NumpyHeader {
+  readonly descriptor: string;
+  readonly fortranOrder: boolean;
+  readonly shape: number[];
+}
+
 /** Decode a verified portable NPY asset. */
 export function numpyLoader(): OutputLoader<"numpy.npy.v1", NumpyArray> {
   return defineOutputLoader({
@@ -81,11 +87,7 @@ function decodeNpy(bytes: Uint8Array): NumpyArray {
   });
 }
 
-function parseHeader(header: string): {
-  readonly descriptor: string;
-  readonly fortranOrder: boolean;
-  readonly shape: number[];
-} {
+function parseHeader(header: string): NumpyHeader {
   const match =
     /^\{\s*['"]descr['"]\s*:\s*(['"])([^'"]+)\1\s*,\s*['"]fortran_order['"]\s*:\s*(True|False)\s*,\s*['"]shape['"]\s*:\s*\(([^)]*)\)\s*,?\s*\}$/u.exec(
       header,
@@ -215,12 +217,20 @@ function decodePayload(bytes: Uint8Array, count: number, dtype: NumpyDType): Arr
   return fillNumbers(Float64Array, components, (offset) => view.getFloat64(offset, littleEndian));
 }
 
-interface NumberArrayConstructor<T extends ArrayBufferView> {
+type NumberTypedArray =
+  | Int16Array
+  | Int32Array
+  | Uint16Array
+  | Uint32Array
+  | Float32Array
+  | Float64Array;
+
+interface NumberArrayConstructor<T extends NumberTypedArray> {
   new (length: number): T;
   readonly BYTES_PER_ELEMENT: number;
 }
 
-function fillNumbers<T extends ArrayBufferView>(
+function fillNumbers<T extends NumberTypedArray>(
   Constructor: NumberArrayConstructor<T>,
   length: number,
   read: (offset: number) => number,
@@ -228,7 +238,7 @@ function fillNumbers<T extends ArrayBufferView>(
 ): T {
   const result = new Constructor(length);
   for (let index = 0; index < length; index += 1) {
-    (result as unknown as { [key: number]: number })[index] = read(index * sourceStride);
+    result[index] = read(index * sourceStride);
   }
   return result;
 }

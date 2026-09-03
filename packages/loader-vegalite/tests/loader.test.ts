@@ -1,18 +1,16 @@
 import { encode } from "@msgpack/msgpack";
 import { openExport } from "@marimo-team/marimo-export";
 import type { ExportOutput } from "@marimo-team/marimo-export";
+import { portableJsonObject } from "@marimo-team/portable-json";
+import type { JsonValue } from "@marimo-team/portable-json";
+import type { EmbedOptions, Result as VegaEmbedResult } from "vega-embed";
 import { beforeEach, describe, expect, test, vi } from "vite-plus/test";
 
-import { vegaLiteLoader } from "../src/index.js";
+import type { VegaEmbed } from "../src/index.js";
+import { vegaLiteLoaderWith } from "../src/index.js";
 
-const { embed, finalize } = vi.hoisted(() => ({
-  embed: vi.fn(),
-  finalize: vi.fn(),
-}));
-
-vi.mock("vega-embed", () => ({
-  default: embed,
-}));
+const embed = vi.fn<VegaEmbed>();
+const finalize = vi.fn();
 
 const encoder = new TextEncoder();
 
@@ -33,9 +31,9 @@ describe("vegaLiteLoader", () => {
       },
     };
     const format = await fixture(encoder.encode(JSON.stringify(spec)));
-    const chart = await format.load(vegaLiteLoader({ actions: false }));
+    const chart = await format.load(testLoader({ actions: false }));
     const host = testHost();
-    embed.mockResolvedValueOnce({ finalize });
+    embed.mockResolvedValueOnce(embedResult(finalize));
 
     const mounted = await chart.mount(host.element, { renderer: "svg" });
 
@@ -57,9 +55,9 @@ describe("vegaLiteLoader", () => {
       throw failure;
     });
     const format = await fixture(encoder.encode(JSON.stringify({ mark: "point" })));
-    const chart = await format.load(vegaLiteLoader());
+    const chart = await format.load(testLoader());
     const host = testHost();
-    embed.mockResolvedValueOnce({ finalize: throwingFinalize });
+    embed.mockResolvedValueOnce(embedResult(throwingFinalize));
     const mounted = await chart.mount(host.element);
 
     expect(() => mounted.dispose()).toThrow(failure);
@@ -73,22 +71,22 @@ describe("vegaLiteLoader", () => {
     const spec = { mark: "point", data: { values: [] } };
     const firstFinalize = vi.fn();
     const secondFinalize = vi.fn();
-    let resolveFirst!: (value: { finalize: typeof firstFinalize }) => void;
+    let resolveFirst!: (value: VegaEmbedResult) => void;
     const host = testHost();
     embed
       .mockImplementationOnce(
         (element) =>
           new Promise((resolve) => {
-            host.appendPartialDom(element);
+            host.appendPartialDom(embedElement(element));
             resolveFirst = resolve;
           }),
       )
       .mockImplementationOnce(async (element) => {
-        host.appendPartialDom(element);
-        return { finalize: secondFinalize };
+        host.appendPartialDom(embedElement(element));
+        return embedResult(secondFinalize);
       });
     const format = await fixture(encoder.encode(JSON.stringify(spec)));
-    const chart = await format.load(vegaLiteLoader());
+    const chart = await format.load(testLoader());
     const controller = new AbortController();
     const firstMount = chart.mount(host.element, { signal: controller.signal });
     await vi.waitFor(() => expect(embed).toHaveBeenCalledOnce());
@@ -99,7 +97,7 @@ describe("vegaLiteLoader", () => {
     const secondContainer = host.lastContainer();
     expect(host.childCount()).toBe(1);
 
-    resolveFirst({ finalize: firstFinalize });
+    resolveFirst(embedResult(firstFinalize));
     await Promise.resolve();
     await Promise.resolve();
 
@@ -119,7 +117,7 @@ describe("vegaLiteLoader", () => {
       "application/json",
     );
 
-    await expect(format.load(vegaLiteLoader())).rejects.toThrow("No OutputLoader accepts");
+    await expect(format.load(testLoader())).rejects.toThrow("No OutputLoader accepts");
   });
 });
 
@@ -179,13 +177,17 @@ async function fixture(
   return notebookExport.state("current").output("chart");
 }
 
-function canonicalJson(value: unknown): string {
-  if (value === null || typeof value !== "object") return JSON.stringify(value);
+function canonicalJson(value: JsonValue): string {
+  if (value === null || isJsonPrimitive(value)) return JSON.stringify(value);
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
-  const object = value as Record<string, unknown>;
+  const object = portableJsonObject(value);
   return `{${Object.keys(object)
     .sort()
-    .map((key) => `${JSON.stringify(key)}:${canonicalJson(object[key])}`)
+    .map((key) => {
+      const child = object[key];
+      if (child === undefined) throw new TypeError("Canonical fixture field is missing.");
+      return `${JSON.stringify(key)}:${canonicalJson(child)}`;
+    })
     .join(",")}}`;
 }
 
@@ -199,10 +201,10 @@ function testHost() {
     },
   };
   const createNode = (): TestNode => {
-    const children: unknown[] = [];
+    const children: TestChild[] = [];
     const classes = new Set<string>();
     let parent: TestNode | undefined;
-    const replaceChildren = vi.fn((...next: unknown[]) => {
+    const replaceChildren = vi.fn((...next: TestChild[]) => {
       for (const child of children) {
         const childNode = nodeFor(child);
         if (childNode !== undefined) childNode.setParent(undefined);
@@ -213,7 +215,7 @@ function testHost() {
     const removeClasses = vi.fn((...names: string[]) => {
       for (const name of names) classes.delete(name);
     });
-    const element = {
+    const element = testElement({
       ownerDocument,
       replaceChildren,
       classList: {
@@ -225,7 +227,7 @@ function testHost() {
       remove() {
         parent?.removeChild(element);
       },
-    } as unknown as HTMLElement;
+    });
     const node: TestNode = {
       element,
       children,
@@ -245,13 +247,13 @@ function testHost() {
     return node;
   };
   const root = createNode();
-  const nodeFor = (value: unknown): TestNode | undefined =>
+  const nodeFor = (value: TestChild): TestNode | undefined =>
     [root, ...created].find((node) => node.element === value);
   return {
     element: root.element,
     appendPartialDom(element: HTMLElement) {
       const target = nodeFor(element)!;
-      target.children.push({});
+      target.children.push({ fixture: true });
       target.classes.add("vega-embed");
       target.classes.add("has-actions");
     },
@@ -263,16 +265,49 @@ function testHost() {
 
 interface TestNode {
   readonly element: HTMLElement;
-  readonly children: unknown[];
+  readonly children: TestChild[];
   readonly classes: Set<string>;
   readonly replaceChildren: ReturnType<typeof vi.fn>;
   readonly removeClasses: ReturnType<typeof vi.fn>;
   setParent(parent: TestNode | undefined): void;
-  removeChild(child: unknown): void;
+  removeChild(child: TestChild): void;
   childCount(): number;
 }
 
+interface TestPlaceholder {
+  readonly fixture: true;
+}
+
+type TestChild = HTMLElement | TestPlaceholder;
+
 async function digest(bytes: Uint8Array): Promise<string> {
-  const value = await crypto.subtle.digest("SHA-256", bytes as Uint8Array<ArrayBuffer>);
+  const value = await crypto.subtle.digest("SHA-256", new Uint8Array(bytes));
   return [...new Uint8Array(value)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function testLoader(defaults: EmbedOptions = {}) {
+  return vegaLiteLoaderWith(async () => embed, defaults);
+}
+
+function testElement<Value extends object>(value: Value): HTMLElement {
+  // SAFETY: The fake implements the HTMLElement members exercised by the Vega loader.
+  return value as HTMLElement;
+}
+
+function isJsonPrimitive(value: JsonValue): value is string | number | boolean {
+  return !Array.isArray(value) && Object.prototype.toString.call(value) !== "[object Object]";
+}
+
+function embedElement(value: string | HTMLElement): HTMLElement {
+  if (isEmbedSelector(value)) throw new TypeError("The Vega test embed target must be an element.");
+  return value;
+}
+
+function isEmbedSelector(value: string | HTMLElement): value is string {
+  return Object.prototype.toString.call(value) === "[object String]";
+}
+
+function embedResult(finalizeResult: () => void): VegaEmbedResult {
+  // SAFETY: The loader contract exercised by these tests reads only Result.finalize.
+  return { finalize: finalizeResult } as VegaEmbedResult;
 }

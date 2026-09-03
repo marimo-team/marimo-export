@@ -61,10 +61,11 @@ describe("numpyLoader", () => {
     const scalar = npy("|u1", [], false, (view) => view.setUint8(0, 9));
     const empty = npy("<f4", [0, 3], false, () => undefined);
 
-    expect([
-      ...((await numpyLoader().load({ descriptor, mediaType, payload: scalar }))
-        .data as Uint8Array),
-    ]).toEqual([9]);
+    const scalarResult = await numpyLoader().load({ descriptor, mediaType, payload: scalar });
+    if (!(scalarResult.data instanceof Uint8Array)) {
+      throw new TypeError("Scalar NPY fixture must decode to Uint8Array.");
+    }
+    expect([...scalarResult.data]).toEqual([9]);
     expect(
       (await numpyLoader().load({ descriptor, mediaType, payload: empty })).data.byteLength,
     ).toBe(0);
