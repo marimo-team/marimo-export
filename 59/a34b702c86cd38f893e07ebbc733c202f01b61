@@ -1,0 +1,21 @@
+packages/python/src/marimo_export/_repository/sqlite/maintenance.py
+  s_84434b42698f4e::t_dea002006d5aeb 5,57,80,99,106-113
+packages/python/tests/test_repository_lifecycle.py
+  s_84434b42698f4e::t_dea002006d5aeb 409-410
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "59a34b702c86cd38f893e07ebbc733c202f01b61",
+  "prompts": {},
+  "sessions": {
+    "s_84434b42698f4e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a061f5-fe96-7e42-ae14-44b03f0596fa",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
