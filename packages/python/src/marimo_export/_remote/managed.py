@@ -676,7 +676,7 @@ class ManagedServer:
     def _close_files(self) -> None:
         if not self._log_file.closed:
             self._log_file.close()
-        deadline = time.monotonic() + min(self.timeout, 1.0)
+        deadline = time.monotonic() + self.timeout
         while True:
             try:
                 self._temporary.cleanup()
