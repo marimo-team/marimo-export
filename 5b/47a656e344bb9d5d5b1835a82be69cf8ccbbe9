@@ -1,0 +1,305 @@
+apps/docs/public/feature-icons/braces-light.svg
+  s_59bd002f90f45e::t_d41e6c2ff7a28e 1
+docs/guide/getting-started.md
+  s_59bd002f90f45e::t_d41e6c2ff7a28e 8,15,18,30-35,113-115,148-149,151,153
+  s_59bd002f90f45e::t_8506b688ecddc1 16
+docs/reference/index.md
+  s_59bd002f90f45e::t_d41e6c2ff7a28e 8-10,14-19,23-32,36-43,47,49-51
+development_docs/architecture/preparation.md
+  s_59bd002f90f45e::t_d41e6c2ff7a28e 50,147,218-223
+  s_59bd002f90f45e::t_c1d75b9a465f43 150-151
+  s_59bd002f90f45e::t_b5e931b60c87cb 203-206
+examples/quickstart/README.md
+  s_59bd002f90f45e::t_d41e6c2ff7a28e 19
+docs/concepts/index.md
+  s_59bd002f90f45e::t_d41e6c2ff7a28e 6,8-10,12,14-28
+docs/guide/agents-and-automation.md
+  s_59bd002f90f45e::t_d41e6c2ff7a28e 14,85-87,91,100-102,120-121
+  s_59bd002f90f45e::t_87e880612fd7bf 70-71
+packages/browser/README.md
+  s_59bd002f90f45e::t_d41e6c2ff7a28e 49,52-53
+docs/reference/python/reader.md
+  s_59bd002f90f45e::t_0b2345b9131acc 20
+  s_59bd002f90f45e::t_d41e6c2ff7a28e 33-38,90-92,107-111,176-179,206-207
+development_docs/architecture/marimo-integration.md
+  s_59bd002f90f45e::t_00a42601676f83 56-63
+  s_59bd002f90f45e::t_d41e6c2ff7a28e 49-55,64
+development_docs/architecture/ports.md
+  s_59bd002f90f45e::t_d41e6c2ff7a28e 21,27,29-30,32,34,47-66
+development_docs/README.md
+  s_59bd002f90f45e::t_c1d75b9a465f43 11
+  s_59bd002f90f45e::t_cf030a24b393e2 25
+  s_59bd002f90f45e::t_d41e6c2ff7a28e 69
+SECURITY.md
+  s_59bd002f90f45e::t_6d958cdf3e3618 1-47
+development_docs/architecture.md
+  s_59bd002f90f45e::t_c1d75b9a465f43 3
+  s_59bd002f90f45e::t_d41e6c2ff7a28e 223-238
+development_docs/architecture/repository.md
+  s_59bd002f90f45e::t_d41e6c2ff7a28e 12,57-58,231-233,244-248,259-265,283-289
+  s_59bd002f90f45e::t_b5e931b60c87cb 258,276
+  s_59bd002f90f45e::t_940aa0d1235d60 179-183,185-187
+development_docs/architecture/live-transport-and-processes.md
+  s_59bd002f90f45e::t_4b332615303832 47
+docs/reference/python/host-integration.md
+  s_59bd002f90f45e::t_d41e6c2ff7a28e 17,122,220
+  s_59bd002f90f45e::t_8506b688ecddc1 15-16
+docs/guide/build-and-capture.md
+  s_59bd002f90f45e::t_d41e6c2ff7a28e 32-41,57-61,68-71,261-265,276-277
+  s_59bd002f90f45e::t_4b332615303832 132
+docs/reference/terminology.md
+  s_59bd002f90f45e::t_d41e6c2ff7a28e 32,46-65,69-78,80-91,106,119-122
+  s_59bd002f90f45e::t_4b332615303832 79
+docs/reference/python/format-records-and-errors.md
+  s_59bd002f90f45e::t_4b332615303832 181
+  s_59bd002f90f45e::t_991f744c0d3dbd 283
+  s_59bd002f90f45e::t_d41e6c2ff7a28e 215,287-290,299,324,328,353
+docs/reference/browser/prepared-publications.md
+  s_59bd002f90f45e::t_d41e6c2ff7a28e 42,48,50,55-58,119-122,140-142,202-203,206,234-237,259,291,299-305,326-329,366-367,388-391,405
+development_docs/architecture/browser-loaders-and-mounts.md
+  s_59bd002f90f45e::t_d41e6c2ff7a28e 3,86,127,150,246,257-261
+  s_59bd002f90f45e::t_b5e931b60c87cb 80-82,175-177,187-189,276-278
+apps/docs/navigation.ts
+  s_59bd002f90f45e::t_c492ad8fded6b6 163-165,167
+  s_59bd002f90f45e::t_6133ec7a337c40 166
+  s_59bd002f90f45e::t_6d958cdf3e3618 170-186
+  s_59bd002f90f45e::t_7ce5e24b0fe927 1-162,168-169,187-206
+apps/docs/public/feature-icons/database-dark.svg
+  s_59bd002f90f45e::t_adedbae6bf4688 1
+docs/guide/prepared-publications.md
+  s_59bd002f90f45e::t_d41e6c2ff7a28e 92-98,166-167
+docs/reference/python/produce.md
+  s_59bd002f90f45e::t_f4491b2999ed8b 8-10
+  s_59bd002f90f45e::t_4b332615303832 96-97,267,329
+  s_59bd002f90f45e::t_320bb67ea44a89 525-526
+  s_59bd002f90f45e::t_c1d75b9a465f43 81-83
+  s_59bd002f90f45e::t_cf030a24b393e2 288
+  s_59bd002f90f45e::t_991f744c0d3dbd 280-287,289-296
+  s_59bd002f90f45e::t_9a1fe6cd033a08 458-461,463-466
+  s_59bd002f90f45e::t_5861a73e75bfaf 462,468-471
+  s_59bd002f90f45e::t_d41e6c2ff7a28e 48,127,229,234,369-371,373-378,435,530-531
+  s_59bd002f90f45e::t_1a48df0ea335bf 467,472
+docs/overview.md
+  s_59bd002f90f45e::t_d41e6c2ff7a28e 2-3,6,8-10,12-13,17,19-21,24-26,29-31,33-36,38-39,41-44,46,48,50-60,68,71-74,76,78-81,83,85-88,90-93,95,97-100,102-104,106,108-112,114-116
+docs/reference/browser/reader.md
+  s_59bd002f90f45e::t_d41e6c2ff7a28e 230,369,372-374
+  s_59bd002f90f45e::t_f7780f553700c4 171
+docs/guide/browser-applications.md
+  s_59bd002f90f45e::t_f4491b2999ed8b 149-153
+  s_59bd002f90f45e::t_d41e6c2ff7a28e 12,75,77-78,105,135,138-140,145-148,159,162-163
+development_docs/architecture/identities-and-protocols.md
+  s_59bd002f90f45e::t_d41e6c2ff7a28e 17,20,27-28,37,44,47,55,63-71,95-119
+  s_59bd002f90f45e::t_320bb67ea44a89 81
+apps/docs/.vitepress/theme/custom.css
+  s_59bd002f90f45e::t_d24421741d3015 42
+  s_59bd002f90f45e::t_75a4a64246205f 43-52
+  s_59bd002f90f45e::t_d41e6c2ff7a28e 65,75-85,89-91,93,98-102,116-117,120-121,124-133,137-142,146-147,152-158,207-209,212-213,216-217,222-225
+apps/docs/public/feature-icons/cloud-upload-dark.svg
+  s_59bd002f90f45e::t_d41e6c2ff7a28e 1
+docs/concepts/preparation-and-reuse.md
+  s_59bd002f90f45e::t_d41e6c2ff7a28e 23-24,28-31,67-69,177-178
+  s_59bd002f90f45e::t_74e904ef51a438 25-27
+  s_59bd002f90f45e::t_c1d75b9a465f43 65-66
+  s_59bd002f90f45e::t_4b332615303832 153
+development_docs/validation.md
+  s_59bd002f90f45e::t_d41e6c2ff7a28e 239
+docs/guide/troubleshooting.md
+  s_59bd002f90f45e::t_d41e6c2ff7a28e 16,36,43,55-58,75-76,84-88,95,117,123-127,157-158
+docs/reference/python/delivery-and-publications.md
+  s_59bd002f90f45e::t_f58809a382d45d 266-267
+  s_59bd002f90f45e::t_d41e6c2ff7a28e 54-55,58-59,78-79,90-91,211,292-295,327
+  s_59bd002f90f45e::t_b5e931b60c87cb 286-290
+  s_59bd002f90f45e::t_4b332615303832 296
+packages/python/README.md
+  s_59bd002f90f45e::t_8506b688ecddc1 13
+  s_59bd002f90f45e::t_d41e6c2ff7a28e 12,14,59-61,81-83,108-109
+development_docs/documentation.md
+  s_59bd002f90f45e::t_54076f69f868ab 32
+  s_59bd002f90f45e::t_d41e6c2ff7a28e 13-14,27-31,33-43,49-51,54,83,85-87,97
+docs/reference/compatibility.md
+  s_59bd002f90f45e::t_991f744c0d3dbd 42-49,62-68
+  s_59bd002f90f45e::t_e6610b2b5f4605 51
+  s_59bd002f90f45e::t_866c69cc992d0f 13-15,17
+  s_59bd002f90f45e::t_8506b688ecddc1 16
+  s_59bd002f90f45e::t_f808f31267a08e 26-29,40,58-60,69-72
+  s_59bd002f90f45e::t_f58809a382d45d 36-37
+  s_59bd002f90f45e::t_28448f29180c8d 1-12,18-25,30-32,39,41,50,52-57,61,73-79
+  s_59bd002f90f45e::t_8034915ac7506b 33-35,38
+apps/docs/public/feature-icons/TABLER-LICENSE.txt
+  s_59bd002f90f45e::t_adedbae6bf4688 1-21
+docs/reference/browser/loaders.md
+  s_59bd002f90f45e::t_d41e6c2ff7a28e 23-36,48-50,65,87,99-102,237,283,427,448
+  s_59bd002f90f45e::t_5861a73e75bfaf 428-431
+  s_59bd002f90f45e::t_320bb67ea44a89 521
+  s_59bd002f90f45e::t_e3d1341d945e9a 432-435
+docs/reference/python-api.md
+  s_59bd002f90f45e::t_d41e6c2ff7a28e 10,32-40
+  s_59bd002f90f45e::t_8506b688ecddc1 11-12
+apps/docs/public/feature-icons/shield-check-light.svg
+  s_59bd002f90f45e::t_adedbae6bf4688 1
+docs/reference/python/sessions-and-inspection.md
+  s_59bd002f90f45e::t_d41e6c2ff7a28e 150-155,158,196-199,349-350
+  s_59bd002f90f45e::t_33ecefcbd890a3 264-266,293-294
+  s_59bd002f90f45e::t_8c172bd6748d7a 267,295-302,319-321
+development_docs/architecture/product-and-export.md
+  s_59bd002f90f45e::t_4b332615303832 176
+  s_59bd002f90f45e::t_940aa0d1235d60 85-86,172-174
+  s_59bd002f90f45e::t_b5e931b60c87cb 89-92
+  s_59bd002f90f45e::t_f7780f553700c4 4
+  s_59bd002f90f45e::t_d41e6c2ff7a28e 9-24,28-33,35-37,74-84,87-88,93,185-191
+apps/docs/public/feature-icons/route-dark.svg
+  s_59bd002f90f45e::t_adedbae6bf4688 1
+docs/guide/deploy.md
+  s_59bd002f90f45e::t_d41e6c2ff7a28e 14,18,27,30-39,65-72,76-80,109
+  s_59bd002f90f45e::t_b50981153b57d5 82-84
+apps/docs/public/feature-icons/braces-dark.svg
+  s_59bd002f90f45e::t_d41e6c2ff7a28e 1
+docs/concepts/outputs-and-representations.md
+  s_59bd002f90f45e::t_f4491b2999ed8b 87-89
+  s_59bd002f90f45e::t_d41e6c2ff7a28e 91-93,142,144
+docs/reference/cli.md
+  s_59bd002f90f45e::t_991f744c0d3dbd 164-167,169-170
+  s_59bd002f90f45e::t_e3d1341d945e9a 147
+  s_59bd002f90f45e::t_d41e6c2ff7a28e 44-46,91-93,142-144,168,249,267
+  s_59bd002f90f45e::t_f58809a382d45d 146,148-150
+development_docs/development.md
+  s_59bd002f90f45e::t_d41e6c2ff7a28e 241,251
+apps/docs/public/feature-icons/git-fork-dark.svg
+  s_59bd002f90f45e::t_d41e6c2ff7a28e 1
+.github/filters.yml
+  s_59bd002f90f45e::t_0a2105758ac99b 57-58,80-81
+docs/why.md
+  s_59bd002f90f45e::t_d41e6c2ff7a28e 2,6,9-10,86-97,115-117
+  s_59bd002f90f45e::t_f7780f553700c4 47
+docs/reference/python/repository-and-observations.md
+  s_59bd002f90f45e::t_5861a73e75bfaf 46-47,49-51
+  s_59bd002f90f45e::t_c1d75b9a465f43 106-107
+  s_59bd002f90f45e::t_d41e6c2ff7a28e 53-55,100-103,110-112,131-132,141-143,160-163,261-266,297,315-316
+  s_59bd002f90f45e::t_e3d1341d945e9a 48
+apps/docs/scripts/check-navigation.ts
+  s_59bd002f90f45e::t_e2f5bade98dcf4 1-43,51-79,81-106
+  s_59bd002f90f45e::t_aff534e3c0ef87 44-50,80
+docs/reference/portable-json.md
+  s_59bd002f90f45e::t_d41e6c2ff7a28e 9-10,62-66
+  s_59bd002f90f45e::t_8a1c91c788895f 48-51
+  s_59bd002f90f45e::t_0e35b1d8437898 204-207,209-210
+docs/reference/browser/snapshots.md
+  s_59bd002f90f45e::t_d41e6c2ff7a28e 36-37,201,213-214
+  s_59bd002f90f45e::t_320bb67ea44a89 56-58
+.github/workflows/pages.yml
+  s_59bd002f90f45e::t_bdab78fc0d9499 74,76
+  s_59bd002f90f45e::t_62dbe41cd1defd 127
+docs/reference/representations.md
+  s_59bd002f90f45e::t_991f744c0d3dbd 19
+  s_59bd002f90f45e::t_87e880612fd7bf 34-36
+  s_59bd002f90f45e::t_d41e6c2ff7a28e 53,56,67,69-77,83,177-178
+apps/docs/tsconfig.json
+  s_59bd002f90f45e::t_d41e6c2ff7a28e 3-6
+apps/docs/package.json
+  s_59bd002f90f45e::t_62dbe41cd1defd 7-9,13
+docs/guide/index.md
+  s_59bd002f90f45e::t_d41e6c2ff7a28e 8-48
+apps/docs/public/feature-icons/git-fork-light.svg
+  s_59bd002f90f45e::t_d41e6c2ff7a28e 1
+CONTRIBUTING.md
+  s_59bd002f90f45e::t_6d958cdf3e3618 1-73
+docs/concepts/states-and-inputs.md
+  s_59bd002f90f45e::t_425b96056eab0a 142-149,151-152
+  s_59bd002f90f45e::t_d41e6c2ff7a28e 12-14,37-42,51,55-59,64,76-80,169
+apps/docs/.vitepress/theme/accessibility.ts
+  s_59bd002f90f45e::t_75a4a64246205f 57-68,120,184-198,209-229,236
+  s_59bd002f90f45e::t_43475f3dca66a1 230-235
+  s_59bd002f90f45e::t_d41e6c2ff7a28e 47-54
+apps/docs/.vitepress/config.ts
+  s_59bd002f90f45e::t_17c033427abc3e 17
+  s_59bd002f90f45e::t_137e56ecd0170b 1-15,18-35,37-48,58-142
+  s_59bd002f90f45e::t_4de2290211bba6 49-57
+  s_59bd002f90f45e::t_866c69cc992d0f 36
+  s_59bd002f90f45e::t_648e8897869548 16
+README.md
+  s_59bd002f90f45e::t_d41e6c2ff7a28e 11,17-18,24,29-31,33,35,46-47,57-59,63-65,67,69,71-74,77-87,96-99,104-111
+  s_59bd002f90f45e::t_6d958cdf3e3618 112-114
+  s_59bd002f90f45e::t_8506b688ecddc1 100-103
+  s_59bd002f90f45e::t_5a14a2c71d74ab 88-95
+docs/guide/market-dashboard.md
+  s_59bd002f90f45e::t_5a14a2c71d74ab 22
+  s_59bd002f90f45e::t_f58809a382d45d 23
+  s_59bd002f90f45e::t_d41e6c2ff7a28e 32,79,115-116
+apps/docs/public/feature-icons/database-light.svg
+  s_59bd002f90f45e::t_adedbae6bf4688 1
+apps/docs/public/feature-icons/cloud-upload-light.svg
+  s_59bd002f90f45e::t_d41e6c2ff7a28e 1
+docs/guide/custom-representations.md
+  s_59bd002f90f45e::t_74e904ef51a438 49-50
+  s_59bd002f90f45e::t_d41e6c2ff7a28e 54-57,109-113,115-116
+docs/guide/manage-repository.md
+  s_59bd002f90f45e::t_d41e6c2ff7a28e 8-12,58,95-96,103-112,154-157,171-172,179-180,257-258
+  s_59bd002f90f45e::t_f58809a382d45d 59,61-63
+  s_59bd002f90f45e::t_e3d1341d945e9a 60
+apps/docs/public/feature-icons/route-light.svg
+  s_59bd002f90f45e::t_adedbae6bf4688 1
+docs/concepts/integrity-and-trust.md
+  s_59bd002f90f45e::t_e89edc15a7d477 72-75,115-117
+  s_59bd002f90f45e::t_d41e6c2ff7a28e 34,119-120
+docs/guide/choose-states.md
+  s_59bd002f90f45e::t_74e904ef51a438 214-217
+  s_59bd002f90f45e::t_d41e6c2ff7a28e 126,145,231
+  s_59bd002f90f45e::t_ca6ee10e410bf4 121
+  s_59bd002f90f45e::t_4b332615303832 8-10
+docs/index.md
+  s_59bd002f90f45e::t_d41e6c2ff7a28e 3,5,8-9,11-13,19-20,23-34,36-37,39-40,42-44,53,56,64,66-67,75-78,80-81,86-88
+development_docs/architecture/agents-and-delivery.md
+  s_59bd002f90f45e::t_4b332615303832 115
+  s_59bd002f90f45e::t_f58809a382d45d 36
+  s_59bd002f90f45e::t_d41e6c2ff7a28e 32-35,48,59-62
+  s_59bd002f90f45e::t_00a42601676f83 111-113
+apps/docs/public/feature-icons/SOURCES.txt
+  s_59bd002f90f45e::t_d41e6c2ff7a28e 1,3,5-6
+docs/guide/consume-an-export.md
+  s_59bd002f90f45e::t_425b96056eab0a 53,56,58-60,153-155
+  s_59bd002f90f45e::t_d41e6c2ff7a28e 11,19,31,65-85,104,163-164
+docs/reference/export-spec.md
+  s_59bd002f90f45e::t_4b332615303832 52,61-63
+  s_59bd002f90f45e::t_d41e6c2ff7a28e 100-106,119,213-214,299,302
+  s_59bd002f90f45e::t_74e904ef51a438 208-209
+  s_59bd002f90f45e::t_f58809a382d45d 110-113
+development_docs/architecture/application-publication-and-delivery.md
+  s_59bd002f90f45e::t_d41e6c2ff7a28e 18-27
+docs/reference/browser-api.md
+  s_59bd002f90f45e::t_4b332615303832 79
+  s_59bd002f90f45e::t_d41e6c2ff7a28e 16-31,47-54,58-69,89
+apps/docs/public/feature-icons/shield-check-dark.svg
+  s_59bd002f90f45e::t_adedbae6bf4688 1
+apps/docs/scripts/check-built-docs.ts
+  s_59bd002f90f45e::t_4de2290211bba6 79-81,83
+  s_59bd002f90f45e::t_30c8ff69e3ba0d 5,100-102,126
+  s_59bd002f90f45e::t_1ee69d672e54b8 1-4,6-53,56-74,78,88-99,103-105,107-125,127-140
+  s_59bd002f90f45e::t_a20e59f4958176 54-55,75-77,82,84-87,106
+Makefile
+  s_59bd002f90f45e::t_bdab78fc0d9499 20,22
+docs/reference/export-format.md
+  s_59bd002f90f45e::t_407c29a93a22fa 104-105,111-114,121-127,136-144,146-148,161-162,193-194
+  s_59bd002f90f45e::t_991f744c0d3dbd 106-110,119-120
+  s_59bd002f90f45e::t_d41e6c2ff7a28e 97-100,251,318,353-354
+development_docs/architecture/runtime-profiles.md
+  s_59bd002f90f45e::t_c1d75b9a465f43 23
+  s_59bd002f90f45e::t_4b332615303832 63
+docs/reference/browser/errors-and-limits.md
+  s_59bd002f90f45e::t_d41e6c2ff7a28e 173-174,176-177,219
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "5b47a656e344bb9d5d5b1835a82be69cf8ccbbe9",
+  "prompts": {},
+  "sessions": {
+    "s_59bd002f90f45e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a068eb-a28a-7310-acb8-d489ceead2e7",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
