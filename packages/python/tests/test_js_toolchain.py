@@ -16,7 +16,7 @@ def test_pnpm_owns_the_workspace_node_runtime() -> None:
     )
     assert manifest["devEngines"]["runtime"] == {
         "name": "node",
-        "version": "22.18.0",
+        "version": "24.14.1",
         "onFail": "download",
     }
 
@@ -25,8 +25,8 @@ def test_pnpm_owns_the_workspace_node_runtime() -> None:
         yaml.safe_load(ROOT.joinpath("pnpm-lock.yaml").read_text(encoding="utf-8")),
     )
     assert lock["importers"]["."]["devDependencies"]["node"] == {
-        "specifier": "runtime:22.18.0",
-        "version": "runtime:22.18.0",
+        "specifier": "runtime:24.14.1",
+        "version": "runtime:24.14.1",
     }
 
 

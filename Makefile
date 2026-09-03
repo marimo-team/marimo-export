@@ -93,8 +93,8 @@ docs-build: ## Build the public documentation site.
 	test -s apps/docs/.vitepress/dist/llms-full.txt
 	test -s apps/docs/.vitepress/dist/sitemap.xml
 
-docs-serve: ## Serve public documentation at http://127.0.0.1:54173/.
-	pnpm --filter @marimo-team/marimo-export-docs dev
+docs-serve: ## Serve public documentation through Portless.
+	BASE_PATH= $(VP) run --filter @marimo-team/marimo-export-docs dev
 
 check: ## Run the complete local quality gate.
 	$(VP) fmt --check $(FORMAT_PATHS)
