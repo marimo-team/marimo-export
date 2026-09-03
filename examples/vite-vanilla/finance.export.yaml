@@ -1,4 +1,4 @@
-schema: marimo-export.spec.v1
+schema: marimo-export.spec.v2
 default_state: baseline
 states:
   baseline: {}
@@ -13,10 +13,10 @@ states:
     symbols_selector: [AAPL, CRWV, MSFT, GOOGL, AMZN]
 outputs:
   market_explorer:
-    source: { kind: value, selector: quote_detail }
+    source: { kind: export, selector: quote_detail }
     exporter: anywidget.bundle
   market_summary:
-    source: { kind: value, selector: selected_prices }
+    source: { kind: export, selector: selected_prices }
     exporter:
       name: market_summary:encode
       options:
@@ -25,17 +25,17 @@ outputs:
         - json
         - polars
   performance_chart:
-    source: { kind: value, selector: performance }
+    source: { kind: export, selector: performance }
     exporter: altair.vegalite
   performance_snapshot:
-    source: { kind: value, selector: performance }
+    source: { kind: export, selector: performance }
     exporter:
       name: altair.png
       options:
         scale: 2
       dependencies: []
   price_history:
-    source: { kind: value, selector: selected_prices }
+    source: { kind: export, selector: selected_prices }
     exporter:
       name: parquet.table
       options:

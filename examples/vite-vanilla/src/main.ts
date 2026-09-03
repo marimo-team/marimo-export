@@ -2,6 +2,7 @@ import { imageLoader, openExport } from "@marimo-team/marimo-export";
 import type { MountedView, NotebookExport, ExportState } from "@marimo-team/marimo-export";
 import { anyWidgetLoader } from "@marimo-team/marimo-export/loader/anywidget";
 import { parquetRowsLoader } from "@marimo-team/marimo-export/loader/parquet";
+import type { ParquetRow, ParquetValue } from "@marimo-team/marimo-export/loader/parquet";
 import { vegaLiteLoader } from "@marimo-team/marimo-export/loader/vegalite";
 
 import { marketSummaryLoader } from "./market-summary";
@@ -18,7 +19,7 @@ interface ViewCopy {
 interface PriceRow {
   readonly "Close Change": number;
   readonly Close: number;
-  readonly Date: unknown;
+  readonly Date: ParquetValue | undefined;
   readonly High: number;
   readonly Low: number;
   readonly Symbol: string;
@@ -29,46 +30,61 @@ interface MountedSet {
   readonly views: readonly MountedView[];
 }
 
-const views: Readonly<Record<string, ViewCopy>> = {
-  baseline: {
-    button: "Leaders",
-    cadence: "Daily close",
-    description: "Apple, Microsoft, and Alphabet",
-    title: "Market leaders",
-  },
-  cloud_platforms: {
-    button: "Cloud",
-    cadence: "Daily close",
-    description: "Microsoft, Alphabet, and Amazon",
-    title: "Cloud platforms",
-  },
-  ai_buildout: {
-    button: "AI buildout",
-    cadence: "Daily close",
-    description: "CoreWeave alongside Microsoft and Alphabet",
-    title: "AI infrastructure",
-  },
-  full_watchlist: {
-    button: "All names",
-    cadence: "Daily close",
-    description: "The complete five-company watchlist",
-    title: "Full watchlist",
-  },
-  weekly_view: {
-    button: "Weekly",
-    cadence: "Weekly close",
-    description: "The full watchlist with weekly movement",
-    title: "Weekly pulse",
-  },
-};
+const views = new Map<string, ViewCopy>([
+  [
+    "baseline",
+    {
+      button: "Leaders",
+      cadence: "Daily close",
+      description: "Apple, Microsoft, and Alphabet",
+      title: "Market leaders",
+    },
+  ],
+  [
+    "cloud_platforms",
+    {
+      button: "Cloud",
+      cadence: "Daily close",
+      description: "Microsoft, Alphabet, and Amazon",
+      title: "Cloud platforms",
+    },
+  ],
+  [
+    "ai_buildout",
+    {
+      button: "AI buildout",
+      cadence: "Daily close",
+      description: "CoreWeave alongside Microsoft and Alphabet",
+      title: "AI infrastructure",
+    },
+  ],
+  [
+    "full_watchlist",
+    {
+      button: "All names",
+      cadence: "Daily close",
+      description: "The complete five-company watchlist",
+      title: "Full watchlist",
+    },
+  ],
+  [
+    "weekly_view",
+    {
+      button: "Weekly",
+      cadence: "Weekly close",
+      description: "The full watchlist with weekly movement",
+      title: "Weekly pulse",
+    },
+  ],
+]);
 
-const companyNames: Readonly<Record<string, string>> = {
-  AAPL: "Apple",
-  AMZN: "Amazon",
-  CRWV: "CoreWeave",
-  GOOGL: "Alphabet",
-  MSFT: "Microsoft",
-};
+const companyNames = new Map([
+  ["AAPL", "Apple"],
+  ["AMZN", "Amazon"],
+  ["CRWV", "CoreWeave"],
+  ["GOOGL", "Alphabet"],
+  ["MSFT", "Microsoft"],
+]);
 
 const dashboard = required<HTMLElement>("#dashboard");
 const viewButtons = required<HTMLElement>("#view-buttons");
@@ -112,7 +128,7 @@ async function start(): Promise<void> {
 }
 
 function renderViewButtons(value: NotebookExport): void {
-  const buttons = Object.entries(views)
+  const buttons = [...views.entries()]
     .filter(([name]) => hasState(value, name))
     .map(([name, copy]) => {
       const button = document.createElement("button");
@@ -127,7 +143,7 @@ function renderViewButtons(value: NotebookExport): void {
 
 function requestView(name: string): void {
   const state = notebookExport?.state(name);
-  const copy = views[name];
+  const copy = views.get(name);
   if (state === undefined || copy === undefined) return;
 
   const nextRevision = ++revision;
@@ -241,7 +257,8 @@ async function renderView(
 }
 
 function stagingHost(host: HTMLElement): HTMLElement {
-  const staged = host.cloneNode(false) as HTMLElement;
+  const staged = host.cloneNode(false);
+  if (!(staged instanceof HTMLElement)) throw new Error("The staging host must be an element.");
   staged.removeAttribute("id");
   return staged;
 }
@@ -289,7 +306,7 @@ function marketRow(row: PriceRow, periodReturn: number, currency: string): HTMLT
   const company = document.createElement("td");
   const name = document.createElement("strong");
   const ticker = document.createElement("span");
-  name.textContent = companyNames[row.Symbol] ?? row.Symbol;
+  name.textContent = companyNames.get(row.Symbol) ?? row.Symbol;
   ticker.textContent = row.Symbol;
   company.append(name, ticker);
   result.append(
@@ -305,14 +322,14 @@ function marketRow(row: PriceRow, periodReturn: number, currency: string): HTMLT
   return result;
 }
 
-function parseRows(values: readonly Record<string, unknown>[]): readonly PriceRow[] {
+function parseRows(values: readonly ParquetRow[]): readonly PriceRow[] {
   const rows = values.map((value) => ({
     "Close Change": numberValue(value["Close Change"]),
     Close: requiredNumber(value.Close, "Close"),
     Date: value.Date,
     High: requiredNumber(value.High, "High"),
     Low: requiredNumber(value.Low, "Low"),
-    Symbol: String(value.Symbol),
+    Symbol: requiredString(value.Symbol, "Symbol"),
   }));
   if (rows.length === 0) throw new Error("The selected market view has no prices.");
   return rows;
@@ -333,6 +350,8 @@ function groupBySymbol(rows: readonly PriceRow[]): ReadonlyMap<string, readonly 
 }
 
 function setBusy(name: string, busy: boolean): void {
+  const title = views.get(name)?.title;
+  if (title === undefined) throw new Error(`Unknown market view ${JSON.stringify(name)}.`);
   dashboard.setAttribute("aria-busy", String(busy));
   dashboard.dataset.loading = String(busy);
   for (const button of viewButtons.querySelectorAll<HTMLButtonElement>("button")) {
@@ -340,13 +359,11 @@ function setBusy(name: string, busy: boolean): void {
     button.dataset.active = String(selected);
     button.setAttribute("aria-pressed", String(selected));
   }
-  status.textContent = busy
-    ? `Loading ${views[name]?.title ?? "market view"}`
-    : `${views[name]!.title} ready`;
+  status.textContent = busy ? `Loading ${title}` : `${title} ready`;
 }
 
-function showError(error: unknown): void {
-  console.error(error);
+function showError(cause: unknown): void {
+  console.error(cause);
   dashboard.setAttribute("aria-busy", "false");
   dashboard.dataset.loading = "false";
   errorPanel.hidden = false;
@@ -356,7 +373,7 @@ function showError(error: unknown): void {
 
 function viewFromHash(value: NotebookExport): string {
   const name = location.hash.slice(1);
-  return name in views && hasState(value, name) ? name : "baseline";
+  return views.has(name) && hasState(value, name) ? name : "baseline";
 }
 
 function hasState(value: NotebookExport, name: string): boolean {
@@ -400,10 +417,10 @@ function formatDate(value: number, length: "short" | "long"): string {
   }).format(value);
 }
 
-function epochMilliseconds(value: unknown): number {
+function epochMilliseconds(value: ParquetValue | undefined): number {
   if (value instanceof Date) return value.valueOf();
-  if (typeof value === "string") return Date.parse(value);
-  if (typeof value !== "number" && typeof value !== "bigint") return Number.NaN;
+  if (isParquetString(value)) return Date.parse(value);
+  if (!isParquetNumber(value) && !isParquetBigInt(value)) return Number.NaN;
   let result = Number(value);
   const magnitude = Math.abs(result);
   if (magnitude < 100_000) return result * 86_400_000;
@@ -412,14 +429,31 @@ function epochMilliseconds(value: unknown): number {
   return result;
 }
 
-function numberValue(value: unknown): number {
+function numberValue(value: ParquetValue | undefined): number {
   return value === null || value === undefined ? Number.NaN : Number(value);
 }
 
-function requiredNumber(value: unknown, name: string): number {
+function requiredNumber(value: ParquetValue | undefined, name: string): number {
   const result = numberValue(value);
   if (!Number.isFinite(result)) throw new Error(`${name} must be numeric.`);
   return result;
+}
+
+function requiredString(value: ParquetValue | undefined, name: string): string {
+  if (!isParquetString(value) || value.length === 0) throw new Error(`${name} must be a string.`);
+  return value;
+}
+
+function isParquetString(value: ParquetValue | undefined): value is string {
+  return Object.prototype.toString.call(value) === "[object String]";
+}
+
+function isParquetNumber(value: ParquetValue | undefined): value is number {
+  return Object.prototype.toString.call(value) === "[object Number]";
+}
+
+function isParquetBigInt(value: ParquetValue | undefined): value is bigint {
+  return Object.prototype.toString.call(value) === "[object BigInt]";
 }
 
 async function disposeMounted(value: MountedSet | undefined): Promise<void> {

@@ -1,4 +1,6 @@
 import { defineBlobAssetLoader } from "@marimo-team/marimo-export";
+import { portableJsonObject } from "@marimo-team/portable-json";
+import type { JsonObject, JsonValue } from "@marimo-team/portable-json";
 
 export interface PeriodReturn {
   readonly return: number;
@@ -25,7 +27,7 @@ export function marketSummaryLoader() {
     mediaTypes: MEDIA_TYPE,
     load({ payload, signal }) {
       signal?.throwIfAborted();
-      const value = record(
+      const value = portableJsonObject(
         JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(payload.data)),
         "market summary",
       );
@@ -59,40 +61,56 @@ export function marketSummaryLoader() {
   });
 }
 
-function record(value: unknown, name: string): Record<string, unknown> {
-  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+function record(value: JsonValue | undefined, name: string): JsonObject {
+  if (!isJsonObject(value)) {
     throw new Error(`${name} must be an object.`);
   }
-  return value as Record<string, unknown>;
+  return value;
 }
 
-function array(value: unknown, name: string): readonly unknown[] {
+function array(value: JsonValue | undefined, name: string): readonly JsonValue[] {
   if (!Array.isArray(value)) throw new Error(`${name} must be an array.`);
   return value;
 }
 
-function string(value: unknown, name: string): string {
-  if (typeof value !== "string" || value.length === 0) {
+function string(value: JsonValue | undefined, name: string): string {
+  if (!isJsonString(value) || value.length === 0) {
     throw new Error(`${name} must be a non-empty string.`);
   }
   return value;
 }
 
-function finiteNumber(value: unknown, name: string): number {
-  if (typeof value !== "number" || !Number.isFinite(value)) {
+function finiteNumber(value: JsonValue | undefined, name: string): number {
+  if (!isJsonNumber(value) || !Number.isFinite(value)) {
     throw new Error(`${name} must be a finite number.`);
   }
   return value;
 }
 
-function positiveInteger(value: unknown, name: string): number {
+function positiveInteger(value: JsonValue | undefined, name: string): number {
   const result = finiteNumber(value, name);
   if (!Number.isInteger(result) || result < 1) throw new Error(`${name} must be positive.`);
   return result;
 }
 
-function date(value: unknown, name: string): number {
+function date(value: JsonValue | undefined, name: string): number {
   const result = Date.parse(string(value, name));
   if (!Number.isFinite(result)) throw new Error(`${name} must be an ISO date.`);
   return result;
+}
+
+function isJsonObject(value: JsonValue | undefined): value is JsonObject {
+  return (
+    value !== null &&
+    !Array.isArray(value) &&
+    Object.prototype.toString.call(value) === "[object Object]"
+  );
+}
+
+function isJsonString(value: JsonValue | undefined): value is string {
+  return Object.prototype.toString.call(value) === "[object String]";
+}
+
+function isJsonNumber(value: JsonValue | undefined): value is number {
+  return Object.prototype.toString.call(value) === "[object Number]";
 }
