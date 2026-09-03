@@ -323,6 +323,7 @@ def test_delayed_success_after_deadline_does_not_revive_reservation(
             return renewed
 
         monkeypatch.setattr(repository._catalog, "renew_lifecycle", delayed_renewal)
+        repository._leases._wake.set()
         assert entered.wait(timeout=limits.lease_ttl_seconds + 2)
         try:
             deadline = time.monotonic() + limits.lease_ttl_seconds + 2
