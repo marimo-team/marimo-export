@@ -227,9 +227,10 @@ def test_busy_renewal_expires_reservation_and_staging_fail_closed(
         lease_heartbeat_seconds=0.1,
     )
     identity = _identity("busy-lifecycle-expiry")
+    with ExportRepository.open(root) as seed_repository:
+        state = _state(seed_repository, identity, 1)
+        state.close()
     repository = ExportRepository.open(root, limits=limits)
-    state = _state(repository, identity, 1)
-    state.close()
     preparation = preparation_repository(repository)
     native_renew = repository._catalog.renew_lifecycle
     attempted = threading.Event()
