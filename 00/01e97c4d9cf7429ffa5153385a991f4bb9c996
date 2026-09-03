@@ -1,0 +1,118 @@
+packages/python/tests/test_marimo_cache_side_effects.py
+  s_84434b42698f4e::t_892f39d953edda 34
+packages/python/tests/test_preparation_capture.py
+  s_84434b42698f4e::t_892f39d953edda 47
+packages/python/tests/preparation_test_support.py
+  s_84434b42698f4e::t_892f39d953edda 285
+packages/python/src/marimo_export/_marimo/compat/output_data.py
+  s_84434b42698f4e::t_389cb4830a2239 330,334,343,363,371-400
+packages/python/src/marimo_export/spec.py
+  s_84434b42698f4e::t_a5a81adb2dcd57 183-194,210-214,227-228,265-267,280-293,323-331,335,342,344,349-366,369,592-597,607-612
+  s_84434b42698f4e::t_00703128f7f886 310-312
+  s_84434b42698f4e::t_20edcdd8792007 41,242,246
+packages/python/tests/test_state_execution_lifecycle.py
+  s_84434b42698f4e::t_26a9e2e9ddc9ab 72,82
+  s_84434b42698f4e::t_892f39d953edda 150,193,234
+packages/python/tests/test_execution_plan.py
+  s_84434b42698f4e::t_19db4d004fb3c7 88,188,207,408
+  s_84434b42698f4e::t_26a9e2e9ddc9ab 443,498
+  s_84434b42698f4e::t_892f39d953edda 251,264,288,328,368,422,582
+packages/python/tests/test_cell_projection_resources.py
+  s_84434b42698f4e::t_07e820703b7bb8 4,6,12,16-17,19-20,22-23,25-29,31-36,38
+  s_84434b42698f4e::t_d388a372775017 18,21,24,30,37,39
+  s_84434b42698f4e::t_892f39d953edda 228,234
+packages/python/src/marimo_export/inspection.py
+  s_84434b42698f4e::t_55b2aec3da0c46 22,25-26,270-273
+packages/python/tests/test_planning.py
+  s_84434b42698f4e::t_892f39d953edda 57,115
+packages/python/tests/test_cell_projection_state.py
+  s_84434b42698f4e::t_892f39d953edda 49,116,191
+packages/python/src/marimo_export/_marimo/compat/replay.py
+  s_84434b42698f4e::t_d388a372775017 89,197,205-207,213-214
+  s_84434b42698f4e::t_07e820703b7bb8 81,90,98,157-158,164,198-204,208-212,215-227
+  s_84434b42698f4e::t_389cb4830a2239 40,42,50-56,119-124,152-156
+packages/python/src/marimo_export/_marimo/compat/receipts.py
+  s_84434b42698f4e::t_fbe0e9e75d9cf9 22,24,140-158
+  s_84434b42698f4e::t_9021db4dbff5ac 41,159
+  s_84434b42698f4e::t_baa21c0479c080 174-179
+packages/python/tests/test_managed_server_integration.py
+  s_84434b42698f4e::t_892f39d953edda 91,141,186
+packages/python/tests/test_output_projection_integration.py
+  s_84434b42698f4e::t_892f39d953edda 45,327,393
+packages/python/tests/test_state_execution_inspection.py
+  s_84434b42698f4e::t_892f39d953edda 133
+packages/python/tests/test_producer.py
+  s_84434b42698f4e::t_892f39d953edda 43
+packages/python/src/marimo_export/_marimo/compat/projections.py
+  s_84434b42698f4e::t_3ce22101001abc 220
+  s_84434b42698f4e::t_fbe0e9e75d9cf9 9,22,46-52,213-219,221,223-232
+  s_84434b42698f4e::t_aa78de21930b82 204-205
+  s_84434b42698f4e::t_baa21c0479c080 469
+  s_84434b42698f4e::t_44d83a3a055a4b 222
+  s_84434b42698f4e::t_2fafa2eccd9d60 192-203,206-212,233-235
+packages/python/src/marimo_export/_execution/plan.py
+  s_84434b42698f4e::t_6889ef314268a8 29,31-32,721,733-746,858-863
+packages/python/tests/test_prepared_lifecycle.py
+  s_84434b42698f4e::t_892f39d953edda 345
+packages/python/src/marimo_export/_marimo/compat/cache/attempts.py
+  s_84434b42698f4e::t_c9ae2f8b80fa7d 179-181,187-199
+packages/python/tests/test_integration.py
+  s_84434b42698f4e::t_892f39d953edda 71,232
+packages/python/tests/test_ordinary_projection_integration.py
+  s_84434b42698f4e::t_892f39d953edda 42,92,141,194
+packages/python/tests/test_marimo_receipts.py
+  s_84434b42698f4e::t_19db4d004fb3c7 97,170,173,176-177
+packages/python/tests/test_spec.py
+  s_84434b42698f4e::t_c24c838c124963 199-200,203-204
+  s_84434b42698f4e::t_26a9e2e9ddc9ab 65,69,237
+  s_84434b42698f4e::t_7f1ea54d4ecbeb 155-157,164
+  s_84434b42698f4e::t_c47ea67586c2c3 18-20,36,47,50-51,70-71,179-181,185-187,255,307,344,370
+  s_84434b42698f4e::t_892f39d953edda 86,129,176,221
+  s_84434b42698f4e::t_76b10dd7c62791 172-173
+  s_84434b42698f4e::t_20edcdd8792007 305,336,365
+packages/python/tests/test_marimo_runtime_compat.py
+  s_84434b42698f4e::t_bca37d39559a13 116-146
+packages/python/tests/test_custom_exporter_integration.py
+  s_84434b42698f4e::t_26a9e2e9ddc9ab 117,166,215,274
+packages/python/tests/test_state_execution.py
+  s_84434b42698f4e::t_892f39d953edda 85,142,203,258,272
+  s_84434b42698f4e::t_26a9e2e9ddc9ab 326
+packages/python/src/marimo_export/reader.py
+  s_84434b42698f4e::t_d8fa1fd11dada6 636-639
+  s_84434b42698f4e::t_44d83a3a055a4b 631-635,640-642
+packages/python/tests/test_client.py
+  s_84434b42698f4e::t_892f39d953edda 18
+packages/python/tests/test_build.py
+  s_84434b42698f4e::t_892f39d953edda 17
+packages/python/tests/test_native_output_integration.py
+  s_84434b42698f4e::t_0e18051554c6be 9,97,100-101
+  s_84434b42698f4e::t_fbe0e9e75d9cf9 8,23,28-29,51,63-68
+  s_84434b42698f4e::t_629e7a6a1c4ebc 82
+  s_84434b42698f4e::t_bca37d39559a13 1-7,10-22,24-27,30-50,52-62,69-81,83-96,98-99
+packages/python/tests/test_cell_projection_cache.py
+  s_84434b42698f4e::t_892f39d953edda 92,248,309,352,426,502
+packages/python/tests/test_state_execution_anywidget.py
+  s_84434b42698f4e::t_3969e58339ab47 177,230
+  s_84434b42698f4e::t_892f39d953edda 66,122
+packages/python/tests/test_marimo_exporter_compat.py
+  s_84434b42698f4e::t_19db4d004fb3c7 32,35-36
+packages/python/tests/cli_support.py
+  s_84434b42698f4e::t_fa6c321106fedd 88
+  s_84434b42698f4e::t_20edcdd8792007 82
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "0001e97c4d9cf7429ffa5153385a991f4bb9c996",
+  "prompts": {},
+  "sessions": {
+    "s_84434b42698f4e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a061f5-fe96-7e42-ae14-44b03f0596fa",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
