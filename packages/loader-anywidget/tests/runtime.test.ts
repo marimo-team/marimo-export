@@ -1,0 +1,432 @@
+import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
+import { loadPayload, moduleUrl, notification, payload } from "./fixture.js";
+
+let documentValue: FakeDocument;
+
+beforeEach(() => {
+  documentValue = new FakeDocument();
+  vi.stubGlobal("document", documentValue);
+  vi.stubGlobal("window", {});
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
+
+describe("AnyWidget browser runtime", () => {
+  test("releases a failed child view while its parent continues", async () => {
+    const counters = { changes: 0 };
+    vi.stubGlobal("__anywidgetFailedChild", counters);
+    const rootUrl = moduleUrl(`
+      export default {
+        async render({ model, el, host }) {
+          const child = await host.getWidget(model.get("child"));
+          try {
+            await child.render({ el: document.createElement("div") });
+          } catch {
+            el.dataset.caught = "true";
+          }
+        },
+      };
+    `);
+    const childUrl = moduleUrl(`
+      export default {
+        render({ model }) {
+          model.on("change:value", () => globalThis.__anywidgetFailedChild.changes += 1);
+          throw new Error("child render failed");
+        },
+      };
+    `);
+    const loaded = await loadPayload<{ child: string }>(
+      payload({
+        modelNotifications: [
+          notification({
+            id: "model-0",
+            state: { child: "anywidget:model-1", _css: ".root {}" },
+            moduleUrl: rootUrl,
+          }),
+          notification({
+            id: "model-1",
+            state: { value: 1, _css: ".child {}" },
+            moduleUrl: childUrl,
+          }),
+        ],
+      }),
+    );
+    const element = documentValue.createElement("div");
+    const mounted = await loaded.mount(browserElement(element));
+
+    expect(element.dataset.caught).toBe("true");
+    const child = await mounted.model.widget_manager.get_model<{ value: number }>("model-1");
+    child.set("value", 2);
+    expect(counters.changes).toBe(0);
+    await mounted.dispose();
+  });
+
+  test("requires disposal before reusing a mount element", async () => {
+    const url = moduleUrl("export default { render() {} };");
+    const loaded = await loadPayload(
+      payload({
+        modelNotifications: [notification({ id: "model-0", state: {}, moduleUrl: url })],
+      }),
+    );
+    const element = browserElement(documentValue.createElement("div"));
+    const first = await loaded.mount(element);
+
+    await expect(loaded.mount(element)).rejects.toThrow("Dispose the existing AnyWidget mount");
+    await first.dispose();
+    const second = await loaded.mount(element);
+    await second.dispose();
+  });
+
+  test("reads only own model fields, including reserved names", async () => {
+    const url = moduleUrl("export default { render() {} };");
+    const loaded = await loadPayload(
+      payload({
+        modelNotifications: [
+          notification({
+            id: "model-0",
+            state: {},
+            moduleUrl: url,
+          }),
+        ],
+      }),
+    );
+    const mounted = await loaded.mount(browserElement(documentValue.createElement("div")));
+
+    expect(mounted.model.get("toString")).toBeUndefined();
+    expect(mounted.model.get("constructor")).toBeUndefined();
+    mounted.model.set("toString", "own toString");
+    mounted.model.set("constructor", "own constructor");
+    expect(mounted.model.get("toString")).toBe("own toString");
+    expect(mounted.model.get("constructor")).toBe("own constructor");
+
+    await mounted.dispose();
+  });
+
+  test("creates isolated state for each mount", async () => {
+    const url = moduleUrl(`
+      export default {
+        render({ model, el }) {
+          const draw = () => el.dataset.value = String(model.get("value"));
+          model.on("change:value", draw);
+          draw();
+          el.dataset.byte = String(new Uint8Array(model.get("binary").view.buffer)[0]);
+        },
+      };
+    `);
+    const loaded = await loadPayload<{ value: number; binary: { view: DataView } }>(
+      payload({
+        modelNotifications: [
+          notification({
+            id: "model-0",
+            state: { value: 3, binary: {} },
+            moduleUrl: url,
+            bufferPaths: [["binary", "view"]],
+            buffers: ["Bw=="],
+          }),
+        ],
+      }),
+    );
+    new Uint8Array(loaded.initialState.binary.view.buffer)[0] = 99;
+    const firstElement = documentValue.createElement("div");
+    const secondElement = documentValue.createElement("div");
+    const first = await loaded.mount(browserElement(firstElement));
+    const second = await loaded.mount(browserElement(secondElement));
+
+    first.model.set("value", 9);
+
+    expect(firstElement.dataset.value).toBe("9");
+    expect(secondElement.dataset.value).toBe("3");
+    expect(firstElement.dataset.byte).toBe("7");
+    expect(secondElement.dataset.byte).toBe("7");
+    expect(second.model.get("value")).toBe(3);
+    new Uint8Array(first.model.get("binary").view.buffer)[0] = 12;
+    expect(new Uint8Array(second.model.get("binary").view.buffer)[0]).toBe(7);
+    await first.dispose();
+    await second.dispose();
+  });
+
+  test("clears partial DOM when render throws synchronously", async () => {
+    const url = moduleUrl(`
+      export default {
+        render({ el }) {
+          el.append(document.createElement("span"));
+          throw new Error("render failed");
+        },
+      };
+    `);
+    const loaded = await loadPayload(
+      payload({
+        modelNotifications: [notification({ id: "model-0", state: {}, moduleUrl: url })],
+      }),
+    );
+    const element = documentValue.createElement("div");
+
+    await expect(loaded.mount(browserElement(element))).rejects.toThrow("render failed");
+
+    expect(element.children).toHaveLength(0);
+  });
+
+  test("revokes an embedded module URL after settlement and skips late initialization", async () => {
+    let releaseModule!: () => void;
+    const moduleGate = new Promise<void>((resolve) => {
+      releaseModule = resolve;
+    });
+    let markStarted!: () => void;
+    const started = new Promise<void>((resolve) => {
+      markStarted = resolve;
+    });
+    let markSettled!: () => void;
+    const settled = new Promise<void>((resolve) => {
+      markSettled = resolve;
+    });
+    const counters = { initialize: 0, render: 0, markStarted, markSettled };
+    vi.stubGlobal("__anywidgetLateImport", counters);
+    vi.stubGlobal("__anywidgetLateImportGate", moduleGate);
+    const source = `
+      globalThis.__anywidgetLateImport.markStarted();
+      await globalThis.__anywidgetLateImportGate;
+      globalThis.__anywidgetLateImport.markSettled();
+      export default {
+        initialize() { globalThis.__anywidgetLateImport.initialize += 1; },
+        render() { globalThis.__anywidgetLateImport.render += 1; },
+      };
+    `;
+    const objectUrl = moduleUrl(source);
+    vi.spyOn(URL, "createObjectURL").mockReturnValue(objectUrl);
+    const revokeObjectUrl = vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => undefined);
+    const loaded = await loadPayload(
+      payload({
+        files: { "/@file/late-widget.js": moduleUrl(source) },
+        modelNotifications: [
+          notification({ id: "model-0", state: {}, moduleUrl: "/@file/late-widget.js" }),
+        ],
+      }),
+    );
+    const controller = new AbortController();
+    const mounting = loaded.mount(browserElement(documentValue.createElement("div")), {
+      signal: controller.signal,
+    });
+    await started;
+
+    controller.abort();
+
+    await expect(settleWithin(mounting)).rejects.toMatchObject({ name: "AbortError" });
+    expect(revokeObjectUrl).not.toHaveBeenCalled();
+
+    releaseModule();
+    await settled;
+    await vi.waitFor(() => expect(revokeObjectUrl).toHaveBeenCalledWith(objectUrl));
+
+    expect(counters.initialize).toBe(0);
+    expect(counters.render).toBe(0);
+  });
+
+  test("ties the mounted lifecycle to an external abort signal", async () => {
+    const counters = { cleanup: 0 };
+    vi.stubGlobal("__anywidgetAbortCounters", counters);
+    const url = moduleUrl(`
+      export default {
+        render({ el }) {
+          el.dataset.mounted = "true";
+          return () => globalThis.__anywidgetAbortCounters.cleanup += 1;
+        },
+      };
+    `);
+    const loaded = await loadPayload(
+      payload({
+        modelNotifications: [notification({ id: "model-0", state: {}, moduleUrl: url })],
+      }),
+    );
+    const element = documentValue.createElement("div");
+    const controller = new AbortController();
+    const mounted = await loaded.mount(browserElement(element), {
+      signal: controller.signal,
+    });
+
+    controller.abort();
+    await mounted.dispose();
+
+    expect(counters.cleanup).toBe(1);
+    expect(element.children).toHaveLength(0);
+  });
+
+  test("cancels an in-flight render and runs its late cleanup", async () => {
+    let markStarted!: () => void;
+    const started = new Promise<void>((resolve) => {
+      markStarted = resolve;
+    });
+    const counters = { render: 0, cleanup: 0, markStarted };
+    vi.stubGlobal("__anywidgetPendingRenderCounters", counters);
+    const url = moduleUrl(`
+      export default {
+        render({ signal }) {
+          const counters = globalThis.__anywidgetPendingRenderCounters;
+          counters.render += 1;
+          counters.markStarted();
+          return new Promise((resolve) => {
+            signal.addEventListener(
+              "abort",
+              () => resolve(() => counters.cleanup += 1),
+              { once: true },
+            );
+          });
+        },
+      };
+    `);
+    const loaded = await loadPayload(
+      payload({
+        modelNotifications: [notification({ id: "model-0", state: {}, moduleUrl: url })],
+      }),
+    );
+    const controller = new AbortController();
+    const mounting = loaded.mount(browserElement(documentValue.createElement("div")), {
+      signal: controller.signal,
+    });
+    await started;
+
+    controller.abort();
+
+    await expect(mounting).rejects.toMatchObject({ name: "AbortError" });
+    expect(counters.cleanup).toBe(1);
+  });
+
+  test("isolates model listener failures from sibling and aggregate change events", async () => {
+    const counters = { sibling: 0, change: 0 };
+    vi.stubGlobal("__anywidgetListenerCounters", counters);
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const url = moduleUrl(`
+      export default {
+        render({ model }) {
+          model.on("change:value", () => { throw new Error("listener failed"); });
+          model.on("change:value", () => globalThis.__anywidgetListenerCounters.sibling += 1);
+          model.on("change", () => globalThis.__anywidgetListenerCounters.change += 1);
+        },
+      };
+    `);
+    const loaded = await loadPayload<{ value: number }>(
+      payload({
+        modelNotifications: [notification({ id: "model-0", state: { value: 1 }, moduleUrl: url })],
+      }),
+    );
+    const mounted = await loaded.mount(browserElement(documentValue.createElement("div")));
+
+    mounted.model.set("value", 2);
+    expect(counters.sibling).toBe(1);
+    await Promise.resolve();
+    expect(counters.change).toBe(1);
+    expect(consoleError).toHaveBeenCalledWith(
+      'AnyWidget model listener for "change:value" failed.',
+      expect.objectContaining({ message: "listener failed" }),
+    );
+
+    await mounted.dispose();
+  });
+
+  test("resolves legacy IPython model references through widget_manager", async () => {
+    const rootUrl = moduleUrl(`
+      export default {
+        async render({ model, el }) {
+          const child = await model.widget_manager.get_model(model.get("child"));
+          el.dataset.childLabel = child.get("label");
+        },
+      };
+    `);
+    const loaded = await loadPayload<{ child: string }>(
+      payload({
+        modelNotifications: [
+          notification({
+            id: "model-0",
+            state: { child: "IPY_MODEL_model-1" },
+            moduleUrl: rootUrl,
+          }),
+          notification({ id: "model-1", state: { label: "legacy child" } }),
+        ],
+      }),
+    );
+    const element = documentValue.createElement("div");
+
+    const mounted = await loaded.mount(browserElement(element));
+
+    expect(element.dataset.childLabel).toBe("legacy child");
+    await mounted.dispose();
+  });
+});
+
+async function settleWithin<T>(task: Promise<T>): Promise<T> {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  const expired = new Promise<never>((_resolve, reject) => {
+    timeout = setTimeout(() => reject(new Error("AnyWidget lifecycle did not settle.")), 250);
+  });
+  try {
+    return await Promise.race([task, expired]);
+  } finally {
+    if (timeout !== undefined) clearTimeout(timeout);
+  }
+}
+
+function browserElement<Value>(value: Value): HTMLElement {
+  // SAFETY: linkedom's createElement result implements the HTMLElement members used by the runtime.
+  return value as HTMLElement;
+}
+
+class FakeElement {
+  readonly nodeType = 1;
+  readonly children: FakeElement[] = [];
+  readonly dataset: Record<string, string> = {};
+  readonly ownerDocument: FakeDocument;
+  readonly tagName: string;
+  parent: FakeElement | undefined;
+  #textContent = "";
+
+  constructor(ownerDocument: FakeDocument, tagName: string) {
+    this.ownerDocument = ownerDocument;
+    this.tagName = tagName.toUpperCase();
+  }
+
+  get textContent(): string {
+    return this.#textContent;
+  }
+
+  set textContent(value: string) {
+    this.#textContent = value;
+    for (const child of this.children) child.parent = undefined;
+    this.children.splice(0);
+  }
+
+  getRootNode(): FakeDocument {
+    return this.parent?.getRootNode() ?? this.ownerDocument;
+  }
+
+  append(...children: FakeElement[]): void {
+    for (const child of children) {
+      child.parent = this;
+      this.children.push(child);
+    }
+  }
+
+  replaceChildren(...children: FakeElement[]): void {
+    this.#textContent = "";
+    for (const child of this.children) child.parent = undefined;
+    this.children.splice(0);
+    this.append(...children);
+  }
+
+  remove(): void {
+    if (this.parent === undefined) return;
+    const index = this.parent.children.indexOf(this);
+    if (index >= 0) this.parent.children.splice(index, 1);
+    this.parent = undefined;
+  }
+}
+
+class FakeDocument {
+  readonly nodeType = 9;
+  readonly head = new FakeElement(this, "head");
+
+  createElement(tagName: string): FakeElement {
+    return new FakeElement(this, tagName);
+  }
+}

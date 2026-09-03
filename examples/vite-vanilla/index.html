@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="An April 2025 market dashboard for technology and AI infrastructure stocks."
+    />
+    <link rel="icon" href="data:," />
+    <title>Technology watchlist · April 2025</title>
+  </head>
+  <body>
+    <header class="masthead">
+      <div class="masthead-copy">
+        <p class="kicker">Market close · April 2025</p>
+        <h1>Technology watchlist</h1>
+        <p>
+          Compare large technology platforms and the AI buildout through a month of market movement.
+        </p>
+      </div>
+      <div class="view-control">
+        <span>Saved view</span>
+        <div
+          id="view-buttons"
+          class="view-buttons"
+          role="group"
+          aria-label="Saved market views"
+        ></div>
+      </div>
+    </header>
+
+    <main id="dashboard" aria-busy="true">
+      <p id="status" class="visually-hidden" role="status" aria-live="polite">
+        Preparing the market view
+      </p>
+
+      <section id="error-panel" class="error-panel" role="alert" hidden>
+        <strong>Market data could not be opened.</strong>
+        <span id="error-message">Reload the page to try again.</span>
+      </section>
+
+      <section class="overview" aria-labelledby="view-title">
+        <div class="view-heading">
+          <div>
+            <p id="view-window" class="kicker">Loading market sessions</p>
+            <h2 id="view-title">Market leaders</h2>
+          </div>
+          <p id="view-description">Apple, Microsoft, and Alphabet</p>
+        </div>
+
+        <dl class="metrics">
+          <div>
+            <dt>Period leader</dt>
+            <dd><span id="leader-symbol">–</span> <small id="leader-return">–</small></dd>
+          </div>
+          <div>
+            <dt>Average return</dt>
+            <dd id="average-return">–</dd>
+          </div>
+          <div>
+            <dt>Market sessions</dt>
+            <dd id="session-count">–</dd>
+          </div>
+          <div>
+            <dt>Latest close</dt>
+            <dd id="latest-date">–</dd>
+          </div>
+        </dl>
+      </section>
+
+      <section class="chart-section" aria-labelledby="performance-title">
+        <header class="section-heading">
+          <div>
+            <p class="kicker">Start of view = 100</p>
+            <h2 id="performance-title">Relative performance</h2>
+          </div>
+          <p>Hover a line for the session close.</p>
+        </header>
+        <div id="performance-chart" class="chart-host"></div>
+      </section>
+
+      <section class="latest-section" aria-labelledby="latest-title">
+        <header class="section-heading">
+          <div>
+            <p class="kicker">Most recent session</p>
+            <h2 id="latest-title">Watchlist close</h2>
+          </div>
+          <p id="latest-summary">Loading the latest prices</p>
+        </header>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">Company</th>
+                <th scope="col">Close</th>
+                <th id="change-period" scope="col">Day</th>
+                <th scope="col">Period</th>
+                <th scope="col">Range</th>
+              </tr>
+            </thead>
+            <tbody id="latest-rows"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="detail-grid" aria-label="Market detail">
+        <article class="quote-panel">
+          <div id="market-explorer"></div>
+        </article>
+
+        <details class="snapshot-panel">
+          <summary>
+            <span>
+              <small>For reports and briefings</small>
+              <strong>Open chart snapshot</strong>
+            </span>
+            <span aria-hidden="true">+</span>
+          </summary>
+          <div id="performance-snapshot" class="snapshot-host"></div>
+        </details>
+      </section>
+    </main>
+
+    <footer>
+      <span>Market data from Yahoo Finance</span>
+      <span>Prices shown in US dollars</span>
+    </footer>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

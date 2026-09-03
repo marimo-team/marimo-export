@@ -1,0 +1,15 @@
+[
+  {"name": "ASCII name", "value": "summary", "valid": true},
+  {"name": "internal ASCII space", "value": "market summary", "valid": true},
+  {"name": "leading ASCII space", "value": " summary", "valid": false},
+  {"name": "trailing ASCII space", "value": "summary ", "valid": false},
+  {"name": "leading U+00A0", "value": "\u00a0summary", "valid": false},
+  {"name": "trailing U+00A0", "value": "summary\u00a0", "valid": false},
+  {"name": "leading U+FEFF", "value": "\ufeffsummary", "valid": false},
+  {"name": "trailing U+FEFF", "value": "summary\ufeff", "valid": false},
+  {"name": "leading U+0085", "value": "\u0085summary", "valid": false},
+  {"name": "trailing U+0085", "value": "summary\u0085", "valid": false},
+  {"name": "internal U+FEFF", "value": "market\ufeffsummary", "valid": true},
+  {"name": "internal U+0085", "value": "market\u0085summary", "valid": true},
+  {"name": "empty name", "value": "", "valid": false}
+]

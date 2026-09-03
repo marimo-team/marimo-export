@@ -1,35 +1,23 @@
-# @marimo-team/export-loader-parquet
+# Parquet loader workspace
 
-Loader for `dataframe.parquet.v1` artifacts.
+`@marimo-export/internal-loader-parquet` owns [Parquet](https://parquet.apache.org/docs/) row decoding for the public
+[`@marimo-team/marimo-export/loader/parquet`](../browser/src/loader/parquet.ts)
+facade. The workspace package is private and the public browser package carries
+its compiled implementation.
 
-This package converts exported Parquet bytes into browser-usable row and
-metadata handles with `hyparquet`.
+The loader passes column and row selection to
+[Hyparquet](https://github.com/hyparam/hyparquet), reads verified BlobAsset bytes,
+and returns a frozen outer row array. Individual row objects and nested values
+retain Hyparquet's runtime shapes. Cancellation rejects the loader call and
+removes its result authority, while an in-progress Hyparquet decode can still
+settle afterward.
 
-```ts
-import { parquetLoader } from "@marimo-team/export-loader-parquet";
-import { readExport } from "@marimo-team/export-reader";
+Run focused checks from the repository root:
 
-const exp = await readExport({
-  root: "/export/",
-  manifest: "manifest.json",
-  loaders: [parquetLoader()],
-});
-
-const handle = exp.get({
-  scenario: "default",
-  value: "prices",
-  format: "parquet",
-});
-
-const parquet = await handle.load();
-
-const metadata = await parquet.readMetadata();
-const rows = await parquet.readRows({ columns: ["Date", "Close"] });
+```bash
+pnpm --filter @marimo-export/internal-loader-parquet test
+pnpm --filter @marimo-export/internal-loader-parquet typecheck
 ```
 
-Mechanics:
-
-- Supports `dataframe.parquet.v1`.
-- Reads bytes from the artifact URL through `hyparquet`.
-- Exposes `.readMetadata()` and `.readRows()`.
-- Supports column and row-range reads.
+Public consumers install `@marimo-team/marimo-export` and follow the
+[Parquet representation and peer-runtime contract](../../docs/reference/representations.md).

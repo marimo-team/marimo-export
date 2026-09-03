@@ -1,76 +1,55 @@
-import { tableFromIPC } from "@uwdata/flechette";
-import {
-  defineLoader,
-  type ArtifactLoader,
-  type ArtifactLoaderContext,
-  type ArtifactRecord,
-  type BlobRef,
-  type JsonObject,
-} from "@marimo-team/export-reader";
+import { CompressionType, setCompressionCodec, tableFromIPC } from "@uwdata/flechette";
+import type { ExtractionOptions, Table } from "@uwdata/flechette";
+import { defineOutputLoader } from "@marimo-team/marimo-export";
+import type { OutputLoader } from "@marimo-team/marimo-export";
+// @ts-expect-error lz4js 0.2.0 does not publish TypeScript declarations.
+import { compress, decompress } from "lz4js";
 
-export const dataframeArrowFormat = "dataframe.arrow.v1";
+const MAX_DECOMPRESSED_BUFFER_BYTES = 512 * 1024 * 1024;
 
-export interface ArrowLoadOptions {
-  useBigInt?: boolean;
-  useBigIntTimestamp?: boolean;
-  useDate?: boolean;
-  useDecimalInt?: boolean;
-  useMap?: boolean;
-  useProxy?: boolean;
+export interface ArrowTableLoaderOptions {
+  readonly extraction?: ExtractionOptions;
 }
 
-export interface ArrowArtifactHandle {
-  artifact: ArtifactRecord;
-  blob: BlobRef;
-  metadata: JsonObject | null;
-  url(): string;
-  bytes(): Promise<Uint8Array>;
-  table(options?: ArrowLoadOptions): Promise<unknown>;
-  rows(options?: ArrowLoadOptions): Promise<unknown[]>;
-  columns(options?: ArrowLoadOptions): Promise<Record<string, unknown>>;
-}
-
-export function arrowLoader(defaults: ArrowLoadOptions = {}): ArtifactLoader<ArrowArtifactHandle> {
-  return defineLoader({
-    formats: dataframeArrowFormat,
-    load(context: ArtifactLoaderContext) {
-      return createArrowHandle(context, defaults);
+/** Decode a verified Arrow IPC file as a Flechette table. */
+export function arrowTableLoader(
+  options: ArrowTableLoaderOptions = {},
+): OutputLoader<"apache.arrow.file.v1", Table> {
+  const extraction: ExtractionOptions = {
+    useBigInt: true,
+    ...options.extraction,
+  };
+  return defineOutputLoader({
+    codec: "apache.arrow.file.v1",
+    accepts: (_descriptor, mediaType) => mediaType.essence === "application/vnd.apache.arrow.file",
+    load({ payload, signal }) {
+      signal?.throwIfAborted();
+      registerLz4();
+      const table = tableFromIPC(payload, extraction);
+      signal?.throwIfAborted();
+      return table;
     },
   });
 }
 
-function createArrowHandle(
-  context: ArtifactLoaderContext,
-  defaults: ArrowLoadOptions,
-): ArrowArtifactHandle {
-  const loadTable = async (options?: ArrowLoadOptions): Promise<unknown> => {
-    const bytes = await context.bytes();
-    const buffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
-    return tableFromIPC(buffer, { ...defaults, ...options });
-  };
-
-  return {
-    artifact: context.artifact,
-    blob: context.file(),
-    metadata: context.artifact.metadata,
-    url() {
-      return context.url();
+function registerLz4(): void {
+  setCompressionCodec(CompressionType.LZ4_FRAME, {
+    decode(bytes, uncompressedLength) {
+      if (
+        !Number.isSafeInteger(uncompressedLength) ||
+        uncompressedLength < 0 ||
+        uncompressedLength > MAX_DECOMPRESSED_BUFFER_BYTES
+      ) {
+        throw new TypeError("Arrow LZ4 buffer exceeds the decompression limit.");
+      }
+      const result = decompress(bytes, uncompressedLength);
+      if (result.byteLength !== uncompressedLength) {
+        throw new TypeError("Arrow LZ4 buffer length does not match its declaration.");
+      }
+      return result;
     },
-    bytes() {
-      return context.bytes();
+    encode(bytes) {
+      return compress(bytes);
     },
-    table: loadTable,
-    async rows(options) {
-      const table = (await loadTable(options)) as {
-        toArray(): unknown[];
-      };
-      return table.toArray();
-    },
-    async columns(options) {
-      const table = (await loadTable(options)) as {
-        toColumns(): Record<string, unknown>;
-      };
-      return table.toColumns();
-    },
-  };
+  });
 }

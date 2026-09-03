@@ -1,0 +1,49 @@
+{
+  "valid": [
+    {
+      "name": "reserved object keys",
+      "source": "{\"__proto__\":{\"nested\":{\"__proto__\":\"kept\"}},\"safe\":true}",
+      "expected_source": "{\"__proto__\":{\"nested\":{\"__proto__\":\"kept\"}},\"safe\":true}"
+    },
+    {
+      "name": "portable number boundaries",
+      "source": "[-0,-0.0,0e9999,1.5,9007199254740991,-9007199254740991]",
+      "expected_source": "[0,0,0,1.5,9007199254740991,-9007199254740991]"
+    },
+    {
+      "name": "unicode scalar strings",
+      "source": "{\"emoji\":\"😀\",\"résumé\":\"ready\"}",
+      "expected_source": "{\"emoji\":\"😀\",\"résumé\":\"ready\"}"
+    }
+  ],
+  "invalid": [
+    {
+      "name": "duplicate decoded key",
+      "source": "{\"a\":1,\"\\u0061\":2}"
+    },
+    {
+      "name": "unsafe integer",
+      "source": "9007199254740992"
+    },
+    {
+      "name": "unsafe integral float",
+      "source": "9007199254740992.0"
+    },
+    {
+      "name": "fractional identity loss",
+      "source": "1.00000000000000001"
+    },
+    {
+      "name": "non-finite conversion",
+      "source": "1e400"
+    },
+    {
+      "name": "lone surrogate value",
+      "source": "\"\\ud800\""
+    },
+    {
+      "name": "lone surrogate key",
+      "source": "{\"\\ud800\":1}"
+    }
+  ]
+}

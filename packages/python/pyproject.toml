@@ -1,0 +1,50 @@
+[build-system]
+requires = ["uv_build>=0.11.28,<0.13.0"]
+build-backend = "uv_build"
+
+[project]
+name = "marimo-export"
+version = "0.1.0"
+description = "Precompute and read verified exports of selected marimo notebook results."
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [{ name = "marimo team" }]
+requires-python = ">=3.10"
+dependencies = [
+  "cryptography==50.0.0",
+  "idna==3.18",
+  "marimo==0.24.0",
+  "msgspec>=0.20",
+  "numpy>=1.23.5",
+  "pydantic>=2,<3",
+  "PyYAML>=6.0.1",
+]
+keywords = ["cache", "export", "marimo", "notebook"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+]
+
+[project.urls]
+Homepage = "https://marimo-team.github.io/marimo-export/"
+Documentation = "https://marimo-team.github.io/marimo-export/"
+Repository = "https://github.com/marimo-team/marimo-export"
+Issues = "https://github.com/marimo-team/marimo-export/issues"
+
+[project.scripts]
+marimo-export = "marimo_export.cli:main"
+
+[project.entry-points."marimo.kernel.lifespan"]
+marimo-export = "marimo_export._marimo.entrypoints:kernel_lifespan"
+
+[project.optional-dependencies]
+anywidget = ["anywidget>=0.9,<1"]
+charts = ["altair>=5,<7", "vl-convert-python>=1.8"]
+parquet = ["pyarrow>=15"]
+all = ["altair>=5,<7", "anywidget>=0.9,<1", "pyarrow>=15", "vl-convert-python>=1.8"]

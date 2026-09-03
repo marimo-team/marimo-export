@@ -1,0 +1,44 @@
+schema: marimo-export.spec.v2
+default_state: baseline
+states:
+  baseline: {}
+  cloud_platforms:
+    symbols_selector: [MSFT, GOOGL, AMZN]
+  ai_buildout:
+    symbols_selector: [CRWV, MSFT, GOOGL]
+  full_watchlist:
+    symbols_selector: [AAPL, CRWV, MSFT, GOOGL, AMZN]
+  weekly_view:
+    interval: 1wk
+    symbols_selector: [AAPL, CRWV, MSFT, GOOGL, AMZN]
+outputs:
+  market_explorer:
+    source: { kind: export, selector: quote_detail }
+    exporter: anywidget.bundle
+  market_summary:
+    source: { kind: export, selector: selected_prices }
+    exporter:
+      name: market_summary:encode
+      options:
+        currency: USD
+      dependencies:
+        - json
+        - polars
+  performance_chart:
+    source: { kind: export, selector: performance }
+    exporter: altair.vegalite
+  performance_snapshot:
+    source: { kind: export, selector: performance }
+    exporter:
+      name: altair.png
+      options:
+        scale: 2
+      dependencies: []
+  price_history:
+    source: { kind: export, selector: selected_prices }
+    exporter:
+      name: parquet.table
+      options:
+        compression: snappy
+        filename: price-history.parquet
+      dependencies: []

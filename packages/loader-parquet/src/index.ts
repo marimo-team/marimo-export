@@ -1,106 +1,80 @@
-import {
-  defineLoader,
-  type ArtifactLoader,
-  type ArtifactLoaderContext,
-  type ArtifactRecord,
-  type BlobRef,
-  type JsonObject,
-} from "@marimo-team/export-reader";
-import {
-  asyncBufferFromUrl,
-  parquetMetadataAsync,
-  parquetReadObjects,
-  parquetSchema,
-} from "hyparquet";
+import { parquetReadObjects } from "hyparquet";
+import type { Compressors, ParquetReadOptions } from "hyparquet";
+import { defineBlobAssetLoader } from "@marimo-team/marimo-export";
+import type { BlobAssetLoader } from "@marimo-team/marimo-export";
 
-export const dataframeParquetFormat = "dataframe.parquet.v1";
-
-export interface ParquetReadOptions {
-  columns?: string[];
-  rowStart?: number;
-  rowEnd?: number;
-  requestInit?: RequestInit;
+export interface ParquetRowsLoaderOptions extends Omit<
+  ParquetReadOptions,
+  "file" | "onComplete" | "rowFormat"
+> {
+  readonly compressors?: Compressors;
 }
 
-export interface ParquetMetadata {
-  rows: number;
-  columns: string[];
-  raw: unknown;
+export type ParquetValue =
+  | null
+  | boolean
+  | number
+  | bigint
+  | string
+  | Date
+  | Uint8Array
+  | readonly ParquetValue[]
+  | ParquetRow;
+
+export interface ParquetRow {
+  readonly [column: string]: ParquetValue;
 }
 
-export interface ParquetArtifactHandle {
-  artifact: ArtifactRecord;
-  blob: BlobRef;
-  metadata: JsonObject | null;
-  url(): string;
-  readMetadata(options?: Pick<ParquetReadOptions, "requestInit">): Promise<ParquetMetadata>;
-  readRows(options?: ParquetReadOptions): Promise<Record<string, unknown>[]>;
+export type ParquetObjectReader = (
+  options: Omit<ParquetReadOptions, "onComplete">,
+) => Promise<ParquetRow[]>;
+
+/** Read a verified Parquet BlobAsset into row objects. */
+export function parquetRowsLoader(
+  options: ParquetRowsLoaderOptions = {},
+): BlobAssetLoader<readonly ParquetRow[]> {
+  return parquetRowsLoaderWith(parquetReadObjects, options);
 }
 
-export function dataframeLoader(
-  defaults: ParquetReadOptions = {},
-): ArtifactLoader<ParquetArtifactHandle> {
-  return defineLoader({
-    formats: dataframeParquetFormat,
-    load(context: ArtifactLoaderContext) {
-      return createDataframeHandle(context, defaults);
+/** @internal */
+export function parquetRowsLoaderWith(
+  readObjects: ParquetObjectReader,
+  options: ParquetRowsLoaderOptions = {},
+): BlobAssetLoader<readonly ParquetRow[]> {
+  const defaults = { ...options };
+  return defineBlobAssetLoader({
+    mediaTypes: ["application/vnd.apache.parquet", "application/x-parquet"],
+    async load({ payload, signal }) {
+      signal?.throwIfAborted();
+      const data = payload.data.slice();
+      const task = readObjects({
+        ...defaults,
+        file: data.buffer,
+      });
+      const rows = await raceAbort(task, signal);
+      signal?.throwIfAborted();
+      return Object.freeze(rows);
     },
   });
 }
 
-export const parquetLoader = dataframeLoader;
-
-function createDataframeHandle(
-  context: ArtifactLoaderContext,
-  defaults: ParquetReadOptions,
-): ParquetArtifactHandle {
-  return {
-    artifact: context.artifact,
-    blob: context.file(),
-    metadata: context.artifact.metadata,
-    url() {
-      return context.url();
-    },
-    async readMetadata(options) {
-      const file = await parquetFile(context, options?.requestInit ?? defaults.requestInit);
-      const metadata = await parquetMetadataAsync(file);
-      const schema = parquetSchema(metadata);
-      return {
-        rows: Number(metadata.num_rows),
-        columns: schema.children.map((child) => child.element.name),
-        raw: metadata,
-      };
-    },
-    async readRows(options) {
-      const merged = { ...defaults, ...options };
-      const file = await parquetFile(context, merged.requestInit);
-      const readOptions: {
-        file: Awaited<ReturnType<typeof parquetFile>>;
-        columns?: string[];
-        rowStart?: number;
-        rowEnd?: number;
-      } = { file };
-      if (merged.columns) {
-        readOptions.columns = merged.columns;
-      }
-      if (merged.rowStart !== undefined) {
-        readOptions.rowStart = merged.rowStart;
-      }
-      if (merged.rowEnd !== undefined) {
-        readOptions.rowEnd = merged.rowEnd;
-      }
-      return (await parquetReadObjects(readOptions)) as Record<string, unknown>[];
-    },
-  };
+async function raceAbort<T>(task: Promise<T>, signal: AbortSignal | undefined): Promise<T> {
+  if (signal === undefined) return task;
+  signal.throwIfAborted();
+  let onAbort: (() => void) | undefined;
+  const aborted = new Promise<never>((_resolve, reject) => {
+    onAbort = () => reject(abortReason(signal));
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
+  try {
+    return await Promise.race([task, aborted]);
+  } finally {
+    if (onAbort !== undefined) signal.removeEventListener("abort", onAbort);
+  }
 }
 
-async function parquetFile(context: ArtifactLoaderContext, requestInit?: RequestInit) {
-  const blob = context.file();
-  const options = {
-    url: context.url(),
-    byteLength: blob.size,
-  };
-  return requestInit
-    ? asyncBufferFromUrl({ ...options, requestInit })
-    : asyncBufferFromUrl(options);
+function abortReason(signal: AbortSignal): Error {
+  return signal.reason instanceof Error
+    ? signal.reason
+    : Object.assign(new Error("Parquet load was cancelled."), { name: "AbortError" });
 }

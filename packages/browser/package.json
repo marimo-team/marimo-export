@@ -1,0 +1,138 @@
+{
+  "name": "@marimo-team/marimo-export",
+  "version": "0.1.0",
+  "description": "Load precomputed marimo notebook results in browser applications",
+  "homepage": "https://marimo-team.github.io/marimo-export/",
+  "bugs": {
+    "url": "https://github.com/marimo-team/marimo-export/issues"
+  },
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/marimo-team/marimo-export.git",
+    "directory": "packages/browser"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts",
+    "./prepared": "./src/prepared/index.ts",
+    "./loader/anywidget": "./src/loader/anywidget.ts",
+    "./loader/arrow": "./src/loader/arrow.ts",
+    "./loader/html": "./src/loader/html.ts",
+    "./loader/json": "./src/loader/json.ts",
+    "./loader/marimo-cell": "./src/loader/marimo-cell.ts",
+    "./loader/marimo-output": "./src/loader/marimo-output.ts",
+    "./loader/numpy": "./src/loader/numpy.ts",
+    "./loader/parquet": "./src/loader/parquet.ts",
+    "./loader/text": "./src/loader/text.ts",
+    "./loader/vegalite": "./src/loader/vegalite.ts",
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.mts",
+        "import": "./dist/index.mjs"
+      },
+      "./prepared": {
+        "types": "./dist/prepared/index.d.mts",
+        "import": "./dist/prepared/index.mjs"
+      },
+      "./loader/anywidget": {
+        "types": "./dist/loader/anywidget.d.mts",
+        "import": "./dist/loader/anywidget.mjs"
+      },
+      "./loader/arrow": {
+        "types": "./dist/loader/arrow.d.mts",
+        "import": "./dist/loader/arrow.mjs"
+      },
+      "./loader/html": {
+        "types": "./dist/loader/html.d.mts",
+        "import": "./dist/loader/html.mjs"
+      },
+      "./loader/json": {
+        "types": "./dist/loader/json.d.mts",
+        "import": "./dist/loader/json.mjs"
+      },
+      "./loader/marimo-cell": {
+        "types": "./dist/loader/marimo-cell.d.mts",
+        "import": "./dist/loader/marimo-cell.mjs"
+      },
+      "./loader/marimo-output": {
+        "types": "./dist/loader/marimo-output.d.mts",
+        "import": "./dist/loader/marimo-output.mjs"
+      },
+      "./loader/numpy": {
+        "types": "./dist/loader/numpy.d.mts",
+        "import": "./dist/loader/numpy.mjs"
+      },
+      "./loader/parquet": {
+        "types": "./dist/loader/parquet.d.mts",
+        "import": "./dist/loader/parquet.mjs"
+      },
+      "./loader/text": {
+        "types": "./dist/loader/text.d.mts",
+        "import": "./dist/loader/text.mjs"
+      },
+      "./loader/vegalite": {
+        "types": "./dist/loader/vegalite.d.mts",
+        "import": "./dist/loader/vegalite.mjs"
+      },
+      "./package.json": "./package.json"
+    },
+    "access": "public"
+  },
+  "scripts": {
+    "build": "vp pack",
+    "check": "vp check",
+    "prepack": "vp pack",
+    "test": "vp test",
+    "test:package": "vp pack && pnpm run test:workspace && node tests/packed-install.mjs",
+    "test:workspace": "node tests/clean-workspace.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@marimo-export/internal-loader-anywidget": "workspace:*",
+    "@marimo-team/portable-json": "workspace:*",
+    "@msgpack/msgpack": "^3.1.2"
+  },
+  "devDependencies": {
+    "@anywidget/types": "catalog:",
+    "@types/node": "catalog:",
+    "@uwdata/flechette": "catalog:",
+    "hyparquet": "catalog:",
+    "lz4js": "catalog:",
+    "typescript": "catalog:",
+    "vega-embed": "catalog:",
+    "vite-plus": "catalog:"
+  },
+  "peerDependencies": {
+    "@anywidget/types": "^0.4.0",
+    "@uwdata/flechette": "^2.5.0",
+    "hyparquet": "^1.26.2",
+    "lz4js": "0.2.0",
+    "vega-embed": "^7.1.0"
+  },
+  "peerDependenciesMeta": {
+    "@anywidget/types": {
+      "optional": true
+    },
+    "@uwdata/flechette": {
+      "optional": true
+    },
+    "hyparquet": {
+      "optional": true
+    },
+    "lz4js": {
+      "optional": true
+    },
+    "vega-embed": {
+      "optional": true
+    }
+  }
+}

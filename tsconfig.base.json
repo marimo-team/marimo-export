@@ -1,17 +1,25 @@
 {
   "compilerOptions": {
-    "target": "ES2022",
+    "allowImportingTsExtensions": true,
+    "declaration": true,
+    "declarationMap": false,
+    "exactOptionalPropertyTypes": true,
+    "forceConsistentCasingInFileNames": true,
+    "isolatedModules": true,
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
     "module": "ESNext",
     "moduleResolution": "Bundler",
-    "lib": ["ES2022", "DOM", "DOM.Iterable"],
-    "strict": true,
-    "exactOptionalPropertyTypes": true,
-    "noUncheckedIndexedAccess": true,
-    "isolatedModules": true,
-    "verbatimModuleSyntax": true,
     "noEmit": true,
+    "noFallthroughCasesInSwitch": true,
+    "noImplicitOverride": true,
+    "noUncheckedIndexedAccess": true,
+    "paths": {
+      "#loaders/*": ["./packages/loader-*/src/index.ts"]
+    },
+    "resolveJsonModule": true,
     "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true,
-    "allowImportingTsExtensions": false
+    "strict": true,
+    "target": "ES2022",
+    "verbatimModuleSyntax": true
   }
 }

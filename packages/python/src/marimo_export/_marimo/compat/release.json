@@ -1,0 +1,44 @@
+{
+  "version": "0.24.0",
+  "commit": "854f7f2910b4bb4b6aebe650efc1f83ad40d9bef",
+  "cache_source_sha256": {
+    "CachedLifecycle.__init__": "b68aab07eac87ce3e1d1dfb4aaf586cc4903e7e962b86aa6f05f369b487d5650",
+    "CachedLifecycle._restored_ui_defs": "4f1d2220a6d7e78d208d76fd4e08b4ab4ddb8da724e9725260e0264bf7cd77fc",
+    "CachedLifecycle.setup": "90d8e2a30661c728df5c4e40370e1224c61dc26de08f2e72bb273179e85ebfcc",
+    "BlobAsset.schema_source": "ade24b0b25f4816aa296c3eda6623960f4a77c514c9124b5b6394f0c1ef3818a",
+    "Cache.schema_source": "c587eb7298afd67887d9cb0c75d9f81e16d54c9f0c6b819d673ecbba35df8119",
+    "CacheSignatureError": "ee0427f2e16982e20dad8ee34ea25b7ddb53ff545b2478ba36ab087c27e7280a",
+    "Item.schema_source": "4b7f1722b2d1583d1c905540a3be691d6bca1e5014d8227a48cf245e733f7062",
+    "LazyLoader._effective_mode": "0e5efc063f8cf83a3b324f539fe3ed0eead25294cea12e5f1f11734b199bd3bb",
+    "LazyLoader._read_blobs": "c0c69d24de338c5ab61669fa8b570e623944c60a014176d98c62df2c0af2f97f",
+    "LazyLoader._resolve_effective_signer": "506841c0e70e7ffd6ffa797c06dd018a330cd40e6a72ec7265d881024089da69",
+    "Meta.schema_source": "8ead90b458e4cfd99946855a6d2f975156567058712b3d02c2f0b5aedbb25f4e",
+    "_verify_signed_blob": "8d650a60e10b9b36b3e312843fc1642e8b67c0b020c30f1afef6fa097473dd50",
+    "cache_attempt_from_hash": "4a1b9421f70703337b2b0874997de0a3022dec99c3a7ed15b140c0e4ccb4f576",
+    "encode._contiguous_tensor_bytes": "b5af49d65687b2ee6b1469ebe46299cb0f975d2f3135962108cbe1b7255f4642",
+    "from_item": "7a14447ebb9f4a8957580fe3eb16ec2108aefb7f086ae739d020de8a4f3ae7c8",
+    "flush_active_caches": "43a9a8956d21ab9adea51be5daaae66db07e17572dd7d138a53ef9695abe3a7c"
+  },
+  "receipt_schema_fields": {
+    "BlobAsset": ["data", "media_type", "filename", "metadata"],
+    "Cache": ["hash", "cache_type", "defs", "stateful_refs", "meta", "ui_defs"],
+    "Item": [
+      "primitive",
+      "reference",
+      "module",
+      "import_ref",
+      "function",
+      "class_def",
+      "hash",
+      "type_hint",
+      "unserializable_type",
+      "module_version",
+      "special_float"
+    ],
+    "Meta": ["version", "return_value", "blob_hashes", "signer_public_key", "signature"]
+  },
+  "polars_lazy_stub_loaders": {
+    "polars.dataframe.frame.DataFrame": "arrow",
+    "polars.series.series.Series": "arrow"
+  }
+}

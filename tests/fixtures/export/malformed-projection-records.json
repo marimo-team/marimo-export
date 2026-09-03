@@ -1,0 +1,377 @@
+[
+  {
+    "name": "output snapshot requires its output field",
+    "record": "output",
+    "operation": "delete",
+    "path": ["output"]
+  },
+  {
+    "name": "output snapshot rejects an extra root field",
+    "record": "output",
+    "operation": "set",
+    "path": ["extra"],
+    "value": true
+  },
+  {
+    "name": "output record requires its mimetype",
+    "record": "output",
+    "operation": "delete",
+    "path": ["output", "mimetype"]
+  },
+  {
+    "name": "output record rejects an unknown channel",
+    "record": "output",
+    "operation": "set",
+    "path": ["output", "channel"],
+    "value": "unknown"
+  },
+  {
+    "name": "output record rejects an extra field",
+    "record": "output",
+    "operation": "set",
+    "path": ["output", "extra"],
+    "value": true
+  },
+  {
+    "name": "resources require their files field",
+    "record": "output",
+    "operation": "delete",
+    "path": ["resources", "files"]
+  },
+  {
+    "name": "resources reject an extra field",
+    "record": "output",
+    "operation": "set",
+    "path": ["resources", "extra"],
+    "value": {}
+  },
+  {
+    "name": "resource files require data URLs",
+    "record": "output",
+    "operation": "set",
+    "path": ["resources", "files", "/@file/module.js"],
+    "value": "https://example.test/module.js"
+  },
+  {
+    "name": "function namespaces require replay values",
+    "record": "output",
+    "operation": "set",
+    "path": ["resources", "uiValues"],
+    "value": {}
+  },
+  {
+    "name": "replay values require function namespaces",
+    "record": "output",
+    "operation": "set",
+    "path": ["resources", "functions"],
+    "value": {}
+  },
+  {
+    "name": "static resources reject live function names",
+    "record": "output",
+    "operation": "set",
+    "path": [
+      "resources",
+      "functions",
+      "cell-summary-projection-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-ui-cell-summary-ui"
+    ],
+    "value": ["validate"]
+  },
+  {
+    "name": "model notifications require their message field",
+    "record": "output",
+    "operation": "set",
+    "path": ["resources", "modelNotifications"],
+    "value": [
+      {
+        "op": "model-lifecycle",
+        "model_id": "projection-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-model-0"
+      }
+    ]
+  },
+  {
+    "name": "model notifications reject an extra field",
+    "record": "output",
+    "operation": "set",
+    "path": ["resources", "modelNotifications"],
+    "value": [
+      {
+        "op": "model-lifecycle",
+        "model_id": "projection-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-model-0",
+        "message": {"method": "close"},
+        "extra": true
+      }
+    ]
+  },
+  {
+    "name": "model notifications require the lifecycle operation",
+    "record": "output",
+    "operation": "set",
+    "path": ["resources", "modelNotifications"],
+    "value": [
+      {
+        "op": "unknown",
+        "model_id": "projection-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-model-0",
+        "message": {"method": "close"}
+      }
+    ]
+  },
+  {
+    "name": "model IDs belong to the snapshot projection",
+    "record": "output",
+    "operation": "set",
+    "path": ["resources", "modelNotifications"],
+    "value": [
+      {
+        "op": "model-lifecycle",
+        "model_id": "projection-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-model-0",
+        "message": {"method": "close"}
+      }
+    ]
+  },
+  {
+    "name": "open messages require complete fields",
+    "record": "output",
+    "operation": "set",
+    "path": ["resources", "modelNotifications"],
+    "value": [
+      {
+        "op": "model-lifecycle",
+        "model_id": "projection-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-model-0",
+        "message": {
+          "method": "open",
+          "buffer_paths": [],
+          "buffers": [],
+          "esm_spec": null
+        }
+      }
+    ]
+  },
+  {
+    "name": "open messages reject an extra field",
+    "record": "output",
+    "operation": "set",
+    "path": ["resources", "modelNotifications"],
+    "value": [
+      {
+        "op": "model-lifecycle",
+        "model_id": "projection-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-model-0",
+        "message": {
+          "method": "open",
+          "state": {},
+          "buffer_paths": [],
+          "buffers": [],
+          "esm_spec": null,
+          "extra": true
+        }
+      }
+    ]
+  },
+  {
+    "name": "buffer paths require nonempty token arrays",
+    "record": "output",
+    "operation": "set",
+    "path": ["resources", "modelNotifications"],
+    "value": [
+      {
+        "op": "model-lifecycle",
+        "model_id": "projection-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-model-0",
+        "message": {
+          "method": "open",
+          "state": {},
+          "buffer_paths": [[]],
+          "buffers": ["AA=="],
+          "esm_spec": null
+        }
+      }
+    ]
+  },
+  {
+    "name": "buffer paths reject invalid tokens",
+    "record": "output",
+    "operation": "set",
+    "path": ["resources", "modelNotifications"],
+    "value": [
+      {
+        "op": "model-lifecycle",
+        "model_id": "projection-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-model-0",
+        "message": {
+          "method": "open",
+          "state": {},
+          "buffer_paths": [[true]],
+          "buffers": ["AA=="],
+          "esm_spec": null
+        }
+      }
+    ]
+  },
+  {
+    "name": "buffer paths and buffers have equal lengths",
+    "record": "output",
+    "operation": "set",
+    "path": ["resources", "modelNotifications"],
+    "value": [
+      {
+        "op": "model-lifecycle",
+        "model_id": "projection-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-model-0",
+        "message": {
+          "method": "update",
+          "state": {},
+          "buffer_paths": [["value"]],
+          "buffers": [],
+          "esm_spec": null
+        }
+      }
+    ]
+  },
+  {
+    "name": "buffers require strings",
+    "record": "output",
+    "operation": "set",
+    "path": ["resources", "modelNotifications"],
+    "value": [
+      {
+        "op": "model-lifecycle",
+        "model_id": "projection-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-model-0",
+        "message": {
+          "method": "custom",
+          "content": null,
+          "buffers": [1]
+        }
+      }
+    ]
+  },
+  {
+    "name": "ESM specs reject an extra field",
+    "record": "output",
+    "operation": "set",
+    "path": ["resources", "modelNotifications"],
+    "value": [
+      {
+        "op": "model-lifecycle",
+        "model_id": "projection-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-model-0",
+        "message": {
+          "method": "open",
+          "state": {},
+          "buffer_paths": [],
+          "buffers": [],
+          "esm_spec": {"hash": "module", "url": "data:text/javascript,export default {}", "extra": true}
+        }
+      }
+    ]
+  },
+  {
+    "name": "ESM specs reject unavailable relative resources",
+    "record": "output",
+    "operation": "set",
+    "path": ["resources", "modelNotifications"],
+    "value": [
+      {
+        "op": "model-lifecycle",
+        "model_id": "projection-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-model-0",
+        "message": {
+          "method": "open",
+          "state": {},
+          "buffer_paths": [],
+          "buffers": [],
+          "esm_spec": {"hash": "module", "url": "./missing.js"}
+        }
+      }
+    ]
+  },
+  {
+    "name": "ESM specs reject incompatible protocols",
+    "record": "output",
+    "operation": "set",
+    "path": ["resources", "modelNotifications"],
+    "value": [
+      {
+        "op": "model-lifecycle",
+        "model_id": "projection-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-model-0",
+        "message": {
+          "method": "open",
+          "state": {},
+          "buffer_paths": [],
+          "buffers": [],
+          "esm_spec": {"hash": "module", "url": "file:///tmp/module.js"}
+        }
+      }
+    ]
+  },
+  {
+    "name": "HTTP ESM URLs require an authority",
+    "record": "output",
+    "operation": "set",
+    "path": ["resources", "modelNotifications", 0, "message", "esm_spec", "url"],
+    "value": "http://"
+  },
+  {
+    "name": "HTTPS ESM URLs require an authority",
+    "record": "output",
+    "operation": "set",
+    "path": ["resources", "modelNotifications", 0, "message", "esm_spec", "url"],
+    "value": "https://"
+  },
+  {
+    "name": "HTTP ESM URLs require a valid hostname",
+    "record": "output",
+    "operation": "set",
+    "path": ["resources", "modelNotifications", 0, "message", "esm_spec", "url"],
+    "value": "http://%/module.js"
+  },
+  {
+    "name": "HTTPS ESM URLs require a valid port",
+    "record": "output",
+    "operation": "set",
+    "path": ["resources", "modelNotifications", 0, "message", "esm_spec", "url"],
+    "value": "https://example.test:bad/module.js"
+  },
+  {
+    "name": "cell snapshots require their console field",
+    "record": "cell",
+    "operation": "delete",
+    "path": ["console"]
+  },
+  {
+    "name": "cell snapshots reject an extra root field",
+    "record": "cell",
+    "operation": "set",
+    "path": ["extra"],
+    "value": true
+  },
+  {
+    "name": "cell identities reject an extra field",
+    "record": "cell",
+    "operation": "set",
+    "path": ["cell", "extra"],
+    "value": true
+  },
+  {
+    "name": "cell identities require a code digest",
+    "record": "cell",
+    "operation": "set",
+    "path": ["cell", "codeSha256"],
+    "value": "invalid"
+  },
+  {
+    "name": "cell snapshots require a completed outcome",
+    "record": "cell",
+    "operation": "set",
+    "path": ["outcome"],
+    "value": "failed"
+  },
+  {
+    "name": "cell console entries require outputs",
+    "record": "cell",
+    "operation": "set",
+    "path": ["console", 0],
+    "value": null
+  },
+  {
+    "name": "cell console outputs reject an extra field",
+    "record": "cell",
+    "operation": "set",
+    "path": ["console", 0, "extra"],
+    "value": true
+  }
+]

@@ -1,0 +1,9 @@
+schema: marimo-export.spec.v2
+default_state: weekly
+states:
+  weekly: {}
+  monthly:
+    days: 30
+outputs:
+  summary:
+    source: { kind: json, selector: summary }

@@ -1,0 +1,22 @@
+{
+  "name": "@marimo-export/internal-loader-numpy",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Workspace implementation of the marimo-export NumPy loader",
+  "license": "Apache-2.0",
+  "type": "module",
+  "sideEffects": false,
+  "scripts": {
+    "build": "vp pack",
+    "check": "vp check",
+    "test": "vp test",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@marimo-team/marimo-export": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "catalog:",
+    "vite-plus": "catalog:"
+  }
+}

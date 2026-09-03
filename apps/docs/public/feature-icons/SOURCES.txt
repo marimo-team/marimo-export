@@ -1,0 +1,7 @@
+Feature icon sources
+
+The icons use paths from lucide-react 0.563.0, which the marimo frontend depends on. Their names are cloud-upload, braces, bot, git-fork, and badge-check.
+
+Dark variants preserve each shape and use a lighter stroke or fill for contrast.
+
+The Lucide license is included in LUCIDE-LICENSE.txt.

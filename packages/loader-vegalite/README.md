@@ -1,32 +1,22 @@
-# @marimo-team/export-loader-vegalite
+# Vega-Lite loader workspace
 
-Loader for `vegalite.v1` artifacts.
+`@marimo-export/internal-loader-vegalite` owns
+[Vega-Lite](https://vega.github.io/vega-lite/) decoding and mount lifecycle for the public
+[`@marimo-team/marimo-export/loader/vegalite`](../browser/src/loader/vegalite.ts)
+facade. The workspace package is private and the public browser package carries
+its compiled implementation.
 
-This package turns exported Vega-Lite JSON into a browser handle that can return
-the raw spec or render an interactive chart with `vega-embed`.
+The loader validates the saved chart specification, imports
+[Vega-Embed](https://github.com/vega/vega-embed) when the chart mounts, applies
+caller options, connects cancellation, and finalizes the mounted view during
+disposal.
 
-```ts
-import { vegaliteLoader } from "@marimo-team/export-loader-vegalite";
-import { readExport } from "@marimo-team/export-reader";
+Run focused checks from the repository root:
 
-const exp = await readExport({
-  root: "/export/",
-  manifest: "manifest.json",
-  loaders: [vegaliteLoader()],
-});
-
-const chart = await exp
-  .get({ scenario: "default", value: "comparison_chart", format: "vegalite" })
-  .load();
-
-await chart.render(document.querySelector("#chart")!);
-
-const spec = await chart.spec();
+```bash
+pnpm --filter @marimo-export/internal-loader-vegalite test
+pnpm --filter @marimo-export/internal-loader-vegalite typecheck
 ```
 
-Mechanics:
-
-- Supports `vegalite.v1`.
-- Reads the artifact entry file as JSON.
-- Renders through `vega-embed`.
-- Exposes `.spec()` for callers that need the language-agnostic payload.
+Public consumers install `@marimo-team/marimo-export` and follow the
+[Vega-Lite representation and peer-runtime contract](../../docs/reference/representations.md).

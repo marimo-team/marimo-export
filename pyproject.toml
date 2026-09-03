@@ -1,12 +1,45 @@
 [tool.uv.workspace]
-members = ["packages/capture"]
+members = ["examples/vite-vanilla", "packages/python"]
+
+[tool.uv]
+constraint-dependencies = ["pymdown-extensions==11.0.1"]
 
 [dependency-groups]
-dev = ["marimo[recommended]", "pytest>=9", "ruff>=0.15", "ty>=0.0.33"]
+dev = ["packaging==26.0", "ruff>=0.15", "tomli==2.2.1", "ty>=0.0.39"]
+test = ["jsonschema>=4.23", "pytest>=9", "pytest-asyncio>=1.3", "pytest-timeout>=2.4"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
 
 [tool.ruff.lint]
 pydocstyle = { convention = "numpy" }
-ignore = []
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF", "TID251"]
 
-[tool.marimo.runtime]
-output_max_bytes = 10_000_000_000
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"marimo._ast" = { msg = "Private marimo imports belong in marimo_export._marimo.compat" }
+"marimo._cli" = { msg = "Private marimo imports belong in marimo_export._marimo.compat" }
+"marimo._code_mode" = { msg = "Private marimo imports belong in marimo_export._marimo.compat" }
+"marimo._config" = { msg = "Private marimo imports belong in marimo_export._marimo.compat" }
+"marimo._entrypoints" = { msg = "Private marimo imports belong in marimo_export._marimo.compat" }
+"marimo._messaging" = { msg = "Private marimo imports belong in marimo_export._marimo.compat" }
+"marimo._plugins" = { msg = "Private marimo imports belong in marimo_export._marimo.compat" }
+"marimo._runtime" = { msg = "Private marimo imports belong in marimo_export._marimo.compat" }
+"marimo._save" = { msg = "Private marimo imports belong in marimo_export._marimo.compat" }
+"marimo._schemas" = { msg = "Private marimo imports belong in marimo_export._marimo.compat" }
+"marimo._session" = { msg = "Private marimo imports belong in marimo_export._marimo.compat" }
+"marimo._types" = { msg = "Private marimo imports belong in marimo_export._marimo.compat" }
+"marimo._utils" = { msg = "Private marimo imports belong in marimo_export._marimo.compat" }
+"marimo_export._marimo.compat" = { msg = "Construct private adapters in marimo_export._marimo composition roots" }
+
+[tool.ruff.lint.per-file-ignores]
+"packages/python/src/marimo_export/_marimo/compat/**/*.py" = ["TID251"]
+"packages/python/src/marimo_export/_marimo/anywidget.py" = ["TID251"]
+"packages/python/src/marimo_export/_marimo/composition.py" = ["TID251"]
+"packages/python/src/marimo_export/_marimo/blob.py" = ["TID251"]
+"packages/python/src/marimo_export/_marimo/entrypoints.py" = ["TID251"]
+"packages/python/src/marimo_export/_marimo/managed_server.py" = ["TID251"]
+"packages/python/tests/**/*.py" = ["TID251"]
+
+[tool.ty.src]
+include = ["packages/python/src", "packages/python/tests"]

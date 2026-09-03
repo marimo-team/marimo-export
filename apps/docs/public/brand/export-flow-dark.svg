@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 360" role="img" aria-labelledby="title description">
+  <title id="title">Notebook export flow</title>
+  <desc id="description">A marimo notebook and ExportSpec produce a finite state and output grid that Python, browser, and agent consumers can open.</desc>
+  <rect width="520" height="360" rx="28" fill="#202522"/>
+  <g fill="none" stroke="#cad996" stroke-width="2">
+    <rect x="34" y="78" width="128" height="70" rx="10" fill="#171b19"/>
+    <rect x="34" y="212" width="128" height="70" rx="10" fill="#171b19"/>
+    <path d="M98 148v64" stroke-dasharray="5 6"/>
+    <path d="M178 180h49"/><path d="m219 173 9 7-9 7"/>
+    <rect x="240" y="85" width="128" height="190" rx="14" fill="#171b19"/>
+    <path d="M304 85v190M240 148h128M240 211h128" opacity=".55"/>
+    <path d="M385 180h43"/><path d="m420 173 9 7-9 7"/>
+    <rect x="440" y="82" width="54" height="48" rx="9" fill="#171b19"/>
+    <rect x="440" y="156" width="54" height="48" rx="9" fill="#171b19"/>
+    <rect x="440" y="230" width="54" height="48" rx="9" fill="#171b19"/>
+  </g>
+  <g fill="#eef1ee" font-family="ui-sans-serif, system-ui, sans-serif" text-anchor="middle">
+    <text x="98" y="109" font-size="15" font-weight="700">marimo</text>
+    <text x="98" y="130" font-size="13">notebook</text>
+    <text x="98" y="243" font-size="15" font-weight="700">ExportSpec</text>
+    <text x="98" y="264" font-size="13">states + outputs</text>
+    <text x="304" y="55" font-size="14" font-weight="700">notebook export</text>
+    <text x="272" y="124" font-size="12">weekly</text><text x="336" y="124" font-size="12">summary</text>
+    <text x="272" y="187" font-size="12">monthly</text><text x="336" y="187" font-size="12">chart</text>
+    <text x="272" y="250" font-size="12">custom</text><text x="336" y="250" font-size="12">table</text>
+    <text x="467" y="111" font-size="12" font-weight="700">Python</text>
+    <text x="467" y="185" font-size="12" font-weight="700">Browser</text>
+    <text x="467" y="259" font-size="12" font-weight="700">Agent</text>
+  </g>
+</svg>

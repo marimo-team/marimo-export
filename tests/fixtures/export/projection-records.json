@@ -1,0 +1,102 @@
+{
+  "json": {
+    "ready": true,
+    "rows": [
+      {
+        "label": "alpha",
+        "value": 1
+      },
+      {
+        "label": "beta",
+        "value": 2
+      }
+    ]
+  },
+  "output": {
+    "schema": "marimo.output.v1",
+    "projectionSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "ownerCellId": "cell-summary",
+    "output": {
+      "channel": "output",
+      "mimetype": "text/html",
+      "data": "<marimo-ui-element object-id=\"cell-summary-projection-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-ui-cell-summary-ui\" random-id=\"cell-summary-projection-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-ui-fixture-random\"></marimo-ui-element>"
+    },
+    "resources": {
+      "files": {
+        "/@file/5-note.txt": "data:text/plain;base64,aGVsbG8=",
+        "/@file/widget.js": "data:text/javascript;base64,ZXhwb3J0IGRlZmF1bHQge30="
+      },
+      "modelNotifications": [
+        {
+          "op": "model-lifecycle",
+          "model_id": "projection-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-model-0",
+          "message": {
+            "method": "open",
+            "state": {"value": null},
+            "buffer_paths": [["binary", 0]],
+            "buffers": ["AA=="],
+            "esm_spec": {"hash": "widget-hash", "url": "./@file/widget.js"}
+          }
+        },
+        {
+          "op": "model-lifecycle",
+          "model_id": "projection-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-model-0",
+          "message": {
+            "method": "update",
+            "state": {"value": 1},
+            "buffer_paths": [],
+            "buffers": [],
+            "esm_spec": {"hash": "remote-widget-hash", "url": "https://example.test/widget.js"}
+          }
+        },
+        {
+          "op": "model-lifecycle",
+          "model_id": "projection-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-model-0",
+          "message": {"method": "custom", "content": {"event": "ready"}, "buffers": []}
+        },
+        {
+          "op": "model-lifecycle",
+          "model_id": "projection-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-model-0",
+          "message": {"method": "close"}
+        }
+      ],
+      "functions": {
+        "cell-summary-projection-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-ui-cell-summary-ui": []
+      },
+      "uiValues": {
+        "cell-summary-projection-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-ui-cell-summary-ui": 3
+      }
+    }
+  },
+  "cell": {
+    "schema": "marimo.cell.v1",
+    "projectionSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "cell": {
+      "id": "cell-summary",
+      "name": "summary",
+      "codeSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "config": {
+        "disabled": false
+      }
+    },
+    "outcome": "completed",
+    "output": {
+      "channel": "output",
+      "mimetype": "text/plain",
+      "data": "42"
+    },
+    "console": [
+      {
+        "channel": "stdout",
+        "mimetype": "text/plain",
+        "data": "ready\n"
+      }
+    ],
+    "resources": {
+      "files": {},
+      "modelNotifications": [],
+      "functions": {},
+      "uiValues": {}
+    }
+  }
+}

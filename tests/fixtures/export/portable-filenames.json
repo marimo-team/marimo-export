@@ -1,0 +1,15 @@
+{
+  "surfaces": ["notebook", "blob"],
+  "cases": [
+    {"name": "ASCII filename", "value": "report.data", "valid": true},
+    {"name": "internal ASCII space", "value": "market report.data", "valid": true},
+    {"name": "leading ASCII space", "value": " report.data", "valid": false},
+    {"name": "trailing ASCII space", "value": "report.data ", "valid": false},
+    {"name": "leading U+FEFF", "value": "\ufeffreport.data", "valid": false},
+    {"name": "trailing U+FEFF", "value": "report.data\ufeff", "valid": false},
+    {"name": "leading U+0085", "value": "\u0085report.data", "valid": false},
+    {"name": "trailing U+0085", "value": "report.data\u0085", "valid": false},
+    {"name": "internal U+FEFF", "value": "market\ufeffreport.data", "valid": true},
+    {"name": "internal U+0085", "value": "market\u0085report.data", "valid": true}
+  ]
+}

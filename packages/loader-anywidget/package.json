@@ -1,36 +1,28 @@
 {
-  "name": "@marimo-team/export-loader-anywidget",
-  "version": "0.1.0",
-  "description": "AnyWidget loader and standalone hydration runtime for marimo export bundles.",
-  "files": [
-    "dist"
-  ],
+  "name": "@marimo-export/internal-loader-anywidget",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Workspace implementation of the marimo-export AnyWidget loader",
+  "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
-  "imports": {
-    "#anywidget/*": {
-      "types": "./dist/*.d.ts",
-      "import": "./dist/*.js"
-    }
-  },
   "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
-    },
-    "./runtime": {
-      "types": "./dist/runtime/export-runtime.d.ts",
-      "import": "./dist/runtime/export-runtime.js"
-    },
-    "./package.json": "./package.json"
+    ".": "./src/index.ts"
   },
   "scripts": {
-    "build": "rm -rf dist && tsc -p tsconfig.build.json",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
-    "lint": "oxlint .",
-    "format": "oxfmt --write ."
+    "build": "vp pack",
+    "check": "vp check",
+    "test": "vp test",
+    "test:browser": "vp test --project browser",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@marimo-team/export-reader": "workspace:*"
+    "@anywidget/types": "catalog:"
+  },
+  "devDependencies": {
+    "@vitest/browser-playwright": "catalog:",
+    "playwright": "catalog:",
+    "typescript": "catalog:",
+    "vite-plus": "catalog:"
   }
 }

@@ -1,8 +1,0 @@
-{
-  "scenario": "steady_single",
-  "arrival_rate": 6.0,
-  "service_rate": 11.0,
-  "server_count": 1,
-  "utilization": 0.545,
-  "response_minutes": 12.0
-}

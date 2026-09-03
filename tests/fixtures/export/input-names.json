@@ -1,0 +1,12 @@
+[
+  {"name":"ASCII name","value":"choice","valid":true},
+  {"name":"name with spaces","value":"not valid in Python","valid":true},
+  {"name":"surrounding whitespace","value":"  spaced  ","valid":true},
+  {"name":"Python keyword","value":"class","valid":true},
+  {"name":"JavaScript prototype key","value":"__proto__","valid":true},
+  {"name":"U+037A version-skew name","value":"ͺ","valid":true},
+  {"name":"newer-Unicode Kawi name","value":"𑼂","valid":true},
+  {"name":"Unicode format character","value":"a‌b","valid":true},
+  {"name":"control character","value":"line\nbreak","valid":true},
+  {"name":"empty name","value":"","valid":false}
+]

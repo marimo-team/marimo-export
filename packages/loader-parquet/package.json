@@ -1,27 +1,23 @@
 {
-  "name": "@marimo-team/export-loader-parquet",
-  "version": "0.1.0",
-  "description": "Parquet dataframe loader for marimo export bundles.",
-  "files": [
-    "dist"
-  ],
+  "name": "@marimo-export/internal-loader-parquet",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Workspace implementation of the marimo-export Parquet loader",
+  "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
-    },
-    "./package.json": "./package.json"
-  },
   "scripts": {
-    "build": "rm -rf dist && tsc -p tsconfig.build.json",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
-    "lint": "oxlint .",
-    "format": "oxfmt --write ."
+    "build": "vp pack",
+    "check": "vp check",
+    "test": "vp test",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@marimo-team/export-reader": "workspace:*",
-    "hyparquet": "^1.25.6"
+    "@marimo-team/marimo-export": "workspace:*",
+    "hyparquet": "catalog:"
+  },
+  "devDependencies": {
+    "typescript": "catalog:",
+    "vite-plus": "catalog:"
   }
 }

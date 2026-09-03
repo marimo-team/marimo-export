@@ -1,0 +1,20 @@
+[project]
+name = "marimo-export-vite-vanilla-example"
+version = "0.0.0"
+description = "Vanilla Vite market dashboard example for marimo-export."
+requires-python = ">=3.10"
+dependencies = [
+  "altair==6.0.0",
+  "anywidget==0.11.0",
+  "marimo-export[all]",
+  "polars==1.40.0",
+  "pyarrow==23.0.1",
+  "traitlets==5.14.3",
+  "yfinance==1.3.0",
+]
+
+[tool.uv]
+package = false
+
+[tool.uv.sources]
+marimo-export = { workspace = true }
