@@ -23,8 +23,8 @@ Studio provider artifact
 ## Dependency shape during development
 
 The Studio Python workspace resolves `marimo-export` from the sibling editable
-checkout. Its browser application links the sibling
-`@marimo-team/marimo-export` and `@marimo-team/portable-json` packages.
+checkout. Its browser application links the sibling browser package and the
+workspace-owned portable JSON module during development.
 
 Studio imports public Python modules:
 

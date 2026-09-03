@@ -1,10 +1,8 @@
 # Releasing marimo-export
 
 One annotated `vX.Y.Z` tag publishes
-[`marimo-export`](https://pypi.org/project/marimo-export/) to PyPI,
-[`@marimo-team/marimo-export`](https://www.npmjs.com/package/@marimo-team/marimo-export),
-and
-[`@marimo-team/portable-json`](https://www.npmjs.com/package/@marimo-team/portable-json)
+[`marimo-export`](https://pypi.org/project/marimo-export/) to PyPI and
+[`@marimo-team/marimo-export`](https://www.npmjs.com/package/@marimo-team/marimo-export)
 to npm from the same source commit.
 
 ```console
@@ -14,7 +12,7 @@ make package
 ```
 
 `make package` writes the release candidates under `dist/python` and
-`dist/npm`. It installs both npm tarballs through npm and pnpm, installs the
+`dist/npm`. It installs the npm tarball through npm and pnpm, installs the
 direct and source-rebuilt Python wheels in isolated environments, and compares
 the two wheel payloads.
 
@@ -22,28 +20,25 @@ the two wheel payloads.
 
 These manifests carry the same version:
 
-| Package                      | Version source                        |
-| ---------------------------- | ------------------------------------- |
-| `marimo-export`              | `packages/python/pyproject.toml`      |
-| `@marimo-team/marimo-export` | `packages/browser/package.json`       |
-| `@marimo-team/portable-json` | `packages/portable-json/package.json` |
+| Package                      | Version source                   |
+| ---------------------------- | -------------------------------- |
+| `marimo-export`              | `packages/python/pyproject.toml` |
+| `@marimo-team/marimo-export` | `packages/browser/package.json`  |
 
-The browser package keeps `workspace:*` while developing in the repository.
-`pnpm pack` rewrites that dependency to the coordinated portable-json version
-inside the release tarball. The artifact verifier rejects workspace, link,
-file, and catalog dependency sources in published package metadata.
+The portable JSON workspace owns the shared TypeScript value contract. Vite+
+bundles that implementation into the browser package, so consumers install one
+npm package. The artifact verifier rejects workspace, link, file, and catalog
+dependency sources in published package metadata.
 
-Update the three manifests, then refresh the locks:
+Update the two public manifests, then refresh the locks:
 
 ```console
-uv version --package marimo-export 0.1.0
-pnpm --dir packages/browser version 0.1.0 --no-git-tag-version
-pnpm --dir packages/portable-json version 0.1.0 --no-git-tag-version
+VERSION=x.y.z
+uv version --package marimo-export "$VERSION"
+pnpm --dir packages/browser version "$VERSION" --no-git-tag-version
 uv lock
 pnpm install --lockfile-only
 ```
-
-Use the intended final version in place of `0.1.0` for later releases.
 
 ## Registry trust
 
@@ -61,7 +56,7 @@ Configure the existing PyPI project to trust:
 - workflow `publish.yml`
 - environment `pypi`
 
-Configure each npm package with the same owner, repository, and workflow plus
+Configure the npm package with the same owner, repository, and workflow plus
 environment `npm`. Allow `npm publish`. The publish job runs on Node 24 with
 `id-token: write` and publishes the verified pnpm-produced tarballs. npm uses
 the workflow's
@@ -69,10 +64,9 @@ the workflow's
 records provenance for each package.
 
 npm requires a package to exist before it can accept a trusted-publisher
-configuration. Reserve every new package name through an authenticated
-maintainer publication, then configure its trusted publisher before the first
-coordinated release. The release preflight checks that both npm package names
-exist.
+configuration. Reserve the package name through an authenticated maintainer
+publication, then configure its trusted publisher before the first coordinated
+release. The release preflight checks that the package exists.
 
 Protect the `npm` and `pypi` environments with the repository's release
 reviewers. Apply a repository ruleset to `v*` tags so the same maintainers
@@ -92,8 +86,8 @@ make package
 Review these artifact facts before merging:
 
 - the wheel, source archive, and source-rebuilt wheel report the same version
-- the browser tarball depends on the exact portable-json version
-- npm tarballs contain every declared export target
+- the browser tarball contains every declared export target and its bundled
+  portable JSON implementation
 - Python wheel entry points include the CLI and Marimo kernel lifespan
 - packed manifests point to the public repository
 
@@ -120,15 +114,14 @@ The publish workflow then:
    commit.
 2. Rebuilds and verifies every artifact.
 3. Writes SHA-256 checksums and records GitHub build provenance.
-4. Publishes portable-json to npm.
-5. Publishes the browser package to npm.
-6. Verifies both npm archives by integrity and through fresh npm and pnpm
+4. Publishes the browser package to npm.
+5. Verifies the npm archive by integrity and through fresh npm and pnpm
    consumers.
-7. Publishes the Python wheel and source archive through PyPI trusted
+6. Publishes the Python wheel and source archive through PyPI trusted
    publishing.
-8. Verifies the PyPI file hashes, a fresh public Python installation, and the
+7. Verifies the PyPI file hashes, a fresh public Python installation, and the
    CLI.
-9. Creates a GitHub Release with generated notes, distributions, and the
+8. Creates a GitHub Release with generated notes, distributions, and the
    checksum manifest.
 
 ## Recover a partial release
@@ -138,5 +131,5 @@ version's integrity with the tagged tarball. PyPI publication compares existing
 files through the simple index and skips files whose hashes match.
 
 Rerun a failed job when every existing registry artifact matches the tagged
-artifact. Advance all three public packages to the next patch version when a
+artifact. Advance both public packages to the next patch version when a
 published artifact differs or needs a source correction.

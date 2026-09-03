@@ -79,8 +79,6 @@ package: ## Build and verify Python and npm release artifacts.
 	pnpm --filter @marimo-team/marimo-export build
 	@set -eu; \
 		version=$$(uv version --package marimo-export --short); \
-		(cd packages/portable-json && pnpm --config.ignore-scripts=true pack \
-			--out "$(NPM_DIST_DIR)/marimo-team-portable-json-$$version.tgz"); \
 		(cd packages/browser && pnpm --config.ignore-scripts=true pack \
 			--out "$(NPM_DIST_DIR)/marimo-team-marimo-export-$$version.tgz")
 	uv build --package marimo-export --out-dir "$(PYTHON_DIST_DIR)" --no-sources

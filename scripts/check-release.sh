@@ -29,7 +29,6 @@ npm_versions="$(
 const { readFileSync } = require("node:fs");
 for (const path of [
   "packages/browser/package.json",
-  "packages/portable-json/package.json",
 ]) {
   process.stdout.write(`${JSON.parse(readFileSync(path, "utf8")).version}\n`);
 }

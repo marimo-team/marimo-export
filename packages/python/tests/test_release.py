@@ -94,7 +94,7 @@ def _run_release_check(
     commands = root / "commands"
     commands.mkdir()
     _write_command(commands / "uv", "#!/bin/sh\nprintf '0.1.0\\n'\n")
-    _write_command(commands / "node", "#!/bin/sh\nprintf '0.1.0\\n0.1.0\\n'\n")
+    _write_command(commands / "node", "#!/bin/sh\nprintf '0.1.0\\n'\n")
     _write_command(
         commands / "gh",
         """#!/bin/sh
@@ -238,7 +238,7 @@ def _step(job: dict[str, Any], name: str) -> dict[str, Any]:
     return next(step for step in steps if step.get("name") == name)
 
 
-def test_publish_workflow_uses_one_coordinated_release_artifact() -> None:
+def test_publish_workflow_coordinates_python_and_browser_distributions() -> None:
     _source, workflow = _workflow()
     jobs = workflow["jobs"]
     assert isinstance(jobs, dict)
@@ -253,6 +253,10 @@ def test_publish_workflow_uses_one_coordinated_release_artifact() -> None:
     ]
     assert jobs["attest"]["needs"] == "build"
     assert jobs["publish-npm"]["needs"] == "attest"
+    publish = _step(jobs["publish-npm"], "Publish npm packages")
+    assert publish["run"] == (
+        './scripts/publish-npm.sh "dist/npm/marimo-team-marimo-export-${GITHUB_REF_NAME#v}.tgz"'
+    )
     assert jobs["publish-pypi"]["needs"] == "verify-npm"
     assert jobs["release-notes"]["needs"] == ["verify-npm", "verify-pypi"]
 
@@ -318,7 +322,6 @@ def test_checksum_manifest_addresses_flat_github_release_assets(tmp_path: Path) 
     manifests = {
         "packages/python/pyproject.toml": f'[project]\nversion = "{version}"\n',
         "packages/browser/package.json": f'{{"version":"{version}"}}\n',
-        "packages/portable-json/package.json": f'{{"version":"{version}"}}\n',
     }
     for relative, contents in manifests.items():
         path = tmp_path / relative
@@ -329,7 +332,6 @@ def test_checksum_manifest_addresses_flat_github_release_assets(tmp_path: Path) 
         f"python/marimo_export-{version}-py3-none-any.whl": b"wheel",
         f"python/marimo_export-{version}.tar.gz": b"source",
         f"npm/marimo-team-marimo-export-{version}.tgz": b"browser",
-        f"npm/marimo-team-portable-json-{version}.tgz": b"portable",
     }
     for relative, contents in artifacts.items():
         path = tmp_path / "dist" / relative

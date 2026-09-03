@@ -37,6 +37,5 @@ for wheel in "${wheels[@]}"; do
 done
 
 node scripts/smoke_npm_packages.mjs \
-	"$npm_dist/marimo-team-portable-json-$version.tgz" \
 	"$npm_dist/marimo-team-marimo-export-$version.tgz" \
 	"$version"

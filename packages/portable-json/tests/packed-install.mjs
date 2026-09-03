@@ -117,9 +117,10 @@ async function inspectInstalledManifest(root) {
   const installedRoot = join(root, "node_modules", "@marimo-team", "portable-json");
   const installed = JSON.parse(await readFile(join(installedRoot, "package.json"), "utf8"));
   assert.equal(installed.version, manifest.version);
+  assert.equal(installed.private, true);
   assert.deepEqual(installed.repository, manifest.repository);
   assert.deepEqual(installed.exports, manifest.publishConfig.exports);
-  assert.deepEqual(installed.publishConfig, { access: "public" });
+  assert.equal(installed.publishConfig, undefined);
   assert.equal(installed.dependencies, undefined);
   assert.deepEqual(installed.peerDependencies, { zod: "^4.3.6" });
   assert.deepEqual(installed.peerDependenciesMeta, { zod: { optional: true } });

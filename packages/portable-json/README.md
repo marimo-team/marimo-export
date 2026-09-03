@@ -1,10 +1,11 @@
-# @marimo-team/portable-json
+# Portable JSON workspace
 
-`@marimo-team/portable-json` validates JavaScript values against the portable
-JSON contract shared by marimo-export's Python and TypeScript boundaries.
+The private `@marimo-team/portable-json` workspace validates JavaScript values
+against the portable JSON contract shared by marimo-export's Python and
+TypeScript boundaries. Vite+ bundles it into the public browser package.
 
 ```bash
-pnpm add @marimo-team/portable-json
+pnpm --filter @marimo-team/portable-json test
 ```
 
 ## Convert a JavaScript value
@@ -64,12 +65,8 @@ four functions shown on this page.
 ## Compose with Zod
 
 [Zod](https://zod.dev/) validates JavaScript and TypeScript values against runtime
-schemas. Install it when the portable JSON contract must compose with an existing
-Zod schema:
-
-```bash
-pnpm add @marimo-team/portable-json zod
-```
+schemas. The workspace's optional Zod subpath composes the portable JSON contract
+with an existing schema:
 
 ```ts
 import {
