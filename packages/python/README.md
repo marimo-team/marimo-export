@@ -12,13 +12,25 @@ uv add marimo-export
 The package requires Python 3.10 or newer, is tested on Python 3.10 through
 3.14, and installs the marimo release pinned by its package metadata.
 
-## Build from a notebook file
-
-This example uses the repository's
+The examples use the repository's
 [`report.py`](https://github.com/marimo-team/marimo-export/blob/main/examples/quickstart/report.py)
 and
 [`report.export.yaml`](https://github.com/marimo-team/marimo-export/blob/main/examples/quickstart/report.export.yaml).
-Download both files into the current directory before running the code.
+Download both files into the current directory before running them.
+
+## Run the CLI from PyPI
+
+```bash
+uvx marimo-export build report.py \
+  --spec report.export.yaml \
+  --output dist/report
+uvx marimo-export verify dist/report
+```
+
+`build` prepares missing states, writes the export, verifies every declared
+asset, and closes the notebook process it started.
+
+## Build from Python
 
 ```python
 from pathlib import Path
@@ -32,10 +44,8 @@ result = build("report.py", spec=spec, output="dist/report")
 print(result.path)
 ```
 
-`build()` prepares missing states, writes the export, verifies every declared
-asset, and closes the notebook process it started. A matching later call with a
-new destination or `replace=True` can reuse the prepared export before notebook
-startup.
+A matching later call with a new destination or `replace=True` can reuse the
+prepared export before notebook startup.
 
 ## Read the export
 
