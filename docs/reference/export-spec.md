@@ -1,9 +1,62 @@
 ---
-title: ExportSpec reference
-description: Exact version 2 schema for default state, sparse states, outputs, selectors, and exporters.
+title: StateSpace and ExportSpec reference
+description: Exact schemas for reusable state spaces and complete export specifications.
 ---
 
-# ExportSpec reference
+# StateSpace and ExportSpec reference
+
+## StateSpace
+
+A `StateSpace` declares a finite set of notebook input assignments independently
+of any output plan. Applications that infer outputs can load the state space and
+compose its states with their own `OutputSpec` values.
+
+```yaml
+schema: marimo-export.states.v1
+default_state: matrix-000000
+states:
+  current: {}
+matrix:
+  interval: [1d, 1wk]
+  region: [All, Europe]
+```
+
+`states` contains named sparse input rows. `matrix` maps input names to nonempty
+value arrays and expands their Cartesian product into `matrix-000000`,
+`matrix-000001`, and subsequent states. Matrix input names are sorted before
+expansion, while each value array retains its authored order. A state space can
+contain explicit states, a matrix, or both. It supports at most 10,000 expanded
+states.
+
+Each matrix domain must contain distinct portable values. Explicit state names
+that collide with generated `matrix-NNNNNN` names are invalid. `default_state`
+must name either an explicit row or an expanded matrix row.
+
+```python
+from marimo_export import ExportSpec, OutputSpec, StateSpace
+
+state_space = StateSpace.from_file("states.yaml")
+spec = ExportSpec.from_state_space(
+    state_space,
+    outputs={"summary": OutputSpec.json("report.summary")},
+)
+```
+
+`StateSpace.from_file()` accepts strict UTF-8 JSON or YAML.
+`StateSpace.from_yaml()` accepts UTF-8 text or bytes already read by another
+filesystem owner. `from_value()` validates a decoded object. `json_schema()`
+returns the Draft 2020-12 authoring schema. `to_value()` returns normalized
+explicit states after matrix expansion. `digest` identifies that normalized
+state space.
+
+Invalid documents and state relations raise `SpecError`. Syntax and schema
+failures use `spec_invalid`. Invalid rows, matrix domains, collisions, and
+defaults use `spec_value_invalid`.
+
+`ExportSpec.from_state_space(state_space, outputs=...)` combines the validated
+state space with one application-owned output plan.
+
+## ExportSpec
 
 An ExportSpec defines the finite state relation and named output representations
 prepared from one notebook.

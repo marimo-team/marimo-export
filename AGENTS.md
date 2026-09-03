@@ -30,7 +30,7 @@ Run focused package commands while developing, then finish with `make check`.
 1. marimo owns notebook parsing, reactive execution, dependency pruning, cell
    hashing, computation-cache persistence, UI updates, and native
    serialization.
-2. marimo-export owns ExportSpec normalization, observations, state planning,
+2. marimo-export owns StateSpace and ExportSpec normalization, observations, state planning,
    preparation, reusable prepared outputs, export integrity, and typed Python
    and browser consumption.
 3. The export repository stores preparation metadata in private SQLite tables
@@ -50,10 +50,11 @@ Run focused package commands while developing, then finish with `make check`.
    `packages/browser` owns export parsing, integrity, immutable readers,
    prepared-publication control, and loader contracts. Each
    `packages/loader-*` owns one representation runtime.
-8. marimo-studio compiles an authored view to ExportSpec outputs and view
-   bindings. It consumes the public Python SDK, the public browser `prepared`
-   subpath, and the public host-cache integration capability. Preparation,
-   repository, and Marimo cache behavior stay in marimo-export.
+8. marimo-studio loads a public StateSpace, then compiles an authored view to
+   ExportSpec outputs and view bindings. It consumes the public Python SDK, the
+   public browser `prepared` subpath, and the public host-cache integration
+   capability. Preparation, repository, and Marimo cache behavior stay in
+   marimo-export.
 9. `docs/` owns user workflows and reference. `development_docs/` owns code
    ownership, lifecycle, compatibility seams, and contributor validation.
 
@@ -123,7 +124,8 @@ noun once.
 | Put static files on a host             | deploy or serve |
 | Release a package to a registry        | publish         |
 
-A state is one complete assignment for the inferred ExportSpec inputs. Authors
+A state space is a finite declaration of explicit state rows, a Cartesian input
+matrix, or both. A state is one complete assignment for the inferred ExportSpec inputs. Authors
 may write sparse rows because one captured baseline supplies omitted values. An
 observation is one successful complete input vector retained as authoring
 evidence. A prepared state is a reusable portable result for one producer,
@@ -135,24 +137,24 @@ or another implementation of the export format.
 
 ## Change routing
 
-| Change                            | Primary owner                                                                  | Required companions                                          |
-| --------------------------------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------ |
-| ExportSpec or state normalization | `spec.py`, `_execution/plan.py`, `planning.py`                                 | YAML, JSON, programmatic, and live-state tests               |
-| Observation lifecycle             | `observations.py`, `_observations`, `_repository/observations.py`, compat hook | Success, source-match, queue, revision, and close tests      |
-| Planning or preparation           | `_services`, `prepared.py`, `progress.py`                                      | Exact reuse, incremental state, cancellation, and live tests |
-| Repository or retention           | `repository.py`, `_repository`                                                 | SQLite, filesystem, concurrency, fencing, and recovery tests |
-| Export format or local reader     | `descriptors.py`, `index.py`, `wire.py`, `reader.py`                           | Browser schema and canonical fixtures                        |
-| Marimo integration or cache       | `_marimo/capabilities.py`, composition, one compat adapter                     | Probe, adapter, build, and capture tests                     |
-| Managed process lifecycle         | `producer.py`, `_remote/managed.py`, managed entry points                      | Startup, shutdown, source, and descendant tests              |
-| Prepared browser control          | `packages/browser/src/prepared`                                                | Manifest, refresh, transition, cancellation, packed tests    |
-| Browser reader or loader contract | `packages/browser`                                                             | TypeScript and cross-language tests                          |
-| Portable JSON contract            | `packages/portable-json`, `_json.py`                                           | Cross-language fixtures and packed consumers                 |
-| One output representation         | `packages/loader-*` and exporter runtime                                       | Peer dependency, malformed input, abort, and disposal tests  |
-| CLI or public Python API          | `_cli`, package root, public records                                           | Human output, JSON, JSONL, exit, and wheel smoke             |
-| Application directory delivery    | `delivery.py`, `_directory*`                                                   | Materialization, races, rollback, and Windows tests          |
-| marimo-studio integration         | Public SDK and browser `prepared` subpath                                      | Studio unit, server, static export, and browser tests        |
-| Example or browser transition     | `examples/vite-vanilla`                                                        | Typecheck, build, desktop, and narrow browser proof          |
-| Public documentation              | `docs/`, VitePress config                                                      | Examples, links, search, LLM bundles, and rendered proof     |
+| Change                                         | Primary owner                                                                  | Required companions                                          |
+| ---------------------------------------------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------ |
+| StateSpace, ExportSpec, or state normalization | `spec.py`, `_execution/plan.py`, `planning.py`                                 | YAML, JSON, programmatic, matrix, and live-state tests       |
+| Observation lifecycle                          | `observations.py`, `_observations`, `_repository/observations.py`, compat hook | Success, source-match, queue, revision, and close tests      |
+| Planning or preparation                        | `_services`, `prepared.py`, `progress.py`                                      | Exact reuse, incremental state, cancellation, and live tests |
+| Repository or retention                        | `repository.py`, `_repository`                                                 | SQLite, filesystem, concurrency, fencing, and recovery tests |
+| Export format or local reader                  | `descriptors.py`, `index.py`, `wire.py`, `reader.py`                           | Browser schema and canonical fixtures                        |
+| Marimo integration or cache                    | `_marimo/capabilities.py`, composition, one compat adapter                     | Probe, adapter, build, and capture tests                     |
+| Managed process lifecycle                      | `producer.py`, `_remote/managed.py`, managed entry points                      | Startup, shutdown, source, and descendant tests              |
+| Prepared browser control                       | `packages/browser/src/prepared`                                                | Manifest, refresh, transition, cancellation, packed tests    |
+| Browser reader or loader contract              | `packages/browser`                                                             | TypeScript and cross-language tests                          |
+| Portable JSON contract                         | `packages/portable-json`, `_json.py`                                           | Cross-language fixtures and packed consumers                 |
+| One output representation                      | `packages/loader-*` and exporter runtime                                       | Peer dependency, malformed input, abort, and disposal tests  |
+| CLI or public Python API                       | `_cli`, package root, public records                                           | Human output, JSON, JSONL, exit, and wheel smoke             |
+| Application directory delivery                 | `delivery.py`, `_directory*`                                                   | Materialization, races, rollback, and Windows tests          |
+| marimo-studio integration                      | Public SDK and browser `prepared` subpath                                      | Studio unit, server, static export, and browser tests        |
+| Example or browser transition                  | `examples/vite-vanilla`                                                        | Typecheck, build, desktop, and narrow browser proof          |
+| Public documentation                           | `docs/`, VitePress config                                                      | Examples, links, search, LLM bundles, and rendered proof     |
 
 ## Core invariants
 

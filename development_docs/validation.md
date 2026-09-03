@@ -31,23 +31,23 @@ builds, packed npm installation, and isolated Python wheel imports.
 
 ## Select evidence by boundary
 
-| Changed boundary                  | Focused evidence                                       | Live or package evidence                                |
-| --------------------------------- | ------------------------------------------------------ | ------------------------------------------------------- |
-| ExportSpec and export format      | Spec, index, wire, fixture, reader tests               | Python and TypeScript fixture parity                    |
-| Planning and preparation          | Plan and preparation service tests                     | Exact repeat, one-state addition, file and live capture |
-| Observations                      | Queue, ledger, source-match, SQLite observation tests  | Successful normal-run recording in a live kernel        |
-| Repository                        | Repository, concurrency, integrity, lifecycle tests    | Multiprocess contention, owner death, Windows matrix    |
-| Marimo cache adapter              | Probe, patch, graph scope, receipt, cleanup tests      | Warm owned build and borrowed capture                   |
-| Managed process lifecycle         | Producer, managed server, startup, shutdown tests      | Source-preserving file preparation                      |
-| Live transport and authentication | Client, auth, SSE, remote response, redaction tests    | HTTPS borrowed capture and same-origin transfer         |
-| Transfer, writer, local reader    | Limits, digest, framing, rollback, filesystem tests    | Public capture and `verify`                             |
-| Prepared Python publication       | Manifest, publication, cancellation, route-grace tests | Mutable manifest and retained immutable routes          |
-| Application directory delivery    | Delivery, directory security, race, rollback tests     | Complete staged application commit                      |
-| Prepared browser control          | Manifest, query, control, refresh, controller tests    | Rapid state changes and publication rotation            |
-| Browser reader or loader          | Parser, integrity, decode, cancellation, disposal      | Packed subpath with required peer                       |
-| marimo-studio integration         | Compiler, registry, route, static delivery tests       | Live Zero-Python preview and static bundle              |
-| Visible application               | Typecheck and production build                         | Desktop, narrow, rapid changes, mounted action          |
-| Documentation                     | Prose, links, VitePress build                          | Navigation, search, source view, LLM text, browser      |
+| Changed boundary                          | Focused evidence                                       | Live or package evidence                                |
+| ----------------------------------------- | ------------------------------------------------------ | ------------------------------------------------------- |
+| StateSpace, ExportSpec, and export format | State-space, spec, index, wire, fixture, reader tests  | Python and TypeScript fixture parity                    |
+| Planning and preparation                  | Plan and preparation service tests                     | Exact repeat, one-state addition, file and live capture |
+| Observations                              | Queue, ledger, source-match, SQLite observation tests  | Successful normal-run recording in a live kernel        |
+| Repository                                | Repository, concurrency, integrity, lifecycle tests    | Multiprocess contention, owner death, Windows matrix    |
+| Marimo cache adapter                      | Probe, patch, graph scope, receipt, cleanup tests      | Warm owned build and borrowed capture                   |
+| Managed process lifecycle                 | Producer, managed server, startup, shutdown tests      | Source-preserving file preparation                      |
+| Live transport and authentication         | Client, auth, SSE, remote response, redaction tests    | HTTPS borrowed capture and same-origin transfer         |
+| Transfer, writer, local reader            | Limits, digest, framing, rollback, filesystem tests    | Public capture and `verify`                             |
+| Prepared Python publication               | Manifest, publication, cancellation, route-grace tests | Mutable manifest and retained immutable routes          |
+| Application directory delivery            | Delivery, directory security, race, rollback tests     | Complete staged application commit                      |
+| Prepared browser control                  | Manifest, query, control, refresh, controller tests    | Rapid state changes and publication rotation            |
+| Browser reader or loader                  | Parser, integrity, decode, cancellation, disposal      | Packed subpath with required peer                       |
+| marimo-studio integration                 | Compiler, registry, route, static delivery tests       | Live Zero-Python preview and static bundle              |
+| Visible application                       | Typecheck and production build                         | Desktop, narrow, rapid changes, mounted action          |
+| Documentation                             | Prose, links, VitePress build                          | Navigation, search, source view, LLM text, browser      |
 
 ## Public Python and dependency direction
 

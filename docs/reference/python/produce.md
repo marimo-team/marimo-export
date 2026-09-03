@@ -33,6 +33,54 @@ network access. It creates a temporary sibling copy beside the notebook, so the
 notebook directory must be writable. The output directory's parent must already
 exist. The authored notebook remains unchanged.
 
+## `StateSpace`
+
+```python
+StateSpace(
+    *,
+    default_state: str,
+    states: Mapping[str, Mapping[str, JsonValue]] | None = None,
+    matrix: Mapping[str, list[JsonValue]] | None = None,
+)
+```
+
+A `StateSpace` declares input states independently of outputs. `states` maps
+stable names to sparse input assignments. `matrix` expands the Cartesian
+product of nonempty input domains into deterministic `matrix-000000` names.
+
+```python
+from marimo_export import ExportSpec, OutputSpec, StateSpace
+
+state_space = StateSpace.from_file("states.yaml")
+spec = ExportSpec.from_state_space(
+    state_space,
+    outputs={"summary": OutputSpec.json("report.summary")},
+)
+```
+
+Methods and properties:
+
+```python
+StateSpace.from_file(path: str | os.PathLike[str]) -> StateSpace
+StateSpace.from_yaml(text: str | bytes, *, source: str = "<memory>") -> StateSpace
+StateSpace.from_value(value: object) -> StateSpace
+StateSpace.json_schema() -> dict[str, object]
+state_space.to_value() -> dict[str, object]
+state_space.digest: str
+ExportSpec.from_state_space(
+    state_space: StateSpace,
+    *,
+    outputs: Mapping[str, OutputSpec],
+) -> ExportSpec
+```
+
+`to_value()` returns normalized explicit states after matrix expansion. The
+`digest` is the SHA-256 identity of that normalized form.
+
+Invalid documents and state relations raise `SpecError` with code
+`spec_invalid` or `spec_value_invalid`. Non-mapping state collections,
+non-mapping rows, and non-list matrix domains raise `TypeError`.
+
 ## `ExportSpec`
 
 ```python
@@ -74,8 +122,8 @@ Invalid wire values raise `SpecError`. Its code identifies the affected part as
 `spec_invalid`, `spec_value_invalid`, `spec_output_invalid`, or
 `spec_exporter_invalid`.
 
-The [ExportSpec reference](../export-spec.md) defines state values, selector
-syntax, and the YAML and JSON shape.
+The [StateSpace and ExportSpec reference](../export-spec.md) defines state
+values, matrix expansion, selector syntax, and the YAML and JSON shapes.
 
 ## `OutputSpec`
 

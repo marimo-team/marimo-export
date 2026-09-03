@@ -37,6 +37,7 @@ def test_root_package_exposes_the_public_api() -> None:
         "OutputSpec",
         "PreparedExport",
         "ProgressEvent",
+        "StateSpace",
         "VerificationResult",
         "build",
         "capture",
@@ -65,6 +66,7 @@ def test_root_records_have_one_public_import_location() -> None:
     assert marimo_export.OutputSpec.__module__ == "marimo_export.spec"
     assert marimo_export.PreparedExport.__module__ == "marimo_export.prepared"
     assert marimo_export.ProgressEvent.__module__ == "marimo_export.progress"
+    assert marimo_export.StateSpace.__module__ == "marimo_export.spec"
     assert marimo_export.VerificationResult.__module__ == "marimo_export.reader"
 
 

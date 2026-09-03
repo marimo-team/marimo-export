@@ -1,6 +1,6 @@
 ---
 title: Reference
-description: Exact contracts for ExportSpec, notebook exports, commands, Python, browser APIs, representations, portable JSON, and project terminology.
+description: Exact contracts for StateSpace, ExportSpec, notebook exports, commands, Python, browser APIs, representations, portable JSON, and project terminology.
 ---
 
 # Reference
@@ -14,7 +14,7 @@ notebook export?](../overview.md) for the product model.
 
 | Need                                                 | Reference                                    |
 | ---------------------------------------------------- | -------------------------------------------- |
-| Declare state rows and output sources                | [ExportSpec](export-spec.md)                 |
+| Declare a state space and output sources             | [StateSpace and ExportSpec](export-spec.md)  |
 | Match a notebook value to a stored form and consumer | [Output representations](representations.md) |
 | Implement or inspect the portable directory          | [Export format](export-format.md)            |
 | Run commands and consume machine output              | [CLI](cli.md)                                |

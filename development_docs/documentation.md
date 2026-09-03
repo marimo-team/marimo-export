@@ -48,7 +48,7 @@ reference contract. Update the route manifest in the same change.
 | Python name, signature, and default        | Public function, class, or package export                     |
 | CLI command, option, output, and exit code | `_cli/arguments.py`, command result record, and render path   |
 | TypeScript value, type, option, and error  | Public package barrel, implementation, and packed declaration |
-| ExportSpec rule                            | `spec.py` and generated JSON Schema                           |
+| StateSpace or ExportSpec rule              | `spec.py` and generated JSON Schema                           |
 | Durable export shape                       | `index.py`, `descriptors.py`, browser schema, and fixtures    |
 | Loader result and lifecycle                | Loader source, package facade, and browser tests              |
 | Compatibility                              | Package manifests, Marimo release record, and CI matrix       |

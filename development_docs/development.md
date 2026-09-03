@@ -83,6 +83,7 @@ NotebookExport
 OutputSpec
 PreparedExport
 ProgressEvent
+StateSpace
 VerificationResult
 build
 capture

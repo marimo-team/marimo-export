@@ -86,6 +86,7 @@ def _freeze_json(value: JsonValue) -> FrozenJsonValue:
 __all__ = [
     "FrozenJsonObject",
     "FrozenJsonValue",
+    "JsonValue",
     "canonical_json_bytes",
     "canonical_json_sha256",
     "parse_canonical_json",

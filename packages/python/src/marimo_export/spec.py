@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import itertools
 import keyword
 import os
 from collections.abc import Mapping
 from dataclasses import dataclass, field
+from hashlib import sha256
 from pathlib import Path
 from types import MappingProxyType
 from typing import Annotated, Any, ClassVar, Literal, TypeAlias, cast
@@ -39,11 +41,13 @@ from marimo_export.exporters._spec import ExporterSpec
 from marimo_export.wire import FrozenJsonObject, FrozenJsonValue
 
 SPEC_SCHEMA = "marimo-export.spec.v2"
+STATE_SPACE_SCHEMA = "marimo-export.states.v1"
 
 StrPath: TypeAlias = str | os.PathLike[str]
 
 _MAX_NAME_BYTES = 255
 _MAX_SPEC_BYTES = 16 * 1024 * 1024
+_MAX_STATE_SPACE_STATES = 10_000
 _MAX_YAML_DEPTH = 256
 _MAX_YAML_NODES = 100_000
 _MAX_VALIDATION_ERRORS = 8
@@ -153,6 +157,10 @@ _PortableValueWire = TypeAliasType(
     | list["_PortableValueWire"]
     | dict[_UnicodeStringWire, "_PortableValueWire"],
 )
+_PortableDomainWire = TypeAliasType(
+    "_PortableDomainWire",
+    Annotated[list[_PortableValueWire], Field(min_length=1)],
+)
 
 
 class _WireModel(BaseModel):
@@ -255,6 +263,28 @@ class _SpecWire(_WireModel):
         return self
 
 
+class _StateSpaceWire(_WireModel):
+    model_config = ConfigDict(
+        extra="forbid",
+        frozen=True,
+        regex_engine="python-re",
+        strict=True,
+        validate_default=True,
+        title="marimo-export state space",
+        json_schema_extra={
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "$id": "https://marimo.io/schemas/marimo-export/states.v1.json",
+        },
+    )
+
+    schema_: Literal["marimo-export.states.v1"] = Field(alias="schema")
+    default_state: _ExportNameWire
+    states: dict[_ExportNameWire, dict[_IdentifierWire, _PortableValueWire]] = Field(
+        default_factory=dict
+    )
+    matrix: dict[_IdentifierWire, _PortableDomainWire] = Field(default_factory=dict)
+
+
 class _SpecSchemaGenerator(GenerateJsonSchema):
     _NAMES: ClassVar[dict[str, str]] = {
         "_UnicodeStringWire": "unicode_string",
@@ -262,6 +292,7 @@ class _SpecSchemaGenerator(GenerateJsonSchema):
         "_IdentifierWire": "python_identifier",
         "_ModuleNameWire": "python_module_name",
         "_PortableValueWire": "portable_input_value",
+        "_PortableDomainWire": "portable_input_domain",
         "_JsonSourceWire": "json_source",
         "_NativeSourceWire": "native_source",
         "_ExportSourceWire": "export_source",
@@ -399,6 +430,231 @@ class OutputSpec:
         return cls(source=CellSource(kind="cell", by=by, value=value))
 
 
+def _state_mapping_value(
+    states: Mapping[str, Mapping[str, JsonValue]],
+) -> JsonObject:
+    if not isinstance(states, Mapping):
+        raise TypeError("states must be a mapping")
+    values: JsonObject = {}
+    for name, row in states.items():
+        if not isinstance(name, str):
+            raise TypeError("state names must be strings")
+        if not isinstance(row, Mapping):
+            raise TypeError(f"states[{name!r}] must be a mapping")
+        values[name] = cast(JsonValue, dict(row))
+    return values
+
+
+def _matrix_mapping_value(matrix: Mapping[str, list[JsonValue]]) -> JsonObject:
+    if not isinstance(matrix, Mapping):
+        raise TypeError("matrix must be a mapping")
+    values: JsonObject = {}
+    for name, domain in matrix.items():
+        if not isinstance(name, str):
+            raise TypeError("matrix input names must be strings")
+        if not isinstance(domain, list):
+            raise TypeError(f"matrix[{name!r}] must be a list")
+        values[name] = cast(JsonValue, list(domain))
+    return values
+
+
+@dataclass(frozen=True, slots=True, init=False)
+class StateSpace:
+    """Declare the finite input states prepared for an output plan."""
+
+    default_state: str
+    states: Mapping[str, FrozenJsonObject]
+    digest: str
+    _wire_bytes: bytes = field(repr=False)
+
+    def __init__(
+        self,
+        *,
+        default_state: str,
+        states: Mapping[str, Mapping[str, JsonValue]] | None = None,
+        matrix: Mapping[str, list[JsonValue]] | None = None,
+    ) -> None:
+        state_values = _state_mapping_value(states or {})
+        matrix_values = _matrix_mapping_value(matrix or {})
+        decoded = self._decode(
+            {
+                "schema": STATE_SPACE_SCHEMA,
+                "default_state": default_state,
+                "states": state_values,
+                "matrix": matrix_values,
+            }
+        )
+        object.__setattr__(self, "default_state", decoded.default_state)
+        object.__setattr__(self, "states", decoded.states)
+        object.__setattr__(self, "digest", decoded.digest)
+        object.__setattr__(self, "_wire_bytes", decoded._wire_bytes)
+
+    @classmethod
+    def _create(cls, wire: _StateSpaceWire) -> StateSpace:
+        expanded: dict[str, JsonObject] = {
+            name: cast(JsonObject, dict(wire.states[name])) for name in wire.states
+        }
+        if wire.matrix:
+            names = sorted(wire.matrix)
+            domains = [wire.matrix[name] for name in names]
+            size = 1
+            for name, domain in zip(names, domains, strict=True):
+                identities = {canonical_bytes(value) for value in domain}
+                if len(identities) != len(domain):
+                    raise SpecError(
+                        f"state space.matrix.{name} contains duplicate values",
+                        code="spec_value_invalid",
+                    )
+                size *= len(domain)
+                if size > _MAX_STATE_SPACE_STATES:
+                    raise SpecError(
+                        f"state space exceeds {_MAX_STATE_SPACE_STATES} states",
+                        code="spec_value_invalid",
+                    )
+            for index, values in enumerate(itertools.product(*domains)):
+                state_name = f"matrix-{index:06d}"
+                if state_name in expanded:
+                    raise SpecError(
+                        f"state name {state_name!r} is reserved for matrix rows",
+                        code="spec_value_invalid",
+                    )
+                expanded[state_name] = dict(zip(names, values, strict=True))
+        if not expanded:
+            raise SpecError(
+                "state space must declare states or a matrix",
+                code="spec_value_invalid",
+            )
+        if len(expanded) > _MAX_STATE_SPACE_STATES:
+            raise SpecError(
+                f"state space exceeds {_MAX_STATE_SPACE_STATES} states",
+                code="spec_value_invalid",
+            )
+        if wire.default_state not in expanded:
+            raise SpecError(
+                "default_state must name a declared state",
+                code="spec_value_invalid",
+            )
+        ordered = {name: expanded[name] for name in sorted(expanded)}
+        value: JsonObject = {
+            "schema": STATE_SPACE_SCHEMA,
+            "default_state": wire.default_state,
+            "states": cast(JsonValue, ordered),
+            "matrix": {},
+        }
+        wire_bytes = canonical_bytes(value)
+        instance = object.__new__(cls)
+        object.__setattr__(instance, "default_state", wire.default_state)
+        object.__setattr__(
+            instance,
+            "states",
+            MappingProxyType(
+                {name: cast(FrozenJsonObject, _freeze(ordered[name])) for name in ordered}
+            ),
+        )
+        object.__setattr__(instance, "digest", sha256(wire_bytes).hexdigest())
+        object.__setattr__(instance, "_wire_bytes", wire_bytes)
+        return instance
+
+    @classmethod
+    def _decode(cls, value: object) -> StateSpace:
+        try:
+            root = json_object(value, "state space")
+            return cls._create(_StateSpaceWire.model_validate(root))
+        except SpecError:
+            raise
+        except ValidationError as error:
+            raise SpecError(
+                _validation_message(error, root="state space"),
+                code=_spec_error_code(error),
+            ) from error
+        except (TypeError, ValueError) as error:
+            raise SpecError(
+                safe_diagnostic(error, maximum_chars=_MAX_ERROR_MESSAGE_CHARS),
+                code="spec_value_invalid",
+            ) from error
+
+    @classmethod
+    def from_value(cls, value: object) -> StateSpace:
+        """Validate a state-space wire value and expand its matrix."""
+
+        if isinstance(value, StateSpace):
+            return value
+        return cls._decode(value)
+
+    @classmethod
+    def from_yaml(
+        cls,
+        text: str | bytes,
+        *,
+        source: str = "<memory>",
+    ) -> StateSpace:
+        """Load a strict state space from UTF-8 YAML."""
+
+        if isinstance(text, str):
+            data = text.encode("utf-8")
+        elif isinstance(text, bytes):
+            data = text
+        else:
+            raise TypeError("text must be a string or bytes")
+        if len(data) > _MAX_SPEC_BYTES:
+            raise SpecError(
+                f"state space exceeds {_MAX_SPEC_BYTES} bytes: {source}",
+                code="spec_invalid",
+            )
+        return cls.from_value(
+            _decode_yaml(
+                data,
+                Path(source),
+                label="state space",
+                loader_type=_StateSpaceSafeLoader,
+            )
+        )
+
+    @classmethod
+    def from_file(cls, path: StrPath) -> StateSpace:
+        """Load a strict UTF-8 JSON or safe YAML state space."""
+
+        source = _spec_path(path, label="state space")
+        data = _read_spec(source, label="state space")
+        suffix = source.suffix.lower()
+        if suffix == ".json":
+            try:
+                value = decode_json_object(data, f"state space {source}")
+            except (TypeError, ValueError) as error:
+                raise SpecError(
+                    safe_diagnostic(error, maximum_chars=_MAX_ERROR_MESSAGE_CHARS),
+                    code="spec_invalid",
+                ) from error
+        elif suffix in {".yaml", ".yml"}:
+            value = _decode_yaml(
+                data,
+                source,
+                label="state space",
+                loader_type=_StateSpaceSafeLoader,
+            )
+        else:
+            raise SpecError(
+                f"state space path must end in .json, .yaml, or .yml: {source}",
+                code="spec_invalid",
+            )
+        return cls.from_value(value)
+
+    @classmethod
+    def json_schema(cls) -> JsonObject:
+        """Return a detached Draft 2020-12 authoring schema."""
+
+        schema = _StateSpaceWire.model_json_schema(
+            by_alias=True,
+            schema_generator=_SpecSchemaGenerator,
+        )
+        return json_object(schema, "state space schema")
+
+    def to_value(self) -> JsonObject:
+        """Return the normalized explicit state-space value."""
+
+        return decode_json_object(self._wire_bytes, "state space")
+
+
 @dataclass(frozen=True, slots=True, init=False)
 class ExportSpec:
     """Declare named states and the notebook definitions to export."""
@@ -415,8 +671,6 @@ class ExportSpec:
         states: Mapping[str, Mapping[str, JsonValue]],
         outputs: Mapping[str, OutputSpec],
     ) -> None:
-        if not isinstance(states, Mapping):
-            raise TypeError("states must be a mapping")
         if not isinstance(outputs, Mapping):
             raise TypeError("outputs must be a mapping")
         output_values: JsonObject = {}
@@ -429,13 +683,7 @@ class ExportSpec:
             if output.exporter is not None:
                 output_value["exporter"] = output.exporter.to_value()
             output_values[name] = output_value
-        state_values: JsonObject = {}
-        for name, row in states.items():
-            if not isinstance(name, str):
-                raise TypeError("state names must be strings")
-            if not isinstance(row, Mapping):
-                raise TypeError(f"states[{name!r}] must be a mapping")
-            state_values[name] = cast(JsonValue, dict(row))
+        state_values = _state_mapping_value(states)
         decoded = self._decode(
             {
                 "schema": SPEC_SCHEMA,
@@ -448,6 +696,27 @@ class ExportSpec:
         object.__setattr__(self, "states", decoded.states)
         object.__setattr__(self, "outputs", decoded.outputs)
         object.__setattr__(self, "_wire_bytes", decoded._wire_bytes)
+
+    @classmethod
+    def from_state_space(
+        cls,
+        state_space: StateSpace,
+        *,
+        outputs: Mapping[str, OutputSpec],
+    ) -> ExportSpec:
+        """Combine a validated state space with one output plan."""
+
+        if not isinstance(state_space, StateSpace):
+            raise TypeError("state_space must be a StateSpace")
+        value = state_space.to_value()
+        states = value["states"]
+        if not isinstance(states, dict):
+            raise AssertionError("Normalized state space states are not an object")
+        return cls(
+            default_state=state_space.default_state,
+            states=cast(dict[str, dict[str, JsonValue]], states),
+            outputs=outputs,
+        )
 
     @classmethod
     def _create(cls, wire: _SpecWire) -> ExportSpec:
@@ -615,7 +884,7 @@ def _source_to_value(source: OutputSource) -> JsonObject:
     return {"kind": "cell", "by": source.by, "value": source.value}
 
 
-def _spec_path(path: StrPath) -> Path:
+def _spec_path(path: StrPath, *, label: str = "export spec") -> Path:
     if not isinstance(path, (str, os.PathLike)):
         raise TypeError("path must be a string or path-like object")
     try:
@@ -623,7 +892,7 @@ def _spec_path(path: StrPath) -> Path:
     except (OSError, RuntimeError, TypeError, ValueError) as error:
         raise SpecError(
             safe_diagnostic(
-                "could not resolve export spec path: ",
+                f"could not resolve {label} path: ",
                 error,
                 maximum_chars=_MAX_ERROR_MESSAGE_CHARS,
             ),
@@ -631,14 +900,14 @@ def _spec_path(path: StrPath) -> Path:
         ) from error
 
 
-def _read_spec(path: Path) -> bytes:
+def _read_spec(path: Path, *, label: str = "export spec") -> bytes:
     try:
         with path.open("rb") as stream:
             data = stream.read(_MAX_SPEC_BYTES + 1)
     except (OSError, OverflowError, ValueError) as error:
         raise SpecError(
             safe_diagnostic(
-                "could not read export spec ",
+                f"could not read {label} ",
                 path,
                 ": ",
                 error,
@@ -648,34 +917,40 @@ def _read_spec(path: Path) -> bytes:
         ) from error
     if len(data) > _MAX_SPEC_BYTES:
         raise SpecError(
-            f"export spec exceeds {_MAX_SPEC_BYTES} bytes: {path}",
+            f"{label} exceeds {_MAX_SPEC_BYTES} bytes: {path}",
             code="spec_invalid",
         )
     return data
 
 
-def _decode_yaml(data: bytes, source: Path) -> object:
+def _decode_yaml(
+    data: bytes,
+    source: Path,
+    *,
+    label: str = "export spec",
+    loader_type: type[_UniqueSafeLoader] | None = None,
+) -> object:
     try:
         text = data.decode("utf-8")
     except UnicodeDecodeError as error:
         raise SpecError(
-            f"export spec must be UTF-8: {source}",
+            f"{label} must be UTF-8: {source}",
             code="spec_invalid",
         ) from error
     try:
-        return yaml.load(text, Loader=_UniqueSafeLoader)
+        return yaml.load(text, Loader=loader_type or _UniqueSafeLoader)
     except SpecError:
         raise
     except RecursionError as error:
         raise SpecError(
-            f"export spec YAML exceeds {_MAX_YAML_DEPTH} container levels",
+            f"{label} YAML exceeds {_MAX_YAML_DEPTH} container levels",
             code="spec_invalid",
         ) from error
     except yaml.YAMLError as error:
         problem = getattr(error, "problem", None) or str(error)
         raise SpecError(
             safe_diagnostic(
-                "invalid YAML in export spec ",
+                f"invalid YAML in {label} ",
                 source,
                 ": ",
                 problem,
@@ -686,6 +961,8 @@ def _decode_yaml(data: bytes, source: Path) -> object:
 
 
 class _UniqueSafeLoader(yaml.SafeLoader):
+    label = "export spec"
+
     def __init__(self, stream: Any) -> None:
         super().__init__(stream)
         self._composition_depth = 0
@@ -693,23 +970,30 @@ class _UniqueSafeLoader(yaml.SafeLoader):
 
     def compose_node(self, parent: Node | None, index: Any) -> Node:
         if self.check_event(AliasEvent):
-            raise SpecError("export spec YAML aliases are invalid", code="spec_invalid")
+            raise SpecError(
+                f"{self.label} YAML aliases are invalid",
+                code="spec_invalid",
+            )
         self._composition_depth += 1
         self._composition_nodes += 1
         try:
             if self._composition_depth > _MAX_YAML_DEPTH:
                 raise SpecError(
-                    f"export spec YAML exceeds {_MAX_YAML_DEPTH} container levels",
+                    f"{self.label} YAML exceeds {_MAX_YAML_DEPTH} container levels",
                     code="spec_invalid",
                 )
             if self._composition_nodes > _MAX_YAML_NODES:
                 raise SpecError(
-                    f"export spec YAML exceeds {_MAX_YAML_NODES} nodes",
+                    f"{self.label} YAML exceeds {_MAX_YAML_NODES} nodes",
                     code="spec_invalid",
                 )
             return cast(Node, super().compose_node(parent, index))
         finally:
             self._composition_depth -= 1
+
+
+class _StateSpaceSafeLoader(_UniqueSafeLoader):
+    label = "state space"
 
 
 def _construct_unique_mapping(
@@ -720,19 +1004,22 @@ def _construct_unique_mapping(
     result: dict[object, object] = {}
     for key_node, value_node in node.value:
         if key_node.tag == "tag:yaml.org,2002:merge":
-            raise SpecError("export spec YAML merge keys are invalid", code="spec_invalid")
+            raise SpecError(
+                f"{loader.label} YAML merge keys are invalid",
+                code="spec_invalid",
+            )
         key = loader.construct_object(key_node, deep=deep)
         try:
             duplicate = key in result
         except TypeError as error:
             raise SpecError(
-                "export spec object keys must be scalar values",
+                f"{loader.label} object keys must be scalar values",
                 code="spec_invalid",
             ) from error
         if duplicate:
             raise SpecError(
                 safe_diagnostic(
-                    "export spec contains duplicate key ",
+                    f"{loader.label} contains duplicate key ",
                     repr(key),
                     maximum_chars=_MAX_ERROR_MESSAGE_CHARS,
                 ),
@@ -753,25 +1040,30 @@ def _spec_error_code(error: ValidationError) -> str:
     locations = [tuple(item.get("loc", ())) for item in items]
     if any("exporter" in location for location in locations):
         return "spec_exporter_invalid"
-    if any("states" in location for location in locations):
+    if any("states" in location or "matrix" in location for location in locations):
         return "spec_value_invalid"
     if any("outputs" in location for location in locations):
         return "spec_output_invalid"
     return "spec_invalid"
 
 
-def _validation_message(error: ValidationError) -> str:
+def _validation_message(error: ValidationError, *, root: str = "spec") -> str:
     messages: list[str] = []
     items = error.errors(include_url=False, include_context=False, include_input=False)
     for item in items[:_MAX_VALIDATION_ERRORS]:
-        location = _validation_path(cast(tuple[object, ...], item.get("loc", ())))
+        location = _validation_path(
+            cast(tuple[object, ...], item.get("loc", ())),
+            root=root,
+        )
         kind = item.get("type")
         if kind == "extra_forbidden":
-            message = (
-                f"{_validation_path(tuple(item['loc'][:-1]))} does not accept {item['loc'][-1]!r}"
-            )
+            parent = _validation_path(tuple(item["loc"][:-1]), root=root)
+            message = f"{parent} does not accept {item['loc'][-1]!r}"
         elif kind == "missing":
-            message = f"{_validation_path(tuple(item['loc'][:-1]))} is missing {item['loc'][-1]!r}"
+            parent = _validation_path(tuple(item["loc"][:-1]), root=root)
+            message = f"{parent} is missing {item['loc'][-1]!r}"
+        elif kind == "too_short" and "matrix" in item.get("loc", ()):
+            message = f"{location}: must contain at least one value"
         else:
             detail = str(item.get("msg", "validation failed")).removeprefix("Value error, ")
             message = f"{location}: {detail}"
@@ -779,15 +1071,15 @@ def _validation_message(error: ValidationError) -> str:
             messages.append(message)
     remaining = len(items) - len(items[:_MAX_VALIDATION_ERRORS])
     if remaining:
-        messages.append(f"spec: {remaining} additional validation errors")
+        messages.append(f"{root}: {remaining} additional validation errors")
     return safe_diagnostic(
         ". ".join(messages),
         maximum_chars=_MAX_ERROR_MESSAGE_CHARS,
     )
 
 
-def _validation_path(location: tuple[object, ...]) -> str:
-    path = "spec"
+def _validation_path(location: tuple[object, ...], *, root: str = "spec") -> str:
+    path = root
     for part in location:
         if isinstance(part, str) and part.startswith("function-after["):
             continue
@@ -795,4 +1087,11 @@ def _validation_path(location: tuple[object, ...]) -> str:
     return path
 
 
-__all__ = ["ExportSpec", "FrozenJsonObject", "FrozenJsonValue", "OutputSpec", "StrPath"]
+__all__ = [
+    "ExportSpec",
+    "FrozenJsonObject",
+    "FrozenJsonValue",
+    "OutputSpec",
+    "StateSpace",
+    "StrPath",
+]

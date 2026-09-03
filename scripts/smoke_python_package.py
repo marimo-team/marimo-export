@@ -15,6 +15,7 @@ _ROOT_API = {
     "OutputSpec",
     "PreparedExport",
     "ProgressEvent",
+    "StateSpace",
     "VerificationResult",
     "build",
     "capture",
@@ -71,6 +72,8 @@ def main() -> None:
         raise RuntimeError("installed ExportRepository must use its public repository module")
     if marimo_export.PreparedExport.__module__ != "marimo_export.prepared":
         raise RuntimeError("installed PreparedExport must use its public prepared module")
+    if marimo_export.StateSpace.__module__ != "marimo_export.spec":
+        raise RuntimeError("installed StateSpace must use its public spec module")
 
     from marimo_export.delivery import StagedDelivery, stage
     from marimo_export.observations import ObservedInputs

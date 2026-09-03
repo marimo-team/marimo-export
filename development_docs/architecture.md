@@ -16,16 +16,17 @@ notebook + ExportSpec
 
 ## Responsibility boundary
 
-| Owner         | Responsibilities                                                                                                                          |
-| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| marimo        | Notebook parsing, reactive graph, execution, controls, cache keys, cache stores, restoration, native serialization                        |
-| marimo-export | ExportSpec, observations, planning, preparation, prepared-state reuse, repository coordination, export format, Python and browser readers |
-| application   | Authored presentation, selected spec relation, view bindings, renderer, runtime UX, deployment assembly                                   |
+| Owner         | Responsibilities                                                                                                                                      |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| marimo        | Notebook parsing, reactive graph, execution, controls, cache keys, cache stores, restoration, native serialization                                    |
+| marimo-export | StateSpace, ExportSpec, observations, planning, preparation, prepared-state reuse, repository coordination, export format, Python and browser readers |
+| application   | Authored presentation, selected spec relation, view bindings, renderer, runtime UX, deployment assembly                                               |
 
-marimo-studio is one application of these capabilities. It compiles HTML
-projection hosts into ExportSpec outputs and Studio-owned view bindings. It
-uses the public Python SDK to prepare exports and the public browser `prepared`
-subpath to drive static state transitions.
+marimo-studio is one application of these capabilities. It loads a public
+StateSpace, compiles HTML projection hosts into ExportSpec outputs and
+Studio-owned view bindings, and combines both into one ExportSpec. It uses the
+public Python SDK to prepare exports and the public browser `prepared` subpath
+to drive static state transitions.
 
 The published Marimo 0.24.0 package remains the execution dependency. Private
 integration code stays under `marimo_export._marimo.compat` behind
@@ -185,7 +186,7 @@ view compiler, server routes, static bundle, and renderer adapter.
 
 | Zone                               | Owns                                                              |
 | ---------------------------------- | ----------------------------------------------------------------- |
-| `spec.py`                          | Authored ExportSpec and OutputSpec                                |
+| `spec.py`                          | Authored StateSpace, ExportSpec, and OutputSpec                   |
 | `planning.py`, `_execution`        | Public plan records, baseline, normalization, transient cells     |
 | `_services`                        | Plan, prepare, capture, artifact assembly, durable write          |
 | `observations.py`, `_observations` | Public observation records, queue, worker, source binding         |

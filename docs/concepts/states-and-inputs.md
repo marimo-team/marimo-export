@@ -9,6 +9,11 @@ An export state is one complete assignment for every input inferred from an
 `ExportSpec`. Authors can write sparse state rows because marimo-export fills
 omitted values from the captured baseline.
 
+A `StateSpace` declares reusable state rows independently of outputs. A complete
+`ExportSpec` combines a state space with the named outputs to prepare. This lets
+an application infer its output plan while reusing marimo-export's state
+validation and matrix expansion.
+
 Consider a notebook whose current controls are `interval: 1d` and
 `region: All`:
 
@@ -67,6 +72,23 @@ Planning rejects a selected input when its value is missing, contains a password
 control, or cannot be represented as portable JSON. It also rejects an ordinary
 definition assigned by the defining cell's final named expression because the
 notebook and the state row would both own that value.
+
+## A matrix expands a state space
+
+Use `matrix` when each value for one input can combine with every value for the
+other inputs:
+
+```yaml
+schema: marimo-export.states.v1
+default_state: matrix-000000
+matrix:
+  interval: [1d, 1wk]
+  region: [All, Europe]
+```
+
+The matrix expands to four named states. Use explicit `states` for combinations
+that need stable domain names or when some combinations are invalid. A
+`StateSpace` can contain both forms.
 
 ## The captured baseline completes sparse rows
 

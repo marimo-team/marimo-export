@@ -16,7 +16,7 @@ Use the architecture map that owns the change:
 
 | Area                                              | Map                                                                                          |
 | ------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| ExportSpec, descriptors, writer, reader           | [Product model and export format](architecture/product-and-export.md)                        |
+| StateSpace, ExportSpec, writer, and reader        | [Product model and export format](architecture/product-and-export.md)                        |
 | State planning, preparation, progress             | [Planning and preparation](architecture/preparation.md)                                      |
 | SQLite, artifacts, leases, fencing, retention     | [Export repository](architecture/repository.md)                                              |
 | Public records, services, ports, composition      | [Ports and composition](architecture/ports.md)                                               |
@@ -51,22 +51,22 @@ TypeScript formatting, linting, types, tests, builds, and task execution.
 
 ## Work in one owning slice
 
-| Owner                                | Focused loop                                                                                                                                                               |
-| ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| ExportSpec or export format          | `uv run pytest packages/python/tests/test_spec.py packages/python/tests/test_protocol_fixtures.py`                                                                         |
-| Public API and dependency direction  | `uv run pytest packages/python/tests/test_public_modules.py packages/python/tests/test_boundaries.py`                                                                      |
-| Observations                         | `uv run pytest packages/python/tests/test_observations.py packages/python/tests/test_marimo_observations.py`                                                               |
-| Planning and preparation             | `uv run pytest packages/python/tests/test_planning.py packages/python/tests/test_preparation_*.py packages/python/tests/test_prepared_*.py`                                |
-| Export repository                    | `uv run pytest packages/python/tests/test_repository*.py`                                                                                                                  |
-| Marimo cache adapter                 | `uv run pytest packages/python/tests/test_marimo_cache_*.py packages/python/tests/test_marimo_{child_run,exporter_compat,projection_recording,receipts,runtime_compat}.py` |
-| Managed or borrowed producer         | Managed server, producer, build, client, or state integration test                                                                                                         |
-| Live transport and authentication    | `uv run pytest packages/python/tests/test_{client,remote_auth,remote_client,remote_sse}.py`                                                                                |
-| Application publication and delivery | `uv run pytest packages/python/tests/test_{manifest,publication,delivery,directory_security}.py`                                                                           |
-| Browser prepared controller          | `pnpm --filter @marimo-team/marimo-export test -- prepared`                                                                                                                |
-| Browser core                         | `pnpm --filter @marimo-team/marimo-export test`                                                                                                                            |
-| One loader                           | `pnpm --filter @marimo-export/internal-loader-<name> test`                                                                                                                 |
-| Skill scaffold                       | `uv run pytest skills/notebook-to-static-app/tests`                                                                                                                        |
-| Documentation                        | `node apps/docs/scripts/check-navigation.mjs && make docs-build`                                                                                                           |
+| Owner                                    | Focused loop                                                                                                                                                               |
+| ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| StateSpace, ExportSpec, or export format | `uv run pytest packages/python/tests/test_state_space.py packages/python/tests/test_spec.py packages/python/tests/test_protocol_fixtures.py`                               |
+| Public API and dependency direction      | `uv run pytest packages/python/tests/test_public_modules.py packages/python/tests/test_boundaries.py`                                                                      |
+| Observations                             | `uv run pytest packages/python/tests/test_observations.py packages/python/tests/test_marimo_observations.py`                                                               |
+| Planning and preparation                 | `uv run pytest packages/python/tests/test_planning.py packages/python/tests/test_preparation_*.py packages/python/tests/test_prepared_*.py`                                |
+| Export repository                        | `uv run pytest packages/python/tests/test_repository*.py`                                                                                                                  |
+| Marimo cache adapter                     | `uv run pytest packages/python/tests/test_marimo_cache_*.py packages/python/tests/test_marimo_{child_run,exporter_compat,projection_recording,receipts,runtime_compat}.py` |
+| Managed or borrowed producer             | Managed server, producer, build, client, or state integration test                                                                                                         |
+| Live transport and authentication        | `uv run pytest packages/python/tests/test_{client,remote_auth,remote_client,remote_sse}.py`                                                                                |
+| Application publication and delivery     | `uv run pytest packages/python/tests/test_{manifest,publication,delivery,directory_security}.py`                                                                           |
+| Browser prepared controller              | `pnpm --filter @marimo-team/marimo-export test -- prepared`                                                                                                                |
+| Browser core                             | `pnpm --filter @marimo-team/marimo-export test`                                                                                                                            |
+| One loader                               | `pnpm --filter @marimo-export/internal-loader-<name> test`                                                                                                                 |
+| Skill scaffold                           | `uv run pytest skills/notebook-to-static-app/tests`                                                                                                                        |
+| Documentation                            | `node apps/docs/scripts/check-navigation.mjs && make docs-build`                                                                                                           |
 
 Add live producer or browser evidence when the contract crosses a process,
 filesystem transaction, remote transport, or mounted document.

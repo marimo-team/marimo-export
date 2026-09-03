@@ -76,6 +76,7 @@ from marimo_export import (
     OutputSpec,
     PreparedExport,
     ProgressEvent,
+    StateSpace,
     VerificationResult,
     build,
     capture,

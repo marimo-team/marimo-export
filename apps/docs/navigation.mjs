@@ -58,7 +58,7 @@ export const documentationSections = [
     prefix: "/reference/",
     items: [
       { text: "Reference overview", link: "/reference/" },
-      { text: "ExportSpec reference", link: "/reference/export-spec" },
+      { text: "StateSpace and ExportSpec", link: "/reference/export-spec" },
       { text: "Output representations", link: "/reference/representations" },
       { text: "Export format reference", link: "/reference/export-format" },
       { text: "CLI reference", link: "/reference/cli" },

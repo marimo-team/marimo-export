@@ -10,6 +10,7 @@ format stores that relation as canonical JSON and content-addressed assets.
 | --------------- | -------------------------------------------------------------------- |
 | Notebook        | Saved marimo source and its reactive dependency graph                |
 | Baseline        | Definitions, values, UI state, cell ownership, document identity     |
+| StateSpace      | Reusable named state rows, matrix expansion, and default state       |
 | ExportSpec      | Default state, sparse named states, and output specifications        |
 | ExportPlan      | Inferred inputs, complete states, identities, and reusable work      |
 | State           | One complete input assignment and canonical fingerprint              |
@@ -20,6 +21,16 @@ format stores that relation as canonical JSON and content-addressed assets.
 | Notebook export | One canonical `index.json` and its declared assets                   |
 | ExportResult    | Plan, preparation reuse, verification, bytes, warnings, elapsed time |
 | Consumer        | Human-facing application, agent, Python reader, or custom client     |
+
+## StateSpace separates states from output discovery
+
+`StateSpace` owns the reusable input relation. It validates explicit state rows,
+expands a Cartesian input matrix, resolves the default state, and emits one
+normalized state mapping. An application that discovers its outputs composes
+that mapping with `OutputSpec` values through `ExportSpec.from_state_space()`.
+
+`ExportSpec` remains the complete planning input. Repository and producer
+identities depend on its combined states and outputs.
 
 ## ExportSpec resolves to execution and preparation plans
 

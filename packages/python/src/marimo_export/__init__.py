@@ -20,7 +20,7 @@ if TYPE_CHECKING:
     from marimo_export.reader import NotebookExport, open_export
     from marimo_export.repository import ExportRepository
     from marimo_export.result import ExportResult
-    from marimo_export.spec import ExportSpec, OutputSpec
+    from marimo_export.spec import ExportSpec, OutputSpec, StateSpace
     from marimo_export.verification import VerificationResult, verify_export
 
 _EXPORTS = {
@@ -32,6 +32,7 @@ _EXPORTS = {
     "OutputSpec": ("marimo_export.spec", "OutputSpec"),
     "PreparedExport": ("marimo_export.prepared", "PreparedExport"),
     "ProgressEvent": ("marimo_export.progress", "ProgressEvent"),
+    "StateSpace": ("marimo_export.spec", "StateSpace"),
     "VerificationResult": ("marimo_export.verification", "VerificationResult"),
     "build": ("marimo_export._build", "build"),
     "capture": ("marimo_export._services.capture_export", "capture"),
@@ -50,6 +51,7 @@ __all__ = (
     "OutputSpec",
     "PreparedExport",
     "ProgressEvent",
+    "StateSpace",
     "VerificationResult",
     "build",
     "capture",

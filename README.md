@@ -147,7 +147,7 @@ current exporter and loader contracts.
 
 ## Reference and development
 
-- [ExportSpec reference](docs/reference/export-spec.md)
+- [StateSpace and ExportSpec reference](docs/reference/export-spec.md)
 - [CLI reference](docs/reference/cli.md)
 - [Python API reference](docs/reference/python-api.md)
 - [Browser API reference](docs/reference/browser-api.md)

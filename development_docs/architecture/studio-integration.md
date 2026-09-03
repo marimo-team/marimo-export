@@ -78,12 +78,13 @@ for Zero-Python publication.
 HTML host identity stays outside ExportSpec and repository identity. Renaming a
 host or changing layout preserves prepared output reuse.
 
-## Studio chooses the authored state relation
+## Studio chooses the authored state space
 
-A view can place `export.yaml` beside its authored entrypoint. The file owns the
-saved states and default state. The provider artifact owns the projection set.
+A view can place `states.yaml` beside its authored entrypoint. The file uses the
+public `marimo_export.StateSpace` schema and owns the saved states and default
+state. The provider artifact owns the projection set.
 
-When a live view has no `export.yaml`, Studio constructs an explicit relation
+When a live view has no `states.yaml`, Studio constructs an explicit relation
 from marimo-export observations:
 
 1. Plan the view outputs against a baseline state and retain the plan's
@@ -94,19 +95,20 @@ from marimo-export observations:
    `observed-<fingerprint>`.
 5. Submit the resulting ExportSpec to marimo-export.
 
-This is application policy. marimo-export owns observation durability,
-normalization, fingerprints, default-state validation, reuse analysis, and
-preparation of the explicit spec it receives.
+This is application policy. marimo-export owns `StateSpace` parsing, matrix
+expansion, portable-value validation, observation durability, normalization,
+fingerprints, default-state validation, reuse analysis, and preparation of the
+explicit spec it receives.
 
-Static delivery uses the saved relation when `export.yaml` exists. Otherwise it
+Static delivery uses the saved relation when `states.yaml` exists. Otherwise it
 prepares one `baseline: {}` row, which planning completes from the initial
 notebook baseline.
 
 ## Live preparation uses public publication and session APIs
 
-Studio passes each `(view, browser binding, presentation revision, state-source
+Studio passes each `(view, browser binding, presentation revision, state-space
 digest)` key and a capture callback to `PreparedPublicationController`. The
-state-source digest invalidates prepared work when `export.yaml` changes.
+state-space digest invalidates prepared work when `states.yaml` changes.
 Supersession groups requests by `(view, browser binding)`. The callback receives
 the controller-owned `ExportRepository` and cancellation predicate, then uses
 the public session APIs:
@@ -197,11 +199,12 @@ the prepared export when it expires, including periods with no route traffic.
 
 ## Static delivery reuses the same artifact
 
-Static export opens an owned temporary `ExportRepository` and passes it to
-public `prepare()` with the compiled view spec. This keeps concurrent Studio
-exports independent while Marimo's cell cache continues to reuse notebook
-execution results. Studio closes the prepared export, repository, and temporary
-directory after bundle commit.
+Static export opens the configured persistent `ExportRepository` and passes it
+to public `prepare()` with the compiled view spec. Exact repository reuse can
+return the same prepared generation before notebook startup. Missing prepared
+states still run through Marimo's notebook-relative native cache. Studio closes
+its prepared-export lease and repository connection after bundle commit while
+the verified generation remains available for later commands.
 
 The site contains:
 

@@ -26,6 +26,7 @@ from marimo_export import (
     ExportRepository,
     ExportSpec,
     PreparedExport,
+    StateSpace,
     build,
     capture,
     open_export,
@@ -62,15 +63,16 @@ Public planning and result records are frozen package values. They contain
 strings, numbers, portable JSON, paths, and other marimo-export records.
 `PreparedExport` is a lifecycle handle over immutable export data.
 
-| Record               | Owner         | Meaning                                                 |
-| -------------------- | ------------- | ------------------------------------------------------- |
-| `ExportSpec`         | `spec.py`     | Authored states, default state, and output declarations |
-| `ExportPlan`         | `planning.py` | Resolved states, identities, and reusable work          |
-| `ProgressEvent`      | `progress.py` | Ordered preparation or write progress                   |
-| `PreparedExport`     | `prepared.py` | Leased immutable export ready to open, serve, or write  |
-| `ExportResult`       | `result.py`   | Durable write result and producer diagnostics           |
-| `NotebookExport`     | `reader.py`   | Immutable verified local reader                         |
-| `VerificationResult` | `reader.py`   | Verified state, output, asset, and byte counts          |
+| Record               | Owner         | Meaning                                                |
+| -------------------- | ------------- | ------------------------------------------------------ |
+| `StateSpace`         | `spec.py`     | Reusable states and explicit default state             |
+| `ExportSpec`         | `spec.py`     | State space combined with output declarations          |
+| `ExportPlan`         | `planning.py` | Resolved states, identities, and reusable work         |
+| `ProgressEvent`      | `progress.py` | Ordered preparation or write progress                  |
+| `PreparedExport`     | `prepared.py` | Leased immutable export ready to open, serve, or write |
+| `ExportResult`       | `result.py`   | Durable write result and producer diagnostics          |
+| `NotebookExport`     | `reader.py`   | Immutable verified local reader                        |
+| `VerificationResult` | `reader.py`   | Verified state, output, asset, and byte counts         |
 
 SQLite rows, Marimo graphs, kernel contexts, cache loaders, HTTP responses, and
 process handles remain private adapter values.
