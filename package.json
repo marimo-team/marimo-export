@@ -9,7 +9,10 @@
     "prepare": "vp config"
   },
   "devDependencies": {
+    "@oxlint/plugins": "catalog:",
     "@types/node": "catalog:",
+    "oxlint": "catalog:",
+    "oxlint-tsgolint": "catalog:",
     "typescript": "catalog:",
     "vite": "catalog:",
     "vite-plus": "catalog:"

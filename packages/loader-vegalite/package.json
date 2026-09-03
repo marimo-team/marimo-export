@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@marimo-team/marimo-export": "workspace:*",
+    "@marimo-team/portable-json": "workspace:*",
     "vega-embed": "catalog:"
   },
   "devDependencies": {

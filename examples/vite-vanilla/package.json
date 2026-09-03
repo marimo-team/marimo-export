@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@marimo-team/marimo-export": "workspace:*",
+    "@marimo-team/portable-json": "workspace:*",
     "hyparquet": "catalog:",
     "vega-embed": "catalog:"
   },
