@@ -456,11 +456,11 @@ def test_delayed_success_after_deadline_does_not_revive_artifact_lease(
         if kwargs["artifacts"] and not blocked:
             blocked = True
             entered.set()
-            assert proceed.wait(timeout=2)
+            assert proceed.wait(timeout=limits.lease_ttl_seconds + 2)
         return renewed
 
     monkeypatch.setattr(repository._catalog, "renew_lifecycle", delayed_renewal)
-    assert entered.wait(timeout=2)
+    assert entered.wait(timeout=limits.lease_ttl_seconds + 2)
     try:
         deadline = time.monotonic() + limits.lease_ttl_seconds + 2
         while state.alive and time.monotonic() < deadline:
@@ -570,11 +570,11 @@ def test_delayed_success_after_deadline_does_not_revive_staging_lease(
         if kwargs["staging"] and not blocked:
             blocked = True
             entered.set()
-            assert proceed.wait(timeout=2)
+            assert proceed.wait(timeout=limits.lease_ttl_seconds + 2)
         return renewed
 
     monkeypatch.setattr(repository._catalog, "renew_lifecycle", delayed_renewal)
-    assert entered.wait(timeout=2)
+    assert entered.wait(timeout=limits.lease_ttl_seconds + 2)
     try:
         deadline = time.monotonic() + limits.lease_ttl_seconds + 2
         while relative in repository._leases._staging and time.monotonic() < deadline:

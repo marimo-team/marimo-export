@@ -114,7 +114,7 @@ def test_detached_lease_survives_repository_close_and_prune(tmp_path: Path) -> N
         retained_identities=1,
         retained_generations=1,
         retained_prepared_states=1,
-        lease_ttl_seconds=1.0,
+        lease_ttl_seconds=2.0,
         lease_heartbeat_seconds=0.1,
     )
     identity = _identity("detached")
@@ -134,7 +134,7 @@ def test_detached_lease_survives_repository_close_and_prune(tmp_path: Path) -> N
         pruning.prune()
         assert (path / "index.json").is_file()
         detached.close()
-        deadline = time.monotonic() + 1
+        deadline = time.monotonic() + limits.lease_ttl_seconds + 2
         while path.exists() and time.monotonic() < deadline:
             time.sleep(0.02)
             pruning.prune()

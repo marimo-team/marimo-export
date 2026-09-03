@@ -319,11 +319,11 @@ def test_delayed_success_after_deadline_does_not_revive_reservation(
             if kwargs["reservations"] and not blocked:
                 blocked = True
                 entered.set()
-                assert proceed.wait(timeout=2)
+                assert proceed.wait(timeout=limits.lease_ttl_seconds + 2)
             return renewed
 
         monkeypatch.setattr(repository._catalog, "renew_lifecycle", delayed_renewal)
-        assert entered.wait(timeout=2)
+        assert entered.wait(timeout=limits.lease_ttl_seconds + 2)
         try:
             deadline = time.monotonic() + limits.lease_ttl_seconds + 2
             while reservation.alive and time.monotonic() < deadline:

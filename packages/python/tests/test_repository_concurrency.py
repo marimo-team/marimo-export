@@ -538,8 +538,8 @@ def test_maintenance_connection_retries_when_database_identity_changes(
 ) -> None:
     path = tmp_path / "maintenance.sqlite3"
     native_connect = sqlite3.connect
-    with native_connect(path):
-        pass
+    initial = native_connect(path)
+    initial.close()
     attempts = 0
 
     class ReplacedConnection:
