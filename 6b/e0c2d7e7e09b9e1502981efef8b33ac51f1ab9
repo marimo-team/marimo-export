@@ -1,0 +1,21 @@
+.github/workflows/ci.yml
+  s_84434b42698f4e::t_c5256c99baf715 20,53
+.github/workflows/pages.yml
+  s_84434b42698f4e::t_c5256c99baf715 16,57
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "6be0c2d7e7e09b9e1502981efef8b33ac51f1ab9",
+  "prompts": {},
+  "sessions": {
+    "s_84434b42698f4e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a061f5-fe96-7e42-ae14-44b03f0596fa",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
