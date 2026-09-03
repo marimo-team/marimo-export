@@ -132,9 +132,7 @@ jobs:
           path: dist
 
       - name: Publish npm packages
-        run: |
-          ./scripts/publish-npm.sh "dist/npm/marimo-team-portable-json-${GITHUB_REF_NAME#v}.tgz"
-          ./scripts/publish-npm.sh "dist/npm/marimo-team-marimo-export-${GITHUB_REF_NAME#v}.tgz"
+        run: ./scripts/publish-npm.sh "dist/npm/marimo-team-marimo-export-${GITHUB_REF_NAME#v}.tgz"
 
   verify-npm:
     name: Verify npm packages

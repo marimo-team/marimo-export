@@ -1,6 +1,6 @@
 {
   "name": "@marimo-team/marimo-export",
-  "version": "0.1.0",
+  "version": "0.0.1",
   "description": "Load precomputed marimo notebook results in browser applications",
   "homepage": "https://marimo-team.github.io/marimo-export/",
   "bugs": {
@@ -98,11 +98,11 @@
   },
   "dependencies": {
     "@marimo-export/internal-loader-anywidget": "workspace:*",
-    "@marimo-team/portable-json": "workspace:*",
     "@msgpack/msgpack": "^3.1.3"
   },
   "devDependencies": {
     "@anywidget/types": "catalog:",
+    "@marimo-team/portable-json": "workspace:*",
     "@types/node": "catalog:",
     "@uwdata/flechette": "catalog:",
     "hyparquet": "catalog:",

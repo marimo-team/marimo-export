@@ -106,18 +106,16 @@ revision-consistent observation snapshot. `clear` passes that plan to
 ## Package boundaries match public distribution
 
 The uv workspace builds one `marimo-export` wheel and source archive. The pnpm
-workspace builds `@marimo-team/portable-json` and
-`@marimo-team/marimo-export`. Browser core implements the root scalar and image
-loaders plus JSON, text, HTML, and marimo snapshot subpaths. Arrow, NumPy,
-Parquet, Vega-Lite, and AnyWidget implementations live in private workspaces and
-appear through public `loader/*` subpaths with their required dependencies.
+workspace builds one public `@marimo-team/marimo-export` package. Browser core
+implements the root scalar and image loaders plus JSON, text, HTML, and marimo
+snapshot subpaths. The workspace-owned portable JSON implementation and private
+Arrow, NumPy, Parquet, Vega-Lite, and AnyWidget loaders are bundled behind
+public browser subpaths with their required peer dependencies.
 
 Workspace builds and package smoke verify:
 
 - Python root exports and console command
 - managed kernel lifespan entry point
-- portable JSON root installation with no peer runtime
-- portable JSON Zod installation with its peer runtime
 - standalone browser core installation
 - every loader subpath with its required peer runtime
 - docs and example builds

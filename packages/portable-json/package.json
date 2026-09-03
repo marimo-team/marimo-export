@@ -1,6 +1,7 @@
 {
   "name": "@marimo-team/portable-json",
-  "version": "0.1.0",
+  "version": "0.0.0",
+  "private": true,
   "description": "Validate and parse JSON values with portable Python and JavaScript semantics",
   "homepage": "https://marimo-team.github.io/marimo-export/",
   "bugs": {
@@ -34,8 +35,7 @@
         "import": "./dist/zod.mjs"
       },
       "./package.json": "./package.json"
-    },
-    "access": "public"
+    }
   },
   "scripts": {
     "build": "vp pack",

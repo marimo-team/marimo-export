@@ -6,9 +6,9 @@ export default defineConfig({
   },
   pack: {
     deps: {
-      alwaysBundle: ["@marimo-export/internal-loader-anywidget"],
+      alwaysBundle: ["@marimo-export/internal-loader-anywidget", "@marimo-team/portable-json"],
       dts: {
-        alwaysBundle: ["@marimo-export/internal-loader-anywidget"],
+        alwaysBundle: ["@marimo-export/internal-loader-anywidget", "@marimo-team/portable-json"],
       },
     },
     entry: [

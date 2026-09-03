@@ -6,16 +6,11 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const packageRoot = fileURLToPath(new URL("..", import.meta.url));
-const portableJsonRoot = fileURLToPath(new URL("../../portable-json/", import.meta.url));
 const manifest = JSON.parse(await readFile(join(packageRoot, "package.json"), "utf8"));
-const portableJsonManifest = JSON.parse(
-  await readFile(join(portableJsonRoot, "package.json"), "utf8"),
-);
 const temporaryRoot = await mkdtemp(join(tmpdir(), "marimo-export-browser-package-"));
 const npm = process.platform === "win32" ? "npm.cmd" : "npm";
 const pnpm = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
 const pnpmTarball = join(temporaryRoot, "marimo-export-pnpm.tgz");
-const portableJsonTarball = join(temporaryRoot, "portable-json.tgz");
 const peerNames = Object.keys(manifest.peerDependencies);
 
 const loaderProjects = [
@@ -109,12 +104,6 @@ document.querySelector("#app")!.textContent = vegaLiteLoader().codec;
 ];
 
 try {
-  await run(pnpm, ["--filter", "@marimo-team/portable-json", "build"], packageRoot);
-  await run(
-    pnpm,
-    ["--config.ignore-scripts=true", "pack", "--out", portableJsonTarball],
-    portableJsonRoot,
-  );
   await run(pnpm, ["--config.ignore-scripts=true", "pack", "--out", pnpmTarball], packageRoot);
 
   const coreRoot = join(temporaryRoot, "core");
@@ -172,7 +161,6 @@ async function createProject(root, options) {
           scripts: { build: "vite build", typecheck: "tsc --noEmit" },
           dependencies: {
             "@marimo-team/marimo-export": `file:${options.tarball}`,
-            "@marimo-team/portable-json": `file:${portableJsonTarball}`,
             ...peerDependencies,
             typescript: "6.0.3",
             vite: "8.1.3",
@@ -209,7 +197,6 @@ async function createProject(root, options) {
       `${JSON.stringify(
         {
           packages: ["."],
-          overrides: { "@marimo-team/portable-json": `file:${portableJsonTarball}` },
         },
         null,
         2,
@@ -252,7 +239,6 @@ async function inspectInstalledManifest(root) {
   assert.deepEqual(installed.exports, manifest.publishConfig.exports);
   assert.deepEqual(installed.publishConfig, { access: "public" });
   assert.deepEqual(installed.dependencies, {
-    "@marimo-team/portable-json": portableJsonManifest.version,
     "@msgpack/msgpack": "^3.1.3",
   });
   assert.equal(

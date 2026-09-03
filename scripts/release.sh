@@ -137,7 +137,7 @@ if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
 	error "Package version must use final X.Y.Z form: $version"
 	exit 1
 fi
-for manifest in packages/browser/package.json packages/portable-json/package.json; do
+for manifest in packages/browser/package.json; do
 	npm_version="$(node -p "require('./$manifest').version")"
 	if [[ "$npm_version" != "$version" ]]; then
 		error "Public package versions must match: Python $version, $manifest $npm_version"
@@ -151,14 +151,8 @@ if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
 	exit 1
 fi
 require_existing_npm_package \
-	"@marimo-team/portable-json" \
-	"https://registry.npmjs.org/@marimo-team%2Fportable-json"
-require_existing_npm_package \
 	"@marimo-team/marimo-export" \
 	"https://registry.npmjs.org/@marimo-team%2Fmarimo-export"
-require_unpublished \
-	"@marimo-team/portable-json@$version" \
-	"https://registry.npmjs.org/@marimo-team%2Fportable-json/$version"
 require_unpublished \
 	"@marimo-team/marimo-export@$version" \
 	"https://registry.npmjs.org/@marimo-team%2Fmarimo-export/$version"

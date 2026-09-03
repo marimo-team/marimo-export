@@ -31,13 +31,9 @@ def _public_versions(root: Path) -> dict[str, str]:
     with (root / "packages/python/pyproject.toml").open("rb") as stream:
         python = tomllib.load(stream)
     browser = json.loads((root / "packages/browser/package.json").read_text(encoding="utf-8"))
-    portable = json.loads(
-        (root / "packages/portable-json/package.json").read_text(encoding="utf-8")
-    )
     return {
         "marimo-export": python["project"]["version"],
         "@marimo-team/marimo-export": browser["version"],
-        "@marimo-team/portable-json": portable["version"],
     }
 
 
@@ -68,6 +64,10 @@ def _verify_wheel(path: Path, version: str) -> None:
         metadata = BytesParser().parsebytes(archive.read(metadata_name))
         if metadata["Name"] != "marimo-export" or metadata["Version"] != version:
             raise RuntimeError(f"{path.name} contains unexpected Python package metadata")
+        if metadata["Description-Content-Type"] != "text/markdown":
+            raise RuntimeError(f"{path.name} must publish its README as Markdown")
+        if "# marimo-export" not in metadata.get_payload():
+            raise RuntimeError(f"{path.name} contains an unexpected package README")
         entry_points = _single(
             [
                 Path(name)
@@ -95,6 +95,13 @@ def _verify_sdist(path: Path, version: str) -> None:
         value = tomllib.loads(stream.read().decode("utf-8"))
         if value["project"]["version"] != version:
             raise RuntimeError(f"{path.name} contains the wrong Python package version")
+        readme = _single(
+            [member for member in archive.getmembers() if member.name.endswith("/README.md")],
+            f"README.md in {path.name}",
+        )
+        readme_stream = archive.extractfile(readme)
+        if readme_stream is None or b"# marimo-export" not in readme_stream.read():
+            raise RuntimeError(f"{path.name} contains an unexpected package README")
 
 
 def _manifest_strings(value: Any) -> list[str]:
@@ -121,7 +128,6 @@ def _verify_npm_tarball(
     name: str,
     version: str,
     directory: str,
-    portable_dependency: bool,
 ) -> None:
     with tarfile.open(path, "r:gz") as archive:
         members = {member.name: member for member in archive.getmembers() if member.isfile()}
@@ -143,8 +149,19 @@ def _verify_npm_tarball(
         }:
             raise RuntimeError(f"{path.name} has unexpected repository metadata")
         dependencies = manifest.get("dependencies", {})
-        if portable_dependency and dependencies.get("@marimo-team/portable-json") != version:
-            raise RuntimeError(f"{path.name} must depend on @marimo-team/portable-json {version}")
+        if "@marimo-team/portable-json" in dependencies:
+            raise RuntimeError(f"{path.name} must bundle its portable JSON implementation")
+        unresolved_portable_json = []
+        for name, member in members.items():
+            if not name.endswith((".mjs", ".d.mts")):
+                continue
+            source = archive.extractfile(member)
+            if source is not None and b"@marimo-team/portable-json" in source.read():
+                unresolved_portable_json.append(name)
+        if unresolved_portable_json:
+            raise RuntimeError(
+                f"{path.name} contains unresolved portable JSON imports: {unresolved_portable_json}"
+            )
         forbidden = [
             value
             for value in _manifest_strings(
@@ -162,6 +179,12 @@ def _verify_npm_tarball(
             relative = target.removeprefix("./")
             if f"package/{relative}" not in members:
                 raise RuntimeError(f"{path.name} does not contain export target {target}")
+        readme_member = members.get("package/README.md")
+        if readme_member is None:
+            raise RuntimeError(f"{path.name} has no README.md")
+        readme_stream = archive.extractfile(readme_member)
+        if readme_stream is None or b"# @marimo-team/marimo-export" not in readme_stream.read():
+            raise RuntimeError(f"{path.name} contains an unexpected package README")
 
 
 def _sha256(path: Path) -> str:
@@ -182,7 +205,6 @@ def write_checksum_manifest(root: Path) -> Path:
         ),
         dist / "python" / f"marimo_export-{version}.tar.gz",
         dist / "npm" / f"marimo-team-marimo-export-{version}.tgz",
-        dist / "npm" / f"marimo-team-portable-json-{version}.tgz",
     ]
     missing = [path for path in artifacts if not path.is_file()]
     if missing:
@@ -212,11 +234,9 @@ def verify(root: Path) -> None:
         list(python_root.glob(f"marimo_export-{version}.tar.gz")),
         "Python source distribution",
     )
-    portable = npm_root / f"marimo-team-portable-json-{version}.tgz"
     browser = npm_root / f"marimo-team-marimo-export-{version}.tgz"
-    for path in (portable, browser):
-        if not path.is_file():
-            raise RuntimeError(f"release artifact is missing: {path}")
+    if not browser.is_file():
+        raise RuntimeError(f"release artifact is missing: {browser}")
 
     _verify_wheel(direct_wheel, version)
     _verify_wheel(rebuilt_wheel, version)
@@ -224,18 +244,10 @@ def verify(root: Path) -> None:
     if _wheel_payload(direct_wheel) != _wheel_payload(rebuilt_wheel):
         raise RuntimeError("the direct and source-rebuilt wheels contain different payloads")
     _verify_npm_tarball(
-        portable,
-        name="@marimo-team/portable-json",
-        version=version,
-        directory="packages/portable-json",
-        portable_dependency=False,
-    )
-    _verify_npm_tarball(
         browser,
         name="@marimo-team/marimo-export",
         version=version,
         directory="packages/browser",
-        portable_dependency=True,
     )
     print(f"Verified coordinated marimo-export {version} release artifacts.")
 

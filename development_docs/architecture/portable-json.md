@@ -98,7 +98,7 @@ canonical value that contributes to a state, plan, or export identity.
 | `packages/browser/src/schema.ts`        | Export-specific parsing after portable JSON validation                                   |
 
 The package root has no runtime peer dependency. The optional
-`@marimo-team/portable-json/zod` subpath requires Zod and lets applications
+The workspace package's `zod` subpath requires Zod and lets repository code
 compose portable values with a larger Zod schema. `losslessRecordSchema()`
 rejects two source keys when a key transform maps them to the same parsed key.
 

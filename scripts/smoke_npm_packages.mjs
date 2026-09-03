@@ -3,12 +3,11 @@ import { access, mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { isAbsolute, resolve } from "node:path";
 
-const [portableInput, browserInput, expectedVersion] = process.argv.slice(2);
-if (portableInput === undefined || browserInput === undefined || expectedVersion === undefined) {
-  throw new Error("Usage: node scripts/smoke_npm_packages.mjs PORTABLE_SPEC BROWSER_SPEC VERSION");
+const [browserInput, expectedVersion] = process.argv.slice(2);
+if (browserInput === undefined || expectedVersion === undefined) {
+  throw new Error("Usage: node scripts/smoke_npm_packages.mjs BROWSER_SPEC VERSION");
 }
 
-const portableSpec = await packageSpec(portableInput);
 const browserSpec = await packageSpec(browserInput);
 const temporaryRoot = await mkdtemp(resolve(tmpdir(), "marimo-export-npm-smoke-"));
 const npm = process.platform === "win32" ? "npm.cmd" : "npm";
@@ -43,7 +42,7 @@ async function packageSpec(value) {
   try {
     await access(candidate);
   } catch (error) {
-    if (error !== null && typeof error === "object" && error.code === "ENOENT") return value;
+    if (error instanceof Object && "code" in error && error.code === "ENOENT") return value;
     throw error;
   }
   return `file:${candidate}`;
@@ -62,8 +61,6 @@ async function createConsumer(root) {
           type: "module",
           dependencies: {
             "@marimo-team/marimo-export": browserSpec,
-            "@marimo-team/portable-json": portableSpec,
-            zod: "4.3.6",
           },
         },
         null,
@@ -75,7 +72,6 @@ async function createConsumer(root) {
       `${JSON.stringify(
         {
           packages: ["."],
-          overrides: { "@marimo-team/portable-json": portableSpec },
         },
         null,
         2,
@@ -91,27 +87,17 @@ import {
   parsePreparedExportManifest,
 } from "@marimo-team/marimo-export/prepared";
 import { jsonLoader } from "@marimo-team/marimo-export/loader/json";
-import {
-  parsePortableJson,
-  portableJsonObject,
-} from "@marimo-team/portable-json";
-import { jsonObjectSchema } from "@marimo-team/portable-json/zod";
 
 const require = createRequire(import.meta.url);
 const expectedVersion = process.argv[2];
 const browser = require("@marimo-team/marimo-export/package.json");
-const portable = require("@marimo-team/portable-json/package.json");
 
 assert.equal(browser.version, expectedVersion);
-assert.equal(portable.version, expectedVersion);
-assert.equal(browser.dependencies["@marimo-team/portable-json"], expectedVersion);
+assert.equal(browser.dependencies?.["@marimo-team/portable-json"], undefined);
 assert.equal(typeof openExport, "function");
 assert.equal(typeof PreparedStateController, "function");
 assert.equal(typeof parsePreparedExportManifest, "function");
 assert.equal(typeof jsonLoader, "function");
-assert.deepEqual(portableJsonObject({ ready: true }), { ready: true });
-assert.deepEqual(parsePortableJson('{"ready":true}'), { ready: true });
-assert.deepEqual(jsonObjectSchema.parse({ ready: true }), { ready: true });
 `,
     ),
   ]);
