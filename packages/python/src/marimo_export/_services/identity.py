@@ -223,10 +223,15 @@ def _local_source_record(source: Path) -> JsonObject:
         for relative, *_revision_parts in before:
             records[relative] = _stable_file_sha256(root / relative)
         after_root, after_search_roots = _local_source_roots(resolved)
+        after = _local_source_manifest(root, search_roots)
+        after_records = {
+            relative: _stable_file_sha256(root / relative) for relative, *_revision_parts in after
+        }
         if (
             after_root != root
             or after_search_roots != search_roots
-            or _local_source_manifest(root, search_roots) != before
+            or after != before
+            or after_records != records
         ):
             raise RuntimeError("local runtime sources changed while identity was computed")
     except RuntimeError:
