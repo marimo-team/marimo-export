@@ -18,7 +18,7 @@
     "portless": "catalog:",
     "typescript": "catalog:",
     "vitepress": "catalog:",
-    "vitepress-plugin-llms": "1.13.2",
+    "vitepress-plugin-llms": "1.13.5",
     "vue": "catalog:"
   },
   "portless": {

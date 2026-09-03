@@ -23,9 +23,9 @@ LOADER_DEPENDENCIES = {
     "marimo-cell": {},
     "marimo-output": {},
     "numpy": {},
-    "parquet": {"hyparquet": "1.26.2"},
+    "parquet": {"hyparquet": "1.29.2"},
     "text": {},
-    "vegalite": {"vega-embed": "7.1.0"},
+    "vegalite": {"vega-embed": "7.2.0"},
 }
 
 
@@ -312,10 +312,10 @@ def _write_package_json(
         "dependencies": dict(sorted(dependencies.items())),
         "devDependencies": {
             "typescript": "6.0.3",
-            "vite-plus": "0.2.4",
+            "vite-plus": "0.3.0",
         },
         "engines": {"node": ">=22.18.0"},
-        "packageManager": "pnpm@11.15.1",
+        "packageManager": "pnpm@11.25.0",
     }
     path.write_text(json.dumps(value, indent=2) + "\n", encoding="utf-8")
 

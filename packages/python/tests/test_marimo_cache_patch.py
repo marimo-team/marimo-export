@@ -132,7 +132,7 @@ def test_complete_lifecycle_leaves_untracked_unavailable_hits_native(
         meta={},
     )
     decision = Skip(result=RunResult(output=None, exception=None))
-    lifecycle = object.__new__(CompleteCachedLifecycle)
+    lifecycle = cast(Any, object.__new__(CompleteCachedLifecycle))
     lifecycle._graph = graph
     lifecycle._attempts = {"cell": attempt}
     lifecycle._exec_starts = {}
@@ -174,7 +174,7 @@ def test_complete_lifecycle_reruns_unavailable_hits_in_managed_parent_scope(
         meta={},
     )
     decision = Skip(result=RunResult(output=None, exception=None))
-    lifecycle = object.__new__(CompleteCachedLifecycle)
+    lifecycle = cast(Any, object.__new__(CompleteCachedLifecycle))
     lifecycle._graph = graph
     lifecycle._attempts = {"cell": attempt}
     lifecycle._exec_starts = {}

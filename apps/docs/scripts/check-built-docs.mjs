@@ -71,8 +71,10 @@ const renderedDocumentation = (
 
 const llmsLinks = [...llms.matchAll(/\]\((https?:\/\/[^)]+\.md)\)/g)].map((match) => match[1]);
 const llmsFullLinks = [
-  ...llmsFull.matchAll(/^url:\s+(?:'(https?:\/\/[^']+\.md)'|>-\n\s+(https?:\/\/\S+\.md))$/gm),
-].map((match) => match[1] ?? match[2]);
+  ...llmsFull.matchAll(
+    /^url:\s+(?:'(https?:\/\/[^']+\.md)'|(https?:\/\/\S+\.md)|>-\n\s+(https?:\/\/\S+\.md))$/gm,
+  ),
+].map((match) => match[1] ?? match[2] ?? match[3]);
 const sitemapLinks = [...sitemap.matchAll(/<loc>([^<]+)<\/loc>/g)].map((match) => match[1]);
 const expectedMarkdownLinks = new Set(
   documentationPages.map(({ link }) => markdownUrlForRoute(link)),

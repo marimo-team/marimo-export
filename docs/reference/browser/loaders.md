@@ -110,11 +110,7 @@ console.log(array.shape, array.dtype, array.data);
 
 ```ts
 type NumpyDTypeKind =
-  | "boolean"
-  | "signed-integer"
-  | "unsigned-integer"
-  | "floating-point"
-  | "complex-floating-point";
+  "boolean" | "signed-integer" | "unsigned-integer" | "floating-point" | "complex-floating-point";
 
 interface NumpyDType {
   readonly descriptor: string;

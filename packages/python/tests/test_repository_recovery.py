@@ -4,6 +4,7 @@ import os
 import sqlite3
 import threading
 from pathlib import Path
+from typing import Any, cast
 
 import marimo_export._repository.files as files_module
 import marimo_export.reader as reader_module
@@ -188,7 +189,7 @@ def test_failed_corrupt_artifact_removal_remains_accounted(
         def fail_retired(candidate, *args, **kwargs):
             if "-quarantine-" in Path(candidate).name:
                 raise PermissionError("corrupt artifact is open")
-            return native_rmtree(candidate, *args, **kwargs)
+            return cast(Any, native_rmtree)(candidate, *args, **kwargs)
 
         monkeypatch.setattr(files_module.shutil, "rmtree", fail_retired)
         with pytest.raises(PermissionError, match="corrupt artifact"):

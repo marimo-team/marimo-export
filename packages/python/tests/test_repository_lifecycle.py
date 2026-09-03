@@ -5,6 +5,7 @@ import threading
 import time
 from hashlib import sha256
 from pathlib import Path
+from typing import Any, cast
 
 import marimo_export._repository.artifact_lifecycle as lifecycle_module
 import marimo_export._repository.files as files_module
@@ -316,7 +317,7 @@ def test_staging_lease_releases_only_after_confirmed_removal(
     def fail_staging(candidate, *args, **kwargs):
         if Path(candidate) == path:
             raise PermissionError("staging is open")
-        return native_rmtree(candidate, *args, **kwargs)
+        return cast(Any, native_rmtree)(candidate, *args, **kwargs)
 
     monkeypatch.setattr(files_module.shutil, "rmtree", fail_staging)
     with pytest.raises(PermissionError, match="open"):
@@ -393,7 +394,7 @@ def test_failed_retired_artifact_removal_remains_accounted(
             if "-quarantine-" in Path(candidate).name and not failed:
                 failed = True
                 raise PermissionError("retired artifact is open")
-            return native_rmtree(candidate, *args, **kwargs)
+            return cast(Any, native_rmtree)(candidate, *args, **kwargs)
 
         monkeypatch.setattr(files_module.shutil, "rmtree", fail_retired)
         second_export = _export(repository, second_identity, second_state, 2)
@@ -975,7 +976,7 @@ def test_failed_corrupt_catalog_snapshot_cleanup_stays_accounted(
     def fail_snapshot(candidate, *args, **kwargs):
         if "-unindexed-" in Path(candidate).name:
             raise PermissionError("snapshot is open")
-        return native_rmtree(candidate, *args, **kwargs)
+        return cast(Any, native_rmtree)(candidate, *args, **kwargs)
 
     monkeypatch.setattr(files_module.shutil, "rmtree", fail_snapshot)
     with pytest.raises(PermissionError, match="snapshot is open"):

@@ -31,7 +31,7 @@ NPM_DIST_DIR := $(DIST_DIR)/npm
 PNPM_BIN := $(CURDIR)/node_modules/.bin
 export PATH := $(PNPM_BIN):$(PATH)
 # The local wrapper selects pnpm's managed Node runtime. A nested `pnpm exec`
-# exposes a relative Node shim that Vite+ 0.2.4 cannot use for child tools.
+# exposes a relative Node shim that child tools cannot use.
 VP := $(PNPM_BIN)/vp
 
 help: ## List development targets.

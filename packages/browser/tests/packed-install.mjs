@@ -253,7 +253,7 @@ async function inspectInstalledManifest(root) {
   assert.deepEqual(installed.publishConfig, { access: "public" });
   assert.deepEqual(installed.dependencies, {
     "@marimo-team/portable-json": portableJsonManifest.version,
-    "@msgpack/msgpack": "^3.1.2",
+    "@msgpack/msgpack": "^3.1.3",
   });
   assert.equal(
     JSON.stringify({

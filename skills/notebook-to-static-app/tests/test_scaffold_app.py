@@ -86,7 +86,7 @@ print("analysis")
     assert package["dependencies"]["@marimo-team/marimo-export"] == (
         "file:vendor/marimo-export.tgz"
     )
-    assert package["dependencies"]["hyparquet"] == "1.26.2"
+    assert package["dependencies"]["hyparquet"] == "1.29.2"
     project = tomli.loads((output / "pyproject.toml").read_text(encoding="utf-8"))
     assert project["project"]["requires-python"] == ">=3.10"
     assert project["tool"]["uv"]["sources"]["marimo-export"] == {
