@@ -2,27 +2,28 @@ import { readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { documentationPages } from "../navigation.mjs";
+import { documentationPages, topNavigation } from "../navigation.ts";
 
 const outputDirectory = fileURLToPath(new URL("../.vitepress/dist/", import.meta.url));
 const siteUrl = new URL("https://marimo-team.github.io/marimo-export/");
 
-const htmlForRoute = (route) => {
+const htmlForRoute = (route: string): string => {
   if (route === "/") return "index.html";
   if (route.endsWith("/")) return `${route.slice(1)}index.html`;
   return `${route.slice(1)}.html`;
 };
 
-const markdownForRoute = (route) => {
+const markdownForRoute = (route: string): string => {
   if (route === "/") return "index.md";
   if (route.endsWith("/")) return `${route.slice(1, -1)}.md`;
   return `${route.slice(1)}.md`;
 };
 
-const canonicalForRoute = (route) => new URL(route.slice(1), siteUrl).href;
-const markdownUrlForRoute = (route) => new URL(markdownForRoute(route), siteUrl).href;
+const canonicalForRoute = (route: string): string => new URL(route.slice(1), siteUrl).href;
+const markdownUrlForRoute = (route: string): string =>
+  new URL(markdownForRoute(route), siteUrl).href;
 
-const missingFiles = async (files) => {
+const missingFiles = async (files: readonly string[]): Promise<string[]> => {
   const results = await Promise.all(
     files.map(async (file) => {
       try {
@@ -33,22 +34,24 @@ const missingFiles = async (files) => {
       }
     }),
   );
-  return results.filter((file) => file !== undefined);
+  return results.filter((file): file is string => file !== undefined);
 };
 
-const duplicates = (values) => {
-  const counts = new Map();
+const duplicates = (values: readonly string[]): string[] => {
+  const counts = new Map<string, number>();
   for (const value of values) counts.set(value, (counts.get(value) ?? 0) + 1);
   return [...counts].filter(([, count]) => count > 1).map(([value]) => value);
 };
 
-const compareSets = (expected, actual) => ({
+const compareSets = (expected: ReadonlySet<string>, actual: ReadonlySet<string>) => ({
   missing: [...expected].filter((value) => !actual.has(value)),
   unexpected: [...actual].filter((value) => !expected.has(value)),
 });
 
-const formatList = (label, values) =>
+const formatList = (label: string, values: readonly string[]): string[] =>
   values.length === 0 ? [] : [`${label}:`, ...values.map((value) => `  - ${value}`)];
+
+const isString = (value: string | undefined): value is string => value !== undefined;
 
 const files = documentationPages.flatMap(({ link }) => [
   htmlForRoute(link),
@@ -69,13 +72,19 @@ const renderedDocumentation = (
   )
 ).join("\n");
 
-const llmsLinks = [...llms.matchAll(/\]\((https?:\/\/[^)]+\.md)\)/g)].map((match) => match[1]);
+const llmsLinks = [...llms.matchAll(/\]\((https?:\/\/[^)]+\.md)\)/g)]
+  .map((match) => match[1])
+  .filter(isString);
 const llmsFullLinks = [
   ...llmsFull.matchAll(
     /^url:\s+(?:'(https?:\/\/[^']+\.md)'|(https?:\/\/\S+\.md)|>-\n\s+(https?:\/\/\S+\.md))$/gm,
   ),
-].map((match) => match[1] ?? match[2] ?? match[3]);
-const sitemapLinks = [...sitemap.matchAll(/<loc>([^<]+)<\/loc>/g)].map((match) => match[1]);
+]
+  .map((match) => match[1] ?? match[2] ?? match[3])
+  .filter(isString);
+const sitemapLinks = [...sitemap.matchAll(/<loc>([^<]+)<\/loc>/g)]
+  .map((match) => match[1])
+  .filter(isString);
 const expectedMarkdownLinks = new Set(
   documentationPages.map(({ link }) => markdownUrlForRoute(link)),
 );
@@ -88,9 +97,13 @@ const sitemapDifference = compareSets(expectedCanonicalLinks, new Set(sitemapLin
 
 const baseName = process.env.BASE_PATH?.trim().replace(/^\/+|\/+$/g, "");
 const assetPrefix = baseName ? `/${baseName}` : "";
+const firstNavigation = topNavigation[0];
+if (firstNavigation === undefined) throw new Error("Top navigation is empty.");
+const navigationHref = `${assetPrefix}${firstNavigation.link}`;
 const escapedBaseReferences = baseName
   ? [...renderedDocumentation.matchAll(/\b(?:href|src)="(\/(?!\/)[^"#?]+)"/g)]
       .map((match) => match[1])
+      .filter(isString)
       .filter((reference) => !reference.startsWith(`${assetPrefix}/`))
   : [];
 const errors = [
@@ -110,7 +123,7 @@ const errors = [
   ...(index.includes(`src="${assetPrefix}/assets/`)
     ? []
     : [`Built index does not use the expected script prefix ${assetPrefix || "/"}.`]),
-  ...(index.includes(`href="${assetPrefix}/guide/getting-started"`)
+  ...(index.includes(`href="${navigationHref}"`)
     ? []
     : [`Built index does not use the expected navigation prefix ${assetPrefix || "/"}.`]),
   ...formatList("Root-absolute references outside the configured base path", [

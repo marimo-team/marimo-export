@@ -8,7 +8,7 @@ description: Read the same exported states and outputs from Python, a browser, a
 A notebook export gives every consumer the same default state, authored state
 aliases, complete input vectors, and named outputs. The examples on this page
 use `dist/report`, created by
-[Build your first notebook export](getting-started.md).
+[Build your first notebook export](getting-started).
 
 | Job                                   | Interface                                         |
 | ------------------------------------- | ------------------------------------------------- |
@@ -16,7 +16,7 @@ use `dist/report`, created by
 | Load immutable results in a browser   | `openExport()`                                    |
 | Drive a changing prepared publication | Browser `prepared` subpath                        |
 | Ground an agent answer                | Python reader, CLI verification, or export format |
-| Implement another reader              | [Export format](../reference/export-format.md)    |
+| Implement another reader              | [Export format](../reference/export-format)       |
 
 ## Open from Python
 
@@ -28,7 +28,7 @@ from marimo_export import open_export
 notebook_export = open_export("dist/report")
 monthly = notebook_export.state("monthly")
 summary = monthly.output("summary").json()
-print(summary)
+print(dict(summary))
 ```
 
 Expected output:
@@ -50,14 +50,38 @@ decoding it. The reader also exposes:
 
 ## Select an exported state
 
-Readers support three forms of selection:
+Readers support these selection forms:
 
 - `state(alias)` selects an authored state alias such as `monthly`.
+- Python `state_by_fingerprint(fingerprint)` selects an exact state identity.
 - `resolve(inputs)` selects one complete exported input vector.
-- `state.resolve(patch)` completes a sparse transition from the current state.
+- `state.resolve(patch)` replaces each supplied root input in the current
+  exported state, then selects the resulting complete vector. It does not
+  deep-merge nested objects.
 
 Resolution returns a state already present in the notebook export. Preparing a
 new input vector requires another producer operation or a Python service.
+
+## Read an asset-backed output from Python
+
+After building the [market dashboard](market-dashboard), an output backed by
+a `BlobAsset` exposes verified bytes and media metadata:
+
+```python
+from marimo_export import open_export
+
+market_export = open_export("examples/vite-vanilla/public/export")
+chart = market_export.default_state.output("performance_chart").blob_asset()
+print(chart.media_type, chart.filename, len(chart.data))
+```
+
+Use `scalar()` for a native scalar and `json()` for portable JSON. Use
+`blob_asset()` for text, HTML, images, Parquet, Vega-Lite, AnyWidget, and custom
+media types stored through the BlobAsset envelope. NumPy, Arrow, rendered-output,
+and complete-cell accessors return verified raw bytes for a compatible decoder.
+
+The Python reader validates framing but does not interpret NumPy, Arrow, or
+marimo snapshot semantics.
 
 ## Open from a browser
 
@@ -77,7 +101,7 @@ console.log(summary); // { days: 30, label: "Last 30 days" }
 ```
 
 The JSON loader has no peer runtime. Specialized loaders can require one.
-[Output representations](../reference/representations.md) maps stored
+[Output representations](../reference/representations) maps stored
 representations to browser loaders and their peer dependencies.
 
 ## Follow a prepared publication
@@ -126,8 +150,9 @@ const result = await notebookExport.verify({
 });
 ```
 
-Verification reads every declared asset and returns state, output, asset, and
-byte counts. `index.json` is the integrity root.
+Verification reads every declared asset. API and JSON results return exported
+state, state-output-pair, unique-asset, and verified-byte counts. Human CLI
+output omits the state-output-pair count. `index.json` is the integrity root.
 
 ## Retain evidence for an agent
 
@@ -135,6 +160,6 @@ Bind data-driven claims to the selected state and output. Retain notebook,
 producer, spec, state fingerprint, codec, media type, asset SHA-256, and
 verification facts when the answer needs an auditable source.
 
-[Use notebook exports with agents](agents-and-automation.md) develops this
-workflow. [Build a browser application](browser-applications.md) covers complete
+[Use notebook exports with agents](agents-and-automation) develops this
+workflow. [Build a browser application](browser-applications) covers complete
 state transitions and mount disposal.

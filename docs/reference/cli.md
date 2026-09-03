@@ -41,7 +41,9 @@ marimo-export build NOTEBOOK --spec FILE --output DIR
 
 Prepares missing states, writes the verified export to `DIR`, and closes the
 owned notebook process tree. `--replace` uses native directory exchange where
-the filesystem supports it and guarded rollback replacement elsewhere.
+the filesystem supports it and guarded rollback replacement elsewhere. It
+replaces the complete destination, including files that exist only in the old
+directory.
 
 ## `capture`
 
@@ -86,8 +88,9 @@ Server inspection reads the live authentication environment variables.
 marimo-export verify EXPORT [--json]
 ```
 
-Reads `index.json` and every declared asset. The result contains state, output,
-asset, and verified-byte counts.
+Reads `index.json` and every declared asset. Human output reports exported
+states, unique assets, and verified bytes. `--json` also reports the
+state-output-pair count as `outputs`.
 
 ## `observations list`
 
@@ -136,8 +139,15 @@ marimo-export repository prune [--repository DIR] [--dry-run] [--json]
 ```
 
 Applies repository retention. `--dry-run` reports removable prepared states,
-generations, and bytes while leaving artifacts unchanged. Active leases protect
-their artifacts.
+generations, and bytes. A live prune can also remove producer records and their
+observation history, which the dry-run result does not report. Active leases
+protect their artifacts.
+
+Opening the repository attempts maintenance recovery before either mode. When
+another process holds the maintenance transaction lock, opening continues without that
+pass. Recovery can create the repository, adjust permissions, quarantine a
+corrupt catalog, or retire an invalid artifact. The CLI uses the default
+`RepositoryLimits` policy.
 
 ## `doctor`
 
@@ -151,13 +161,13 @@ returns exit code `4`.
 
 ## Common options
 
-| Option              | Contract                                                    |
-| ------------------- | ----------------------------------------------------------- |
-| `--spec FILE`       | Strict JSON or YAML ExportSpec                              |
-| `--repository DIR`  | Export repository for one command                           |
-| `--timeout SECONDS` | Positive finite startup or inactivity timeout, default `30` |
-| `--json`            | One terminal JSON success or failure object                 |
-| `--jsonl`           | Progress records followed by one terminal JSON Lines record |
+| Option              | Contract                                                                              |
+| ------------------- | ------------------------------------------------------------------------------------- |
+| `--spec FILE`       | Strict JSON or YAML ExportSpec                                                        |
+| `--repository DIR`  | Export repository for one command                                                     |
+| `--timeout SECONDS` | Positive finite startup, inactivity, or preparation-reservation timeout, default `30` |
+| `--json`            | One terminal JSON success or failure object                                           |
+| `--jsonl`           | Progress records followed by one terminal JSON Lines record                           |
 
 Repository precedence is:
 
@@ -236,7 +246,7 @@ individual check result available for automation.
 | `repository prune`   | Retired state, generation, and byte counts                     |
 | `doctor`             | Repository, Python, package, and marimo compatibility facts    |
 
-Use the [Python records and errors](python/format-records-and-errors.md) reference
+Use the [Python records and errors](python/format-records-and-errors) reference
 for planning, result, warning, and error field contracts.
 
 ## Exit codes
@@ -254,5 +264,5 @@ for planning, result, warning, and error field contracts.
 | `130` | Interrupted                               |
 | `141` | Closed output pipe                        |
 
-[Build or capture](../guide/build-and-capture.md) provides the complete producer
+[Build or capture](../guide/build-and-capture) provides the complete producer
 workflow.

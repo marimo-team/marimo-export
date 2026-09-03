@@ -84,12 +84,13 @@ An exporter converts one selected Python value into a `BlobAsset`. A
 `BlobAsset` contains representation bytes, a media type, an optional portable
 filename, and portable JSON metadata.
 
-Built-in exporters cover text, HTML, Parquet tables, Altair charts, PNG images,
-and AnyWidget state. A custom exporter is an importable `module:symbol` callable
-that returns a `BlobAsset`.
+Built-in exporters cover JSON, text, HTML, Parquet tables, Altair charts, PNG
+images, and AnyWidget state. A custom exporter is an importable `module:symbol`
+callable that returns a `BlobAsset`.
 
-Declare modules loaded dynamically by a custom exporter when they affect the
-returned bytes. Their source identity then participates in drift detection.
+Declare every helper module whose source affects the returned bytes, including
+ordinary imported helpers. The exporter module and declared dependencies then
+participate in source identity and drift detection.
 
 ## A representation joins producer and consumer
 
@@ -138,6 +139,6 @@ Vega-Lite, or custom interactive code grants that code the page's authority.
 Review executable modules, allowed origins, and Content Security Policy before
 mounting them.
 
-Use [Output representations](../reference/representations.md) for the complete
+Use [Output representations](../reference/representations) for the complete
 exporter, loader, and peer-dependency matrix. Use [Integrity and
-trust](integrity-and-trust.md) for the executable-code boundary.
+trust](integrity-and-trust) for the executable-code boundary.

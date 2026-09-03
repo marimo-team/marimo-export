@@ -8,20 +8,13 @@ import {
 } from "vitepress";
 import llmstxt from "vitepress-plugin-llms";
 
-// TypeScript excludes JavaScript from this package's source program. The
-// navigation check imports this module directly and validates every route.
-// @ts-expect-error The checked JavaScript module has no generated declaration.
-import { documentationSidebar, llmsSidebar, topNavigation } from "../navigation.mjs";
-// @ts-expect-error The checked JavaScript module has no generated declaration.
-import { checkNavigation } from "../scripts/check-navigation.mjs";
-
-await checkNavigation();
+import { documentationSidebar, llmsSidebar, topNavigation } from "../navigation.ts";
 
 const repository = "https://github.com/marimo-team/marimo-export";
 const siteUrl = new URL("https://marimo-team.github.io/marimo-export/");
 const description =
-  "Precompute selected marimo notebook results as one verified export for applications, agents, Python automation, and custom clients.";
-const socialTitle = "Turn notebook states into verified files.";
+  "Select marimo notebook states and outputs, prepare them once, and read the resulting export from applications, agents, Python, and TypeScript.";
+const socialTitle = "Prepare notebook results for any application.";
 const socialImageAlt = `marimo-export: ${socialTitle}`;
 const socialImageUrl = new URL("brand/marimo-export-og.png", siteUrl).href;
 const baseName = process.env.BASE_PATH?.trim().replace(/^\/+|\/+$/g, "");
@@ -40,7 +33,7 @@ const canonicalUrl = (page: string): string => {
   return new URL(route, siteUrl).href;
 };
 
-const vitePlugins = <Value,>(value: Value): [Plugin, Plugin] => {
+const vitePlugins = <Value>(value: Value): [Plugin, Plugin] => {
   // SAFETY: vitepress-plugin-llms returns two Vite plugins whose standard hooks
   // are loaded by the pinned VitePress release during every documentation build.
   return value as [Plugin, Plugin];
@@ -91,22 +84,6 @@ export default defineConfig({
       {
         href: publicPath("/brand/marimo-export-mark-dark.png"),
         rel: "apple-touch-icon",
-      },
-    ],
-    [
-      "meta",
-      {
-        content: "#ffffff",
-        media: "(prefers-color-scheme: light)",
-        name: "theme-color",
-      },
-    ],
-    [
-      "meta",
-      {
-        content: "#1b1b1f",
-        media: "(prefers-color-scheme: dark)",
-        name: "theme-color",
       },
     ],
   ],

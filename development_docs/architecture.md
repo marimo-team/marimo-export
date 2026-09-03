@@ -1,6 +1,6 @@
 # Architecture
 
-marimo-export prepares a finite relation of notebook states and named outputs,
+marimo-export prepares a finite state-output relation from a notebook,
 retains reusable results, and writes one verified notebook export for Python,
 browsers, agents, and custom applications.
 
@@ -219,6 +219,22 @@ the read. The Windows path also rechecks file identity during open. Asset digest
 verification detects same-size content changes after the secure read.
 `reader.py` translates those failures into public format and availability
 errors.
+
+## Trust boundaries
+
+| Boundary                        | Authority and guarantee                                                                                                         |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| Notebook and exporter execution | Runs with the producer process's files, credentials, packages, and network access                                               |
+| Export repository               | Uses local ownership and permissions for producer cache data. It is not a deployment tree or publisher-authentication mechanism |
+| Live transport                  | HTTPS and access tokens authenticate remote access. The selected kernel still retains its full producer authority               |
+| Notebook export verification    | Proves canonical index, declared closure, framing, sizes, and digests agree with the loaded integrity root                      |
+| Prepared manifest route         | Selects one export identity and state. The application authenticates the route and constrains allowed origins                   |
+| Browser mount                   | Grants the loaded chart, widget, or custom module the page's DOM, network, and global JavaScript authority                      |
+
+Keep these guarantees separate in adapters and diagnostics. Repository recovery
+can quarantine local data. Export verification cannot establish who published
+the index. Mount disposal releases owned resources while page-global module
+effects may remain.
 
 ## Lifecycle owners
 

@@ -39,22 +39,23 @@ await controller.dispose();
 For several outputs, `apply()` should load and mount replacements in connected
 staging hosts, check the signal, commit the complete replacement, then dispose
 the previous mount owner. [Build a browser
-application](../../guide/browser-applications.md) describes that DOM pattern.
+application](../../guide/browser-applications) describes that DOM pattern.
 
 ## Publication objects
 
 | Object                       | Contract                                                                                 |
 | ---------------------------- | ---------------------------------------------------------------------------------------- |
-| Prepared manifest document   | Snake-case JSON served by an application route                                           |
+| Prepared manifest            | Snake-case JSON served by an application route                                           |
 | `PreparedExportManifest`     | Parsed immutable TypeScript value with camel-case properties                             |
-| `NotebookExport`             | Immutable export selected by the manifest `instance` and `export_url`                    |
+| `NotebookExport`             | Immutable reader opened from the manifest `instance` and `export_url`                    |
 | `PreparedPublication`        | `{ manifest, notebookExport, state }` after URL, identity, input, and fingerprint checks |
 | `PreparedStateController`    | Mutable input intent and serialized application transitions                              |
 | `PreparedPublicationRefresh` | Manifest fetching, immutable export reuse, publication replacement, and polling          |
 
-The manifest is named after the prepared export protocol. The browser follows a
-prepared publication because the route can select a new immutable export or
-state over time.
+The TypeScript API names the parsed value `PreparedExportManifest`. In prose,
+**prepared manifest** means the protocol document. The browser follows a
+prepared publication because the route can select another notebook export or
+exported state over time.
 
 ## Prepared manifest document
 
@@ -115,9 +116,10 @@ function parsePreparedExportManifest<Input>(input: Input): PreparedExportManifes
 ```
 
 Converts the snake-case document to the frozen camel-case value. It validates
-portable JSON, the exact field set, digest spelling, complete nonempty input
-names, URL length, and polling range. Invalid input raises `PreparedExportError`
-with code `manifest_invalid`.
+portable JSON, the exact field set, digest spelling, nonempty input names, URL
+length, and polling range. The later publication resolver checks that the input
+object is complete for the opened export. Invalid input raises
+`PreparedExportError` with code `manifest_invalid`.
 
 ### `fetchPreparedExportManifest(url, options?)`
 
@@ -135,8 +137,9 @@ function fetchPreparedExportManifest(
 
 Fetches with `cache: "no-store"` and `Accept: application/json`. It reads at most
 256 KiB, requires strict UTF-8 portable JSON, then calls the manifest parser.
-Transport and response failures use `manifest_read_failed`. Shape and value
-failures use `manifest_invalid`.
+Network, non-success response, stream, and byte-limit failures use
+`manifest_read_failed`. An empty, malformed, or contract-invalid response body
+uses `manifest_invalid`.
 
 ### `resolvePreparedPublication(manifest, manifestUrl, notebookExport)`
 
@@ -196,11 +199,11 @@ interface PreparedStatePort {
 ```
 
 `apply()` owns output loading, DOM staging, visible commit, and disposal of the
-previous application state. Resolve its promise after the complete next state
-has committed. A later request aborts `signal` and removes the transition's
+previous visible application view. Resolve its promise after the complete next
+view has committed. A later request aborts `signal` and removes the transition's
 authority to commit.
 
-`restore()` synchronizes optimistic controls or application state to the last
+`restore()` synchronizes optimistic controls or the visible application view to the last
 committed publication when an input request requires no new commit or a
 non-cancellation transition fails. An abort-shaped port failure does not invoke
 `restore()`. If restoration also fails, the controller raises an
@@ -228,8 +231,10 @@ class PreparedStateController {
 
 ### Start and inspect
 
-`start()` applies one initial publication with reason `start`. A controller can
-start once. `snapshot()` returns frozen current state without waiting:
+`start()` applies one initial publication with reason `start`. After one start
+commits, the controller rejects another. A failed start can be retried while no
+publication is current or targeted. `snapshot()` returns a frozen controller
+snapshot without waiting:
 
 ```ts
 interface PreparedStateSnapshot {
@@ -251,7 +256,7 @@ current transition target. It resolves the resulting complete vector against
 the current immutable export and applies it with reason `state`.
 
 Rapid updates abort prior transition signals and execute port calls serially.
-Only the latest generation can become current. If an unavailable state or a
+Only the latest transition generation can become current. If an unavailable state or a
 missing asset response interrupts the request, the requested input vector stays
 pending so a later publication can satisfy it. A caller-aborted request or an
 incompatible replacement input contract clears that pending intent.
@@ -283,7 +288,7 @@ ignores object key order.
 `updateQuery(query)` inspects parameters whose names occur in `inputNames`.
 Unknown parameters are ignored. A recognized parameter must occur exactly once.
 Strings match their raw text. Other exported values match their JSON spelling.
-The supplied parameters form a sparse patch over the current state.
+The supplied parameters form a sparse patch over the current exported state.
 
 The method returns `false` when the query contains no recognized input. It
 returns `true` after applying a recognized selection. No match raises
@@ -291,8 +296,13 @@ returns `true` after applying a recognized selection. No match raises
 `query_ambiguous`.
 
 `resolvePreparedQuerySelection()` returns `undefined` when no recognized input
-is present. `resolvePreparedQueryState()` returns the current state in that
-case.
+is present. `resolvePreparedQueryState()` returns the current exported state in
+that case.
+
+Arrays and objects use their exact `JSON.stringify()` text in the exported
+domain. For example, `?symbols=%5B%22AAPL%22%2C%22MSFT%22%5D` selects the array
+`["AAPL", "MSFT"]` when that value appears in an exported state. A string whose
+text is identical to another typed value can make the query ambiguous.
 
 ### Replace a publication
 
@@ -313,9 +323,10 @@ preserved. Other reasons become a `DOMException` named `AbortError`.
 does not rethrow a tracked rejection.
 
 `dispose()` is idempotent. It aborts the controller lifecycle, settles active
-work, clears current and pending state, then calls `port.dispose()`. An external
-signal passed to the constructor triggers the same disposal. Operations after
-disposal raise `Error`.
+work, clears the current publication, calls `port.dispose()`, then clears the
+pending input vector in a final cleanup step. An external signal passed to the
+constructor triggers the same disposal. Operations after disposal raise
+`Error`.
 
 ## `PreparedPublicationRefresh`
 
@@ -352,7 +363,8 @@ class PreparedPublicationRefresh {
 ```
 
 `start()` fetches the first manifest and starts a controller that has no current
-or target publication. It can run once for that controller.
+or target publication. A failed start can be retried while the controller still
+has no current or target publication.
 
 `refresh()` fetches the current manifest. Concurrent calls share the active
 refresh operation. The refresh object reuses the opened `NotebookExport` when
@@ -373,9 +385,10 @@ polling, aborts active refresh work, and settles it. A later `refresh()` resolve
 without work. Refresh disposal does not dispose the state controller, so the
 application should dispose both owners.
 
-`dependencies` replaces manifest fetching or publication opening. `fetch` is
-the normal integration point for authentication and request policy and is
-passed to both manifest and export requests.
+`fetch` is the normal integration point for authentication and request policy
+and is passed to both manifest and export requests. `dependencies` replaces the
+two complete fetch-and-open operations for a test harness or compatible host
+adapter.
 
 ## Cancellation and trust
 
@@ -389,5 +402,5 @@ server through the deployment's HTTPS, authentication, and origin policy. The
 `instance` digest detects an export whose index differs from the selected
 identity.
 
-[Errors and limits](errors-and-limits.md) separates prepared errors, reader
+[Errors and limits](errors-and-limits) separates prepared errors, reader
 errors, application errors, and aborts.

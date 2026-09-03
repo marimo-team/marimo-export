@@ -9,10 +9,9 @@ An export state is one complete assignment for every input inferred from an
 `ExportSpec`. Authors can write sparse state rows because marimo-export fills
 omitted values from the captured baseline.
 
-A `StateSpace` declares reusable state rows independently of outputs. A complete
-`ExportSpec` combines a state space with the named outputs to prepare. This lets
-an application infer its output plan while reusing marimo-export's state
-validation and matrix expansion.
+A `StateSpace` validates reusable state rows and expands an optional Cartesian
+matrix. A complete `ExportSpec` combines those rows with the named outputs to
+prepare. Planning then infers the inputs that connect the two.
 
 Consider a notebook whose current controls are `interval: 1d` and
 `region: All`:
@@ -35,12 +34,12 @@ outputs:
 
 Planning completes the rows as follows:
 
-| State alias | Authored row     | Complete input vector            | Prepared state |
-| ----------- | ---------------- | -------------------------------- | -------------- |
-| `current`   | `{}`             | `interval: 1d`, `region: All`    | A              |
-| `daily`     | `interval: 1d`   | `interval: 1d`, `region: All`    | A              |
-| `weekly`    | `interval: 1wk`  | `interval: 1wk`, `region: All`   | B              |
-| `europe`    | `region: Europe` | `interval: 1d`, `region: Europe` | C              |
+| State alias | Authored row     | Complete input vector            | Fingerprint |
+| ----------- | ---------------- | -------------------------------- | ----------- |
+| `current`   | `{}`             | `interval: 1d`, `region: All`    | A           |
+| `daily`     | `interval: 1d`   | `interval: 1d`, `region: All`    | A           |
+| `weekly`    | `interval: 1wk`  | `interval: 1wk`, `region: All`   | B           |
+| `europe`    | `region: Europe` | `interval: 1d`, `region: Europe` | C           |
 
 `current` and `daily` select the same state fingerprint because their
 complete input vectors are equal. marimo-export executes that vector once.
@@ -49,19 +48,20 @@ complete input vectors are equal. marimo-export executes that vector once.
 
 The `ExportSpec` has no `inputs` field. Planning infers inputs from:
 
-- eligible input definitions in the selected outputs' dependency closure
+- canonical UI roots in the selected outputs' dependency closure
 - definition names used as keys in state rows
 
 A definition is a name created by a notebook cell. The dependency closure
-contains each selected result and every definition required to compute it. An
-eligible input can be an ordinary Python definition, a supported marimo UI
-element, or an [AnyWidget](https://anywidget.dev/) whose serializer accepts
-portable model state.
+contains each selected result and every definition required to compute it. That
+closure contributes supported marimo UI elements and
+[AnyWidget](https://anywidget.dev/) roots whose serializer accepts portable
+model state. An ordinary Python definition becomes an input when a state row
+names it explicitly.
 
 Input names are definition names. Use the UI element name such as
 `interval_selector`, not its `.value` property.
 
-Run `marimo-export inspect NOTEBOOK --json` before authoring a spec when the
+Run `uv run marimo-export inspect NOTEBOOK --json` before authoring a spec when the
 available definitions or their input modes are unclear. An input mode reports
 whether a state row replaces the complete value or applies a sparse patch. File
 inspection runs the notebook's initial autorun, which is marimo's first
@@ -72,6 +72,11 @@ Planning rejects a selected input when its value is missing, contains a password
 control, or cannot be represented as portable JSON. It also rejects an ordinary
 definition assigned by the defining cell's final named expression because the
 notebook and the state row would both own that value.
+
+Selected output dependencies determine which definitions can vary as inputs.
+State execution still runs every available authored cell before it completes.
+An unrelated enabled cell that fails can therefore fail preparation even when
+no published output depends on that cell.
 
 ## A matrix expands a state space
 
@@ -134,13 +139,17 @@ same complete vector even when several aliases share it.
 
 ## Readers resolve existing states
 
-A reader can select a state in three ways:
+A reader can select an exported state through these operations:
 
-| Operation              | Input                         | Behavior                                                             |
-| ---------------------- | ----------------------------- | -------------------------------------------------------------------- |
-| `state(alias)`         | Authored state alias          | Returns the state targeted by the alias                              |
-| `resolve(inputs)`      | Complete input vector         | Returns the matching exported state                                  |
-| `state.resolve(patch)` | Sparse changes from one state | Completes the patch from that state's inputs, then returns the match |
+| Operation                       | Input                 | Behavior                                                           |
+| ------------------------------- | --------------------- | ------------------------------------------------------------------ |
+| `state(alias)`                  | Authored state alias  | Returns the state targeted by the alias                            |
+| Python `state_by_fingerprint()` | State fingerprint     | Returns the state with that exact identity                         |
+| `resolve(inputs)`               | Complete input vector | Returns the matching exported state                                |
+| `state.resolve(patch)`          | Root-input patch      | Replaces each supplied root value, then returns the complete match |
+
+`state.resolve(patch)` is a shallow root replacement. It does not deep-merge
+nested objects or apply AnyWidget authoring-patch semantics.
 
 Resolution returns a state already present in the notebook export. Preparing a
 new input vector requires another producer run.
@@ -157,5 +166,5 @@ an author adds a state row to the `ExportSpec`.
 
 Use `marimo-export observations list NOTEBOOK --spec FILE` to inspect this
 evidence before choosing state rows. Read the [ExportSpec
-reference](../reference/export-spec.md) for exact names, value limits, selectors,
+reference](../reference/export-spec) for exact names, value limits, selectors,
 and AnyWidget patch behavior.

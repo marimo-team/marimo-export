@@ -20,7 +20,7 @@ WebAssembly path and explains its content-addressed keys and lazy value stubs.
 | Static profile       | Producer boundary                                                                   | Browser boundary                                                       |
 | -------------------- | ----------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
 | Browser WebAssembly  | Bundle marimo's native cache manifests, value blobs, and notebook code              | Pyodide derives native keys, restores cached values, and runs Python   |
-| Prepared Zero-Python | Use native cached execution, verify selected receipts, and create a notebook export | A reader resolves the finite state relation and loads declared outputs |
+| Prepared Zero-Python | Use native cached execution, verify selected receipts, and create a notebook export | A reader resolves the state-output relation and loads declared outputs |
 
 Both profiles can avoid repeating expensive producer work. Their deployed
 runtime contracts differ. Browser WebAssembly retains a Python notebook runtime.
@@ -60,7 +60,7 @@ marimo-export owns:
 - ExportSpec planning and preparation
 - repository reuse and prepared publication coordination
 - the notebook export format and verification
-- immutable browser reading and prepared state transitions
+- immutable browser reading and prepared-publication transitions
 - representation loaders and mount contracts
 
 The application owns:

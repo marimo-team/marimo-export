@@ -33,7 +33,8 @@ function parseMarimoCellSnapshot(bytes: Uint8Array): MarimoCellSnapshot;
 
 Each parser requires strict canonical UTF-8 JSON, the exact field set, a known
 schema, valid digests, and at most 2,000,000 JSON values. It returns a recursively
-frozen record. Invalid bytes raise `TypeError`.
+frozen record. Invalid record shapes raise `TypeError`. Strict JSON syntax and
+value-limit failures raise `SyntaxError`.
 
 `marimoOutputLoader()` and `marimoCellLoader()` apply the same parsers after the
 browser reader verifies the asset. A parser failure reached through
@@ -52,7 +53,9 @@ interface MarimoOutputSnapshot {
 }
 ```
 
-`projectionSha256` identifies the planned output projection. `ownerCellId`
+`projectionSha256` identifies the output-specific capture used to produce this
+published output. [Outputs and representations](../../concepts/outputs-and-representations)
+explains that projection boundary. `ownerCellId`
 identifies the authored cell that owns the output's UI object graph. `output` is
 `null` when the formatted value has no terminal output.
 
@@ -195,7 +198,7 @@ A snapshot is renderer-neutral data. A consumer adapter decides how to:
 4. route UI values through exported control bindings
 5. own view replacement and disposal
 
-Use [`anyWidgetLoader()`](loaders.md#anywidget) when the output representation is
+Use [`anyWidgetLoader()`](loaders#anywidget) when the output representation is
 an `anywidget.bundle` intended to mount directly. Use snapshot records when an
 application owns a broader marimo output renderer or merges resources from
 several projections.
@@ -207,6 +210,6 @@ rendered HTML or authenticate an external module URL. A later adapter that
 inserts output markup or imports a model module grants that content the
 application's page authority.
 
-[Output loaders](loaders.md#mount-and-policy-requirements) describes Content
-Security Policy and module-origin requirements. [Export format](../export-format.md)
+[Output loaders](loaders#mount-and-policy-requirements) describes Content
+Security Policy and module-origin requirements. [Export format](../export-format)
 contains exact wire examples for both snapshot schemas.

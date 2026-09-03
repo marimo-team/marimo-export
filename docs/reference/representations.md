@@ -16,6 +16,7 @@ interpret that output.
 | Native NumPy array        | `OutputSpec.native()`              | `asset_bytes()` | `numpyLoader()`        | Numeric arrays with NPY tooling            |
 | Native Apache Arrow table | `OutputSpec.native()`              | `asset_bytes()` | `arrowTableLoader()`   | Columnar data with Arrow tooling           |
 | Native BlobAsset          | `OutputSpec.native()`              | `blob_asset()`  | Matching blob loader   | Media-typed application data               |
+| JSON BlobAsset            | `blob.json`                        | `blob_asset()`  | Matching blob loader   | Versioned JSON in a media-typed envelope   |
 | Rendered marimo output    | `OutputSpec.output()`              | `asset_bytes()` | `marimoOutputLoader()` | Inert output and replay records            |
 | Complete marimo cell      | `OutputSpec.cell()`                | `asset_bytes()` | `marimoCellLoader()`   | Output, console, and cell provenance       |
 | Text                      | `blob.text`                        | `blob_asset()`  | `textLoader()`         | Reports, labels, and source text           |
@@ -30,8 +31,9 @@ The codec identifies the stable native envelope. A BlobAsset media type
 identifies the representation inside that envelope. Browser applications select
 one codec-aware loader explicitly.
 
-Every descriptor records the originating `python_type`. Producer-local marimo
-cache paths are outside the portable representation contract.
+Every descriptor records the stored value's `python_type`. Exporter-backed
+outputs record `marimo_export.outputs.BlobAsset`. Producer-local marimo cache
+paths are outside the portable representation contract.
 
 When an exported state needs execution, a custom exporter runs for that state.
 Declared dependency modules contribute to exporter source identity and drift
@@ -48,10 +50,10 @@ For agent-oriented publication, combine:
 
 An image or interactive widget supports human review, while a paired table or
 JSON record supplies machine-readable evidence. [Use notebook exports with
-agents](../guide/agents-and-automation.md) defines the grounding workflow and
+agents](../guide/agents-and-automation) defines the grounding workflow and
 evidence identity.
 
-## Browser runtimes
+## Browser loader dependencies
 
 [NumPy](https://numpy.org/doc/stable/reference/generated/numpy.lib.format.html)
 defines the NPY array-file format. [Apache
@@ -62,23 +64,23 @@ table data. [Vega-Lite](https://vega.github.io/vega-lite/) defines a declarative
 chart specification. [AnyWidget](https://anywidget.dev/) defines a browser
 widget model and view lifecycle.
 
-Install the runtime used by each imported loader:
+Install the dependency used by each imported loader:
 
-| Loader                          | Peer dependency                                                                                             | Role                                           |
-| ------------------------------- | ----------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
-| JSON, scalar, text, HTML, image | None                                                                                                        | Browser-native values and DOM APIs             |
-| marimo output and marimo cell   | None                                                                                                        | Inert replay records                           |
-| NumPy                           | None                                                                                                        | Built-in NPY decoder                           |
-| Arrow                           | [`@uwdata/flechette`](https://github.com/uwdata/flechette) and [`lz4js`](https://github.com/Benzinga/lz4js) | Arrow table API and LZ4 decompression          |
-| Parquet                         | [`hyparquet`](https://github.com/hyparam/hyparquet)                                                         | Parquet row decoding                           |
-| Vega-Lite                       | [`vega-embed`](https://github.com/vega/vega-embed)                                                          | Chart rendering and disposal                   |
-| AnyWidget                       | [`@anywidget/types`](https://github.com/manzt/anywidget)                                                    | Public widget model, host, and lifecycle types |
+| Loader                          | Dependency                                                                                                  | Role                                        |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
+| JSON, scalar, text, HTML, image | None                                                                                                        | Browser-native values and DOM APIs          |
+| marimo output and marimo cell   | None                                                                                                        | Inert replay records                        |
+| NumPy                           | None                                                                                                        | Built-in NPY decoder                        |
+| Arrow                           | [`@uwdata/flechette`](https://github.com/uwdata/flechette) and [`lz4js`](https://github.com/Benzinga/lz4js) | Arrow table API and LZ4 decompression       |
+| Parquet                         | [`hyparquet`](https://github.com/hyparam/hyparquet)                                                         | Parquet row decoding                        |
+| Vega-Lite                       | [`vega-embed`](https://github.com/vega/vega-embed)                                                          | Chart rendering and disposal                |
+| AnyWidget                       | [`@anywidget/types`](https://github.com/manzt/anywidget)                                                    | TypeScript model, host, and lifecycle types |
 
 ```bash
 pnpm add @marimo-team/marimo-export hyparquet vega-embed
 ```
 
-Import each loader from its public subpath. [Output loaders](browser/loaders.md)
+Import each loader from its public subpath. [Output loaders](browser/loaders)
 defines every result type, option, default, cancellation point, and disposal
 contract.
 
@@ -172,6 +174,6 @@ client. A loader can return data or a value with a browser `mount()` method. A
 mount returns an idempotent disposable view and owns every node, listener,
 object URL, model, and renderer resource that it creates.
 
-[Portable JSON](portable-json.md) defines the cross-language value contract.
-[Errors and limits](browser/errors-and-limits.md) defines the integrity and
+[Portable JSON](portable-json) defines the cross-language value contract.
+[Errors and limits](browser/errors-and-limits) defines the integrity and
 execution boundaries for custom loaders.

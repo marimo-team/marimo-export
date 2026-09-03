@@ -46,8 +46,11 @@ const chart = await state.output("chart").load(vegaLiteLoader());
 const host = document.querySelector<HTMLElement>("#chart")!;
 const mounted = await chart.mount(host, { renderer: "svg" });
 
-await mounted.dispose();
+window.addEventListener("pagehide", () => void mounted.dispose(), { once: true });
 ```
+
+Keep the mount alive while it is visible. Dispose it during route teardown or
+after a replacement commits.
 
 Install the peer runtime required by each specialized loader. JSON, scalar,
 text, HTML, image, NumPy, and marimo snapshot loaders have no peer dependency.

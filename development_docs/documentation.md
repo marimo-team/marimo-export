@@ -10,8 +10,8 @@ validation, and release mechanics needed to keep that public contract true.
 | -------------------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------- |
 | Root README                | Evaluate the project and reach one result                                | `README.md`                                                         |
 | Registry README            | Adopt one published package                                              | Package `README.md`                                                 |
-| Introduction               | Understand what the product is and why it exists                         | `docs/overview.md`, `docs/why.md`                                   |
-| Concepts                   | Predict states, outputs, reuse, integrity, and trust                     | `docs/concepts/`                                                    |
+| Start                      | Understand what the product is and why it exists                         | `docs/overview.md`, `docs/why.md`                                   |
+| Understand                 | Predict states, outputs, reuse, integrity, and trust                     | `docs/concepts/`                                                    |
 | Guides                     | Complete a producer, consumer, integration, deployment, or recovery task | `docs/guide/`                                                       |
 | Reference                  | Look up exact public contracts                                           | `docs/reference/`                                                   |
 | Contributor entry          | Choose the code and validation owner                                     | `development_docs/README.md`                                        |
@@ -24,17 +24,34 @@ The [terminology reference](../docs/reference/terminology.md) is the lookup owne
 [Identities and protocols](architecture/identities-and-protocols.md) owns the
 more precise internal hash and schema vocabulary.
 
+## VitePress runtime
+
+`apps/docs` pins VitePress 2.0.0-alpha.19 through the pnpm catalog and lockfile.
+`.vitepress/config.ts` owns site configuration. `navigation.ts` is the typed
+route manifest. The directly executed TypeScript checks stay within Node's
+erasable syntax and run on the workspace's declared Node runtime.
+
+The pinned VitePress release requires an absolute deployment base. GitHub Pages
+supplies that base through `BASE_PATH`, while `publicPath()` prefixes head assets
+that VitePress emits verbatim. Themeable hero and navigation images use
+root-absolute paths because VitePress applies the configured base to them.
+
+The accessibility enhancer supplies dialog inertness, focus restoration,
+mobile-navigation containment, and sidebar keyboard behavior for this pinned
+release. Keep it until a VitePress upgrade is verified against the same desktop,
+narrow, search, and keyboard checks.
+
 ## Reader-state navigation
 
 The public structure supports four primary paths:
 
 ```text
-Introduction -> first export -> concepts -> guides -> reference
-                          \-> integrations -> operations
-                          \-> troubleshooting
+Start -> first export -> understand -> guides -> reference
+                    \-> integrations and operations
+                    \-> troubleshooting
 ```
 
-`apps/docs/navigation.mjs` is the canonical route manifest. It drives top
+`apps/docs/navigation.ts` is the canonical route manifest. It drives top
 navigation, sidebars, and the LLM text bundle. The companion check maps every
 route to one Markdown file, rejects duplicates, and rejects unlisted pages.
 
@@ -63,9 +80,11 @@ The deterministic quickstart under `examples/quickstart/` owns the first
 producer-to-reader result. `test_quickstart_example.py` builds it through the
 public Python boundary and checks both exported states.
 
-The market dashboard owns the multi-representation browser proof. Its
+The market dashboard owns the multi-representation browser proof. Its Python
 integration test verifies planning, preparation, exact reuse, live capture,
-output loading, and export closure.
+descriptors, Python reads, and export closure. Loader packages test their own
+browser runtimes. The complete dashboard loading, transition, and mount path
+requires a browser journey check.
 
 When a page uses a partial snippet, it must name the fixture, variable, DOM
 host, server route, or framework context supplied by the surrounding page.
@@ -75,7 +94,7 @@ host, server route, or framework context supplied by the surrounding page.
 Run:
 
 ```bash
-node apps/docs/scripts/check-navigation.mjs
+node apps/docs/scripts/check-navigation.ts
 make docs-build
 make docs-serve
 ```

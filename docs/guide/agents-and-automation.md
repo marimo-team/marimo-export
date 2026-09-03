@@ -11,7 +11,7 @@ and retain the identities needed to reproduce its answer.
 
 ## Read a verified output
 
-Build the [first notebook export](getting-started.md), then verify it in machine
+Build the [first notebook export](getting-started), then verify it in machine
 mode:
 
 ```bash
@@ -67,7 +67,8 @@ Keep these facts with a data-driven answer or generated application:
 - notebook export identity from canonical `index.json`
 - marimo and marimo-export producer versions
 - state name, complete inputs, and state fingerprint
-- output name, codec, media type, and originating Python type
+- output name, codec, media type, and stored Python type. Exporter-backed
+  outputs record `marimo_export.outputs.BlobAsset`
 - asset SHA-256 when the output references an asset
 - complete-export verification result
 
@@ -81,13 +82,13 @@ An agent can use the CLI as a bounded workflow:
 
 ```bash
 mkdir -p dist
-marimo-export inspect report.py --json
-marimo-export plan report.py --spec report.export.yaml --json
-marimo-export build report.py \
+uv run marimo-export inspect report.py --json
+uv run marimo-export plan report.py --spec report.export.yaml --json
+uv run marimo-export build report.py \
   --spec report.export.yaml \
   --output dist/report \
   --jsonl
-marimo-export verify dist/report --json
+uv run marimo-export verify dist/report --json
 ```
 
 File inspection and preparation execute notebook code with the producer
@@ -96,9 +97,9 @@ and network access. Review the notebook and selected outputs before allowing an
 agent to run them.
 
 The plan reports complete state vectors, reusable state fingerprints, and
-missing work. A matching prepared export can be returned before notebook
-startup. A new external data response does not invalidate that reusable export
-unless the producer identity, output declarations, or ExportSpec changes.
+missing work. [Preparation and reuse](../concepts/preparation-and-reuse)
+defines when an exact match can return before notebook startup and how external
+data freshness enters producer identity and marimo caching.
 
 ## Ask an agent to create a browser application
 
@@ -116,6 +117,6 @@ Require the resulting application to:
 - load notebook results from the deployed export origin
 - open no Python kernel or WebSocket for exported state changes
 
-Use [Build a browser application](browser-applications.md) for the consumer
-lifecycle and [Troubleshooting](troubleshooting.md) for evidence to collect when
+Use [Build a browser application](browser-applications) for the consumer
+lifecycle and [Troubleshooting](troubleshooting) for evidence to collect when
 an agent workflow fails.

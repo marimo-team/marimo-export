@@ -9,6 +9,9 @@ notebook exports from saved [marimo](https://marimo.io/) notebooks or named live
 uv add marimo-export
 ```
 
+The package requires Python 3.10 or newer, is tested on Python 3.10 through
+3.14, and installs the marimo release pinned by its package metadata.
+
 ## Build from a notebook file
 
 This example uses the repository's
@@ -53,8 +56,9 @@ print(verified.states, verified.outputs)
 ```
 
 Opening validates canonical `index.json` and leaves asset data lazy. Complete
-verification reads every declared asset and returns state, output, asset, and
-byte counts.
+verification reads every declared asset and returns exported-state,
+state-output-pair, unique-asset, and verified-byte counts. The example has two
+states and one output name, so `verified.outputs` is `2`.
 
 ## Capture a live session
 
@@ -73,6 +77,9 @@ with capture(
 ) as prepared:
     prepared.write("dist/report", replace=True)
 ```
+
+`replace=True` replaces the complete destination directory. Keep unrelated
+application files outside `dist/report`.
 
 Use `marimo-export inspect SERVER` to find session IDs. The selected session
 remains active after capture. The live notebook environment and the client must
@@ -98,6 +105,5 @@ AnyWidget bundles.
 - [CLI reference](https://marimo-team.github.io/marimo-export/reference/cli)
 - [Use notebook exports with agents](https://marimo-team.github.io/marimo-export/guide/agents-and-automation)
 
-The package supports Python 3.10 and newer. Preparing an export executes notebook
-code with the notebook environment's file, credential, network, and package
-access.
+Preparing an export executes notebook code with the notebook environment's file,
+credential, network, and package access.

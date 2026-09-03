@@ -29,11 +29,11 @@ lifecycle.
 
 ## Inspection resolves definitions before state preparation
 
-`marimo-export inspect` starts an owned notebook, runs its initial autorun, and
-returns notebook identity, definitions, UI domains, input mode, version, and
-capability records. `Session.inspect()` returns the same contract from an
-already-active session. A person or agent can therefore use real definition
-names before preparing a state matrix.
+File inspection through `marimo-export inspect` starts an owned notebook, runs
+its initial autorun, and returns notebook identity, definitions, UI domains,
+input mode, version, and capability records. Server inspection borrows a live
+session. `Session.inspect()` returns the live-session contract. A person or
+agent can therefore use real definition names before preparing a state space.
 
 `plan()` takes a separate exact-reuse fast path. When the repository already
 contains the matching prepared export, it reconstructs the public plan from the
@@ -45,7 +45,7 @@ or `capture` begins.
 
 ## Exports ground agent answers
 
-An agent can inspect prepared states and output representations, verify the
+An agent can inspect exported states and output representations, verify the
 asset closure, read structured data, and retain notebook, state, producer, and
 asset identity with its answer. Agent-oriented exports pair concise summaries
 with inspectable tables, arrays, or versioned JSON. Visual and interactive
@@ -56,10 +56,10 @@ frontend uses exported values as its fixtures and notebook-computation results.
 
 ## Producer choice follows source ownership
 
-| Source context                                                   | Producer  |
-| ---------------------------------------------------------------- | --------- |
-| The workflow owns notebook startup, execution, and cleanup       | `build`   |
-| A live session already owns the environment or completed results | `capture` |
+| Source context                                                   | Preparation operation | Prepare-and-write command |
+| ---------------------------------------------------------------- | --------------------- | ------------------------- |
+| The workflow owns notebook startup, execution, and cleanup       | `prepare`             | `build`                   |
+| A live session already owns the environment or completed results | `capture`             | CLI `capture`             |
 
 Both modes run the same ExportSpec through the same bridge and export format.
 The live finance acceptance path exercises both modes.
@@ -108,10 +108,11 @@ revision-consistent observation snapshot. `clear` passes that plan to
 The uv workspace builds one `marimo-export` wheel and source archive. The pnpm
 workspace builds `@marimo-team/portable-json` and
 `@marimo-team/marimo-export`. Browser core implements the root scalar and image
-loaders. Other representation loaders live in private workspaces and appear
-through public `loader/*` subpaths with their required peer dependencies.
+loaders plus JSON, text, HTML, and marimo snapshot subpaths. Arrow, NumPy,
+Parquet, Vega-Lite, and AnyWidget implementations live in private workspaces and
+appear through public `loader/*` subpaths with their required dependencies.
 
-Package smoke verifies:
+Workspace builds and package smoke verify:
 
 - Python root exports and console command
 - managed kernel lifespan entry point

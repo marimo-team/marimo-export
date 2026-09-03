@@ -147,9 +147,15 @@ session.capture(
 requested export states. `capture()` prepares those states and returns a leased
 `PreparedExport`. Both leave the session active.
 
+`Session.capture(timeout=...)` uses its timeout for repository reservation and
+preparation waits. The `Client` timeout still controls HTTP requests, asset
+downloads, and server-sent event inactivity. Cancellation is checked between
+bounded phases. It cannot stop a remote scratchpad operation that is already
+running.
+
 `observe_inputs()` returns portable values for eligible live UI roots and typed
 control bindings. Use it to inspect current input state. Durable observation
-history uses the [repository observation APIs](repository-and-observations.md).
+history uses the [repository observation APIs](repository-and-observations).
 
 ## Root `capture()`
 
@@ -187,9 +193,10 @@ returning the `PreparedExport`. The remote server and selected session remain
 active.
 
 The client and kernel must load the same marimo-export version and
-implementation identity. A mismatch raises a planning or execution failure such
-as `implementation_changed`. Restart the session after changing the installed
-package or an already imported custom exporter module.
+implementation identity. A bridge package or source mismatch raises
+`bridge_version_mismatch`. Source drift detected within the local client process
+raises `implementation_changed`. Restart the session after changing the
+installed package or an already imported custom exporter module.
 
 `marimo_export.client.capture()` is a public wrapper for the same operation.
 Use the package-root `capture()` import so producer workflows share one
@@ -254,6 +261,10 @@ description.to_dict() -> dict[str, object]
 dependency closures. It raises `SpecError` when a selected definition or cell is
 missing or when a cell name is ambiguous.
 
+`capabilities` lists runtime feature names reported by the inspected kernel.
+Plan and capture requests perform their own bridge capability checks before
+executing the requested operation.
+
 ### `DefinitionDescription`
 
 Each immutable definition record exposes:
@@ -279,6 +290,16 @@ also be JSON `null`, which is represented by the same Python value. Check
 `value_available` when the distinction affects a decision. `to_dict()` returns
 the complete mutable wire shape.
 
+- `siblings` lists every definition created by the same cell, including this
+  definition.
+- `input_mode` is `value` for complete replacement and `patch` for a sparse
+  AnyWidget trait patch.
+- `control_paths` maps projection-scoped control IDs to typed paths inside this
+  root input.
+- `domain` contains portable control hints such as options, minimum, maximum,
+  step, or debounce behavior. It describes the observed control and does not
+  replace producer-side validation.
+
 ### `CellDescription`
 
 Each immutable cell record exposes:
@@ -294,6 +315,10 @@ config: FrozenJsonObject
 `to_dict()` returns the complete mutable wire shape. Use `id` with
 `OutputSpec.cell(id=...)`. Use a unique authored `name` with
 `OutputSpec.cell(name)`.
+
+`config` is the canonical portable marimo cell configuration captured during
+inspection. `code_sha256` identifies the authored cell code while
+`input_dependencies` lists upstream definition names.
 
 ## Narrow `OwnedNotebook` handle
 
@@ -321,6 +346,6 @@ The public handle supports inspection. High-level planning and capture belong
 to `plan()`, `prepare()`, and `build()`. Those calls preserve repository reuse,
 leases, cancellation, and complete-export commit behavior.
 
-Use [Produce an export](produce.md) for file-backed preparation. Use [Host
-integration](host-integration.md) when an application already owns a marimo
+Use [Produce an export](produce) for file-backed preparation. Use [Host
+integration](host-integration) when an application already owns a marimo
 kernel context.

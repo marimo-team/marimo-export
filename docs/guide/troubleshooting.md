@@ -13,7 +13,7 @@ details, and cause before changing files or clearing repository state.
 Run:
 
 ```bash
-marimo-export doctor --json
+uv run marimo-export doctor --json
 ```
 
 The result reports the effective export repository, Python executable and
@@ -33,14 +33,14 @@ uv add "marimo-export[parquet]"   # Parquet
 uv add "marimo-export[anywidget]" # AnyWidget
 ```
 
-Run `marimo-export plan` again, then rebuild the missing state.
+Run `uv run marimo-export plan` again, then rebuild the missing state.
 
 ## A state input is invalid or nonportable
 
 Inspect the notebook boundary:
 
 ```bash
-marimo-export inspect report.py --json
+uv run marimo-export inspect report.py --json
 ```
 
 Use the definition's reported `value`, `domain`, `input_mode`,
@@ -51,6 +51,10 @@ inspected shape into the state row.
 Planning rejects sensitive inputs, binary AnyWidget state, non-finite portable
 numbers, missing definitions, and ordinary assignments that compete with a
 selected final named expression.
+
+If preparation fails in a cell outside the selected output dependency closure,
+inspect the full notebook run. Each state executes every available authored
+cell before the producer operation completes.
 
 ## A state cannot be resolved
 
@@ -68,8 +72,8 @@ run or a Python service.
 Inspect it before pruning:
 
 ```bash
-marimo-export repository status --json
-marimo-export repository prune --dry-run --json
+uv run marimo-export repository status --json
+uv run marimo-export repository prune --dry-run --json
 ```
 
 `repository_busy` usually means another healthy writer holds a reservation or
@@ -77,16 +81,18 @@ filesystem maintenance lock. Retry after that operation completes. A lost
 lease or confirmed integrity error requires reopening or preparing the export
 again.
 
-Use live prune only after reviewing the dry-run counts. Active artifact leases
-protect their files. [Manage repository reuse](manage-repository.md) describes
-the retained data and clear scope.
+The dry run covers prepared states, generations, and bytes. A live prune can
+also remove producer records and their observation history. Export that history
+before pruning when it must be retained. Active artifact leases protect their
+files. [Manage repository reuse](manage-repository) describes the retained
+data and clear scope.
 
 ## Verification fails
 
 Run:
 
 ```bash
-marimo-export verify dist/report --json
+uv run marimo-export verify dist/report --json
 ```
 
 Do not edit `index.json` or files under `assets/`. Rebuild from the notebook and
@@ -108,11 +114,16 @@ Check the server URL and credentials:
 List sessions before capture:
 
 ```bash
-marimo-export inspect https://notebooks.example --json
+uv run marimo-export inspect https://notebooks.example --json
 ```
 
 A timeout means the client stopped waiting. The remote scratchpad operation may
 still be running, so marimo-export does not retry it automatically.
+
+`bridge_version_mismatch` means the client and selected kernel loaded different
+marimo-export versions or source identities. Restart the server in the same
+environment as the client. `implementation_changed` means local package source
+changed during the operation. Restart the client process and repeat the check.
 
 ## The browser cannot fetch the export
 
@@ -143,6 +154,6 @@ Dispose failed staged mounts and keep the prior committed view. An aborted
 transition can leave non-cancellable decoder or module work settling in the
 background, but that work must not receive commit authority.
 
-Use the [error and limit reference](../reference/browser/errors-and-limits.md)
-for browser codes and [Python records and errors](../reference/python/format-records-and-errors.md)
+Use the [error and limit reference](../reference/browser/errors-and-limits)
+for browser codes and [Python records and errors](../reference/python/format-records-and-errors)
 for Python failure families.

@@ -168,7 +168,7 @@ Selects one exact complete input vector. The object must contain every
 
 ### `ExportState.resolve(patch)`
 
-Merges a sparse root-input patch over the current state, then selects the exact
+Merges a sparse root-input patch over the current exported state, then selects the exact
 matching exported vector. An empty patch returns the same state object. Unknown
 input names raise `state_input_invalid`.
 
@@ -227,7 +227,7 @@ const rows = await state.output("prices").load(parquetRowsLoader(), {
 
 An abort prevents the loaded value from receiving commit authority. Some
 decoders and browser module evaluations cannot stop after they begin. They can
-settle later while their result remains stale. [Output loaders](loaders.md)
+settle later while their result remains stale. [Output loaders](loaders)
 defines each loader's cancellation and cleanup behavior.
 
 ## Verify the complete export
@@ -366,10 +366,10 @@ type OutputDescriptor =
 ```
 
 The exported `DescriptorFor<C>` type selects the descriptor for one
-`OutputCodec`. [Export format](../export-format.md) defines the corresponding
+`OutputCodec`. [Export format](../export-format) defines the corresponding
 snake-case wire fields and durable invariants.
 
-[Output loaders](loaders.md) defines loader, media-type, payload, and mount
-types. [Errors and limits](errors-and-limits.md) defines every reader error code
-and browser requirement. [Portable JSON](../portable-json.md) defines
+[Output loaders](loaders) defines loader, media-type, payload, and mount
+types. [Errors and limits](errors-and-limits) defines every reader error code
+and browser requirement. [Portable JSON](../portable-json) defines
 `JsonPrimitive`, `JsonValue`, and `JsonObject`.

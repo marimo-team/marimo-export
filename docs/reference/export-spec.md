@@ -49,7 +49,7 @@ returns the Draft 2020-12 authoring schema. `to_value()` returns normalized
 explicit states after matrix expansion. `digest` identifies that normalized
 state space.
 
-Invalid documents and state relations raise `SpecError`. Syntax and schema
+Invalid documents and state-space values raise `SpecError`. Syntax and schema
 failures use `spec_invalid`. Invalid rows, matrix domains, collisions, and
 defaults use `spec_value_invalid`.
 
@@ -58,8 +58,9 @@ state space with one application-owned output plan.
 
 ## ExportSpec
 
-An ExportSpec defines the finite state relation and named output representations
-prepared from one notebook.
+An ExportSpec defines the finite state-output relation to publish. Each named
+output selects a notebook value and may name an exporter. Execution turns that
+source and exporter into one stable output representation across all states.
 
 ```yaml
 schema: marimo-export.spec.v2
@@ -96,20 +97,26 @@ The root contains exactly:
 Unknown fields are invalid.
 
 State and output names are nonempty Unicode scalar strings with no surrounding
-whitespace or control characters and at most 255 UTF-8 bytes. State-row keys,
-selector roots, and exporter option names are non-keyword Python identifiers of
-at most 255 UTF-8 bytes.
+whitespace or control characters and at most 255 UTF-8 bytes. State-row keys and
+exporter option names are non-keyword Python identifiers of at most 255 UTF-8
+bytes.
+
+A value selector contains at most 2,048 UTF-8 bytes. Its root and dot steps use
+ASCII identifier-shaped names. Brackets accept a nonnegative integer or a JSON
+string key. Selector parsing does not apply Python keyword rules.
 
 ## Inferred inputs
 
-Planning derives input names from selected output dependencies and state-row
-keys. Each inferred name must identify one eligible notebook definition.
+Planning derives input names from state-row keys and the canonical UI roots in
+the selected outputs' dependency closures. An ordinary Python definition enters
+the input set when a state row names it explicitly. Each inferred name must
+identify one eligible notebook definition.
 
 Eligible definitions include ordinary Python definitions, supported marimo UI
 elements, and AnyWidget values with portable serializer-owned state. Planning
 rejects missing, sensitive, unavailable, and nonportable definitions.
 
-Use `marimo-export inspect NOTEBOOK --json` or
+Use `uv run marimo-export inspect NOTEBOOK --json` or
 `marimo_export.inspection.inspect_notebook()` to inspect definitions, cells,
 input modes, current values, dependencies, portability, and sensitivity.
 
@@ -198,11 +205,13 @@ Set `by` to `name` for an authored cell name or `id` for an inspected runtime ce
 ID. A complete-cell source stores `marimo.cell.v1` with cell identity, config,
 terminal output, console records, outcome, and replay resources.
 
-JSON, native, export, and rendered-output selectors accept:
+JSON, native, export, and rendered-output selectors contain no whitespace
+outside a JSON-string item and accept:
 
 - one Python identifier root
 - attribute steps such as `.summary`
-- nonnegative integer items such as `[0]`
+- canonical nonnegative integer items such as `[0]` or `[10]`. Signs, leading
+  zeroes, and spaces are invalid
 - JSON-string items such as `["total"]`
 
 Mapping keys take precedence over attributes. Every normalized state must
@@ -287,8 +296,8 @@ spec = ExportSpec(
 ```
 
 Invalid specs raise `SpecError` with a stable code and portable details. [Choose
-states and outputs](../guide/choose-states.md) provides the authoring workflow.
+states and outputs](../guide/choose-states) provides the authoring workflow.
 
 `ExportSpec.json_schema()` returns the Draft 2020-12 authoring schema as a
-portable Python object. [Python production](python/produce.md) defines the
+portable Python object. [Python production](python/produce) defines the
 programmatic constructors and error boundary.

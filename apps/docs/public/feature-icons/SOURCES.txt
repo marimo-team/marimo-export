@@ -1,7 +1,6 @@
-Feature icon sources
+The feature icons are static exports from the Tabler icon set through Iconify:
 
-The icons use paths from lucide-react 0.563.0, which the marimo frontend depends on. Their names are cloud-upload, braces, bot, git-fork, and badge-check.
+https://icon-sets.iconify.design/tabler/
 
-Dark variants preserve each shape and use a lighter stroke or fill for contrast.
-
-The Lucide license is included in LUCIDE-LICENSE.txt.
+Icons: route, database, git-fork, braces, cloud-upload, shield-check.
+Colors are adapted for the marimo-export light and dark documentation themes.

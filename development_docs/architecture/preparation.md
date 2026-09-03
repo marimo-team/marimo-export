@@ -47,7 +47,7 @@ states that preparation must commit.
 
 - notebook document identity
 - producer identity
-- output declaration identity in `output_plan_sha256`
+- output-plan identity in `output_plan_sha256`
 - spec identity
 - inferred input names
 - normalized states and aliases
@@ -144,11 +144,11 @@ Repository reuse and Marimo computation caching solve different work:
 | Default alias change           | Reuse prepared states, assemble export  | No state needs new computation          |
 | One added state                | Prepare one missing state               | Native cache may restore its cells      |
 | One removed state              | Reuse remaining states, assemble export | Zero state executions                   |
-| Output declaration change      | New output declaration identity         | Native cache may restore notebook cells |
+| Output plan change             | New output-plan identity                | Native cache may restore notebook cells |
 | Producer identity change       | New producer scope                      | Marimo decides native cache validity    |
 
-State aliases share one prepared-state artifact. A generation records the exact
-alias and default-state relation requested by its spec.
+State aliases share one prepared-state artifact. An export generation records
+the exact alias mapping and default alias requested by its spec.
 
 ## Progress and cancellation
 
@@ -200,9 +200,10 @@ Use it as a context manager. When `prepare()` opened the default repository,
 closing the handle closes that repository after the generation lease releases.
 
 `manifest(export_url, state=...)` emits `marimo-export.prepared.v1`. Its
-`instance` field binds the notebook export identity, export URL, complete
-selected inputs, state fingerprint, and optional refresh interval. The default
-selection comes from the export's explicit default state.
+`instance` field identifies the immutable notebook export. The complete manifest
+associates that identity with the export URL, selected inputs, state fingerprint,
+and optional refresh interval. The default selection comes from the export's
+explicit default state.
 
 ## Durable write
 
@@ -214,7 +215,12 @@ the same writer and reader used by direct builds. The writer:
 3. stages the complete directory
 4. verifies `index.json` and every staged asset
 5. commits the directory atomically where the host filesystem supports it
-6. returns `ExportResult`
+6. opens and verifies the visible destination
+7. returns `ExportResult`
+
+The destination can become visible before the final open and verification. An
+external mutation or storage failure at that boundary raises after commit while
+the new directory remains visible.
 
 The destination contains the portable notebook export. Repository databases,
 leases, reservations, staging records, and observation history remain in the

@@ -43,12 +43,16 @@ platform cache directory:
 | Other platforms | `$XDG_CACHE_HOME/marimo-export/repository` or `~/.cache/marimo-export/repository` |
 
 Opening creates the directory when needed, rejects a symbolic-link root, and
-sets owner-only permissions on POSIX systems. It opens or recovers the private
-SQLite catalog and retires invalid repository artifacts. Recovery never treats
-the repository as a notebook export directory.
+sets owner-only permissions on POSIX systems. It attempts maintenance recovery
+for the private SQLite catalog and invalid repository artifacts. When another
+process holds the maintenance transaction lock, opening continues without that pass.
+Recovery can quarantine a corrupt catalog and open a fresh one, which also
+resets catalog-backed observation history. Recovery never treats the repository
+as a notebook export directory.
 
-`limits` defaults to `RepositoryLimits()`. Use one explicit instance when an
-application needs a smaller retention or storage budget.
+`limits` defaults to `RepositoryLimits()`. The policy belongs to the opened
+handle and is not persisted with the repository path. A later handle can apply
+different limits. CLI commands open with the default policy.
 
 `default_path()` returns the selected default path without creating it:
 
@@ -93,17 +97,19 @@ repository.close() -> None
 canonicalizes the values, advances the producer observation revision, and
 returns the stored `ObservedState`.
 
-`observations()` projects retained producer observations to the plan's inferred
-inputs. `clear_observations()` removes the producer's observation history and
-returns the number removed.
+`observations()` returns observations stored for the plan's exact ordered input
+relation. Planning performs the separate projection that can select a subset of
+values from broader observations. `clear_observations()` removes the producer's
+observation history and returns the number removed.
 
 `prepared()` returns an exact verified prepared export when the repository has
-one matching producer, output plan, spec, and complete state relation. It
-returns `None` when no exact generation matches.
+one matching producer, output plan, and exact spec identity. It returns `None`
+when no exact export generation matches.
 
 `status()` reports current counts and bytes. `prune()` applies the configured
-retention policy and removes candidates when `dry_run=False`. Run with
-`dry_run=True` first when an operator needs to inspect the candidate counts.
+retention policy and removes candidates when `dry_run=False`. A dry run reports
+prepared states, generations, and bytes. A live prune can also remove producer
+records and their observation history, which `PruneResult` does not count.
 Active staging, state, generation, and detached asset leases protect their
 artifacts from pruning.
 
@@ -122,8 +128,8 @@ artifacts from pruning.
 | `retained_generations`              |     128 | Generations retained across the repository              |
 | `retained_prepared_states`          |    4096 | Prepared states retained across producers               |
 | `metadata_bytes`                    |  16 MiB | Repository metadata budget                              |
-| `prepared_state_bytes`              | 512 MiB | Prepared-state content budget                           |
-| `generation_bytes`                  |   1 GiB | Prepared-generation content budget                      |
+| `prepared_state_bytes`              | 512 MiB | Per-state maximum and aggregate prepared-state budget   |
+| `generation_bytes`                  |   1 GiB | Per-generation maximum and aggregate generation budget  |
 | `repository_bytes`                  |   2 GiB | Total repository content budget                         |
 | `lease_ttl_seconds`                 |  `30.0` | Lease expiry after heartbeat loss                       |
 | `lease_heartbeat_seconds`           |   `5.0` | Active lease renewal interval                           |
@@ -131,6 +137,9 @@ artifacts from pruning.
 Integer limits must be positive and fit SQLite's signed integer range. Lease
 durations must be positive finite numbers. The heartbeat interval must be
 shorter than the time to live.
+
+`repository_bytes` is a steady-state admission budget. Replacing a leased
+generation can temporarily retain old and new bytes above that value.
 
 ## Repository result records
 
@@ -148,9 +157,10 @@ canonical_values: bytes
 byte_count: int
 ```
 
-`values` is immutable. `fingerprint` is computed from the complete canonical
-values. `to_dict()` returns producer identity, revision, fingerprint, and a
-detached values object.
+`values` is a read-only top-level mapping decoded from canonical bytes. Nested
+lists and dictionaries are detached mutable values. `fingerprint` is computed
+from the complete canonical values. `to_dict()` returns producer identity,
+revision, fingerprint, and another detached values object.
 
 ### `RepositoryStatus`
 
@@ -248,12 +258,12 @@ observation is limited to 1 MiB. It can evict older pending vectors while still
 advancing their observation revisions. Deferred host observations reject new
 work when the corresponding bounds are full.
 
-`flush()` waits for queued and deferred writes to settle. `close()` stops and
-joins the worker without a separate timeout. Busy repository writes make up to
-three attempts with 10 and 20 millisecond waits between attempts. Both methods
-replay a terminal worker failure as
-`ObservationPersistenceError`. Calls after close also replay a prior failure,
-then otherwise raise `RuntimeError`.
+`flush()` waits for queued and deferred writes to settle. After a successful
+close it returns immediately. `close()` is idempotent and joins the worker
+without a separate timeout. Busy repository writes make up to three attempts
+with 10 and 20 millisecond waits between attempts. Both methods replay a
+terminal worker failure as `ObservationPersistenceError`. Recording after close
+replays a prior failure or raises `RuntimeError`.
 
 A repository-limit rejection advances the producer revision without retaining
 the oversized vector. Queue ingestion that exceeds its own bound raises
@@ -284,7 +294,7 @@ live kernel to remain bound to the ledger's saved notebook source.
 This is an advanced host integration. Applications that do not own a marimo
 kernel context should record through `ExportRepository.record_observation()` or
 use an integration that owns the hook lifecycle. See [Host
-integration](host-integration.md).
+integration](host-integration).
 
 ## Repository errors
 
@@ -302,6 +312,6 @@ Repository errors inherit `MarimoExportError`, so each exposes `code`,
 artifact. A temporary availability failure preserves the current prepared
 export.
 
-Use [Produce an export](produce.md) to pass the repository into planning and
-preparation. Use [Delivery and publications](delivery-and-publications.md) to
+Use [Produce an export](produce) to pass the repository into planning and
+preparation. Use [Delivery and publications](delivery-and-publications) to
 retain prepared generations for an application.

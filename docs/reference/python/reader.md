@@ -17,7 +17,7 @@ state = export.default_state
 summary = state.output("summary").json()
 
 print(state.aliases)
-print(summary)
+print(dict(summary))
 ```
 
 Opening and verification execute no notebook-authored browser module. Treat an
@@ -30,11 +30,12 @@ trust policy when that application later renders or mounts it.
 open_export(path: str | os.PathLike[str]) -> NotebookExport
 ```
 
-`path` must be a real directory. The reader rejects a symbolic-link export root,
-a missing or noncanonical `index.json`, an unknown schema or codec, a declared
-asset larger than 64 MiB, and a declared index-plus-unique-asset closure larger
-than 512 MiB. Opening reads the index and validates its complete declared
-relation. It does not read asset contents.
+`path` must be a real directory. Opening rejects a symbolic-link export root, a
+symbolic-link or nonregular `index.json`, a missing or noncanonical index, an
+unknown schema or codec, a declared asset larger than 64 MiB, and a declared
+index-plus-unique-asset closure larger than 512 MiB. Asset access and complete
+verification separately reject symbolic-link or nonregular asset files. Opening
+validates the complete declared relation without reading asset contents.
 
 Storage that is temporarily unavailable raises `ExportUnavailableError`.
 Malformed paths, indexes, and relations raise `NotebookExportError`.
@@ -86,8 +87,9 @@ was not prepared raises `StateUnavailableError` with code `state_unavailable`.
 
 ## `ExportState`
 
-An `ExportState` is one complete prepared input vector and its named outputs.
-Several authored aliases can select the same state.
+An `ExportState` is one exported state: a complete input vector and its named
+outputs in the notebook export. Several authored aliases can select the same
+exported state.
 
 ```python
 state.aliases: tuple[str, ...]
@@ -102,10 +104,11 @@ state.resolve(patch: Mapping[str, JsonValue]) -> ExportState
 `inputs` is recursively immutable. `output()` raises `NotebookExportError` with
 code `output_not_found` when `name` is absent.
 
-`resolve(patch)` merges a sparse patch over the current complete vector, then
-performs exact export resolution. An empty patch returns the same state. Unknown
-input names raise `state_input_invalid`. A merged vector absent from the export
-raises `StateUnavailableError`.
+`resolve(patch)` replaces the named root input values in the current complete
+vector, then performs exact export resolution. It does not deep-merge nested
+objects. An empty patch returns the same state. Unknown input names raise
+`state_input_invalid`. A resulting vector absent from the export raises
+`StateUnavailableError`.
 
 ```python
 weekly = export.default_state.resolve({"interval": "1wk"})
@@ -170,9 +173,10 @@ export.verify() -> VerificationResult
 ```
 
 Both forms inspect the export directory, reject undeclared files under
-`assets/`, and read each unique declared asset once. `VerificationResult` has
-nonnegative `states`, `outputs`, `assets`, and `bytes_verified` fields.
-`to_dict()` returns those four fields.
+`assets/`, and read each unique declared asset once. `VerificationResult.states`
+counts exported states. `outputs` counts state-output pairs. `assets` counts
+unique asset files. `bytes_verified` counts those asset bytes and excludes
+`index.json` and inline values. `to_dict()` returns those four fields.
 
 Verification proves consistency with `index.json`. It does not authenticate the
 person or system that produced that index. Bind provenance to a trusted index
@@ -199,6 +203,6 @@ Both records are immutable and expose `to_value()`. Import them from
 `marimo_export.reader` when handling values returned by `NotebookExport`. Their
 defining low-level module is `marimo_export.index`.
 
-Use [Output representations](../representations.md) to choose a representation
-for the next consumer. Use [Format records and errors](format-records-and-errors.md)
+Use [Output representations](../representations) to choose a representation
+for the next consumer. Use [Format records and errors](format-records-and-errors)
 to inspect descriptors or implement directly against the export format.

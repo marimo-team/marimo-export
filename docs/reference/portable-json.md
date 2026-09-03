@@ -6,8 +6,8 @@ description: Cross-language JSON values, conversion, strict parsing, limits, err
 # Portable JSON
 
 `@marimo-team/portable-json` validates values before they cross the Python and
-JavaScript boundary used by notebook exports. It returns detached frozen data
-whose numbers and strings preserve the same meaning in both runtimes.
+JavaScript boundary used by notebook exports. It normalizes primitive values and
+returns detached, frozen copies of valid array and object inputs.
 
 ```bash
 pnpm add @marimo-team/portable-json
@@ -45,6 +45,10 @@ A portable value can contain:
 - dense arrays of portable values
 - objects with string keys and portable values
 
+Supported inputs use plain JavaScript primitives, arrays, and ordinary objects
+that match `JsonValue`. Boxed wrappers such as `new String("value")` are outside
+the public input contract.
+
 Strings and object keys must contain Unicode scalar values. An unpaired UTF-16
 surrogate fails conversion. Negative zero becomes positive zero.
 
@@ -55,10 +59,11 @@ function portableJsonValue<Input>(input: Input, path?: string): JsonValue;
 function portableJsonObject<Input>(input: Input, path?: string): JsonObject;
 ```
 
-`portableJsonValue()` walks the input, copies every array and object, and freezes
-each copied container. Mutating the source after conversion cannot change the
-result. When the same source object appears in several positions, each position
-receives its own copy. A container cycle raises `TypeError`.
+For inputs that match `JsonValue`, `portableJsonValue()` copies every array and
+object and freezes each copied container. Mutating the source after conversion
+cannot change a container result. When the same source object appears in several
+positions, each position receives its own copy. A container cycle raises
+`TypeError`.
 
 `portableJsonObject()` applies the same conversion and requires an object at the
 root. Its default diagnostic path is `value`. Pass a project noun to identify a
@@ -196,33 +201,10 @@ root does not load or require Zod.
 
 ## Use in a custom output loader
 
-Decode bytes with fatal UTF-8 handling, convert the parsed object, then validate
-the representation schema:
+Decode bytes with fatal UTF-8 handling, parse portable JSON, then validate the
+representation-specific fields and ranges. Portable conversion owns the shared
+primitive and container rules. The representation loader owns application
+meaning.
 
-```ts
-import { defineBlobAssetLoader } from "@marimo-team/marimo-export";
-import { parsePortableJson, portableJsonObject } from "@marimo-team/portable-json";
-
-const summaryLoader = defineBlobAssetLoader<{ readonly rows: number }>({
-  mediaTypes: "application/vnd.example.summary.v1+json",
-  load({ payload, signal }) {
-    signal?.throwIfAborted();
-    const text = new TextDecoder("utf-8", { fatal: true }).decode(payload.data);
-    const value = portableJsonObject(parsePortableJson(text), "summary");
-    if (
-      value.schema !== "example.summary.v1" ||
-      typeof value.rows !== "number" ||
-      !Number.isSafeInteger(value.rows) ||
-      value.rows < 0
-    ) {
-      throw new TypeError("Summary payload is invalid.");
-    }
-    signal?.throwIfAborted();
-    return Object.freeze({ rows: value.rows });
-  },
-});
-```
-
-Portable conversion establishes the shared primitive and container rules. The
-representation check still owns required fields, allowed fields, ranges, and
-application meaning.
+[Define a custom representation](representations#define-a-custom-representation)
+shows the complete producer and browser pair.

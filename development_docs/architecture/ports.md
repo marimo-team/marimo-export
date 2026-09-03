@@ -18,15 +18,20 @@ producer service   -> PreparationRepository -> repository adapters
 
 ## Public Python surface
 
-The package root contains the common producer and consumer path:
+The package root contains these public symbols:
 
 ```python
 from marimo_export import (
     ExportPlan,
     ExportRepository,
+    ExportResult,
     ExportSpec,
+    NotebookExport,
+    OutputSpec,
     PreparedExport,
+    ProgressEvent,
     StateSpace,
+    VerificationResult,
     build,
     capture,
     open_export,
@@ -39,19 +44,26 @@ from marimo_export import (
 Focused modules carry capabilities needed by applications with longer
 lifecycles:
 
-| Module                       | Contract                                                  |
-| ---------------------------- | --------------------------------------------------------- |
-| `marimo_export.sessions`     | Connect to a server and borrow a live `Session`           |
-| `marimo_export.inspection`   | Inspect definitions, cells, input roots, and capabilities |
-| `marimo_export.prepared`     | Hold a prepared export or one independently leased asset  |
-| `marimo_export.publication`  | Retain last-good prepared exports for application keys    |
-| `marimo_export.manifest`     | Encode a bounded canonical prepared manifest              |
-| `marimo_export.delivery`     | Stage and commit an application directory                 |
-| `marimo_export.observations` | Record successful input vectors through a bounded ledger  |
-| `marimo_export.outputs`      | Return a package-owned `BlobAsset` from a custom exporter |
-| `marimo_export.diagnostics`  | Validate the installed Marimo adapter                     |
-| `marimo_export.integration`  | Install host capabilities and expose integration records  |
-| `marimo_export.wire`         | Use canonical portable JSON and fingerprint operations    |
+| Module                       | Contract                                                   |
+| ---------------------------- | ---------------------------------------------------------- |
+| `marimo_export.sessions`     | Connect to a server and borrow a live `Session`            |
+| `marimo_export.inspection`   | Inspect definitions, cells, input roots, and capabilities  |
+| `marimo_export.prepared`     | Hold a prepared export or one independently leased asset   |
+| `marimo_export.publication`  | Retain last-good prepared exports for application keys     |
+| `marimo_export.manifest`     | Encode a bounded canonical prepared manifest               |
+| `marimo_export.delivery`     | Stage and commit an application directory                  |
+| `marimo_export.observations` | Record successful input vectors through a bounded ledger   |
+| `marimo_export.outputs`      | Return a package-owned `BlobAsset` from a custom exporter  |
+| `marimo_export.diagnostics`  | Validate the installed Marimo adapter                      |
+| `marimo_export.integration`  | Install host capabilities and expose integration records   |
+| `marimo_export.exporters`    | Define built-in and importable output exporters            |
+| `marimo_export.limits`       | Configure capture byte limits                              |
+| `marimo_export.errors`       | Handle typed Python failures                               |
+| `marimo_export.reader`       | Use detailed reader, state, output, and provenance records |
+| `marimo_export.repository`   | Configure retention and inspect repository records         |
+| `marimo_export.descriptors`  | Inspect low-level output descriptors                       |
+| `marimo_export.verification` | Verify a notebook export                                   |
+| `marimo_export.wire`         | Use canonical portable JSON and fingerprint operations     |
 
 The CLI delegates to the same SDK operations. Human output, JSON output, JSONL
 progress, and exit categories belong to `_cli`. Planning and preparation

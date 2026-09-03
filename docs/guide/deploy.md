@@ -11,11 +11,11 @@ then exercise the deployed consumer against the final origin.
 
 ## Preview the static files
 
-Build the [first notebook export](getting-started.md), then serve its parent
+Build the [first notebook export](getting-started), then serve its parent
 directory:
 
 ```bash
-python -m http.server 8000 --directory dist
+python -m http.server 8000 --bind 127.0.0.1 --directory dist
 ```
 
 `http://127.0.0.1:8000/report/index.json` should return canonical JSON. Pass
@@ -24,8 +24,18 @@ python -m http.server 8000 --directory dist
 Run the complete verifier before copying files:
 
 ```bash
-marimo-export verify dist/report
+uv run marimo-export verify dist/report
 ```
+
+Upload or copy `dist/report/` as one directory. Deploy the written export, not
+the local export repository.
+
+On POSIX systems, marimo-export creates directories with owner-only access and
+files with owner read and write access. A static server running as another user
+may need the deployment tool to assign its ownership or permissions. Apply that
+policy after the final directory commit. `--replace` installs a new directory
+and does not preserve the old directory's mode, owner, access-control lists, or
+extended attributes.
 
 ## Configure the host
 
@@ -52,17 +62,26 @@ query is copied to every asset request.
 (CSP)](https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP) controls resources
 that mounted outputs can execute or create.
 
-| Representation                    | Policy capability that may be required  |
-| --------------------------------- | --------------------------------------- |
-| Embedded AnyWidget module         | `script-src blob:`                      |
-| Remote AnyWidget module           | Its HTTPS script origin                 |
-| AnyWidget styles                  | The application's accepted style policy |
-| Image loader                      | `img-src blob:`                         |
-| Vega-Lite external data or images | Each declared network or image origin   |
+| Representation                        | Policy capability that may be required                                     |
+| ------------------------------------- | -------------------------------------------------------------------------- |
+| Embedded AnyWidget module             | `script-src blob:`                                                         |
+| AnyWidget module stored as a data URL | `script-src data:`                                                         |
+| Remote AnyWidget module               | Its HTTPS script origin                                                    |
+| AnyWidget styles                      | Inline styles or another policy that accepts an inserted `<style>` element |
+| Image loader                          | `img-src blob:`                                                            |
+| Vega-Lite external data or images     | Each declared network or image origin                                      |
 
 An AnyWidget module loaded from an HTTP URL remains outside the export asset
 closure. The export verifies the stored URL record, while the remote server owns
-the module bytes returned at mount time.
+the module bytes returned at mount time. A remote module must use a JavaScript
+media type, allow the application origin through CORS, and satisfy the page's
+HTTPS and request policies. The browser reader's custom `fetch` handles export
+requests. It does not intercept AnyWidget module imports or Vega-Lite data and
+image requests.
+
+HTML loaders and marimo snapshot records return inert markup. Apply the
+application's sanitization and rendering policy before inserting that markup
+into the document.
 
 ## Separate integrity from publisher trust
 
@@ -87,5 +106,5 @@ After upload:
 6. Verify the same deployed directory through an independent download when the
    host can transform uploaded files.
 
-Use [Troubleshooting](troubleshooting.md) for CORS, CSP, integrity, state, and
+Use [Troubleshooting](troubleshooting) for CORS, CSP, integrity, state, and
 loader failures.

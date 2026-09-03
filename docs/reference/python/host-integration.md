@@ -12,6 +12,9 @@ kernel runtime and controls its startup and shutdown.
 Most producers should use `build()`, `prepare()`, or `capture()`. Those calls own
 or borrow the required lifecycle. Use the APIs on this page when the application
 already owns the kernel object, runtime context, hooks, and cleanup order.
+Host integration supports the adapter for the marimo release pinned by the
+Python package. Run `uv run marimo-export doctor` in the host environment before
+constructing the integration.
 
 ## Ownership map
 
@@ -116,7 +119,7 @@ Hook-side inspection failure is logged and leaves the notebook run complete.
 Persistence failure is retained by the ledger and raised by `flush()`,
 `close()`, or the next `record()` call.
 
-[Repository and observations](repository-and-observations.md) defines the
+[Repository and observations](repository-and-observations) defines the
 ledger's queue, repository ownership, errors, and close behavior.
 
 ## Keep restored cache values compatible
@@ -214,5 +217,5 @@ details: dict[str, object]
 `details` returns a detached portable object. `to_dict()` returns every field.
 Use `status` as the branch condition and retain `details` for diagnostics.
 
-Use [Format records and errors](format-records-and-errors.md) to handle
+Use [Format records and errors](format-records-and-errors) to handle
 `CompatibilityError` and other typed failures from direct integration calls.

@@ -19,8 +19,8 @@ Run this example from a repository checkout with:
 | [Git](https://git-scm.com/)                                  | Clones the repository                                    |
 | [Python 3.14](https://www.python.org/)                       | Runs the notebook and Python package                     |
 | [uv](https://docs.astral.sh/uv/)                             | Installs locked Python dependencies and runs the CLI     |
-| [Node.js 22.18 or newer](https://nodejs.org/)                | Runs the TypeScript application tooling                  |
-| [pnpm 11.25.0](https://pnpm.io/)                             | Installs dependencies and runs the example scripts       |
+| [Node.js](https://nodejs.org/)                               | Runs the version pinned by the workspace                 |
+| [pnpm](https://pnpm.io/)                                     | Installs dependencies and runs the example scripts       |
 | A POSIX shell and [Make](https://www.gnu.org/software/make/) | Run the repository targets                               |
 | HTTPS access to the Python and npm package registries        | Downloads dependencies that are absent from local caches |
 | HTTPS access to [Yahoo Finance](https://finance.yahoo.com/)  | Retrieves historical prices during preparation           |
@@ -29,7 +29,7 @@ Run this example from a repository checkout with:
 ::: warning Live market data
 The preparation run requests historical prices from Yahoo Finance. Network
 availability and the returned market data can change the run. Use the
-[deterministic quickstart](getting-started.md) for the first local workflow.
+[deterministic quickstart](getting-started) for the first local workflow.
 :::
 
 ## Build and open the application
@@ -76,7 +76,7 @@ Build the matching export a second time:
 pnpm run export
 ```
 
-The [export repository](manage-repository.md) stores reusable prepared states.
+The [export repository](manage-repository) stores reusable prepared states.
 The matching `ExportSpec`, producer identity, and state fingerprints let the
 second build reuse the prepared export before notebook startup.
 
@@ -112,5 +112,5 @@ uv run --locked --package marimo-export-vite-vanilla-example \
 session active. The dashboard consumes the same `index.json` contract from
 either producer path.
 
-Next, [choose states and outputs](choose-states.md) for your own notebook or
-[consume a notebook export](consume-an-export.md) from another client.
+Next, [choose states and outputs](choose-states) for your own notebook or
+[consume a notebook export](consume-an-export) from another client.

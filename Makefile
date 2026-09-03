@@ -17,7 +17,9 @@ FORMAT_PATHS := \
 	skills \
 	AGENTS.md \
 	CLAUDE.md \
+	CONTRIBUTING.md \
 	README.md \
+	SECURITY.md \
 	package.json \
 	pnpm-workspace.yaml \
 	pyproject.toml \

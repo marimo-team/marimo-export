@@ -5,10 +5,11 @@ description: Inspect reusable artifacts, apply retention, and manage observed no
 
 # Manage the export repository
 
-The export repository stores reusable prepared states, immutable export
-generations, and observed input vectors for producers. It is private producer
-storage. A notebook export written to `dist/` is a separate portable directory
-and remains available when repository retention removes its reusable source.
+The export repository is a local producer cache for reusable prepared states,
+immutable export generations, and observations. Deploy the notebook export
+written to `dist/` or another destination. Do not serve the repository tree,
+which also contains old generations, observation history, staging data, and
+private SQLite coordination records.
 
 ## Select one repository
 
@@ -54,7 +55,12 @@ with ExportRepository.open(".exports") as repository:
     print(repository.status().to_dict())
 ```
 
-`default_path()` reports the effective default without creating it.
+`default_path()` reports the effective default without creating it. Opening a
+repository attempts maintenance recovery. When another process holds the
+maintenance transaction lock, opening continues without that pass. A status or dry-run
+command can still create the repository, tighten its permissions, quarantine a
+corrupt catalog, retire an invalid artifact, or open a fresh catalog after an
+incompatible schema.
 
 ## Inspect storage
 
@@ -86,14 +92,24 @@ files and retires a confirmed integrity failure.
 
 ## Preview and apply retention
 
-Preview the artifacts that exceed the active retention policy:
+Preview the prepared states and export generations that exceed the active
+retention policy:
 
 ```bash
 uv run marimo-export repository prune --dry-run
 ```
 
 The result reports removable prepared-state count, generation count, and bytes.
-Apply the same policy after reviewing the preview:
+It does not report producer histories that may leave retention.
+
+::: warning Prune can remove observation history
+A live prune can remove producer records and cascade into their observations.
+The dry-run result does not include those observation deletions. Export
+observation data before a live prune when that authoring history must be kept.
+:::
+
+Apply retention after reviewing both the artifact preview and the observation
+history:
 
 ```bash
 uv run marimo-export repository prune
@@ -135,6 +151,10 @@ with ExportRepository.open(".exports", limits=limits) as repository:
     print(preview.to_dict())
 ```
 
+The policy belongs to this handle and is not stored in the repository. Opening
+the same path later with different limits applies the later handle's policy.
+CLI maintenance commands open with `RepositoryLimits()` defaults.
+
 Defaults:
 
 | Limit                               |    Default | Effect                                                            |
@@ -148,14 +168,16 @@ Defaults:
 | `retained_generations`              |        128 | Generations retained across the repository                        |
 | `retained_prepared_states`          |      4,096 | Prepared states retained across the repository                    |
 | `metadata_bytes`                    |     16 MiB | Metadata retained across prepared states and generations          |
-| `prepared_state_bytes`              |    512 MiB | Prepared-state content retained across the repository             |
-| `generation_bytes`                  |      1 GiB | Generation content retained across the repository                 |
+| `prepared_state_bytes`              |    512 MiB | Maximum for one prepared state and its aggregate retained content |
+| `generation_bytes`                  |      1 GiB | Maximum for one generation and its aggregate retained content     |
 | `repository_bytes`                  |      2 GiB | State, generation, and retired content across the repository      |
 | `lease_ttl_seconds`                 | 30 seconds | Lifetime of a lease without renewal                               |
 | `lease_heartbeat_seconds`           |  5 seconds | Renewal interval for active leases                                |
 
 All count and byte limits are positive integers. Lease durations are positive
 finite numbers, and the heartbeat must be shorter than the lease lifetime.
+`repository_bytes` is a steady-state admission budget. A replacement can
+temporarily exceed it while leases protect both the old and new generations.
 
 ## List observed input vectors
 
@@ -232,6 +254,6 @@ Building or capturing explicit ExportSpec states does not promote those states
 into observation history. Use normal-run recording or
 `record_observation()` when repopulation is intended.
 
-The [CLI reference](../reference/cli.md) defines machine output and exit codes.
-The [repository and observations reference](../reference/python/repository-and-observations.md)
+The [CLI reference](../reference/cli) defines machine output and exit codes.
+The [repository and observations reference](../reference/python/repository-and-observations)
 defines the Python records and methods.
