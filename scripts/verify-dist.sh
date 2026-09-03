@@ -18,7 +18,7 @@ if [[ "${#wheels[@]}" -ne 2 ]]; then
 	exit 1
 fi
 
-uv run python scripts/verify_release_artifacts.py
+uv run python scripts/verify_release_artifacts.py --write-checksums
 
 export UV_NO_CONFIG=1
 for wheel in "${wheels[@]}"; do

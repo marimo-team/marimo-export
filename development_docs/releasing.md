@@ -1,7 +1,11 @@
 # Releasing marimo-export
 
-One annotated `vX.Y.Z` tag publishes the Python package and both public npm
-packages from the same source commit.
+One annotated `vX.Y.Z` tag publishes
+[`marimo-export`](https://pypi.org/project/marimo-export/) to PyPI,
+[`@marimo-team/marimo-export`](https://www.npmjs.com/package/@marimo-team/marimo-export),
+and
+[`@marimo-team/portable-json`](https://www.npmjs.com/package/@marimo-team/portable-json)
+to npm from the same source commit.
 
 ```console
 make check
@@ -43,7 +47,12 @@ Use the intended final version in place of `0.1.0` for later releases.
 
 ## Registry trust
 
-The GitHub repository requires `npm` and `pypi` environments.
+The GitHub repository requires existing `npm` and `pypi` environments. The
+release preflight checks both names before creating or accepting a release tag.
+
+Make the GitHub repository public before tagging. The release preflight checks
+repository visibility because npm provenance links each public package to its
+public source repository.
 
 Configure the existing PyPI project to trust:
 
@@ -54,19 +63,20 @@ Configure the existing PyPI project to trust:
 
 Configure each npm package with the same owner, repository, and workflow plus
 environment `npm`. Allow `npm publish`. The publish job runs on Node 24 with
-`id-token: write` and uploads pnpm-produced tarballs.
+`id-token: write` and publishes the verified pnpm-produced tarballs. npm uses
+the workflow's
+[OpenID Connect](https://openid.net/developers/how-connect-works/) identity and
+records provenance for each package.
 
-The first publication of a new npm package must create its package settings.
-Place one short-lived granular token in the protected `npm` environment as
-`NPM_BOOTSTRAP_TOKEN` for that publication. After both packages verify:
+npm requires a package to exist before it can accept a trusted-publisher
+configuration. Reserve every new package name through an authenticated
+maintainer publication, then configure its trusted publisher before the first
+coordinated release. The release preflight checks that both npm package names
+exist.
 
-1. Configure their trusted publishers.
-2. Remove and revoke the bootstrap token.
-3. Set publishing access to require two-factor authentication and disallow
-   token publication.
-
-Later releases leave `NPM_BOOTSTRAP_TOKEN` unset. npm uses the workflow's OIDC
-identity and emits provenance for each package.
+Protect the `npm` and `pypi` environments with the repository's release
+reviewers. Apply a repository ruleset to `v*` tags so the same maintainers
+control the identity that starts publication.
 
 ## Prepare the release commit
 
@@ -105,22 +115,27 @@ commit. The final command creates and pushes an annotated `vX.Y.Z` tag.
 
 The publish workflow then:
 
-1. Rechecks that the annotated tag, workflow commit, current `origin/main`, and
-   successful push-event CI identify one commit.
+1. Rechecks that the annotated tag resolves to the workflow commit, the commit
+   is on the fetched `origin/main` history, and push-event CI passed that exact
+   commit.
 2. Rebuilds and verifies every artifact.
-3. Publishes portable-json to npm.
-4. Publishes the browser package to npm.
-5. Verifies both packages through fresh npm and pnpm consumers.
-6. Publishes the Python wheel and source archive through PyPI trusted
+3. Writes SHA-256 checksums and records GitHub build provenance.
+4. Publishes portable-json to npm.
+5. Publishes the browser package to npm.
+6. Verifies both npm archives by integrity and through fresh npm and pnpm
+   consumers.
+7. Publishes the Python wheel and source archive through PyPI trusted
    publishing.
-7. Verifies a fresh public Python installation and CLI.
-8. Creates the GitHub release notes.
+8. Verifies the PyPI file hashes, a fresh public Python installation, and the
+   CLI.
+9. Creates a GitHub Release with generated notes, distributions, and the
+   checksum manifest.
 
 ## Recover a partial release
 
 Registry versions are immutable. The npm publisher compares an existing
-version's integrity with the tagged tarball. PyPI publication uses the simple
-index to skip identical files.
+version's integrity with the tagged tarball. PyPI publication compares existing
+files through the simple index and skips files whose hashes match.
 
 Rerun a failed job when every existing registry artifact matches the tagged
 artifact. Advance all three public packages to the next patch version when a

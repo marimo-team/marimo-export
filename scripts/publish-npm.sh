@@ -1,8 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+verify_only=0
+if [[ "${1:-}" == "--verify-only" ]]; then
+	verify_only=1
+	shift
+fi
+
 if [[ "$#" -ne 1 ]]; then
-	printf 'Usage: ./scripts/publish-npm.sh PACKAGE.tgz\n' >&2
+	printf 'Usage: ./scripts/publish-npm.sh [--verify-only] PACKAGE.tgz\n' >&2
 	exit 2
 fi
 
@@ -11,6 +17,7 @@ if [[ ! -f "$tarball" ]]; then
 	printf 'ERROR: npm package tarball is missing: %s\n' "$tarball" >&2
 	exit 1
 fi
+tarball="$(cd "$(dirname "$tarball")" && pwd)/$(basename "$tarball")"
 
 package_identity="$(
 	# shellcheck disable=SC2016
@@ -43,4 +50,9 @@ if published_integrity="$(npm view "$name@$version" dist.integrity 2>/dev/null)"
 	exit 0
 fi
 
-npm publish "$tarball" --access public --provenance
+if [[ "$verify_only" == "1" ]]; then
+	printf 'ERROR: npm package is not published: %s@%s\n' "$name" "$version" >&2
+	exit 1
+fi
+
+npm publish "$tarball" --access public

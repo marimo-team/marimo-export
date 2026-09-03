@@ -47,6 +47,18 @@ if [[ "v$version" != "$GITHUB_REF_NAME" ]]; then
 	exit 1
 fi
 
+repository_visibility="$(gh repo view --json visibility --jq .visibility)"
+if [[ "$repository_visibility" != "PUBLIC" ]]; then
+	error "Releases require a public GitHub repository. Current visibility: $repository_visibility"
+	exit 1
+fi
+for environment in npm pypi; do
+	if ! gh api "repos/{owner}/{repo}/environments/$environment" --silent >/dev/null; then
+		error "Missing required GitHub environment: $environment"
+		exit 1
+	fi
+done
+
 if [[ "$(git cat-file -t "$GITHUB_REF")" != tag ]]; then
 	error "Release tag $GITHUB_REF_NAME must be annotated"
 	exit 1
@@ -58,12 +70,12 @@ if [[ "$tag_commit" != "$GITHUB_SHA" ]]; then
 	exit 1
 fi
 
-if ! main_commit="$(git rev-parse --verify "refs/remotes/origin/main^{commit}")"; then
+if ! git rev-parse --verify "refs/remotes/origin/main^{commit}" >/dev/null; then
 	error "Release validation requires a freshly fetched origin/main"
 	exit 1
 fi
-if [[ "$tag_commit" != "$main_commit" ]]; then
-	error "Release tag $GITHUB_REF_NAME must point to current origin/main $main_commit"
+if ! git merge-base --is-ancestor "$tag_commit" refs/remotes/origin/main; then
+	error "Release commit $tag_commit is not on origin/main"
 	exit 1
 fi
 

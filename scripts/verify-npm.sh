@@ -14,10 +14,15 @@ fi
 
 portable="@marimo-team/portable-json@$version"
 browser="@marimo-team/marimo-export@$version"
+npm_dist="${NPM_DIST_DIR:-dist/npm}"
+portable_tarball="$npm_dist/marimo-team-portable-json-$version.tgz"
+browser_tarball="$npm_dist/marimo-team-marimo-export-$version.tgz"
 
 for ((attempt = 1; attempt <= 18; attempt++)); do
 	if [[ "$(npm view "$portable" version 2>/dev/null || true)" == "$version" ]] && \
 		[[ "$(npm view "$browser" version 2>/dev/null || true)" == "$version" ]]; then
+		./scripts/publish-npm.sh --verify-only "$portable_tarball"
+		./scripts/publish-npm.sh --verify-only "$browser_tarball"
 		node scripts/smoke_npm_packages.mjs "$portable" "$browser" "$version"
 		exit 0
 	fi

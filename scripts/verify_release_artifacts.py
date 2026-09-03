@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import tarfile
@@ -163,6 +164,38 @@ def _verify_npm_tarball(
                 raise RuntimeError(f"{path.name} does not contain export target {target}")
 
 
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def write_checksum_manifest(root: Path) -> Path:
+    version = _require_release_version(root)
+    dist = root / "dist"
+    artifacts = [
+        _single(
+            list((dist / "python").glob(f"marimo_export-{version}-*.whl")),
+            "release Python wheel",
+        ),
+        dist / "python" / f"marimo_export-{version}.tar.gz",
+        dist / "npm" / f"marimo-team-marimo-export-{version}.tgz",
+        dist / "npm" / f"marimo-team-portable-json-{version}.tgz",
+    ]
+    missing = [path for path in artifacts if not path.is_file()]
+    if missing:
+        raise RuntimeError(
+            "release artifacts are missing: " + ", ".join(str(path) for path in missing)
+        )
+
+    lines = [f"{_sha256(path)}  {path.name}" for path in sorted(artifacts)]
+    manifest = dist / "SHA256SUMS"
+    manifest.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return manifest
+
+
 def verify(root: Path) -> None:
     version = _require_release_version(root)
     python_root = root / "dist/python"
@@ -215,8 +248,17 @@ def main() -> None:
         default=Path(__file__).resolve().parents[1],
         help="marimo-export repository root",
     )
+    parser.add_argument(
+        "--write-checksums",
+        action="store_true",
+        help="write dist/SHA256SUMS after verifying the release artifacts",
+    )
     arguments = parser.parse_args()
-    verify(arguments.root.resolve())
+    root = arguments.root.resolve()
+    verify(root)
+    if arguments.write_checksums:
+        manifest = write_checksum_manifest(root)
+        print(f"Wrote {manifest.relative_to(root)}.")
 
 
 if __name__ == "__main__":
