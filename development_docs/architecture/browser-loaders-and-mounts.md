@@ -1,6 +1,6 @@
 # Browser loaders and mounts
 
-The browser package opens one notebook export, resolves exact prepared states,
+The browser package opens one notebook export, resolves exact exported states,
 loads verified representations, and mounts interactive values into an
 application-owned document.
 
@@ -77,12 +77,13 @@ immutable notebook export instances. The strict core manifest is:
 }
 ```
 
-The parser rejects unknown fields, bounds the export URL and refresh interval,
-opens the immutable export, checks its identity and base URL, resolves the
+Manifest parsing rejects unknown fields and bounds the export URL and refresh
+interval. `openPreparedPublication()` opens the notebook export.
+`resolvePreparedPublication()` checks its identity and base URL, resolves the
 complete input vector, and verifies the selected fingerprint.
 
 `PreparedStateController` owns pending input intent, sparse input updates,
-patchable control updates, URL query updates, supersession, cancellation,
+patchable control updates, query-string selection, supersession, cancellation,
 publication replacement, settlement, and disposal. A control binding with an
 `element` path stays application-owned and `updateControl()` returns `false`.
 An application supplies one `PreparedStatePort`:
@@ -123,7 +124,7 @@ and media-type predicate accept the output descriptor.
 
 Before invoking a representation runtime, browser core checks:
 
-- same-origin relative asset path
+- codec-derived asset path under the selected export base
 - declared and caller byte limits
 - response body availability and exact length
 - SHA-256 digest
@@ -146,7 +147,7 @@ integrity, state, and output failures continue to use `NotebookExportError`.
 
 | Loader                 | Application result                      | Runtime dependency                                                                              |
 | ---------------------- | --------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| `scalarLoader()`       | JSON-compatible scalar                  | None                                                                                            |
+| `scalarLoader()`       | Native scalar                           | None                                                                                            |
 | `jsonLoader()`         | Immutable portable JSON                 | None                                                                                            |
 | `marimoOutputLoader()` | Immutable rendered-output record        | None                                                                                            |
 | `marimoCellLoader()`   | Immutable complete-cell record          | None                                                                                            |
@@ -171,7 +172,9 @@ several projection records before committing one presentation state.
 
 A mount receives an application element and returns an idempotent disposable
 view. The handle owns its nodes, listeners, object URLs, renderer finalizers,
-models, module URLs, styles, child views, and cleanup callbacks.
+models, styles, child views, and cleanup callbacks. AnyWidget module definitions
+and successful imports belong to the page-global cache and browser module
+registry. Temporary Blob URLs are revoked when their imports settle.
 
 Opening, resolution, loading, and verification execute no notebook-authored
 browser module. Mounting an interactive representation grants that code page
@@ -181,8 +184,9 @@ authority.
 
 The controller keeps the current publication until `PreparedStatePort.apply()`
 succeeds. It aborts superseded work and asks the port to restore the last
-committed publication after a rejected transition. The application port owns
-output loading, DOM staging, visible commit, and mount disposal.
+committed publication after a non-cancellation failure. Superseded, cancelled,
+and stale-generation work skips restoration. The application port owns output
+loading, DOM staging, visible commit, and mount disposal.
 
 A DOM application can implement that port with two owners:
 
@@ -239,7 +243,7 @@ kernel.
 ## PreparedWidgetGraph stages model-graph replacement
 
 The AnyWidget loader facade also exposes `PreparedWidgetGraph`. An application
-uses it when several prepared states should update one mounted model registry
+uses it when several exported states should update one mounted model registry
 while preserving compatible browser-local model state.
 
 `PreparedWidgetGraphPort` supplies model identity, equality, module-change
@@ -250,10 +254,11 @@ serialization, cancellation, rollback, and disposal around that port.
 The lifecycle is:
 
 1. `checkpoint()` captures current live state into an opaque return point.
-2. `replace(snapshot, signal)` validates and preflights additions, updates, and
-   module replacements before returning a staged replacement.
-3. `replacement.commit()` closes removed models, installs the next file table,
-   and advances the current graph.
+2. `replace(snapshot, signal)` stages the union of current and target files,
+   validates every changed active record, preflights additions and module
+   replacements, then applies additions, updates, and replacements.
+3. `replacement.commit()` closes removed models, installs the exact target file
+   table, and advances the current graph.
 4. `replacement.rollback()` closes additions, restores stable models, and
    replays replaced or removed models with their captured live state.
 5. `dispose()` aborts active work, rolls back a pending replacement, closes every
@@ -268,5 +273,6 @@ Only one replacement or unsettled staged replacement may exist at a time.
 Checkpoint and replacement calls require an idle graph. Teardown and replay run
 sequentially because registry identity makes their order observable.
 
-Read [Product surfaces and distribution](agents-and-delivery.md) for the example, packaging,
-and browser evidence that exercise this lifecycle.
+Read the public [output loader reference](../../docs/reference/browser/loaders.md)
+for the example and [Product surfaces and distribution](agents-and-delivery.md)
+for packaging and browser evidence.

@@ -5,26 +5,44 @@ description: Build, inspect, consume, and deploy notebook exports from saved not
 
 # Guides
 
-marimo-export runs the notebook states selected by an `ExportSpec` and writes
-their named outputs as one verified notebook export. Start by building the
-deterministic quickstart export, then follow the guide for your next task.
+Start with the deterministic quickstart, then choose the task that matches the
+next boundary in your application.
 
-| Task                                                      | Guide                                                       |
-| --------------------------------------------------------- | ----------------------------------------------------------- |
-| Build, verify, and read your first notebook export        | [Build your first notebook export](getting-started.md)      |
-| Run the complete Yahoo Finance browser example            | [Run the market dashboard](market-dashboard.md)             |
-| Select the notebook states and outputs to include         | [Choose states and outputs](choose-states.md)               |
-| Prepare from a file or capture a live session             | [Build or capture](build-and-capture.md)                    |
-| Inspect retention, observations, and stored work          | [Manage the export repository](manage-repository.md)        |
-| Open the export from Python, a browser, or another client | [Consume an export](consume-an-export.md)                   |
-| Build a purpose-specific frontend outside Python          | [Build a browser application](browser-applications.md)      |
-| Follow changing exports from a browser application        | [Serve a prepared publication](prepared-publications.md)    |
-| Add an application-specific output format                 | [Create a custom representation](custom-representations.md) |
-| Ground an answer or generated application in export data  | [Use with agents](agents-and-automation.md)                 |
-| Verify files and configure the static host                | [Deploy an export](deploy.md)                               |
-| Diagnose preparation, verification, and browser failures  | [Troubleshoot notebook exports](troubleshooting.md)         |
+## Start
 
-Read [How notebook exports work](../overview.md) when you need the complete
-model for notebooks, `ExportSpec`, states, outputs, assets, and consumers. Use
-the [Reference](../reference/) for exact CLI, Python, TypeScript, and format
-contracts.
+1. [Build your first notebook export](getting-started) creates two exported
+   states, verifies the directory, and reads one result from Python.
+2. [Run the market dashboard](market-dashboard) builds a browser application
+   with five states and several output representations.
+
+## Author an export
+
+- [Choose states and outputs](choose-states) inspects notebook inputs and
+  declares the finite results consumers can select.
+- [Build or capture](build-and-capture) chooses a saved notebook or a running
+  marimo session as the producer.
+
+## Consume an export
+
+- [Read an export](consume-an-export) compares Python, browser, agent, and
+  custom-reader paths.
+- [Build a browser application](browser-applications) resolves exported
+  states, loads output representations, and owns mount disposal.
+- [Serve a prepared publication](prepared-publications) lets a browser follow
+  a changing manifest that points at immutable exports.
+- [Use exports with agents](agents-and-automation) retains the state,
+  representation, and verification evidence behind an answer.
+- [Create a representation](custom-representations) pairs a Python exporter
+  with a validating consumer loader.
+
+## Operate the producer and files
+
+- [Manage repository storage](manage-repository) inspects reuse, retention,
+  and observation history.
+- [Deploy an export](deploy) serves the written directory and configures
+  browser security policy.
+- [Troubleshoot](troubleshooting) starts from observable producer, repository,
+  reader, and browser failures.
+
+Use [Reference](../reference/index) for exact command, Python, TypeScript, and
+format contracts.

@@ -31,7 +31,7 @@ Each asset declaration contains:
 - the expected SHA-256 digest
 
 The asset path follows from the codec and digest. Readers reject a path,
-declared size, observed size, required NumPy or Arrow file framing, or digest
+declared size, observed size, required NumPy or Arrow framing, or digest
 that disagrees with the descriptor.
 
 ## Opening, loading, and verifying check different scopes
@@ -69,9 +69,10 @@ transport, a trusted artifact registry, or a separate signature policy. Record
 the expected notebook export identity when a consumer must pin exact content.
 
 Provenance records support inspection. They include notebook and producer facts,
-state identities, output codec and media type, originating Python type, and asset
-identity. Provenance remains data from the producer until a trusted channel
-authenticates that producer.
+state identities, output codec and media type, stored Python type, and asset
+identity. Exporter-backed outputs record `marimo_export.outputs.BlobAsset` as
+the stored Python type. Provenance remains data from the producer until a
+trusted channel authenticates that producer.
 
 ## marimo cache signing protects another boundary
 
@@ -111,6 +112,10 @@ network requests allowed by the page. Before mounting executable output:
 - pass abort signals to stale loads and mounts
 - dispose replaced mounts and page-lifetime resources
 
-Use [Deploy an export](../guide/deploy.md) for the operational checklist and the
-[export format reference](../reference/export-format.md) for exact verification
+An HTML loader and marimo snapshot return inert markup records. Sanitize and
+render that markup under the application's HTML policy. Integrity verification
+does not make HTML safe to insert into the document.
+
+Use [Deploy an export](../guide/deploy) for the operational checklist and the
+[export format reference](../reference/export-format) for exact verification
 rules and size limits.

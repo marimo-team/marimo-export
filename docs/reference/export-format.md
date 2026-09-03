@@ -94,24 +94,37 @@ marimo-export Python source set that created the index. Capture freezes this
 identity before execution and commits it after the end-of-operation identity
 check succeeds.
 
-Descriptor provenance contains the originating `python_type`. Native marimo
-cache keys and return references remain inside the producer process.
+Descriptor provenance contains the stored value's `python_type`. For an
+exporter-backed output, that type is `marimo_export.outputs.BlobAsset`, not the
+selected notebook value's original type. Native marimo cache keys and return
+references remain inside the producer process.
 
 BlobAsset descriptors also record filename and portable metadata.
+
+The descriptor shape is closed by codec:
+
+| Descriptor kind                                 | Exact fields                                                         |
+| ----------------------------------------------- | -------------------------------------------------------------------- |
+| Scalar or portable JSON                         | `codec`, `media_type`, `provenance`, `value`                         |
+| Rendered output, complete cell, NumPy, or Arrow | `codec`, `media_type`, `provenance`, `asset`                         |
+| BlobAsset                                       | `codec`, `media_type`, `provenance`, `asset`, `filename`, `metadata` |
+
+`provenance` contains exactly `python_type`. `asset` contains exactly `sha256`
+and `size`. Readers reject missing and unknown descriptor fields.
 
 ## Native codecs
 
 Export format version 1 accepts seven codecs:
 
-| Codec                          | Stored form                        | Asset suffix   |
-| ------------------------------ | ---------------------------------- | -------------- |
-| `marimo.scalar.v1`             | Inline scalar                      | None           |
-| `marimo.json.v1`               | Inline portable JSON               | None           |
-| `marimo.output.v1`             | Canonical rendered-output snapshot | `.output.json` |
-| `marimo.cell.v1`               | Canonical complete-cell snapshot   | `.cell.json`   |
-| `numpy.npy.v1`                 | NumPy NPY file                     | `.npy`         |
-| `apache.arrow.file.v1`         | Arrow IPC file                     | `.arrow`       |
-| `marimo.blob-asset.msgpack.v1` | Canonical MessagePack `BlobAsset`  | `.bin`         |
+| Codec                          | Required media type                        | Stored form                        | Asset suffix   |
+| ------------------------------ | ------------------------------------------ | ---------------------------------- | -------------- |
+| `marimo.scalar.v1`             | `application/vnd.marimo.scalar.v1+json`    | Inline scalar                      | None           |
+| `marimo.json.v1`               | `application/vnd.marimo.json.v1+json`      | Inline portable JSON               | None           |
+| `marimo.output.v1`             | `application/vnd.marimo.output.v1+json`    | Canonical rendered-output snapshot | `.output.json` |
+| `marimo.cell.v1`               | `application/vnd.marimo.cell.v1+json`      | Canonical complete-cell snapshot   | `.cell.json`   |
+| `numpy.npy.v1`                 | `application/x-npy`                        | NumPy NPY file                     | `.npy`         |
+| `apache.arrow.file.v1`         | `application/vnd.apache.arrow.file`        | Arrow IPC file or stream framing   | `.arrow`       |
+| `marimo.blob-asset.msgpack.v1` | Valid BlobAsset media type from descriptor | Canonical MessagePack `BlobAsset`  | `.bin`         |
 
 The codec identifies the native envelope. A BlobAsset media type identifies
 the representation within that envelope. Custom media types extend the output
@@ -120,12 +133,19 @@ space while the codec set remains closed for version 1.
 ## Scalar wire values
 
 JSON-compatible scalars remain inline. Values that JSON cannot preserve use
-closed tagged forms:
+these closed tagged objects:
 
-- integers outside the JavaScript safe range become tagged big integers
-- NaN becomes a tagged special float
-- positive and negative infinity become tagged special floats
-- negative zero becomes a tagged special float
+```json
+{ "type": "bigint", "value": "9007199254740992" }
+{ "type": "float", "value": "nan" }
+{ "type": "float", "value": "infinity" }
+{ "type": "float", "value": "-infinity" }
+{ "type": "float", "value": "negative-zero" }
+```
+
+The tagged bigint decimal has no leading plus sign or unnecessary leading
+zeroes and must lie outside the JavaScript safe-integer range. Untagged numbers
+must be finite, with integers inside that range.
 
 Readers reject unknown or noncanonical scalar tags.
 
@@ -138,7 +158,8 @@ range, and null retain their JSON shape. Python returns a frozen value through
 
 ## Rendered-output snapshots
 
-`marimo.output.v1` stores this exact canonical JSON record:
+`marimo.output.v1` stores the following shape. Whitespace is added for display.
+Stored bytes use canonical JSON:
 
 ```json
 {
@@ -169,7 +190,8 @@ graph produced the output.
 
 ## Complete-cell snapshots
 
-`marimo.cell.v1` stores this exact canonical JSON record:
+`marimo.cell.v1` stores the following shape. Whitespace is added for display.
+Stored bytes use canonical JSON:
 
 ```json
 {
@@ -226,7 +248,7 @@ rendered-output and complete-cell resources from the same live UI element.
 Browser loaders validate and freeze these records. Rendering and model replay
 belong to the consuming application.
 
-The [marimo snapshot reference](browser/snapshots.md) defines every record,
+The [marimo snapshot reference](browser/snapshots) defines every record,
 message union, replay-resource field, and browser parser.
 
 ## Asset identity
@@ -293,7 +315,7 @@ the lowercase SHA-256 of the exact canonical `index.json` bytes.
 | Python producer or local-reader asset           |                             64 MiB |
 | Python export closure                           |     512 MiB including `index.json` |
 
-The [browser errors and limits](browser/errors-and-limits.md) reference lists
+The [browser errors and limits](browser/errors-and-limits) reference lists
 browser defaults and caller overrides.
 
 ## HTTP delivery
@@ -328,6 +350,6 @@ The schema identifier and codec identifiers version durable behavior. A reader
 rejects an unknown export schema or native codec. Custom representations should
 use versioned media types so producer and consumer changes remain explicit.
 
-[Consume an export](../guide/consume-an-export.md) provides Python, browser, and
-agent workflows. [Output representations](representations.md) maps built-in and
+[Consume an export](../guide/consume-an-export) provides Python, browser, and
+agent workflows. [Output representations](representations) maps built-in and
 custom representations to their consumers.

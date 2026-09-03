@@ -44,6 +44,28 @@ const normalizeSidebarGroups = (): void => {
     caret.removeAttribute("aria-label");
     setAttribute(caret, "aria-hidden", "true");
   }
+
+  for (const link of document.querySelectorAll<HTMLElement>(".VPSidebarItem .link")) {
+    if (link.closest(".VPSidebarItem")?.classList.contains("is-active")) {
+      setAttribute(link, "aria-current", "page");
+    } else {
+      link.removeAttribute("aria-current");
+    }
+  }
+};
+
+const normalizeNavigationFlyouts = (): void => {
+  for (const [index, flyout] of Array.from(
+    document.querySelectorAll<HTMLElement>(".VPNavBarMenuGroup"),
+  ).entries()) {
+    const button = flyout.querySelector<HTMLElement>(":scope > .button");
+    const menu = flyout.querySelector<HTMLElement>(":scope > .menu");
+    if (button === null || menu === null) continue;
+
+    const menuId = menu.id || `vp-navigation-flyout-${index + 1}`;
+    menu.id = menuId;
+    setAttribute(button, "aria-controls", menuId);
+  }
 };
 
 const normalizeSearch = (search: HTMLElement): void => {
@@ -95,6 +117,7 @@ export const installAccessibilityEnhancements = (): void => {
   const synchronize = (): void => {
     document.querySelector<HTMLElement>(".VPHome")?.setAttribute("role", "main");
     normalizeSidebarGroups();
+    normalizeNavigationFlyouts();
 
     const search = document.querySelector<HTMLElement>("body > .VPLocalSearchBox");
     const searchIsOpen = search !== null;
@@ -158,6 +181,21 @@ export const installAccessibilityEnhancements = (): void => {
       }
     }
 
+    if (event.key === "Escape") {
+      const flyoutButton = document.querySelector<HTMLElement>(
+        '.VPNavBarMenuGroup > .button[aria-expanded="true"]',
+      );
+      if (flyoutButton !== null) {
+        event.preventDefault();
+        const flyout = flyoutButton.closest(".VPNavBarMenuGroup");
+        const restoreFocus =
+          document.activeElement instanceof Node && flyout?.contains(document.activeElement);
+        flyoutButton.click();
+        if (restoreFocus) queueMicrotask(() => flyoutButton.focus());
+        return;
+      }
+    }
+
     if (
       event.key === " " &&
       event.target instanceof HTMLElement &&
@@ -165,6 +203,37 @@ export const installAccessibilityEnhancements = (): void => {
     ) {
       event.preventDefault();
       event.target.click();
+    }
+  });
+
+  document.addEventListener(
+    "click",
+    (event) => {
+      if (!(event instanceof MouseEvent) || event.detail === 0) return;
+      const button =
+        event.target instanceof Element
+          ? event.target.closest<HTMLElement>(".VPNavBarMenuGroup > .button")
+          : null;
+      if (button?.matches(':hover[aria-expanded="true"]')) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+      }
+    },
+    true,
+  );
+
+  document.addEventListener("pointerdown", (event) => {
+    const openButton = document.querySelector<HTMLElement>(
+      '.VPNavBarMenuGroup > .button[aria-expanded="true"]',
+    );
+    const flyout = openButton?.closest(".VPNavBarMenuGroup");
+    if (
+      openButton !== null &&
+      flyout &&
+      event.target instanceof Node &&
+      !flyout.contains(event.target)
+    ) {
+      openButton.click();
     }
   });
 

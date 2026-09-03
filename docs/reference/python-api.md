@@ -7,7 +7,9 @@ description: Choose the Python API for producing, reading, serving, or integrati
 
 The Python package prepares selected marimo notebook states, writes verified
 notebook exports, and reads the same files that browser applications consume.
-Python 3.10 or newer is required.
+Python 3.10 or newer is required. Continuous integration tests Python 3.10
+through 3.14, and the package metadata pins its exact supported marimo release.
+See [Compatibility](compatibility) for the complete boundary.
 
 Install the base package to produce and read portable JSON, scalar, NumPy,
 rendered-output, complete-cell, and blob outputs:
@@ -27,15 +29,15 @@ Install a producer extra when an `ExportSpec` uses its exporter:
 
 ## Choose a Python path
 
-| Job                                                                     | Reference                                                            |
-| ----------------------------------------------------------------------- | -------------------------------------------------------------------- |
-| Define states and outputs, plan work, prepare, or build                 | [Produce an export](python/produce.md)                               |
-| Open states and decode outputs                                          | [Read and verify exports](python/reader.md)                          |
-| Inspect a notebook or capture a live session                            | [Sessions and inspection](python/sessions-and-inspection.md)         |
-| Configure retention or record observed inputs                           | [Repository and observations](python/repository-and-observations.md) |
-| Commit an application directory or retain a changing publication        | [Delivery and publications](python/delivery-and-publications.md)     |
-| Embed marimo-export behavior in a marimo host                           | [Host integration](python/host-integration.md)                       |
-| Implement against canonical JSON, indexes, descriptors, or typed errors | [Format records and errors](python/format-records-and-errors.md)     |
+| Job                                                                     | Reference                                                         |
+| ----------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| Define states and outputs, plan work, prepare, or build                 | [Produce an export](python/produce)                               |
+| Open states and decode outputs                                          | [Read and verify exports](python/reader)                          |
+| Inspect a notebook or capture a live session                            | [Sessions and inspection](python/sessions-and-inspection)         |
+| Configure retention or record observed inputs                           | [Repository and observations](python/repository-and-observations) |
+| Commit an application directory or retain a changing publication        | [Delivery and publications](python/delivery-and-publications)     |
+| Embed marimo-export behavior in a marimo host                           | [Host integration](python/host-integration)                       |
+| Implement against canonical JSON, indexes, descriptors, or typed errors | [Format records and errors](python/format-records-and-errors)     |
 
 ## The common workflow
 

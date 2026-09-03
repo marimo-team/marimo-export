@@ -89,7 +89,13 @@ def current_manifest(controller):
 
 Enter `report_publication()` from the server framework's asynchronous lifespan.
 Keep that context open while the server handles requests. The yielded controller
-supplies the request handlers. The server boundary must:
+supplies the request handlers. Keep the controller and its handlers on one
+running `asyncio` event loop. A synchronous worker-thread handler cannot call
+`poll()` because polling schedules observation refresh on that loop.
+
+The example is an integration fragment. The server adapter must map the current
+and immutable routes, response media types, cache policy, and leased response
+lifetime. It must:
 
 1. call `current_manifest(controller)` for every mutable `current` response
 2. call `controller.asset("sales", instance, relative)` for an immutable
@@ -157,6 +163,6 @@ await controller.dispose();
 ```
 
 Use the [Python delivery and publication
-reference](../reference/python/delivery-and-publications.md) and [browser
-prepared-publication reference](../reference/browser/prepared-publications.md)
+reference](../reference/python/delivery-and-publications) and [browser
+prepared-publication reference](../reference/browser/prepared-publications)
 for exact signatures and failure ownership.

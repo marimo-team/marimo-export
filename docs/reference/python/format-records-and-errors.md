@@ -178,7 +178,7 @@ Import descriptor values from `marimo_export.descriptors`.
 ```python
 Provenance(python_type: str)
 AssetRef(sha256: str, size: int)
-asset.path(codec: OutputCodec) -> str
+AssetRef.path(codec: OutputCodec) -> str
 asset_path(codec: OutputCodec, digest: str) -> str
 ```
 
@@ -212,7 +212,7 @@ normalize negative zero.
 scalar or JSON union. `AssetDescriptor` is the union of the five asset-backed
 descriptors.
 
-The [export format reference](../export-format.md) defines the serialized index,
+The [export format reference](../export-format) defines the serialized index,
 descriptor, scalar-tag, snapshot, and asset-envelope shapes.
 
 ## Typed Python failures
@@ -280,9 +280,13 @@ depends on the exact failed operation:
 | Session and transport | `transport_failed`, `session_error`, `session_not_found`, `session_ambiguous`, `client_closed`, `owned_notebook_closed`, `bridge_version_mismatch`, `implementation_changed`                                                                                                |
 | Notebook execution    | `notebook_invalid`, `notebook_changed`, `parent_document_changed`, `parent_state_changed`, `state_execution_failed`, `state_cleanup_failed`, `output_execution_failed`, `output_cell_unavailable`, `preparation_cancelled`, `server_start_failed`, `server_shutdown_failed` |
 | Reader and integrity  | `export_invalid`, `export_noncanonical`, `export_unavailable`, `integrity_failed`, `asset_invalid`, `asset_undeclared`, `asset_conflict`, `state_input_invalid`, `state_not_found`, `state_unavailable`, `output_not_found`                                                 |
-| Destination           | `destination_invalid`, `destination_exists`, `destination_changed`, `export_commit_failed`, `export_parent_sync_failed`, `retired_destination_cleanup_failed`                                                                                                               |
+| Destination           | `destination_invalid`, `destination_exists`, `destination_changed`, `export_commit_failed`                                                                                                                                                                                  |
 | Repository            | `repository_error`, `repository_limit_exceeded`, `repository_integrity_failed`, `repository_unavailable`, `repository_busy`, `repository_reservation_timeout`, `repository_fence_stale`                                                                                     |
 | Host and observation  | `marimo_incompatible`, `marimo_cache_patch_conflict`, `observation_rejected`, `observation_persistence_failed`, `prepared_manifest_limit_exceeded`                                                                                                                          |
+
+`export_parent_sync_failed` and `retired_destination_cleanup_failed` are
+post-commit `ExportWarning` codes. They accompany a successful result after the
+new destination becomes visible.
 
 Some repository subclasses remain implementation-owned, but their codes can
 surface through the public `RepositoryError` base. Catch the public base and
@@ -292,7 +296,7 @@ branch on `code` when a retry or operator action differs.
 
 `marimo_export.diagnostics.CheckResult` and `marimo_compatibility()` provide a
 non-throwing compatibility check for normal diagnostic use. See [Host
-integration](host-integration.md#check-adapter-compatibility) for the signature
+integration](host-integration#check-adapter-compatibility) for the signature
 and fields.
 
 ## Canonical imports and narrow exports
@@ -317,11 +321,11 @@ string or path-like object without importing the alias.
 
 `CaptureLimits`, `CacheSummary`, `StateRunTimings`, and `PhaseTimings` describe
 lower-level producer protocol records. [Produce an
-export](produce.md#narrow-protocol-records) defines their current reachability
+export](produce#narrow-protocol-records) defines their current reachability
 from high-level calls.
 
 `OwnedNotebook` is a single-use inspection context. [Sessions and
-inspection](sessions-and-inspection.md#narrow-ownednotebook-handle) defines its
+inspection](sessions-and-inspection#narrow-ownednotebook-handle) defines its
 public lifecycle and the high-level producer replacements for planning and
 preparation.
 
@@ -346,5 +350,5 @@ The module exports constants for stable process categories:
 | `EXIT_BROKEN_PIPE` | `141` |
 
 Unexpected internal failures return `1` with a request ID. Prefer the importable
-SDK operations for Python applications. Use the [CLI reference](../cli.md) for
+SDK operations for Python applications. Use the [CLI reference](../cli) for
 command syntax, standard streams, and machine-output envelopes.

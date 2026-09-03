@@ -20,20 +20,20 @@ const summary = await state.output("summary").load(jsonLoader());
 
 ## Loader catalog
 
-| Loader and import                                   | Accepted representation                             | Result                                       | Peer runtime                     |
-| --------------------------------------------------- | --------------------------------------------------- | -------------------------------------------- | -------------------------------- |
-| `scalarLoader()` from package root                  | `marimo.scalar.v1`                                  | `null`, boolean, string, number, or `bigint` | None                             |
-| `jsonLoader()` from `/loader/json`                  | `marimo.json.v1`                                    | Frozen portable `JsonValue`                  | None                             |
-| `textLoader()` from `/loader/text`                  | Non-HTML `text/*` with UTF-8 or unspecified charset | String                                       | None                             |
-| `htmlLoader()` from `/loader/html`                  | `text/html` with UTF-8 or unspecified charset       | Inert HTML source string                     | None                             |
-| `imageLoader()` from package root                   | Any image BlobAsset media type                      | `MountableValue`                             | Browser Blob and object URL APIs |
-| `numpyLoader()` from `/loader/numpy`                | `numpy.npy.v1`                                      | `NumpyArray`                                 | None                             |
-| `arrowTableLoader()` from `/loader/arrow`           | `apache.arrow.file.v1`                              | Flechette `Table`                            | `@uwdata/flechette`, `lz4js`     |
-| `parquetRowsLoader()` from `/loader/parquet`        | Apache Parquet BlobAsset                            | Frozen array of `ParquetRow`                 | `hyparquet`                      |
-| `vegaLiteLoader()` from `/loader/vegalite`          | Versioned Vega-Lite BlobAsset                       | `VegaLiteChart`                              | `vega-embed`                     |
-| `anyWidgetLoader()` from `/loader/anywidget`        | `application/vnd.marimo-export.anywidget.v1+json`   | `LoadedAnyWidget`                            | `@anywidget/types`               |
-| `marimoOutputLoader()` from `/loader/marimo-output` | `marimo.output.v1`                                  | `MarimoOutputSnapshot`                       | None                             |
-| `marimoCellLoader()` from `/loader/marimo-cell`     | `marimo.cell.v1`                                    | `MarimoCellSnapshot`                         | None                             |
+| Loader and import                                   | Accepted representation                             | Result                                       | Dependency                              |
+| --------------------------------------------------- | --------------------------------------------------- | -------------------------------------------- | --------------------------------------- |
+| `scalarLoader()` from package root                  | `marimo.scalar.v1`                                  | `null`, boolean, string, number, or `bigint` | None                                    |
+| `jsonLoader()` from `/loader/json`                  | `marimo.json.v1`                                    | Frozen portable `JsonValue`                  | None                                    |
+| `textLoader()` from `/loader/text`                  | Non-HTML `text/*` with UTF-8 or unspecified charset | String                                       | None                                    |
+| `htmlLoader()` from `/loader/html`                  | `text/html` with UTF-8 or unspecified charset       | Inert HTML source string                     | None                                    |
+| `imageLoader()` from package root                   | Any image BlobAsset media type                      | `MountableValue`                             | Browser Blob and object URL APIs        |
+| `numpyLoader()` from `/loader/numpy`                | `numpy.npy.v1`                                      | `NumpyArray`                                 | None                                    |
+| `arrowTableLoader()` from `/loader/arrow`           | `apache.arrow.file.v1`                              | Flechette `Table`                            | `@uwdata/flechette`, `lz4js`            |
+| `parquetRowsLoader()` from `/loader/parquet`        | Apache Parquet BlobAsset                            | Frozen array of `ParquetRow`                 | `hyparquet`                             |
+| `vegaLiteLoader()` from `/loader/vegalite`          | Versioned Vega-Lite BlobAsset                       | `VegaLiteChart`                              | `vega-embed`                            |
+| `anyWidgetLoader()` from `/loader/anywidget`        | `application/vnd.marimo-export.anywidget.v1+json`   | `LoadedAnyWidget`                            | `@anywidget/types` for TypeScript types |
+| `marimoOutputLoader()` from `/loader/marimo-output` | `marimo.output.v1`                                  | `MarimoOutputSnapshot`                       | None                                    |
+| `marimoCellLoader()` from `/loader/marimo-cell`     | `marimo.cell.v1`                                    | `MarimoCellSnapshot`                         | None                                    |
 
 Install the package and the peers for the loaders your application imports:
 
@@ -45,9 +45,9 @@ pnpm add vega-embed
 pnpm add @anywidget/types
 ```
 
-The peers are optional at the package root. A specialized loader subpath uses
-its listed peer. [Output representations](../representations.md) maps producer
-forms to these browser loaders.
+The dependencies are optional at the package root. A specialized loader subpath
+uses its listed dependency. [Output representations](../representations)
+maps producer forms to these browser loaders.
 
 ## Scalar and JSON
 
@@ -62,7 +62,7 @@ negative zero before the loader runs.
 
 Returns a detached recursively frozen portable JSON value. Numbers are finite,
 integers stay within the JavaScript safe range, and negative zero has already
-become zero. [Portable JSON](../portable-json.md) defines the exact value
+become zero. [Portable JSON](../portable-json) defines the exact value
 contract.
 
 ## Text and HTML
@@ -84,7 +84,7 @@ import { imageLoader } from "@marimo-team/marimo-export";
 const image = await state.output("snapshot").load(imageLoader());
 const mounted = await image.mount(document.querySelector("#snapshot")!);
 
-await mounted.dispose();
+window.addEventListener("pagehide", () => void mounted.dispose(), { once: true });
 ```
 
 `imageLoader()` creates a Blob and object URL during `mount()`, appends an
@@ -95,6 +95,10 @@ and revokes the object URL. Aborting the mount signal performs the same cleanup.
 The mount resolves after inserting the image. It does not wait for image decode.
 Call `HTMLImageElement.decode()` when visible commit depends on successful image
 decoding.
+
+Keep the mount alive while the image is visible. Dispose it during route
+teardown or after a replacement commits. Supply a meaningful accessible name or
+nearby text when the portable filename is not suitable alternative text.
 
 ## NumPy arrays
 
@@ -230,7 +234,7 @@ const mounted = await chart.mount(document.querySelector("#chart")!, {
   renderer: "svg",
 });
 
-await mounted.dispose();
+window.addEventListener("pagehide", () => void mounted.dispose(), { once: true });
 ```
 
 ```ts
@@ -276,7 +280,7 @@ const mounted = await widget.mount(document.querySelector("#explorer")!);
 mounted.model.set("metric", "Open");
 mounted.model.save_changes();
 
-await mounted.dispose();
+window.addEventListener("pagehide", () => void mounted.dispose(), { once: true });
 ```
 
 ```ts
@@ -420,10 +424,15 @@ await graph.dispose();
 `checkpoint()` captures live state for active records and returns an opaque
 checkpoint owned by that graph. The graph must be idle.
 
-`replace()` compares IDs and records through the port. It validates and
-preflights additions, stable updates, and module replacements before mutation.
-It then replays additions, applies stable updates, and closes and replays module
-replacements. The returned `PreparedWidgetGraphReplacement` reports:
+`replace()` compares IDs and records through the port and stages the union of
+the current and target file maps. It validates additions, stable updates, and
+module replacements, then preflights additions and module replacements. A
+staging failure restores the previous file map. The operation then replays
+additions, applies stable updates, and closes and replays module replacements.
+`commit()` closes removals before it installs and adopts the exact target file
+map. If closing a removal fails, the target map remains uninstalled. Call
+`rollback()` to restore the previous committed graph. The returned
+`PreparedWidgetGraphReplacement` reports:
 
 - `mutated`, whether files or active records changed
 - `remount`, whether a model module changed and the outer view must remount
@@ -436,7 +445,7 @@ replacement or creating a checkpoint. Both settlement methods are idempotent.
 `PreparedWidgetGraphReplacementError` has `remount: true`. It means rollback
 could not restore a trustworthy live registry or a failure occurred after a
 module identity changed. Dispose the graph and rebuild the outer mount from the
-last committed application state.
+last committed visible application view.
 
 `dispose()` aborts active work, rolls back an unsettled replacement, closes each
 active committed record, clears files, and aggregates cleanup failures.
@@ -509,7 +518,7 @@ strings, or a predicate over the parsed `MediaType`. String matching uses the
 lowercase media-type essence and ignores parameters.
 
 `resolveOutputLoader(output, loaders)` selects exactly one compatible loader
-from a registry. No match raises `loader_unavailable`. More than one match
+from the candidate loader array. No match raises `loader_unavailable`. More than one match
 raises `loader_ambiguous`. A malformed loader or non-boolean `accepts()` result
 raises `loader_invalid`.
 

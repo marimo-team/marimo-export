@@ -170,9 +170,11 @@ expand what a standard producer writes.
 | NumPy typed-array length                         |                               4,294,967,295 elements |
 | Arrow LZ4 decompressed buffer                    |                                              512 MiB |
 | AnyWidget page module definitions                |                                                1,024 |
+| AnyWidget external module URL                    |                                    8,192 UTF-8 bytes |
+| AnyWidget data URL media type                    |                                    1,024 UTF-8 bytes |
 
-[Export format](../export-format.md) defines field shapes and producer limits.
-[Portable JSON](../portable-json.md) defines its separate 256-level and
+[Export format](../export-format) defines field shapes and producer limits.
+[Portable JSON](../portable-json) defines its separate 256-level and
 100,000-value limits.
 
 ## Browser requirements
@@ -214,7 +216,7 @@ appending a newline changes canonical `index.json` bytes and its identity.
 ### A loader is unavailable
 
 Compare `output.codec` and `output.mediaType.essence` with the [loader
-catalog](loaders.md#loader-catalog). Install the listed peer beside
+catalog](loaders#loader-catalog). Install the listed peer beside
 `@marimo-team/marimo-export`.
 
 ### A mount is blocked

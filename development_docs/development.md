@@ -238,7 +238,7 @@ The current durable schema is `marimo-export.export.v1`.
 ## Change documentation
 
 Public concepts live under `docs/concepts/`, workflows under `docs/guide/`, and
-exact contracts under `docs/reference/`. `apps/docs/navigation.mjs` owns every
+exact contracts under `docs/reference/`. `apps/docs/navigation.ts` owns every
 route and feeds the site and LLM text bundles. Read
 [Documentation system](documentation.md) before adding or moving a page.
 
@@ -248,7 +248,7 @@ VitePress 2.0.0-alpha.19 builds the site, local search, per-page Markdown,
 Run:
 
 ```bash
-node apps/docs/scripts/check-navigation.mjs
+node apps/docs/scripts/check-navigation.ts
 make docs-build
 make docs-serve
 ```

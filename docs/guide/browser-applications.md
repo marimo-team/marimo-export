@@ -9,7 +9,7 @@ The browser package reads a notebook export through HTTP. It validates
 `index.json` when opening the export, verifies an asset when loading that output,
 and gives the application control over rendering and mount disposal.
 
-This guide starts from the [first notebook export](getting-started.md). Copy
+This guide starts from the [first notebook export](getting-started). Copy
 `dist/report` into the static files served by your application at
 `/export/`.
 
@@ -72,11 +72,10 @@ complete input vector. `state.resolve(patch)` applies a sparse patch to the
 current vector and selects the matching exported state. Resolution never runs
 notebook Python.
 
-## Load several outputs as one transition
+## Cancel a stale state transition
 
-An application state can depend on several exported outputs. Give one
-`AbortController` ownership of the pending transition, load every output, then
-commit them together:
+Give one `AbortController` ownership of the pending transition. Check its signal
+after loading and immediately before the visible commit:
 
 ```ts
 let pending: AbortController | undefined;
@@ -103,7 +102,7 @@ any value they created when it settles.
 ## Mount an interactive output
 
 Some loaders return a value with `mount(element)`. A mount returns an idempotent
-disposable handle. After building the [market dashboard](market-dashboard.md),
+disposable handle. After building the [market dashboard](market-dashboard),
 serve its export at `/market-export/`. Install the Vega-Lite loader's
 [`vega-embed`](https://github.com/vega/vega-embed) peer runtime:
 
@@ -133,26 +132,33 @@ const mounted = await chart.mount(host, {
   renderer: "svg",
 });
 
-await mounted.dispose();
+window.addEventListener("pagehide", () => void mounted.dispose(), { once: true });
 ```
 
-For a complete replacement, mount new values in connected offscreen hosts,
+Keep the mounted view alive while it is visible. Dispose it during route
+teardown or after a replacement commits. For a complete replacement, mount new
+values in connected offscreen hosts,
 confirm that the transition remains current, replace the visible hosts, then
 dispose the previous mount owner. A failed staged mount leaves the last
 committed document visible.
 
-Opening, resolving, loading, and verifying operate on inert records. Mounting a
-chart, AnyWidget, or custom interactive value grants its code page authority.
-Review the [integrity and trust boundary](../concepts/integrity-and-trust.md)
-before deployment.
+The image loader uses the portable filename as alternative text when one is
+available. The application must provide a meaningful accessible name or nearby
+text when that filename does not describe the image.
+
+Opening, resolving, verifying, and built-in data loaders operate on inert
+records. A custom loader executes application-supplied code during `load()`.
+Mounting a chart, AnyWidget, or custom interactive value can execute more code
+with page authority. Review the [integrity and trust
+boundary](../concepts/integrity-and-trust) before deployment.
 
 ## Follow a changing publication
 
 Use the `prepared` package subpath when a server exposes one mutable manifest
 route and immutable export instances. [Serve a prepared
-publication](prepared-publications.md) develops the producer and browser sides
+publication](prepared-publications) develops the producer and browser sides
 of that handoff.
 
-Use the [browser reader reference](../reference/browser/reader.md) for exact
-methods and the [loader reference](../reference/browser/loaders.md) for loader
+Use the [browser reader reference](../reference/browser/reader) for exact
+methods and the [loader reference](../reference/browser/loaders) for loader
 options, result types, peers, cancellation, and disposal.

@@ -236,7 +236,7 @@ or WebSocket connection.
 ## Documentation delivery
 
 ```bash
-node apps/docs/scripts/check-navigation.mjs
+node apps/docs/scripts/check-navigation.ts
 make docs-build
 make docs-serve
 ```

@@ -9,7 +9,7 @@ portable artifacts.
 repository/
   catalog.sqlite3
   maintenance.sqlite3
-  prepared-states/<producer>/<output-declaration>/<state>/<instance>/
+  prepared-states/<producer>/<output-plan>/<state>/<instance>/
   exports/<repository-identity>/<generation-instance>/
   staging/<operation>/
 ```
@@ -54,8 +54,8 @@ document, Python and operating-system runtime, installed distributions, local
 runtime sources, Marimo version, marimo-export version, and marimo-export
 implementation identity.
 
-`output_plan_sha256` is the output declaration identity. It covers the authored
-output declarations. Presentation HTML, CSS, JavaScript, route names, and view
+`output_plan_sha256` is the output-plan identity. It covers the authored output
+declarations. Presentation HTML, CSS, JavaScript, route names, and view
 host IDs remain outside that identity.
 Two applications can therefore reuse the same prepared outputs when they request
 the same producer, outputs, and states.
@@ -176,13 +176,15 @@ that state commit. Export-generation commit has its own ordered sequence:
 5. Install and completely verify the filesystem tree outside the catalog writer transaction.
 6. Use a short transaction to recheck the fence and pointer, enforce repository byte admission, record the generation and its state membership, and acquire its lease.
 
-Filesystem installation uses native same-filesystem exchange when available and
-a guarded rollback replacement elsewhere. A
-lost final compare-and-swap retires the uncommitted installation for accounted
-cleanup. The prior current instance remains selected.
+Repository installation uses `os.replace`. When a target already exists, it
+moves that target to a backup, installs the staging tree, verifies it, and
+restores the backup if installation fails. A lost final compare-and-swap retires
+the uncommitted installation for accounted cleanup. The prior current instance
+remains selected.
 
-Committed files become owner-readable and directories become owner-readable and
-executable on POSIX. Cleanup first restores owner write permission. Windows uses
+Committed files become owner-read-only. Directories become owner-readable,
+owner-writable, and owner-executable on POSIX. Cleanup first restores owner
+write permission. Windows uses
 the same logical verification and lifecycle with best-effort permission changes.
 
 ## Reservations and fencing
@@ -226,6 +228,9 @@ is idempotent and releases an owned repository after its artifact lease closes.
 `PreparedExport` retains the verified file closure. It rechecks `index.json`
 before path access, opening, or renewal. `PreparedAsset` checks the declared path,
 size, and digest when borrowed and again when its bytes are read.
+Detaching a `PreparedAsset` keeps the lease manager alive after the parent
+`PreparedExport` or `ExportRepository` closes. The response owner can therefore
+finish a verified byte read before closing its detached handle.
 
 Retention treats active leases as pinned. A heartbeat failure makes the handle
 unavailable so callers cannot use an unprotected artifact.
@@ -236,6 +241,11 @@ unavailable so callers cannot use an unprotected artifact.
 generations, metadata bytes, artifact bytes, total repository bytes, lease
 lifetimes, and heartbeat cadence.
 
+The limits belong to one opened repository handle and are not persisted in the
+SQLite catalog. Another process or later handle can apply another policy to the
+same repository. `prepared_state_bytes` and `generation_bytes` each enforce both
+a per-artifact maximum and an aggregate retained-content budget.
+
 Admission applies retention before a new artifact commits. Retention chooses
 victims from least-recently-used unleased instances. It preserves active leases,
 the current generation for each identity admitted by `retained_identities`, and
@@ -245,8 +255,14 @@ repository-owned quarantine name. The catalog then removes matching rows and
 accounts any tree awaiting deletion.
 
 `repository.prune(dry_run=True)` reports eligible prepared states, generations,
-and bytes. A live prune returns the rows actually retired after rechecking the
-candidate snapshot.
+and bytes. A live prune returns counts and released bytes after rechecking the
+candidate snapshot. It can also remove producer rows outside retention and
+cascade into their observations. Dry-run and `PruneResult` do not report that
+observation deletion.
+
+`repository_bytes` is a steady-state admission budget. Replacement can install
+new bytes while leases still pin an old generation, temporarily placing the
+repository above that value until retention can retire the predecessor.
 
 ## Recovery and failure classification
 
@@ -257,17 +273,20 @@ it. Recovery:
 
 - removes abandoned unleased staging directories
 - restores a verified installation backup when directory replacement was interrupted
-- reconciles a verified installed tree whose catalog commit was interrupted
+- quarantines and removes an installed tree whose catalog commit was interrupted
 - verifies prepared-state identity, metadata, closure, and derived key
 - verifies notebook export identity and closure
 - quarantines invalid artifact trees and removes catalog rows only for confirmed integrity failures
 - preserves healthy rows when another row is invalid
 - keeps retired-artifact cleanup accounted until the retired path is gone
 
-Operational filesystem errors such as permission and resource failures surface
-as repository availability errors. They preserve the current catalog pointer.
-A confirmed SQLite corruption or incompatible internal schema is quarantined
-before a fresh catalog opens.
+Public error translation depends on the failing boundary. Artifact-tree I/O can
+become `ExportUnavailableError`. Member verification and lease heartbeat
+failures can surface as `RepositoryError` or `RuntimeError`. Confirmed integrity
+failures retire the affected artifact while temporary availability failures
+preserve the current pointer. A confirmed SQLite corruption or incompatible
+internal schema is quarantined before a fresh catalog opens. A fresh catalog
+also resets catalog-backed observation history.
 
 ## Status and maintenance results
 

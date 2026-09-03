@@ -15,16 +15,16 @@ PreparedExport
 
 ## Terms and ownership
 
-| Term               | Contract                                                                                         | Owner                           |
-| ------------------ | ------------------------------------------------------------------------------------------------ | ------------------------------- |
-| Prepared export    | Leased immutable notebook export generation                                                      | `PreparedExport`                |
-| Prepared manifest  | Selected state and immutable export location for a browser                                       | `marimo-export.prepared.v1`     |
-| Publication key    | Application-defined identity for one requested publication                                       | Application                     |
-| Supersession group | Application-defined set in which newer preparation cancels older work and replaces current state | `PreparedPublicationController` |
-| Route group        | Application-defined namespace used to find immutable instance assets                             | `PreparedPublicationController` |
-| Route grace        | Bounded retention of a replaced prepared export for in-flight or delayed asset requests          | `PreparedPublicationController` |
-| Staged delivery    | Owned sibling directory containing application files and materialized notebook exports           | `StagedDelivery`                |
-| Directory target   | Destination path plus the preflight identity of an existing directory                            | `_directory_target.py`          |
+| Term               | Contract                                                                                                   | Owner                           |
+| ------------------ | ---------------------------------------------------------------------------------------------------------- | ------------------------------- |
+| Prepared export    | Leased immutable notebook export generation                                                                | `PreparedExport`                |
+| Prepared manifest  | Selected state and immutable export location for a browser                                                 | `marimo-export.prepared.v1`     |
+| Publication key    | Application-defined identity for one requested publication                                                 | Application                     |
+| Supersession group | Application-defined set in which newer preparation cancels older work and replaces the current publication | `PreparedPublicationController` |
+| Route group        | Application-defined namespace used to find immutable instance assets                                       | `PreparedPublicationController` |
+| Route grace        | Bounded retention of a replaced prepared export for in-flight or delayed asset requests                    | `PreparedPublicationController` |
+| Staged delivery    | Owned sibling directory containing application files and materialized notebook exports                     | `StagedDelivery`                |
+| Directory target   | Destination path plus the preflight identity of an existing directory                                      | `_directory_target.py`          |
 
 Publication is an application lifecycle over repository leases. Delivery is a
 filesystem transaction. Neither changes the immutable notebook export format.

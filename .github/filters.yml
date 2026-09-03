@@ -54,6 +54,8 @@ frontend_inputs: &frontend_inputs
 
 documentation:
   - "README.md"
+  - "CONTRIBUTING.md"
+  - "SECURITY.md"
   - "AGENTS.md"
   - "CLAUDE.md"
   - "LICENSE"
@@ -75,6 +77,8 @@ pages:
 quality:
   - "**"
   - "!README.md"
+  - "!CONTRIBUTING.md"
+  - "!SECURITY.md"
   - "!AGENTS.md"
   - "!CLAUDE.md"
   - "!LICENSE"

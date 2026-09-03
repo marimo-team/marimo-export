@@ -8,7 +8,7 @@ that must remain stable, then change the code that owns that contract.
 ## Understand the product boundary
 
 marimo owns notebook execution, the reactive graph, controls, and native
-computation caching. marimo-export owns observations, the finite state relation,
+computation caching. marimo-export owns observations, the state-output relation,
 prepared-state reuse, repository coordination, output representations,
 directory integrity, and typed Python and browser consumption.
 
@@ -22,7 +22,7 @@ Use the architecture map that owns the change:
 | Public records, services, ports, composition      | [Ports and composition](architecture/ports.md)                                               |
 | Marimo cache ownership and contained adaptation   | [Execution and caching](architecture/execution-and-caching.md)                               |
 | Child execution, projections, transfer            | [marimo integration](architecture/marimo-integration.md)                                     |
-| Browser parsing, prepared state, mounts           | [Browser loaders and mounts](architecture/browser-loaders-and-mounts.md)                     |
+| Browser parsing, exported states, mounts          | [Browser loaders and mounts](architecture/browser-loaders-and-mounts.md)                     |
 | Live HTTP, authentication, SSE, process ownership | [Live transport and processes](architecture/live-transport-and-processes.md)                 |
 | Prepared routes and application directory commits | [Application publication and delivery](architecture/application-publication-and-delivery.md) |
 | Hash scopes, schemas, and versioned records       | [Identities and protocols](architecture/identities-and-protocols.md)                         |
@@ -66,7 +66,7 @@ TypeScript formatting, linting, types, tests, builds, and task execution.
 | Browser core                             | `pnpm --filter @marimo-team/marimo-export test`                                                                                                                            |
 | One loader                               | `pnpm --filter @marimo-export/internal-loader-<name> test`                                                                                                                 |
 | Skill scaffold                           | `uv run pytest skills/notebook-to-static-app/tests`                                                                                                                        |
-| Documentation                            | `node apps/docs/scripts/check-navigation.mjs && make docs-build`                                                                                                           |
+| Documentation                            | `node apps/docs/scripts/check-navigation.ts && make docs-build`                                                                                                            |
 
 Add live producer or browser evidence when the contract crosses a process,
 filesystem transaction, remote transport, or mounted document.

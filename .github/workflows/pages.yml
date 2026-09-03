@@ -71,7 +71,9 @@ jobs:
           README.md
           AGENTS.md
           CLAUDE.md
+          CONTRIBUTING.md
           LICENSE
+          SECURITY.md
           apps/docs
           development_docs
           docs
@@ -122,12 +124,7 @@ jobs:
       - name: Build docs
         env:
           BASE_PATH: ${{ steps.pages.outputs.base_path }}
-        run: ./node_modules/.bin/vp exec -F @marimo-team/marimo-export-docs -- vitepress build
-
-      - name: Verify docs base path
-        env:
-          BASE_PATH: ${{ steps.pages.outputs.base_path }}
-        run: node apps/docs/scripts/check-built-docs.mjs
+        run: pnpm --filter @marimo-team/marimo-export-docs build
 
       - name: Upload GitHub Pages artifact
         if: github.event_name != 'pull_request'

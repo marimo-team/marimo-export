@@ -44,7 +44,7 @@ order:
    to its disabled-cell rules, then marimo-export validates the resulting
    baseline.
 10. Plan and capture missing states through the bridge.
-11. Commit each prepared state and the exact prepared-export generation while the
+11. Commit each prepared state and the exact export generation while the
     managed server remains active.
 12. Close the client, stop the managed server and descendants, then remove the
     sibling notebook copy.

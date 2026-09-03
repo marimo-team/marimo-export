@@ -1,36 +1,40 @@
 # Product model and export format
 
 The product model connects one saved or running marimo notebook to a finite
-set of complete input states and named output representations. The export
+set of complete input vectors and named output representations. The export
 format stores that relation as canonical JSON and content-addressed assets.
 
 ## Product nouns
 
-| Noun            | Contract                                                             |
-| --------------- | -------------------------------------------------------------------- |
-| Notebook        | Saved marimo source and its reactive dependency graph                |
-| Baseline        | Definitions, values, UI state, cell ownership, document identity     |
-| StateSpace      | Reusable named state rows, matrix expansion, and default state       |
-| ExportSpec      | Default state, sparse named states, and output specifications        |
-| ExportPlan      | Inferred inputs, complete states, identities, and reusable work      |
-| State           | One complete input assignment and canonical fingerprint              |
-| Control binding | Scoped UI object ID mapped to an input and semantic tree path        |
-| Output          | Published name, typed source, and optional value exporter            |
-| Representation  | Export descriptor codec plus media type and metadata                 |
-| Asset           | Content-addressed export payload bytes                               |
-| Notebook export | One canonical `index.json` and its declared assets                   |
-| ExportResult    | Plan, preparation reuse, verification, bytes, warnings, elapsed time |
-| Consumer        | Human-facing application, agent, Python reader, or custom client     |
+| Noun              | Contract                                                                                        |
+| ----------------- | ----------------------------------------------------------------------------------------------- |
+| Notebook          | Saved marimo source and its reactive dependency graph                                           |
+| Baseline          | Private kernel record with definitions, values, UI state, cell ownership, and document identity |
+| StateSpace        | Reusable named state rows, matrix expansion, and default state                                  |
+| ExportSpec        | Default state, sparse named states, and output specifications                                   |
+| ExportPlan        | Inferred inputs, complete states, identities, and reusable work                                 |
+| Exported state    | One complete input assignment, canonical fingerprint, aliases, and named outputs                |
+| Control binding   | Scoped UI object ID mapped to an input and semantic tree path                                   |
+| Output            | Published name, typed source, and optional value exporter                                       |
+| Representation    | Stable codec and media type for one output name                                                 |
+| Output descriptor | Representation, provenance, and inline data or an asset reference                               |
+| Asset             | Content-addressed export payload bytes                                                          |
+| Notebook export   | One canonical `index.json` and its declared assets                                              |
+| ExportResult      | Plan, preparation reuse, verification, bytes, warnings, elapsed time                            |
+| Consumer          | Human-facing application, agent, Python reader, or custom client                                |
 
 ## StateSpace separates states from output discovery
 
-`StateSpace` owns the reusable input relation. It validates explicit state rows,
-expands a Cartesian input matrix, resolves the default state, and emits one
-normalized state mapping. An application that discovers its outputs composes
-that mapping with `OutputSpec` values through `ExportSpec.from_state_space()`.
+`StateSpace` owns reusable authored state rows. It validates explicit rows,
+expands a Cartesian input matrix, resolves the default name, and returns
+validated matrix-expanded rows. Planning completes and normalizes those rows
+against the captured input baseline. An application that discovers its outputs
+composes the rows with `OutputSpec` values through
+`ExportSpec.from_state_space()`.
 
-`ExportSpec` remains the complete planning input. Repository and producer
-identities depend on its combined states and outputs.
+`ExportSpec` remains the complete planning input. Its states and outputs affect
+the spec and plan identities. Producer identity is independent of the
+`ExportSpec`.
 
 ## ExportSpec resolves to execution and preparation plans
 
@@ -66,6 +70,26 @@ composite portable values as canonical JSON. An export projection converts the
 selected value to a BlobAsset. Rendered-output and complete-cell projections
 capture Marimo-owned output records through the child recording stream and
 `SessionView`.
+
+## Selectors and exporters
+
+`ValueSelector` owns JSON, native, exporter, and rendered-output selection. A
+selector contains at most 2,048 UTF-8 bytes. It starts with an ASCII
+identifier-shaped root, then traverses ASCII dot names, nonnegative integer
+indexes, or JSON-string mapping keys. Mapping keys win over attributes when a
+runtime value supports both.
+
+`OutputSpec` binds one source to an optional `ExporterSpec`. Only an export
+source accepts an exporter. `ExporterSpec` resolves a built-in name or an
+importable `module:symbol`, portable option values, and up to 256 dependency
+modules whose source contributes to exporter execution identity and output-cell
+cache keys.
+
+Built-in exporters own BlobAsset creation for JSON, text, HTML, Altair
+Vega-Lite, PNG, Parquet, and AnyWidget. Exporter execution loads optional
+distributions when their implementation needs them. The capture-scoped registry
+freezes the resolved callables and modules, invokes each callable as
+`exporter(value, **options)`, and verifies source stability before commit.
 
 ## Every state has every output
 
@@ -145,10 +169,11 @@ The writer validates the exact asset closure, length, digest, native framing,
 and descriptor agreement. It writes a staging directory, opens and verifies
 that directory through the local reader, then commits the complete directory.
 Replacement uses an atomic directory exchange where the host filesystem
-provides one. A failed write removes staging and leaves the destination
-unchanged.
+provides one and guarded rollback elsewhere. A pre-commit failure leaves the
+destination unchanged. A rollback failure or post-commit verification failure
+can leave a replacement visible while the operation raises.
 
-File preparation runs its producer source guard before the repository generation
+File preparation runs its producer source guard before the export generation
 commit. That guard binds the reusable prepared export to the source identity
 used during execution.
 
@@ -156,6 +181,14 @@ used during execution.
 returns immutable `NotebookExport`, `ExportState`, and `ExportOutput` values.
 Assets remain lazy until one output is read or the export is verified.
 `NotebookExport.identity` is the SHA-256 of the exact canonical index bytes.
+
+The Python reader resolves aliases, fingerprints, complete input vectors, and
+shallow root-input patches. Scalar and portable JSON accessors decode semantic
+values. NumPy, Arrow, rendered-output, and complete-cell accessors return
+verified raw bytes after framing checks. `verify()` reads each unique asset once
+and reports exported states, state-output pairs, unique assets, and asset bytes.
+Secure reads reject symbolic links, reparse-point escapes, nonregular files,
+file replacement races, and size or digest changes.
 
 ## Coherence rules
 

@@ -1,4 +1,7 @@
 {
   "extends": "../../tsconfig.base.json",
-  "include": [".vitepress/**/*.mts", ".vitepress/**/*.ts"]
+  "compilerOptions": {
+    "erasableSyntaxOnly": true
+  },
+  "include": [".vitepress/**/*.ts", "navigation.ts", "scripts/**/*.ts"]
 }

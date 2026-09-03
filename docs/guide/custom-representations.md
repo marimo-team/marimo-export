@@ -46,14 +46,15 @@ outputs:
     exporter:
       name: summary_exporter:encode_summary
       options: {}
-      dependencies: []
+      dependencies:
+        - json
 ```
 
 The callable receives the selected notebook value first and exporter options as
-keyword arguments. Add dynamically imported source modules to `dependencies`
-when their code affects the returned bytes. A live session uses module objects
-already loaded in that kernel, so restart it after changing an imported exporter
-module.
+keyword arguments. Add every helper module whose source affects the returned
+bytes to `dependencies`, including ordinary imported helpers. A live session
+uses module objects already loaded in that kernel, so restart it after changing
+an imported exporter or helper module.
 
 ## Validate the representation in TypeScript
 
@@ -105,10 +106,12 @@ A loader may return an object with `mount(element, options)`. The mount must
 return an idempotent `dispose()` handle and release its nodes, listeners, object
 URLs, renderer state, and other owned resources.
 
-Mounting grants the loader and representation page authority. Keep parsing and
-validation before module execution, honor abort signals, and document any
-network origins or Content Security Policy capabilities the mount requires.
+A custom loader runs application-supplied code during `load()`. A returned
+mountable value runs more application-supplied code during `mount()`. Keep
+parsing and validation before dynamic module execution, honor abort signals,
+and document any network origins or Content Security Policy capabilities these
+operations require.
 
-Use [Output representations](../reference/representations.md) to compare
-built-in choices and the [browser loader reference](../reference/browser/loaders.md)
+Use [Output representations](../reference/representations) to compare
+built-in choices and the [browser loader reference](../reference/browser/loaders)
 for `defineOutputLoader()`, loader resolution, and mount contracts.

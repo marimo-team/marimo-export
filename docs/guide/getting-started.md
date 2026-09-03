@@ -5,14 +5,17 @@ description: Create, build, verify, and read a deterministic two-state notebook 
 
 # Build your first notebook export
 
-Create a local marimo notebook, prepare two input states, verify the resulting
+Create a local marimo notebook, prepare two exported states, verify the resulting
 files, then read the monthly state from Python. This quickstart uses no external
 data or optional exporter package.
 
 ## Install marimo-export
 
 Install [Python 3.10 or newer](https://www.python.org/) and
-[uv](https://docs.astral.sh/uv/). Create an empty project:
+[uv](https://docs.astral.sh/uv/). Continuous integration tests Python 3.10
+through 3.14. The package metadata pins its exact supported marimo release.
+
+Create an empty project:
 
 ```bash
 mkdir notebook-export-demo
@@ -23,6 +26,12 @@ uv add marimo-export
 
 The installation downloads packages from the Python package registry when they
 are absent from the local uv cache.
+
+Confirm the producer environment:
+
+```bash
+uv run marimo-export doctor
+```
 
 ## Create the notebook
 
@@ -101,8 +110,9 @@ The verifier prints:
 Verified 0 assets and 0 B for 2 states
 ```
 
-If `dist/report` already exists, pass `--replace` to use the guarded replacement
-transaction.
+If `dist/report` already exists, `--replace` installs the new export as the
+complete directory. Files that exist only in the old directory, including
+permitted root sidecars, are removed by the replacement.
 
 ## Read the monthly state
 
@@ -135,12 +145,12 @@ for the `summary` output.
 
 ## Continue from the first export
 
-- [How notebook exports work](../overview.md) names each object in the lifecycle.
-- [Choose states and outputs](choose-states.md) develops input inspection,
+- [What is marimo-export?](../overview) names each object in the lifecycle.
+- [Choose states and outputs](choose-states) develops input inspection,
   sparse rows, output sources, and exporter dependencies.
-- [Consume a notebook export](consume-an-export.md) opens the same export from
+- [Consume a notebook export](consume-an-export) opens the same export from
   Python and a browser.
-- [Run the market dashboard](market-dashboard.md) builds a multi-representation
+- [Run the market dashboard](market-dashboard) builds a multi-representation
   application from a repository checkout and live market data.
 
 The repository keeps the same deterministic source under

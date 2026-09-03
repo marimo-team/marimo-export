@@ -29,8 +29,16 @@ uv run marimo-export build examples/quickstart/report.py \
 
 `build` validates the destination before notebook execution. It plans the
 relation, prepares missing states, stages the notebook export, verifies
-`index.json` and every declared asset, then commits the directory. Add
-`--replace` when the destination already exists:
+`index.json` and every declared asset, then commits the directory.
+
+::: warning Replacement owns the complete destination
+`--replace` installs the staged export as the complete destination directory.
+It removes files that exist only in the old directory, including permitted root
+sidecars. Move application-owned files outside the export directory before
+replacement.
+:::
+
+Add `--replace` when the destination already exists:
 
 ```bash
 uv run marimo-export build examples/quickstart/report.py \
@@ -46,16 +54,20 @@ progress stream.
 
 ### Grant access to the notebook directory
 
-A file build creates a temporary copy beside the notebook. The notebook's
-parent directory must be a real writable directory. The managed marimo server
-runs the copy while marimo-export checks that the authored source stays stable.
-Cleanup removes the copy and closes the owned server, session, and process tree.
-The authored notebook remains byte-for-byte unchanged.
+A file build requires a regular notebook file in a real writable parent
+directory. It creates a temporary copy beside that file while marimo-export
+checks that the authored source stays stable. Cleanup removes the copy and
+closes the owned server, session, and process tree. The authored notebook
+remains byte-for-byte unchanged.
 
 The notebook autorun and selected state runs use the current producer
 environment. They can read files, import packages, access credentials, and make
 network requests available to that process. Review notebook code with the same
 care as any Python program before building it.
+
+Each state run finishes every available authored cell after producing the
+selected output dependencies. An unrelated enabled cell failure fails the
+complete producer operation.
 
 The destination parent must already exist and be writable. Staging occurs
 beside the destination so the final directory can be installed atomically on a
@@ -117,7 +129,7 @@ remain reusable for the next attempt.
 
 ## Retain the prepared export from Python
 
-Use `prepare()` when an application needs the leased repository generation
+Use `prepare()` when an application needs the leased export generation
 before deciding where to write it:
 
 ```python
@@ -246,6 +258,11 @@ Progress on the stream renews the inactivity deadline. Each operation receives
 its own budget, so a progressing multi-state capture can run longer than the
 configured number of seconds.
 
+Python `Session.capture(timeout=...)` uses its argument for repository and
+preparation waits. The `Client` timeout continues to control transport
+inactivity. Cancellation is cooperative between phases and cannot stop a remote
+scratchpad operation that has already started.
+
 ## Verify the written export
 
 Verify the destination after either producer path:
@@ -256,5 +273,5 @@ uv run marimo-export verify dist/quickstart
 
 `verify` reads the canonical index and every declared asset, then checks sizes,
 SHA-256 digests, native framing, state fingerprints, and descriptor agreement.
-Use [Manage the export repository](manage-repository.md) to inspect reusable
-storage or [Consume a notebook export](consume-an-export.md) to read the result.
+Use [Manage the export repository](manage-repository) to inspect reusable
+storage or [Consume a notebook export](consume-an-export) to read the result.

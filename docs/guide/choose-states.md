@@ -5,9 +5,9 @@ description: Inspect a notebook, declare sparse states, and publish the represen
 
 # Choose states and outputs
 
-An `ExportSpec` selects a finite relation from one notebook. Each named state
-becomes a complete input assignment, and each output publishes one selected
-notebook result in every state.
+An `ExportSpec` selects a finite state-output relation from one notebook. Each
+named state becomes a complete input assignment, and each output publishes one
+selected notebook result in every state.
 
 The deterministic quickstart declares two states and one JSON output:
 
@@ -118,12 +118,12 @@ states:
 ```
 
 Use explicit values when a consumer must receive the same state regardless of
-the current live baseline. Keep an empty row when the captured current state is
+the current live baseline. Keep an empty row when the captured baseline is
 the intended product state.
 
 State values can contain null, booleans, Unicode strings, finite numbers in the
 JavaScript safe-integer range, arrays, and string-keyed objects. NaN and
-infinity are invalid. The [ExportSpec reference](../reference/export-spec.md)
+infinity are invalid. The [ExportSpec reference](../reference/export-spec)
 defines the complete wire contract.
 
 ## Treat observations as authoring evidence
@@ -142,7 +142,7 @@ Observations show states that have worked in the matching saved notebook. They
 do not add states to the notebook export. Copy a chosen vector into `states` and
 give it a stable name when consumers should be able to select it.
 
-Use [Manage the export repository](manage-repository.md) to inspect, clear, and
+Use [Manage the export repository](manage-repository) to inspect, clear, and
 repopulate observation history.
 
 ## Choose each output source
@@ -211,9 +211,10 @@ outputs:
 ```
 
 A custom exporter names an importable `module:symbol` callable. Declare every
-dynamically imported module whose source affects the returned bytes. Custom
-exporter calls run for each state that needs preparation. Restart a live session
-after changing a custom exporter module that the session already imported.
+helper module whose source affects the returned bytes, including ordinary
+imports. Custom exporter calls run for each state that needs preparation.
+Restart a live session after changing an exporter or helper module that the
+session already imported.
 
 ## Check the resolved relation
 
@@ -227,5 +228,5 @@ uv run marimo-export plan examples/quickstart/report.py \
 
 Inspect `inputs`, the complete `states` mappings, `default_alias`, `outputs`,
 `observations`, `reusable_states`, `missing_states`, and `exact_reuse`. Continue
-with [Build or capture](build-and-capture.md) after the relation matches the
+with [Build or capture](build-and-capture) after the relation matches the
 states and outputs your consumers need.

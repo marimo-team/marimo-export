@@ -51,10 +51,12 @@ stage(
 `stage()` preflights the destination, records its identity, and creates one
 writable sibling staging directory. An existing destination raises
 `NotebookExportError` with code `destination_exists` unless `replace=True`.
+Replacement installs the staged application as the complete destination and
+removes files that exist only in the old directory.
 
 Use `StagedDelivery` as a context manager. Exiting before a successful commit
-removes the staging directory. `close()` is idempotent and removes an
-uncommitted staging directory.
+attempts best-effort removal of the staging directory. `close()` is idempotent
+and applies the same cleanup.
 
 ### `StagedDelivery`
 
@@ -73,8 +75,8 @@ before `commit()`.
 
 `materialize()` writes and verifies one prepared export under the portable
 relative directory `at`. The path cannot be absolute, empty, `.` or `..`, and
-cannot overlap another materialized export root. The method returns the nested
-export's `ExportResult`.
+cannot overlap another materialized export root. Its target inside `staged.path`
+must not already exist. The method returns the nested export's `ExportResult`.
 
 `commit()` performs these observable steps:
 
@@ -85,7 +87,8 @@ export's `ExportResult`.
 5. Install the complete application directory with rollback protection.
 6. Synchronize the destination parent and remove the retired directory.
 
-The guard runs after verification and before the directory becomes visible. A
+The guard runs after verification and before the directory becomes visible. It
+must leave the staging tree unchanged. A
 guard exception preserves the previous destination and leaves the staged
 context available for cleanup.
 
@@ -205,7 +208,7 @@ async def main() -> None:
     controller = PreparedPublicationController[str, dict[str, str]]()
     try:
         publication = await controller.prepare("report", prepare_report)
-        manifest = publication.manifest("/runtime/report/")
+        manifest = publication.manifest(f"/runtime/report/{publication.identity}/")
         print(manifest["instance"])
     finally:
         await controller.close()
@@ -260,8 +263,8 @@ the complete key. A replaced generation remains eligible for `asset()` for
 `route_grace_seconds`, which defaults to 60 seconds. This lets in-flight
 manifest requests finish after a replacement commits.
 
-`route_grace_seconds` must be nonnegative. A value of zero closes a replaced
-publication during the replacement commit.
+Use a finite, nonnegative `route_grace_seconds`. A value of zero closes a
+replaced publication during the replacement commit.
 
 Methods and properties:
 
@@ -280,12 +283,17 @@ await controller.close() -> None
 grace state is retained. `keys` includes current, preparing, and retained keys.
 
 `current()` returns the exact current publication after expiring elapsed route
-grace entries. `poll()` returns the same current publication immediately. When
-its repository observation revision has advanced, `poll()` schedules one
-background refresh with the last successful preparation callback. Refresh
-failure preserves the current publication.
+grace entries. `poll()` returns the same current publication immediately and
+schedules one asynchronous revision check when no refresh is active. That check
+uses the last successful preparation callback only when the repository
+observation revision has advanced. Refresh failure preserves the current
+publication.
 
-`asset()` matches the application route, prepared instance identity, and
+The controller and every call to `poll()` belong to one running `asyncio` event
+loop. Call `poll()` from an asynchronous handler on that loop. The preparation
+callback itself runs in a worker thread.
+
+`asset()` matches the application route, notebook export identity, and
 declared relative export file. It searches current and retained generations and
 returns an independently leased `PreparedAsset`. It returns `None` when no live
 generation matches. Close a returned asset after its response finishes.
@@ -316,5 +324,5 @@ publication.manifest(
 The controller retains the underlying `PreparedExport` until replacement,
 release, route-grace expiry, or controller close.
 
-Use the [browser prepared-publication API](../browser/prepared-publications.md)
+Use the [browser prepared-publication API](../browser/prepared-publications)
 to consume the manifest and coordinate state transitions in the page.

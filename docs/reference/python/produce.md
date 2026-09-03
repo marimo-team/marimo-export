@@ -5,8 +5,9 @@ description: Define an ExportSpec, inspect reusable work, prepare states, and wr
 
 # Produce an export from Python
 
-`build()` prepares every state in an `ExportSpec` and writes one verified
-notebook export. Start with portable JSON when the consumer needs structured
+`build()` prepares every distinct normalized state in an `ExportSpec` and writes
+one verified notebook export. Equal authored rows share one state fingerprint
+and execute once. Start with portable JSON when the consumer needs structured
 records, arrays, or metrics:
 
 ```python
@@ -44,7 +45,7 @@ StateSpace(
 )
 ```
 
-A `StateSpace` declares input states independently of outputs. `states` maps
+A `StateSpace` declares state rows independently of outputs. `states` maps
 stable names to sparse input assignments. `matrix` expands the Cartesian
 product of nonempty input domains into deterministic `matrix-000000` names.
 
@@ -77,9 +78,9 @@ ExportSpec.from_state_space(
 `to_value()` returns normalized explicit states after matrix expansion. The
 `digest` is the SHA-256 identity of that normalized form.
 
-Invalid documents and state relations raise `SpecError` with code
-`spec_invalid` or `spec_value_invalid`. Non-mapping state collections,
-non-mapping rows, and non-list matrix domains raise `TypeError`.
+Invalid documents and state-space values fail validation before planning. Shape
+and value failures raise `SpecError` or `TypeError` according to the rejected
+field.
 
 ## `ExportSpec`
 
@@ -92,7 +93,8 @@ ExportSpec(
 )
 ```
 
-An `ExportSpec` declares the finite relation that consumers can select:
+An `ExportSpec` declares the finite state-output relation that consumers can
+select:
 
 - `default_state` names one entry in `states`.
 - `states` maps authored aliases to sparse input assignments.
@@ -122,7 +124,7 @@ Invalid wire values raise `SpecError`. Its code identifies the affected part as
 `spec_invalid`, `spec_value_invalid`, `spec_output_invalid`, or
 `spec_exporter_invalid`.
 
-The [StateSpace and ExportSpec reference](../export-spec.md) defines state
+The [StateSpace and ExportSpec reference](../export-spec) defines state
 values, matrix expansion, selector syntax, and the YAML and JSON shapes.
 
 ## `OutputSpec`
@@ -224,12 +226,12 @@ Custom exporters return `marimo_export.outputs.BlobAsset`:
 from marimo_export.outputs import BlobAsset
 
 
-def encode(value: str) -> BlobAsset:
+def encode(value: str, *, currency: str = "USD") -> BlobAsset:
     return BlobAsset(
         data=value.encode("utf-8"),
         media_type="text/plain; charset=utf-8",
         filename="summary.txt",
-        metadata={"schema": "example.summary.v1"},
+        metadata={"schema": "example.summary.v1", "currency": currency},
     )
 ```
 
@@ -262,7 +264,7 @@ plan(
 ) -> ExportPlan
 ```
 
-`plan()` returns the exact state relation and reports which state fingerprints
+`plan()` returns the exact state-output relation and reports which state fingerprints
 are reusable or missing. An exact prepared export avoids notebook startup.
 Otherwise, planning runs the notebook's initial autorun to inspect its baseline
 and dependencies.
@@ -275,23 +277,23 @@ repository opened by `plan()` closes before the call returns.
 
 `ExportPlan` is an immutable record:
 
-| Field                  | Meaning                                                 |
-| ---------------------- | ------------------------------------------------------- |
-| `identity`             | SHA-256 over producer, output-plan, and spec identities |
-| `document_sha256`      | Authored notebook document identity                     |
-| `producer_sha256`      | Notebook plus producer environment identity             |
-| `output_plan_sha256`   | Identity of the authored output declarations            |
-| `spec_sha256`          | Identity of the complete authored `ExportSpec`          |
-| `default_alias`        | Authored default state name                             |
-| `default_fingerprint`  | Complete input vector selected by the default alias     |
-| `inputs`               | Sorted inferred input names                             |
-| `states`               | Normalized `PlannedState` records                       |
-| `outputs`              | Ordered published output names                          |
-| `reusable_states`      | Reusable state fingerprints                             |
-| `missing_states`       | State fingerprints that need preparation                |
-| `observation_revision` | Repository observation revision used by the plan        |
-| `observations`         | `ObservedState` records projected to the plan inputs    |
-| `exact_reuse`          | Whether one matching prepared export supplied the plan  |
+| Field                  | Meaning                                                            |
+| ---------------------- | ------------------------------------------------------------------ |
+| `identity`             | SHA-256 over producer, output-plan, and spec identities            |
+| `document_sha256`      | Authored notebook document identity                                |
+| `producer_sha256`      | Notebook plus producer environment identity                        |
+| `output_plan_sha256`   | Identity of the authored output declarations                       |
+| `spec_sha256`          | Identity of the complete authored `ExportSpec`                     |
+| `default_alias`        | Authored default state name                                        |
+| `default_fingerprint`  | SHA-256 of the complete input vector selected by the default alias |
+| `inputs`               | Sorted inferred input names                                        |
+| `states`               | Normalized `PlannedState` records                                  |
+| `outputs`              | Ordered published output names                                     |
+| `reusable_states`      | Reusable state fingerprints                                        |
+| `missing_states`       | State fingerprints that need preparation                           |
+| `observation_revision` | Repository observation revision used by the plan                   |
+| `observations`         | `ObservedState` records projected to the plan inputs               |
+| `exact_reuse`          | Whether one matching prepared export supplied the plan             |
 
 Each `PlannedState` has sorted `aliases`, a complete immutable `inputs` mapping,
 and its `fingerprint`. `plan.state_fingerprints` returns every normalized
@@ -324,7 +326,7 @@ prepare(
 ) -> PreparedExport
 ```
 
-`prepare()` returns a leased immutable repository generation. Exact reuse
+`prepare()` returns a leased immutable export generation. Exact reuse
 returns before starting a notebook. Missing work starts one owned notebook
 session, prepares every missing state, commits the complete generation, and
 closes the owned process tree.
@@ -364,9 +366,16 @@ notebook export, then closes the prepared handle. Preflight happens before
 notebook execution. An existing destination raises `NotebookExportError` with
 code `destination_exists` unless `replace=True`.
 
+`cancelled` applies through preparation. Once writing begins, the writer stages,
+verifies, and commits the destination without another cancellation callback.
+
 Replacement uses a staged sibling directory and rollback. A successful commit
-can return a warning when parent-directory synchronization or cleanup of the
-retired destination fails.
+replaces the complete destination tree, including permitted root sidecars that
+exist only in the old directory. Keep application-owned files outside that
+destination.
+
+The operation can return a warning when parent-directory synchronization or
+cleanup of the retired destination fails.
 
 ## `PreparedExport`
 
@@ -423,7 +432,7 @@ using a `NotebookExport` returned by `open()`.
 Calls that need files raise `RepositoryError` after close or lease loss.
 Integrity changes raise `IntegrityError`. `close()` is idempotent.
 
-[Delivery and publications](delivery-and-publications.md) defines prepared
+[Delivery and publications](delivery-and-publications) defines prepared
 manifests and application-level retention.
 
 ## Progress callbacks
@@ -445,6 +454,21 @@ Each event contains `kind` and optional `completed`, `total`, `state`, `cache`,
 uses `None` when a field does not apply.
 
 `ProgressKind` is the type alias for the seven supported `kind` strings.
+
+| Event                | Fields and timing                                                                                                    |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `inspection_started` | Emitted before file inspection and for every live plan or capture. File exact reuse omits it.                        |
+| `plan_ready`         | `completed` is the reusable-state count and `total` is the normalized-state count.                                   |
+| `prepared_reused`    | Emitted by `prepare()` and `capture()` for exact export reuse, with both counts equal to the normalized-state count. |
+| `state_started`      | `state` is the primary alias. `completed` counts missing states already finished.                                    |
+| `state_finished`     | Advances `completed` and adds this state's cache activity and execution time.                                        |
+| `prepared_committed` | Emitted after the complete export generation commits.                                                                |
+| `write_finished`     | Emitted after destination writing and verification, with write duration.                                             |
+
+An exact `prepare()` or `capture()` reuse path emits `plan_ready` and
+`prepared_reused` before a later write. An exact `plan()` reuse emits
+`plan_ready`. A path with missing work emits state events and
+`prepared_committed`.
 
 ```python
 ProgressEvent(
@@ -498,25 +522,11 @@ needs a check immediately before an outer directory commit.
 
 `result.to_dict()` returns the same nested shape used by CLI JSON output.
 
-An `ExportWarning` contains `code`, `message`, immutable portable `details`, and
-`to_dict()`. Current warning codes are `export_parent_sync_failed` and
+An `ExportWarning` contains `code`, `message`, detached mutable portable
+`details`, and `to_dict()`. Current warning codes are `export_parent_sync_failed` and
 `retired_destination_cleanup_failed`. The destination is already visible when
 either warning is returned.
 
-## Narrow protocol records
-
-`marimo_export.limits.CaptureLimits`, `CacheSummary`, `StateRunTimings`, and
-`PhaseTimings` are exported record types used by lower-level producer protocol
-integration. The high-level `plan()`, `prepare()`, `capture()`, and `build()`
-calls apply package limits and have no `limits` parameter. Application code
-should use the high-level calls unless it implements that lower-level protocol.
-
-`CaptureLimits()` defaults to 64 MiB per asset and 512 MiB for the complete
-asset closure. `CacheSummary` records `hits` and `misses`. `StateRunTimings`
-records state count and setup, dependency execution, UI update, output
-materialization, and cleanup seconds. `PhaseTimings` combines state-run timings
-with producer lifecycle timings.
-
-Use [Read and verify exports](reader.md) after writing the notebook export, or
-[Sessions and inspection](sessions-and-inspection.md) to prepare from a running
+Use [Read and verify exports](reader) after writing the notebook export, or
+[Sessions and inspection](sessions-and-inspection) to prepare from a running
 session.

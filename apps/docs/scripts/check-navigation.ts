@@ -2,11 +2,11 @@ import { readdir } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { documentationPages, documentationSections, topNavigation } from "../navigation.mjs";
+import { documentationPages, documentationSections, topNavigation } from "../navigation.ts";
 
 const docsDirectory = fileURLToPath(new URL("../../../docs/", import.meta.url));
 
-const collectMarkdownFiles = async (directory, relative = "") => {
+const collectMarkdownFiles = async (directory: string, relative = ""): Promise<string[]> => {
   const entries = await readdir(directory, { withFileTypes: true });
   const files = await Promise.all(
     entries.map(async (entry) => {
@@ -20,7 +20,7 @@ const collectMarkdownFiles = async (directory, relative = "") => {
   return files.flat();
 };
 
-const markdownForRoute = (route) => {
+const markdownForRoute = (route: string): string => {
   if (route === "/") {
     return "index.md";
   }
@@ -30,16 +30,23 @@ const markdownForRoute = (route) => {
   return `${route.slice(1)}.md`;
 };
 
-const duplicates = (values) => {
-  const counts = new Map();
+const duplicates = (values: readonly string[]): string[] => {
+  const counts = new Map<string, number>();
   for (const value of values) {
     counts.set(value, (counts.get(value) ?? 0) + 1);
   }
   return [...counts].filter(([, count]) => count > 1).map(([value]) => value);
 };
 
-const formatList = (label, values) =>
+const formatList = (label: string, values: readonly string[]): string[] =>
   values.length === 0 ? [] : [`${label}:`, ...values.map((value) => `  - ${value}`)];
+
+const topNavigationRoutes = topNavigation.flatMap((item) => {
+  if ("link" in item) {
+    return [item.link];
+  }
+  return item.items.map(({ link }) => link).filter((link) => link.startsWith("/"));
+});
 
 export const checkNavigation = async () => {
   const markdownFiles = (await collectMarkdownFiles(docsDirectory)).sort();
@@ -70,7 +77,7 @@ export const checkNavigation = async () => {
     ),
     ...formatList(
       "Top navigation routes missing from the manifest",
-      topNavigation.map(({ link }) => link).filter((route) => !routeSet.has(route)),
+      topNavigationRoutes.filter((route) => !routeSet.has(route)),
     ),
     ...formatList(
       "Sections with no pages",

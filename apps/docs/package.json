@@ -4,13 +4,13 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "node scripts/check-navigation.mjs && vitepress build && node scripts/check-built-docs.mjs",
-    "check:built": "node scripts/check-built-docs.mjs",
-    "check:navigation": "node scripts/check-navigation.mjs",
+    "build": "node scripts/check-navigation.ts && vitepress build && node scripts/check-built-docs.ts",
+    "check:built": "node scripts/check-built-docs.ts",
+    "check:navigation": "node scripts/check-navigation.ts",
     "dev": "portless",
     "dev:server": "vitepress dev",
     "preview": "vitepress preview --host 127.0.0.1 --port 54173 --strictPort",
-    "test": "node scripts/check-navigation.mjs",
+    "test": "node scripts/check-navigation.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {

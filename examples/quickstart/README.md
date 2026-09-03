@@ -16,7 +16,7 @@ uv run marimo-export verify dist/quickstart
 Read the monthly state:
 
 ```bash
-uv run python -c 'from marimo_export import open_export; export = open_export("dist/quickstart"); print(export.state("monthly").output("summary").json())'
+uv run python -c 'from marimo_export import open_export; export = open_export("dist/quickstart"); print(dict(export.state("monthly").output("summary").json()))'
 ```
 
 Expected output:

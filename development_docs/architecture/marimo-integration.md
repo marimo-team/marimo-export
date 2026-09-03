@@ -46,6 +46,22 @@ flowchart LR
 `_marimo/anywidget.py` and `_marimo/blob.py` own narrow representation
 bindings. `_marimo/entrypoints.py` selects the managed kernel lifespan.
 
+## Inspection and control roots
+
+Kernel inspection returns `DefinitionDescription`, `CellDescription`, and
+`SessionDescription` records before planning mutates any state. Definitions
+carry input mode, portable frontend value availability, UI domain hints,
+dependency names, control paths, and sensitivity.
+
+`select_control_roots()` chooses the smallest canonical UI root set for supported
+control candidates reached from selected outputs or explicit UI state keys.
+Ordinary definition keys enter through the separate explicit-input path. A
+password control makes its containing root sensitive. Sensitive roots never
+enter exported states. Composed controls retain typed index, key, and element
+path steps so browser updates can route back to one root input. Inspection
+rejects duplicate authored cell names. Runtime IDs select unnamed cells or an
+exact live cell instance.
+
 `document_sha256()` reads one revision-stable byte snapshot and passes it to the
 adapter with the authored path as its logical filename. The compatibility
 adapter parses those bytes and passes ordered cell IDs, code, names, and config

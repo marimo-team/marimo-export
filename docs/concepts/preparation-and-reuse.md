@@ -20,6 +20,15 @@ an export repository already contains prepared states for `daily` and `weekly`:
 `plan()` reports this split before preparation. Exact reuse can return a plan
 from a matching prepared export before notebook startup.
 
+Because exact reuse returns before notebook execution, a changed external data
+response does not invalidate that export by itself. Change a producer-identity
+input or the output plan when the application requires deterministic fresh state
+execution. Changing an alias, the default state, or generation retention can
+still reuse matching prepared states.
+`mo.watch.file` and other marimo cache keys take effect after preparation reaches
+notebook execution. They cannot force an exact repository hit to start the
+notebook.
+
 ## Three identities determine reuse
 
 marimo-export computes three identities before it decides which artifacts match:
@@ -53,7 +62,11 @@ generation.
 
 When no exact prepared export exists, file-based planning starts the notebook,
 runs its initial autorun, captures the baseline, and closes the owned session.
-Execution of the requested state relation begins during `prepare` or `capture`.
+Execution of the requested state-output relation begins during `prepare` or
+`capture`.
+Every inferred baseline value must be portable before authored state-row
+overrides apply. Supplying that input in every row cannot make a sensitive or
+nonportable captured baseline eligible.
 
 ## `prepare` and `capture` execute missing states
 
@@ -137,7 +150,7 @@ Python, browser, agent, and custom readers.
 ## A PreparedExport owns a lease
 
 `prepare()` and `capture()` return `PreparedExport`, a Python handle to one
-immutable repository generation. The lease protects that generation from
+immutable export generation. The lease protects that generation from
 retention while the handle remains open.
 
 Given the `report.py` notebook and matching `report.export.yaml` used throughout
@@ -161,6 +174,6 @@ applications. The manifest identifies one immutable notebook export and one
 selected state. It can also declare a refresh interval for a changing
 publication.
 
-Use [Build or capture](../guide/build-and-capture.md) for commands and
-authentication. Use the [Python API](../reference/python-api.md) for handle
+Use [Build or capture](../guide/build-and-capture) for commands and
+authentication. Use the [Python API](../reference/python-api) for handle
 methods, repository configuration, and application directory delivery.
