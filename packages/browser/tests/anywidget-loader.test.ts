@@ -75,7 +75,7 @@ describe("AnyWidget loader adapter", () => {
   });
 });
 
-const envelope = (payload: unknown, valueMediaType = mediaType): Uint8Array =>
+const envelope = <Payload>(payload: Payload, valueMediaType = mediaType): Uint8Array =>
   encode({
     data: encoder.encode(JSON.stringify(payload)),
     media_type: valueMediaType,

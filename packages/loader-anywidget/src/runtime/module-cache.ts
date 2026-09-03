@@ -2,6 +2,7 @@ import type { AnyWidget } from "@anywidget/types";
 
 import { embeddedFileKey, parseDataUrl, type EsmSpec } from "../payload.js";
 import { resolveAnyWidgetModule } from "./binding.js";
+import { isPropertyOwner } from "./value-types.js";
 
 export const MAX_PAGE_MODULES = 1_024;
 export const PAGE_MODULE_CACHE_SYMBOL = Symbol.for(
@@ -34,9 +35,9 @@ export async function loadPageAnyWidget(
   }
 
   let promise: Promise<AnyWidget>;
-  promise = startImport(source, spec.url).catch((error: unknown) => {
+  promise = startImport(source, spec.url).catch((cause: unknown) => {
     if (modules.get(source.cacheKey) === promise) modules.delete(source.cacheKey);
-    throw error;
+    throw cause;
   });
   modules.set(source.cacheKey, promise);
   return promise;
@@ -89,13 +90,13 @@ async function importEmbeddedWidget(objectUrl: string, diagnosticUrl: string): P
 }
 
 async function resolveImportedWidget(
-  task: Promise<unknown>,
+  task: Promise<object>,
   diagnosticUrl: string,
 ): Promise<AnyWidget> {
   return resolveAnyWidgetModule(await task, diagnosticUrl);
 }
 
-function importModule(url: string): Promise<unknown> {
+function importModule(url: string): Promise<object> {
   // Keep the runtime URL opaque so the browser owns module loading and its
   // page-lifetime ESM registry.
   return import(/* @vite-ignore */ /* webpackIgnore: true */ /* turbopackIgnore: true */ url);
@@ -118,12 +119,12 @@ function base64Bytes(value: string): Uint8Array<ArrayBuffer> {
 
 async function digestIdentity(parts: readonly string[]): Promise<string> {
   const bytes = encoder.encode(JSON.stringify(parts));
-  const digest = await crypto.subtle.digest("SHA-256", bytes as Uint8Array<ArrayBuffer>);
+  const digest = await crypto.subtle.digest("SHA-256", new Uint8Array(bytes));
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
 function pageModuleCache(): PageModuleCache {
-  const existing = Reflect.get(globalThis, PAGE_MODULE_CACHE_SYMBOL) as unknown;
+  const existing = Object.getOwnPropertyDescriptor(globalThis, PAGE_MODULE_CACHE_SYMBOL)?.value;
   if (existing !== undefined) {
     if (isPageModuleCache(existing)) return existing;
     throw new Error("AnyWidget page module cache has an incompatible value.");
@@ -142,8 +143,7 @@ function pageModuleCache(): PageModuleCache {
   return created;
 }
 
-function isPageModuleCache(value: unknown): value is PageModuleCache {
-  if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
-  const record = value as { readonly version?: unknown; readonly modules?: unknown };
-  return record.version === PAGE_MODULE_CACHE_VERSION && record.modules instanceof Map;
+function isPageModuleCache<Value>(value: Value): value is Value & PageModuleCache {
+  if (!isPropertyOwner(value) || !("version" in value) || !("modules" in value)) return false;
+  return value.version === PAGE_MODULE_CACHE_VERSION && value.modules instanceof Map;
 }

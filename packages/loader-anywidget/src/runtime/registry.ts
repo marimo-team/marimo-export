@@ -4,8 +4,9 @@ import { cloneModelState, type AnyWidgetSnapshot, type EsmSpec } from "../payloa
 import { abortError, combineAbortSignals, raceAbort } from "./abort.js";
 import { WidgetBinding } from "./binding.js";
 import { createHost, type WidgetResolver } from "./host.js";
-import { type ModelResolver, type ModelState, StaticModel } from "./model.js";
+import { type ModelResolver, type ModelShape, type ModelState, StaticModel } from "./model.js";
 import { loadPageAnyWidget } from "./module-cache.js";
+import { isPropertyOwner, isStringValue } from "./value-types.js";
 
 interface BindingEntry {
   readonly controller: AbortController;
@@ -28,16 +29,23 @@ interface ViewRuntime {
 
 const ACTIVE_MOUNTS = new WeakSet<HTMLElement>();
 
-export interface MountedRuntime<State extends ModelState, Exports> {
+export interface MountedRuntime<State extends ModelShape<State>, Exports> {
   readonly model: AnyModel<State>;
   readonly exports: Exports;
   dispose(): Promise<void>;
 }
 
-export async function mountSnapshot<State extends ModelState, Exports>(
+export interface AnyWidgetMountOptions {
+  readonly signal?: AbortSignal;
+}
+
+export async function mountSnapshot<
+  State extends ModelShape<State>,
+  Exports extends object | undefined,
+>(
   snapshot: AnyWidgetSnapshot,
   element: HTMLElement,
-  options: { readonly signal?: AbortSignal } = {},
+  options: AnyWidgetMountOptions = {},
 ): Promise<MountedRuntime<State, Exports>> {
   assertBrowserElement(element);
   options.signal?.throwIfAborted();
@@ -65,7 +73,9 @@ export async function mountSnapshot<State extends ModelState, Exports>(
     if (registry.signal.aborted) throw abortError("AnyWidget mount was disposed.");
     options.signal?.throwIfAborted();
     return Object.freeze({
+      // SAFETY: State is the caller-owned specialization for the parsed root model.
       model: model as AnyModel<State>,
+      // SAFETY: Exports is the caller-owned specialization of AnyWidget initialize's object result.
       exports: binding.exports as Exports,
       async dispose() {
         options.signal?.removeEventListener("abort", onAbort);
@@ -95,18 +105,18 @@ export class StaticRegistry implements ModelResolver, WidgetResolver {
   constructor(snapshot: AnyWidgetSnapshot) {
     this.#snapshot = snapshot;
     for (const model of snapshot.models.values()) {
-      const state = cloneModelState(model.state as ModelState);
+      const state = cloneModelState(model.state);
       const runtime: ViewRuntime = {
         model: new StaticModel(state, this, this.#controller.signal),
         esmSpec: model.esmSpec,
         styleMounts: new Map(),
-        css: typeof state._css === "string" ? state._css : "",
+        css: isStringValue(state._css) ? state._css : "",
       };
       runtime.model.on(
         "change:_css",
         () => {
           const css = runtime.model.get("_css");
-          runtime.css = typeof css === "string" ? css : "";
+          runtime.css = isStringValue(css) ? css : "";
           for (const mount of runtime.styleMounts.values()) mount.update(runtime.css);
         },
         { signal: this.#controller.signal },
@@ -126,6 +136,7 @@ export class StaticRegistry implements ModelResolver, WidgetResolver {
   async getWidget<Exports = unknown>(modelId: string): Promise<ResolvedWidget<Exports>> {
     const binding = await this.getBinding(modelId);
     return {
+      // SAFETY: The host caller owns the export specialization for this widget reference.
       exports: binding.exports as Exports,
       render: async ({ el, signal }) => {
         await this.createView(modelId, el, signal ?? this.#controller.signal);
@@ -172,10 +183,10 @@ export class StaticRegistry implements ModelResolver, WidgetResolver {
         this.#bindingOrder.push(binding);
         return binding;
       })
-      .catch((error) => {
+      .catch((cause) => {
         controller.abort();
         this.#bindings.delete(modelId);
-        throw error;
+        throw cause;
       })
       .finally(() => this.#controller.signal.removeEventListener("abort", onDispose));
     this.#bindings.set(modelId, { controller, promise, state });
@@ -299,12 +310,11 @@ function isShadowRoot(node: Node): node is ShadowRoot {
 
 function assertBrowserElement(element: HTMLElement): void {
   if (
-    typeof document === "undefined" ||
-    typeof window === "undefined" ||
-    element === null ||
-    typeof element !== "object" ||
+    globalThis.document === undefined ||
+    globalThis.window === undefined ||
+    !isPropertyOwner(element) ||
     element.nodeType !== 1 ||
-    typeof element.replaceChildren !== "function"
+    !("replaceChildren" in element)
   ) {
     throw new TypeError("AnyWidget mount requires a browser element.");
   }

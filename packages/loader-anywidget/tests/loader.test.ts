@@ -10,6 +10,8 @@ interface HttpModuleUrlCase {
   readonly valid: boolean;
 }
 
+const moduleUrlCases: readonly HttpModuleUrlCase[] = httpModuleUrlCases;
+
 describe("anywidget", () => {
   test("accepts state interfaces with required and optional fields", () => {
     interface MapState {
@@ -34,21 +36,18 @@ describe("anywidget", () => {
     expect([...new Uint8Array(loaded.initialState.binary.view.buffer)]).toEqual([1, 2, 3]);
   });
 
-  test.each(httpModuleUrlCases as readonly HttpModuleUrlCase[])(
-    "$name at the AnyWidget loader boundary",
-    async ({ url, valid }) => {
-      const loading = loadPayload(
-        payload({
-          modelNotifications: [notification({ id: "model-0", state: {}, moduleUrl: url })],
-        }),
-      );
-      if (valid) {
-        await expect(loading).resolves.toBeDefined();
-      } else {
-        await expect(loading).rejects.toThrow();
-      }
-    },
-  );
+  test.each(moduleUrlCases)("$name at the AnyWidget loader boundary", async ({ url, valid }) => {
+    const loading = loadPayload(
+      payload({
+        modelNotifications: [notification({ id: "model-0", state: {}, moduleUrl: url })],
+      }),
+    );
+    if (valid) {
+      await expect(loading).resolves.toBeDefined();
+    } else {
+      await expect(loading).rejects.toThrow();
+    }
+  });
 
   test("loads state and buffers without executing the frontend module", async () => {
     const marker = "__marimoExportAnyWidgetLoaded";
@@ -73,7 +72,7 @@ describe("anywidget", () => {
     expect([...new Uint8Array(loaded.initialState.binary.view.buffer)]).toEqual([1, 2, 3]);
     expect(Object.hasOwn(loaded.initialState.binary, "view")).toBe(true);
     expect(Object.isFrozen(loaded.initialState)).toBe(true);
-    await expect(loaded.mount({} as HTMLElement)).rejects.toThrow(
+    await expect(loaded.mount(invalidElement())).rejects.toThrow(
       "AnyWidget mount requires a browser element",
     );
   });
@@ -194,3 +193,8 @@ describe("anywidget", () => {
     await expect(loading).rejects.toThrow('rootModelId must be "model-0"');
   });
 });
+
+function invalidElement(): HTMLElement {
+  // SAFETY: The test deliberately supplies an object outside the HTMLElement contract.
+  return {} as HTMLElement;
+}

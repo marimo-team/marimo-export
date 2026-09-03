@@ -1,15 +1,30 @@
 import type { AnyModel } from "@anywidget/types";
 
-export type ModelState = Record<string, unknown>;
+import { isCallableValue } from "./value-types.js";
+
+export type ModelValue =
+  | null
+  | boolean
+  | number
+  | string
+  | DataView
+  | readonly ModelValue[]
+  | ModelState
+  | undefined;
+
+export interface ModelState {
+  [key: string]: ModelValue;
+}
+export type ModelShape<State> = Partial<{ [Key in keyof State]: ModelValue }>;
 type EventHandler = (...args: never[]) => void;
 
 export interface ModelResolver {
   getModel(modelId: string): Promise<AnyModel<ModelState>>;
 }
 
-export class StaticModel<T extends ModelState = ModelState> implements AnyModel<T> {
+export class StaticModel<T extends ModelShape<T> = ModelState> implements AnyModel<T> {
   readonly #resolver: ModelResolver;
-  readonly #dirtyFields = new Map<keyof T, unknown>();
+  readonly #dirtyFields = new Map<keyof T, ModelValue>();
   #data: T;
   #listeners = new Map<string, Set<EventHandler>>();
   #changeQueued = false;
@@ -28,7 +43,8 @@ export class StaticModel<T extends ModelState = ModelState> implements AnyModel<
   }
 
   get<K extends keyof T>(key: K): T[K] {
-    return Object.hasOwn(this.#data, key) ? this.#data[key] : (undefined as T[K]);
+    if (Object.hasOwn(this.#data, key)) return this.#data[key];
+    return missingModelValue<T[K]>();
   }
 
   set<K extends keyof T>(key: K, value: T[K]): void {
@@ -42,16 +58,21 @@ export class StaticModel<T extends ModelState = ModelState> implements AnyModel<
     this.#dirtyFields.clear();
   }
 
-  send(_content: unknown, callbacks?: unknown, _buffers?: ArrayBuffer[] | ArrayBufferView[]): void {
-    if (typeof callbacks === "function") queueMicrotask(callbacks as () => void);
-  }
-
-  readonly widget_manager = {
-    get_model: async <State extends ModelState>(modelId: string): Promise<AnyModel<State>> =>
-      (await this.#resolver.getModel(widgetManagerModelId(modelId))) as AnyModel<State>,
+  readonly send: AnyModel<T>["send"] = (_content, callbacks) => {
+    if (isCallableValue(callbacks)) queueMicrotask(callbacks);
   };
 
-  on(eventName: "msg:custom", callback: (msg: unknown, buffers: DataView[]) => void): void;
+  readonly widget_manager = {
+    get_model: async <State extends ModelShape<State>>(
+      modelId: string,
+    ): Promise<AnyModel<State>> => {
+      const model = await this.#resolver.getModel(widgetManagerModelId(modelId));
+      // SAFETY: The AnyWidget caller owns the requested state specialization for this model id.
+      return model as AnyModel<State>;
+    },
+  };
+
+  on(eventName: "msg:custom", callback: (msg: ModelValue, buffers: DataView[]) => void): void;
   on(eventName: `change:${string}`, callback: () => void): void;
   on(eventName: string, callback: EventHandler, options?: { signal?: AbortSignal }): void;
   on(eventName: string, callback: EventHandler, options?: { signal?: AbortSignal }): void {
@@ -76,13 +97,14 @@ export class StaticModel<T extends ModelState = ModelState> implements AnyModel<
     this.#listeners.get(eventName)?.delete(callback);
   }
 
-  #emit(eventName: string, ...args: unknown[]): void {
+  #emit(eventName: string, ...args: ModelValue[]): void {
     const listeners = this.#listeners.get(eventName);
     if (listeners === undefined) return;
     // A callback may unregister the next listener while this event is emitted.
     // oxlint-disable-next-line no-useless-spread
     for (const listener of [...listeners]) {
       try {
+        // SAFETY: EventHandler intentionally erases the event-specific argument tuple.
         listener(...(args as never[]));
       } catch (error) {
         console.error(`AnyWidget model listener for ${JSON.stringify(eventName)} failed.`, error);
@@ -98,6 +120,11 @@ export class StaticModel<T extends ModelState = ModelState> implements AnyModel<
       this.#emit("change");
     });
   }
+}
+
+function missingModelValue<Value>(): Value {
+  // SAFETY: AnyModel.get uses undefined for a key absent from the model state.
+  return undefined as never;
 }
 
 function widgetManagerModelId(value: string): string {

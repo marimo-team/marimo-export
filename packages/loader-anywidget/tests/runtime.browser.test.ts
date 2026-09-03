@@ -238,7 +238,7 @@ describe("AnyWidget native browser runtime", () => {
 
     const [first, second] = await Promise.all([loaded.mount(firstHost), loaded.mount(secondHost)]);
     try {
-      expect(Reflect.get(globalThis, MODULE_EVALUATIONS)).toBe(1);
+      expect(Object.getOwnPropertyDescriptor(globalThis, MODULE_EVALUATIONS)?.value).toBe(1);
       expect(first.model).not.toBe(second.model);
       first.model.set("count", 2);
       expect(second.model.get("count")).toBe(1);
@@ -247,7 +247,7 @@ describe("AnyWidget native browser runtime", () => {
       await second.dispose();
       const third = await loaded.mount(thirdHost);
       try {
-        expect(Reflect.get(globalThis, MODULE_EVALUATIONS)).toBe(1);
+        expect(Object.getOwnPropertyDescriptor(globalThis, MODULE_EVALUATIONS)?.value).toBe(1);
         expect(thirdHost.textContent).toBe("1");
       } finally {
         await third.dispose();
@@ -306,7 +306,9 @@ describe("AnyWidget native browser runtime", () => {
     const second = await secondMount;
     try {
       expect(secondHost.textContent).toBe("ready");
-      expect(Reflect.get(globalThis, PENDING_IMPORT)).toMatchObject({ evaluations: 1 });
+      expect(Object.getOwnPropertyDescriptor(globalThis, PENDING_IMPORT)?.value).toMatchObject({
+        evaluations: 1,
+      });
     } finally {
       await second.dispose();
       firstHost.remove();
@@ -341,7 +343,7 @@ describe("AnyWidget native browser runtime", () => {
     await expect(loaded.mount(firstHost)).rejects.toThrow("first module evaluation failed");
     const mounted = await loaded.mount(secondHost);
     try {
-      expect(Reflect.get(globalThis, RETRY_IMPORT)).toBe(2);
+      expect(Object.getOwnPropertyDescriptor(globalThis, RETRY_IMPORT)?.value).toBe(2);
       expect(secondHost.textContent).toBe("retried");
     } finally {
       await mounted.dispose();
@@ -381,9 +383,13 @@ describe("AnyWidget native browser runtime", () => {
     const [firstWidget, secondWidget] = await Promise.all([first, second]);
 
     expect(firstWidget).toBe(secondWidget);
-    expect(Reflect.get(globalThis, DUAL_PENDING_IMPORT)).toMatchObject({ evaluations: 1 });
+    expect(Object.getOwnPropertyDescriptor(globalThis, DUAL_PENDING_IMPORT)?.value).toMatchObject({
+      evaluations: 1,
+    });
     expect(await secondCache.loadPageAnyWidget(spec, files)).toBe(firstWidget);
-    expect(Reflect.get(globalThis, DUAL_PENDING_IMPORT)).toMatchObject({ evaluations: 1 });
+    expect(Object.getOwnPropertyDescriptor(globalThis, DUAL_PENDING_IMPORT)?.value).toMatchObject({
+      evaluations: 1,
+    });
   });
 
   test("shares rejection eviction and retry across module-cache copies", async () => {
@@ -402,18 +408,17 @@ describe("AnyWidget native browser runtime", () => {
       secondCache.loadPageAnyWidget(spec, files),
     ]);
     expect(failures.map((result) => result.status)).toEqual(["rejected", "rejected"]);
-    expect(Reflect.get(globalThis, DUAL_RETRY_IMPORT)).toBe(1);
+    expect(Object.getOwnPropertyDescriptor(globalThis, DUAL_RETRY_IMPORT)?.value).toBe(1);
 
     await secondCache.loadPageAnyWidget(spec, files);
-    expect(Reflect.get(globalThis, DUAL_RETRY_IMPORT)).toBe(2);
+    expect(Object.getOwnPropertyDescriptor(globalThis, DUAL_RETRY_IMPORT)?.value).toBe(2);
   });
 
   test("shares the page admission cap across module-cache copies", async () => {
     const [firstCache, secondCache] = await moduleCacheCopies();
-    const record = Reflect.get(globalThis, firstCache.PAGE_MODULE_CACHE_SYMBOL) as {
-      readonly version: number;
-      readonly modules: Map<string, Promise<unknown>>;
-    };
+    const record = moduleCacheRecord(
+      Object.getOwnPropertyDescriptor(globalThis, firstCache.PAGE_MODULE_CACHE_SYMBOL)?.value,
+    );
     expect(record.version).toBe(1);
     expect(record.modules).toBeInstanceOf(Map);
     const added: string[] = [];
@@ -452,4 +457,19 @@ function widgetStyles(): string[] {
   return [...document.head.querySelectorAll("style")]
     .map((style) => style.textContent ?? "")
     .filter((css) => css === ROOT_CSS || css === UPDATED_ROOT_CSS || css === CHILD_CSS);
+}
+
+interface ModuleCacheRecord {
+  readonly version: number;
+  readonly modules: Map<string, Promise<object>>;
+}
+
+function moduleCacheRecord<Value>(value: Value): ModuleCacheRecord {
+  if (!(value instanceof Object) || !("version" in value) || !("modules" in value)) {
+    throw new TypeError("The page module cache fixture is missing.");
+  }
+  if (value.version !== 1 || !(value.modules instanceof Map)) {
+    throw new TypeError("The page module cache fixture is invalid.");
+  }
+  return { version: value.version, modules: value.modules };
 }

@@ -2,6 +2,7 @@ import { loadAnyWidget } from "@marimo-export/internal-loader-anywidget";
 import type {
   AnyWidgetStateShape,
   LoadedAnyWidget,
+  ModelState,
 } from "@marimo-export/internal-loader-anywidget";
 
 import { defineBlobAssetLoader } from "../loader.js";
@@ -16,6 +17,7 @@ export type {
   AnyWidgetMountOptions,
   AnyWidgetStateShape,
   LoadedAnyWidget,
+  ModelState,
   MountedAnyWidget,
   PreparedWidgetGraphCheckpoint,
   PreparedWidgetGraphPort,
@@ -27,8 +29,8 @@ const MEDIA_TYPE = "application/vnd.marimo-export.anywidget.v1+json";
 
 /** Decode an exported AnyWidget value and prepare it for browser mounting. */
 export const anyWidgetLoader = <
-  State extends AnyWidgetStateShape<State> = Record<string, unknown>,
-  Exports = unknown,
+  State extends AnyWidgetStateShape<State> = ModelState,
+  Exports extends object | undefined = object | undefined,
 >(): BlobAssetLoader<LoadedAnyWidget<State, Exports>> =>
   defineBlobAssetLoader({
     mediaTypes: MEDIA_TYPE,

@@ -1,13 +1,14 @@
 import { loadAnyWidget } from "../src/index.js";
 import type { AnyWidgetStateShape, LoadedAnyWidget } from "../src/index.js";
+import type { ModelState, ModelValue } from "../src/runtime/model.js";
 
 const encoder = new TextEncoder();
 
 export const loadPayload = <
-  State extends AnyWidgetStateShape<State> = Record<string, unknown>,
-  Exports = unknown,
+  State extends AnyWidgetStateShape<State> = ModelState,
+  Exports extends object | undefined = object | undefined,
 >(
-  payload: unknown,
+  payload: ModelValue,
   signal?: AbortSignal,
 ): Promise<LoadedAnyWidget<State, Exports>> =>
   loadAnyWidget<State, Exports>(encoder.encode(JSON.stringify(payload)), signal);
@@ -22,7 +23,7 @@ export function base64ModuleUrl(source: string, marker = "base64"): string {
 
 export function notification(options: {
   readonly id: string;
-  readonly state: Record<string, unknown>;
+  readonly state: ModelState;
   readonly moduleUrl?: string;
   readonly moduleHash?: string;
   readonly bufferPaths?: readonly (readonly (string | number)[])[];
@@ -47,7 +48,7 @@ export function notification(options: {
 export function payload(options: {
   readonly rootModelId?: string;
   readonly files?: Record<string, string>;
-  readonly modelNotifications: readonly unknown[];
+  readonly modelNotifications: readonly ModelValue[];
 }) {
   return {
     schema: "marimo-export.anywidget.v1",

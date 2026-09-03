@@ -1,5 +1,7 @@
-export function parseWidgetRef(value: unknown): string {
-  if (typeof value === "string" && value.startsWith("anywidget:")) {
+import { isStringValue } from "./value-types.js";
+
+export function parseWidgetRef<Value>(value: Value): string {
+  if (isStringValue(value) && value.startsWith("anywidget:")) {
     const modelId = value.slice("anywidget:".length);
     if (modelId.length > 0) return modelId;
   }

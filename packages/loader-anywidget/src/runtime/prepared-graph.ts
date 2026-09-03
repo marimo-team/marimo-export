@@ -202,9 +202,9 @@ const settledReplacement = <Record>(
           committed = true;
           return result;
         })
-        .catch((error: unknown) => {
-          commitFailure = graphFailure(error);
-          throw error;
+        .catch((cause: unknown) => {
+          commitFailure = graphFailure(cause);
+          throw cause;
         });
       return commitTask;
     },
@@ -265,6 +265,7 @@ export class PreparedWidgetGraph<Record, LiveState> {
       }
     });
     const snapshot = snapshotCopy({ files: this.#current.files, records }, this.#port);
+    // SAFETY: The private WeakMap registers this opaque checkpoint before it is returned.
     const checkpoint = Object.freeze({}) as PreparedWidgetGraphCheckpoint<Record>;
     this.#checkpoints.set(checkpoint, { snapshot, source: this.#current });
     return checkpoint;
@@ -308,7 +309,8 @@ export class PreparedWidgetGraph<Record, LiveState> {
     target: PreparedWidgetGraphSnapshot<Record> | PreparedWidgetGraphCheckpoint<Record>,
     signal: AbortSignal,
   ): Promise<PreparedWidgetGraphReplacement<Record>> {
-    const checkpoint = this.#checkpoints.get(target as object);
+    const checkpoint = this.#checkpoints.get(target);
+    // SAFETY: Every opaque checkpoint resolves in the private WeakMap while other values are snapshots.
     const value =
       checkpoint === undefined
         ? (target as PreparedWidgetGraphSnapshot<Record>)

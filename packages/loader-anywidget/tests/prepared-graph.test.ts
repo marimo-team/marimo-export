@@ -9,13 +9,14 @@ import {
   PreparedWidgetGraph,
   PreparedWidgetGraphReplacementError,
 } from "../src/runtime/prepared-graph.js";
+import type { ModelState } from "../src/runtime/model.js";
 
 interface GraphRecord {
   readonly id: string;
   readonly active: boolean;
   readonly revision: string;
   readonly module: string | undefined;
-  readonly state: Readonly<Record<string, unknown>>;
+  readonly state: Readonly<ModelState>;
   readonly failValidation?: boolean;
   readonly failPreflight?: boolean;
   readonly failReplay?: boolean;
@@ -23,13 +24,13 @@ interface GraphRecord {
 
 interface LiveModel {
   module: string | undefined;
-  state: Record<string, unknown>;
+  state: ModelState;
 }
 
 const record = (
   id: string,
   revision: string,
-  state: Readonly<Record<string, unknown>>,
+  state: Readonly<ModelState>,
   options: Partial<Omit<GraphRecord, "id" | "revision" | "state">> = {},
 ): GraphRecord => ({
   id,
@@ -282,13 +283,13 @@ describe("prepared AnyWidget graph", () => {
     port.replayFailures.add("model-0");
     const replacement = await runtime.replace(graph([]));
 
-    const commitFailure = await replacement.commit().catch((error: unknown) => error);
-    const rollbackFailure = await replacement.rollback().catch((error: unknown) => error);
+    const commitFailure = await replacement.commit().catch((cause) => cause);
+    const rollbackFailure = await replacement.rollback().catch((cause) => cause);
 
     expect(commitFailure).toMatchObject({ message: "Close failed for model-1" });
     expect(rollbackFailure).toBeInstanceOf(PreparedWidgetGraphReplacementError);
     expect(rollbackFailure).toMatchObject({ remount: true, cause: expect.any(AggregateError) });
-    expect((rollbackFailure as PreparedWidgetGraphReplacementError).cause).toMatchObject({
+    expect(replacementFailure(rollbackFailure).cause).toMatchObject({
       errors: [commitFailure, expect.objectContaining({ message: "Replay failed for model-0" })],
     });
     await expect(runtime.dispose()).rejects.toBe(rollbackFailure);
@@ -300,7 +301,7 @@ describe("prepared AnyWidget graph", () => {
     const replacement = await runtime.replace(graph([record("model-0", "first", { count: 1 })]));
     port.closeFailures.add("model-0");
 
-    const failure = await replacement.rollback().catch((error: unknown) => error);
+    const failure = await replacement.rollback().catch((cause) => cause);
 
     expect(failure).toBeInstanceOf(PreparedWidgetGraphReplacementError);
     expect(failure).toMatchObject({
@@ -317,7 +318,7 @@ describe("prepared AnyWidget graph", () => {
     const replacement = await runtime.replace(graph([record("model-0", "second", { count: 2 })]));
     port.restoreFailures.add("model-0");
 
-    const failure = await replacement.rollback().catch((error: unknown) => error);
+    const failure = await replacement.rollback().catch((cause) => cause);
 
     expect(failure).toBeInstanceOf(PreparedWidgetGraphReplacementError);
     expect(failure).toMatchObject({
@@ -373,11 +374,11 @@ describe("prepared AnyWidget graph", () => {
 
     const failure = await runtime
       .replace(graph([record("model-0", "second", { count: 2 }, { module: "module-b" })]))
-      .catch((error: unknown) => error);
+      .catch((cause) => cause);
 
     expect(failure).toBeInstanceOf(PreparedWidgetGraphReplacementError);
     expect(failure).toMatchObject({ remount: true, cause: expect.any(AggregateError) });
-    expect((failure as PreparedWidgetGraphReplacementError).cause).toMatchObject({
+    expect(replacementFailure(failure).cause).toMatchObject({
       errors: [expect.any(Error), expect.any(Error)],
     });
     port.persistentCloseFailures.clear();
@@ -428,3 +429,10 @@ describe("prepared AnyWidget graph", () => {
     expect(port.files).toEqual({});
   });
 });
+
+function replacementFailure<Value>(value: Value): PreparedWidgetGraphReplacementError {
+  if (!(value instanceof PreparedWidgetGraphReplacementError)) {
+    throw new TypeError("Expected a prepared graph replacement failure.");
+  }
+  return value;
+}

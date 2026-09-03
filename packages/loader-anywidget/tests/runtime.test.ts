@@ -55,7 +55,7 @@ describe("AnyWidget browser runtime", () => {
       }),
     );
     const element = documentValue.createElement("div");
-    const mounted = await loaded.mount(element as unknown as HTMLElement);
+    const mounted = await loaded.mount(browserElement(element));
 
     expect(element.dataset.caught).toBe("true");
     const child = await mounted.model.widget_manager.get_model<{ value: number }>("model-1");
@@ -71,7 +71,7 @@ describe("AnyWidget browser runtime", () => {
         modelNotifications: [notification({ id: "model-0", state: {}, moduleUrl: url })],
       }),
     );
-    const element = documentValue.createElement("div") as unknown as HTMLElement;
+    const element = browserElement(documentValue.createElement("div"));
     const first = await loaded.mount(element);
 
     await expect(loaded.mount(element)).rejects.toThrow("Dispose the existing AnyWidget mount");
@@ -82,7 +82,7 @@ describe("AnyWidget browser runtime", () => {
 
   test("reads only own model fields, including reserved names", async () => {
     const url = moduleUrl("export default { render() {} };");
-    const loaded = await loadPayload<Record<string, unknown>>(
+    const loaded = await loadPayload(
       payload({
         modelNotifications: [
           notification({
@@ -93,9 +93,7 @@ describe("AnyWidget browser runtime", () => {
         ],
       }),
     );
-    const mounted = await loaded.mount(
-      documentValue.createElement("div") as unknown as HTMLElement,
-    );
+    const mounted = await loaded.mount(browserElement(documentValue.createElement("div")));
 
     expect(mounted.model.get("toString")).toBeUndefined();
     expect(mounted.model.get("constructor")).toBeUndefined();
@@ -134,8 +132,8 @@ describe("AnyWidget browser runtime", () => {
     new Uint8Array(loaded.initialState.binary.view.buffer)[0] = 99;
     const firstElement = documentValue.createElement("div");
     const secondElement = documentValue.createElement("div");
-    const first = await loaded.mount(firstElement as unknown as HTMLElement);
-    const second = await loaded.mount(secondElement as unknown as HTMLElement);
+    const first = await loaded.mount(browserElement(firstElement));
+    const second = await loaded.mount(browserElement(secondElement));
 
     first.model.set("value", 9);
 
@@ -166,7 +164,7 @@ describe("AnyWidget browser runtime", () => {
     );
     const element = documentValue.createElement("div");
 
-    await expect(loaded.mount(element as unknown as HTMLElement)).rejects.toThrow("render failed");
+    await expect(loaded.mount(browserElement(element))).rejects.toThrow("render failed");
 
     expect(element.children).toHaveLength(0);
   });
@@ -208,7 +206,7 @@ describe("AnyWidget browser runtime", () => {
       }),
     );
     const controller = new AbortController();
-    const mounting = loaded.mount(documentValue.createElement("div") as unknown as HTMLElement, {
+    const mounting = loaded.mount(browserElement(documentValue.createElement("div")), {
       signal: controller.signal,
     });
     await started;
@@ -244,7 +242,7 @@ describe("AnyWidget browser runtime", () => {
     );
     const element = documentValue.createElement("div");
     const controller = new AbortController();
-    const mounted = await loaded.mount(element as unknown as HTMLElement, {
+    const mounted = await loaded.mount(browserElement(element), {
       signal: controller.signal,
     });
 
@@ -284,7 +282,7 @@ describe("AnyWidget browser runtime", () => {
       }),
     );
     const controller = new AbortController();
-    const mounting = loaded.mount(documentValue.createElement("div") as unknown as HTMLElement, {
+    const mounting = loaded.mount(browserElement(documentValue.createElement("div")), {
       signal: controller.signal,
     });
     await started;
@@ -313,9 +311,7 @@ describe("AnyWidget browser runtime", () => {
         modelNotifications: [notification({ id: "model-0", state: { value: 1 }, moduleUrl: url })],
       }),
     );
-    const mounted = await loaded.mount(
-      documentValue.createElement("div") as unknown as HTMLElement,
-    );
+    const mounted = await loaded.mount(browserElement(documentValue.createElement("div")));
 
     mounted.model.set("value", 2);
     expect(counters.sibling).toBe(1);
@@ -352,7 +348,7 @@ describe("AnyWidget browser runtime", () => {
     );
     const element = documentValue.createElement("div");
 
-    const mounted = await loaded.mount(element as unknown as HTMLElement);
+    const mounted = await loaded.mount(browserElement(element));
 
     expect(element.dataset.childLabel).toBe("legacy child");
     await mounted.dispose();
@@ -369,6 +365,11 @@ async function settleWithin<T>(task: Promise<T>): Promise<T> {
   } finally {
     if (timeout !== undefined) clearTimeout(timeout);
   }
+}
+
+function browserElement<Value>(value: Value): HTMLElement {
+  // SAFETY: linkedom's createElement result implements the HTMLElement members used by the runtime.
+  return value as HTMLElement;
 }
 
 class FakeElement {

@@ -1,12 +1,14 @@
 import type { AnyWidget, Experimental, Host } from "@anywidget/types";
 import { abortReason, combineAbortSignals, raceAbort } from "./abort.js";
 import { modelProxy } from "./model-proxy.js";
-import type { ModelState, StaticModel } from "./model.js";
+import type { ModelShape, ModelState, StaticModel } from "./model.js";
+import { isCallableValue, isPropertyOwner } from "./value-types.js";
 
 type Cleanup = () => void | PromiseLike<void>;
-type ResolvedDefinition<T extends ModelState> = Exclude<
+type WidgetFactory<T extends ModelShape<T>> = Extract<AnyWidget<T>, (...args: never[]) => object>;
+type ResolvedDefinition<T extends ModelShape<T>> = Exclude<
   AnyWidget<T>,
-  (...args: never[]) => unknown
+  (...args: never[]) => object
 >;
 
 const experimental: Experimental = {
@@ -15,26 +17,26 @@ const experimental: Experimental = {
   },
 };
 
-export function resolveAnyWidgetModule<T extends ModelState>(
-  module: unknown,
+export function resolveAnyWidgetModule<T extends ModelShape<T>, Module>(
+  module: Module,
   moduleUrl: string,
 ): AnyWidget<T> {
-  if (!isRecord(module)) throw invalidModule(moduleUrl);
-  if (isAnyWidget(module.default)) return module.default as AnyWidget<T>;
+  if (!isPropertyOwner(module) || !("default" in module)) throw invalidModule(moduleUrl);
+  if (isAnyWidget<T, typeof module.default>(module.default)) return module.default;
   if (module.default !== undefined) throw invalidModule(moduleUrl);
 
-  const render = typeof module.render === "function" ? module.render : undefined;
-  const initialize = typeof module.initialize === "function" ? module.initialize : undefined;
+  const render = callableMember(module, "render");
+  const initialize = callableMember(module, "initialize");
   if (render === undefined && initialize === undefined) throw invalidModule(moduleUrl);
-  return { render, initialize } as AnyWidget<T>;
+  return widgetDefinition<T>({ render, initialize });
 }
 
-export class WidgetBinding<T extends ModelState = ModelState> {
+export class WidgetBinding<T extends ModelShape<T> = ModelState> {
   readonly #controller: AbortController;
   readonly #widget: ResolvedDefinition<T>;
   readonly #model: StaticModel<T>;
   readonly #createHost: (signal: AbortSignal) => Host;
-  readonly #exports: unknown;
+  readonly #exports: object | undefined;
   readonly #cleanupTasks = new Set<Promise<void>>();
   readonly #cleanupErrors: unknown[] = [];
   readonly #viewTasks = new Set<Promise<void>>();
@@ -46,7 +48,7 @@ export class WidgetBinding<T extends ModelState = ModelState> {
     widget: ResolvedDefinition<T>;
     model: StaticModel<T>;
     createHost: (signal: AbortSignal) => Host;
-    exports: unknown;
+    exports: object | undefined;
   }) {
     this.#controller = options.controller;
     this.#widget = options.widget;
@@ -55,7 +57,7 @@ export class WidgetBinding<T extends ModelState = ModelState> {
     this.#exports = options.exports;
   }
 
-  static async create<T extends ModelState>(options: {
+  static async create<T extends ModelShape<T>>(options: {
     widget: AnyWidget<T>;
     model: StaticModel<T>;
     createHost: (signal: AbortSignal) => Host;
@@ -64,7 +66,7 @@ export class WidgetBinding<T extends ModelState = ModelState> {
     const { controller, model, createHost } = options;
     const signal = controller.signal;
     const definitionTask = Promise.resolve(
-      typeof options.widget === "function" ? options.widget() : options.widget,
+      isWidgetFactory(options.widget) ? options.widget() : options.widget,
     );
     const widget = await raceAbort(definitionTask, signal, "AnyWidget binding was disposed.");
 
@@ -84,8 +86,8 @@ export class WidgetBinding<T extends ModelState = ModelState> {
       .then(async (result) => {
         if (signal.aborted && isCleanup(result)) await settleLateInitializeCleanup(result);
       })
-      .catch((error: unknown) => {
-        if (signal.aborted) reportLateFailure("initialize", error);
+      .catch((cause: unknown) => {
+        if (signal.aborted) reportLateFailure("initialize", cause);
       });
     const initializeResult = await raceAbort(
       initializeTask,
@@ -97,11 +99,11 @@ export class WidgetBinding<T extends ModelState = ModelState> {
       throw abortReason(signal, "AnyWidget binding was disposed.");
     }
 
-    let exports: unknown;
+    let exports: object | undefined;
     let initializeCleanup: Cleanup | undefined;
     if (isCleanup(initializeResult)) {
       initializeCleanup = initializeResult;
-    } else if (typeof initializeResult === "object" && initializeResult !== null) {
+    } else if (isPropertyOwner(initializeResult)) {
       exports = initializeResult;
     }
 
@@ -122,7 +124,7 @@ export class WidgetBinding<T extends ModelState = ModelState> {
     return binding;
   }
 
-  get exports(): unknown {
+  get exports(): object | undefined {
     return this.#exports;
   }
 
@@ -167,11 +169,11 @@ export class WidgetBinding<T extends ModelState = ModelState> {
         }
         return undefined;
       })
-      .catch((error: unknown) => {
-        if (renderSignal.aborted) reportLateFailure("render", error);
+      .catch((cause: unknown) => {
+        if (renderSignal.aborted) reportLateFailure("render", cause);
       });
 
-    let cleanup: unknown;
+    let cleanup: void | Cleanup;
     try {
       cleanup = await raceAbort(renderTask, renderSignal, "AnyWidget view was disposed.");
     } catch (error) {
@@ -220,15 +222,18 @@ export class WidgetBinding<T extends ModelState = ModelState> {
   }
 }
 
-function reportLateFailure(phase: string, error: unknown): void {
-  console.error(`AnyWidget ${phase} settled after its mount was disposed.`, error);
+function reportLateFailure(phase: string, cause: unknown): void {
+  console.error(`AnyWidget ${phase} settled after its mount was disposed.`, cause);
 }
 
-function isAnyWidget(value: unknown): boolean {
+function isAnyWidget<State extends ModelShape<State>, Value>(
+  value: Value,
+): value is Value & AnyWidget<State> {
   return (
-    typeof value === "function" ||
-    (isRecord(value) &&
-      (typeof value.render === "function" || typeof value.initialize === "function"))
+    isCallableValue(value) ||
+    (isPropertyOwner(value) &&
+      (callableMember(value, "render") !== undefined ||
+        callableMember(value, "initialize") !== undefined))
   );
 }
 
@@ -272,14 +277,31 @@ function quoteDiagnostic(value: string): string {
   return `"${body}"`;
 }
 
-function isCleanup(value: unknown): value is Cleanup {
-  return typeof value === "function";
+function isCleanup<Value>(value: Value): value is Value & Cleanup {
+  return isCallableValue(value);
 }
 
 async function settleCleanup(cleanup: Cleanup): Promise<void> {
   await cleanup();
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+function callableMember<Value extends object>(
+  value: Value,
+  name: PropertyKey,
+): ((...arguments_: never[]) => void) | undefined {
+  const member = Object.getOwnPropertyDescriptor(value, name)?.value;
+  return isCallableValue(member) ? member : undefined;
+}
+
+function isWidgetFactory<State extends ModelShape<State>>(
+  value: AnyWidget<State>,
+): value is WidgetFactory<State> {
+  return isCallableValue(value);
+}
+
+function widgetDefinition<State extends ModelShape<State>, Value extends object = object>(
+  value: Value,
+): AnyWidget<State> {
+  // SAFETY: resolveAnyWidgetModule has validated every present lifecycle member as callable.
+  return value as AnyWidget<State>;
 }

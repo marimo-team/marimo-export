@@ -1,8 +1,13 @@
 import type { AnyModel } from "@anywidget/types";
 
-import type { ModelState } from "./model.js";
+import type { ModelShape, ModelValue } from "./model.js";
 
-type EventHandler = (...args: unknown[]) => void;
+type EventHandler = (...args: ModelValue[]) => void;
+
+interface ModelEvents {
+  on(name: string, callback: EventHandler): void;
+  off(name?: string | null, callback?: EventHandler | null): void;
+}
 
 interface ListenerRegistration {
   readonly name: string;
@@ -10,14 +15,11 @@ interface ListenerRegistration {
   readonly onAbort: () => void;
 }
 
-export function modelProxy<T extends ModelState>(
+export function modelProxy<T extends ModelShape<T>>(
   model: AnyModel<T>,
   signal: AbortSignal,
 ): AnyModel<T> {
-  const events = model as unknown as {
-    on(name: string, callback: EventHandler): void;
-    off(name?: string | null, callback?: EventHandler | null): void;
-  };
+  const events = modelEvents(model);
   const listeners = new Set<ListenerRegistration>();
   const proxy = {
     get<K extends keyof T>(key: K): T[K] {
@@ -65,11 +67,17 @@ export function modelProxy<T extends ModelState>(
       }
     },
     widget_manager: {
-      async get_model<State extends ModelState>(modelId: string) {
+      async get_model<State extends ModelShape<State>>(modelId: string) {
         const child = await model.widget_manager.get_model<State>(modelId);
         return modelProxy(child, signal);
       },
     },
   };
+  // SAFETY: The proxy delegates every AnyModel member and preserves the supplied state type.
   return proxy as AnyModel<T>;
+}
+
+function modelEvents<T extends ModelShape<T>>(model: AnyModel<T>): ModelEvents {
+  // SAFETY: AnyModel exposes compatible on and off methods with broader upstream event arguments.
+  return model as ModelEvents;
 }

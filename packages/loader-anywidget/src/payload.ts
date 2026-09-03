@@ -1,6 +1,20 @@
+import type { ModelState, ModelValue } from "./runtime/model.js";
+import {
+  isBooleanValue,
+  isNumberValue,
+  isRecordValue,
+  isStringValue,
+} from "./runtime/value-types.js";
+
 export const ANYWIDGET_SCHEMA = "marimo-export.anywidget.v1";
 
-export type SnapshotState = Record<string, unknown>;
+export type SnapshotState = ModelState;
+
+export interface ParsedDataUrl {
+  readonly body: string;
+  readonly isBase64: boolean;
+  readonly mediaType: string;
+}
 
 export interface EsmSpec {
   readonly url: string;
@@ -32,8 +46,8 @@ const MAX_DIAGNOSTIC_FIELD_LENGTH = 128;
 const MAX_DATA_URL_MEDIA_TYPE_BYTES = 1_024;
 const MAX_EXTERNAL_ESM_URL_BYTES = 8_192;
 
-export function parseAnyWidgetPayload(value: unknown): AnyWidgetSnapshot {
-  const payload = record(value, "AnyWidget payload");
+export function parseAnyWidgetPayload<Value>(value: Value): AnyWidgetSnapshot {
+  const payload = record(parseSnapshotValue(value), "AnyWidget payload");
   exactKeys(payload, ["schema", "rootModelId", "files", "modelNotifications"], "payload");
   if (payload.schema !== ANYWIDGET_SCHEMA) {
     throw new TypeError(`AnyWidget payload schema must be ${JSON.stringify(ANYWIDGET_SCHEMA)}.`);
@@ -119,18 +133,15 @@ export function parseAnyWidgetPayload(value: unknown): AnyWidgetSnapshot {
   });
 }
 
-export function cloneModelState<T extends Record<string, unknown>>(state: T): T {
+export function cloneModelState<T extends ModelState>(state: T): T {
   return structuredClone(state);
 }
 
-export function readonlyModelState<T extends Record<string, unknown>>(state: T): Readonly<T> {
+export function readonlyModelState<T extends ModelState>(state: T): Readonly<T> {
   return deepFreeze(cloneModelState(state));
 }
 
-export function parseDataUrl(
-  value: string,
-  path: string,
-): { readonly body: string; readonly isBase64: boolean; readonly mediaType: string } {
+export function parseDataUrl(value: string, path: string): ParsedDataUrl {
   const comma = value.indexOf(",");
   if (comma === -1) throw new TypeError(`${path} is a malformed data URL.`);
   const mediaTypeEnd = dataUrlMediaTypeEnd(value, comma, path);
@@ -141,15 +152,15 @@ export function parseDataUrl(
   };
 }
 
-function parseFiles(value: unknown): Readonly<Record<string, string>> {
+function parseFiles(value: ModelValue | undefined): Readonly<Record<string, string>> {
   const input = record(value, "files");
-  const files: Record<string, string> = Object.create(null) as Record<string, string>;
+  const files: Record<string, string> = Object.create(null);
   for (const [path, dataUrl] of Object.entries(input)) {
     if (path.length === 0) {
       throw new TypeError("AnyWidget file paths must be non-empty strings.");
     }
     const fileLabel = `AnyWidget file ${quoteField(path)}`;
-    if (typeof dataUrl !== "string" || !dataUrl.startsWith("data:")) {
+    if (!isStringValue(dataUrl) || !dataUrl.startsWith("data:")) {
       throw new TypeError(`${fileLabel} must contain a data URL.`);
     }
     validateDataUrl(dataUrl, fileLabel);
@@ -159,7 +170,7 @@ function parseFiles(value: unknown): Readonly<Record<string, string>> {
 }
 
 function parseEsmSpec(
-  value: unknown,
+  value: ModelValue | undefined,
   files: Readonly<Record<string, string>>,
   modelId: string,
 ): EsmSpec | undefined {
@@ -196,7 +207,10 @@ function parseEsmSpec(
   return Object.freeze({ url, hash });
 }
 
-function parseBufferPaths(value: unknown, modelId: string): readonly (readonly PathToken[])[] {
+function parseBufferPaths(
+  value: ModelValue | undefined,
+  modelId: string,
+): readonly (readonly PathToken[])[] {
   const input = array(value, `AnyWidget model ${JSON.stringify(modelId)} buffer_paths`);
   const seen = new Set<string>();
   return Object.freeze(
@@ -206,8 +220,8 @@ function parseBufferPaths(value: unknown, modelId: string): readonly (readonly P
         throw new TypeError(`AnyWidget model ${JSON.stringify(modelId)} has an empty buffer path.`);
       }
       const parsed = path.map((token) => {
-        if (typeof token === "number" && Number.isSafeInteger(token) && token >= 0) return token;
-        if (typeof token === "string" && !UNSAFE_PATH_KEYS.has(token)) return token;
+        if (isNumberValue(token) && Number.isSafeInteger(token) && token >= 0) return token;
+        if (isStringValue(token) && !UNSAFE_PATH_KEYS.has(token)) return token;
         throw new TypeError(
           `AnyWidget model ${JSON.stringify(modelId)} has an invalid buffer path token.`,
         );
@@ -224,10 +238,10 @@ function parseBufferPaths(value: unknown, modelId: string): readonly (readonly P
   );
 }
 
-function parseBuffers(value: unknown, modelId: string): readonly DataView[] {
+function parseBuffers(value: ModelValue | undefined, modelId: string): readonly DataView[] {
   return Object.freeze(
     array(value, `AnyWidget model ${JSON.stringify(modelId)} buffers`).map((buffer, index) => {
-      if (typeof buffer !== "string" || !isCanonicalBase64(buffer)) {
+      if (!isStringValue(buffer) || !isCanonicalBase64(buffer)) {
         throw new TypeError(
           `AnyWidget model ${JSON.stringify(modelId)} buffer ${index} is not canonical base64.`,
         );
@@ -433,12 +447,12 @@ function setBuffer(
   buffer: DataView,
   modelId: string,
 ) {
-  let target: unknown = state;
+  let target: ModelValue = state;
   for (const token of path.slice(0, -1)) {
     target = ownChild(target, token, modelId, path);
   }
   const finalToken = path.at(-1)!;
-  if (typeof finalToken === "number") {
+  if (isNumberValue(finalToken)) {
     if (
       !Array.isArray(target) ||
       finalToken >= target.length ||
@@ -449,11 +463,15 @@ function setBuffer(
     defineBuffer(target, finalToken, buffer);
     return;
   }
-  if (!isRecord(target)) invalidBufferPath(modelId, path);
+  if (!isModelState(target)) invalidBufferPath(modelId, path);
   defineBuffer(target, finalToken, buffer);
 }
 
-function defineBuffer(target: object, token: PathToken, buffer: DataView): void {
+function defineBuffer<Target extends object>(
+  target: Target,
+  token: PathToken,
+  buffer: DataView,
+): void {
   Object.defineProperty(target, token, {
     value: buffer,
     configurable: true,
@@ -463,17 +481,23 @@ function defineBuffer(target: object, token: PathToken, buffer: DataView): void 
 }
 
 function ownChild(
-  target: unknown,
+  target: ModelValue,
   token: PathToken,
   modelId: string,
   path: readonly PathToken[],
-): unknown {
-  if (typeof token === "number") {
-    if (!Array.isArray(target) || token >= target.length) invalidBufferPath(modelId, path);
-    return target[token];
+): ModelValue {
+  if (isNumberValue(token)) {
+    if (!Array.isArray(target) || token >= target.length || !Object.hasOwn(target, token)) {
+      invalidBufferPath(modelId, path);
+    }
+    const child = target[token];
+    if (child === undefined) invalidBufferPath(modelId, path);
+    return child;
   }
-  if (!isRecord(target) || !Object.hasOwn(target, token)) invalidBufferPath(modelId, path);
-  return target[token];
+  if (!isModelState(target) || !Object.hasOwn(target, token)) invalidBufferPath(modelId, path);
+  const child = target[token];
+  if (child === undefined) invalidBufferPath(modelId, path);
+  return child;
 }
 
 function invalidBufferPath(modelId: string, _path: readonly PathToken[]): never {
@@ -501,10 +525,10 @@ function collectReachableModels(
   return reachable;
 }
 
-function findWidgetReferences(value: unknown): readonly string[] {
+function findWidgetReferences(value: ModelValue): readonly string[] {
   const references: string[] = [];
-  const visit = (value: unknown): void => {
-    if (typeof value === "string") {
+  const visit = (value: ModelValue): void => {
+    if (isModelString(value)) {
       for (const prefix of ["anywidget:", "IPY_MODEL_"]) {
         if (!value.startsWith(prefix)) continue;
         const id = value.slice(prefix.length);
@@ -520,7 +544,7 @@ function findWidgetReferences(value: unknown): readonly string[] {
       for (const child of value) visit(child);
       return;
     }
-    if (isRecord(value) && !(value instanceof DataView)) {
+    if (isModelState(value) && !(value instanceof DataView)) {
       for (const child of Object.values(value)) visit(child);
     }
   };
@@ -528,7 +552,7 @@ function findWidgetReferences(value: unknown): readonly string[] {
   return references;
 }
 
-function cloneJsonObject(value: Record<string, unknown>): SnapshotState {
+function cloneJsonObject(value: ModelState): SnapshotState {
   return structuredClone(value);
 }
 
@@ -538,18 +562,14 @@ function deepFreeze<T>(value: T): T {
     for (const child of value) deepFreeze(child);
     return Object.freeze(value);
   }
-  if (isRecord(value)) {
+  if (isModelState(value)) {
     for (const child of Object.values(value)) deepFreeze(child);
     return Object.freeze(value);
   }
   return value;
 }
 
-function exactKeys(
-  value: Record<string, unknown>,
-  expected: readonly string[],
-  path: string,
-): void {
+function exactKeys(value: ModelState, expected: readonly string[], path: string): void {
   const allowed = new Set(expected);
   const unexpected: string[] = [];
   let unexpectedCount = 0;
@@ -620,23 +640,37 @@ function truncateDiagnostic(value: string): string {
   return `${value.slice(0, MAX_DIAGNOSTIC_LENGTH - 3)}...`;
 }
 
-function nonEmptyString(value: unknown, path: string): string {
-  if (typeof value !== "string" || value.length === 0) {
+function nonEmptyString(value: ModelValue | undefined, path: string): string {
+  if (!isStringValue(value) || value.length === 0) {
     throw new TypeError(`${path} must be a non-empty string.`);
   }
   return value;
 }
 
-function array(value: unknown, path: string): readonly unknown[] {
+function array(value: ModelValue | undefined, path: string): readonly ModelValue[] {
   if (!Array.isArray(value)) throw new TypeError(`${path} must be an array.`);
   return value;
 }
 
-function record(value: unknown, path: string): Record<string, unknown> {
-  if (!isRecord(value)) throw new TypeError(`${path} must be an object.`);
+function record(value: ModelValue | undefined, path: string): ModelState {
+  if (!isModelState(value)) throw new TypeError(`${path} must be an object.`);
   return value;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+function isModelState<Value>(value: Value): value is Value & ModelState {
+  return isRecordValue(value) && !(value instanceof DataView);
+}
+
+function isModelString(value: ModelValue | undefined): value is string {
+  return isStringValue(value);
+}
+
+function parseSnapshotValue<Value>(value: Value): ModelValue {
+  if (value === null) return null;
+  if (isBooleanValue(value) || isNumberValue(value) || isStringValue(value)) return value;
+  if (Array.isArray(value)) return value.map(parseSnapshotValue);
+  if (!isRecordValue(value)) throw new TypeError("AnyWidget payload must contain JSON values.");
+  const parsed: ModelState = {};
+  for (const [key, child] of Object.entries(value)) parsed[key] = parseSnapshotValue(child);
+  return parsed;
 }

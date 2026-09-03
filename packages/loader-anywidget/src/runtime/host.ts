@@ -2,7 +2,7 @@ import type { AnyModel, Host, ResolvedWidget } from "@anywidget/types";
 
 import { combineAbortSignals, throwIfAborted } from "./abort.js";
 import { modelProxy } from "./model-proxy.js";
-import type { ModelState } from "./model.js";
+import type { ModelShape, ModelState } from "./model.js";
 import { parseWidgetRef } from "./widget-ref.js";
 
 export interface WidgetResolver {
@@ -12,10 +12,13 @@ export interface WidgetResolver {
 
 export function createHost(resolver: WidgetResolver, parentSignal: AbortSignal): Host {
   return {
-    async getModel<State extends ModelState = ModelState>(ref: string): Promise<AnyModel<State>> {
+    async getModel<State extends ModelShape<State> = ModelState>(
+      ref: string,
+    ): Promise<AnyModel<State>> {
       throwIfAborted(parentSignal, "AnyWidget parent view was disposed.");
       const model = await resolver.getModel(parseWidgetRef(ref));
       throwIfAborted(parentSignal, "AnyWidget parent view was disposed.");
+      // SAFETY: The host caller owns the state specialization requested for this model reference.
       return modelProxy(model, parentSignal) as AnyModel<State>;
     },
     async getWidget<Exports = unknown>(ref: string): Promise<ResolvedWidget<Exports>> {

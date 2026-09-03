@@ -1,6 +1,15 @@
+import { isCallableValue } from "./value-types.js";
+
+type AbortSignalAny = (signals: readonly AbortSignal[]) => AbortSignal;
+
 export function combineAbortSignals(signals: readonly AbortSignal[]): AbortSignal {
   const sources = [...new Set(signals)];
-  if (typeof AbortSignal.any === "function") return AbortSignal.any(sources);
+  const candidate = Object.getOwnPropertyDescriptor(AbortSignal, "any")?.value;
+  if (isCallableValue(candidate)) {
+    // SAFETY: The callable AbortSignal.any static accepts an iterable of signals by web contract.
+    const combine = candidate as AbortSignalAny;
+    return combine(sources);
+  }
 
   const controller = new AbortController();
   const listeners = new Map<AbortSignal, () => void>();

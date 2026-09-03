@@ -24,6 +24,7 @@ describe("AnyWidget payload in Chromium", () => {
 
     const buffer = snapshot.models.get("model-0")!.state.binary;
     expect(buffer).toBeInstanceOf(DataView);
-    expect((buffer as DataView).byteLength).toBe(6 * MIB);
+    if (!(buffer instanceof DataView)) throw new TypeError("Fixture buffer must be a DataView.");
+    expect(buffer.byteLength).toBe(6 * MIB);
   });
 });
