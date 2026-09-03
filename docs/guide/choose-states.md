@@ -9,7 +9,7 @@ An `ExportSpec` names a default state, sparse state rows, and the output
 representation produced for each normalized state.
 
 ```yaml
-schema: marimo-export.spec.v1
+schema: marimo-export.spec.v2
 default_state: leaders
 states:
   leaders: {}
@@ -20,12 +20,12 @@ states:
     symbols_selector: [AAPL, MSFT, GOOGL, AMZN]
 outputs:
   summary:
-    source: { kind: value, selector: report.summary }
+    source: { kind: json, selector: report.summary }
   chart:
-    source: { kind: value, selector: performance }
+    source: { kind: export, selector: performance }
     exporter: altair.vegalite
   prices:
-    source: { kind: value, selector: selected_prices }
+    source: { kind: export, selector: selected_prices }
     exporter: parquet.table
   report:
     source: { kind: output, selector: report.view }
@@ -102,13 +102,15 @@ Each output has one source kind:
 
 | Source         | Stored result                                                 |
 | -------------- | ------------------------------------------------------------- |
-| `kind: value`  | Portable JSON or one explicit exporter result                 |
+| `kind: json`   | Canonical portable JSON                                       |
+| `kind: native` | Scalar, JSON, NumPy, Arrow, or BlobAsset cache representation |
+| `kind: export` | BlobAsset returned by one declared exporter                   |
 | `kind: output` | Formatted Marimo output and replay resources                  |
 | `kind: cell`   | Cell identity, terminal output, console, and replay resources |
 
-Value and output selectors accept a Python identifier root, attribute steps,
-nonnegative integer items, and JSON-string items. Mapping keys take precedence
-over attributes.
+JSON, native, export, and output selectors accept a Python identifier root,
+attribute steps, nonnegative integer items, and JSON-string items. Mapping keys
+take precedence over attributes.
 
 Select a complete cell by native name or an inspected runtime ID:
 
@@ -132,7 +134,7 @@ Use expanded exporter form when options or source dependencies are required:
 ```yaml
 outputs:
   prices:
-    source: { kind: value, selector: selected_prices }
+    source: { kind: export, selector: selected_prices }
     exporter:
       name: parquet.table
       options:
@@ -146,7 +148,7 @@ A custom exporter uses an importable `module:symbol` callable:
 ```yaml
 outputs:
   summary:
-    source: { kind: value, selector: report }
+    source: { kind: export, selector: report }
     exporter:
       name: market_summary:encode
       options:

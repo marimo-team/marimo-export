@@ -5,7 +5,7 @@
 Declare one default, sparse states, and published outputs:
 
 ```yaml
-schema: marimo-export.spec.v1
+schema: marimo-export.spec.v2
 default_state: national
 states:
   national: {}
@@ -15,12 +15,12 @@ states:
     threshold_slider: 0.8
 outputs:
   headline:
-    source: { kind: value, selector: summary }
+    source: { kind: json, selector: summary }
   chart:
-    source: { kind: value, selector: comparison_chart }
+    source: { kind: export, selector: comparison_chart }
     exporter: altair.vegalite
   rows:
-    source: { kind: value, selector: filtered_table }
+    source: { kind: export, selector: filtered_table }
     exporter: parquet.table
 ```
 
@@ -60,12 +60,12 @@ after their responses finish.
 
 | Notebook result | Exporter or source             | Browser loader         |
 | --------------- | ------------------------------ | ---------------------- |
-| JSON value      | `OutputSpec.value()`           | `jsonLoader()`         |
+| JSON value      | `OutputSpec.json()`            | `jsonLoader()`         |
+| Native scalar   | `OutputSpec.native()`          | `scalarLoader()`       |
+| NumPy array     | `OutputSpec.native()`          | `numpyLoader()`        |
+| Arrow table     | `OutputSpec.native()`          | `arrowTableLoader()`   |
 | Marimo output   | `OutputSpec.output()`          | `marimoOutputLoader()` |
 | Marimo cell     | `OutputSpec.cell()`            | `marimoCellLoader()`   |
-| Scalar          | scalar exporter                | `scalarLoader()`       |
-| NumPy array     | array exporter                 | `numpyLoader()`        |
-| Arrow table     | table exporter                 | `arrowTableLoader()`   |
 | DataFrame       | `parquet.table`                | `parquetRowsLoader()`  |
 | Altair chart    | `altair.vegalite`              | `vegaLiteLoader()`     |
 | PNG             | `altair.png`                   | `imageLoader()`        |

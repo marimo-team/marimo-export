@@ -19,7 +19,7 @@ notebook + ExportSpec
 ## ExportSpec declares the product surface
 
 ```yaml
-schema: marimo-export.spec.v1
+schema: marimo-export.spec.v2
 default_state: baseline
 states:
   baseline: {}
@@ -27,7 +27,7 @@ states:
     interval: 1wk
 outputs:
   summary:
-    source: { kind: value, selector: report.summary }
+    source: { kind: json, selector: report.summary }
   report:
     source: { kind: output, selector: report.view }
 ```

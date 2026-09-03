@@ -9,21 +9,22 @@ An output representation is the stored form of one published notebook result.
 It determines which human-facing applications, agents, Python tools, and
 browser clients can interpret that output.
 
-| Notebook result        | OutputSpec form or exporter            | Python access   | Browser loader         | Agent use                              |
-| ---------------------- | -------------------------------------- | --------------- | ---------------------- | -------------------------------------- |
-| JSON-compatible value  | `OutputSpec.value()`                   | `json()`        | `jsonLoader()`         | Summaries, records, and arrays         |
-| Rendered Marimo output | `OutputSpec.output()`                  | `asset_bytes()` | `marimoOutputLoader()` | Inert output and replay records        |
-| Complete Marimo cell   | `OutputSpec.cell()`                    | `asset_bytes()` | `marimoCellLoader()`   | Output, console, and cell provenance   |
-| Scalar                 | Importable exporter returning a scalar | `scalar()`      | `scalarLoader()`       | Metrics, labels, statuses, identifiers |
-| Text                   | `blob.text`                            | `blob_asset()`  | `textLoader()`         | Reports, labels, and source text       |
-| HTML                   | `blob.html`                            | `blob_asset()`  | `htmlLoader()`         | Authored document fragments            |
-| NumPy array            | Importable exporter returning an array | `asset_bytes()` | `numpyLoader()`        | Numeric arrays with NPY tooling        |
-| Arrow table            | Importable exporter returning a table  | `asset_bytes()` | `arrowTableLoader()`   | Columnar data with Arrow tooling       |
-| Table rows             | `parquet.table`                        | `blob_asset()`  | `parquetRowsLoader()`  | Tables, filtering, and aggregation     |
-| Altair chart           | `altair.vegalite`                      | `blob_asset()`  | `vegaLiteLoader()`     | Chart specification and companion view |
-| Chart image            | `altair.png`                           | `blob_asset()`  | `imageLoader()`        | Visual companion                       |
-| AnyWidget              | `anywidget.bundle`                     | `blob_asset()`  | `anyWidgetLoader()`    | Saved state and interactive review     |
-| Custom value           | Function that returns a `BlobAsset`    | `blob_asset()`  | Custom loader          | Depends on its media type and schema   |
+| Notebook result        | OutputSpec form or exporter        | Python access   | Browser loader         | Agent use                              |
+| ---------------------- | ---------------------------------- | --------------- | ---------------------- | -------------------------------------- |
+| JSON-compatible value  | `OutputSpec.json()`                | `json()`        | `jsonLoader()`         | Summaries, records, and arrays         |
+| Native scalar          | `OutputSpec.native()`              | `scalar()`      | `scalarLoader()`       | Metrics, labels, statuses, identifiers |
+| Native NumPy array     | `OutputSpec.native()`              | `asset_bytes()` | `numpyLoader()`        | Numeric arrays with NPY tooling        |
+| Native Arrow table     | `OutputSpec.native()`              | `asset_bytes()` | `arrowTableLoader()`   | Columnar data with Arrow tooling       |
+| Native BlobAsset       | `OutputSpec.native()`              | `blob_asset()`  | Matching blob loader   | Media-typed application data           |
+| Rendered Marimo output | `OutputSpec.output()`              | `asset_bytes()` | `marimoOutputLoader()` | Inert output and replay records        |
+| Complete Marimo cell   | `OutputSpec.cell()`                | `asset_bytes()` | `marimoCellLoader()`   | Output, console, and cell provenance   |
+| Text                   | `blob.text`                        | `blob_asset()`  | `textLoader()`         | Reports, labels, and source text       |
+| HTML                   | `blob.html`                        | `blob_asset()`  | `htmlLoader()`         | Authored document fragments            |
+| Table rows             | `parquet.table`                    | `blob_asset()`  | `parquetRowsLoader()`  | Tables, filtering, and aggregation     |
+| Altair chart           | `altair.vegalite`                  | `blob_asset()`  | `vegaLiteLoader()`     | Chart specification and companion view |
+| Chart image            | `altair.png`                       | `blob_asset()`  | `imageLoader()`        | Visual companion                       |
+| AnyWidget              | `anywidget.bundle`                 | `blob_asset()`  | `anyWidgetLoader()`    | Saved state and interactive review     |
+| Custom value           | `OutputSpec.export()` and callable | `blob_asset()`  | Custom loader          | Depends on its media type and schema   |
 
 The codec identifies the stable native envelope. A BlobAsset media type
 identifies the representation inside that envelope. Browser applications
@@ -129,7 +130,7 @@ An ExportSpec selects that callable:
 ```yaml
 outputs:
   summary:
-    source: { kind: value, selector: report }
+    source: { kind: export, selector: report }
     exporter:
       name: summary_exporter:encode_summary
       options: {}

@@ -1,6 +1,6 @@
 ---
 title: ExportSpec reference
-description: Exact version 1 schema for default state, sparse states, outputs, selectors, and exporters.
+description: Exact version 2 schema for default state, sparse states, outputs, selectors, and exporters.
 ---
 
 # ExportSpec reference
@@ -9,7 +9,7 @@ An ExportSpec defines the finite state relation and named output representations
 prepared from one notebook.
 
 ```yaml
-schema: marimo-export.spec.v1
+schema: marimo-export.spec.v2
 default_state: baseline
 states:
   baseline: {}
@@ -19,13 +19,13 @@ states:
     interval: 1wk
 outputs:
   summary:
-    source: { kind: value, selector: report.summary }
+    source: { kind: json, selector: report.summary }
   report:
     source: { kind: output, selector: report.view }
   summary_cell:
     source: { kind: cell, by: name, value: summary_cell }
   chart:
-    source: { kind: value, selector: performance }
+    source: { kind: export, selector: performance }
     exporter: altair.vegalite
 ```
 
@@ -35,7 +35,7 @@ The root contains exactly:
 
 | Field           | Contract                                                    |
 | --------------- | ----------------------------------------------------------- |
-| `schema`        | Exact string `marimo-export.spec.v1`                        |
+| `schema`        | Exact string `marimo-export.spec.v2`                        |
 | `default_state` | Name of one entry in `states`                               |
 | `states`        | Nonempty mapping from aliases to sparse portable input rows |
 | `outputs`       | Nonempty mapping from published names to output specs       |
@@ -89,16 +89,36 @@ value.
 
 ## Output specs
 
-Each output contains `source` and an optional `exporter`.
+Each output contains `source`. An export source also contains `exporter`.
 
-### Value source
+### JSON source
 
 ```yaml
-source: { kind: value, selector: 'report.rows[0]["total"]' }
+source: { kind: json, selector: 'report.rows[0]["total"]' }
 ```
 
-A value source stores portable JSON through `marimo.json.v1` by default. Add an
-exporter for another representation.
+A JSON source stores one canonical portable value through `marimo.json.v1`.
+
+### Native source
+
+```yaml
+source: { kind: native, selector: selected_prices }
+```
+
+A native source uses Marimo's cache representation. Scalars remain inline.
+Composite portable values use canonical JSON. NumPy arrays, Arrow tables, and
+BlobAsset values retain their native verified payload. A pickle-backed value
+fails preparation with a typed output error.
+
+### Export source
+
+```yaml
+source: { kind: export, selector: performance }
+exporter: altair.vegalite
+```
+
+An export source passes the selected value to one declared exporter. The
+exporter returns a `BlobAsset` with bytes, media type, filename, and metadata.
 
 ### Rendered-output source
 
@@ -119,7 +139,7 @@ Set `by` to `name` for a native cell name or `id` for an inspected runtime cell
 ID. A complete-cell source stores `marimo.cell.v1` with cell identity, config,
 terminal output, console records, outcome, and replay resources.
 
-Value and rendered-output selectors accept:
+JSON, native, export, and rendered-output selectors accept:
 
 - one Python identifier root
 - attribute steps such as `.summary`
@@ -187,11 +207,12 @@ spec = ExportSpec(
         "cloud": {"symbols_selector": ["MSFT", "GOOGL", "AMZN"]},
     },
     outputs={
-        "summary": OutputSpec.value("report.summary"),
+        "summary": OutputSpec.json("report.summary"),
+        "table": OutputSpec.native("selected_prices"),
         "report": OutputSpec.output("report.view"),
         "summary_cell": OutputSpec.cell("summary_cell"),
-        "chart": OutputSpec.value("performance", altair.vegalite()),
-        "prices": OutputSpec.value(
+        "chart": OutputSpec.export("performance", altair.vegalite()),
+        "prices": OutputSpec.export(
             "selected_prices",
             parquet.table(filename="prices.parquet"),
         ),

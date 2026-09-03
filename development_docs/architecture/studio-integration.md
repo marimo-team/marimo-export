@@ -6,8 +6,8 @@ UX. marimo-export owns the reusable Zero-Python preparation and browser state
 machinery.
 
 ```text
-Studio view source
-  -> PresentationSnapshot(document, assets, projection references)
+Studio provider artifact
+  -> PresentationSnapshot(document, immutable mount declarations)
   -> CompiledExportView(ExportSpec, ViewBindings)
   -> marimo-export plan and capture or prepare
   -> PreparedExport
@@ -47,7 +47,7 @@ Its kernel host imports `keep_cached_cells_compatible()` from the public
 
 ## View compilation stays in Studio
 
-Studio owns the authored projection grammar:
+Studio providers own the authored projection grammar:
 
 ```html
 <marimo-cell name="graph_views"></marimo-cell>
@@ -55,7 +55,8 @@ Studio owns the authored projection grammar:
 <b mo-value="deck_stats.n_edges"></b>
 ```
 
-The view compiler parses these selectors and returns:
+Provider inspection turns these selectors into immutable mount declarations.
+The Studio compiler consumes those declarations and returns:
 
 ```python
 CompiledExportView(
@@ -64,19 +65,19 @@ CompiledExportView(
 )
 ```
 
-`spec.outputs` contains public `OutputSpec` values that marimo-export can
-plan. `ViewBindings` maps Studio-owned host selectors to exported output names.
+`spec.outputs` contains public `OutputSpec` values that marimo-export can plan.
+`ViewBindings` maps canonical Studio target selectors to exported output names.
 Repeated projection sources share one export output while retaining independent
-document hosts.
+document hosts. A wildcard mount has no finite output set, so Studio rejects it
+for Zero-Python publication.
 
 HTML host identity stays outside ExportSpec and repository identity. Renaming a
 host or changing layout preserves prepared output reuse.
 
 ## Studio chooses the authored state relation
 
-A view can place `export.yaml` beside its authored `index.html`. The file owns
-the saved states and default state. Its outputs must match the projection set
-compiled from that view's HTML.
+A view can place `export.yaml` beside its authored entrypoint. The file owns the
+saved states and default state. The provider artifact owns the projection set.
 
 When a live view has no `export.yaml`, Studio constructs an explicit relation
 from marimo-export observations:
@@ -190,9 +191,11 @@ the prepared export when it expires, including periods with no route traffic.
 
 ## Static delivery reuses the same artifact
 
-Static export calls public `prepare()` for the compiled view spec. The default
-repository created by `prepare()` belongs to the returned `PreparedExport` and
-closes with that handle after bundle commit.
+Static export opens an owned temporary `ExportRepository` and passes it to
+public `prepare()` with the compiled view spec. This keeps concurrent Studio
+exports independent while Marimo's cell cache continues to reuse notebook
+execution results. Studio closes the prepared export, repository, and temporary
+directory after bundle commit.
 
 The site contains:
 
@@ -202,10 +205,9 @@ _marimo-studio/views/<view>/zero-python/<instance>/index.json
 _marimo-studio/views/<view>/zero-python/<instance>/assets/...
 ```
 
-Static assembly opens `marimo_export.delivery.stage()`, writes the compiled
-document, Studio bindings, and projection runtime into `staged.path`, and calls
-`staged.materialize()` for the nested prepared export. `staged.commit()`
-re-verifies the nested export and installs the complete site directory. Studio
+Static assembly verifies `PreparedExport`, copies its immutable directory beside
+the provider artifact, writes the Studio manifest and bindings, verifies every
+copied file, and atomically installs the complete site directory. Studio
 performs no state execution after `PreparedExport` is returned.
 
 Live preview and static delivery therefore consume the same notebook export and
@@ -247,9 +249,10 @@ the last committed document visible and disposes staged mounts.
 Studio calls `marimo_export.integration.keep_cached_cells_compatible()` while
 its kernel adapter is active. marimo-export owns the pinned Marimo repairs for
 cached UI definitions, Polars lazy stubs, and contiguous tensor bytes. Studio
-owns the release handle as part of its kernel lifecycle. Its
-`_CachedCellCompatibility` wrapper contains lifecycle bookkeeping. All private
-Marimo cache imports remain in marimo-export.
+owns the release handle as part of its kernel lifecycle. Export-owned sessions
+skip Studio's renderer, value encoder, observation ledger, and cache host so one
+integration owns cache capture. All private Marimo cache imports remain in
+marimo-export.
 
 Execution receipts cross the contained Marimo compatibility boundary.
 Repository reuse and prepared browser control consume package-owned export

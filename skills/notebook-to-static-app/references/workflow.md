@@ -39,13 +39,13 @@ input modes, dependencies, portability, and sensitivity to author
 `$STATIC_APP_DIR/app.export.yaml`.
 
 ```yaml
-schema: marimo-export.spec.v1
+schema: marimo-export.spec.v2
 default_state: baseline
 states:
   baseline: {}
 outputs:
   summary:
-    source: { kind: value, selector: summary }
+    source: { kind: json, selector: summary }
 ```
 
 ## Plan and build

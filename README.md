@@ -18,7 +18,7 @@ uv add marimo-export
 Create `report.export.yaml`:
 
 ```yaml
-schema: marimo-export.spec.v1
+schema: marimo-export.spec.v2
 default_state: baseline
 states:
   baseline: {}
@@ -26,9 +26,9 @@ states:
     interval: 1wk
 outputs:
   summary:
-    source: { kind: value, selector: report.summary }
+    source: { kind: json, selector: report.summary }
   chart:
-    source: { kind: value, selector: performance }
+    source: { kind: export, selector: performance }
     exporter: altair.vegalite
 ```
 

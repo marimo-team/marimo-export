@@ -41,16 +41,20 @@ kernel result with producer identities, repository observations, prepared-state
 reuse, and exact prepared-export reuse. The authored notebook source remains
 unchanged throughout planning and execution.
 
-An output source is one of three records:
+An output source is one of five records:
 
-- a structurally parsed value selector
+- a structurally parsed JSON selector
+- a structurally parsed native selector
+- a structurally parsed exporter selector
 - a structurally parsed rendered-output selector
 - a complete cell selected by native name or runtime ID
 
-The default value projection captures portable JSON. A value exporter can
-produce a specialized native cache value. Rendered-output and complete-cell
-projections capture Marimo-owned output records through the child recording
-stream and `SessionView`.
+A JSON projection captures canonical portable JSON. A native projection keeps
+scalar, NumPy, Arrow, and BlobAsset cache representations while encoding
+composite portable values as canonical JSON. An export projection converts the
+selected value to a BlobAsset. Rendered-output and complete-cell projections
+capture Marimo-owned output records through the child recording stream and
+`SessionView`.
 
 ## Every state has every output
 

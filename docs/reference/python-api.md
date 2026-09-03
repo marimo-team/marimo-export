@@ -50,11 +50,12 @@ spec = ExportSpec(
         "weekly": {"interval": "1wk"},
     },
     outputs={
-        "summary": OutputSpec.value("report.summary"),
+        "summary": OutputSpec.json("report.summary"),
+        "table": OutputSpec.native("selected_prices"),
         "report": OutputSpec.output("report.view"),
         "summary_cell": OutputSpec.cell("summary_cell"),
-        "chart": OutputSpec.value("performance", altair.vegalite()),
-        "prices": OutputSpec.value(
+        "chart": OutputSpec.export("performance", altair.vegalite()),
+        "prices": OutputSpec.export(
             "selected_prices",
             parquet.table(filename="prices.parquet"),
         ),
@@ -67,7 +68,11 @@ are inferred during planning. `from_file()` reads strict JSON or safe YAML.
 `from_value()` validates a wire value. `to_value()` returns detached mutable
 data. `json_schema()` returns the Draft 2020-12 authoring schema.
 
-`OutputSpec.value(selector)` stores portable JSON or applies one exporter.
+`OutputSpec.json(selector)` stores canonical portable JSON.
+`OutputSpec.native(selector)` stores a cache-native scalar, JSON value, NumPy
+array, Arrow table, or BlobAsset.
+`OutputSpec.export(selector, exporter)` converts a selected value to a
+BlobAsset.
 `OutputSpec.output(selector)` stores a formatted Marimo output snapshot.
 `OutputSpec.cell(name)` stores one complete named cell. Pass `id=` to select an
 inspected runtime cell ID.
