@@ -70,8 +70,8 @@ sequenceDiagram
     Producer->>Kernel: Execute authored notebook once
     Producer->>Bridge: Inspect and prepare ExportSpec states
     Bridge-->>Producer: Index, diagnostics, transfer ticket
-    Producer->>Server: Stop stream and owned process tree
     Producer->>Producer: Verify source and commit export
+    Producer->>Server: Stop stream and owned process tree
 ```
 
 The lifespan consumes its private activation environment before notebook
@@ -94,9 +94,11 @@ the access token once through the child pipe, then closes stdin immediately.
 Logs and diagnostics redact the token value.
 
 After initial autorun, activation calls the internal `validate_baseline`
-bridge operation. The validator reads bounded cell statuses and rejects failed
-or cancelled authored cells before inspection or capture. It does not traverse
-definition values or ordinary globals.
+bridge operation. The validator reads bounded cell statuses and rejects
+exception, interruption, and cancellation outcomes before inspection or
+capture. A marimo stop outcome remains valid when it does not invalidate a
+requested output closure. The validator does not traverse definition values or
+ordinary globals.
 
 `marimo_export.integration.is_owned_session()` exposes the managed-kernel
 lifecycle to host integrations. The marker is set in the child environment
@@ -140,19 +142,22 @@ rendered-output, and complete-cell owner before execution. A state with UI
 inputs visits their defining cells in topological order. Before each defining
 cell, it runs the required ancestor cells that have not reached the current
 state, then applies that cell's requested UI values. A dependent control tree
-therefore sees accepted upstream inputs when it is constructed. The final
+therefore sees accepted upstream inputs when it is constructed.
+
+The final
 phase runs every remaining available authored cell plus initialization cells
 marked stale by callbacks such as `mo.state` updates. UI input owners stay
 intact so the patch remains applied. A state with no UI inputs runs every
 available authored cell once. This full state run preserves notebook failure
 atomicity even when a failing reactive cell is not projected.
 
-Within each phase, projected members enter native lookup as misses while the
-remaining cells follow normal native cache behavior. Each phase uses one
-topological run. Cache teardown writes fresh projected receipts under their
-deterministic native keys. Snapshot tokens and synthetic output leaves
-materialize after the final phase. Custom exporter leaves use the same
-forced-miss mechanism on every state run.
+Within each child phase, authored cells follow Marimo's native cache decision.
+The adapter requests live execution for complete-cell owners because console
+messages are outside Marimo's cache contract. Cells that define UI elements or
+`mo.state` recreate their session-bound objects before dependent cache keys are
+evaluated. Each phase uses one topological run. Snapshot tokens and synthetic
+output leaves materialize after the final phase. Custom exporter leaves run
+live when their callable or widget contract requires current process resources.
 
 For each rendered-output and complete-cell output, the adapter materializes
 canonical snapshot bytes once after the source reaches its final state. It
@@ -180,10 +185,12 @@ to 10 MiB. Public files must retain one filesystem revision across the bounded
 read. Any known local file in an unrecognized attribute fails capture.
 AnyWidget replay resources begin at model IDs referenced by structured widget
 fields, then follow serializer-owned child references.
+
 Each replay graph uses IDs of the form
 `projection-<planned-output-digest>-model-<index>`. The namespace remains
 stable for one output across states and separates independently mounted
 outputs.
+
 UI object and random IDs begin with the snapshot owner cell ID, followed by the
 projection namespace and a projection-root structural path. Common controls
 retain their scoped IDs when a conditional tree adds or removes siblings.
@@ -224,12 +231,11 @@ output recording, flushes native writes through the cache port, then releases
 the child context. Marimo's WASM cache manifest callback remains owned by
 Marimo's deployment commands.
 
-An owned parent run can satisfy baseline value and rendered-output freshness
-for the next capture when its complete input fingerprint matches. Capture
-consumes that activity once and shares it across the operation's states.
-Complete-cell targets still run in the child so console records come from the
-snapshot run. Nonbaseline states and later captures force their projected
-work through the child cache lifecycle.
+The owned parent and every state child use the same notebook-relative Marimo
+cache store. Authored cache entries therefore remain reusable across states,
+output plans, Studio views, and later producer processes. Complete-cell targets
+run in the child so console records come from the snapshot run. Marimo remains
+the authority for all other authored-cell hits and misses.
 
 ## Implementation identity enters every output-cell source
 
@@ -245,11 +251,12 @@ Output leaves also embed the canonical notebook document digest and exact
 Marimo producer version. Complete-cell leaves combine those identities with
 the materialized snapshot token.
 
-Exporter preparation uses the module objects already loaded in the kernel and
-records disk source provenance for the callable's module and each dependency
-declared by the ExporterSpec. Edits made after module import and before first
-preparation require a kernel restart to take effect. Later disk source drift
-fails with `exporter_source_changed`. Managed builds begin in a fresh process.
+Exporter preparation reuses module objects already loaded in the kernel and
+imports missing callable or dependency modules. It records disk source
+provenance for the callable's module and each dependency declared by the
+ExporterSpec. Edits made after module import and before first preparation require
+a kernel restart to take effect. Later disk source drift fails with
+`exporter_source_changed`. Managed builds begin in a fresh process.
 
 Custom exporter leaves embed the marimo-export implementation identity and
 exporter provenance. Preparation binds the resolved callable in a

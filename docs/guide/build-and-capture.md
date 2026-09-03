@@ -1,195 +1,260 @@
 ---
 title: Build or capture
-description: Prepare reusable notebook states from a file or live session and write a verified export.
+description: Choose the producer that owns the notebook, prepare missing states, and write one verified export.
 ---
 
 # Build or capture
 
-Use `build` for a saved notebook file. Use `capture` when a named live session
-already owns the environment or completed computation.
+Use `build` when a saved notebook file is the source of truth. Use `capture`
+when a running marimo session already owns the environment or current baseline.
 
-| Source         | Preparation call         | Result                                 |
-| -------------- | ------------------------ | -------------------------------------- |
-| Saved notebook | `prepare()` or `build()` | Owned session closes after preparation |
-| Live session   | `capture()`              | Borrowed session remains active        |
+| Starting point       | Command                 | Producer ownership after the command                     |
+| -------------------- | ----------------------- | -------------------------------------------------------- |
+| Saved notebook       | `marimo-export build`   | The managed server, session, and process tree are closed |
+| Running edit session | `marimo-export capture` | The borrowed server and session remain active            |
 
-Both paths use the same `ExportSpec`, export repository, `PreparedExport`, and
-portable export format.
+Both commands use the same `ExportSpec`, export repository, state preparation,
+verification, and notebook export format.
 
-## Inspect the plan
+## Build from a saved notebook
+
+Build the deterministic quickstart from the repository root:
 
 ```bash
-marimo-export plan finance.py \
-  --spec finance.export.yaml
+mkdir -p dist
+uv run marimo-export build examples/quickstart/report.py \
+  --spec examples/quickstart/report.export.yaml \
+  --output dist/quickstart
 ```
 
-The result reports the producer identity, inferred inputs, normalized states,
-default alias, outputs, observations, reusable states, and states to prepare.
-Planning may execute the notebook's initial autorun when the repository has no
-exact prepared export.
-
-Use JSON for automation:
+`build` validates the destination before notebook execution. It plans the
+relation, prepares missing states, stages the notebook export, verifies
+`index.json` and every declared asset, then commits the directory. Add
+`--replace` when the destination already exists:
 
 ```bash
-marimo-export plan finance.py \
-  --spec finance.export.yaml \
-  --json
-```
-
-## Build from a notebook file
-
-```bash
-marimo-export build finance.py \
-  --spec finance.export.yaml \
-  --output dist/finance
-```
-
-`build` validates the destination, resolves the plan, prepares missing states,
-writes a staged export, verifies it, and commits the directory atomically. Pass
-`--replace` to replace an existing export directory.
-
-Stream preparation progress as JSON Lines:
-
-```bash
-marimo-export build finance.py \
-  --spec finance.export.yaml \
-  --output dist/finance \
+uv run marimo-export build examples/quickstart/report.py \
+  --spec examples/quickstart/report.export.yaml \
+  --output dist/quickstart \
   --replace \
   --jsonl
 ```
 
-Progress records have `type: "progress"`. The final record has `type: "result"`
-or `type: "error"`. `--json` emits one terminal object and suppresses progress.
+JSON Lines output contains ordered `progress` records followed by one `result`
+or `error` record. Use `--json` when automation needs one terminal object and no
+progress stream.
 
-## Retain a PreparedExport in Python
+### Grant access to the notebook directory
 
-Use `prepare()` when an application needs to serve assets, create a prepared
-manifest, inspect the immutable export, or choose when to write it:
+A file build creates a temporary copy beside the notebook. The notebook's
+parent directory must be a real writable directory. The managed marimo server
+runs the copy while marimo-export checks that the authored source stays stable.
+Cleanup removes the copy and closes the owned server, session, and process tree.
+The authored notebook remains byte-for-byte unchanged.
+
+The notebook autorun and selected state runs use the current producer
+environment. They can read files, import packages, access credentials, and make
+network requests available to that process. Review notebook code with the same
+care as any Python program before building it.
+
+The destination parent must already exist and be writable. Staging occurs
+beside the destination so the final directory can be installed atomically on a
+supporting filesystem. `--replace` checks that an existing destination has not
+changed since preflight before it commits the replacement.
+
+## Inspect reuse before preparation
+
+Run `plan` against the same repository used by `build`:
+
+```bash
+uv run marimo-export plan examples/quickstart/report.py \
+  --spec examples/quickstart/report.export.yaml \
+  --json
+```
+
+The repository looks up one exact requested relation through three hashes:
+
+```text
+producer identity + output-plan identity + ExportSpec identity
+```
+
+The producer identity covers the notebook source and document, the installed
+marimo and marimo-export implementations, Python and platform facts, installed
+distribution versions, and relevant local source files. The output-plan
+identity covers the output declarations. The ExportSpec identity covers the
+complete requested relation.
+
+This combined value is the plan identity used for repository lookup. A committed
+notebook export has a separate export identity, which is the SHA-256 digest of
+its canonical `index.json`.
+
+When the repository contains that exact verified generation, `plan`, `prepare`,
+and `build` reuse it before a notebook process starts. marimo-export still
+rechecks the file producer identity and verifies the selected repository
+artifact.
+
+When the exact generation is absent, planning compares state fingerprints under
+the same producer and output plan. It reuses matching prepared states and runs
+the missing states. Common changes behave as follows:
+
+| Change                                  | Preparation result                                    |
+| --------------------------------------- | ----------------------------------------------------- |
+| Exact repeat                            | Reuse the complete generation before notebook startup |
+| Change the default alias                | Reuse matching states and assemble a new generation   |
+| Add one state                           | Prepare the new state and reuse matching states       |
+| Remove one state                        | Assemble a new generation from the remaining states   |
+| Change an output declaration            | Create a new output-plan scope                        |
+| Change notebook or producer environment | Create a new producer scope                           |
+
+Observations do not make an exact export stale because they are authoring
+evidence, not published states. Update the `ExportSpec` when an observed vector
+should enter the exported relation.
+
+Source, environment, implementation, or live-document drift during preparation
+fails the operation before generation commit. The repository preserves its
+previous current generation. A state that completed before a later failure can
+remain reusable for the next attempt.
+
+## Retain the prepared export from Python
+
+Use `prepare()` when an application needs the leased repository generation
+before deciding where to write it:
 
 ```python
 from marimo_export import ExportSpec, prepare
 
-spec = ExportSpec.from_file("finance.export.yaml")
+spec = ExportSpec.from_file("examples/quickstart/report.export.yaml")
 
-with prepare("finance.py", spec=spec) as prepared:
-    export = prepared.open()
-    print(export.default_state.fingerprint)
-
-    manifest = prepared.manifest(
-        "/runtime/export/",
-        state="baseline",
-        refresh_interval_ms=1_000,
-    )
-    prepared.write("dist/finance", replace=True)
+with prepare("examples/quickstart/report.py", spec=spec) as prepared:
+    notebook_export = prepared.open()
+    print(notebook_export.default_state.output("summary").json())
+    prepared.write("dist/quickstart", replace=True)
 ```
 
-The context owns the repository lease. `PreparedExport.asset(relative)` returns
-an independently leased `PreparedAsset` for HTTP response lifetimes that extend
-beyond the parent handle. Close each asset handle after its response completes.
+The `PreparedExport` owns a generation lease. Keep the handle open while reading
+its files. `prepared.asset(relative)` creates an independent asset lease for a
+file consumer or HTTP response that can outlive the parent handle. Close each
+asset handle after its consumer finishes.
 
-## Capture an active session
+## Capture a running session
 
-List live sessions:
+Start the quickstart notebook in one terminal:
 
 ```bash
-marimo-export inspect http://127.0.0.1:2718 --json
+uv run marimo edit examples/quickstart/report.py \
+  --headless \
+  --no-token \
+  --port 2718
 ```
 
-Inspect one session:
+The server binds to `127.0.0.1` by default. `--no-token` is scoped to this local
+loopback example. Keep authentication enabled for any server reachable by
+another machine. Open the printed URL and wait for the notebook to finish its
+initial run.
+
+List the sessions from another terminal:
 
 ```bash
-marimo-export inspect http://127.0.0.1:2718 \
+uv run marimo-export inspect http://127.0.0.1:2718 --json
+```
+
+Inspect the selected session when you need its current frontend input values,
+definition names, or cell IDs:
+
+```bash
+uv run marimo-export inspect http://127.0.0.1:2718 \
   --session SESSION_ID \
   --json
 ```
 
-The CLI capture command prepares the export through the configured repository,
-writes it to a deployment directory, and closes its preparation lease:
+Capture and write the quickstart relation:
 
 ```bash
-marimo-export capture http://127.0.0.1:2718 \
+uv run marimo-export capture http://127.0.0.1:2718 \
   --session SESSION_ID \
-  --spec finance.export.yaml \
-  --output dist/finance \
+  --spec examples/quickstart/report.export.yaml \
+  --output dist/quickstart \
   --replace \
   --jsonl
 ```
 
-Use Python when an application needs to retain the prepared handle before
-writing:
+The server process and selected edit session belong to the caller. `capture`
+borrows them, runs each missing state in a transient child, downloads and
+verifies the result, and leaves the server and parent session active. State
+overrides stay inside the child run, so the current parent controls and authored
+notebook source remain unchanged.
+
+The live session must be able to import the same marimo-export version and
+implementation as the client. It must also contain every Python dependency used
+by the notebook and its exporters. Restart the session after changing an
+already imported custom exporter module.
+
+Python `capture()` returns a `PreparedExport` instead of writing a destination:
 
 ```python
 from marimo_export import ExportSpec, capture
 
-spec = ExportSpec.from_file("finance.export.yaml")
+spec = ExportSpec.from_file("examples/quickstart/report.export.yaml")
 
 with capture(
     "http://127.0.0.1:2718",
     session="SESSION_ID",
     spec=spec,
 ) as prepared:
-    prepared.write("dist/finance", replace=True)
+    prepared.write("dist/quickstart", replace=True)
 ```
 
-The notebook environment must import the same marimo-export implementation and
-exporter dependencies as the client. Restart a live session after changing an
-already imported custom exporter module.
+The CLI composes the same call with `PreparedExport.write()` and closes the
+preparation lease after writing.
 
-## Configure the export repository
+## Configure the live connection
 
-Pass one repository explicitly:
+`SERVER` must be an absolute HTTP or HTTPS URL. Plain HTTP is accepted for
+`localhost` and loopback IP addresses. Use HTTPS for a remote host. The URL can
+include a base path, and marimo-export adds a trailing slash when needed. User
+information, query strings, and fragments are rejected.
 
-```python
-from marimo_export import ExportRepository, ExportSpec, prepare
+The two credentials have separate protocol roles:
 
-spec = ExportSpec.from_file("finance.export.yaml")
+| Environment variable         | Request header              |
+| ---------------------------- | --------------------------- |
+| `MARIMO_EXPORT_ACCESS_TOKEN` | `Authorization: Bearer ...` |
+| `MARIMO_EXPORT_SERVER_TOKEN` | `Marimo-Server-Token: ...`  |
 
-with ExportRepository.open(".exports") as repository:
-    with prepare("finance.py", spec=spec, repository=repository) as prepared:
-        print(prepared.reused_states)
-```
-
-CLI repository precedence is:
-
-1. `--repository DIR`
-2. `MARIMO_EXPORT_REPOSITORY`
-3. the operating system cache directory
-
-Inspect and prune repository storage:
-
-```bash
-marimo-export repository status
-marimo-export repository prune --dry-run
-marimo-export repository prune
-```
-
-Active leases protect prepared exports and state artifacts from pruning.
-
-## Authenticate to a live server
-
-Set credentials through the environment:
+Set them in the capture environment:
 
 ```bash
 export MARIMO_EXPORT_ACCESS_TOKEN="..."
 export MARIMO_EXPORT_SERVER_TOKEN="..."
 ```
 
-To read credentials from files, load each value into its environment variable:
+The Python `capture()` and `connect()` APIs also accept `access_token=` and
+`server_token=`. An explicit Python argument takes precedence over its
+environment variable. Keep credentials out of the server URL. Diagnostics and
+structured bridge errors redact configured token values.
+
+The HTTP transport rejects redirects and sends each request once. It does not
+retry a failed request. Check the server and selected session, then rerun the
+operation when recovery is safe. A timed-out scratchpad operation can continue
+in the remote session, and a later retry can reuse any state that committed
+successfully.
+
+`--timeout` defaults to 30 seconds and must be a positive finite number. It
+bounds connection setup, inactivity while reading a scratchpad execution
+stream, each bounded asset download, and repository reservation acquisition.
+Progress on the stream renews the inactivity deadline. Each operation receives
+its own budget, so a progressing multi-state capture can run longer than the
+configured number of seconds.
+
+## Verify the written export
+
+Verify the destination after either producer path:
 
 ```bash
-IFS= read -r MARIMO_EXPORT_ACCESS_TOKEN < access-token
-IFS= read -r MARIMO_EXPORT_SERVER_TOKEN < server-token
-export MARIMO_EXPORT_ACCESS_TOKEN MARIMO_EXPORT_SERVER_TOKEN
+uv run marimo-export verify dist/quickstart
 ```
 
-Diagnostics redact configured token values.
-
-## Verify the deployment directory
-
-```bash
-marimo-export verify dist/finance
-```
-
-`verify` reads every declared asset and checks its size, SHA-256, native framing,
-and descriptor agreement. Use `verify_export("dist/finance")` for the same Python
-boundary.
+`verify` reads the canonical index and every declared asset, then checks sizes,
+SHA-256 digests, native framing, state fingerprints, and descriptor agreement.
+Use [Manage the export repository](manage-repository.md) to inspect reusable
+storage or [Consume a notebook export](consume-an-export.md) to read the result.

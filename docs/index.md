@@ -1,40 +1,29 @@
 ---
 layout: home
-title: "marimo-export: Precompute notebook results. Use them anywhere."
+title: "marimo-export: Turn notebook states into verified files"
 titleTemplate: false
-description: Precompute selected marimo notebook results as one verified export for applications, agents, Python automation, and custom clients.
+description: Select finite marimo notebook states and named outputs, prepare them once, and open the same notebook export from Python, browsers, agents, or custom clients.
 
 hero:
-  text: Precompute notebook results. Use them anywhere.
-  tagline: Run selected notebook states through marimo and package the results as one verified export.
+  text: Turn notebook states into verified files.
+  tagline: Select finite inputs and named outputs. Run them through marimo once, then open the same notebook export from Python, browser applications, agents, or custom clients.
   image:
-    light: /brand/marimo-export-lockup-stacked-light.svg
-    dark: /brand/marimo-export-lockup-stacked-dark.svg
-    alt: marimo-export
+    light: /brand/export-flow-light.svg
+    dark: /brand/export-flow-dark.svg
+    alt: A notebook and ExportSpec become a state-output grid consumed by Python, a browser, and an agent.
   actions:
     - theme: brand
-      text: Run example
+      text: Build your first export
       link: ./guide/getting-started
     - theme: alt
-      text: Create an export
-      link: ./guide/choose-states
-    - theme: alt
-      text: How it works
+      text: What is a notebook export?
       link: ./overview
+    - theme: alt
+      text: Browse reference
+      link: ./reference/
 
 features:
-  - title: Static delivery
-    icon:
-      light: /feature-icons/cloud-upload-light.svg
-      dark: /feature-icons/cloud-upload-dark.svg
-      alt: ""
-      width: "24"
-      height: "24"
-      wrap: true
-    details: Serve the same export without a live Python kernel.
-    link: ./guide/deploy
-    linkText: Deploy
-  - title: marimo execution
+  - title: Understand the model
     icon:
       light: /brand/marimo-logo-light.svg
       dark: /brand/marimo-logo-dark.svg
@@ -42,31 +31,9 @@ features:
       width: "32"
       height: "32"
       wrap: true
-    details: Run states and representation exporters through marimo's graph and cache.
+    details: See how a notebook, ExportSpec, state, output, representation, and consumer fit together.
     link: ./overview
-    linkText: How it works
-  - title: Python and browser readers
-    icon:
-      light: /feature-icons/braces-light.svg
-      dark: /feature-icons/braces-dark.svg
-      alt: ""
-      width: "24"
-      height: "24"
-      wrap: true
-    details: Open the same prepared states and outputs from Python or TypeScript.
-    link: ./guide/consume-an-export
-    linkText: Consume
-  - title: Agent-readable outputs
-    icon:
-      light: /feature-icons/bot-light.svg
-      dark: /feature-icons/bot-dark.svg
-      alt: ""
-      width: "24"
-      height: "24"
-      wrap: true
-    details: Give agents structured data with provenance and content identity.
-    link: ./guide/agents-and-automation
-    linkText: Use with agents
+    linkText: Learn the model
   - title: Build or capture
     icon:
       light: /feature-icons/git-fork-light.svg
@@ -75,10 +42,43 @@ features:
       width: "24"
       height: "24"
       wrap: true
-    details: Start from a notebook file or reuse an active session.
+    details: Start an owned notebook process or borrow one named live session.
     link: ./guide/build-and-capture
     linkText: Choose a producer
-  - title: Verified exports
+  - title: Read the same export
+    icon:
+      light: /feature-icons/braces-light.svg
+      dark: /feature-icons/braces-dark.svg
+      alt: ""
+      width: "24"
+      height: "24"
+      wrap: true
+    details: Select exported states and load named outputs from Python or TypeScript.
+    link: ./guide/consume-an-export
+    linkText: Choose a consumer
+  - title: Follow changing publications
+    icon:
+      light: /feature-icons/cloud-upload-light.svg
+      dark: /feature-icons/cloud-upload-dark.svg
+      alt: ""
+      width: "24"
+      height: "24"
+      wrap: true
+    details: Point one mutable manifest at verified immutable export instances.
+    link: ./guide/prepared-publications
+    linkText: Serve a publication
+  - title: Extend representations
+    icon:
+      light: /feature-icons/bot-light.svg
+      dark: /feature-icons/bot-dark.svg
+      alt: ""
+      width: "24"
+      height: "24"
+      wrap: true
+    details: Pair a versioned Python BlobAsset exporter with a validating consumer loader.
+    link: ./guide/custom-representations
+    linkText: Add a representation
+  - title: Diagnose and recover
     icon:
       light: /feature-icons/badge-check-light.svg
       dark: /feature-icons/badge-check-dark.svg
@@ -86,22 +86,36 @@ features:
       width: "24"
       height: "24"
       wrap: true
-    details: Check the index and every declared asset before use.
-    link: ./reference/export-format
-    linkText: Export format
+    details: Trace environment, repository, state, integrity, browser, and mount failures.
+    link: ./guide/troubleshooting
+    linkText: Troubleshoot
 ---
 
-## Keep Python in the producer environment
+## One finite relation, several consumers
 
-The producer can use private data, Python packages, credentials, and expensive
-computation. Applications, agents, Python automation, and custom clients
-consume the completed export.
+An `ExportSpec` names the input rows and outputs the application needs.
+marimo-export completes each row from the notebook's initial input vector,
+executes missing states through marimo, and writes one notebook export.
 
-A request that needs a new Python result requires another export or a Python
-service.
+```text
+notebook + ExportSpec
+  -> complete states × named outputs
+  -> index.json + declared assets
+  -> Python | browser | agent | custom reader
+```
 
-## Start with one complete path
+The deployed browser selects results already present in that finite relation. A
+request for another Python-derived input vector requires another preparation run
+or a Python service.
 
-[Run the market dashboard](guide/getting-started.md) to precompute five
-result sets from a live Yahoo Finance notebook, verify the export, and open the
-vanilla TypeScript application that consumes it.
+## Follow the learning path
+
+1. [Build your first export](guide/getting-started.md) from a local notebook.
+2. [Learn the product model](overview.md) from the same two-state example.
+3. [Choose states and outputs](guide/choose-states.md) for your notebook.
+4. [Build or capture](guide/build-and-capture.md) from the environment that owns execution.
+5. [Consume the export](guide/consume-an-export.md) from Python or a browser.
+
+The [Guide](guide/) routes complete tasks. [Concepts](concepts/) explain the
+state, output, reuse, and trust models. [Reference](reference/) defines exact
+CLI, Python, browser, package, and wire contracts.

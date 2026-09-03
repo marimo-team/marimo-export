@@ -1,12 +1,14 @@
 ---
-title: Consume an export
-description: Read the same prepared states and outputs from Python, a browser, an agent, or another client.
+title: Consume a notebook export
+description: Read the same exported states and outputs from Python, a browser, an agent, or another client.
 ---
 
 # Consume a notebook export
 
-A notebook export exposes one default state, authored aliases, complete input
-vectors, and the same named outputs to each consumer.
+A notebook export gives every consumer the same default state, authored state
+aliases, complete input vectors, and named outputs. The examples on this page
+use `dist/report`, created by
+[Build your first notebook export](getting-started.md).
 
 | Job                                   | Interface                                         |
 | ------------------------------------- | ------------------------------------------------- |
@@ -18,54 +20,70 @@ vectors, and the same named outputs to each consumer.
 
 ## Open from Python
 
+Select the `monthly` state and decode its JSON output:
+
 ```python
-from marimo_export import open_export, verify_export
+from marimo_export import open_export
 
-export = open_export("dist/report")
-state = export.default_state
-title = state.output("title").json()
-
-verified = verify_export("dist/report")
+notebook_export = open_export("dist/report")
+monthly = notebook_export.state("monthly")
+summary = monthly.output("summary").json()
+print(summary)
 ```
 
-Opening validates canonical `index.json` and leaves assets lazy. The reader
-exposes:
+Expected output:
 
-- `identity`, the SHA-256 of exact `index.json` bytes
-- `spec_sha256`, the identity of the authored ExportSpec
-- `default_state`, the resolved `ExportState`
+```text
+{'days': 30, 'label': 'Last 30 days'}
+```
+
+Opening validates canonical `index.json` and leaves output assets lazy. The
+quickstart keeps `summary` inline, so `json()` decodes it directly from the
+index. When an output references an asset, its reader verifies that asset before
+decoding it. The reader also exposes:
+
+- `identity`, the SHA-256 of the exact `index.json` bytes
+- `spec_sha256`, the identity of the authored `ExportSpec`
+- `default_state`, the resolved default `ExportState`
 - notebook and producer facts
 - input names, control bindings, output names, aliases, and states
 
+## Select an exported state
+
+Readers support three forms of selection:
+
+- `state(alias)` selects an authored state alias such as `monthly`.
+- `resolve(inputs)` selects one complete exported input vector.
+- `state.resolve(patch)` completes a sparse transition from the current state.
+
+Resolution returns a state already present in the notebook export. Preparing a
+new input vector requires another producer operation or a Python service.
+
 ## Open from a browser
+
+A browser reads the export over HTTP. Configure the static server so
+`dist/report` is available at `/exports/report/`, then open the same
+`monthly` state:
 
 ```ts
 import { openExport } from "@marimo-team/marimo-export";
 import { jsonLoader } from "@marimo-team/marimo-export/loader/json";
 
 const notebookExport = await openExport("/exports/report/");
-const title = await notebookExport.defaultState.output("title").load(jsonLoader());
+const monthly = notebookExport.state("monthly");
+const summary = await monthly.output("summary").load(jsonLoader());
+
+console.log(summary); // { days: 30, label: "Last 30 days" }
 ```
 
-Install the optional peer runtime used by each imported loader. [Output
-representations](../reference/representations.md) maps stored forms to browser
-loaders and peer dependencies.
-
-## Select a prepared state
-
-Readers support three forms of selection:
-
-- `state(alias)` selects an authored alias.
-- `resolve(inputs)` selects one complete exported input vector.
-- `state.resolve(patch)` completes a sparse transition from the current state.
-
-Resolution returns a state already present in the export. A new Python result
-requires another preparation run or a Python service.
+The JSON loader has no peer runtime. Specialized loaders can require one.
+[Output representations](../reference/representations.md) maps stored
+representations to browser loaders and their peer dependencies.
 
 ## Follow a prepared publication
 
 Applications can open a `marimo-export.prepared.v1` manifest with the browser
-prepared subpath:
+`prepared` subpath:
 
 ```ts
 import {
@@ -88,7 +106,15 @@ manifest while preserving a compatible current selection.
 Python:
 
 ```python
+from marimo_export import verify_export
+
 result = verify_export("dist/report")
+```
+
+CLI:
+
+```bash
+uv run marimo-export verify dist/report
 ```
 
 Browser:
@@ -100,7 +126,7 @@ const result = await notebookExport.verify({
 });
 ```
 
-Verification checks every declared asset and returns state, output, asset, and
+Verification reads every declared asset and returns state, output, asset, and
 byte counts. `index.json` is the integrity root.
 
 ## Retain evidence for an agent

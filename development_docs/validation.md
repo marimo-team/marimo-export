@@ -31,20 +31,23 @@ builds, packed npm installation, and isolated Python wheel imports.
 
 ## Select evidence by boundary
 
-| Changed boundary               | Focused evidence                                      | Live or package evidence                                |
-| ------------------------------ | ----------------------------------------------------- | ------------------------------------------------------- |
-| ExportSpec and export format   | Spec, index, wire, fixture, reader tests              | Python and TypeScript fixture parity                    |
-| Planning and preparation       | Plan and preparation service tests                    | Exact repeat, one-state addition, file and live capture |
-| Observations                   | Queue, ledger, source-match, SQLite observation tests | Successful normal-run recording in a live kernel        |
-| Repository                     | Repository, concurrency, integrity, lifecycle tests   | Multiprocess contention, owner death, Windows matrix    |
-| Marimo cache adapter           | Probe, patch, graph scope, receipt, cleanup tests     | Warm owned build and borrowed capture                   |
-| Managed process lifecycle      | Producer, managed server, startup, shutdown tests     | Source-preserving file preparation                      |
-| Transfer, writer, local reader | Limits, digest, framing, rollback, filesystem tests   | Public capture and `verify`                             |
-| Prepared browser control       | Manifest, query, control, refresh, controller tests   | Rapid state changes and publication rotation            |
-| Browser reader or loader       | Parser, integrity, decode, cancellation, disposal     | Packed subpath with required peer                       |
-| marimo-studio integration      | Compiler, registry, route, static delivery tests      | Live Zero-Python preview and static bundle              |
-| Visible application            | Typecheck and production build                        | Desktop, narrow, rapid changes, mounted action          |
-| Documentation                  | Prose, links, VitePress build                         | Navigation, search, source view, LLM text, browser      |
+| Changed boundary                  | Focused evidence                                       | Live or package evidence                                |
+| --------------------------------- | ------------------------------------------------------ | ------------------------------------------------------- |
+| ExportSpec and export format      | Spec, index, wire, fixture, reader tests               | Python and TypeScript fixture parity                    |
+| Planning and preparation          | Plan and preparation service tests                     | Exact repeat, one-state addition, file and live capture |
+| Observations                      | Queue, ledger, source-match, SQLite observation tests  | Successful normal-run recording in a live kernel        |
+| Repository                        | Repository, concurrency, integrity, lifecycle tests    | Multiprocess contention, owner death, Windows matrix    |
+| Marimo cache adapter              | Probe, patch, graph scope, receipt, cleanup tests      | Warm owned build and borrowed capture                   |
+| Managed process lifecycle         | Producer, managed server, startup, shutdown tests      | Source-preserving file preparation                      |
+| Live transport and authentication | Client, auth, SSE, remote response, redaction tests    | HTTPS borrowed capture and same-origin transfer         |
+| Transfer, writer, local reader    | Limits, digest, framing, rollback, filesystem tests    | Public capture and `verify`                             |
+| Prepared Python publication       | Manifest, publication, cancellation, route-grace tests | Mutable manifest and retained immutable routes          |
+| Application directory delivery    | Delivery, directory security, race, rollback tests     | Complete staged application commit                      |
+| Prepared browser control          | Manifest, query, control, refresh, controller tests    | Rapid state changes and publication rotation            |
+| Browser reader or loader          | Parser, integrity, decode, cancellation, disposal      | Packed subpath with required peer                       |
+| marimo-studio integration         | Compiler, registry, route, static delivery tests       | Live Zero-Python preview and static bundle              |
+| Visible application               | Typecheck and production build                         | Desktop, narrow, rapid changes, mounted action          |
+| Documentation                     | Prose, links, VitePress build                          | Navigation, search, source view, LLM text, browser      |
 
 ## Public Python and dependency direction
 
@@ -119,6 +122,7 @@ uv run pytest -q \
   packages/python/tests/test_marimo_cache_boundaries.py \
   packages/python/tests/test_marimo_cache_host.py \
   packages/python/tests/test_marimo_cache_patch.py \
+  packages/python/tests/test_marimo_cache_probe.py \
   packages/python/tests/test_marimo_cache_side_effects.py \
   packages/python/tests/test_marimo_{child_run,exporter_compat,projection_recording,receipts,runtime_compat}.py
 ```
@@ -131,11 +135,44 @@ marimo-export doctor
 
 Adapter evidence must cover the exact Marimo release, private source drift,
 reversible overlapping leases, foreign patch conflicts, unrelated graph
-isolation, forced projection execution, signed receipts, incomplete cache data,
+isolation, native reuse across output plans, live complete-cell execution,
+signed receipts, incomplete cache data,
 unavailable restored values, write barriers, and cleanup.
 
 After focused tests, run one warm file preparation and one borrowed capture.
 Report authored and projection cache activity from the public result.
+
+## Live transport and managed processes
+
+```bash
+uv run pytest -q \
+  packages/python/tests/test_client.py \
+  packages/python/tests/test_remote_auth.py \
+  packages/python/tests/test_remote_client.py \
+  packages/python/tests/test_remote_sse.py \
+  packages/python/tests/test_managed_server_*.py \
+  packages/python/tests/test_producer.py
+```
+
+Cover URL normalization, HTTPS policy, header roles, redirect rejection,
+response bounds, no-retry uncertainty, source stability, process-tree cleanup,
+and secret redaction.
+
+## Application publication and delivery
+
+```bash
+uv run pytest -q \
+  packages/python/tests/test_manifest.py \
+  packages/python/tests/test_publication.py \
+  packages/python/tests/test_delivery.py \
+  packages/python/tests/test_directory_security.py \
+  packages/python/tests/test_writer.py
+```
+
+Cover supersession, last-good preservation, observation-driven polling, route
+grace, detached asset leases, nested export verification, directory identity,
+native exchange, rollback replacement, recovery paths, and warnings emitted
+after the new directory becomes visible.
 
 ## Cross-language and prepared browser contracts
 
@@ -192,6 +229,7 @@ or WebSocket connection.
 ## Documentation delivery
 
 ```bash
+node apps/docs/scripts/check-navigation.mjs
 make docs-build
 make docs-serve
 ```
@@ -199,3 +237,22 @@ make docs-serve
 Check local links and fragments, navigation parity, local search, code block
 rendering, `llms.txt`, `llms-full.txt`, desktop layout, and narrow layout.
 VitePress build success alone does not prove these delivery properties.
+
+## Open validation gaps
+
+The following source behaviors need focused witnesses before their stronger
+architectural claims can be treated as enforced:
+
+- clearing observations does not advance the producer revision, so
+  observation-driven publication polling does not react to the deletion
+- public exact observation lookup and plan-time projection of stored supersets
+  have different matching semantics
+- combined repository-byte admission can reject a write before evicting every
+  otherwise eligible historical artifact
+- prepared-state corruption can delete dependent generation rows before the
+  same recovery pass quarantines their directories
+- a valid reservation has no focused negative test for a current-pointer change
+  immediately before final publication
+- internal and public projection cache summaries count different cell sets
+- private Marimo transfer values and signature exceptions can cross the current
+  capability boundary

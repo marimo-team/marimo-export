@@ -82,8 +82,9 @@ remain unchanged.
 ### Required behavior
 
 marimo-export needs the final decision after native cache validity checks and
-unavailable-value handling. It also needs to request a live run for selected
-projection cells while leaving unrelated graphs untouched.
+unavailable-value handling. It also needs to request a live run for
+complete-cell owners and exporter leaves whose contracts include uncached
+side effects or current process resources.
 
 ### Current implementation
 
@@ -94,8 +95,8 @@ selected hit with an empty native attempt.
 ### Upstream shape
 
 A run request could accept `force_live` cell IDs and return a typed disposition
-for each cell. Marimo would retain ownership of cache attempt construction and
-key semantics.
+for each cell. Marimo would retain ownership of cache attempt construction,
+key semantics, and authored-cell invalidation.
 
 The local `CacheActivity` record remains the consumer contract. The global
 attempt-function patch and its source digest can then leave the adapter.
@@ -175,22 +176,20 @@ remain in marimo-export.
 
 ### Required behavior
 
-A cache hit that restores an unavailable `UIElementStub` or `UnhashableStub`
-must execute live before export. Parent editor activity also needs to report
-whether a cell executed since the previous capture.
+A cache hit that restores an unavailable `UIElementStub`, `UnhashableStub`, UI
+element, or `mo.state` object must execute live before export.
 
 ### Current implementation
 
-`CompleteCachedLifecycle` reruns unavailable hits inside an owned graph scope.
-Weak graph state records live parent activity and merges later runs with logical
-OR until capture consumes it.
+`CompleteCachedLifecycle` reruns unavailable hits and recreates session-bound
+state inside an owned graph scope.
 
 ### Upstream shape
 
 Marimo could define cached lifecycle completeness as a native post-restore
 contract and report final execution disposition through the cached execution
-receipt. The local lifecycle subclass and parent activity interception can then
-be replaced behind `CachedStateExecutor`.
+receipt. The local lifecycle subclass can then be replaced behind
+`CachedStateExecutor`.
 
 ## Interactive host cache restoration
 
@@ -265,7 +264,7 @@ marimo-export tests for:
 - cache key and store behavior
 - signed and unsigned cache receipts
 - missing, corrupt, and unavailable values
-- forced projection execution
+- live complete-cell and exporter-leaf execution
 - unrelated graph isolation
 - write visibility
 - state failure atomicity

@@ -1,131 +1,158 @@
 ---
 title: Build a browser application
-description: Load immutable exports or drive prepared publications with atomic state transitions and disposal.
+description: Open a notebook export, resolve states, load outputs, and replace mounted values safely.
 ---
 
 # Build a browser application
 
-Use browser core for one immutable export. Use the `prepared` subpath when an
-application follows a repository-backed publication or routes saved Marimo
-control events.
+The browser package reads a notebook export through HTTP. It validates
+`index.json` when opening the export, verifies an asset when loading that output,
+and gives the application control over rendering and mount disposal.
 
-## Load one immutable export
+This guide starts from the [first notebook export](getting-started.md). Copy
+`dist/report` into the static files served by your application at
+`/export/`.
+
+## Install the browser reader
+
+Install the package in a TypeScript application. [Vite](https://vite.dev/) is
+one bundler that can serve the application and its `public` directory.
 
 ```bash
-pnpm add @marimo-team/marimo-export hyparquet vega-embed
+pnpm add @marimo-team/marimo-export
 ```
+
+Add one host and two state buttons to the page:
+
+```html
+<main>
+  <div aria-label="Report period">
+    <button type="button" data-state="weekly">Weekly</button>
+    <button type="button" data-state="monthly">Monthly</button>
+  </div>
+  <pre id="summary" aria-live="polite"></pre>
+</main>
+```
+
+Open the export and render its JSON output:
 
 ```ts
 import { openExport } from "@marimo-team/marimo-export";
-import { parquetRowsLoader } from "@marimo-team/marimo-export/loader/parquet";
-import { vegaLiteLoader } from "@marimo-team/marimo-export/loader/vegalite";
-
-const notebookExport = await openExport("./export/");
-const state = notebookExport.defaultState;
-
-const [rows, chart] = await Promise.all([
-  state.output("prices").load(parquetRowsLoader()),
-  state.output("chart").load(vegaLiteLoader({ actions: false })),
-]);
-```
-
-Opening validates `index.json`. Each output load verifies its asset before the
-selected loader decodes it.
-
-## Drive a prepared publication
-
-`PreparedStateController` accepts a `PreparedStatePort`. The port owns loading
-and committing one complete application state:
-
-```ts
 import { jsonLoader } from "@marimo-team/marimo-export/loader/json";
-import {
-  fetchPreparedExportManifest,
-  openPreparedPublication,
-  PreparedStateController,
-  type PreparedStatePort,
-} from "@marimo-team/marimo-export/prepared";
 
-const manifestUrl = new URL("/runtime/prepared.json", location.href);
-const manifest = await fetchPreparedExportManifest(manifestUrl);
-const publication = await openPreparedPublication(manifest, manifestUrl);
+const notebookExport = await openExport("/export/");
+const summary = document.querySelector<HTMLPreElement>("#summary");
 
-const port: PreparedStatePort = {
-  async apply({ next }, signal) {
-    const title = await next.state.output("title").load(jsonLoader(), { signal });
-    signal.throwIfAborted();
-    document.querySelector("#title")!.textContent = String(title);
-  },
+if (summary === null) throw new Error("Summary host is missing");
+
+const show = async (name: string): Promise<void> => {
+  const state = notebookExport.state(name);
+  const value = await state.output("summary").load(jsonLoader());
+  summary.textContent = JSON.stringify(value, null, 2);
 };
 
-const controller = new PreparedStateController(port);
-await controller.start(publication);
-await controller.updateInputs({ interval: "1wk" });
+for (const button of document.querySelectorAll<HTMLButtonElement>("[data-state]")) {
+  button.addEventListener("click", () => void show(button.dataset.state ?? "weekly"));
+}
+
+await show("weekly");
 ```
 
-For a view with several outputs, `apply` should load and mount every required
-output in staging hosts, confirm the signal remains active, then commit the
-complete replacement. A rejected transition invokes the optional `restore`
-method with the last committed publication.
+Selecting Monthly renders:
 
-## Route controls and URL queries
-
-The export's `controlBindings` maps projection-scoped object IDs to semantic
-input paths. Route an accepted frontend value through the controller:
-
-```ts
-const handled = await controller.updateControl("cell-region", "Northeast");
+```json
+{
+  "days": 30,
+  "label": "Last 30 days"
+}
 ```
 
-`handled` is false when the object ID has no exported binding. Query-driven
-applications can call `updateQuery(location.search)` to resolve a complete saved
-state from URL parameters.
+`state(name)` selects an authored state name. `resolve(inputs)` selects an exact
+complete input vector. `state.resolve(patch)` applies a sparse patch to the
+current vector and selects the matching exported state. Resolution never runs
+notebook Python.
 
-## Refresh the publication
+## Load several outputs as one transition
 
-`PreparedPublicationRefresh` fetches the manifest, reuses an already opened
-immutable export when its identity matches, and replaces the controller's
-publication atomically:
+An application state can depend on several exported outputs. Give one
+`AbortController` ownership of the pending transition, load every output, then
+commit them together:
 
 ```ts
-import { PreparedPublicationRefresh } from "@marimo-team/marimo-export/prepared";
+let pending: AbortController | undefined;
 
-const liveController = new PreparedStateController(port);
-const refresh = new PreparedPublicationRefresh(manifestUrl, liveController, {
-  onError: console.error,
+const selectState = async (name: string): Promise<void> => {
+  pending?.abort("superseded");
+  const current = new AbortController();
+  pending = current;
+
+  const state = notebookExport.state(name);
+  const value = await state.output("summary").load(jsonLoader(), {
+    signal: current.signal,
+  });
+
+  current.signal.throwIfAborted();
+  summary.textContent = JSON.stringify(value, null, 2);
+};
+```
+
+An abort signal removes stale work's authority to commit. Some third-party
+decoders and browser module evaluations can finish after cancellation. Dispose
+any value they created when it settles.
+
+## Mount an interactive output
+
+Some loaders return a value with `mount(element)`. A mount returns an idempotent
+disposable handle. After building the [market dashboard](market-dashboard.md),
+serve its export at `/market-export/`. Install the Vega-Lite loader's
+[`vega-embed`](https://github.com/vega/vega-embed) peer runtime:
+
+```bash
+pnpm add vega-embed
+```
+
+Add a mount host to the page:
+
+```html
+<div id="chart"></div>
+```
+
+Load and mount the dashboard's `performance_chart` output:
+
+```ts
+import { openExport } from "@marimo-team/marimo-export";
+import { vegaLiteLoader } from "@marimo-team/marimo-export/loader/vegalite";
+
+const marketExport = await openExport("/market-export/");
+const state = marketExport.defaultState;
+const host = document.querySelector<HTMLElement>("#chart");
+if (host === null) throw new Error("Chart host is missing");
+
+const chart = await state.output("performance_chart").load(vegaLiteLoader({ actions: false }));
+const mounted = await chart.mount(host, {
+  renderer: "svg",
 });
 
-await refresh.start();
-```
-
-`refresh_interval_ms` in the manifest enables polling from 250 through 60,000
-milliseconds. A value of zero disables polling. Call `refresh.refresh()` for an
-explicit update. `syncPolling()` reschedules polling from the current manifest.
-
-## Dispose the complete lifecycle
-
-```ts
-await refresh.dispose();
-await liveController.dispose();
-```
-
-Mounted output values return their own idempotent disposal handles:
-
-```ts
-const mounted = await chart.mount(document.querySelector("#chart")!);
 await mounted.dispose();
 ```
 
-Dispose staged work after failure and committed mounts after replacement or page
-teardown. AnyWidget definitions use page-lifetime module ownership, while each
-mount owns its model and view state.
+For a complete replacement, mount new values in connected offscreen hosts,
+confirm that the transition remains current, replace the visible hosts, then
+dispose the previous mount owner. A failed staged mount leaves the last
+committed document visible.
 
-## Review executable browser code
+Opening, resolving, loading, and verifying operate on inert records. Mounting a
+chart, AnyWidget, or custom interactive value grants its code page authority.
+Review the [integrity and trust boundary](../concepts/integrity-and-trust.md)
+before deployment.
 
-Opening, resolving, loading, and verifying parse inert records. Mounting
-AnyWidget, Vega-Lite, or custom interactive output grants that code the page's
-authority. Review mounted modules and configure Content Security Policy, allowed
-origins, byte limits, cancellation, and teardown for the deployment.
+## Follow a changing publication
 
-Use the [Browser API](../reference/browser-api.md) for exact core and prepared
-subpath contracts.
+Use the `prepared` package subpath when a server exposes one mutable manifest
+route and immutable export instances. [Serve a prepared
+publication](prepared-publications.md) develops the producer and browser sides
+of that handoff.
+
+Use the [browser reader reference](../reference/browser/reader.md) for exact
+methods and the [loader reference](../reference/browser/loaders.md) for loader
+options, result types, peers, cancellation, and disposal.

@@ -1,15 +1,22 @@
-# Vega-Lite loader
+# Vega-Lite loader workspace
 
-Load and mount an exported Vega-Lite chart:
+`@marimo-export/internal-loader-vegalite` owns
+[Vega-Lite](https://vega.github.io/vega-lite/) decoding and mount lifecycle for the public
+[`@marimo-team/marimo-export/loader/vegalite`](../browser/src/loader/vegalite.ts)
+facade. The workspace package is private and the public browser package carries
+its compiled implementation.
 
-```ts
-import { vegaLiteLoader } from "@marimo-team/marimo-export/loader/vegalite";
+The loader validates the saved chart specification, imports
+[Vega-Embed](https://github.com/vega/vega-embed) when the chart mounts, applies
+caller options, connects cancellation, and finalizes the mounted view during
+disposal.
 
-const chart = await output.load(vegaLiteLoader({ actions: false }));
-const mounted = await chart.mount(host, { renderer: "svg" });
+Run focused checks from the repository root:
 
-await mounted.dispose();
+```bash
+pnpm --filter @marimo-export/internal-loader-vegalite test
+pnpm --filter @marimo-export/internal-loader-vegalite typecheck
 ```
 
-Install `vega-embed` beside `@marimo-team/marimo-export`. Review charts that
-load external data or images under the same browser policy as application code.
+Public consumers install `@marimo-team/marimo-export` and follow the
+[Vega-Lite representation and peer-runtime contract](../../docs/reference/representations.md).

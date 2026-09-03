@@ -99,6 +99,16 @@ interface PreparedStatePort {
 `restore()` returns application controls to the last committed publication after
 a rejected transition.
 
+Each transition owns an `AbortController`. A newer transition aborts the active
+one before it enters the serialized application queue. A caller-supplied
+`AbortSignal` is linked to that transition. `cancel()` marks superseded work,
+`settle()` waits for the queued transition, and `dispose()` aborts the controller
+lifecycle before calling the application port's optional disposer.
+
+`isPreparedAbort()` recognizes a browser `AbortError` and a
+`NotebookExportError` with code `abort`. Cancellation remains separate from
+manifest, query, and state-selection failures.
+
 `PreparedPublicationRefresh` fetches the manifest with `cache: "no-store"`.
 When the export identity and base URL remain equal, it reuses the opened export.
 When a new instance appears, it opens and validates that export before replacing
@@ -129,20 +139,25 @@ value. `isNotebookExportError()` checks the shared brand, public error name,
 string message, known code set, and optional portable details. This preserves a
 compatible error object across realms and separately bundled package copies.
 
-| Loader                 | Application result                      | Runtime dependency               |
-| ---------------------- | --------------------------------------- | -------------------------------- |
-| `scalarLoader()`       | JSON-compatible scalar                  | None                             |
-| `jsonLoader()`         | Immutable portable JSON                 | None                             |
-| `marimoOutputLoader()` | Immutable rendered-output record        | None                             |
-| `marimoCellLoader()`   | Immutable complete-cell record          | None                             |
-| `textLoader()`         | UTF-8 text                              | None                             |
-| `htmlLoader()`         | UTF-8 HTML source                       | None                             |
-| `imageLoader()`        | Mountable image                         | Browser Blob and object URL APIs |
-| `numpyLoader()`        | Shape, dtype, order, numeric buffer     | None                             |
-| `arrowTableLoader()`   | Flechette table                         | `@uwdata/flechette`, `lz4js`     |
-| `parquetRowsLoader()`  | Readonly row objects                    | `hyparquet`                      |
-| `vegaLiteLoader()`     | Immutable specification and mount       | `vega-embed`                     |
-| `anyWidgetLoader()`    | Saved model graph, model API, and mount | `@anywidget/types`               |
+The prepared subpath has its own frozen `PreparedExportError`. Its codes are
+`manifest_invalid`, `manifest_read_failed`, `query_ambiguous`, and `query_miss`.
+`isPreparedExportError()` recognizes the versioned brand across realms. Loading,
+integrity, state, and output failures continue to use `NotebookExportError`.
+
+| Loader                 | Application result                      | Runtime dependency                                                                              |
+| ---------------------- | --------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `scalarLoader()`       | JSON-compatible scalar                  | None                                                                                            |
+| `jsonLoader()`         | Immutable portable JSON                 | None                                                                                            |
+| `marimoOutputLoader()` | Immutable rendered-output record        | None                                                                                            |
+| `marimoCellLoader()`   | Immutable complete-cell record          | None                                                                                            |
+| `textLoader()`         | UTF-8 text                              | None                                                                                            |
+| `htmlLoader()`         | UTF-8 HTML source                       | None                                                                                            |
+| `imageLoader()`        | Mountable image                         | Browser Blob and object URL APIs                                                                |
+| `numpyLoader()`        | Shape, dtype, order, numeric buffer     | None                                                                                            |
+| `arrowTableLoader()`   | Flechette table                         | `@uwdata/flechette`, `lz4js`                                                                    |
+| `parquetRowsLoader()`  | Readonly row objects                    | `hyparquet`                                                                                     |
+| `vegaLiteLoader()`     | Immutable specification and mount       | `vega-embed`                                                                                    |
+| `anyWidgetLoader()`    | Saved model graph, model API, and mount | Runtime modules declared by the saved graph. `@anywidget/types` is an optional type-level peer. |
 
 The Marimo output and cell loaders validate canonical replay records. They
 return data that an application can adapt to its own renderer. The records
@@ -221,5 +236,37 @@ Disposal releases those resources while a shared pending module import continues
 for other mounts. The exported widget has no connection to its former Python
 kernel.
 
-Read [Agents and delivery](agents-and-delivery.md) for the example, packaging,
+## PreparedWidgetGraph stages model-graph replacement
+
+The AnyWidget loader facade also exposes `PreparedWidgetGraph`. An application
+uses it when several prepared states should update one mounted model registry
+while preserving compatible browser-local model state.
+
+`PreparedWidgetGraphPort` supplies model identity, equality, module-change
+detection, live-state capture and merge, replay, restore, close, file-table
+replacement, and optional validation and preflight. The graph owns operation
+serialization, cancellation, rollback, and disposal around that port.
+
+The lifecycle is:
+
+1. `checkpoint()` captures current live state into an opaque return point.
+2. `replace(snapshot, signal)` validates and preflights additions, updates, and
+   module replacements before returning a staged replacement.
+3. `replacement.commit()` closes removed models, installs the next file table,
+   and advances the current graph.
+4. `replacement.rollback()` closes additions, restores stable models, and
+   replays replaced or removed models with their captured live state.
+5. `dispose()` aborts active work, rolls back a pending replacement, closes every
+   active model, and clears the file table.
+
+A module change requires model teardown and replay. The returned replacement has
+`remount: true` so the application can rebuild views that refer to the replaced
+module. A failure after module teardown and any rollback failure raise
+`PreparedWidgetGraphReplacementError`, which requires a full remount.
+
+Only one replacement or unsettled staged replacement may exist at a time.
+Checkpoint and replacement calls require an idle graph. Teardown and replay run
+sequentially because registry identity makes their order observable.
+
+Read [Product surfaces and distribution](agents-and-delivery.md) for the example, packaging,
 and browser evidence that exercise this lifecycle.

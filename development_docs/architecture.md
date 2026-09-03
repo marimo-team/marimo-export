@@ -8,7 +8,7 @@ browsers, agents, and custom applications.
 notebook + ExportSpec
   -> ExportPlan
   -> reusable states + missing states
-  -> Marimo execution for missing work
+  -> marimo execution for missing work
   -> leased PreparedExport
   -> index.json + content-addressed assets
   -> Python, browser, agent, or application
@@ -48,6 +48,14 @@ Marimo owns computation-cache identity, persistence, signing, codecs, and
 validity. marimo-export stores portable prepared outputs after they cross the
 native cache receipt boundary. Exact repository reuse can skip notebook startup.
 Native cache reuse can reduce computation when a missing prepared state runs.
+
+The upstream mechanism is documented in marimo's
+[caching API](https://docs.marimo.io/api/caching/) and the SciPy 2026 article
+[Content-Addressed Caching for Reactive
+Notebooks](https://dmadisetti.github.io/scipy_proceedings_2026/). The article
+also demonstrates cached WebAssembly publication, where browser Python restores
+native cache artifacts. marimo-export uses the same producer-side cache and
+publishes selected results through its own language-neutral export format.
 
 Read [Execution and caching](architecture/execution-and-caching.md) and
 [Export repository](architecture/repository.md) before changing this boundary.
@@ -145,7 +153,7 @@ states x outputs -> descriptor
 ```
 
 `index.json` names the explicit default state, aliases, complete state vectors,
-output descriptors, control bindings, producer identity, and asset closure. A
+output descriptors, control bindings, producer provenance, and asset closure. A
 consumer opens the index before loading representation assets.
 
 Read [Product model and export format](architecture/product-and-export.md) for
@@ -192,9 +200,24 @@ view compiler, server routes, static bundle, and renderer adapter.
 | `_remote`                          | HTTP, authentication, scratchpad transport, managed process tree  |
 | `descriptors.py`, `index.py`       | Durable output and export records                                 |
 | `reader.py`, `_writer.py`          | Verified consumer reads and caller destination commit             |
+| `_secure_io.py`                    | Bounded platform-safe reads of export indexes and assets          |
+| `manifest.py`, `publication.py`    | Prepared manifest serialization and last-good route coordination  |
+| `delivery.py`, `_directory*`       | Complete application staging, verification, commit, and rollback  |
 | `packages/portable-json`           | Cross-language JSON types, parsing, conversion, Zod adapter       |
 | `packages/browser`                 | Browser reader, prepared controller, built-in loaders             |
 | `packages/loader-*`                | One specialized decoder and optional runtime                      |
+
+## Secure local reads
+
+`_secure_io.py` is the filesystem trust boundary for local export readers. On
+POSIX it traverses from an opened root descriptor and refuses symbolic links. On
+Windows it rejects reparse points and rechecks containment and file identity.
+Both paths accept the fixed `index.json` name or one portable `assets/<name>`
+path, require a regular file, enforce byte limits, and detect size changes during
+the read. The Windows path also rechecks file identity during open. Asset digest
+verification detects same-size content changes after the secure read.
+`reader.py` translates those failures into public format and availability
+errors.
 
 ## Lifecycle owners
 
@@ -209,25 +232,30 @@ view compiler, server routes, static bundle, and renderer adapter.
 | Managed notebook source copy      | `OwnedNotebook`                 | producer context close                             |
 | Managed server and process tree   | `OwnedNotebook`                 | producer context close                             |
 | Borrowed server and session       | application                     | application close                                  |
-| State child graph                 | Marimo execution adapter        | state completion, failure, or cancellation         |
+| State child graph                 | marimo execution adapter        | state completion, failure, or cancellation         |
 | Transfer ticket and virtual files | transfer registry               | client release or lease expiry                     |
 | Browser state transition          | `PreparedStateController`       | commit, supersession, failure, or disposal         |
 | Mounted representation            | application renderer            | replacement commit or page teardown                |
 
 ## Contributor maps
 
-| Question                                    | Map                                                                      |
-| ------------------------------------------- | ------------------------------------------------------------------------ |
-| What is stored in a notebook export?        | [Product model and export format](architecture/product-and-export.md)    |
-| How are states planned and prepared?        | [Planning and preparation](architecture/preparation.md)                  |
-| What does SQLite own?                       | [Export repository](architecture/repository.md)                          |
-| Which dependencies are ports or adapters?   | [Ports and composition](architecture/ports.md)                           |
-| How is Marimo caching reused?               | [Execution and caching](architecture/execution-and-caching.md)           |
-| How are notebook outputs captured?          | [marimo integration](architecture/marimo-integration.md)                 |
-| Which private seams could move upstream?    | [Marimo upstream candidates](architecture/marimo-upstream-candidates.md) |
-| How does browser state become visible UI?   | [Browser loaders and mounts](architecture/browser-loaders-and-mounts.md) |
-| How does Studio consume the package?        | [marimo-studio integration](architecture/studio-integration.md)          |
-| How are packages, agents, and docs shipped? | [Agents and delivery](architecture/agents-and-delivery.md)               |
+| Question                                                 | Map                                                                                          |
+| -------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| What is stored in a notebook export?                     | [Product model and export format](architecture/product-and-export.md)                        |
+| How are states planned and prepared?                     | [Planning and preparation](architecture/preparation.md)                                      |
+| What does SQLite own?                                    | [Export repository](architecture/repository.md)                                              |
+| Which dependencies are ports or adapters?                | [Ports and composition](architecture/ports.md)                                               |
+| How is Marimo caching reused?                            | [Execution and caching](architecture/execution-and-caching.md)                               |
+| How are notebook outputs captured?                       | [marimo integration](architecture/marimo-integration.md)                                     |
+| Which private seams could move upstream?                 | [Marimo upstream candidates](architecture/marimo-upstream-candidates.md)                     |
+| How does browser state become visible UI?                | [Browser loaders and mounts](architecture/browser-loaders-and-mounts.md)                     |
+| How are live sessions authenticated and owned?           | [Live transport and processes](architecture/live-transport-and-processes.md)                 |
+| How are prepared routes and application trees committed? | [Application publication and delivery](architecture/application-publication-and-delivery.md) |
+| Which hash and schema identifies each boundary?          | [Identities and protocols](architecture/identities-and-protocols.md)                         |
+| Which JSON values cross Python and TypeScript?           | [Portable JSON](architecture/portable-json.md)                                               |
+| Where does Python run for each application profile?      | [Runtime profiles](architecture/runtime-profiles.md)                                         |
+| How does Studio consume the package?                     | [marimo-studio integration](architecture/studio-integration.md)                              |
+| How are packages, agents, and docs shipped?              | [Product surfaces and distribution](architecture/agents-and-delivery.md)                     |
 
 [Development](development.md) contains focused workflows. [Validation](validation.md)
 maps each changed boundary to required evidence.

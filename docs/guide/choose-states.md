@@ -1,81 +1,114 @@
 ---
 title: Choose states and outputs
-description: Declare the finite notebook states and output representations available to every consumer.
+description: Inspect a notebook, declare sparse states, and publish the representations each consumer needs.
 ---
 
 # Choose states and outputs
 
-An `ExportSpec` names a default state, sparse state rows, and the output
-representation produced for each normalized state.
+An `ExportSpec` selects a finite relation from one notebook. Each named state
+becomes a complete input assignment, and each output publishes one selected
+notebook result in every state.
+
+The deterministic quickstart declares two states and one JSON output:
 
 ```yaml
 schema: marimo-export.spec.v2
-default_state: leaders
+default_state: weekly
 states:
-  leaders: {}
-  cloud:
-    symbols_selector: [MSFT, GOOGL, AMZN]
-  weekly:
-    interval: 1wk
-    symbols_selector: [AAPL, MSFT, GOOGL, AMZN]
+  weekly: {}
+  monthly:
+    days: 30
 outputs:
   summary:
-    source: { kind: json, selector: report.summary }
-  chart:
-    source: { kind: export, selector: performance }
-    exporter: altair.vegalite
-  prices:
-    source: { kind: export, selector: selected_prices }
-    exporter: parquet.table
-  report:
-    source: { kind: output, selector: report.view }
+    source: { kind: json, selector: summary }
 ```
 
-Build the relation:
+The notebook defines a `days` slider with a value of `7` and derives `summary`
+from `days.value`. Planning infers `days` as the input because it affects the
+selected output. `default_state` names the alias that readers select when they
+do not request another state.
+
+## Inspect the notebook inputs
+
+Inspect the notebook before writing state rows:
 
 ```bash
-marimo-export plan finance.py --spec finance.export.yaml
-marimo-export build finance.py \
-  --spec finance.export.yaml \
-  --output dist/finance
+uv run marimo-export inspect examples/quickstart/report.py --json
 ```
 
-Every state exposes the same output names. Python and browser readers select
-`leaders` when no other state is requested.
+File inspection runs the notebook's initial autorun with the current Python
+environment and its file, credential, package, and network access.
 
-## Let planning infer inputs
+The quickstart reports this definition. The excerpt omits unrelated fields:
 
-The authored spec has no `inputs` field. marimo-export infers input definitions
-from:
-
-- portable stateful roots in the selected outputs' dependency closure
-- definition names used as keys in state rows
-
-Input names are notebook definition names. Use the UI element definition such as
-`symbols_selector`, not its `.value` property.
-
-Inspect available definitions and cells before authoring output selectors:
-
-```bash
-marimo-export inspect finance.py --json
+```json
+{
+  "name": "days",
+  "kind": "ui",
+  "input_mode": "value",
+  "value": 7,
+  "value_available": true,
+  "portable_input": true,
+  "sensitive": false,
+  "input_dependencies": [],
+  "control_paths": { "Hbol-0": [] },
+  "domain": { "debounce": false, "step": null }
+}
 ```
 
-::: warning File inspection executes the notebook
-`inspect NOTEBOOK` performs the notebook's initial autorun with the current file,
-credential, network, and package access.
-:::
+Use the inspected definition name as the state key. For the slider, write
+`days: 30`. The state value matches the frontend value shown by `inspect`, so it
+is `30` rather than `days.value`, `{value: 30}`, or a runtime control ID.
 
-Planning rejects missing, sensitive, unavailable, and nonportable inputs. It also
-rejects an ordinary input assigned by the defining cell's final named expression
-because the authored assignment and selected state would compete for ownership.
+The inspection fields answer different authoring questions:
 
-## Write sparse named states
+| Field                | Authoring decision                                                                           |
+| -------------------- | -------------------------------------------------------------------------------------------- |
+| `name`               | Key to use in a state row                                                                    |
+| `kind`               | `ui` for a marimo control or `ordinary` for a Python definition                              |
+| `input_mode`         | `value` replaces the complete frontend value, while `patch` applies an AnyWidget trait patch |
+| `value`              | Current frontend JSON shape when `value_available` is `true`                                 |
+| `domain`             | Available control hints such as options, minimum, maximum, or step                           |
+| `input_dependencies` | Other input roots that affect this definition                                                |
+| `control_paths`      | Runtime IDs mapped to paths inside a composed control                                        |
+| `portable_input`     | Whether the definition can enter a state vector                                              |
+| `sensitive`          | Whether the control contains password input and is rejected from export state                |
 
-Each state row may omit inputs that should retain the captured baseline. The
-producer records a complete input vector and SHA-256 fingerprint for each
-distinct normalized row.
+For a composed control, copy the array or object shape reported in `value`.
+`control_paths` describes browser event routing. Its IDs and path steps are not
+state keys.
 
-Equivalent rows become aliases of one state:
+An AnyWidget reports `input_mode: "patch"`. Its state value is an object whose
+keys are widget traits. The producer merges that sparse trait patch over the
+complete serializer-owned model state captured at baseline, then verifies the
+accepted complete value.
+
+An ordinary definition can be input-capable even when `value_available` is
+`false`. That field means inspection did not include a copy of its value.
+`portable_input` reports whether planning can use it. Planning also rejects an
+ordinary definition assigned by its cell's final named expression because the
+authored assignment and state override would compete for ownership.
+
+## Write sparse states
+
+Each state row can omit inputs that should retain the captured baseline:
+
+```yaml
+states:
+  weekly: {}
+  monthly:
+    days: 30
+```
+
+For a file build, the baseline comes from the initial autorun of the saved
+notebook. For live capture, it comes from the selected session. In the
+quickstart, `weekly` resolves to `{"days": 7}` and `monthly` resolves to
+`{"days": 30}`.
+
+The producer fills every omitted input before execution. It then hashes the
+complete input object. Two rows that resolve to the same object share one state
+fingerprint and later reuse one prepared-state artifact while retaining both
+authored names as aliases:
 
 ```yaml
 default_state: current
@@ -84,35 +117,59 @@ states:
   current: {}
 ```
 
-Both aliases select one prepared vector. The authored `default_state` remains
-`current` in the `ExportPlan`, while the export index stores its resolved
-fingerprint.
+Use explicit values when a consumer must receive the same state regardless of
+the current live baseline. Keep an empty row when the captured current state is
+the intended product state.
 
-Portable state values support null, booleans, Unicode strings, JavaScript-safe
-finite numbers, arrays, and string-keyed objects. Negative zero normalizes to
-zero for state identity.
+State values can contain null, booleans, Unicode strings, finite numbers in the
+JavaScript safe-integer range, arrays, and string-keyed objects. NaN and
+infinity are invalid. The [ExportSpec reference](../reference/export-spec.md)
+defines the complete wire contract.
 
-An AnyWidget input uses an object as a sparse trait patch. The producer merges
-the patch over the baseline serializer-owned model state and verifies the
-accepted complete value.
+## Treat observations as authoring evidence
 
-## Select output sources
+An observation is a complete portable input vector recorded after a successful
+normal notebook run. Planning returns a revision-consistent set of observations
+projected to the inferred inputs:
+
+```bash
+uv run marimo-export observations list examples/quickstart/report.py \
+  --spec examples/quickstart/report.export.yaml \
+  --json
+```
+
+Observations show states that have worked in the matching saved notebook. They
+do not add states to the notebook export. Copy a chosen vector into `states` and
+give it a stable name when consumers should be able to select it.
+
+Use [Manage the export repository](manage-repository.md) to inspect, clear, and
+repopulate observation history.
+
+## Choose each output source
+
+Start with JSON for records, arrays, summaries, and metrics:
+
+```yaml
+outputs:
+  summary:
+    source: { kind: json, selector: summary }
+```
 
 Each output has one source kind:
 
-| Source         | Stored result                                                 |
-| -------------- | ------------------------------------------------------------- |
-| `kind: json`   | Canonical portable JSON                                       |
-| `kind: native` | Scalar, JSON, NumPy, Arrow, or BlobAsset cache representation |
-| `kind: export` | BlobAsset returned by one declared exporter                   |
-| `kind: output` | Formatted Marimo output and replay resources                  |
-| `kind: cell`   | Cell identity, terminal output, console, and replay resources |
+| Source         | Stored result                                                         | Typical consumer                               |
+| -------------- | --------------------------------------------------------------------- | ---------------------------------------------- |
+| `kind: json`   | Canonical portable JSON                                               | Python, browser, agent, or custom client       |
+| `kind: native` | marimo scalar, JSON, NumPy, Arrow, or `BlobAsset` representation      | Typed Python or browser loader                 |
+| `kind: export` | `BlobAsset` returned by one declared exporter                         | Chart, table, media, or domain-specific loader |
+| `kind: output` | Formatted marimo output and replay resources                          | marimo-aware browser application               |
+| `kind: cell`   | Cell identity, terminal output, console records, and replay resources | marimo-aware browser application or agent      |
 
-JSON, native, export, and output selectors accept a Python identifier root,
-attribute steps, nonnegative integer items, and JSON-string items. Mapping keys
-take precedence over attributes.
+JSON, native, export, and rendered-output selectors begin with a Python
+definition name. They can continue through attributes, nonnegative array items,
+or JSON-string mapping keys. Mapping keys take precedence over attributes.
 
-Select a complete cell by native name or an inspected runtime ID:
+Select a complete cell by its authored name or an inspected runtime ID:
 
 ```yaml
 outputs:
@@ -120,16 +177,26 @@ outputs:
     source: { kind: cell, by: name, value: summary_cell }
 ```
 
-## Choose representations for consumers
+Every normalized state must produce every named output. One output name also
+keeps the same codec and media type across all states.
 
-- portable JSON for summaries, records, and metrics
-- rendered output or complete cells for Marimo-aware applications
-- Parquet, Arrow, or NumPy for typed data and frontend computation
-- Vega-Lite or PNG for visual presentation
-- AnyWidget for browser-local model interaction
-- a versioned `BlobAsset` media type for domain-specific data
+## Install exporter dependencies in the producer
 
-Use expanded exporter form when options or source dependencies are required:
+The base Python package supports JSON, native, rendered-output, complete-cell,
+and `blob.*` export paths. Install the matching extra before using an exporter
+that depends on another Python distribution:
+
+| Exporter                          | Install command                     |
+| --------------------------------- | ----------------------------------- |
+| `altair.vegalite` or `altair.png` | `uv add "marimo-export[charts]"`    |
+| `parquet.table`                   | `uv add "marimo-export[parquet]"`   |
+| `anywidget.bundle`                | `uv add "marimo-export[anywidget]"` |
+| Every bundled exporter dependency | `uv add "marimo-export[all]"`       |
+
+The extra belongs in the environment that runs `build` or hosts the session
+used by `capture`. A browser loader has its own npm peer dependencies.
+
+Use expanded exporter form when options are required:
 
 ```yaml
 outputs:
@@ -143,24 +210,22 @@ outputs:
       dependencies: []
 ```
 
-A custom exporter uses an importable `module:symbol` callable:
+A custom exporter names an importable `module:symbol` callable. Declare every
+dynamically imported module whose source affects the returned bytes. Custom
+exporter calls run for each state that needs preparation. Restart a live session
+after changing a custom exporter module that the session already imported.
 
-```yaml
-outputs:
-  summary:
-    source: { kind: export, selector: report }
-    exporter:
-      name: market_summary:encode
-      options:
-        currency: USD
-      dependencies:
-        - market_summary.formatting
+## Check the resolved relation
+
+Run `plan` before a costly build or capture:
+
+```bash
+uv run marimo-export plan examples/quickstart/report.py \
+  --spec examples/quickstart/report.export.yaml \
+  --json
 ```
 
-Declare dynamically loaded modules that affect conversion bytes. Custom
-exporter leaves execute for each prepared state. Built-in deterministic leaves
-can reuse Marimo's native cache.
-
-Use [Output representations](../reference/representations.md) for exporter and
-loader pairs and the [ExportSpec reference](../reference/export-spec.md) for the
-exact wire schema.
+Inspect `inputs`, the complete `states` mappings, `default_alias`, `outputs`,
+`observations`, `reusable_states`, `missing_states`, and `exact_reuse`. Continue
+with [Build or capture](build-and-capture.md) after the relation matches the
+states and outputs your consumers need.

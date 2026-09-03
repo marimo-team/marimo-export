@@ -42,12 +42,17 @@ The root contains exactly:
 
 Unknown fields are invalid.
 
+State and output names are nonempty Unicode scalar strings with no surrounding
+whitespace or control characters and at most 255 UTF-8 bytes. State-row keys,
+selector roots, and exporter option names are non-keyword Python identifiers of
+at most 255 UTF-8 bytes.
+
 ## Inferred inputs
 
 Planning derives input names from selected output dependencies and state-row
 keys. Each inferred name must identify one eligible notebook definition.
 
-Eligible definitions include ordinary Python definitions, supported Marimo UI
+Eligible definitions include ordinary Python definitions, supported marimo UI
 elements, and AnyWidget values with portable serializer-owned state. Planning
 rejects missing, sensitive, unavailable, and nonportable definitions.
 
@@ -64,9 +69,10 @@ Each row maps input definition names to portable values. Rows are sparse. The
 producer fills omitted inputs from one captured baseline, then records the
 complete vector and its SHA-256 fingerprint.
 
-Rows that normalize to the same complete vector share one prepared state and
-retain every authored alias. `default_state` retains the selected authored alias
-in `ExportPlan`. The export index stores its resolved fingerprint.
+Rows that normalize to the same complete vector share one state fingerprint and
+later reuse one prepared-state artifact. They retain every authored alias.
+`default_state` retains the selected authored alias in `ExportPlan`. The export
+index stores its resolved fingerprint.
 
 ## Portable state values
 
@@ -105,7 +111,7 @@ A JSON source stores one canonical portable value through `marimo.json.v1`.
 source: { kind: native, selector: selected_prices }
 ```
 
-A native source uses Marimo's cache representation. Scalars remain inline.
+A native source uses marimo's cache representation. Scalars remain inline.
 Composite portable values use canonical JSON. NumPy arrays, Arrow tables, and
 BlobAsset values retain their native verified payload. A pickle-backed value
 fails preparation with a typed output error.
@@ -135,7 +141,7 @@ the formatted output, source cell identity, and replay resources.
 source: { kind: cell, by: name, value: summary_cell }
 ```
 
-Set `by` to `name` for a native cell name or `id` for an inspected runtime cell
+Set `by` to `name` for an authored cell name or `id` for an inspected runtime cell
 ID. A complete-cell source stores `marimo.cell.v1` with cell identity, config,
 terminal output, console records, outcome, and replay resources.
 
@@ -149,6 +155,10 @@ JSON, native, export, and rendered-output selectors accept:
 Mapping keys take precedence over attributes. Every normalized state must
 produce every configured output. One output name retains one codec and media
 type across the relation.
+
+A selector contains at most 2,048 UTF-8 bytes. Invalid roots, attribute steps,
+indexes, quoted keys, or trailing content raise `SpecError` before notebook
+execution. A cell name or runtime ID contains at most 255 UTF-8 bytes.
 
 ## Exporter forms
 
@@ -184,6 +194,9 @@ The callable receives the selected value as its first argument and exporter
 options as keyword arguments. `dependencies` contains sorted unique module names
 whose code affects the returned bytes. Declare dynamically imported modules.
 
+Each dependency is an importable dotted module name. A declaration contains at
+most 256 dependencies. Exporter option keys are Python identifiers.
+
 A borrowed session uses its loaded module objects. Restart the session after
 changing an already imported exporter module. Source drift during preparation
 raises a typed output error.
@@ -192,7 +205,7 @@ raises a typed output error.
 
 `ExportSpec.from_file()` accepts UTF-8 `.json`, `.yaml`, and `.yml` files up to
 16 MiB. JSON and YAML reject duplicate keys. YAML aliases and merge keys are
-invalid. YAML composition is bounded by depth and node count.
+invalid. YAML permits at most 256 container levels and 100,000 composed nodes.
 
 ## Python construction
 
@@ -222,3 +235,7 @@ spec = ExportSpec(
 
 Invalid specs raise `SpecError` with a stable code and portable details. [Choose
 states and outputs](../guide/choose-states.md) provides the authoring workflow.
+
+`ExportSpec.json_schema()` returns the Draft 2020-12 authoring schema as a
+portable Python object. [Python production](python/produce.md) defines the
+programmatic constructors and error boundary.

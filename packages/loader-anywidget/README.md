@@ -1,18 +1,23 @@
-# AnyWidget loader
+# AnyWidget loader workspace
 
-Load an exported AnyWidget and mount it with browser-local interaction:
+`@marimo-export/internal-loader-anywidget` owns the browser-local
+[AnyWidget](https://anywidget.dev/) model
+runtime used by the public
+[`@marimo-team/marimo-export/loader/anywidget`](../browser/src/loader/anywidget.ts)
+facade. The workspace package is private and is bundled into the public browser
+package during release builds.
 
-```ts
-import { anyWidgetLoader } from "@marimo-team/marimo-export/loader/anywidget";
+The implementation decodes the exported widget graph, restores serializer-owned
+model state, loads widget modules, mounts the root model, routes browser-local
+model changes, and disposes the complete mounted graph.
 
-const widget = await output.load(anyWidgetLoader());
-const mounted = await widget.mount(host);
+Run focused checks from the repository root:
 
-mounted.model.set("metric", "Open");
-mounted.model.save_changes();
-
-await mounted.dispose();
+```bash
+pnpm --filter @marimo-export/internal-loader-anywidget test
+pnpm --filter @marimo-export/internal-loader-anywidget test:browser
+pnpm --filter @marimo-export/internal-loader-anywidget typecheck
 ```
 
-Install `@anywidget/types` beside `@marimo-team/marimo-export`. Widget changes
-stay in the browser and do not call Python.
+Public consumers install `@marimo-team/marimo-export` and follow the
+[AnyWidget representation contract](../../docs/reference/representations.md).

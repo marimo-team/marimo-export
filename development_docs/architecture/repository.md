@@ -9,8 +9,8 @@ portable artifacts.
 repository/
   catalog.sqlite3
   maintenance.sqlite3
-  prepared-states/<producer>/<output-plan>/<state>/<instance>/
-  exports/<export-identity>/<instance>/
+  prepared-states/<producer>/<output-declaration>/<state>/<instance>/
+  exports/<repository-identity>/<generation-instance>/
   staging/<operation>/
 ```
 
@@ -35,15 +35,15 @@ output boundary. Repository reuse can therefore avoid notebook startup. If a
 prepared state is absent, Marimo's native cache may still avoid notebook cell
 computation while that state is rebuilt.
 
-## Identities define reuse
+## Repository identities define reuse
 
-A prepared state is addressed by:
+A prepared-state scope is addressed by:
 
 ```text
 producer_sha256 + output_plan_sha256 + state_fingerprint
 ```
 
-An exact prepared export is addressed by:
+An exact `ExportPlan` has this repository identity:
 
 ```text
 producer_sha256 + output_plan_sha256 + spec_sha256
@@ -54,8 +54,9 @@ document, Python and operating-system runtime, installed distributions, local
 runtime sources, Marimo version, marimo-export version, and marimo-export
 implementation identity.
 
-`output_plan_sha256` covers the authored output declarations. Presentation HTML,
-CSS, JavaScript, route names, and view host IDs remain outside that identity.
+`output_plan_sha256` is the output declaration identity. It covers the authored
+output declarations. Presentation HTML, CSS, JavaScript, route names, and view
+host IDs remain outside that identity.
 Two applications can therefore reuse the same prepared outputs when they request
 the same producer, outputs, and states.
 
@@ -64,6 +65,13 @@ and the default state. Changing presentation assets preserves repository reuse.
 Adding one state retains matching prepared states and prepares the missing
 fingerprint.
 
+The repository identity finds a mutable current-generation pointer. The selected
+generation instance is the notebook export identity, which is SHA-256 over the
+generation's canonical `index.json`. A prepared-state instance is SHA-256 over
+its private prepared-state manifest. Read
+[Identities and protocols](identities-and-protocols.md) before changing a digest
+scope or stored key.
+
 ## SQLite owns metadata and coordination
 
 `_repository/sqlite` is the sole SQL owner. `catalog.sqlite3` tracks:
@@ -71,7 +79,7 @@ fingerprint.
 - producers and monotonic observation revisions
 - canonical observed vectors and bounded observation history
 - prepared-state scopes and immutable instances
-- exact export identities and immutable generations
+- repository identities and immutable generations
 - generation membership in prepared states
 - artifact, staging, and preparation leases
 - preparation fencing tokens
@@ -116,10 +124,12 @@ one stable saved notebook revision. The resulting producer identity binds the
 observation to the source that produced it.
 
 The ledger has a bounded coalescing queue. Repeated adjacent vectors accumulate
-an occurrence count. Queue eviction preserves the monotonic observation
-revision even when the vector itself is not retained. `flush()` waits for queued
-writes and surfaces a persistence failure. `close()` drains the worker, closes
-an owned repository, and reports the first failure.
+an occurrence count. Every accepted occurrence advances the producer's monotonic
+revision. Queue eviction advances that revision without retaining a vector.
+SQLite keeps one current row per fingerprint plus a bounded event history used
+to resolve the latest vector for each input-name relation at a snapshot revision.
+`flush()` waits for queued writes and surfaces a persistence failure. `close()`
+drains the worker, closes an owned repository, and reports the first failure.
 
 Application code records a vector through
 `ExportRepository.record_observation(plan, inputs)`. The facade validates that
@@ -130,6 +140,11 @@ An ExportSpec is the reviewable state contract. Observations remain local
 history until an application selects vectors and places them in an explicit
 spec.
 
+`clear_observations(plan)` deletes the producer's retained current rows and
+event history. It returns the number of current rows deleted. The monotonic
+producer revision remains unchanged, so clearing history does not create a new
+observation revision.
+
 ## Immutable artifact lifecycle
 
 Preparation writes into a private staging directory. State commit writes and
@@ -138,16 +153,31 @@ output plan, state fingerprint, metadata, file closure, byte count, and instance
 digest.
 
 Generation commit verifies the complete notebook export, its exact state
-membership, and its spec identity. Each committed instance is immutable. A
-scope row contains the mutable pointer to the current instance.
+membership, and its spec identity. Each instance's artifact bytes and canonical
+identity metadata are immutable. Its access time and captured observation
+revision can advance, and a scope row contains the mutable pointer to the
+current instance.
 
-Artifact commit uses three phases:
+Prepared-state commit uses five ordered phases:
 
-1. A short catalog transaction validates reservation, fence, pointer, and admission.
-2. Filesystem installation and complete verification run outside the catalog writer transaction.
-3. A short transaction rechecks the fence and pointer, records the instance, and acquires its lease.
+1. Write `prepared-state.json` and enforce the per-state byte limit.
+2. Apply repository retention before checking the candidate commit.
+3. Use a short catalog transaction to validate the reservation, fence, and pointer.
+4. Install and completely verify the filesystem tree outside the catalog writer transaction.
+5. Use a short transaction to recheck the fence and pointer, enforce repository byte admission, record the instance, and acquire its lease.
 
-Filesystem installation uses a same-filesystem atomic replacement sequence. A
+The preparation service runs its source and cancellation guard before invoking
+that state commit. Export-generation commit has its own ordered sequence:
+
+1. Verify the staged `index.json`, asset closure, exact prepared-state membership, and metadata limits.
+2. Apply repository retention before checking the candidate commit.
+3. Use a short catalog transaction to validate the reservation, fence, and pointer.
+4. Run the source and cancellation guard.
+5. Install and completely verify the filesystem tree outside the catalog writer transaction.
+6. Use a short transaction to recheck the fence and pointer, enforce repository byte admission, record the generation and its state membership, and acquire its lease.
+
+Filesystem installation uses native same-filesystem exchange when available and
+a guarded rollback replacement elsewhere. A
 lost final compare-and-swap retires the uncommitted installation for accounted
 cleanup. The prior current instance remains selected.
 
@@ -157,9 +187,10 @@ the same logical verification and lifecycle with best-effort permission changes.
 
 ## Reservations and fencing
 
-One preparation reservation owns one exact export identity. The first claimant
-receives a monotonically increasing fencing token. The lease manager renews the
-owner, token, staging paths, and live artifact leases.
+One preparation reservation owns one repository identity. The first claimant
+receives a monotonically increasing fencing token. The lease manager extends the
+reservation expiry while retaining its owner and token. It also renews staging
+paths and live artifact leases.
 
 Acquisition polls for a bounded interval and raises a repository failure with
 code `repository_reservation_timeout` when another healthy owner retains the
@@ -167,16 +198,17 @@ identity. The active reservation exposes liveness to preparation cancellation.
 
 Every state and generation commit proves:
 
-1. the reservation identity matches the export identity
+1. the reservation identity matches the repository identity
 2. the reservation owner still holds the row
 3. the fencing token is current
 4. the reservation has not expired
-5. an initial pointer is still empty, or the named replacement is still current
+5. an initial pointer is still empty, the named replacement is still current,
+   or another writer has already selected the same content-addressed instance
 
 A stale worker receives `RepositoryFenceError` and cannot replace a newer
 generation.
 
-Prepared states are shared across exact spec identities. Concurrent preparations
+Prepared states are shared across repository identities. Concurrent preparations
 that produce the same content-addressed state instance converge on that instance.
 A conflicting instance still requires the caller's observed replacement pointer.
 
@@ -205,8 +237,10 @@ generations, metadata bytes, artifact bytes, total repository bytes, lease
 lifetimes, and heartbeat cadence.
 
 Admission applies retention before a new artifact commits. Retention chooses
-victims from least-recently-used unleased instances while preserving current
-generations and their member states. The filesystem tree is first moved to a
+victims from least-recently-used unleased instances. It preserves active leases,
+the current generation for each identity admitted by `retained_identities`, and
+the prepared states required by retained generations. An older unleased identity
+can lose its current generation. The filesystem tree is first moved to a
 repository-owned quarantine name. The catalog then removes matching rows and
 accounts any tree awaiting deletion.
 
@@ -216,14 +250,17 @@ candidate snapshot.
 
 ## Recovery and failure classification
 
-Repository opening validates the SQLite schema and recovers active catalog
-artifacts. Recovery:
+Repository opening validates the SQLite schema and attempts one maintenance
+recovery. Another process may already hold maintenance ownership. In that case,
+opening continues and later reads verify the selected artifact before returning
+it. Recovery:
 
 - removes abandoned unleased staging directories
-- restores a verified installation backup when atomic replacement was interrupted
+- restores a verified installation backup when directory replacement was interrupted
+- reconciles a verified installed tree whose catalog commit was interrupted
 - verifies prepared-state identity, metadata, closure, and derived key
 - verifies notebook export identity and closure
-- retires catalog rows only for confirmed integrity failures
+- quarantines invalid artifact trees and removes catalog rows only for confirmed integrity failures
 - preserves healthy rows when another row is invalid
 - keeps retired-artifact cleanup accounted until the retired path is gone
 
@@ -231,6 +268,22 @@ Operational filesystem errors such as permission and resource failures surface
 as repository availability errors. They preserve the current catalog pointer.
 A confirmed SQLite corruption or incompatible internal schema is quarantined
 before a fresh catalog opens.
+
+## Status and maintenance results
+
+`repository.status()` returns a `RepositoryStatus` with the absolute repository
+path and counts for producers, retained observation fingerprints, prepared-state
+instances, repository identities, export generation instances, and active
+artifact leases. It removes expired artifact leases before counting them.
+
+`content_bytes` is accounted artifact content. It includes prepared states,
+export generations, and retired artifacts awaiting deletion. It does not report
+SQLite file size or active staging-directory bytes.
+
+`repository.prune(dry_run=True)` returns the prepared-state count, generation
+count, and content bytes eligible under the current retention policy. A live
+prune rechecks the snapshot, retires matching files, commits matching catalog
+changes, and returns the rows and bytes actually retired.
 
 ## Public and private boundaries
 
@@ -259,8 +312,9 @@ The public observation methods also accept the resolved plan:
 - `record_observation(plan, inputs)` records one complete vector and returns its
   `ObservedState`.
 - `observation_revision(plan)` returns the producer's current monotonic revision.
-- `observations(plan)` returns vectors projected to the producer and inferred
-  input names.
+- `observations(plan)` returns vectors stored for the exact ordered input-name
+  relation in the plan. Planning snapshots can project retained superset
+  relations to the inferred input names.
 - `clear_observations(plan)` clears that producer's observation history and
   returns the deleted row count.
 

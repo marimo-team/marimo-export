@@ -19,7 +19,7 @@ Windows.
 | Test                | `make test`       | Python, browser, loader, skill, and app tests pass         |
 | Build               | `make build`      | Python, npm, docs, and example packages build              |
 | Build docs          | `make docs-build` | VitePress site and LLM text bundles build                  |
-| Serve docs          | `make docs-serve` | Documentation runs at `127.0.0.1:4173`                     |
+| Serve docs          | `make docs-serve` | Documentation runs at `127.0.0.1:54173`                    |
 | Package             | `make package`    | Python and npm release artifacts pass isolated smoke tests |
 | Complete local gate | `make check`      | Format, lint, types, tests, builds, and package smoke pass |
 
@@ -209,8 +209,14 @@ or another implementation of the export format.
 - [marimo integration](development_docs/architecture/marimo-integration.md)
 - [Marimo upstream candidates](development_docs/architecture/marimo-upstream-candidates.md)
 - [Browser loaders and mounts](development_docs/architecture/browser-loaders-and-mounts.md)
+- [Live transport and processes](development_docs/architecture/live-transport-and-processes.md)
+- [Application publication and delivery](development_docs/architecture/application-publication-and-delivery.md)
+- [Identities and protocols](development_docs/architecture/identities-and-protocols.md)
+- [Portable JSON](development_docs/architecture/portable-json.md)
+- [Runtime profiles](development_docs/architecture/runtime-profiles.md)
 - [marimo-studio integration](development_docs/architecture/studio-integration.md)
-- [Agents and delivery](development_docs/architecture/agents-and-delivery.md)
+- [Product surfaces and distribution](development_docs/architecture/agents-and-delivery.md)
 - [Development](development_docs/development.md)
+- [Documentation system](development_docs/documentation.md)
 - [Validation](development_docs/validation.md)
 - [Releasing](development_docs/releasing.md)

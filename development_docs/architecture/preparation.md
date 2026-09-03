@@ -1,7 +1,7 @@
 # Planning and preparation
 
 Planning resolves an ExportSpec into exact producer work. Preparation reuses or
-captures the missing states, commits one immutable export, and returns a leased
+executes the missing states, commits one immutable export, and returns a leased
 `PreparedExport`.
 
 ```python
@@ -39,7 +39,7 @@ aliases. The default alias resolves to one fingerprint before state execution.
 Observations support authoring. They show complete input vectors that succeeded
 in a matching saved notebook. Planning includes the revision-consistent
 observation snapshot in `ExportPlan`, while the spec remains the source of
-states that preparation must publish.
+states that preparation must commit.
 
 ## ExportPlan reports exact work
 
@@ -47,7 +47,7 @@ states that preparation must publish.
 
 - notebook document identity
 - producer identity
-- output-plan identity
+- output declaration identity in `output_plan_sha256`
 - spec identity
 - inferred input names
 - normalized states and aliases
@@ -57,11 +57,17 @@ states that preparation must publish.
 - observed vectors and their repository revision
 - exact-generation reuse status
 
-The identity of one exact prepared export is:
+The repository identity of one exact `ExportPlan` is:
 
 ```text
 sha256(producer_sha256, output_plan_sha256, spec_sha256)
 ```
+
+`ExportPlan.identity` carries this repository lookup identity.
+`PreparedExport.identity` carries the notebook export identity, which is the
+SHA-256 of canonical `index.json` bytes. Read
+[Identities and protocols](identities-and-protocols.md) for the complete identity
+map.
 
 Planning first computes that identity from stable source and runtime facts. If
 the repository holds the exact verified generation, planning reconstructs the
@@ -88,9 +94,9 @@ reuse rules.
 5. Open one `OwnedNotebook` when work remains.
 6. Resolve the plan against the running baseline.
 7. Requery prepared states inside the reservation.
-8. Capture each missing fingerprint through a single-state ExportSpec.
-9. Verify and commit each captured prepared-state artifact.
-10. Assemble the requested relation from reusable and captured states.
+8. Execute each missing fingerprint through a single-state ExportSpec.
+9. Verify and commit each new prepared-state artifact.
+10. Assemble the requested relation from reusable and newly prepared states.
 11. Verify and commit one immutable export generation.
 12. Return a leased `PreparedExport`.
 
@@ -98,7 +104,7 @@ The producer source guard runs before generation publication. A notebook,
 environment, or marimo-export implementation change fails preparation and
 preserves the previous current generation.
 
-Each missing state commits independently after its complete capture succeeds.
+Each missing state commits independently after its complete execution succeeds.
 A later cancellation can therefore leave reusable state artifacts for the next
 attempt while withholding the incomplete exact generation.
 
@@ -117,7 +123,7 @@ Within the reservation, live capture:
 2. reuses matching prepared-state fingerprints
 3. captures each missing state through the borrowed session
 4. assembles the complete export
-5. publishes against the exact current generation observed before replacement
+5. commits against the exact current generation observed before replacement
 
 The capture bridge verifies the parent document again after downloading every
 asset. A changed live notebook fails the operation before repository commit.
@@ -131,14 +137,14 @@ when its individual operations continue to make progress.
 
 Repository reuse and Marimo computation caching solve different work:
 
-| Change                         | Repository work                         | Marimo work when capture runs           |
+| Change                         | Repository work                         | Marimo work during state execution      |
 | ------------------------------ | --------------------------------------- | --------------------------------------- |
 | Exact repeat                   | Reuse exact generation                  | No notebook starts                      |
 | HTML, CSS, or view-host change | Reuse exact generation                  | No notebook starts                      |
 | Default alias change           | Reuse prepared states, assemble export  | No state needs new computation          |
-| One added state                | Capture one missing state               | Native cache may restore its cells      |
+| One added state                | Prepare one missing state               | Native cache may restore its cells      |
 | One removed state              | Reuse remaining states, assemble export | Zero state executions                   |
-| Output declaration change      | New output-plan identity                | Native cache may restore notebook cells |
+| Output declaration change      | New output declaration identity         | Native cache may restore notebook cells |
 | Producer identity change       | New producer scope                      | Marimo decides native cache validity    |
 
 State aliases share one prepared-state artifact. A generation records the exact
@@ -159,7 +165,7 @@ write_finished
 ```
 
 State events carry completed count, total count, authored and projection cache
-activity, state alias, and elapsed capture time when available. The CLI renders
+activity, state alias, and elapsed execution time when available. The CLI renders
 the same records as human progress or JSONL. Applications can pass their own
 callback.
 
@@ -168,9 +174,10 @@ missing state, and before generation assembly. Cancellation releases the
 reservation, closes state handles, removes staging, and preserves the current
 generation.
 
-Reservation acquisition is bounded. File preparation uses its public `timeout`.
-Borrowed-session preparation uses the repository's 30-second reservation wait.
-Expiry raises a repository failure with code `repository_reservation_timeout`.
+Reservation acquisition is bounded. File and borrowed-session preparation use
+their public `timeout` for reservation acquisition and individual repository
+operations. Expiry raises a repository failure with code
+`repository_reservation_timeout`.
 
 After acquisition, the service combines caller cancellation with reservation
 liveness. A lost or reclaimed reservation stops later state work and the fenced
@@ -180,7 +187,7 @@ commit rejects the stale owner.
 
 `PreparedExport` exposes:
 
-- immutable export identity and `ExportPlan`
+- notebook export identity and `ExportPlan`
 - prepared and reused state fingerprints
 - observed Marimo cache activity for work that ran
 - `open()` for a verified `NotebookExport`
@@ -192,10 +199,10 @@ commit rejects the stale owner.
 Use it as a context manager. When `prepare()` opened the default repository,
 closing the handle closes that repository after the generation lease releases.
 
-`manifest(export_url, state=...)` emits `marimo-export.prepared.v1`. It binds the
-immutable export identity, export URL, complete selected inputs, state
-fingerprint, and optional refresh interval. The default selection comes from
-the export's explicit default state.
+`manifest(export_url, state=...)` emits `marimo-export.prepared.v1`. Its
+`instance` field binds the notebook export identity, export URL, complete
+selected inputs, state fingerprint, and optional refresh interval. The default
+selection comes from the export's explicit default state.
 
 ## Durable write
 

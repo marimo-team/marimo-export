@@ -1,89 +1,88 @@
 ---
-title: Use with agents
-description: Ground agent work in verified prepared notebook states and structured output representations.
+title: Use notebook exports with agents
+description: Give agents verified prepared data, exact state identity, and representation-aware evidence.
 ---
 
 # Use notebook exports with agents
 
-A notebook export gives an agent a finite data source with named states, explicit
-output representations, content identity, and verification facts.
+A notebook export gives an agent a finite, named data source. The agent can
+verify the complete export, select an exported state, decode a supported output,
+and retain the identities needed to reproduce its answer.
 
-## Ground an answer in an existing export
+## Read a verified output
 
-1. Verify the export.
-2. Open its default or requested state.
-3. Select an output the available tools can decode.
-4. Bind claims to the source and state identities.
+Build the [first notebook export](getting-started.md), then verify it in machine
+mode:
 
 ```bash
-marimo-export verify dist/report --json
+uv run marimo-export verify dist/report --json
 ```
+
+Stable result shape:
+
+```json
+{
+  "ok": true,
+  "result": {
+    "assets": 0,
+    "bytes_verified": 0,
+    "outputs": 2,
+    "states": 2
+  }
+}
+```
+
+Read the monthly summary and retain its evidence identity:
 
 ```python
 from marimo_export import open_export
 
-export = open_export("dist/report")
-state = export.default_state
-summary = state.output("summary").json()
+notebook_export = open_export("dist/report")
+state = notebook_export.state("monthly")
+output = state.output("summary")
 
 evidence = {
-    "export_sha256": export.identity,
-    "spec_sha256": export.spec_sha256,
+    "export_sha256": notebook_export.identity,
+    "spec_sha256": notebook_export.spec_sha256,
     "state_sha256": state.fingerprint,
-    "output": "summary",
-    "python_type": state.output("summary").descriptor.provenance.python_type,
+    "output": output.name,
+    "codec": output.codec,
+    "media_type": output.media_type,
+    "python_type": output.descriptor.provenance.python_type,
 }
+
+print(output.json())
 ```
 
-The selected representation constrains the claims an agent can support. Pair a
-visual output with JSON, a table, or an array when the answer depends on exact
-values.
+The selected representation determines what the agent can inspect. Pair a chart
+or widget with JSON, Parquet, Arrow, or NumPy data when an answer depends on
+exact values.
 
-## Choose agent-readable outputs
-
-| Representation         | Agent task                                           |
-| ---------------------- | ---------------------------------------------------- |
-| Portable JSON          | Summaries, records, arrays, metrics, and identifiers |
-| Scalar                 | Labels, statuses, thresholds, and metrics            |
-| Parquet or Arrow       | Filtering, aggregation, comparison, and typed tables |
-| NumPy                  | Numeric arrays when NPY tooling is available         |
-| Complete Marimo cell   | Output, console records, and cell identity           |
-| Rendered Marimo output | Formatted output and replay resources                |
-| Vega-Lite              | Inspectable chart specification and visual companion |
-| PNG                    | Visual review paired with structured evidence        |
-| AnyWidget              | Saved browser model state and interactive review     |
-| Versioned BlobAsset    | Domain records with a named media-type contract      |
-
-[Output representations](../reference/representations.md) maps these forms to
-Python access and browser loaders.
-
-## Retain evidence identity
+## Retain the evidence chain
 
 Keep these facts with a data-driven answer or generated application:
 
 - notebook filename and document SHA-256
 - ExportSpec SHA-256
 - notebook export identity from canonical `index.json`
-- Marimo and marimo-export producer versions
-- producer implementation SHA-256
-- state aliases and fingerprint
+- marimo and marimo-export producer versions
+- state name, complete inputs, and state fingerprint
 - output name, codec, media type, and originating Python type
-- asset SHA-256 when the output has an asset
-- verification result
+- asset SHA-256 when the output references an asset
+- complete-export verification result
 
-These records distinguish authored intent, producer implementation, selected
-state, representation, and exact bytes.
+Verification proves that files match `index.json`. It does not authenticate the
+publisher. Bind publisher identity through the storage, origin, signature, or
+release mechanism used by the deployment.
 
-## Ask an agent to prepare an export
+## Ask an agent to create an export
 
-An agent can inspect the notebook, author a finite spec, plan the work, build the
-export, and verify it:
+An agent can use the CLI as a bounded workflow:
 
 ```bash
+mkdir -p dist
 marimo-export inspect report.py --json
-marimo-export plan report.py \
-  --spec report.export.yaml \
-  --json
+marimo-export plan report.py --spec report.export.yaml --json
 marimo-export build report.py \
   --spec report.export.yaml \
   --output dist/report \
@@ -91,24 +90,32 @@ marimo-export build report.py \
 marimo-export verify dist/report --json
 ```
 
-Notebook inspection and preparation execute notebook code with the producer
-environment's file, credential, network, and package access. The agent should
-report external data dependencies and preserve the authored notebook source.
+File inspection and preparation execute notebook code with the producer
+process's environment, working directory, file access, credentials, packages,
+and network access. Review the notebook and selected outputs before allowing an
+agent to run them.
 
-`plan` reports reusable state fingerprints. An unchanged second build can reuse
-the exact prepared export before notebook startup. Adding one state prepares its
-missing fingerprint while retaining matching state artifacts.
+The plan reports complete state vectors, reusable state fingerprints, and
+missing work. A matching prepared export can be returned before notebook
+startup. A new external data response does not invalidate that reusable export
+unless the producer identity, output declarations, or ExportSpec changes.
 
-## Ask an agent to build a frontend
+## Ask an agent to create a browser application
 
 The repository includes a [notebook-to-static-app
 workflow](https://github.com/marimo-team/marimo-export/blob/main/skills/notebook-to-static-app/SKILL.md).
-It routes the agent through notebook inspection, ExportSpec design, preparation,
-frontend implementation, and browser validation.
+It guides an agent through notebook inspection, ExportSpec authoring,
+preparation, application implementation, and browser validation.
 
-The frontend should exercise every saved state, preserve the last committed view
-during rapid changes, dispose stale mounts, report recoverable errors, and load
-notebook results from the verified export.
+Require the resulting application to:
 
-Use [Build a browser application](browser-applications.md) for prepared state
-transitions and [Browser API](../reference/browser-api.md) for exact methods.
+- exercise every exported state
+- keep the last committed view during rapid changes
+- dispose replaced mounts
+- surface recoverable errors
+- load notebook results from the deployed export origin
+- open no Python kernel or WebSocket for exported state changes
+
+Use [Build a browser application](browser-applications.md) for the consumer
+lifecycle and [Troubleshooting](troubleshooting.md) for evidence to collect when
+an agent workflow fails.

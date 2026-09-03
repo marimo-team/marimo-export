@@ -67,6 +67,7 @@ build: ## Build Python, npm, docs, and example packages.
 	$(VP) run -r build
 	test -s apps/docs/.vitepress/dist/llms.txt
 	test -s apps/docs/.vitepress/dist/llms-full.txt
+	test -s apps/docs/.vitepress/dist/sitemap.xml
 	uv build --package marimo-export --clear --no-sources
 
 package: ## Build and verify Python and npm release artifacts.
@@ -90,8 +91,9 @@ docs-build: ## Build the public documentation site.
 	pnpm --filter @marimo-team/marimo-export-docs build
 	test -s apps/docs/.vitepress/dist/llms.txt
 	test -s apps/docs/.vitepress/dist/llms-full.txt
+	test -s apps/docs/.vitepress/dist/sitemap.xml
 
-docs-serve: ## Serve public documentation at http://127.0.0.1:4173/.
+docs-serve: ## Serve public documentation at http://127.0.0.1:54173/.
 	pnpm --filter @marimo-team/marimo-export-docs dev
 
 check: ## Run the complete local quality gate.

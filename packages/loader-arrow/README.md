@@ -1,13 +1,21 @@
-# Arrow loader
+# Arrow loader workspace
 
-Load an exported Arrow table with Flechette:
+`@marimo-export/internal-loader-arrow` owns [Apache Arrow](https://arrow.apache.org/docs/format/Columnar.html#serialization-and-interprocess-communication-ipc)
+interprocess communication file decoding for the public
+[`@marimo-team/marimo-export/loader/arrow`](../browser/src/loader/arrow.ts)
+facade. The workspace package is private and the public browser package carries
+its compiled implementation.
 
-```ts
-import { arrowTableLoader } from "@marimo-team/marimo-export/loader/arrow";
+The loader validates the Arrow media type, registers bounded
+[LZ4](https://github.com/Benzinga/lz4js) decompression, and returns a
+[Flechette](https://github.com/uwdata/flechette) table from verified export bytes.
 
-const table = await output.load(arrowTableLoader());
-console.log(table.numRows);
+Run focused checks from the repository root:
+
+```bash
+pnpm --filter @marimo-export/internal-loader-arrow test
+pnpm --filter @marimo-export/internal-loader-arrow typecheck
 ```
 
-Install `@uwdata/flechette` and `lz4js` beside
-`@marimo-team/marimo-export`.
+Public consumers install `@marimo-team/marimo-export` and follow the
+[Arrow representation and peer-runtime contract](../../docs/reference/representations.md).

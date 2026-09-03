@@ -5,6 +5,10 @@ prepared notebook export. Studio owns view authoring, presentation, and runtime
 UX. marimo-export owns the reusable Zero-Python preparation and browser state
 machinery.
 
+[Runtime profiles](runtime-profiles.md) defines live server, browser
+WebAssembly, and prepared execution before this page describes Studio's concrete
+runtime integration.
+
 ```text
 Studio provider artifact
   -> PresentationSnapshot(document, immutable mount declarations)
@@ -100,10 +104,12 @@ notebook baseline.
 
 ## Live preparation uses public publication and session APIs
 
-Studio passes each `(view, browser binding, presentation revision)` key and a
-capture callback to `PreparedPublicationController`. The callback receives the
-controller-owned `ExportRepository` and cancellation predicate, then uses the
-public session APIs:
+Studio passes each `(view, browser binding, presentation revision, state-source
+digest)` key and a capture callback to `PreparedPublicationController`. The
+state-source digest invalidates prepared work when `export.yaml` changes.
+Supersession groups requests by `(view, browser binding)`. The callback receives
+the controller-owned `ExportRepository` and cancellation predicate, then uses
+the public session APIs:
 
 ```python
 plan = session.plan(spec=compiled.spec, repository=repository)
@@ -207,7 +213,8 @@ _marimo-studio/views/<view>/zero-python/<instance>/assets/...
 
 Static assembly verifies `PreparedExport`, copies its immutable directory beside
 the provider artifact, writes the Studio manifest and bindings, verifies every
-copied file, and atomically installs the complete site directory. Studio
+copied file, and commits the complete site through native exchange when
+available or guarded rollback replacement elsewhere. Studio
 performs no state execution after `PreparedExport` is returned.
 
 Live preview and static delivery therefore consume the same notebook export and

@@ -1,12 +1,27 @@
 import { fileURLToPath } from "node:url";
-import { defineConfig, type HeadConfig, type Plugin, type UserConfig } from "vitepress";
+import {
+  defineConfig,
+  type DefaultTheme,
+  type HeadConfig,
+  type Plugin,
+  type UserConfig,
+} from "vitepress";
 import llmstxt from "vitepress-plugin-llms";
+
+// TypeScript excludes JavaScript from this package's source program. The
+// navigation check imports this module directly and validates every route.
+// @ts-expect-error The checked JavaScript module has no generated declaration.
+import { documentationSidebar, llmsSidebar, topNavigation } from "../navigation.mjs";
+// @ts-expect-error The checked JavaScript module has no generated declaration.
+import { checkNavigation } from "../scripts/check-navigation.mjs";
+
+await checkNavigation();
 
 const repository = "https://github.com/marimo-team/marimo-export";
 const siteUrl = new URL("https://marimo-team.github.io/marimo-export/");
 const description =
   "Precompute selected marimo notebook results as one verified export for applications, agents, Python automation, and custom clients.";
-const socialTitle = "Precompute notebook results. Use them anywhere.";
+const socialTitle = "Turn notebook states into verified files.";
 const socialImageAlt = `marimo-export: ${socialTitle}`;
 const socialImageUrl = new URL("brand/marimo-export-og.png", siteUrl).href;
 const baseName = process.env.BASE_PATH?.trim().replace(/^\/+|\/+$/g, "");
@@ -14,6 +29,9 @@ const basePath = baseName ? `/${baseName}` : "";
 const publicDir = fileURLToPath(new URL("../public", import.meta.url));
 const publicPath = (path: string): string => `${basePath}${path}`;
 const llmsDomain = basePath ? siteUrl.origin : siteUrl.href.replace(/\/$/, "");
+const themeNavigation: DefaultTheme.NavItem[] = topNavigation;
+const themeSidebar: DefaultTheme.Sidebar = documentationSidebar;
+const llmsNavigation: DefaultTheme.Sidebar = llmsSidebar;
 const canonicalUrl = (page: string): string => {
   const route = page
     .replace(/^\/+/, "")
@@ -21,47 +39,21 @@ const canonicalUrl = (page: string): string => {
     .replace(/\.md$/, "");
   return new URL(route, siteUrl).href;
 };
-const guideItems = [
-  { text: "Guide overview", link: "/guide/" },
-  { text: "Run the market dashboard", link: "/guide/getting-started" },
-  { text: "Choose states and results", link: "/guide/choose-states" },
-  { text: "Build or capture", link: "/guide/build-and-capture" },
-  { text: "Consume an export", link: "/guide/consume-an-export" },
-  { text: "Use with agents", link: "/guide/agents-and-automation" },
-  { text: "Build a browser application", link: "/guide/browser-applications" },
-  { text: "Deploy an export", link: "/guide/deploy" },
-];
-const referenceItems = [
-  { text: "Reference overview", link: "/reference/" },
-  { text: "ExportSpec", link: "/reference/export-spec" },
-  { text: "Export format", link: "/reference/export-format" },
-  { text: "CLI", link: "/reference/cli" },
-  { text: "Python API", link: "/reference/python-api" },
-  { text: "Browser API", link: "/reference/browser-api" },
-  { text: "Output representations", link: "/reference/representations" },
-];
-const introductionItems = [
-  { text: "marimo-export", link: "/" },
-  { text: "How notebook exports work", link: "/overview" },
-];
+
+const vitePlugins = <Value,>(value: Value): [Plugin, Plugin] => {
+  // SAFETY: vitepress-plugin-llms returns two Vite plugins whose standard hooks
+  // are loaded by the pinned VitePress release during every documentation build.
+  return value as [Plugin, Plugin];
+};
+
 const llmsPlugins = vitePlugins(
   llmstxt({
     domain: llmsDomain,
     excludeIndexPage: false,
-    sidebar: [
-      { text: "Introduction", items: introductionItems },
-      { text: "Guide", items: guideItems },
-      { text: "Reference", items: referenceItems },
-    ],
+    sidebar: llmsNavigation,
   }),
 );
 const viteConfig: UserConfig["vite"] = { plugins: llmsPlugins, publicDir };
-
-function vitePlugins<Value>(value: Value): [Plugin, Plugin] {
-  // SAFETY: vitepress-plugin-llms returns two Vite plugins whose standard hooks
-  // are loaded by the pinned VitePress release during every documentation build.
-  return value as [Plugin, Plugin];
-}
 
 export default defineConfig({
   base: basePath ? `${basePath}/` : "/",
@@ -112,17 +104,19 @@ export default defineConfig({
   ],
   lang: "en-US",
   lastUpdated: true,
+  sitemap: { hostname: siteUrl.href },
   srcDir: "../../docs",
   title: "marimo-export",
-  transformHead({ description: pageDescription, page }): HeadConfig[] {
+  transformHead({ description: pageDescription, page, title }): HeadConfig[] {
     const canonical = canonicalUrl(page);
     const summary = pageDescription || description;
+    const pageTitle = title || socialTitle;
     return [
       ["link", { href: canonical, rel: "canonical" }],
       ["meta", { property: "og:type", content: "website" }],
       ["meta", { property: "og:site_name", content: "marimo-export" }],
       ["meta", { property: "og:locale", content: "en_US" }],
-      ["meta", { property: "og:title", content: socialTitle }],
+      ["meta", { property: "og:title", content: pageTitle }],
       ["meta", { property: "og:description", content: summary }],
       ["meta", { property: "og:url", content: canonical }],
       ["meta", { property: "og:image", content: socialImageUrl }],
@@ -132,7 +126,7 @@ export default defineConfig({
       ["meta", { property: "og:image:height", content: "1260" }],
       ["meta", { property: "og:image:alt", content: socialImageAlt }],
       ["meta", { name: "twitter:card", content: "summary_large_image" }],
-      ["meta", { name: "twitter:title", content: socialTitle }],
+      ["meta", { name: "twitter:title", content: pageTitle }],
       ["meta", { name: "twitter:description", content: summary }],
       ["meta", { name: "twitter:image", content: socialImageUrl }],
       ["meta", { name: "twitter:image:alt", content: socialImageAlt }],
@@ -152,52 +146,10 @@ export default defineConfig({
       dark: "/brand/marimo-export-lockup-horizontal-dark.svg",
       alt: "marimo-export",
     },
-    nav: [
-      { text: "How it works", link: "/overview" },
-      {
-        text: "Guide",
-        items: guideItems,
-      },
-      { text: "Reference", link: "/reference/" },
-    ],
+    nav: themeNavigation,
     outline: [2, 3],
     search: { provider: "local" },
-    sidebar: {
-      "/guide/": [
-        {
-          text: "Guide",
-          collapsed: false,
-          items: guideItems,
-        },
-      ],
-      "/reference/": [
-        {
-          text: "Reference",
-          collapsed: false,
-          items: referenceItems,
-        },
-      ],
-      "/": [
-        {
-          text: "Introduction",
-          collapsed: false,
-          items: [
-            ...introductionItems,
-            { text: "Run the market dashboard", link: "/guide/getting-started" },
-          ],
-        },
-        {
-          text: "Guide",
-          collapsed: true,
-          items: guideItems,
-        },
-        {
-          text: "Reference",
-          collapsed: true,
-          items: referenceItems,
-        },
-      ],
-    },
+    sidebar: themeSidebar,
     siteTitle: false,
     socialLinks: [{ icon: "github", link: repository }],
   },

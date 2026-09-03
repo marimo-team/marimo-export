@@ -1,8 +1,9 @@
 # Development
 
-The workspace pins Python 3.12 for local development with Node 22.18, pnpm
-11.15.1, uv, and Vite+. Package CI verifies Python 3.10 through 3.14 on Ubuntu
-and Windows.
+The workspace pins Python 3.12 for local development with Node 22.18.0, pnpm
+11.15.1, uv, and Vite+. The root `devEngines.runtime` lets pnpm install the exact
+Node runtime and records it in `pnpm-lock.yaml`. Package CI verifies Python 3.10
+through 3.14 on Ubuntu and Windows.
 
 ## Install the workspace
 
@@ -169,9 +170,11 @@ Declare source modules that affect conversion output, including modules loaded
 dynamically. A borrowed session uses module objects already loaded at first
 exporter preparation. Restart the session for earlier edits to take effect.
 Later disk drift fails with `exporter_source_changed`. Custom exporter leaves
-never produce a cache hit. Files, network responses, mutable module state, and
-other external inputs affect each execution. The selected notebook value still
-follows Marimo's native cache policy.
+run live when their process resources require it. The selected notebook value
+follows Marimo's native cache policy. Create `mo.watch.file` in an upstream
+cell before reading the watched path from dependent cells. Give other external
+systems an author-owned Marimo cache or side-effect boundary so native
+invalidation can observe them.
 
 ```python
 from marimo_export.exporters import importable
@@ -233,13 +236,18 @@ The current durable schema is `marimo-export.export.v1`.
 
 ## Change documentation
 
-Public workflows live under `docs/guide/`. Exact contracts live under
-`docs/reference/`. VitePress 2.0.0-alpha.19 builds the site, local search,
+Public concepts live under `docs/concepts/`, workflows under `docs/guide/`, and
+exact contracts under `docs/reference/`. `apps/docs/navigation.mjs` owns every
+route and feeds the site and LLM text bundles. Read
+[Documentation system](documentation.md) before adding or moving a page.
+
+VitePress 2.0.0-alpha.19 builds the site, local search, per-page Markdown,
 `llms.txt`, and `llms-full.txt`.
 
 Run:
 
 ```bash
+node apps/docs/scripts/check-navigation.mjs
 make docs-build
 make docs-serve
 ```

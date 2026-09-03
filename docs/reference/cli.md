@@ -40,8 +40,8 @@ marimo-export build NOTEBOOK --spec FILE --output DIR
 ```
 
 Prepares missing states, writes the verified export to `DIR`, and closes the
-owned notebook process tree. `--replace` atomically replaces an existing export
-directory.
+owned notebook process tree. `--replace` uses native directory exchange where
+the filesystem supports it and guarded rollback replacement elsewhere.
 
 ## `capture`
 
@@ -53,11 +53,18 @@ marimo-export capture SERVER --session ID --spec FILE --output DIR
 
 Prepares one named live session through the export repository, writes the
 verified export to `DIR`, and closes the preparation lease. The server and
-session remain active. `--replace` atomically replaces an existing export
-directory.
+session remain active. `--replace` uses the same guarded replacement contract as
+`build`.
 
 Live server authentication reads `MARIMO_EXPORT_ACCESS_TOKEN` and
 `MARIMO_EXPORT_SERVER_TOKEN` from the environment.
+
+Plain HTTP is accepted for loopback hosts. Remote servers require HTTPS. Server
+URLs cannot contain user information, a query string, or a fragment, and the
+client rejects redirects. `MARIMO_EXPORT_ACCESS_TOKEN` becomes an
+`Authorization: Bearer` credential. `MARIMO_EXPORT_SERVER_TOKEN` becomes the
+`Marimo-Server-Token` header. Explicit Python credentials take precedence over
+these environment values.
 
 ## `inspect`
 
@@ -105,6 +112,14 @@ marimo-export observations clear NOTEBOOK --spec FILE
 Resolves the notebook plan, clears its producer observations, and reports the
 producer identity, prior observation revision, and number removed.
 
+::: danger Producer-wide deletion
+This command permanently removes the retained canonical vectors and event rows
+for the plan's producer, including observations created through other specs for
+that producer. It returns the number of canonical vectors removed. The monotonic
+producer revision and prepared exports remain. Later successful notebook runs
+can record new observations through an installed observation ledger.
+:::
+
 ## `repository status`
 
 ```text
@@ -131,7 +146,7 @@ marimo-export doctor [--repository DIR] [--json]
 ```
 
 Reports the effective repository, Python executable and version, marimo-export
-version, and pinned Marimo adapter compatibility. A failed compatibility check
+version, and pinned marimo adapter compatibility. A failed compatibility check
 returns exit code `4`.
 
 ## Common options
@@ -150,18 +165,20 @@ Repository precedence is:
 2. `MARIMO_EXPORT_REPOSITORY`
 3. the operating system cache directory
 
+`marimo-export --version` prints the installed command version and exits.
+
 ## Output contracts
 
 Human results use standard output. Human progress, warnings, and errors use
 standard error.
 
-JSON success:
+JSON success wraps the command-specific result:
 
 ```json
-{ "ok": true, "result": {} }
+{ "ok": true, "result": { "states": 2, "outputs": 2, "assets": 0, "bytes_verified": 0 } }
 ```
 
-JSON failure:
+Most JSON failures use an error envelope:
 
 ```json
 { "error": { "code": "...", "message": "..." }, "ok": false }
@@ -200,14 +217,37 @@ Progress objects include every `ProgressEvent` field. Unused fields are `null`.
 `--json` suppresses progress. `--json` and `--jsonl` are mutually exclusive.
 Machine modes write one compact sorted-key object per line to standard output.
 
+`doctor --json` always returns its diagnostic record under `result`. A failed
+compatibility check sets `ok` to `false`, returns exit code `4`, and keeps the
+individual check result available for automation.
+
+## Command result records
+
+| Command              | Stable `result` content                                        |
+| -------------------- | -------------------------------------------------------------- |
+| `plan`               | Complete `ExportPlan` record                                   |
+| `build`, `capture`   | Complete `ExportResult` record                                 |
+| `inspect NOTEBOOK`   | `SessionDescription` record                                    |
+| `inspect SERVER`     | `sessions` array with ID, filename, and path                   |
+| `verify`             | State, output, asset, and verified-byte counts                 |
+| `observations list`  | Producer, inputs, revision, and observed vectors               |
+| `observations clear` | Producer, prior revision, and removed-vector count             |
+| `repository status`  | Repository counts, accounted bytes, and active artifact leases |
+| `repository prune`   | Retired state, generation, and byte counts                     |
+| `doctor`             | Repository, Python, package, and marimo compatibility facts    |
+
+Use the [Python records and errors](python/format-records-and-errors.md) reference
+for planning, result, warning, and error field contracts.
+
 ## Exit codes
 
 |  Exit | Meaning                                   |
 | ----: | ----------------------------------------- |
 |   `0` | Success                                   |
+|   `1` | Unexpected internal failure               |
 |   `2` | Arguments or local value shape            |
 |   `3` | Environment, transport, or live session   |
-|   `4` | Export planning or Marimo compatibility   |
+|   `4` | Export planning or marimo compatibility   |
 |   `5` | State execution or output materialization |
 |   `6` | Export or asset integrity                 |
 |   `7` | Filesystem or export repository           |

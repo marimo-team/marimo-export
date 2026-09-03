@@ -1,71 +1,91 @@
 ---
-title: Deploy an export
-description: Verify the export, review executable browser representations, and configure static hosting.
+title: Deploy a notebook export
+description: Verify files, configure static hosting, and preserve the integrity and browser trust boundaries.
 ---
 
-# Deploy an export
+# Deploy a notebook export
 
-Verify the complete export before copying it to a static host or handing it to
-an agent or service:
+A deployed notebook export is a directory whose `index.json` and declared
+assets remain available at stable HTTP URLs. Verify the directory before upload,
+then exercise the deployed consumer against the final origin.
 
-```bash
-marimo-export verify dist/finance
-```
+## Preview the static files
 
-The same reader validates local exports during the producer commit. Running the
-command again checks the files selected for deployment.
-
-## Treat producer code as notebook code
-
-`build` and file-based `inspect NOTEBOOK` execute notebook code with its file,
-credential, network, and package access. `capture` runs selected states in an
-active session with the same authority. Review the notebook, custom exporters,
-and selected session before running these commands.
-
-List the sessions on a server before capture, then pass the selected ID:
+Build the [first notebook export](getting-started.md), then serve its parent
+directory:
 
 ```bash
-marimo-export inspect http://127.0.0.1:2718
-
-marimo-export capture http://127.0.0.1:2718 \
-  --session SESSION_ID \
-  --spec export.yaml \
-  --output dist/export
+python -m http.server 8000 --directory dist
 ```
 
-Pin the notebook environment and external data inputs when the export must be
-reproducible. marimo cache entries execute with the notebook's authority when
-restored.
+`http://127.0.0.1:8000/report/index.json` should return canonical JSON. Pass
+`http://127.0.0.1:8000/report/` to `openExport()`.
 
-Producer installs include cryptographic verification support. marimo's signing
-policy and key configuration determine whether a cache is signed and verified.
-Configure persistent signing keys and trusted signers when unverified cache
-entries are unacceptable.
+Run the complete verifier before copying files:
 
-## Review mounted browser code
+```bash
+marimo-export verify dist/report
+```
 
-AnyWidget, Vega-Lite, and custom loaders can execute JavaScript or request
-external resources with the page's authority.
+## Configure the host
 
-- Review widget modules, chart specifications, and custom loaders.
-- Configure Content Security Policy and allowed origins.
-- Set output byte limits for untrusted or unusually large exports.
-- Abort stale state transitions and dispose replaced mounts.
+The host must preserve paths and bytes exactly. It may compress responses in
+transit because readers verify the decoded body.
 
-Opening and verifying `index.json` executes no notebook-authored browser
-module. Mounting an interactive representation grants that module page
-authority.
+| Resource                               | Recommended cache policy                                        |
+| -------------------------------------- | --------------------------------------------------------------- |
+| Immutable asset under `assets/`        | Long-lived immutable caching                                    |
+| Versioned export instance `index.json` | Long-lived immutable caching                                    |
+| Replaceable standalone `index.json`    | Revalidate according to the application's freshness requirement |
+| Prepared manifest `current` route      | `no-store` or equivalent revalidation                           |
 
-## Serve the directory
+Serve the application and its export from one origin when possible. A separate
+origin must allow the application origin through [Cross-Origin Resource Sharing
+(CORS)](https://developer.mozilla.org/en-US/docs/Web/HTTP/CORS). Use the browser
+API's custom `fetch` option when requests require credentials or an origin
+allowlist. Do not place bearer credentials in the export URL query because that
+query is copied to every asset request.
 
-Serve the notebook export over HTTPS or localhost. Pass `openExport()` the URL
-that contains `index.json`. A browser application can consume it from the same
-origin or an origin allowed by the deployment policy.
+## Configure executable representations
 
-Content-addressed assets can use long-lived immutable cache headers. Choose an
-`index.json` cache policy that matches how quickly a replacement export should
-become visible.
+[Content Security Policy
+(CSP)](https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP) controls resources
+that mounted outputs can execute or create.
 
-After deployment, open the application at desktop and narrow widths. Exercise
-every state control, inspect browser errors, and confirm that notebook result
-requests use the static application origin.
+| Representation                    | Policy capability that may be required  |
+| --------------------------------- | --------------------------------------- |
+| Embedded AnyWidget module         | `script-src blob:`                      |
+| Remote AnyWidget module           | Its HTTPS script origin                 |
+| AnyWidget styles                  | The application's accepted style policy |
+| Image loader                      | `img-src blob:`                         |
+| Vega-Lite external data or images | Each declared network or image origin   |
+
+An AnyWidget module loaded from an HTTP URL remains outside the export asset
+closure. The export verifies the stored URL record, while the remote server owns
+the module bytes returned at mount time.
+
+## Separate integrity from publisher trust
+
+`openExport()` validates canonical `index.json`. Loading an output verifies the
+selected asset. `NotebookExport.verify()` and `marimo-export verify` read every
+declared asset.
+
+These checks prove consistency with `index.json`. Authenticate the publisher
+through the deployment origin, signed release artifacts, or another mechanism
+owned by your application. marimo computation-cache signing protects producer
+cache restoration and is separate from notebook export authentication.
+
+## Verify the deployed application
+
+After upload:
+
+1. Open the application at desktop and narrow widths.
+2. Exercise every exported state and one interaction in each mounted output.
+3. Confirm that all notebook result requests use the deployed static origin.
+4. Confirm that exported state changes open no kernel or WebSocket connection.
+5. Inspect console errors and failed requests.
+6. Verify the same deployed directory through an independent download when the
+   host can transform uploaded files.
+
+Use [Troubleshooting](troubleshooting.md) for CORS, CSP, integrity, state, and
+loader failures.

@@ -7,7 +7,7 @@ description: Durable directory, index, state, representation, asset, integrity, 
 
 A notebook export is one canonical `index.json` and the content-addressed assets
 declared by that index. Python, browser, agent, and custom clients consume the
-same durable relation between prepared states and named outputs.
+same durable relation between exported states and named outputs.
 
 ## Directory layout
 
@@ -24,6 +24,11 @@ report/
 
 `index.json` is the single entry point. Asset paths are derived from codec and
 SHA-256 rather than supplied as arbitrary paths.
+
+An export directory may contain application-owned sidecar files beside
+`index.json`. The declared export closure consists of `index.json` and the exact
+files referenced under `assets/`. Repository generations apply a stricter
+private directory closure before reuse.
 
 ## Index schema
 
@@ -89,7 +94,7 @@ marimo-export Python source set that created the index. Capture freezes this
 identity before execution and commits it after the end-of-operation identity
 check succeeds.
 
-Descriptor provenance contains the originating `python_type`. Native Marimo
+Descriptor provenance contains the originating `python_type`. Native marimo
 cache keys and return references remain inside the producer process.
 
 BlobAsset descriptors also record filename and portable metadata.
@@ -193,13 +198,13 @@ graph produced the output.
 ```
 
 `cell.name` is null for an unnamed cell. `output` is null when the completed
-cell has no terminal output. `console` preserves the ordered Marimo console
+cell has no terminal output. `console` preserves the ordered marimo console
 records captured during the selected cell's fresh execution.
 
 Both snapshot records use the same replay resources:
 
 - `files` maps each closed virtual resource to a slash-prefixed `/@file/`
-  path and data URL. Model notifications retain Marimo's trusted relative
+  path and data URL. Model notifications retain marimo's trusted relative
   `./@file/` URL, which resolves through that normalized key.
 - `modelNotifications` contains the reachable AnyWidget model lifecycle
   closure in replay order. Model IDs contain the record's
@@ -212,7 +217,7 @@ Both snapshot records use the same replay resources:
 
 The producer applies the same scope to UI object IDs, random IDs, HTML
 attributes, and structured UI references within one snapshot. Each UI ID begins
-with the snapshot's `ownerCellId` or `cell.id`, preserving Marimo's ownership
+with the snapshot's `ownerCellId` or `cell.id`, preserving marimo's ownership
 authorization, and ends in a projection-root structural path. Common controls
 keep the same ID when a conditional tree adds or removes siblings. Model IDs
 use their projection-scoped model namespace. This lets a consumer merge
@@ -220,6 +225,9 @@ rendered-output and complete-cell resources from the same live UI element.
 
 Browser loaders validate and freeze these records. Rendering and model replay
 belong to the consuming application.
+
+The [marimo snapshot reference](browser/snapshots.md) defines every record,
+message union, replay-resource field, and browser parser.
 
 ## Asset identity
 
@@ -234,6 +242,11 @@ Producer and local-reader bounds are:
 
 Browser callers can apply their own per-output and aggregate limits through the
 browser API.
+
+The Python reader's 512 MiB closure limit includes `index.json` plus unique
+declared assets. Descriptor records can represent assets up to 2,147,483,647
+bytes so another format implementation can apply its own lower operational
+limit.
 
 ## BlobAsset envelope
 
@@ -268,6 +281,33 @@ consistency with that index. It does not authenticate who produced the index.
 Python `NotebookExport.identity` and browser `NotebookExport.identity` expose
 the lowercase SHA-256 of the exact canonical `index.json` bytes.
 
+## Protocol limits
+
+| Value                                           |                              Limit |
+| ----------------------------------------------- | ---------------------------------: |
+| Canonical `index.json`                          |   16 MiB and 2,000,000 JSON values |
+| Input, output, alias, and producer version name |                    255 UTF-8 bytes |
+| Control binding path                            |                    256 typed steps |
+| Media type                                      |        1,024 printable ASCII bytes |
+| BlobAsset metadata                              | 256 KiB of canonical portable JSON |
+| Python producer or local-reader asset           |                             64 MiB |
+| Python export closure                           |     512 MiB including `index.json` |
+
+The [browser errors and limits](browser/errors-and-limits.md) reference lists
+browser defaults and caller overrides.
+
+## HTTP delivery
+
+Serve `index.json` and each declared asset at byte-stable HTTP or HTTPS URLs.
+Content encoding is permitted because browser readers verify the decoded body.
+Use immutable caching for content-addressed assets. A replaceable `index.json`
+needs a revalidation policy that matches the application's freshness contract.
+
+Cross-origin applications need an explicit [Cross-Origin Resource Sharing
+(CORS)](https://developer.mozilla.org/en-US/docs/Web/HTTP/CORS) policy. The
+browser API accepts a custom `fetch` implementation for credentials and request
+policy.
+
 ## Consumer behavior
 
 Opening an export reads and validates `index.json`. Assets remain lazy until a
@@ -280,7 +320,7 @@ State selection supports:
 - exact complete input vector
 - sparse patch from an existing state
 
-Resolution returns a prepared state already present in the export.
+Resolution returns an exported state already present in the export.
 
 ## Versioning
 

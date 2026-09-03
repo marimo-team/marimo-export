@@ -1,6 +1,6 @@
-# Agents and delivery
+# Product surfaces and distribution
 
-The delivery path starts with an unchanged notebook and ends with a verified
+The product workflow starts with an unchanged notebook and ends with a verified
 notebook export for people, agents, Python automation, browser applications,
 and custom consumers. The repository also delivers three installable packages,
 an agent workflow, a reference application, and documentation for the same
