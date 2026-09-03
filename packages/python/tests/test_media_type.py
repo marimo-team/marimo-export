@@ -1,7 +1,28 @@
 from __future__ import annotations
 
+import mimetypes
+
 import pytest
-from marimo_export._media_type import validate_media_type
+from marimo_export._media_type import media_type_for_filename, validate_media_type
+
+
+@pytest.mark.parametrize(
+    ("filename", "system_value", "expected"),
+    [
+        ("app.js", "application/javascript", "text/javascript"),
+        ("captions.vtt", None, "text/vtt"),
+        ("module.wasm", None, "application/wasm"),
+    ],
+)
+def test_web_media_types_are_independent_of_system_mappings(
+    monkeypatch: pytest.MonkeyPatch,
+    filename: str,
+    system_value: str | None,
+    expected: str,
+) -> None:
+    monkeypatch.setattr(mimetypes, "guess_type", lambda _filename: (system_value, None))
+
+    assert media_type_for_filename(filename, default="application/octet-stream") == expected
 
 
 @pytest.mark.parametrize(

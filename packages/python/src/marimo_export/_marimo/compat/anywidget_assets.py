@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import base64
-import mimetypes
 import re
 from dataclasses import dataclass
 
 from marimo._runtime.virtual_file import read_virtual_file
 from marimo._utils.data_uri import build_data_url
+
+from marimo_export._media_type import media_type_for_filename
 
 _VIRTUAL_FILE = re.compile(r"^(?:\./|/)?@file/(?P<size>\d+)-(?P<name>.+)$")
 _JS_ALLOWED_URL_PREFIXES = ("data:", "http://", "https://")
@@ -771,7 +772,10 @@ def _inline_css_virtual_file(url: str) -> str:
         raise ValueError(
             f"AnyWidget CSS {url!r} declared {expected_size} bytes but returned {len(contents)}"
         )
-    media_type = mimetypes.guess_type(match.group("name"))[0] or "application/octet-stream"
+    media_type = media_type_for_filename(
+        match.group("name"),
+        default="application/octet-stream",
+    )
     return build_data_url(media_type, base64.b64encode(contents))
 
 

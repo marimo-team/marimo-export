@@ -3,7 +3,6 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
-import mimetypes
 import re
 from collections import deque
 from collections.abc import Mapping
@@ -28,6 +27,7 @@ from marimo._utils.data_uri import build_data_url
 
 from marimo_export._diagnostics import safe_diagnostic
 from marimo_export._json import json_value
+from marimo_export._media_type import media_type_for_filename
 from marimo_export.errors import OutputError
 
 from .anywidget_assets import portable_css, validate_embedded_esm
@@ -276,7 +276,7 @@ def _canonical_esm_spec(
     validate_embedded_esm(source)
     digest = hashlib.sha256(contents).hexdigest()
     url = f"./@file/{len(contents)}-anywidget-{digest}.js"
-    media_type = mimetypes.guess_type(url)[0] or "text/javascript"
+    media_type = media_type_for_filename(url, default="text/javascript")
     files[url.removeprefix(".")] = build_data_url(
         media_type,
         base64.b64encode(contents),

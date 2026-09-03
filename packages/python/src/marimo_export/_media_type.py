@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import mimetypes
 import re
+from pathlib import PurePath
 
 from marimo_export._json import json_string
 
@@ -24,9 +26,30 @@ MEDIA_TYPE_SCHEMA_PATTERN = (
 )
 
 _MEDIA_TYPE = re.compile(MEDIA_TYPE_SCHEMA_PATTERN)
+_WEB_MEDIA_TYPES = {
+    ".cjs": "text/javascript",
+    ".css": "text/css",
+    ".htm": "text/html",
+    ".html": "text/html",
+    ".js": "text/javascript",
+    ".json": "application/json",
+    ".mjs": "text/javascript",
+    ".svg": "image/svg+xml",
+    ".vtt": "text/vtt",
+    ".wasm": "application/wasm",
+}
 _MEDIA_TOKEN_CHARACTERS = frozenset(
     "!#$%&'*+.^_`|~0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-"
 )
+
+
+def media_type_for_filename(filename: str, *, default: str) -> str:
+    """Return a stable web media type for a filename."""
+
+    known = _WEB_MEDIA_TYPES.get(PurePath(filename).suffix.casefold())
+    if known is not None:
+        return known
+    return mimetypes.guess_type(filename)[0] or default
 
 
 def validate_media_type(value: object, label: str) -> str:
@@ -108,5 +131,6 @@ __all__ = [
     "MAX_BLOB_METADATA_JSON_BYTES",
     "MAX_MEDIA_TYPE_ASCII_BYTES",
     "MEDIA_TYPE_SCHEMA_PATTERN",
+    "media_type_for_filename",
     "validate_media_type",
 ]

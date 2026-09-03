@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import base64
 import html
-import mimetypes
 import os
 import re
 from html.parser import HTMLParser
@@ -14,6 +13,7 @@ from typing import TYPE_CHECKING, Any, cast
 import msgspec
 
 from marimo_export._json import JsonValue, canonical_bytes, json_value
+from marimo_export._media_type import media_type_for_filename
 from marimo_export.errors import OutputError
 
 if TYPE_CHECKING:
@@ -416,7 +416,7 @@ def _close_component_value(value: object, resolver: _ResourceResolver) -> object
 
 
 def _data_url(filename: str, data: bytes) -> str:
-    media_type = mimetypes.guess_type(filename)[0] or "application/octet-stream"
+    media_type = media_type_for_filename(filename, default="application/octet-stream")
     payload = base64.b64encode(data).decode("ascii")
     return f"data:{media_type};base64,{payload}"
 
