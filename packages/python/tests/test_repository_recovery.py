@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 import sqlite3
-import time
+import threading
 from pathlib import Path
 
 import marimo_export._repository.files as files_module
@@ -308,7 +308,7 @@ def test_slow_recovery_does_not_starve_live_generation_heartbeat(
 ) -> None:
     root = tmp_path / "repository"
     limits = RepositoryLimits(
-        lease_ttl_seconds=0.2,
+        lease_ttl_seconds=2.0,
         lease_heartbeat_seconds=0.05,
     )
     identity = _identity("slow-recovery")
@@ -317,11 +317,22 @@ def test_slow_recovery_does_not_starve_live_generation_heartbeat(
     export = _export(owner, identity, state, "live")
     recovering = ExportRepository.open(root, limits=limits)
     native_verify = ArtifactContext.verify_export
+    native_renew = owner._catalog.renew_lifecycle
+    verification_started = threading.Event()
+    renewed = threading.Event()
+
+    def observe_renewal(**kwargs):
+        result = native_renew(**kwargs)
+        if verification_started.is_set() and kwargs["artifacts"]:
+            renewed.set()
+        return result
 
     def slow_verify(context: ArtifactContext, path: Path):
-        time.sleep(0.35)
+        verification_started.set()
+        assert renewed.wait(timeout=2)
         return native_verify(context, path)
 
+    monkeypatch.setattr(owner._catalog, "renew_lifecycle", observe_renewal)
     monkeypatch.setattr(ArtifactContext, "verify_export", slow_verify)
     recovering._recover()
     assert export.asset("index.json") is not None

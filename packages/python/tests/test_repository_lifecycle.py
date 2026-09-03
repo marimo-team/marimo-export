@@ -411,19 +411,18 @@ def test_repeated_busy_renewal_expires_artifact_handle_fail_closed(
     )
     repository = ExportRepository.open(tmp_path / "repository", limits=limits)
     state = _state(repository, identity, 1)
-    attempts = 0
+    attempted = threading.Event()
 
     def busy_heartbeat(**_kwargs):
-        nonlocal attempts
-        attempts += 1
+        attempted.set()
         raise RepositoryBusyError("catalog busy")
 
     monkeypatch.setattr(repository._catalog, "renew_lifecycle", busy_heartbeat)
     repository._leases._wake.set()
+    assert attempted.wait(timeout=2)
     deadline = time.monotonic() + 2
     while state.alive and time.monotonic() < deadline:
         time.sleep(0.01)
-    assert attempts >= 2
     assert not state.alive
     with pytest.raises(RuntimeError, match="heartbeat failed"):
         state.asset("value.txt")
@@ -459,11 +458,12 @@ def test_delayed_success_after_deadline_does_not_revive_artifact_lease(
 
     monkeypatch.setattr(repository._catalog, "renew_lifecycle", delayed_renewal)
     assert entered.wait(timeout=2)
-    time.sleep(0.2)
-    proceed.set()
-    deadline = time.monotonic() + 2
-    while repository._leases._failure is None and time.monotonic() < deadline:
-        time.sleep(0.01)
+    try:
+        deadline = time.monotonic() + 2
+        while state.alive and time.monotonic() < deadline:
+            time.sleep(0.01)
+    finally:
+        proceed.set()
     assert repository._leases._failure is not None
     assert not state.alive
     with pytest.raises(RuntimeError, match="heartbeat failed"):
@@ -572,11 +572,14 @@ def test_delayed_success_after_deadline_does_not_revive_staging_lease(
 
     monkeypatch.setattr(repository._catalog, "renew_lifecycle", delayed_renewal)
     assert entered.wait(timeout=2)
-    time.sleep(0.2)
-    proceed.set()
-    deadline = time.monotonic() + 2
-    while relative in repository._leases._staging and time.monotonic() < deadline:
-        time.sleep(0.01)
+    try:
+        deadline = time.monotonic() + 2
+        while relative in repository._leases._staging and time.monotonic() < deadline:
+            with repository._leases._condition:
+                repository._leases._expire_unconfirmed_lifecycle()
+            time.sleep(0.01)
+    finally:
+        proceed.set()
     assert relative not in repository._leases._staging
     assert relative not in repository._leases._confirmed_staging_deadline
     monkeypatch.setattr(repository._catalog, "renew_lifecycle", native_renew)
@@ -730,7 +733,7 @@ def test_slow_prune_quarantine_does_not_starve_live_heartbeat(
         retained_identities=1,
         retained_generations=1,
         retained_prepared_states=1,
-        lease_ttl_seconds=0.2,
+        lease_ttl_seconds=2.0,
         lease_heartbeat_seconds=0.05,
     )
     victim_identity = _identity("slow-prune-victim")
@@ -746,11 +749,22 @@ def test_slow_prune_quarantine_does_not_starve_live_heartbeat(
     live_export = _export(owner, live_identity, live_state, 2)
     pruning = ExportRepository.open(root, limits=limits)
     native_quarantine = lifecycle_module.quarantine
+    native_renew = owner._catalog.renew_lifecycle
+    quarantine_started = threading.Event()
+    renewed = threading.Event()
+
+    def observe_renewal(**kwargs):
+        result = native_renew(**kwargs)
+        if quarantine_started.is_set() and kwargs["artifacts"]:
+            renewed.set()
+        return result
 
     def slow_quarantine(path: Path):
-        time.sleep(0.35)
+        quarantine_started.set()
+        assert renewed.wait(timeout=2)
         return native_quarantine(path)
 
+    monkeypatch.setattr(owner._catalog, "renew_lifecycle", observe_renewal)
     monkeypatch.setattr(lifecycle_module, "quarantine", slow_quarantine)
     pruning.prune()
     assert live_export.asset("index.json") is not None

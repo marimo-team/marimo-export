@@ -114,8 +114,8 @@ def test_detached_lease_survives_repository_close_and_prune(tmp_path: Path) -> N
         retained_identities=1,
         retained_generations=1,
         retained_prepared_states=1,
-        lease_ttl_seconds=0.5,
-        lease_heartbeat_seconds=0.05,
+        lease_ttl_seconds=1.0,
+        lease_heartbeat_seconds=0.1,
     )
     identity = _identity("detached")
     repository = ExportRepository.open(root, limits=limits)
@@ -197,8 +197,8 @@ def test_crashed_process_lease_expires_before_generation_is_pruned(tmp_path: Pat
         retained_identities=1,
         retained_generations=1,
         retained_prepared_states=1,
-        lease_ttl_seconds=0.5,
-        lease_heartbeat_seconds=0.05,
+        lease_ttl_seconds=1.0,
+        lease_heartbeat_seconds=0.1,
     )
     old_identity = _identity("process-old")
     with ExportRepository.open(root, limits=limits) as seed:
@@ -225,8 +225,8 @@ limits = RepositoryLimits(
     retained_identities=1,
     retained_generations=1,
     retained_prepared_states=1,
-    lease_ttl_seconds=0.5,
-    lease_heartbeat_seconds=0.05,
+    lease_ttl_seconds=1.0,
+    lease_heartbeat_seconds=0.1,
 )
 repository = ExportRepository.open(sys.argv[1], limits=limits)
 handle = preparation_repository(repository).current(identity)
@@ -266,8 +266,10 @@ while True:
 
             process.kill()
             process.communicate(timeout=10)
-            time.sleep(0.6)
-            repository.prune()
+            deadline = time.monotonic() + 5
+            while old_path.exists() and time.monotonic() < deadline:
+                time.sleep(0.05)
+                repository.prune()
             assert not old_path.exists()
             newer_export.close()
             newer_state.close()

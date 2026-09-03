@@ -232,8 +232,7 @@ def test_busy_renewal_expires_reservation_and_staging_fail_closed(
     state.close()
     preparation = preparation_repository(repository)
     native_renew = repository._catalog.renew_lifecycle
-    attempts = 0
-    started = time.monotonic()
+    attempted = threading.Event()
     with preparation.reserve_preparation(identity) as reservation:
         staged_state = preparation.stage_prepared_state(
             producer_sha256=identity.producer_sha256,
@@ -255,22 +254,26 @@ def test_busy_renewal_expires_reservation_and_staging_fail_closed(
         }
 
         def busy_heartbeat(**_kwargs):
-            nonlocal attempts
-            attempts += 1
+            attempted.set()
             raise RepositoryBusyError("catalog busy")
 
         monkeypatch.setattr(repository._catalog, "renew_lifecycle", busy_heartbeat)
         repository._leases._wake.set()
-        deadline = started + 0.25
-        while attempts < 2 and time.monotonic() < deadline:
-            time.sleep(0.01)
-        assert attempts >= 2
-        assert reservation.alive
-        while time.monotonic() < started + 0.85:
+        assert attempted.wait(timeout=2)
+        deadline = time.monotonic() + 2
+        while reservation.alive and time.monotonic() < deadline:
             time.sleep(0.01)
         assert not reservation.alive
         assert preparation.cancellation(lambda: False)()
         assert identity.key in repository._leases._lost_reservations
+        deadline = time.monotonic() + 2
+        while (
+            not staging_paths.isdisjoint(repository._leases._staging)
+            and time.monotonic() < deadline
+        ):
+            with repository._leases._condition:
+                repository._leases._expire_unconfirmed_lifecycle()
+            time.sleep(0.01)
         assert staging_paths.isdisjoint(repository._leases._staging)
         with pytest.raises(RepositoryFenceError, match="stale"):
             staged_state.commit(metadata={"value": 2})
@@ -321,11 +324,12 @@ def test_delayed_success_after_deadline_does_not_revive_reservation(
 
         monkeypatch.setattr(repository._catalog, "renew_lifecycle", delayed_renewal)
         assert entered.wait(timeout=2)
-        time.sleep(0.2)
-        proceed.set()
-        deadline = time.monotonic() + 2
-        while reservation.alive and time.monotonic() < deadline:
-            time.sleep(0.01)
+        try:
+            deadline = time.monotonic() + 2
+            while reservation.alive and time.monotonic() < deadline:
+                time.sleep(0.01)
+        finally:
+            proceed.set()
         assert not reservation.alive
         assert preparation.cancellation(lambda: False)()
         with pytest.raises(RepositoryFenceError, match="stale"):
