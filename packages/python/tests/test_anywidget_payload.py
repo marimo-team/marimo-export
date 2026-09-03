@@ -15,12 +15,12 @@ _HTTP_MODULE_URL_CASES = json.loads(
         / "fixtures"
         / "export"
         / "http-module-urls.json"
-    ).read_text()
+    ).read_text(encoding="utf-8")
 )
 
 
 def _document() -> dict[str, Any]:
-    return json.loads(_FIXTURE.read_text())
+    return json.loads(_FIXTURE.read_text(encoding="utf-8"))
 
 
 def _payload(document: dict[str, Any]) -> bytes:

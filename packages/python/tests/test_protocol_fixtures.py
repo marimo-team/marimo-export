@@ -15,14 +15,14 @@ from marimo_export.wire import state_fingerprint
 FIXTURES = Path(__file__).resolve().parents[3] / "tests" / "fixtures"
 HTTP_MODULE_URL_CASES = cast(
     list[JsonObject],
-    json.loads((FIXTURES / "export" / "http-module-urls.json").read_text()),
+    json.loads((FIXTURES / "export" / "http-module-urls.json").read_text(encoding="utf-8")),
 )
 
 
 def test_canonical_json_fixtures_match_python_producer() -> None:
     cases = cast(
         list[JsonObject],
-        json.loads((FIXTURES / "canonical-json" / "cases.json").read_text()),
+        json.loads((FIXTURES / "canonical-json" / "cases.json").read_text(encoding="utf-8")),
     )
 
     for case in cases:
@@ -30,10 +30,10 @@ def test_canonical_json_fixtures_match_python_producer() -> None:
 
 
 def test_input_name_fixtures_match_python_export_reader_policy() -> None:
-    cases = json.loads((FIXTURES / "export" / "input-names.json").read_text())
+    cases = json.loads((FIXTURES / "export" / "input-names.json").read_text(encoding="utf-8"))
     fixture = cast(
         JsonObject,
-        json.loads((FIXTURES / "export" / "scalar-index.json").read_text()),
+        json.loads((FIXTURES / "export" / "scalar-index.json").read_text(encoding="utf-8")),
     )
 
     for case in cases:
@@ -81,7 +81,7 @@ def test_scalar_export_fixture_matches_python_v1_reader() -> None:
 def test_projection_records_match_python_snapshot_contracts() -> None:
     records = cast(
         JsonObject,
-        json.loads((FIXTURES / "export" / "projection-records.json").read_text()),
+        json.loads((FIXTURES / "export" / "projection-records.json").read_text(encoding="utf-8")),
     )
 
     assert json_value(records["json"]) == records["json"]
@@ -100,7 +100,7 @@ def test_projection_records_match_python_snapshot_contracts() -> None:
 def test_http_module_url_fixtures_match_python_snapshot_contracts(case: JsonObject) -> None:
     records = cast(
         JsonObject,
-        json.loads((FIXTURES / "export" / "projection-records.json").read_text()),
+        json.loads((FIXTURES / "export" / "projection-records.json").read_text(encoding="utf-8")),
     )
     output = cast(JsonObject, copy.deepcopy(records["output"]))
     resources = cast(JsonObject, output["resources"])
@@ -119,11 +119,13 @@ def test_http_module_url_fixtures_match_python_snapshot_contracts(case: JsonObje
 def test_malformed_projection_records_match_python_snapshot_contracts() -> None:
     records = cast(
         JsonObject,
-        json.loads((FIXTURES / "export" / "projection-records.json").read_text()),
+        json.loads((FIXTURES / "export" / "projection-records.json").read_text(encoding="utf-8")),
     )
     cases = cast(
         list[JsonObject],
-        json.loads((FIXTURES / "export" / "malformed-projection-records.json").read_text()),
+        json.loads(
+            (FIXTURES / "export" / "malformed-projection-records.json").read_text(encoding="utf-8")
+        ),
     )
 
     for case in cases:
@@ -141,7 +143,7 @@ def test_malformed_projection_records_match_python_snapshot_contracts() -> None:
 def test_projection_records_reject_invalid_ui_ownership() -> None:
     records = cast(
         JsonObject,
-        json.loads((FIXTURES / "export" / "projection-records.json").read_text()),
+        json.loads((FIXTURES / "export" / "projection-records.json").read_text(encoding="utf-8")),
     )
     output = cast(JsonObject, copy.deepcopy(records["output"]))
     resources = cast(JsonObject, output["resources"])
@@ -157,7 +159,7 @@ def test_projection_records_reject_invalid_ui_ownership() -> None:
 def test_projection_records_reject_live_python_functions() -> None:
     records = cast(
         JsonObject,
-        json.loads((FIXTURES / "export" / "projection-records.json").read_text()),
+        json.loads((FIXTURES / "export" / "projection-records.json").read_text(encoding="utf-8")),
     )
     output = cast(JsonObject, copy.deepcopy(records["output"]))
     resources = cast(JsonObject, output["resources"])
@@ -172,7 +174,7 @@ def test_projection_records_reject_live_python_functions() -> None:
 def test_projection_records_reject_cross_projection_model_ids() -> None:
     records = cast(
         JsonObject,
-        json.loads((FIXTURES / "export" / "projection-records.json").read_text()),
+        json.loads((FIXTURES / "export" / "projection-records.json").read_text(encoding="utf-8")),
     )
     output = cast(JsonObject, copy.deepcopy(records["output"]))
     resources = cast(JsonObject, output["resources"])
