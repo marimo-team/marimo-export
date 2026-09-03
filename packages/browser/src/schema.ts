@@ -19,6 +19,7 @@ import type {
   ScalarValue,
 } from "./types.js";
 import { isNotebookExportError, NotebookExportError } from "./types.js";
+import { isJsonBoolean, isJsonNumber, isJsonString, isRecordValue } from "./value-types.js";
 
 const encoder = new TextEncoder();
 const SHA256 = /^[0-9a-f]{64}$/u;
@@ -54,9 +55,9 @@ export interface ParsedExportIndex {
   readonly states: Readonly<Record<string, ParsedState>>;
 }
 
-export function parseExportIndex(input: unknown): ParsedExportIndex {
+export function parseExportIndex<Input>(input: Input): ParsedExportIndex {
   try {
-    const root = strictRecord(input, "export", [
+    const root = strictRecord(portableJsonObject(input, "export"), "export", [
       "aliases",
       "control_bindings",
       "default_state",
@@ -166,7 +167,7 @@ export function parseExportIndex(input: unknown): ParsedExportIndex {
   }
 }
 
-function parseNotebook(input: unknown): NotebookProvenance {
+function parseNotebook(input: JsonValue | undefined): NotebookProvenance {
   const value = strictRecord(input, "export.notebook", ["document_sha256", "filename"]);
   const filename =
     value.filename === null ? null : portableBasename(value.filename, "export.notebook.filename");
@@ -176,7 +177,7 @@ function parseNotebook(input: unknown): NotebookProvenance {
   });
 }
 
-function parseProducer(input: unknown): ProducerProvenance {
+function parseProducer(input: JsonValue | undefined): ProducerProvenance {
   const value = strictRecord(input, "export.producer", [
     "implementation_sha256",
     "marimo",
@@ -197,7 +198,7 @@ function parseProducer(input: unknown): ProducerProvenance {
 }
 
 function parseControlBinding(
-  input: unknown,
+  input: JsonValue | undefined,
   path: string,
   inputNames: ReadonlySet<string>,
 ): ControlBinding {
@@ -215,7 +216,10 @@ function parseControlBinding(
   });
 }
 
-function parseControlPathStep(input: unknown, path: string): ControlBinding["path"][number] {
+function parseControlPathStep(
+  input: JsonValue | undefined,
+  path: string,
+): ControlBinding["path"][number] {
   const value = record(input, path);
   if (value.kind === "element") {
     exactFields(value, ["kind"], path);
@@ -223,14 +227,14 @@ function parseControlPathStep(input: unknown, path: string): ControlBinding["pat
   }
   if (value.kind === "index") {
     exactFields(value, ["kind", "value"], path);
-    if (typeof value.value !== "number" || !Number.isSafeInteger(value.value) || value.value < 0) {
+    if (!isJsonNumber(value.value) || !Number.isSafeInteger(value.value) || value.value < 0) {
       fail(`${path}.value must be a nonnegative safe integer`);
     }
     return Object.freeze({ kind: "index", value: value.value });
   }
   if (value.kind === "key") {
     exactFields(value, ["kind", "value"], path);
-    if (typeof value.value !== "string") fail(`${path}.value must be a string`);
+    if (!isJsonString(value.value)) fail(`${path}.value must be a string`);
     unicodeScalar(value.value, `${path}.value`);
     if (encoder.encode(value.value).byteLength > MAX_CONTROL_ID_BYTES) {
       fail(`${path}.value exceeds ${MAX_CONTROL_ID_BYTES} UTF-8 bytes`);
@@ -240,7 +244,7 @@ function parseControlPathStep(input: unknown, path: string): ControlBinding["pat
   fail(`${path}.kind must be index, key, or element`);
 }
 
-function parseDescriptor(input: unknown, outputName: string): OutputDescriptor {
+function parseDescriptor(input: JsonValue | undefined, outputName: string): OutputDescriptor {
   const value = record(input, `output ${JSON.stringify(outputName)}`);
   const codec = value.codec;
   if (codec === "marimo.scalar.v1") return parseScalar(value, outputName);
@@ -253,7 +257,7 @@ function parseDescriptor(input: unknown, outputName: string): OutputDescriptor {
   fail(`output ${JSON.stringify(outputName)} has an unknown codec`);
 }
 
-function parseJson(value: Record<string, unknown>, outputName: string): JsonDescriptor {
+function parseJson(value: JsonObject, outputName: string): JsonDescriptor {
   const path = `output ${JSON.stringify(outputName)}`;
   exactFields(value, ["codec", "media_type", "provenance", "value"], path);
   literal(value.media_type, "application/vnd.marimo.json.v1+json", `${path}.media_type`);
@@ -265,10 +269,7 @@ function parseJson(value: Record<string, unknown>, outputName: string): JsonDesc
   });
 }
 
-function parseMarimoOutput(
-  value: Record<string, unknown>,
-  outputName: string,
-): MarimoOutputDescriptor {
+function parseMarimoOutput(value: JsonObject, outputName: string): MarimoOutputDescriptor {
   const path = `output ${JSON.stringify(outputName)}`;
   exactFields(value, ["asset", "codec", "media_type", "provenance"], path);
   literal(value.media_type, "application/vnd.marimo.output.v1+json", `${path}.media_type`);
@@ -280,7 +281,7 @@ function parseMarimoOutput(
   });
 }
 
-function parseMarimoCell(value: Record<string, unknown>, outputName: string): MarimoCellDescriptor {
+function parseMarimoCell(value: JsonObject, outputName: string): MarimoCellDescriptor {
   const path = `output ${JSON.stringify(outputName)}`;
   exactFields(value, ["asset", "codec", "media_type", "provenance"], path);
   literal(value.media_type, "application/vnd.marimo.cell.v1+json", `${path}.media_type`);
@@ -292,7 +293,7 @@ function parseMarimoCell(value: Record<string, unknown>, outputName: string): Ma
   });
 }
 
-function parseScalar(value: Record<string, unknown>, outputName: string): ScalarDescriptor {
+function parseScalar(value: JsonObject, outputName: string): ScalarDescriptor {
   const path = `output ${JSON.stringify(outputName)}`;
   exactFields(value, ["codec", "media_type", "provenance", "value"], path);
   literal(value.media_type, "application/vnd.marimo.scalar.v1+json", `${path}.media_type`);
@@ -305,7 +306,7 @@ function parseScalar(value: Record<string, unknown>, outputName: string): Scalar
   });
 }
 
-function parseNumpy(value: Record<string, unknown>, outputName: string): NumpyDescriptor {
+function parseNumpy(value: JsonObject, outputName: string): NumpyDescriptor {
   const path = `output ${JSON.stringify(outputName)}`;
   exactFields(value, ["asset", "codec", "media_type", "provenance"], path);
   literal(value.media_type, "application/x-npy", `${path}.media_type`);
@@ -317,7 +318,7 @@ function parseNumpy(value: Record<string, unknown>, outputName: string): NumpyDe
   });
 }
 
-function parseArrow(value: Record<string, unknown>, outputName: string): ArrowDescriptor {
+function parseArrow(value: JsonObject, outputName: string): ArrowDescriptor {
   const path = `output ${JSON.stringify(outputName)}`;
   exactFields(value, ["asset", "codec", "media_type", "provenance"], path);
   literal(value.media_type, "application/vnd.apache.arrow.file", `${path}.media_type`);
@@ -329,10 +330,10 @@ function parseArrow(value: Record<string, unknown>, outputName: string): ArrowDe
   });
 }
 
-function parseBlobAsset(value: Record<string, unknown>, outputName: string): BlobAssetDescriptor {
+function parseBlobAsset(value: JsonObject, outputName: string): BlobAssetDescriptor {
   const path = `output ${JSON.stringify(outputName)}`;
   exactFields(value, ["asset", "codec", "filename", "media_type", "metadata", "provenance"], path);
-  if (typeof value.media_type !== "string") fail(`${path}.media_type must be a string`);
+  if (!isJsonString(value.media_type)) fail(`${path}.media_type must be a string`);
   parseMediaType(value.media_type);
   const filename =
     value.filename === null ? null : portableBasename(value.filename, `${path}.filename`);
@@ -350,7 +351,7 @@ function parseBlobAsset(value: Record<string, unknown>, outputName: string): Blo
   });
 }
 
-function parseProvenance(input: unknown, parent: string): Provenance {
+function parseProvenance(input: JsonValue | undefined, parent: string): Provenance {
   const path = `${parent}.provenance`;
   const value = strictRecord(input, path, ["python_type"]);
   return Object.freeze({
@@ -358,11 +359,11 @@ function parseProvenance(input: unknown, parent: string): Provenance {
   });
 }
 
-function parseAsset(input: unknown, parent: string): AssetDescriptor {
+function parseAsset(input: JsonValue | undefined, parent: string): AssetDescriptor {
   const path = `${parent}.asset`;
   const value = strictRecord(input, path, ["sha256", "size"]);
   if (
-    typeof value.size !== "number" ||
+    !isJsonNumber(value.size) ||
     !Number.isInteger(value.size) ||
     value.size < 1 ||
     value.size > MAX_ASSET_SIZE
@@ -375,9 +376,10 @@ function parseAsset(input: unknown, parent: string): AssetDescriptor {
   });
 }
 
-function parseScalarValue(input: unknown): ScalarValue {
-  if (input === null || typeof input === "boolean" || typeof input === "string") return input;
-  if (typeof input === "number") {
+function parseScalarValue(input: JsonValue | undefined): ScalarValue {
+  if (input === null) return null;
+  if (isJsonBoolean(input) || isJsonString(input)) return input;
+  if (isJsonNumber(input)) {
     if (Number.isInteger(input) && !Number.isSafeInteger(input)) {
       fail("untagged scalar integer exceeds the safe integer range");
     }
@@ -385,7 +387,7 @@ function parseScalarValue(input: unknown): ScalarValue {
   }
   const value = strictRecord(input, "scalar.value", ["type", "value"]);
   if (value.type === "bigint") {
-    if (typeof value.value !== "string" || !BIGINT.test(value.value)) {
+    if (!isJsonString(value.value) || !BIGINT.test(value.value)) {
       fail("tagged bigint has an invalid decimal value");
     }
     const result = BigInt(value.value);
@@ -454,22 +456,22 @@ function validateAssets(states: Readonly<Record<string, ParsedState>>): void {
 }
 
 export function canonicalJson(value: JsonValue): string {
-  if (value === null || typeof value === "boolean") return JSON.stringify(value);
-  if (typeof value === "string") {
+  if (value === null || isJsonBoolean(value)) return JSON.stringify(value);
+  if (isJsonString(value)) {
     unicodeScalar(value, "canonical JSON string");
     return JSON.stringify(value);
   }
-  if (typeof value === "number") {
+  if (isJsonNumber(value)) {
     if (!Number.isFinite(value)) fail("canonical JSON number must be finite");
     return JSON.stringify(Object.is(value, -0) ? 0 : value);
   }
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
-  const object = value as JsonObject;
-  const keys = Object.keys(object);
+  if (!isJsonObject(value)) fail("canonical JSON object must use string keys");
+  const keys = Object.keys(value);
   keys.forEach((key) => unicodeScalar(key, "canonical JSON key"));
   return `{${keys
     .sort(compareUnicodeScalarStrings)
-    .map((key) => `${JSON.stringify(key)}:${canonicalJson(object[key]!)}`)
+    .map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key]!)}`)
     .join(",")}}`;
 }
 
@@ -489,27 +491,23 @@ export function compareUnicodeScalarStrings(left: string, right: string): number
 }
 
 function strictRecord(
-  input: unknown,
+  input: JsonValue | undefined,
   path: string,
   fields: readonly string[],
-): Record<string, unknown> {
+): JsonObject {
   const value = record(input, path);
   exactFields(value, fields, path);
   return value;
 }
 
-function record(input: unknown, path: string): Record<string, unknown> {
-  if (input === null || typeof input !== "object" || Array.isArray(input)) {
+function record(input: JsonValue | undefined, path: string): JsonObject {
+  if (!isJsonObject(input)) {
     fail(`${path} must be an object`);
   }
-  return input as Record<string, unknown>;
+  return input;
 }
 
-function exactFields(
-  value: Record<string, unknown>,
-  fields: readonly string[],
-  path: string,
-): void {
+function exactFields(value: JsonObject, fields: readonly string[], path: string): void {
   const expected = new Set(fields);
   const actual = Object.keys(value);
   const missing = fields.filter((field) => !Object.hasOwn(value, field));
@@ -518,18 +516,18 @@ function exactFields(
   if (extra.length > 0) fail(`${path} has unknown fields: ${extra.slice(0, 8).join(", ")}`);
 }
 
-function requireExactKeys(
-  value: Record<string, unknown> | JsonObject,
-  expected: ReadonlySet<string>,
-  path: string,
-): void {
+function requireExactKeys(value: JsonObject, expected: ReadonlySet<string>, path: string): void {
   const keys = Object.keys(value);
   const missing = [...expected].filter((key) => !Object.hasOwn(value, key));
   const extra = keys.filter((key) => !expected.has(key));
   if (missing.length > 0 || extra.length > 0) fail(`${path} must match the root name set`);
 }
 
-function nameArray(input: unknown, path: string, nonempty: boolean): readonly string[] {
+function nameArray(
+  input: JsonValue | undefined,
+  path: string,
+  nonempty: boolean,
+): readonly string[] {
   if (!Array.isArray(input)) fail(`${path} must be an array`);
   const values = input.map((name, index) => exportName(name, `${path}[${index}]`));
   if (nonempty && values.length === 0) fail(`${path} must not be empty`);
@@ -537,15 +535,15 @@ function nameArray(input: unknown, path: string, nonempty: boolean): readonly st
   return Object.freeze(values);
 }
 
-function opaqueNameArray(input: unknown, path: string): readonly string[] {
+function opaqueNameArray(input: JsonValue | undefined, path: string): readonly string[] {
   if (!Array.isArray(input)) fail(`${path} must be an array`);
   const values = input.map((name, index) => opaqueInputName(name, `${path}[${index}]`));
   if (new Set(values).size !== values.length) fail(`${path} must contain unique names`);
   return Object.freeze(values);
 }
 
-export function opaqueInputName(input: unknown, path: string): string {
-  if (typeof input !== "string") fail(`${path} must be a string`);
+export function opaqueInputName(input: JsonValue | undefined, path: string): string {
+  if (!isJsonString(input)) fail(`${path} must be a string`);
   unicodeScalar(input, path);
   if (input.length === 0 || encoder.encode(input).byteLength > MAX_EXPORT_NAME_BYTES) {
     fail(`${path} must be a bounded nonempty UTF-8 string`);
@@ -553,12 +551,12 @@ export function opaqueInputName(input: unknown, path: string): string {
   return input;
 }
 
-function exportName(input: unknown, path: string): string {
+function exportName(input: JsonValue | undefined, path: string): string {
   return boundedPrintable(input, path, MAX_EXPORT_NAME_BYTES);
 }
 
-function boundedPrintable(input: unknown, path: string, maxBytes: number): string {
-  if (typeof input !== "string") fail(`${path} must be a string`);
+function boundedPrintable(input: JsonValue | undefined, path: string, maxBytes: number): string {
+  if (!isJsonString(input)) fail(`${path} must be a string`);
   unicodeScalar(input, path);
   if (
     input.length === 0 ||
@@ -578,8 +576,8 @@ function hasEdgeWhitespace(value: string): boolean {
   );
 }
 
-function portableBasename(input: unknown, path: string): string {
-  if (typeof input !== "string") fail(`${path} must be a string`);
+function portableBasename(input: JsonValue | undefined, path: string): string {
+  if (!isJsonString(input)) fail(`${path} must be a string`);
   unicodeScalar(input, path);
   const stem = input.split(".", 1)[0]!.replace(/[ .]+$/u, "");
   if (
@@ -598,14 +596,14 @@ function portableBasename(input: unknown, path: string): string {
   return input;
 }
 
-function digest(input: unknown, path: string): string {
-  if (typeof input !== "string" || !SHA256.test(input)) {
+function digest(input: JsonValue | undefined, path: string): string {
+  if (!isJsonString(input) || !SHA256.test(input)) {
     fail(`${path} must be a lowercase SHA-256 digest`);
   }
   return input;
 }
 
-function literal<T extends string>(input: unknown, expected: T, path: string): T {
+function literal<T extends string>(input: JsonValue | undefined, expected: T, path: string): T {
   if (input !== expected) fail(`${path} must be ${JSON.stringify(expected)}`);
   return expected;
 }
@@ -622,10 +620,14 @@ function hasControl(value: string): boolean {
   return false;
 }
 
-function boundedMessage(error: unknown): string {
-  const source = error instanceof Error ? error.message : "Export index validation failed.";
+function boundedMessage(cause: unknown): string {
+  const source = cause instanceof Error ? cause.message : "Export index validation failed.";
   const message = source.length > 2_048 ? `${source.slice(0, 2_045)}...` : source;
   return `Invalid export index: ${message}`;
+}
+
+function isJsonObject(value: JsonValue | undefined): value is JsonObject {
+  return isRecordValue(value);
 }
 
 function fail(message: string): never {

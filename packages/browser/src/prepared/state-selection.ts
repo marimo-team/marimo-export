@@ -50,28 +50,28 @@ export const pendingInputsForPublication = (
     ? undefined
     : pending;
 
-export const isPreparedStateUnavailable = (error: unknown): boolean =>
-  isNotebookExportError(error) && error.code === "state_unavailable";
+export const isPreparedStateUnavailable = <Value>(value: Value): boolean =>
+  isNotebookExportError(value) && value.code === "state_unavailable";
 
-export const isPreparedStatePendingFailure = (error: unknown): boolean => {
-  if (!isNotebookExportError(error)) {
+export const isPreparedStatePendingFailure = <Value>(value: Value): boolean => {
+  if (!isNotebookExportError(value)) {
     return false;
   }
-  if (error.code === "state_unavailable") {
+  if (value.code === "state_unavailable") {
     return true;
   }
   return (
-    error.code === "read_failed" &&
-    error.details !== undefined &&
-    Object.hasOwn(error.details, "status") &&
-    error.details.status === 404
+    value.code === "read_failed" &&
+    value.details !== undefined &&
+    Object.hasOwn(value.details, "status") &&
+    value.details.status === 404
   );
 };
 
-export const pendingInputsAfterFailure = (
+export const pendingInputsAfterFailure = <Failure>(
   pending: JsonObject | undefined,
   requested: JsonObject,
-  error: unknown,
+  error: Failure,
   callerAborted: boolean,
 ): JsonObject | undefined => {
   if (pending === undefined || !samePreparedInputs(pending, requested)) {

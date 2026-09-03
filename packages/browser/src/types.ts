@@ -1,6 +1,8 @@
 import { portableJsonObject } from "@marimo-team/portable-json";
 import type { JsonObject, JsonValue } from "@marimo-team/portable-json";
 
+import { isPropertyOwner, isStringValue } from "./value-types.js";
+
 export type { JsonObject, JsonPrimitive, JsonValue } from "@marimo-team/portable-json";
 
 const NOTEBOOK_EXPORT_ERROR_BRAND = Symbol.for("@marimo-team/marimo-export.NotebookExportError.v1");
@@ -28,6 +30,11 @@ export type ScalarValue = null | boolean | string | number | bigint;
 
 export type NotebookExportErrorCode = (typeof NOTEBOOK_EXPORT_ERROR_CODES)[number];
 
+export interface NotebookExportErrorOptions {
+  readonly cause?: unknown;
+  readonly details?: JsonObject;
+}
+
 export class NotebookExportError extends Error {
   readonly code: NotebookExportErrorCode;
   readonly details: JsonObject | undefined;
@@ -36,12 +43,12 @@ export class NotebookExportError extends Error {
   constructor(
     code: NotebookExportErrorCode,
     message: string,
-    options: { readonly cause?: unknown; readonly details?: JsonObject } = {},
+    options: NotebookExportErrorOptions = {},
   ) {
-    if (typeof code !== "string" || !NOTEBOOK_EXPORT_ERROR_CODE_SET.has(code)) {
+    if (!isStringValue(code) || !NOTEBOOK_EXPORT_ERROR_CODE_SET.has(code)) {
       throw new TypeError("NotebookExportError code must be a known code.");
     }
-    if (typeof message !== "string") {
+    if (!isStringValue(message)) {
       throw new TypeError("NotebookExportError message must be a string.");
     }
     super(message, options.cause === undefined ? undefined : { cause: options.cause });
@@ -54,17 +61,18 @@ export class NotebookExportError extends Error {
   }
 }
 
-export function isNotebookExportError(value: unknown): value is NotebookExportError {
-  if (value === null || typeof value !== "object") return false;
+export function isNotebookExportError<Value>(value: Value): value is Value & NotebookExportError {
+  if (!isPropertyOwner(value)) return false;
   try {
-    const error = value as Readonly<Record<PropertyKey, unknown>>;
-    const code = error.code;
-    const details = error.details;
+    if (!(NOTEBOOK_EXPORT_ERROR_BRAND in value) || !("code" in value)) return false;
+    if (!("details" in value) || !("name" in value) || !("message" in value)) return false;
+    const code = value.code;
+    const details = value.details;
     if (
-      error[NOTEBOOK_EXPORT_ERROR_BRAND] !== true ||
-      error.name !== "NotebookExportError" ||
-      typeof error.message !== "string" ||
-      typeof code !== "string" ||
+      value[NOTEBOOK_EXPORT_ERROR_BRAND] !== true ||
+      value.name !== "NotebookExportError" ||
+      !isStringValue(value.message) ||
+      !isStringValue(code) ||
       !NOTEBOOK_EXPORT_ERROR_CODE_SET.has(code)
     ) {
       return false;
@@ -304,11 +312,10 @@ export interface MountedView {
   dispose(): void | Promise<void>;
 }
 
+export interface MountOptions {
+  readonly signal?: AbortSignal;
+}
+
 export interface MountableValue {
-  mount(
-    element: HTMLElement,
-    options?: {
-      readonly signal?: AbortSignal;
-    },
-  ): Promise<MountedView>;
+  mount(element: HTMLElement, options?: MountOptions): Promise<MountedView>;
 }

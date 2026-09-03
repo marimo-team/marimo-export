@@ -2,6 +2,7 @@ import { parseStrictJson, portableJsonObject, portableJsonValue } from "@marimo-
 import type { JsonObject, JsonValue } from "@marimo-team/portable-json";
 
 import { canonicalJson } from "./schema.js";
+import { isJsonNumber, isJsonString, isRecordValue } from "./value-types.js";
 
 const decoder = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
 const encoder = new TextEncoder();
@@ -168,23 +169,23 @@ function snapshotRoot(
   bytes: Uint8Array,
   schema: "marimo.output.v1" | "marimo.cell.v1",
   fields: readonly string[],
-): Record<string, unknown> {
+): JsonObject {
   const text = decoder.decode(bytes);
   const parsed = parseStrictJson(text, MAX_SNAPSHOT_VALUES);
   const root = strictRecord(parsed, `${schema} snapshot`, fields);
   if (root.schema !== schema)
     throw new TypeError(`Snapshot schema must be ${JSON.stringify(schema)}.`);
-  const canonical = encoder.encode(canonicalJson(parsed as JsonValue));
+  const canonical = encoder.encode(canonicalJson(parsed));
   if (!equalBytes(bytes, canonical))
     throw new TypeError(`${schema} snapshot must be canonical JSON.`);
   return root;
 }
 
-function parseCellIdentity(value: unknown): MarimoCellIdentity {
+function parseCellIdentity(value: JsonValue | undefined): MarimoCellIdentity {
   const cell = strictRecord(value, "cell", ["codeSha256", "config", "id", "name"]);
   const id = nonEmptyString(cell.id, "cell.id");
   const name = cell.name === null ? null : nonEmptyString(cell.name, "cell.name");
-  if (typeof cell.codeSha256 !== "string" || !SHA256.test(cell.codeSha256)) {
+  if (!isJsonString(cell.codeSha256) || !SHA256.test(cell.codeSha256)) {
     throw new TypeError("cell.codeSha256 must be a lowercase SHA-256 digest.");
   }
   return Object.freeze({
@@ -195,7 +196,7 @@ function parseCellIdentity(value: unknown): MarimoCellIdentity {
   });
 }
 
-function parseCellOutput(value: unknown, path: string): MarimoCellOutput | null {
+function parseCellOutput(value: JsonValue | undefined, path: string): MarimoCellOutput | null {
   if (value === null) return null;
   const output = strictRecord(value, path, ["channel", "data", "mimetype"]);
   return Object.freeze({
@@ -206,7 +207,7 @@ function parseCellOutput(value: unknown, path: string): MarimoCellOutput | null 
 }
 
 function parseResources(
-  value: unknown,
+  value: JsonValue | undefined,
   ownerCellId: string,
   projectionSha256: string,
 ): MarimoReplayResources {
@@ -237,7 +238,7 @@ function parseResources(
   const parsedFunctions = Object.freeze(
     Object.fromEntries(
       Object.entries(functions).map(([namespace, names]) => {
-        if (!Array.isArray(names) || names.some((name) => typeof name !== "string" || !name)) {
+        if (!Array.isArray(names) || names.some((name) => !isJsonString(name) || !name)) {
           throw new TypeError(
             `resources.functions[${JSON.stringify(namespace)}] must be an array of names.`,
           );
@@ -286,7 +287,7 @@ function parseResources(
 }
 
 function projectionUiObjectId(
-  value: unknown,
+  value: JsonValue | undefined,
   path: string,
   ownerCellId: string,
   projectionSha256: string,
@@ -302,7 +303,7 @@ function projectionUiObjectId(
 }
 
 function parseModelLifecycle(
-  value: unknown,
+  value: JsonValue | undefined,
   index: number,
   files: Readonly<Record<string, string>>,
   projectionSha256: string,
@@ -367,7 +368,7 @@ function parseModelLifecycle(
   }
 }
 
-function bufferPaths(value: unknown, path: string): readonly MarimoBufferPath[] {
+function bufferPaths(value: JsonValue | undefined, path: string): readonly MarimoBufferPath[] {
   if (!Array.isArray(value)) throw new TypeError(`${path} must be an array.`);
   return Object.freeze(
     value.map((item, index) => {
@@ -375,17 +376,18 @@ function bufferPaths(value: unknown, path: string): readonly MarimoBufferPath[] 
         throw new TypeError(`${path}[${index}] must be a non-empty array.`);
       }
       const parsed = item.map((token) => {
-        if (typeof token === "string") return token;
-        if (typeof token === "number" && Number.isSafeInteger(token) && token >= 0) return token;
+        if (isJsonString(token)) return token;
+        if (isJsonNumber(token) && Number.isSafeInteger(token) && token >= 0) return token;
         throw new TypeError(`${path}[${index}] contains an invalid token.`);
       });
-      return Object.freeze(parsed) as unknown as MarimoBufferPath;
+      // SAFETY: The nonempty array check above establishes MarimoBufferPath's tuple head.
+      return Object.freeze(parsed) as MarimoBufferPath;
     }),
   );
 }
 
 function parseEsmSpec(
-  value: unknown,
+  value: JsonValue | undefined,
   path: string,
   files: Readonly<Record<string, string>>,
 ): MarimoEsmSpec | null {
@@ -409,28 +411,24 @@ function parseEsmSpec(
   return Object.freeze({ hash, url });
 }
 
-function stringArray(value: unknown, path: string): readonly string[] {
-  if (!Array.isArray(value) || value.some((item) => typeof item !== "string")) {
+function stringArray(value: JsonValue | undefined, path: string): readonly string[] {
+  if (!Array.isArray(value) || value.some((item) => !isJsonString(item))) {
     throw new TypeError(`${path} must be an array of strings.`);
   }
   return Object.freeze([...value]);
 }
 
 function strictRecord(
-  value: unknown,
+  value: JsonValue | undefined,
   path: string,
   fields: readonly string[],
-): Record<string, unknown> {
+): JsonObject {
   const parsed = record(value, path);
   exactFields(parsed, fields, path);
   return parsed;
 }
 
-function exactFields(
-  value: Record<string, unknown>,
-  fields: readonly string[],
-  path: string,
-): void {
+function exactFields(value: JsonObject, fields: readonly string[], path: string): void {
   const expected = new Set(fields);
   const missing = fields.filter((field) => !Object.hasOwn(value, field));
   const extra = Object.keys(value).filter((field) => !expected.has(field));
@@ -438,35 +436,40 @@ function exactFields(
   if (extra.length > 0) throw new TypeError(`${path} has unknown fields: ${extra.join(", ")}.`);
 }
 
-function record(value: unknown, path: string): Record<string, unknown> {
-  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+function record(value: JsonValue | undefined, path: string): JsonObject {
+  if (!isJsonObject(value)) {
     throw new TypeError(`${path} must be an object.`);
   }
-  return value as Record<string, unknown>;
+  return value;
 }
 
-function nonEmptyString(value: unknown, path: string): string {
-  if (typeof value !== "string" || value.length === 0) {
+function isJsonObject(value: JsonValue | undefined): value is JsonObject {
+  return isRecordValue(value);
+}
+
+function nonEmptyString(value: JsonValue | undefined, path: string): string {
+  if (!isJsonString(value) || value.length === 0) {
     throw new TypeError(`${path} must be a non-empty string.`);
   }
   return value;
 }
 
-function digest(value: unknown, path: string): string {
+function digest(value: JsonValue | undefined, path: string): string {
   const parsed = nonEmptyString(value, path);
   if (!SHA256.test(parsed)) throw new TypeError(`${path} must be a lowercase SHA-256 digest.`);
   return parsed;
 }
 
-function dataUrlString(value: unknown, path: string): string {
+function dataUrlString(value: JsonValue | undefined, path: string): string {
   const dataUrl = nonEmptyString(value, path);
   if (!dataUrl.startsWith("data:")) throw new TypeError(`${path} must contain a data URL.`);
   return dataUrl;
 }
 
-function cellChannel(value: unknown, path: string): MarimoCellChannel {
+function cellChannel(value: JsonValue | undefined, path: string): MarimoCellChannel {
   const channel = nonEmptyString(value, path);
   if (!CELL_CHANNELS.has(channel)) throw new TypeError(`${path} is not a Marimo cell channel.`);
+  // SAFETY: CELL_CHANNELS contains every MarimoCellChannel literal and membership passed.
   return channel as MarimoCellChannel;
 }
 

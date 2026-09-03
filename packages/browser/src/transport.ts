@@ -33,7 +33,7 @@ export function normalizeBase(base: string | URL): URL {
 }
 
 export function resolveExportUrl(base: URL | string, path: string): URL {
-  if (typeof path !== "string" || path.length === 0 || path.includes("?") || path.includes("#")) {
+  if (path.length === 0 || path.includes("?") || path.includes("#")) {
     throw new TypeError("Export object path must be a non-empty path without a query or fragment.");
   }
   const normalized = base instanceof URL ? base : new URL(base);
@@ -56,10 +56,10 @@ export async function fetchBytes(
   throwIfAborted(options.signal);
   let response: Response;
   try {
-    response = await fetcher(url, {
-      ...(options.cache === undefined ? {} : { cache: options.cache }),
-      ...(options.signal === undefined ? {} : { signal: options.signal }),
-    });
+    const request: RequestInit = {};
+    if (options.cache !== undefined) request.cache = options.cache;
+    if (options.signal !== undefined) request.signal = options.signal;
+    response = await fetcher(url, request);
   } catch (error) {
     throwReadError(error, options.signal, path);
   }
@@ -230,18 +230,18 @@ function throwIfAborted(signal: AbortSignal | undefined): void {
   }
 }
 
-function throwReadError(error: unknown, signal: AbortSignal | undefined, path: string): never {
-  if (signal?.aborted || isAbortError(error)) {
-    throw new NotebookExportError("abort", "Export operation was aborted.", { cause: error });
+function throwReadError(cause: unknown, signal: AbortSignal | undefined, path: string): never {
+  if (signal?.aborted || isAbortError(cause)) {
+    throw new NotebookExportError("abort", "Export operation was aborted.", { cause });
   }
   throw new NotebookExportError("read_failed", `Failed to read export object ${quotePath(path)}.`, {
-    cause: error,
+    cause,
     details: { path: boundedPath(path) },
   });
 }
 
-function cancelBody(response: Response, reason: unknown): void {
-  if (response.body !== null) void response.body.cancel(reason).catch(() => undefined);
+function cancelBody(response: Response, cause: unknown): void {
+  if (response.body !== null) void response.body.cancel(cause).catch(() => undefined);
 }
 
 function boundedPath(path: string): string {

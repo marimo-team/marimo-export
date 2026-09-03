@@ -10,7 +10,7 @@ const fixturePath = fileURLToPath(
 );
 
 test("parses the canonical Python prepared manifest fixture", async () => {
-  const fixture = JSON.parse(await readFile(fixturePath, "utf8")) as unknown;
+  const fixture = JSON.parse(await readFile(fixturePath, "utf8"));
   const manifest = parsePreparedExportManifest(fixture);
 
   expect(manifest).toEqual({

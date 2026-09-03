@@ -269,7 +269,7 @@ async function inspectInstalledManifest(root) {
 
 function exportTargets(exports) {
   return Object.values(exports).flatMap((value) =>
-    typeof value === "string" ? [value] : Object.values(value),
+    Object.prototype.toString.call(value) === "[object String]" ? [value] : Object.values(value),
   );
 }
 
@@ -277,9 +277,9 @@ async function pathExists(path) {
   try {
     await access(path);
     return true;
-  } catch (error) {
-    if (error !== null && typeof error === "object" && error.code === "ENOENT") return false;
-    throw error;
+  } catch (cause) {
+    if (cause instanceof Object && "code" in cause && cause.code === "ENOENT") return false;
+    throw cause;
   }
 }
 

@@ -42,9 +42,9 @@ async function copyArchiveFile(relative) {
   let metadata;
   try {
     metadata = await lstat(source);
-  } catch (error) {
-    if (error !== null && typeof error === "object" && error.code === "ENOENT") return;
-    throw error;
+  } catch (cause) {
+    if (cause instanceof Object && "code" in cause && cause.code === "ENOENT") return;
+    throw cause;
   }
   await mkdir(dirname(destination), { recursive: true });
   if (metadata.isSymbolicLink()) {
@@ -61,12 +61,18 @@ async function run(command, args, cwd) {
       encoding: "utf8",
       maxBuffer: 16 * 1024 * 1024,
     });
-  } catch (error) {
-    if (error instanceof Error) {
-      const stdout = "stdout" in error && typeof error.stdout === "string" ? error.stdout : "";
-      const stderr = "stderr" in error && typeof error.stderr === "string" ? error.stderr : "";
-      if (stdout || stderr) error.message += `\n${stdout}${stderr}`;
+  } catch (cause) {
+    if (cause instanceof Error) {
+      const stdout =
+        "stdout" in cause && Object.prototype.toString.call(cause.stdout) === "[object String]"
+          ? String(cause.stdout)
+          : "";
+      const stderr =
+        "stderr" in cause && Object.prototype.toString.call(cause.stderr) === "[object String]"
+          ? String(cause.stderr)
+          : "";
+      if (stdout || stderr) cause.message += `\n${stdout}${stderr}`;
     }
-    throw error;
+    throw cause;
   }
 }

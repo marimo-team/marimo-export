@@ -6,6 +6,7 @@ import { canonicalJson } from "./schema.js";
 import { validateCanonicalMessagePack } from "./strict-msgpack.js";
 import type { BlobAsset, BlobAssetDescriptor } from "./types.js";
 import { isNotebookExportError, NotebookExportError } from "./types.js";
+import { isRecordValue, isStringValue } from "./value-types.js";
 
 const EXPECTED_FIELDS = ["data", "media_type", "filename", "metadata"];
 
@@ -13,28 +14,31 @@ export function decodeBlobAsset(bytes: Uint8Array, descriptor: BlobAssetDescript
   try {
     validateCanonicalMessagePack(bytes);
     const decoded = decode(bytes);
-    if (decoded === null || typeof decoded !== "object" || Array.isArray(decoded)) {
+    if (!isRecordValue(decoded)) {
       throw new TypeError("BlobAsset must be a map.");
     }
-    const value = decoded as Record<string, unknown>;
-    const fields = Object.keys(value);
+    const fields = Object.keys(decoded);
     if (
       fields.length !== EXPECTED_FIELDS.length ||
       fields.some((field, index) => field !== EXPECTED_FIELDS[index])
     ) {
       throw new TypeError("BlobAsset must use the native four-field envelope.");
     }
-    if (!(value.data instanceof Uint8Array)) throw new TypeError("BlobAsset.data must be binary.");
-    if (typeof value.media_type !== "string") {
+    if (!("data" in decoded) || !(decoded.data instanceof Uint8Array)) {
+      throw new TypeError("BlobAsset.data must be binary.");
+    }
+    if (!("media_type" in decoded) || !isStringValue(decoded.media_type)) {
       throw new TypeError("BlobAsset.media_type must be a string.");
     }
-    const mediaType = parseMediaType(value.media_type);
-    const filename = value.filename;
-    if (filename !== null && typeof filename !== "string") {
+    const mediaType = parseMediaType(decoded.media_type);
+    if (!("filename" in decoded)) throw new TypeError("BlobAsset.filename must be present.");
+    const filename = decoded.filename;
+    if (filename !== null && !isStringValue(filename)) {
       throw new TypeError("BlobAsset.filename must be a string or null.");
     }
-    const metadata = portableJsonObject(value.metadata, "BlobAsset.metadata");
-    if (value.media_type !== descriptor.mediaType) {
+    if (!("metadata" in decoded)) throw new TypeError("BlobAsset.metadata must be present.");
+    const metadata = portableJsonObject(decoded.metadata, "BlobAsset.metadata");
+    if (decoded.media_type !== descriptor.mediaType) {
       throw new TypeError("BlobAsset.media_type does not match its descriptor.");
     }
     if (filename !== descriptor.filename) {
@@ -44,7 +48,7 @@ export function decodeBlobAsset(bytes: Uint8Array, descriptor: BlobAssetDescript
       throw new TypeError("BlobAsset.metadata does not match its descriptor.");
     }
     return Object.freeze({
-      data: value.data,
+      data: decoded.data,
       mediaType,
       filename,
       metadata,

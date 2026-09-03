@@ -8,7 +8,6 @@ const encoder = new TextEncoder();
 export function parseMediaType(raw: string): MediaType {
   try {
     if (
-      typeof raw !== "string" ||
       encoder.encode(raw).byteLength > 1_024 ||
       !PRINTABLE_ASCII.test(raw) ||
       raw !== raw.trim()
@@ -136,9 +135,9 @@ class FrozenMap<K, V> implements ReadonlyMap<K, V> {
     return this.#map.values();
   }
 
-  forEach(callbackfn: (value: V, key: K, map: ReadonlyMap<K, V>) => void, thisArg?: unknown): void {
+  readonly forEach: ReadonlyMap<K, V>["forEach"] = (callbackfn, thisArg) => {
     for (const [key, value] of this.#map) callbackfn.call(thisArg, value, key, this);
-  }
+  };
 
   [Symbol.iterator](): MapIterator<[K, V]> {
     return this.#map[Symbol.iterator]();

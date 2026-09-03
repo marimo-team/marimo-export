@@ -1,11 +1,12 @@
 import type { JsonValue } from "@marimo-team/portable-json";
 
 import type { ExportState, NotebookExport } from "../types.js";
+import { isStringValue } from "../value-types.js";
 import { PreparedExportError } from "./errors.js";
 
 const jsonKey = (value: JsonValue): string => JSON.stringify(value);
 const queryText = (value: JsonValue): string =>
-  typeof value === "string" ? value : JSON.stringify(value);
+  isStringValue(value) ? value : JSON.stringify(value);
 
 const inputDomain = (notebookExport: NotebookExport, name: string): readonly JsonValue[] => {
   const values = new Map<string, JsonValue>();

@@ -2,7 +2,7 @@ import { describe, expect, test } from "vite-plus/test";
 
 import { parseMarimoCellSnapshot, parseMarimoOutputSnapshot } from "../src/marimo-snapshot.js";
 import { canonicalJson } from "../src/schema.js";
-import type { JsonValue } from "../src/types.js";
+import type { MutableJsonObject, MutableJsonValue } from "./fixture.js";
 
 const encoder = new TextEncoder();
 
@@ -248,17 +248,19 @@ describe("Marimo snapshot records", () => {
   });
 });
 
-interface MutableOutputSnapshot {
+interface MutableOutputSnapshot extends MutableJsonObject {
   schema: string;
   projectionSha256: string;
   ownerCellId: string;
-  output: Record<string, unknown> | null;
-  resources: {
-    files: Record<string, string>;
-    functions: Record<string, string[]>;
-    modelNotifications: unknown[];
-    uiValues: Record<string, unknown>;
-  };
+  output: MutableJsonObject | null;
+  resources: MutableResources;
+}
+
+interface MutableResources extends MutableJsonObject {
+  files: Record<string, string>;
+  functions: Record<string, string[]>;
+  modelNotifications: MutableJsonValue[];
+  uiValues: MutableJsonObject;
 }
 
 function outputSnapshot(): MutableOutputSnapshot {
@@ -271,6 +273,6 @@ function outputSnapshot(): MutableOutputSnapshot {
   };
 }
 
-function bytes(value: unknown): Uint8Array {
-  return encoder.encode(canonicalJson(value as JsonValue));
+function bytes(value: MutableJsonValue): Uint8Array {
+  return encoder.encode(canonicalJson(value));
 }

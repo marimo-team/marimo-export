@@ -1,7 +1,9 @@
-export function isAbortError(error: unknown): boolean {
-  if ((typeof error !== "object" && typeof error !== "function") || error === null) return false;
+import { isPropertyOwner } from "./value-types.js";
+
+export function isAbortError<Value>(cause: Value): boolean {
+  if (!isPropertyOwner(cause) || !("name" in cause)) return false;
   try {
-    return Reflect.get(error, "name") === "AbortError";
+    return cause.name === "AbortError";
   } catch {
     return false;
   }

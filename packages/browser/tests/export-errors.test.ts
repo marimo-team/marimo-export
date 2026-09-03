@@ -37,10 +37,12 @@ describe("export errors", () => {
     for (const code of codes) {
       expect(isNotebookExportError(new NotebookExportError(code, ""))).toBe(true);
     }
-    expect(
-      () => new NotebookExportError("unknown" as NotebookExportErrorCode, "typed failure"),
-    ).toThrow(/known code/u);
-    expect(() => new NotebookExportError("abort", 42 as never)).toThrow(
+    // SAFETY: The test bypasses the public code union to exercise runtime validation.
+    const invalidCode = "unknown" as NotebookExportErrorCode;
+    expect(() => new NotebookExportError(invalidCode, "typed failure")).toThrow(/known code/u);
+    // SAFETY: The test bypasses the string signature to exercise runtime validation.
+    const invalidMessage = 42 as never;
+    expect(() => new NotebookExportError("abort", invalidMessage)).toThrow(
       /message must be a string/u,
     );
   });
@@ -125,7 +127,7 @@ describe("export errors", () => {
         { value: true }
       );
       return error;
-    })()`) as unknown;
+    })()`);
     class PackageCopyError extends Error {
       readonly code = "loader_invalid";
       readonly details = { packageCopy: true };
@@ -172,7 +174,7 @@ describe("export errors", () => {
     });
     const foreign = runInNewContext(
       'Object.assign(new Error("cross-realm cancellation"), { name: "AbortError" })',
-    ) as unknown;
+    );
     const foreignLoader = defineOutputLoader({
       codec: "numpy.npy.v1",
       accepts: () => true,

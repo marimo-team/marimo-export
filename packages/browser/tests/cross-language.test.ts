@@ -9,9 +9,9 @@ import {
   parseMarimoOutputSnapshot,
   scalarLoader,
 } from "../src/index.js";
-import type { JsonValue } from "../src/types.js";
 import { canonicalJson } from "../src/schema.js";
-import { exportFixture } from "./fixture.js";
+import type { MutableJsonValue } from "./fixture.js";
+import { exportFixture, mutableObject } from "./fixture.js";
 import canonicalCases from "../../../tests/fixtures/canonical-json/cases.json" with { type: "json" };
 import httpModuleUrlCases from "../../../tests/fixtures/export/http-module-urls.json" with { type: "json" };
 import inputNameCases from "../../../tests/fixtures/export/input-names.json" with { type: "json" };
@@ -91,10 +91,10 @@ describe("Python and TypeScript protocol fixtures", () => {
     );
   });
 
-  test.each(httpModuleUrlCases as readonly HttpModuleUrlCase[])(
+  test.each(fixtureCases<HttpModuleUrlCase>(httpModuleUrlCases))(
     "$name at the Marimo snapshot boundary",
     ({ url, valid }) => {
-      const record = structuredClone(projectionRecords.output) as JsonValue;
+      const record: MutableJsonValue = structuredClone(projectionRecords.output);
       applyMutation(record, {
         name: "HTTP module URL",
         operation: "set",
@@ -112,10 +112,10 @@ describe("Python and TypeScript protocol fixtures", () => {
     },
   );
 
-  test.each(malformedProjectionRecords as unknown as readonly ProjectionMutation[])(
+  test.each(fixtureCases<ProjectionMutation>(malformedProjectionRecords))(
     "rejects malformed projection case: $name",
     (testCase) => {
-      const record = structuredClone(projectionRecords[testCase.record]) as JsonValue;
+      const record: MutableJsonValue = structuredClone(projectionRecords[testCase.record]);
       applyMutation(record, testCase);
       const bytes = new TextEncoder().encode(canonicalJson(record));
       const parse =
@@ -131,25 +131,50 @@ interface ProjectionMutation {
   readonly operation: "delete" | "set";
   readonly path: readonly (number | string)[];
   readonly record: "cell" | "output";
-  readonly value?: JsonValue;
+  readonly value?: MutableJsonValue;
 }
 
-const applyMutation = (record: JsonValue, mutation: ProjectionMutation): void => {
-  let parent: JsonValue = record;
+const applyMutation = (record: MutableJsonValue, mutation: ProjectionMutation): void => {
+  let parent = record;
   for (const token of mutation.path.slice(0, -1)) {
-    if (parent === null || typeof parent !== "object") {
-      throw new Error(`Malformed fixture path stops before ${String(token)}.`);
-    }
-    parent = (parent as Readonly<Record<PropertyKey, JsonValue>>)[token]!;
-  }
-  if (parent === null || typeof parent !== "object") {
-    throw new Error("Malformed fixture path has no parent container.");
+    parent = mutationChild(parent, token);
   }
   const token = mutation.path.at(-1);
   if (token === undefined) throw new Error("Malformed fixture path must not be empty.");
-  if (mutation.operation === "delete") {
-    Reflect.deleteProperty(parent, token);
+  if (Array.isArray(parent)) {
+    if (!Number.isSafeInteger(token)) throw new Error("Array fixture paths require an index.");
+    if (mutation.operation === "delete") {
+      Reflect.deleteProperty(parent, Number(token));
+      return;
+    }
+    if (mutation.value === undefined) throw new Error("Set mutations require a value.");
+    parent[Number(token)] = structuredClone(mutation.value);
     return;
   }
-  Reflect.set(parent, token, structuredClone(mutation.value));
+  const object = mutableObject(parent, "mutation parent");
+  const key = String(token);
+  if (mutation.operation === "delete") {
+    delete object[key];
+    return;
+  }
+  if (mutation.value === undefined) throw new Error("Set mutations require a value.");
+  object[key] = structuredClone(mutation.value);
 };
+
+function mutationChild(parent: MutableJsonValue, token: number | string): MutableJsonValue {
+  if (Array.isArray(parent)) {
+    if (!Number.isSafeInteger(token)) throw new Error("Array fixture paths require an index.");
+    const child = parent[Number(token)];
+    if (child === undefined) throw new Error(`Malformed fixture path stops before ${token}.`);
+    return child;
+  }
+  const object = mutableObject(parent, "mutation path");
+  const child = object[String(token)];
+  if (child === undefined) throw new Error(`Malformed fixture path stops before ${token}.`);
+  return child;
+}
+
+function fixtureCases<Case, Value = object>(value: Value): readonly Case[] {
+  // SAFETY: Checked-in cross-language fixtures are validated by the Python fixture generator.
+  return value as readonly Case[];
+}

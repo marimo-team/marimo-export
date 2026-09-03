@@ -2,6 +2,7 @@ import { portableJsonObject, portableJsonValue } from "@marimo-team/portable-jso
 import type { JsonObject, JsonValue } from "@marimo-team/portable-json";
 
 import type { ControlBinding } from "../types.js";
+import { isRecordValue } from "../value-types.js";
 import { PreparedExportError } from "./errors.js";
 
 const sameJsonValue = (left: JsonValue, right: JsonValue): boolean => {
@@ -69,8 +70,7 @@ const replaceControlValue = (
   });
 };
 
-const isJsonObject = (value: JsonValue): value is JsonObject =>
-  value !== null && typeof value === "object" && !Array.isArray(value);
+const isJsonObject = (value: JsonValue): value is JsonObject => isRecordValue(value);
 
 export const preparedControlInputPatch = (
   inputs: JsonObject,

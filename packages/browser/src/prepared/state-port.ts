@@ -119,7 +119,7 @@ export class PreparedStateTransitions {
     return this.#operation;
   }
 
-  async restoreAfter(primary: unknown): Promise<void> {
+  async restoreAfter<Primary>(primary: Primary): Promise<void> {
     try {
       await this.restore();
     } catch (cleanup) {

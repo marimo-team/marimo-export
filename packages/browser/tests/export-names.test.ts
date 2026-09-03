@@ -1,7 +1,8 @@
 import { describe, expect, test } from "vite-plus/test";
 
 import { openExport } from "../src/index.js";
-import { exportFixture } from "./fixture.js";
+import type { MutableJsonObject } from "./fixture.js";
+import { exportFixture, mutableArray, mutableObject, stringValue } from "./fixture.js";
 import exportNameCases from "../../../tests/fixtures/export/export-names.json" with { type: "json" };
 
 type ExportNameSurface = "alias" | "output";
@@ -29,20 +30,24 @@ describe("export name policy", () => {
 });
 
 function renameExportName(
-  index: Record<string, unknown>,
+  index: MutableJsonObject,
   surface: ExportNameSurface,
   value: string,
 ): void {
   if (surface === "alias") {
-    const aliases = index.aliases as Record<string, string>;
-    aliases[value] = aliases.alpha!;
+    const aliases = mutableObject(index.aliases, "aliases");
+    aliases[value] = stringValue(aliases.alpha, "aliases.alpha");
     delete aliases.alpha;
     return;
   }
-  index.outputs = (index.outputs as string[]).map((name) => (name === "count" ? value : name));
-  for (const state of Object.values(index.states as Record<string, unknown>)) {
-    const outputs = (state as { outputs: Record<string, unknown> }).outputs;
-    outputs[value] = outputs.count;
+  index.outputs = mutableArray(index.outputs, "outputs").map((name) =>
+    name === "count" ? value : name,
+  );
+  for (const state of Object.values(mutableObject(index.states, "states"))) {
+    const outputs = mutableObject(mutableObject(state, "state").outputs, "state.outputs");
+    const count = outputs.count;
+    if (count === undefined) throw new TypeError("State fixture count output is missing.");
+    outputs[value] = count;
     delete outputs.count;
   }
 }

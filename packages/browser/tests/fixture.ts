@@ -1,28 +1,35 @@
 import { encode } from "@msgpack/msgpack";
+import type { JsonPrimitive } from "@marimo-team/portable-json";
 
 import { canonicalJson } from "../src/schema.js";
 
 const encoder = new TextEncoder();
 
+export type MutableJsonValue = JsonPrimitive | MutableJsonValue[] | MutableJsonObject;
+
+export interface MutableJsonObject {
+  [key: string]: MutableJsonValue;
+}
+
 export interface Fixture {
-  readonly index: Record<string, unknown>;
+  readonly index: MutableJsonObject;
   readonly indexBytes: Uint8Array;
   readonly assets: ReadonlyMap<string, Uint8Array>;
   readonly requests: string[];
   readonly fetch: typeof globalThis.fetch;
 }
 
-export async function exportFixture(
-  options: {
-    readonly envelope?: Uint8Array;
-    readonly blobMetadata?: Record<string, unknown>;
-    readonly blobMediaType?: string;
-    readonly blobFilename?: string | null;
-    readonly basePath?: string;
-    readonly inputs?: readonly [string, string];
-    readonly indexTransform?: (index: Record<string, unknown>) => void;
-  } = {},
-): Promise<Fixture> {
+export interface ExportFixtureOptions {
+  readonly envelope?: Uint8Array;
+  readonly blobMetadata?: MutableJsonObject;
+  readonly blobMediaType?: string;
+  readonly blobFilename?: string | null;
+  readonly basePath?: string;
+  readonly inputs?: readonly [string, string];
+  readonly indexTransform?: (index: MutableJsonObject) => void;
+}
+
+export async function exportFixture(options: ExportFixtureOptions = {}): Promise<Fixture> {
   const blobMetadata = options.blobMetadata ?? { representation: "fixture" };
   const blobMediaType = options.blobMediaType ?? "application/vnd.example.fixture+json";
   const blobFilename = options.blobFilename === undefined ? "fixture.json" : options.blobFilename;
@@ -35,7 +42,7 @@ export async function exportFixture(
       metadata: blobMetadata,
     });
   const npy = new Uint8Array([0x93, 0x4e, 0x55, 0x4d, 0x50, 0x59, 0x01, 0x00]);
-  const arrow = encoder.encode("ARROW1ARROW1");
+  const arrow = encoder.encode("ARROW1DATAARROW1");
   const blobDigest = await digest(envelope);
   const npyDigest = await digest(npy);
   const arrowDigest = await digest(arrow);
@@ -49,7 +56,7 @@ export async function exportFixture(
     definitions.map(([, vector]) => digest(encoder.encode(canonicalJson(vector)))),
   );
   const aliases: Record<string, string> = {};
-  const states: Record<string, unknown> = {};
+  const states: MutableJsonObject = {};
   definitions.forEach(([name, vector, count], index) => {
     const fingerprint = fingerprints[index]!;
     aliases[name] = fingerprint;
@@ -76,13 +83,13 @@ export async function exportFixture(
     };
   });
   aliases.first = fingerprints[1]!;
-  const index: Record<string, unknown> = {
+  const index = {
     aliases,
     control_bindings: {
       "cell-symbol-0": { input: inputs[0], path: [] },
     },
     default_state: fingerprints[1]!,
-    inputs,
+    inputs: [...inputs],
     notebook: { document_sha256: "a".repeat(64), filename: "finance.py" },
     outputs,
     producer: {
@@ -93,9 +100,9 @@ export async function exportFixture(
     schema: "marimo-export.export.v1",
     spec_sha256: "d".repeat(64),
     states,
-  };
+  } satisfies MutableJsonObject;
   options.indexTransform?.(index);
-  const indexBytes = encoder.encode(canonicalJson(index as never));
+  const indexBytes = encoder.encode(canonicalJson(index));
   const assets = new Map([
     [`assets/${npyDigest}.npy`, npy],
     [`assets/${arrowDigest}.arrow`, arrow],
@@ -116,38 +123,68 @@ export async function exportFixture(
   return { index, indexBytes, assets, requests, fetch };
 }
 
-export function scalar(value: unknown): Record<string, unknown> {
+export function scalar(value: MutableJsonValue) {
   return {
     codec: "marimo.scalar.v1",
     media_type: "application/vnd.marimo.scalar.v1+json",
     provenance: provenance(),
     value,
-  };
+  } satisfies MutableJsonObject;
 }
 
-function assetDescriptor(
-  codec: string,
-  mediaType: string,
-  sha256: string,
-  size: number,
-): Record<string, unknown> {
+function assetDescriptor(codec: string, mediaType: string, sha256: string, size: number) {
   return {
     asset: { sha256, size },
     codec,
     media_type: mediaType,
     provenance: provenance(),
-  };
+  } satisfies MutableJsonObject;
 }
 
-function provenance(): Record<string, unknown> {
-  return { python_type: "fixture.Value" };
+function provenance() {
+  return { python_type: "fixture.Value" } satisfies MutableJsonObject;
 }
 
 export async function digest(bytes: Uint8Array): Promise<string> {
-  const value = await crypto.subtle.digest("SHA-256", bytes as Uint8Array<ArrayBuffer>);
+  const value = await crypto.subtle.digest("SHA-256", new Uint8Array(bytes));
   return [...new Uint8Array(value)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
 export function hexBytes(value: string): Uint8Array {
   return Uint8Array.from(value.match(/../gu)!.map((byte) => Number.parseInt(byte, 16)));
+}
+
+export function mutableObject(
+  value: MutableJsonValue | undefined,
+  path: string,
+): MutableJsonObject {
+  if (!isMutableObject(value)) throw new TypeError(`${path} must be an object fixture.`);
+  return value;
+}
+
+export function mutableArray(
+  value: MutableJsonValue | undefined,
+  path: string,
+): MutableJsonValue[] {
+  if (!Array.isArray(value)) throw new TypeError(`${path} must be an array fixture.`);
+  return value;
+}
+
+export function stringValue(value: MutableJsonValue | undefined, path: string): string {
+  if (!isMutableString(value)) {
+    throw new TypeError(`${path} must be a string fixture.`);
+  }
+  return value;
+}
+
+function isMutableString(value: MutableJsonValue | undefined): value is string {
+  return Object.prototype.toString.call(value) === "[object String]";
+}
+
+function isMutableObject(value: MutableJsonValue | undefined): value is MutableJsonObject {
+  return (
+    value !== null &&
+    !Array.isArray(value) &&
+    Object.prototype.toString.call(value) === "[object Object]"
+  );
 }

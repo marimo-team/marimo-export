@@ -19,11 +19,12 @@ export const fetchPreparedExportManifest = async (
   throwIfPreparedAborted(options.signal);
   let response: Response;
   try {
-    response = await (options.fetch ?? globalThis.fetch)(url, {
+    const request: RequestInit = {
       cache: "no-store",
       headers: { Accept: "application/json" },
-      ...(options.signal === undefined ? {} : { signal: options.signal }),
-    });
+    };
+    if (options.signal !== undefined) request.signal = options.signal;
+    response = await (options.fetch ?? globalThis.fetch)(url, request);
   } catch (error) {
     if (options.signal?.aborted) {
       throw preparedAbortReason(options.signal.reason);

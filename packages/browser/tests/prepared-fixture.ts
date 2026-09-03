@@ -12,6 +12,11 @@ interface PreparedExportFixtureOptions {
   readonly inputs: readonly JsonObject[];
 }
 
+interface PreparedManifestFixtureOptions {
+  readonly exportUrl?: string;
+  readonly refreshIntervalMs?: number;
+}
+
 export const preparedExportFixture = (options: PreparedExportFixtureOptions): NotebookExport => {
   const base = new URL(options.base ?? "https://example.test/export/");
   const identity = options.identity ?? "1".repeat(64);
@@ -20,7 +25,7 @@ export const preparedExportFixture = (options: PreparedExportFixtureOptions): No
   let notebookExport: NotebookExport;
   const states = options.inputs.map((inputs, index) => {
     const normalized = portableJsonObject(inputs);
-    const state = {
+    const state: ExportState = {
       aliases: Object.freeze([`state-${index}`]),
       fingerprint: (index + 1).toString(16).padStart(64, "0"),
       inputs: normalized,
@@ -35,7 +40,7 @@ export const preparedExportFixture = (options: PreparedExportFixtureOptions): No
         const merged = portableJsonObject({ ...normalized, ...patch });
         return notebookExport.resolve(merged);
       },
-    } as ExportState;
+    };
     statesByInputs.set(jsonKey(normalized), state);
     return state;
   });
@@ -44,6 +49,8 @@ export const preparedExportFixture = (options: PreparedExportFixtureOptions): No
     controlBindings: Object.freeze({ ...options.controlBindings }),
     identity,
     inputNames,
+    specSha256: "f".repeat(64),
+    defaultState: states[0]!,
     notebook: { documentSha256: "d".repeat(64), filename: "fixture.py" },
     outputNames: Object.freeze([]),
     producer: {
@@ -70,29 +77,25 @@ export const preparedExportFixture = (options: PreparedExportFixtureOptions): No
     },
     states: () => states,
     verify: async () => ({ assets: 0, bytesVerified: 0, outputs: 0, states: states.length }),
-  } as unknown as NotebookExport;
+  };
   return notebookExport;
 };
 
 export const preparedManifestFixture = (
   notebookExport: NotebookExport,
   inputs: JsonObject,
-  options: {
-    readonly exportUrl?: string;
-    readonly refreshIntervalMs?: number;
-  } = {},
+  options: PreparedManifestFixtureOptions = {},
 ): PreparedExportManifest => {
   const state = notebookExport.resolve(inputs);
-  return Object.freeze({
+  const manifest = {
     schema: "marimo-export.prepared.v1",
     instance: notebookExport.identity,
     exportUrl: options.exportUrl ?? notebookExport.base.href,
     inputs: state.inputs,
     stateFingerprint: state.fingerprint,
-    ...(options.refreshIntervalMs === undefined
-      ? {}
-      : { refreshIntervalMs: options.refreshIntervalMs }),
-  });
+  } as const;
+  if (options.refreshIntervalMs === undefined) return Object.freeze(manifest);
+  return Object.freeze({ ...manifest, refreshIntervalMs: options.refreshIntervalMs });
 };
 
 export const preparedPublicationFixture = (
@@ -106,30 +109,36 @@ export const preparedPublicationFixture = (
     state: notebookExport.resolve(inputs),
   });
 
-export const manifestWire = (
-  manifest: PreparedExportManifest,
-): Readonly<Record<string, JsonValue>> =>
-  Object.freeze({
+export const manifestWire = (manifest: PreparedExportManifest): JsonObject => {
+  const wire = {
     schema: manifest.schema,
     instance: manifest.instance,
     export_url: manifest.exportUrl,
     inputs: manifest.inputs,
     state_fingerprint: manifest.stateFingerprint,
-    ...(manifest.refreshIntervalMs === undefined
-      ? {}
-      : { refresh_interval_ms: manifest.refreshIntervalMs }),
-  });
+  } as const;
+  if (manifest.refreshIntervalMs === undefined) return Object.freeze(wire);
+  return Object.freeze({ ...wire, refresh_interval_ms: manifest.refreshIntervalMs });
+};
 
 const jsonKey = (value: JsonValue): string => {
-  if (value === null || typeof value !== "object") {
+  if (value === null || isJsonPrimitive(value)) {
     return JSON.stringify(value);
   }
   if (Array.isArray(value)) {
     return `[${value.map(jsonKey).join(",")}]`;
   }
-  const object = value as JsonObject;
-  return `{${Object.keys(object)
+  if (!isJsonObject(value)) throw new TypeError("Prepared fixture value must be JSON.");
+  return `{${Object.keys(value)
     .sort()
-    .map((key) => `${JSON.stringify(key)}:${jsonKey(object[key]!)}`)
+    .map((key) => `${JSON.stringify(key)}:${jsonKey(value[key]!)}`)
     .join(",")}}`;
 };
+
+const isJsonPrimitive = (value: JsonValue): value is string | number | boolean =>
+  Object.prototype.toString.call(value) !== "[object Object]" && !Array.isArray(value);
+
+const isJsonObject = (value: JsonValue): value is JsonObject =>
+  value !== null &&
+  !Array.isArray(value) &&
+  Object.prototype.toString.call(value) === "[object Object]";

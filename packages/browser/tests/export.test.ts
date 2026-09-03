@@ -9,7 +9,7 @@ import {
 } from "../src/index.js";
 import { canonicalJson } from "../src/schema.js";
 import { sha256Hex } from "../src/integrity.js";
-import { exportFixture } from "./fixture.js";
+import { exportFixture, mutableObject, stringValue } from "./fixture.js";
 
 const encoder = new TextEncoder();
 
@@ -43,7 +43,7 @@ describe("export", () => {
     expect(Object.isFrozen(notebookExport.controlBindings["cell-symbol-0"]!.path)).toBe(true);
     expect(notebookExport.outputNames).toEqual(["count", "array", "table", "view"]);
     expect(notebookExport.states().map((state) => state.fingerprint)).toEqual(
-      Object.keys(fixture.index.states as Record<string, unknown>).sort(),
+      Object.keys(mutableObject(fixture.index.states, "states")).sort(),
     );
     expect(notebookExport.state("alpha").aliases).toEqual(["alpha", "first"]);
     expect(notebookExport.state("first")).toBe(notebookExport.state("alpha"));
@@ -313,9 +313,9 @@ describe("canonical export validation", () => {
     }
 
     const wrong = structuredClone(fixture.index);
-    const states = wrong.states as Record<string, Record<string, unknown>>;
-    const aliases = wrong.aliases as Record<string, string>;
-    const alpha = aliases.alpha!;
+    const states = mutableObject(wrong.states, "states");
+    const aliases = mutableObject(wrong.aliases, "aliases");
+    const alpha = stringValue(aliases.alpha, "aliases.alpha");
     const wrongFingerprint = "f".repeat(64);
     states[wrongFingerprint] = states[alpha]!;
     delete states[alpha];
@@ -323,7 +323,7 @@ describe("canonical export validation", () => {
     for (const alias of Object.keys(aliases)) {
       if (aliases[alias] === alpha) aliases[alias] = wrongFingerprint;
     }
-    const bytes = encoder.encode(canonicalJson(wrong as never));
+    const bytes = encoder.encode(canonicalJson(wrong));
     await expect(
       openExport("https://example.test/stocks", {
         fetch: async () => new Response(bytes),
@@ -334,10 +334,15 @@ describe("canonical export validation", () => {
   test("rejects a representation that changes across states", async () => {
     const fixture = await exportFixture({
       indexTransform(index) {
-        const states = index.states as Record<string, Record<string, unknown>>;
-        const aliases = index.aliases as Record<string, string>;
-        const zeta = states[aliases.zeta!]!.outputs as Record<string, Record<string, unknown>>;
-        zeta.view!.media_type = "application/vnd.example.other+json";
+        const states = mutableObject(index.states, "states");
+        const aliases = mutableObject(index.aliases, "aliases");
+        const zetaState = mutableObject(
+          states[stringValue(aliases.zeta, "aliases.zeta")],
+          "states.zeta",
+        );
+        const outputs = mutableObject(zetaState.outputs, "states.zeta.outputs");
+        const view = mutableObject(outputs.view, "states.zeta.outputs.view");
+        view.media_type = "application/vnd.example.other+json";
       },
     });
 
@@ -472,7 +477,7 @@ describe("canonical export validation", () => {
   test("requires the producer implementation identity", async () => {
     const fixture = await exportFixture({
       indexTransform(index) {
-        const producer = index.producer as Record<string, unknown>;
+        const producer = mutableObject(index.producer, "producer");
         delete producer.implementation_sha256;
       },
     });
@@ -488,10 +493,15 @@ describe("canonical export validation", () => {
   ])("rejects private cache receipt field %s in provenance", async (field, value) => {
     const fixture = await exportFixture({
       indexTransform(index) {
-        const states = index.states as Record<string, Record<string, unknown>>;
-        const aliases = index.aliases as Record<string, string>;
-        const outputs = states[aliases.alpha!]!.outputs as Record<string, Record<string, unknown>>;
-        const provenance = outputs.count!.provenance as Record<string, unknown>;
+        const states = mutableObject(index.states, "states");
+        const aliases = mutableObject(index.aliases, "aliases");
+        const state = mutableObject(
+          states[stringValue(aliases.alpha, "aliases.alpha")],
+          "states.alpha",
+        );
+        const outputs = mutableObject(state.outputs, "states.alpha.outputs");
+        const count = mutableObject(outputs.count, "states.alpha.outputs.count");
+        const provenance = mutableObject(count.provenance, "states.alpha.outputs.count.provenance");
         provenance[field] = value;
       },
     });

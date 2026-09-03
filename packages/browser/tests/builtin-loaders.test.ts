@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
 import { describe, expect, test } from "vite-plus/test";
+import { portableJsonObject } from "@marimo-team/portable-json";
 
 import { htmlLoader } from "../src/loader/html.js";
 import { jsonLoader } from "../src/loader/json.js";
@@ -34,7 +35,7 @@ describe("built-in loaders", () => {
     expect(result).toEqual(source);
     expect(result).not.toBe(source);
     expect(Object.isFrozen(result)).toBe(true);
-    expect(Object.isFrozen((result as { readonly rows: readonly unknown[] }).rows)).toBe(true);
+    expect(Object.isFrozen(portableJsonObject(result).rows)).toBe(true);
   });
 
   test("decodes UTF-8 text and keeps HTML selection disjoint", () => {
@@ -57,10 +58,10 @@ describe("built-in loaders", () => {
   });
 
   test("decodes canonical Marimo output and cell snapshots", async () => {
-    const fixture = JSON.parse(await readFile(projectionFixturePath, "utf8")) as {
+    const fixture: {
       readonly cell: JsonValue;
       readonly output: JsonValue;
-    };
+    } = JSON.parse(await readFile(projectionFixturePath, "utf8"));
     const output = await marimoOutputLoader().load(
       snapshotInput("marimo.output.v1", fixture.output),
     );
@@ -75,7 +76,7 @@ describe("built-in loaders", () => {
 
 const blobInput = (value: string | Uint8Array, mediaType: string): BlobAssetLoadInput => {
   const parsed = media(mediaType);
-  const data = typeof value === "string" ? encoder.encode(value) : value;
+  const data = value instanceof Uint8Array ? value : encoder.encode(value);
   return {
     descriptor: {
       asset: { sha256: "a".repeat(64), size: data.byteLength },
@@ -96,6 +97,7 @@ const snapshotInput = <C extends "marimo.cell.v1" | "marimo.output.v1">(
 ) => {
   const payload = encoder.encode(canonicalJson(value));
   const essence = `application/vnd.${codec}+json`;
+  // SAFETY: The codec parameter selects the matching descriptor member used by the test loader.
   return {
     descriptor: {
       asset: { sha256: "a".repeat(64), size: payload.byteLength },
@@ -110,10 +112,12 @@ const snapshotInput = <C extends "marimo.cell.v1" | "marimo.output.v1">(
 
 const media = (raw: string): MediaType => {
   const [essence, ...parameters] = raw.split(";").map((part) => part.trim());
-  const [type, subtype] = essence!.split("/") as [string, string];
+  if (essence === undefined) throw new TypeError("Media type essence is missing.");
+  const [type, subtype] = essence.split("/");
+  if (type === undefined || subtype === undefined) throw new TypeError("Media type is incomplete.");
   return {
     raw,
-    essence: essence!,
+    essence,
     type,
     subtype,
     parameters: new Map(

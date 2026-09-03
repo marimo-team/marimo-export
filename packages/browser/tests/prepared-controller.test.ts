@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vite-plus/test";
+import type { JsonValue } from "../src/types.js";
 
 import type { PreparedStateChange, PreparedStatePort } from "../src/prepared/index.js";
 import { PreparedStateController } from "../src/prepared/index.js";
@@ -74,9 +75,9 @@ describe("prepared state controller", () => {
   });
 
   it("distinguishes inherited control names from own reserved-name bindings", async () => {
-    const bindings = JSON.parse('{"__proto__":{"input":"count","path":[]}}') as Readonly<
+    const bindings: Readonly<
       Record<string, { readonly input: string; readonly path: readonly [] }>
-    >;
+    > = JSON.parse('{"__proto__":{"input":"count","path":[]}}');
     const notebookExport = preparedExportFixture({
       controlBindings: bindings,
       inputs: [{ count: 0 }, { count: 1 }],
@@ -105,7 +106,7 @@ describe("prepared state controller", () => {
         try {
           await new Promise<void>((resolve) => setTimeout(resolve, 1));
           signal.throwIfAborted();
-          committed.push(change.next.state.inputs.count as number);
+          committed.push(numberValue(change.next.state.inputs.count));
         } finally {
           active -= 1;
         }
@@ -270,3 +271,14 @@ describe("prepared state controller", () => {
     expect(controller.snapshot().current).toBeUndefined();
   });
 });
+
+function numberValue(value: JsonValue | undefined): number {
+  if (!isJsonNumber(value)) {
+    throw new TypeError("Expected a numeric prepared-state fixture value.");
+  }
+  return value;
+}
+
+function isJsonNumber(value: JsonValue | undefined): value is number {
+  return Object.prototype.toString.call(value) === "[object Number]";
+}

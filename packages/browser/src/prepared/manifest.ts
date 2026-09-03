@@ -4,6 +4,7 @@ import type { JsonObject, JsonValue } from "@marimo-team/portable-json";
 import { openExport } from "../export.js";
 import { normalizeBase } from "../transport.js";
 import type { ExportState, NotebookExport, OpenExportOptions } from "../types.js";
+import { isJsonNumber, isJsonString } from "../value-types.js";
 import { throwIfPreparedAborted } from "./cancellation.js";
 import { PreparedExportError } from "./errors.js";
 
@@ -33,7 +34,12 @@ export interface OpenPreparedPublicationOptions extends OpenExportOptions {
   ) => Promise<NotebookExport>;
 }
 
-export const parsePreparedExportManifest = (input: unknown): PreparedExportManifest => {
+interface MutableOpenExportOptions {
+  fetch?: typeof globalThis.fetch;
+  signal?: AbortSignal;
+}
+
+export const parsePreparedExportManifest = <Input>(input: Input): PreparedExportManifest => {
   try {
     const root = portableJsonObject(input, "prepared manifest");
     requireFields(
@@ -52,14 +58,15 @@ export const parsePreparedExportManifest = (input: unknown): PreparedExportManif
     }
     const stateFingerprint = digest(root.state_fingerprint, "prepared manifest.state_fingerprint");
     const refreshIntervalMs = parseRefreshInterval(root.refresh_interval_ms);
-    return Object.freeze({
+    const manifest = {
       schema: "marimo-export.prepared.v1",
       instance,
       exportUrl,
       inputs,
       stateFingerprint,
-      ...(refreshIntervalMs === undefined ? {} : { refreshIntervalMs }),
-    });
+    } as const;
+    if (refreshIntervalMs === undefined) return Object.freeze(manifest);
+    return Object.freeze({ ...manifest, refreshIntervalMs });
   } catch (error) {
     if (error instanceof PreparedExportError) {
       throw error;
@@ -109,10 +116,10 @@ export const openPreparedPublication = async (
   throwIfPreparedAborted(options.signal);
   const base = preparedExportBase(manifest, manifestUrl);
   const opener = options.openExport ?? openExport;
-  const notebookExport = await opener(base, {
-    ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
-    ...(options.signal === undefined ? {} : { signal: options.signal }),
-  });
+  const openOptions: MutableOpenExportOptions = {};
+  if (options.fetch !== undefined) openOptions.fetch = options.fetch;
+  if (options.signal !== undefined) openOptions.signal = options.signal;
+  const notebookExport = await opener(base, openOptions);
   throwIfPreparedAborted(options.signal);
   return resolvePreparedPublication(manifest, manifestUrl, notebookExport);
 };
@@ -133,37 +140,38 @@ const requireFields = (
 };
 
 const digest = (value: JsonValue | undefined, path: string): string => {
-  if (typeof value !== "string" || !SHA256.test(value)) {
+  if (!isJsonString(value)) {
     invalid(`${path} must be a lowercase SHA-256 digest.`);
   }
-  return value as string;
+  if (!SHA256.test(value)) {
+    invalid(`${path} must be a lowercase SHA-256 digest.`);
+  }
+  return value;
 };
 
 const boundedUrl = (value: JsonValue | undefined): string => {
-  if (
-    typeof value !== "string" ||
-    value.length === 0 ||
-    encoder.encode(value).byteLength > MANIFEST_MAX_URL_BYTES
-  ) {
+  if (!isJsonString(value)) {
     invalid(`prepared manifest.export_url must be at most ${MANIFEST_MAX_URL_BYTES} UTF-8 bytes.`);
   }
-  return value as string;
+  if (value.length === 0 || encoder.encode(value).byteLength > MANIFEST_MAX_URL_BYTES) {
+    invalid(`prepared manifest.export_url must be at most ${MANIFEST_MAX_URL_BYTES} UTF-8 bytes.`);
+  }
+  return value;
 };
 
 const parseRefreshInterval = (value: JsonValue | undefined): number | undefined => {
   if (value === undefined) {
     return undefined;
   }
-  if (
-    typeof value !== "number" ||
-    !Number.isSafeInteger(value) ||
-    (value !== 0 && (value < 250 || value > 60_000))
-  ) {
+  if (!isJsonNumber(value)) {
     invalid("prepared manifest.refresh_interval_ms must be 0 or between 250 and 60000.");
   }
-  return value as number;
+  if (!Number.isSafeInteger(value) || (value !== 0 && (value < 250 || value > 60_000))) {
+    invalid("prepared manifest.refresh_interval_ms must be 0 or between 250 and 60000.");
+  }
+  return value;
 };
 
-const invalid = (message: string): never => {
+function invalid(message: string): never {
   throw new PreparedExportError("manifest_invalid", message);
-};
+}

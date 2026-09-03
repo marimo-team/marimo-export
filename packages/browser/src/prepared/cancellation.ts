@@ -1,7 +1,7 @@
 import { isNotebookExportError } from "../types.js";
 
-export const preparedAbortReason = (
-  reason: unknown,
+export const preparedAbortReason = <Reason>(
+  reason: Reason,
   message = "Prepared export operation aborted",
 ): Error | DOMException => {
   if (reason instanceof Error || reason instanceof DOMException) {
@@ -10,10 +10,10 @@ export const preparedAbortReason = (
   return new DOMException(message, "AbortError");
 };
 
-export const isPreparedAbort = (error: unknown): boolean =>
-  (error instanceof DOMException && error.name === "AbortError") ||
-  (error instanceof Error && error.name === "AbortError") ||
-  (isNotebookExportError(error) && error.code === "abort");
+export const isPreparedAbort = <Value>(value: Value): boolean =>
+  (value instanceof DOMException && value.name === "AbortError") ||
+  (value instanceof Error && value.name === "AbortError") ||
+  (isNotebookExportError(value) && value.code === "abort");
 
 export const throwIfPreparedAborted = (signal: AbortSignal | undefined, message?: string): void => {
   if (signal?.aborted) {

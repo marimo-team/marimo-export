@@ -1,3 +1,5 @@
+import { isPropertyOwner, isStringValue } from "../value-types.js";
+
 const PREPARED_EXPORT_ERROR_BRAND = Symbol.for("@marimo-team/marimo-export.PreparedExportError.v1");
 const PREPARED_EXPORT_ERROR_CODES = [
   "manifest_invalid",
@@ -9,6 +11,10 @@ const PREPARED_EXPORT_ERROR_CODE_SET: ReadonlySet<string> = new Set(PREPARED_EXP
 
 export type PreparedExportErrorCode = (typeof PREPARED_EXPORT_ERROR_CODES)[number];
 
+export interface PreparedExportErrorOptions {
+  readonly cause?: unknown;
+}
+
 export class PreparedExportError extends Error {
   readonly code: PreparedExportErrorCode;
   override readonly cause: unknown;
@@ -16,12 +22,12 @@ export class PreparedExportError extends Error {
   constructor(
     code: PreparedExportErrorCode,
     message: string,
-    options: { readonly cause?: unknown } = {},
+    options: PreparedExportErrorOptions = {},
   ) {
     if (!PREPARED_EXPORT_ERROR_CODE_SET.has(code)) {
       throw new TypeError("PreparedExportError code must be a known code.");
     }
-    if (typeof message !== "string") {
+    if (!isStringValue(message)) {
       throw new TypeError("PreparedExportError message must be a string.");
     }
     super(message, options.cause === undefined ? undefined : { cause: options.cause });
@@ -33,15 +39,17 @@ export class PreparedExportError extends Error {
   }
 }
 
-export const isPreparedExportError = (value: unknown): value is PreparedExportError => {
-  if (value === null || typeof value !== "object" || !Object.isFrozen(value)) {
+export const isPreparedExportError = <Value>(
+  value: Value,
+): value is Value & PreparedExportError => {
+  if (!isPropertyOwner(value) || !Object.isFrozen(value)) {
     return false;
   }
   try {
     return (
       Object.getOwnPropertyDescriptor(value, PREPARED_EXPORT_ERROR_BRAND)?.value === true &&
       Object.getOwnPropertyDescriptor(value, "name")?.value === "PreparedExportError" &&
-      typeof Object.getOwnPropertyDescriptor(value, "message")?.value === "string" &&
+      isStringValue(Object.getOwnPropertyDescriptor(value, "message")?.value) &&
       PREPARED_EXPORT_ERROR_CODE_SET.has(
         String(Object.getOwnPropertyDescriptor(value, "code")?.value),
       )

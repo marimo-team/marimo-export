@@ -3,6 +3,8 @@ import { NotebookExportError } from "./types.js";
 
 const NPY_MAGIC = new Uint8Array([0x93, 0x4e, 0x55, 0x4d, 0x50, 0x59]);
 const ARROW_MAGIC = new TextEncoder().encode("ARROW1");
+const ARROW_CONTINUATION = new Uint8Array([0xff, 0xff, 0xff, 0xff]);
+const ARROW_STREAM_END = new Uint8Array([0xff, 0xff, 0xff, 0xff, 0, 0, 0, 0]);
 
 export async function sha256Hex(bytes: Uint8Array): Promise<string> {
   const subtle = globalThis.crypto?.subtle;
@@ -13,7 +15,7 @@ export async function sha256Hex(bytes: Uint8Array): Promise<string> {
     );
   }
   try {
-    const digest = await subtle.digest("SHA-256", bytes as Uint8Array<ArrayBuffer>);
+    const digest = await subtle.digest("SHA-256", new Uint8Array(bytes));
     return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join(
       "",
     );
@@ -48,14 +50,25 @@ export function validateNativeFile(codec: OutputCodec, bytes: Uint8Array): void 
   if (codec === "numpy.npy.v1" && !hasBytes(bytes, NPY_MAGIC, 0)) {
     throw new NotebookExportError("decode_failed", "NumPy asset has an invalid NPY header.");
   }
-  if (
-    codec === "apache.arrow.file.v1" &&
-    (bytes.byteLength < 10 ||
-      !hasBytes(bytes, ARROW_MAGIC, 0) ||
-      !hasBytes(bytes, ARROW_MAGIC, bytes.byteLength - ARROW_MAGIC.byteLength))
-  ) {
-    throw new NotebookExportError("decode_failed", "Arrow asset has an invalid file signature.");
+  if (codec === "apache.arrow.file.v1" && !isArrowFile(bytes) && !isArrowStream(bytes)) {
+    throw new NotebookExportError("decode_failed", "Arrow asset has invalid IPC framing.");
   }
+}
+
+function isArrowFile(bytes: Uint8Array): boolean {
+  return (
+    bytes.byteLength >= 16 &&
+    hasBytes(bytes, ARROW_MAGIC, 0) &&
+    hasBytes(bytes, ARROW_MAGIC, bytes.byteLength - ARROW_MAGIC.byteLength)
+  );
+}
+
+function isArrowStream(bytes: Uint8Array): boolean {
+  return (
+    bytes.byteLength >= 16 &&
+    hasBytes(bytes, ARROW_CONTINUATION, 0) &&
+    hasBytes(bytes, ARROW_STREAM_END, bytes.byteLength - ARROW_STREAM_END.byteLength)
+  );
 }
 
 function hasBytes(value: Uint8Array, expected: Uint8Array, offset: number): boolean {

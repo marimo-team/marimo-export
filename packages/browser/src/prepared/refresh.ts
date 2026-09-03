@@ -32,7 +32,17 @@ export interface PreparedPublicationRefreshOptions {
   readonly fetch?: typeof globalThis.fetch;
   readonly openExport?: OpenPreparedPublicationOptions["openExport"];
   readonly signal?: AbortSignal;
-  readonly onError?: (error: unknown) => void;
+  readonly onError?: (cause: unknown) => void;
+}
+
+interface MutableOpenOptions {
+  fetch?: typeof globalThis.fetch;
+  openExport?: NonNullable<OpenPreparedPublicationOptions["openExport"]>;
+}
+
+interface ManifestRequestOptions {
+  fetch?: typeof globalThis.fetch;
+  signal: AbortSignal;
 }
 
 export class PreparedPublicationRefresh {
@@ -41,7 +51,7 @@ export class PreparedPublicationRefresh {
   readonly #state: PreparedStateController;
   readonly #dependencies: PreparedPublicationRefreshDependencies;
   readonly #openOptions: OpenPreparedPublicationOptions;
-  readonly #onError: (error: unknown) => void;
+  readonly #onError: (cause: unknown) => void;
   #operation: Promise<void> | undefined;
   #controller: AbortController | undefined;
   #timer: ReturnType<typeof setInterval> | undefined;
@@ -59,10 +69,10 @@ export class PreparedPublicationRefresh {
       fetchManifest: options.dependencies?.fetchManifest ?? fetchPreparedExportManifest,
       openPublication: options.dependencies?.openPublication ?? openPreparedPublication,
     };
-    this.#openOptions = {
-      ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
-      ...(options.openExport === undefined ? {} : { openExport: options.openExport }),
-    };
+    const openOptions: MutableOpenOptions = {};
+    if (options.fetch !== undefined) openOptions.fetch = options.fetch;
+    if (options.openExport !== undefined) openOptions.openExport = options.openExport;
+    this.#openOptions = openOptions;
     this.#onError = options.onError ?? (() => {});
     if (options.signal !== undefined) {
       this.#unlinkLifecycle = disposePreparedOnAbort(options.signal, this.#lifecycle, () =>
@@ -151,10 +161,9 @@ export class PreparedPublicationRefresh {
 
   async #perform(kind: "start" | "refresh", signal: AbortSignal): Promise<void> {
     throwIfPreparedAborted(signal);
-    const manifest = await this.#dependencies.fetchManifest(this.#manifestUrl, {
-      ...(this.#openOptions.fetch === undefined ? {} : { fetch: this.#openOptions.fetch }),
-      signal,
-    });
+    const manifestOptions: ManifestRequestOptions = { signal };
+    if (this.#openOptions.fetch !== undefined) manifestOptions.fetch = this.#openOptions.fetch;
+    const manifest = await this.#dependencies.fetchManifest(this.#manifestUrl, manifestOptions);
     throwIfPreparedAborted(signal);
     if (this.#state.snapshot().transition.active) {
       await this.#state.settle();

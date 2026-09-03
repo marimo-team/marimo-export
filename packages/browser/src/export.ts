@@ -23,6 +23,7 @@ import type {
   VerifyOptions,
 } from "./types.js";
 import { isNotebookExportError, NotebookExportError } from "./types.js";
+import { isCallableValue } from "./value-types.js";
 
 const INDEX_MAX_BYTES = 16 * 1024 * 1024;
 const INDEX_MAX_VALUES = 2_000_000;
@@ -32,6 +33,34 @@ const DEFAULT_VERIFY_MAX_BYTES = 2 * 1024 * 1024 * 1024;
 const encoder = new TextEncoder();
 const decoder = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
 
+interface AssetReadOptions {
+  readonly maxBytes: number;
+  readonly signal?: AbortSignal;
+}
+
+interface MutableAssetReadOptions {
+  maxBytes: number;
+  signal?: AbortSignal;
+}
+
+interface SelectedLoadInput {
+  descriptor: OutputDescriptor;
+  mediaType: ReturnType<typeof parseMediaType>;
+  payload: OutputPayloadMap[OutputCodec];
+  signal?: AbortSignal;
+}
+
+interface SelectedLoader<Result> {
+  load(input: SelectedLoadInput): Result | Promise<Result>;
+}
+
+interface FetchAssetOptions {
+  cache: RequestCache;
+  expectedBytes: number;
+  maxBytes: number;
+  signal?: AbortSignal;
+}
+
 export async function openExport(
   base: string | URL,
   options: OpenExportOptions = {},
@@ -39,15 +68,12 @@ export async function openExport(
   throwIfAborted(options.signal);
   const normalized = normalizeBase(base);
   const fetcher = options.fetch ?? globalThis.fetch;
-  if (typeof fetcher !== "function") throw new TypeError("A fetch implementation is required.");
+  if (!isCallableValue(fetcher)) throw new TypeError("A fetch implementation is required.");
   const bytes = await fetchBytes(
     fetcher,
     resolveExportUrl(normalized, "index.json"),
     "index.json",
-    {
-      maxBytes: INDEX_MAX_BYTES,
-      ...(options.signal === undefined ? {} : { signal: options.signal }),
-    },
+    assetReadOptions(INDEX_MAX_BYTES, options.signal),
   );
   const wire = decodeCanonicalIndex(bytes);
   const parsed = parseExportIndex(wire);
@@ -56,8 +82,8 @@ export async function openExport(
   return new NotebookExportValue(normalized, identity, parsed, fetcher);
 }
 
-function decodeCanonicalIndex(bytes: Uint8Array): unknown {
-  let value: unknown;
+function decodeCanonicalIndex(bytes: Uint8Array): JsonValue {
+  let value: JsonValue;
   try {
     value = parseStrictJson(decoder.decode(bytes), INDEX_MAX_VALUES);
   } catch (error) {
@@ -67,7 +93,7 @@ function decodeCanonicalIndex(bytes: Uint8Array): unknown {
   }
   let canonical: Uint8Array;
   try {
-    canonical = encoder.encode(canonicalJson(value as JsonValue));
+    canonical = encoder.encode(canonicalJson(value));
   } catch (error) {
     if (isNotebookExportError(error)) throw error;
     throw new NotebookExportError("export_invalid", "Export index JSON is invalid.", {
@@ -225,10 +251,7 @@ class NotebookExportValue implements NotebookExport {
       throwIfAborted(options.signal);
       // Verification is sequential so one run does not retain every asset.
       // oxlint-disable-next-line no-await-in-loop
-      await this.#reader.payload(item.descriptor, {
-        maxBytes,
-        ...(options.signal === undefined ? {} : { signal: options.signal }),
-      });
+      await this.#reader.payload(item.descriptor, assetReadOptions(maxBytes, options.signal));
     }
     return Object.freeze({
       states: this.#states.length,
@@ -307,7 +330,7 @@ class ExportStateValue implements ExportState {
           Object.hasOwn(normalized, name) ? normalized[name]! : this.inputs[name]!,
         ]),
       ),
-    ) as JsonObject;
+    );
     return this.notebookExport.resolveNormalized(merged);
   }
 }
@@ -339,30 +362,21 @@ class ExportOutputValue implements ExportOutput {
     loader: OutputLoader<C, T>,
     options: LoadOptions = {},
   ): Promise<T> {
-    const selected = resolveOutputLoader(this, [loader as AnyOutputLoader]);
-    const payload = await this.#reader.payload(this.descriptor, {
-      maxBytes: assetLimit(options.maxBytes),
-      ...(options.signal === undefined ? {} : { signal: options.signal }),
-    });
+    const selected = resolveOutputLoader(this, [anyOutputLoader(loader)]);
+    const payload = await this.#reader.payload(
+      this.descriptor,
+      assetReadOptions(assetLimit(options.maxBytes), options.signal),
+    );
     throwIfAborted(options.signal);
-    const call = selected as unknown as {
-      load(input: {
-        readonly descriptor: OutputDescriptor;
-        readonly mediaType: ReturnType<typeof parseMediaType>;
-        readonly payload: OutputPayloadMap[OutputCodec];
-        readonly signal?: AbortSignal;
-      }): unknown;
-    };
+    const call = selectedLoader<T>(selected);
     try {
-      const result = Promise.resolve(
-        call.load({
-          descriptor: this.descriptor,
-          mediaType: this.mediaType,
-          payload,
-          ...(options.signal === undefined ? {} : { signal: options.signal }),
-        }),
-      );
-      return (await waitForLoader(result, options.signal)) as T;
+      const input: SelectedLoadInput = {
+        descriptor: this.descriptor,
+        mediaType: this.mediaType,
+        payload,
+      };
+      if (options.signal !== undefined) input.signal = options.signal;
+      return await waitForLoader(Promise.resolve(call.load(input)), options.signal);
     } catch (error) {
       throwLoaderError(error, options.signal, this);
     }
@@ -385,7 +399,7 @@ class AssetReader {
 
   async payload(
     descriptor: OutputDescriptor,
-    options: { readonly maxBytes: number; readonly signal?: AbortSignal },
+    options: AssetReadOptions,
   ): Promise<OutputPayloadMap[OutputCodec]> {
     throwIfAborted(options.signal);
     if (descriptor.codec === "marimo.scalar.v1") return descriptor.value;
@@ -403,12 +417,18 @@ class AssetReader {
       );
     }
     const path = assetPath(descriptor.codec, descriptor.asset.sha256);
-    const bytes = await fetchBytes(this.#fetch, resolveExportUrl(this.#baseHref, path), path, {
+    const fetchOptions: FetchAssetOptions = {
       cache: "force-cache",
       maxBytes: options.maxBytes,
       expectedBytes: descriptor.asset.size,
-      ...(options.signal === undefined ? {} : { signal: options.signal }),
-    });
+    };
+    if (options.signal !== undefined) fetchOptions.signal = options.signal;
+    const bytes = await fetchBytes(
+      this.#fetch,
+      resolveExportUrl(this.#baseHref, path),
+      path,
+      fetchOptions,
+    );
     throwIfAborted(options.signal);
     await verifyBytes(bytes, descriptor.asset);
     throwIfAborted(options.signal);
@@ -443,14 +463,14 @@ function uniqueAssets(
       ) {
         continue;
       }
-      const descriptor = output.descriptor as AssetOutputDescriptor;
+      const descriptor = output.descriptor;
       values.set(`${descriptor.codec}\0${descriptor.asset.sha256}`, { descriptor });
     }
   }
   return Object.freeze([...values.values()]);
 }
 
-function normalizeResolutionObject(input: unknown, label: string): JsonObject {
+function normalizeResolutionObject<Input>(input: Input, label: string): JsonObject {
   try {
     return portableJsonObject(input, label);
   } catch (error) {
@@ -513,24 +533,42 @@ async function waitForLoader<T>(promise: Promise<T>, signal: AbortSignal | undef
 }
 
 function throwLoaderError(
-  error: unknown,
+  cause: unknown,
   signal: AbortSignal | undefined,
   output: ExportOutputValue,
 ): never {
-  if (isNotebookExportError(error)) throw error;
-  if (signal?.aborted || isAbortError(error)) {
+  if (isNotebookExportError(cause)) throw cause;
+  if (signal?.aborted || isAbortError(cause)) {
     throw new NotebookExportError("abort", "Export output loading was aborted.", {
-      cause: signal?.aborted ? signal.reason : error,
+      cause: signal?.aborted ? signal.reason : cause,
     });
   }
   throw new NotebookExportError("decode_failed", "OutputLoader decoding failed.", {
-    cause: error,
+    cause,
     details: {
       output: output.name,
       codec: output.codec,
       mediaType: output.mediaType.raw,
     },
   });
+}
+
+function assetReadOptions(maxBytes: number, signal: AbortSignal | undefined): AssetReadOptions {
+  const options: MutableAssetReadOptions = { maxBytes };
+  if (signal !== undefined) options.signal = signal;
+  return options;
+}
+
+function selectedLoader<Result>(loader: AnyOutputLoader): SelectedLoader<Result> {
+  // SAFETY: resolveOutputLoader matched the loader codec to the output descriptor and payload.
+  return loader as SelectedLoader<Result>;
+}
+
+function anyOutputLoader<Codec extends OutputCodec, Result>(
+  loader: OutputLoader<Codec, Result>,
+): AnyOutputLoader {
+  // SAFETY: The mapped AnyOutputLoader union contains every OutputCodec specialization.
+  return loader as AnyOutputLoader;
 }
 
 function throwIfAborted(signal: AbortSignal | undefined): void {

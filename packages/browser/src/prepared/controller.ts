@@ -149,7 +149,7 @@ export class PreparedStateController {
     await this.#apply(selected, "publication", signal);
   }
 
-  cancel(reason?: unknown): void {
+  cancel<Reason>(reason?: Reason): void {
     this.#transitions.cancel(preparedAbortReason(reason, "Prepared state transition superseded"));
   }
 

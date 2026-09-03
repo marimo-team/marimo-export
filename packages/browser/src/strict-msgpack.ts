@@ -2,6 +2,16 @@ const decoder = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
 const MAX_DEPTH = 256;
 const MAX_VALUES = 100_000;
 
+type MessagePackValue =
+  | null
+  | boolean
+  | number
+  | bigint
+  | string
+  | Uint8Array
+  | readonly MessagePackValue[]
+  | ReadonlyMap<string, MessagePackValue>;
+
 export function validateCanonicalMessagePack(bytes: Uint8Array): void {
   const scanner = new MessagePackScanner(bytes);
   scanner.value(0);
@@ -19,7 +29,7 @@ class MessagePackScanner {
     this.#view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   }
 
-  value(depth: number): unknown {
+  value(depth: number): MessagePackValue {
     this.#values += 1;
     if (this.#values > MAX_VALUES) throw new RangeError("MessagePack exceeds its value limit.");
     if (depth > MAX_DEPTH) throw new RangeError("MessagePack exceeds its nesting limit.");
@@ -135,17 +145,17 @@ class MessagePackScanner {
     }
   }
 
-  array(length: number, depth: number): readonly unknown[] {
-    const values: unknown[] = [];
+  array(length: number, depth: number): readonly MessagePackValue[] {
+    const values: MessagePackValue[] = [];
     for (let index = 0; index < length; index += 1) values.push(this.value(depth + 1));
     return values;
   }
 
-  map(length: number, depth: number): ReadonlyMap<string, unknown> {
-    const values = new Map<string, unknown>();
+  map(length: number, depth: number): ReadonlyMap<string, MessagePackValue> {
+    const values = new Map<string, MessagePackValue>();
     for (let index = 0; index < length; index += 1) {
       const key = this.value(depth + 1);
-      if (typeof key !== "string") throw new RangeError("BlobAsset map keys must be strings.");
+      if (!isMessagePackString(key)) throw new RangeError("BlobAsset map keys must be strings.");
       if (values.has(key)) throw new RangeError("BlobAsset map keys must be unique.");
       values.set(key, this.value(depth + 1));
     }
@@ -237,6 +247,10 @@ class MessagePackScanner {
       throw new RangeError("BlobAsset MessagePack is truncated.");
     }
   }
+}
+
+function isMessagePackString(value: MessagePackValue): value is string {
+  return Object.prototype.toString.call(value) === "[object String]";
 }
 
 function nonCanonical(): RangeError {
