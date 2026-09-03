@@ -1,0 +1,127 @@
+ci_control: &ci_control
+  - ".github/filters.yml"
+  - ".github/workflows/ci.yml"
+
+pages_control: &pages_control
+  - ".github/filters.yml"
+  - ".github/workflows/pages.yml"
+
+javascript_workspace: &javascript_workspace
+  - ".pnpmfile.mjs"
+  - "package.json"
+  - "pnpm-lock.yaml"
+  - "pnpm-workspace.yaml"
+  - "tsconfig.base.json"
+  - "vite.config.ts"
+
+python_inputs: &python_inputs
+  - *ci_control
+  - ".github/workflows/publish.yml"
+  - ".python-version"
+  - "pyproject.toml"
+  - "uv.lock"
+  - "packages/python/pyproject.toml"
+  - "packages/python/src/**"
+  - "packages/python/tests/**"
+  - "scripts/*.py"
+  - "scripts/check-release.sh"
+  - "skills/notebook-to-static-app/scripts/**"
+  - "skills/notebook-to-static-app/tests/**"
+  - "examples/quickstart/*.py"
+  - "examples/quickstart/*.yaml"
+  - "examples/vite-vanilla/*.py"
+  - "examples/vite-vanilla/*.toml"
+  - "examples/vite-vanilla/*.yaml"
+  - "tests/fixtures/**"
+
+frontend_inputs: &frontend_inputs
+  - *ci_control
+  - *javascript_workspace
+  - "packages/*/package.json"
+  - "packages/*/src/**"
+  - "packages/*/tests/**"
+  - "packages/*/tsconfig.json"
+  - "packages/*/vite.config.ts"
+  - "!packages/python/**"
+  - "examples/vite-vanilla/package.json"
+  - "examples/vite-vanilla/index.html"
+  - "examples/vite-vanilla/src/**"
+  - "examples/vite-vanilla/tests/**"
+  - "examples/vite-vanilla/tsconfig.json"
+  - "examples/vite-vanilla/vite.config.ts"
+  - "tests/fixtures/**"
+  - "tools/oxlint/**"
+
+documentation:
+  - "README.md"
+  - "AGENTS.md"
+  - "CLAUDE.md"
+  - "LICENSE"
+  - "apps/docs/**"
+  - "development_docs/**"
+  - "docs/**"
+  - "examples/**/*.md"
+  - "packages/*/LICENSE"
+  - "packages/*/README.md"
+  - "skills/**/*.md"
+  - "skills/**/*.yaml"
+
+pages:
+  - *pages_control
+  - *javascript_workspace
+  - "apps/docs/**"
+  - "docs/**"
+
+quality:
+  - "**"
+  - "!README.md"
+  - "!AGENTS.md"
+  - "!CLAUDE.md"
+  - "!LICENSE"
+  - "!apps/docs/**"
+  - "!development_docs/**"
+  - "!docs/**"
+  - "!examples/**/*.md"
+  - "!packages/*/LICENSE"
+  - "!packages/*/README.md"
+  - "!skills/**/*.md"
+  - "!skills/**/*.yaml"
+
+python_contracts:
+  - *python_inputs
+
+frontend_contracts:
+  - *frontend_inputs
+
+distribution:
+  - *ci_control
+  - *javascript_workspace
+  - ".github/workflows/publish.yml"
+  - ".python-version"
+  - "LICENSE"
+  - "Makefile"
+  - "pyproject.toml"
+  - "uv.lock"
+  - "packages/browser/LICENSE"
+  - "packages/browser/README.md"
+  - "packages/browser/package.json"
+  - "packages/browser/src/**"
+  - "packages/browser/tests/*.mjs"
+  - "packages/browser/tsconfig.json"
+  - "packages/browser/vite.config.ts"
+  - "packages/loader-anywidget/package.json"
+  - "packages/loader-anywidget/src/**"
+  - "packages/loader-anywidget/tsconfig.json"
+  - "packages/loader-anywidget/vite.config.ts"
+  - "packages/portable-json/LICENSE"
+  - "packages/portable-json/README.md"
+  - "packages/portable-json/package.json"
+  - "packages/portable-json/src/**"
+  - "packages/portable-json/tests/*.mjs"
+  - "packages/portable-json/tsconfig.json"
+  - "packages/portable-json/vite.config.ts"
+  - "packages/python/LICENSE"
+  - "packages/python/README.md"
+  - "packages/python/pyproject.toml"
+  - "packages/python/src/**"
+  - "scripts/**"

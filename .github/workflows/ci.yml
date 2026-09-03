@@ -7,15 +7,85 @@ on:
       - main
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 permissions:
   contents: read
 
 jobs:
-  python:
+  changes:
+    name: Changes
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      distribution: ${{ steps.filter.outputs.distribution }}
+      frontend_contracts: ${{ steps.filter.outputs.frontend_contracts }}
+      python_contracts: ${{ steps.filter.outputs.python_contracts }}
+      quality: ${{ steps.filter.outputs.quality }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Classify changed files
+        id: filter
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        with:
+          filters: .github/filters.yml
+          predicate-quantifier: some-with-excludes
+
+  quality:
+    name: Quality
+    needs: changes
+    if: needs.changes.outputs.quality == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Vite+
+        uses: voidzero-dev/setup-vp@1b32467adbe183473499fd9d5d372c3ed9641754 # v1.18.0
+        with:
+          version: 0.2.4
+          sfw: true
+          cache: true
+          run-install: |
+            - args: ['--frozen-lockfile']
+
+      - name: Enable pnpm
+        run: corepack enable pnpm
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+        with:
+          enable-cache: true
+
+      - name: Install Python workspace
+        run: uv sync --all-packages --all-extras --locked
+
+      - name: Check formatting
+        run: |
+          make format
+          git diff --exit-code
+
+      - name: Lint
+        run: make lint
+
+      - name: Type-check
+        run: make typecheck
+
+  test-python:
     name: Python ${{ matrix.python-version }} / ${{ matrix.os }}
+    needs: changes
+    if: needs.changes.outputs.python_contracts == 'true'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     strategy:
@@ -48,10 +118,69 @@ jobs:
           pytest -q packages/python/tests
           --ignore packages/python/tests/test_vite_vanilla_example.py
 
-  check:
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
+      - name: Run application and skill contracts
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
+        run: >-
+          uv run
+          --frozen
+          --isolated
+          --group test
+          --all-extras
+          --python "${{ matrix.python-version }}"
+          pytest -q
+          packages/python/tests/test_vite_vanilla_example.py
+          skills/notebook-to-static-app/tests
 
+  test-frontend:
+    name: Frontend
+    needs: changes
+    if: needs.changes.outputs.frontend_contracts == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Vite+
+        uses: voidzero-dev/setup-vp@1b32467adbe183473499fd9d5d372c3ed9641754 # v1.18.0
+        with:
+          version: 0.2.4
+          sfw: true
+          cache: true
+          run-install: |
+            - args: ['--frozen-lockfile']
+
+      - name: Enable pnpm
+        run: corepack enable pnpm
+
+      - name: Install AnyWidget test browser
+        run: pnpm --filter @marimo-export/internal-loader-anywidget exec playwright install --with-deps --only-shell chromium
+
+      - name: Test frontend
+        run: >-
+          ./node_modules/.bin/vp run
+          --filter './packages/**'
+          --filter './examples/**'
+          --fail-if-no-match
+          test
+
+      - name: Build frontend
+        run: >-
+          ./node_modules/.bin/vp run
+          --filter './packages/**'
+          --filter './examples/**'
+          --fail-if-no-match
+          build
+
+  package:
+    name: Package
+    needs: changes
+    if: needs.changes.outputs.distribution == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - name: Check out repository
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
@@ -78,8 +207,37 @@ jobs:
       - name: Install Python workspace
         run: uv sync --all-packages --all-extras --locked
 
-      - name: Install AnyWidget test browser
-        run: pnpm --filter @marimo-export/internal-loader-anywidget exec playwright install --with-deps --only-shell chromium
+      - name: Test packed npm packages
+        run: |
+          pnpm --filter @marimo-team/portable-json test:package
+          pnpm --filter @marimo-team/marimo-export test:package
 
-      - name: Run release gate
-        run: make check package
+      - name: Build and verify packages
+        run: make package
+
+  required:
+    name: Required
+    if: always()
+    needs: [changes, quality, test-python, test-frontend, package]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Verify required jobs
+        env:
+          CHANGES: ${{ needs.changes.result }}
+          PACKAGE: ${{ needs.package.result }}
+          QUALITY: ${{ needs.quality.result }}
+          TEST_FRONTEND: ${{ needs.test-frontend.result }}
+          TEST_PYTHON: ${{ needs.test-python.result }}
+        run: |
+          if [ "$CHANGES" != success ]; then
+            printf 'Change classification failed: %s\n' "$CHANGES" >&2
+            exit 1
+          fi
+          for result in "$QUALITY" "$TEST_PYTHON" "$TEST_FRONTEND" "$PACKAGE"; do
+            if [ "$result" != success ] && [ "$result" != skipped ]; then
+              printf 'Required jobs: quality=%s test-python=%s test-frontend=%s package=%s\n' \
+                "$QUALITY" "$TEST_PYTHON" "$TEST_FRONTEND" "$PACKAGE" >&2
+              exit 1
+            fi
+          done

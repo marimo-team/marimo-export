@@ -9,15 +9,22 @@ boundaries.
 Local development uses Python 3.12 from `.python-version`. The Python package
 supports 3.10 through 3.14.
 
-GitHub Actions runs the Python package contracts on:
+GitHub Actions classifies changed files before starting the quality, Python,
+frontend, package, and documentation jobs. Each job runs when its owned inputs
+change. The `Required` job accepts successful and skipped jobs, and fails when
+change classification or an executed CI job fails.
+
+The Python job runs the package contracts on:
 
 ```text
 Ubuntu:  3.10, 3.11, 3.12, 3.13, 3.14
 Windows: 3.10, 3.11, 3.12, 3.13, 3.14
 ```
 
-The Ubuntu check job also runs formatting, lint, Python and TypeScript types,
-all tests, builds, packed npm consumers, and isolated wheel smoke.
+The Ubuntu jobs check formatting, lint, Python and TypeScript types, frontend
+tests and builds, packed npm consumers, and isolated wheel smoke. The Pages
+workflow checks documentation changes on pull requests and builds the site when
+its source or toolchain inputs change.
 
 ## Root gate
 
