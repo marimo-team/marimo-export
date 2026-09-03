@@ -61,6 +61,13 @@ const llms = await readFile(join(outputDirectory, "llms.txt"), "utf8");
 const llmsFull = await readFile(join(outputDirectory, "llms-full.txt"), "utf8");
 const sitemap = await readFile(join(outputDirectory, "sitemap.xml"), "utf8");
 const index = await readFile(join(outputDirectory, "index.html"), "utf8");
+const renderedDocumentation = (
+  await Promise.all(
+    files
+      .filter((file) => file.endsWith(".html"))
+      .map((file) => readFile(join(outputDirectory, file), "utf8")),
+  )
+).join("\n");
 
 const llmsLinks = [...llms.matchAll(/\]\((https?:\/\/[^)]+\.md)\)/g)].map((match) => match[1]);
 const llmsFullLinks = [
@@ -79,6 +86,11 @@ const sitemapDifference = compareSets(expectedCanonicalLinks, new Set(sitemapLin
 
 const baseName = process.env.BASE_PATH?.trim().replace(/^\/+|\/+$/g, "");
 const assetPrefix = baseName ? `/${baseName}` : "";
+const escapedBaseReferences = baseName
+  ? [...renderedDocumentation.matchAll(/\b(?:href|src)="(\/(?!\/)[^"#?]+)"/g)]
+      .map((match) => match[1])
+      .filter((reference) => !reference.startsWith(`${assetPrefix}/`))
+  : [];
 const errors = [
   ...formatList("Missing or empty build artifacts", missing),
   ...formatList("Duplicate llms.txt links", duplicates(llmsLinks)),
@@ -92,7 +104,16 @@ const errors = [
   ...formatList("Unexpected sitemap URLs", sitemapDifference.unexpected),
   ...(index.includes(`href="${assetPrefix}/assets/`)
     ? []
-    : [`Built index does not use the expected asset prefix ${assetPrefix || "/"}.`]),
+    : [`Built index does not use the expected stylesheet prefix ${assetPrefix || "/"}.`]),
+  ...(index.includes(`src="${assetPrefix}/assets/`)
+    ? []
+    : [`Built index does not use the expected script prefix ${assetPrefix || "/"}.`]),
+  ...(index.includes(`href="${assetPrefix}/guide/getting-started"`)
+    ? []
+    : [`Built index does not use the expected navigation prefix ${assetPrefix || "/"}.`]),
+  ...formatList("Root-absolute references outside the configured base path", [
+    ...new Set(escapedBaseReferences),
+  ]),
 ];
 
 if (errors.length > 0) {
