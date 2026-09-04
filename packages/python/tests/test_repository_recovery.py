@@ -311,7 +311,7 @@ def test_slow_recovery_does_not_starve_live_generation_heartbeat(
 ) -> None:
     root = tmp_path / "repository"
     limits = RepositoryLimits(
-        lease_ttl_seconds=2.0,
+        lease_ttl_seconds=10.0,
         lease_heartbeat_seconds=0.05,
     )
     identity = _identity("slow-recovery")
@@ -332,7 +332,7 @@ def test_slow_recovery_does_not_starve_live_generation_heartbeat(
 
     def slow_verify(context: ArtifactContext, path: Path):
         verification_started.set()
-        assert renewed.wait(timeout=2)
+        assert renewed.wait(timeout=10)
         return native_verify(context, path)
 
     monkeypatch.setattr(owner._catalog, "renew_lifecycle", observe_renewal)

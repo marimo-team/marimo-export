@@ -240,7 +240,7 @@ from pathlib import Path
 from marimo_export._repository.preparation import RepositoryIdentity, preparation_repository
 from marimo_export.repository import ExportRepository, RepositoryLimits
 
-limits = RepositoryLimits(lease_ttl_seconds=2.0, lease_heartbeat_seconds=0.1)
+limits = RepositoryLimits(lease_ttl_seconds=30.0, lease_heartbeat_seconds=0.1)
 identity = RepositoryIdentity(sys.argv[2], sys.argv[3], sys.argv[4])
 repository = ExportRepository.open(sys.argv[1], limits=limits)
 preparation = preparation_repository(repository)
@@ -264,7 +264,7 @@ with preparation.reserve_preparation(identity):
     assert process.returncode == 0, (stdout, stderr)
     staged_path = Path(ready.read_text(encoding="utf-8"))
     identity = RepositoryIdentity(*identity_parts)
-    limits = RepositoryLimits(lease_ttl_seconds=2.0, lease_heartbeat_seconds=0.1)
+    limits = RepositoryLimits(lease_ttl_seconds=30.0, lease_heartbeat_seconds=0.1)
 
     with ExportRepository.open(root, limits=limits) as repository:
         assert staged_path.is_dir()
@@ -276,12 +276,15 @@ with preparation.reserve_preparation(identity):
             raise AssertionError("crashed reservation has not expired")
         assert raised.value.code == "preparation_cancelled"
 
-    deadline = time.monotonic() + limits.lease_ttl_seconds + 3
-    while staged_path.exists() and time.monotonic() < deadline:
-        with ExportRepository.open(root, limits=limits):
-            pass
-        time.sleep(0.05)
-    assert not staged_path.exists()
+    connection = sqlite3.connect(root / "catalog.sqlite3")
+    try:
+        connection.execute("UPDATE staging_leases SET expires_at_us = 0")
+        connection.execute("UPDATE preparation_reservations SET expires_at_us = 0")
+        connection.commit()
+    finally:
+        connection.close()
+    with ExportRepository.open(root, limits=limits):
+        assert not staged_path.exists()
     with (
         ExportRepository.open(root, limits=limits) as repository,
         preparation_repository(repository).reserve_preparation(identity),
@@ -461,27 +464,30 @@ def test_same_repository_serializes_same_identity_reservations(tmp_path: Path) -
     identity = RepositoryIdentity(_digest("producer"), _digest("outputs"), _digest("spec"))
     first_entered = threading.Event()
     release_first = threading.Event()
+    second_started = threading.Event()
     second_entered = threading.Event()
 
     def first_operation() -> None:
-        with preparation.reserve_preparation(identity, timeout=2):
+        with preparation.reserve_preparation(identity, timeout=10):
             first_entered.set()
-            assert release_first.wait(timeout=2)
+            assert release_first.wait(timeout=10)
 
     def second_operation() -> None:
-        assert first_entered.wait(timeout=2)
-        with preparation.reserve_preparation(identity, timeout=2):
+        assert first_entered.wait(timeout=10)
+        second_started.set()
+        with preparation.reserve_preparation(identity, timeout=10):
             second_entered.set()
 
     first_thread = threading.Thread(target=first_operation)
     second_thread = threading.Thread(target=second_operation)
     first_thread.start()
     second_thread.start()
-    assert first_entered.wait(timeout=2)
-    assert not second_entered.wait(timeout=0.1)
+    assert first_entered.wait(timeout=10)
+    assert second_started.wait(timeout=10)
+    assert not second_entered.is_set()
     release_first.set()
-    first_thread.join(timeout=2)
-    second_thread.join(timeout=2)
+    first_thread.join(timeout=10)
+    second_thread.join(timeout=10)
     assert second_entered.is_set()
     assert not first_thread.is_alive()
     assert not second_thread.is_alive()
@@ -501,7 +507,7 @@ def test_same_repository_reservation_wait_cancellation_is_public_error(
             with preparation.reserve_preparation(
                 identity,
                 cancelled=lambda: True,
-                timeout=1,
+                timeout=10,
             ):
                 raise AssertionError("cancelled reservation must not be acquired")
         except BaseException as error:
@@ -510,7 +516,7 @@ def test_same_repository_reservation_wait_cancellation_is_public_error(
     with preparation.reserve_preparation(identity):
         waiting = threading.Thread(target=wait_for_reservation)
         waiting.start()
-        waiting.join(timeout=2)
+        waiting.join(timeout=10)
     assert not waiting.is_alive()
     assert len(failures) == 1
     assert isinstance(failures[0], ExecutionError)

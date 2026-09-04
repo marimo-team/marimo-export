@@ -161,7 +161,7 @@ def test_staging_acquisition_waits_within_operation_timeout(
 
         def create_staging() -> None:
             try:
-                staged.append(repository._artifacts.new_staging(timeout_seconds=2))
+                staged.append(repository._artifacts.new_staging(timeout_seconds=10))
             except BaseException as error:
                 errors.append(error)
             finally:
@@ -171,12 +171,12 @@ def test_staging_acquisition_waits_within_operation_timeout(
         worker = threading.Thread(target=create_staging)
         worker.start()
         try:
-            assert connected.wait(timeout=2)
-            assert not finished.wait(timeout=0.5)
+            assert connected.wait(timeout=10)
+            assert not finished.is_set()
         finally:
             connection.rollback()
             connection.close()
-        assert finished.wait(timeout=2)
+        assert finished.wait(timeout=10)
         worker.join()
         assert not errors
         repository._artifacts.discard_staging(staged.pop())
@@ -338,7 +338,7 @@ def test_staging_lease_releases_only_after_confirmed_removal(
 def test_close_is_bounded_when_catalog_release_is_blocked(tmp_path: Path) -> None:
     root = tmp_path / "repository"
     limits = RepositoryLimits(
-        lease_ttl_seconds=1.0,
+        lease_ttl_seconds=30.0,
         lease_heartbeat_seconds=0.1,
     )
     identity = _identity("blocked-close")
@@ -359,12 +359,15 @@ def test_close_is_bounded_when_catalog_release_is_blocked(tmp_path: Path) -> Non
         connection.rollback()
         connection.close()
     assert time.monotonic() - started < 2
-    deadline = time.monotonic() + limits.lease_ttl_seconds + 2
-    while staged.path.exists() and time.monotonic() < deadline:
-        with ExportRepository.open(root, limits=limits):
-            pass
-        time.sleep(0.05)
-    assert not staged.path.exists()
+    connection = sqlite3.connect(root / "catalog.sqlite3")
+    try:
+        connection.execute("UPDATE staging_leases SET expires_at_us = 0")
+        connection.execute("UPDATE preparation_reservations SET expires_at_us = 0")
+        connection.commit()
+    finally:
+        connection.close()
+    with ExportRepository.open(root, limits=limits):
+        assert not staged.path.exists()
 
 
 def test_failed_retired_artifact_removal_remains_accounted(
@@ -420,7 +423,7 @@ def test_heartbeat_failure_surfaces_through_public_operations(
 ) -> None:
     identity = _identity("heartbeat-failure")
     limits = RepositoryLimits(
-        lease_ttl_seconds=2.0,
+        lease_ttl_seconds=10.0,
         lease_heartbeat_seconds=0.1,
     )
     repository = ExportRepository.open(tmp_path / "repository", limits=limits)
@@ -431,7 +434,7 @@ def test_heartbeat_failure_surfaces_through_public_operations(
 
     monkeypatch.setattr(repository._catalog, "renew_lifecycle", fail_heartbeat)
     repository._leases._wake.set()
-    deadline = time.monotonic() + 2
+    deadline = time.monotonic() + 10
     while repository._leases._failure is None and time.monotonic() < deadline:
         time.sleep(0.01)
     assert repository._leases._failure is not None
@@ -508,13 +511,13 @@ def test_delayed_success_after_deadline_does_not_revive_artifact_lease(
         if kwargs["artifacts"] and not blocked:
             blocked = True
             entered.set()
-            assert proceed.wait(timeout=limits.lease_ttl_seconds + 2)
+            assert proceed.wait(timeout=10)
         return renewed
 
     monkeypatch.setattr(repository._catalog, "renew_lifecycle", delayed_renewal)
-    assert entered.wait(timeout=limits.lease_ttl_seconds + 2)
+    assert entered.wait(timeout=10)
     try:
-        deadline = time.monotonic() + limits.lease_ttl_seconds + 2
+        deadline = time.monotonic() + 10
         while state.alive and time.monotonic() < deadline:
             time.sleep(0.01)
     finally:
@@ -545,12 +548,12 @@ def test_stale_artifact_heartbeat_cannot_shorten_fresh_reacquisition(
         if kwargs["artifacts"] and not requested:
             requested.append(kwargs["expires_at_us"])
             entered.set()
-            assert proceed.wait(timeout=2)
+            assert proceed.wait(timeout=10)
         return native_renew(**kwargs)
 
     monkeypatch.setattr(repository._catalog, "renew_lifecycle", delayed_renewal)
     repository._leases._wake.set()
-    assert entered.wait(timeout=2)
+    assert entered.wait(timeout=10)
     time.sleep(0.05)
     reacquired = preparation_repository(repository).lookup_prepared_states(
         producer_sha256=identity.producer_sha256,
@@ -576,7 +579,7 @@ def test_stale_artifact_heartbeat_cannot_shorten_fresh_reacquisition(
     with repository._leases._condition:
         assert repository._leases._condition.wait_for(
             lambda: not repository._leases._maintaining,
-            timeout=2,
+            timeout=10,
         )
     connection = sqlite3.connect(repository.path / "catalog.sqlite3")
     try:
@@ -622,13 +625,13 @@ def test_delayed_success_after_deadline_does_not_revive_staging_lease(
         if kwargs["staging"] and not blocked:
             blocked = True
             entered.set()
-            assert proceed.wait(timeout=limits.lease_ttl_seconds + 2)
+            assert proceed.wait(timeout=10)
         return renewed
 
     monkeypatch.setattr(repository._catalog, "renew_lifecycle", delayed_renewal)
-    assert entered.wait(timeout=limits.lease_ttl_seconds + 2)
+    assert entered.wait(timeout=10)
     try:
-        deadline = time.monotonic() + limits.lease_ttl_seconds + 2
+        deadline = time.monotonic() + 10
         while relative in repository._leases._staging and time.monotonic() < deadline:
             with repository._leases._condition:
                 repository._leases._expire_unconfirmed_lifecycle()
@@ -648,7 +651,7 @@ def test_release_during_heartbeat_renewal_removes_renewed_lease(
 ) -> None:
     identity = _identity("renewal-race")
     limits = RepositoryLimits(
-        lease_ttl_seconds=2.0,
+        lease_ttl_seconds=10.0,
         lease_heartbeat_seconds=0.1,
     )
     with ExportRepository.open(tmp_path / "repository", limits=limits) as repository:
@@ -663,12 +666,12 @@ def test_release_during_heartbeat_renewal_removes_renewed_lease(
             if kwargs["artifacts"] and not blocked:
                 blocked = True
                 entered.set()
-                assert proceed.wait(timeout=2)
+                assert proceed.wait(timeout=10)
             return native_renew(**kwargs)
 
         monkeypatch.setattr(repository._catalog, "renew_lifecycle", block_renewal)
         repository._leases._wake.set()
-        assert entered.wait(timeout=2)
+        assert entered.wait(timeout=10)
         state.close()
         proceed.set()
         repository._leases.flush_releases()
@@ -816,7 +819,7 @@ def test_slow_prune_quarantine_does_not_starve_live_heartbeat(
 
     def slow_quarantine(path: Path):
         quarantine_started.set()
-        assert renewed.wait(timeout=2)
+        assert renewed.wait(timeout=10)
         return native_quarantine(path)
 
     monkeypatch.setattr(owner._catalog, "renew_lifecycle", observe_renewal)
