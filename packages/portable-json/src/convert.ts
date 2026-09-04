@@ -134,15 +134,20 @@ function unicodeScalar(value: string, path: string): string {
 }
 
 function isBoolean<Value>(value: Value): value is Value & boolean {
-  return Object.prototype.toString.call(value) === "[object Boolean]";
+  return isPrimitiveWithPrototype(value, Boolean.prototype);
 }
 
 function isString<Value>(value: Value): value is Value & string {
-  return Object.prototype.toString.call(value) === "[object String]";
+  return isPrimitiveWithPrototype(value, String.prototype);
 }
 
 function isNumber<Value>(value: Value): value is Value & number {
-  return Object.prototype.toString.call(value) === "[object Number]";
+  return isPrimitiveWithPrototype(value, Number.prototype);
+}
+
+function isPrimitiveWithPrototype<Value, Prototype>(value: Value, prototype: Prototype): boolean {
+  const boxed = Object(value);
+  return boxed !== value && Object.getPrototypeOf(boxed) === prototype;
 }
 
 function isJsonObject<Value>(value: Value): value is Value & JsonObject {

@@ -87,6 +87,12 @@ describe("portable JSON conversion", () => {
     );
     expect(Object.is(portableJsonValue(-0), 0)).toBe(true);
   });
+
+  test("rejects boxed primitives", () => {
+    for (const value of [new Boolean(true), new Number(1), new String("ready")]) {
+      expect(() => portableJsonValue(value)).toThrow("must be JSON-compatible");
+    }
+  });
 });
 
 describe("portable JSON parsing", () => {
