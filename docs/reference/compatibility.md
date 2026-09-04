@@ -39,14 +39,14 @@ optional `AbortSignal`, and
 
 Loading and mounting add representation-specific browser requirements:
 
-| Representation                                    | Additional dependency or browser capability                                                 |
-| ------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| JSON, scalar, text, HTML, NumPy, marimo snapshots | None beyond the browser package                                                             |
-| Image                                             | Document Object Model, Blob, and object URL APIs                                            |
-| Apache Arrow                                      | `@uwdata/flechette` and `lz4js`                                                             |
-| Parquet                                           | `hyparquet`                                                                                 |
-| Vega-Lite                                         | `vega-embed`                                                                                |
-| AnyWidget                                         | `@anywidget/types` for TypeScript types, plus embedded, data, HTTP, or HTTPS widget modules |
+| Representation                                    | Peer range or browser capability                                                               |
+| ------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| JSON, scalar, text, HTML, NumPy, marimo snapshots | None beyond the browser package                                                                |
+| Image                                             | Document Object Model, Blob, and object URL APIs                                               |
+| Apache Arrow                                      | `@uwdata/flechette ^2.5.0` and `lz4js 0.2.0`                                                   |
+| Parquet                                           | `hyparquet ^1.26.2`                                                                            |
+| Vega-Lite                                         | `vega-embed ^7.1.0`                                                                            |
+| AnyWidget                                         | `@anywidget/types ^0.4.0` for types, plus embedded, data, HTTP, or HTTPS widget module support |
 
 See [Output representations](representations) for install commands and
 loader contracts. Browser mounts, Blob URLs, canvas rendering, dynamic imports,
@@ -73,7 +73,12 @@ changes. Version a custom media type when its payload changes incompatibly.
 
 ## Release coordination
 
-The Python package, browser package, and portable JSON package use coordinated
-release versions. Keep package versions aligned when one application produces
-and consumes the same export. The export itself records the producer versions
-and implementation identity for inspection and diagnostics.
+The public `marimo-export` Python and browser packages use coordinated release
+versions. Keep those package versions aligned when one application produces and
+consumes the same export. The export records the producer versions and
+implementation identity for inspection and diagnostics.
+
+Portable JSON is a protocol and value contract within those public packages.
+Browser applications import its TypeScript types from
+`@marimo-team/marimo-export`. Python applications import conversion and
+canonical-encoding functions from `marimo_export.wire`.

@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="A static application that reads two prepared report states from a verified notebook export."
+    />
+    <link rel="icon" href="data:," />
+    <title>Prepared report</title>
+  </head>
+  <body>
+    <main id="app" aria-busy="true">
+      <header class="masthead">
+        <div>
+          <p class="kicker">Verified notebook export</p>
+          <h1>Prepared report</h1>
+          <p class="intro">
+            Switch between two states prepared from the same notebook. Each view reads static
+            <code>index.json</code> and asset files.
+          </p>
+        </div>
+        <div class="state-control">
+          <span>Report window</span>
+          <div role="group" aria-label="Prepared report window">
+            <button type="button" data-state="weekly">Weekly</button>
+            <button type="button" data-state="monthly">Monthly</button>
+          </div>
+        </div>
+      </header>
+
+      <p id="status" class="visually-hidden" role="status" aria-live="polite">
+        Opening the notebook export
+      </p>
+
+      <section id="error-panel" class="error-panel" role="alert" hidden>
+        <strong>The prepared report could not be opened.</strong>
+        <span>Reload the page to try again.</span>
+      </section>
+
+      <section class="report-card" aria-labelledby="report-title">
+        <div class="metric">
+          <p id="state-label" class="kicker">Loading state</p>
+          <p><strong id="day-count">–</strong><span> days</span></p>
+          <p id="summary-label">Loading summary</p>
+        </div>
+        <div class="report-output">
+          <p class="kicker">Rendered report output</p>
+          <div id="report-output" aria-live="polite"></div>
+        </div>
+      </section>
+
+      <details class="summary-panel">
+        <summary>Inspect summary JSON</summary>
+        <pre id="summary-json"><code>Loading summary</code></pre>
+      </details>
+
+      <footer>
+        <span>Reads a verified export</span>
+        <span>Ships no Python source or runtime</span>
+      </footer>
+    </main>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

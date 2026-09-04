@@ -1,7 +1,10 @@
 # @marimo-team/marimo-export
 
-`@marimo-team/marimo-export` opens notebook exports in browser applications. The
-Python package or CLI produces the export directory before the browser reads it.
+`@marimo-team/marimo-export` opens **notebook exports** in browser applications,
+resolves exported states, and loads named outputs. Select the states and outputs
+to publish from a [marimo](https://marimo.io/) notebook. marimo-export writes a
+portable, verified notebook export that browser applications and agents read
+without a Python runtime or a copy of the notebook source.
 
 [pnpm](https://pnpm.io/) adds the package to a TypeScript project:
 
@@ -9,24 +12,33 @@ Python package or CLI produces the export directory before the browser reads it.
 pnpm add @marimo-team/marimo-export
 ```
 
+The package targets [ECMAScript 2022](https://tc39.es/ecma262/2022/). Opening and
+verifying an export require browser `fetch`, `URL`, `TextEncoder`, `TextDecoder`,
+`AbortSignal`, and [Web Crypto](https://developer.mozilla.org/en-US/docs/Web/API/Web_Crypto_API).
+Serve the application over HTTPS or from a browser-recognized local development
+origin so Web Crypto is available.
+
 ## Open one immutable export
 
-Assume the application serves a notebook export at `/exports/report/` and its
-document contains `<h1 id="title"></h1>`:
+Assume the application serves the quickstart notebook export at
+`/exports/report/` and its document contains `<pre id="summary"></pre>`:
 
 ```ts
 import { openExport } from "@marimo-team/marimo-export";
 import { jsonLoader } from "@marimo-team/marimo-export/loader/json";
 
 const notebookExport = await openExport("/exports/report/");
-const title = await notebookExport.defaultState.output("title").load(jsonLoader());
+const summary = await notebookExport.defaultState.output("summary").load(jsonLoader());
 
-document.querySelector("#title")!.textContent = String(title);
+document.querySelector("#summary")!.textContent = JSON.stringify(summary, null, 2);
 ```
 
 `openExport()` validates canonical `index.json`. Output assets remain lazy until
 a loader or complete verification requests them. Each load verifies the selected
 asset before decoding it.
+
+Verification checks the notebook export against its loaded `index.json`. The
+application still authenticates the publisher and delivery origin.
 
 The reader exposes the export identity, spec SHA-256, default state, notebook and
 producer facts, input names, control bindings, output names, aliases, and
@@ -34,14 +46,20 @@ normalized states.
 
 ## Load and mount an output
 
-The next fragment continues with the `notebookExport` opened in the first
-example. That export also contains a `weekly` state and a `chart` output stored
-as Vega-Lite. The document contains an element with `id="chart"`.
+The next fragment uses another export with a `weekly` state and a `chart` output
+stored as Vega-Lite. Its document contains an element with `id="chart"`.
+
+Install the peer runtime used to mount Vega-Lite charts:
+
+```bash
+pnpm add vega-embed
+```
 
 ```ts
 import { vegaLiteLoader } from "@marimo-team/marimo-export/loader/vegalite";
 
-const state = notebookExport.state("weekly");
+const chartExport = await openExport("/exports/market/");
+const state = chartExport.state("weekly");
 const chart = await state.output("chart").load(vegaLiteLoader());
 const host = document.querySelector<HTMLElement>("#chart")!;
 const mounted = await chart.mount(host, { renderer: "svg" });
@@ -64,9 +82,8 @@ selected by a `marimo-export.prepared.v1` manifest. Applications use it when a
 server may publish a newer export generation or select another exported state.
 
 The following fragment assumes the application serves the manifest at
-`/runtime/prepared.json` and provides the same `#title` element as the first
-example. The manifest's export contains an `interval` input and a `title`
-output:
+`/runtime/prepared.json` and provides `<h1 id="title"></h1>`. The manifest's
+export contains an `interval` input and a `title` output:
 
 ```ts
 import { jsonLoader } from "@marimo-team/marimo-export/loader/json";
@@ -110,7 +127,8 @@ the page's authority. Apply the application's rendering policy,
 [Content Security Policy](https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP), and origin rules before
 mounting executable output.
 
-- [Build a browser application](https://marimo-team.github.io/marimo-export/guide/browser-applications)
+- [Browser applications](https://marimo-team.github.io/marimo-export/guide/browser-applications)
 - [Browser API](https://marimo-team.github.io/marimo-export/reference/browser-api)
+- [Browser compatibility and limits](https://marimo-team.github.io/marimo-export/reference/browser/errors-and-limits)
 - [Output representations](https://marimo-team.github.io/marimo-export/reference/representations)
 - [Export format](https://marimo-team.github.io/marimo-export/reference/export-format)

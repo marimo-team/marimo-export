@@ -5,6 +5,10 @@ This example prepares five states and five outputs from a
 static browser dashboard. Python and agents can read the same `public/export`
 directory.
 
+[View the published dashboard](https://marimo-team.github.io/marimo-export/examples/market-dashboard/application/)
+or follow the [complete example guide](../../docs/guide/market-dashboard.md) for
+prerequisites and expected browser behavior.
+
 ## Build and open the dashboard
 
 From the repository root, install the locked workspaces, build the export, verify

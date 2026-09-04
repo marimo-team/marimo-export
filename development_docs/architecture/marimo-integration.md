@@ -249,7 +249,7 @@ Marimo's deployment commands.
 
 The owned parent and every state child use the same notebook-relative Marimo
 cache store. Authored cache entries therefore remain reusable across states,
-output plans, Studio views, and later producer processes. Complete-cell targets
+output plans, application views, and later producer processes. Complete-cell targets
 run in the child so console records come from the snapshot run. Marimo remains
 the authority for all other authored-cell hits and misses.
 
@@ -304,8 +304,8 @@ and cleanup diagnostics attach to the primary cancellation.
 Credentials, cache paths, server internals, and operation URLs stay outside the
 notebook export.
 
-## Upstream one contained capability
+## Upstream replacement boundary
 
-[Marimo upstream candidates](marimo-upstream-candidates.md) maps each private
-seam to the package-owned port and tests that remain stable when a supported
-Marimo capability replaces it.
+[marimo upstream capabilities](../proposals/marimo-upstream-capabilities.md) maps
+each private seam to the package-owned port and tests that remain stable when a
+supported Marimo capability replaces it.

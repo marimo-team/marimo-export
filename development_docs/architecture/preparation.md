@@ -36,8 +36,9 @@ the notebook baseline.
 Equal complete vectors share one state fingerprint. Their authored names remain
 aliases. The default alias resolves to one fingerprint before state execution.
 
-Observations support authoring. They show complete input vectors that succeeded
-in a matching saved notebook. Planning includes the revision-consistent
+Observations support authoring. They show input vectors that were complete for
+their recorded input-name relation and succeeded in a matching saved notebook.
+Planning includes the revision-consistent
 observation snapshot in `ExportPlan`, while the spec remains the source of
 states that preparation must commit.
 
@@ -72,6 +73,12 @@ map.
 Planning first computes that identity from stable source and runtime facts. If
 the repository holds the exact verified generation, planning reconstructs the
 plan from its canonical index and starts no notebook process.
+
+Exact prepared-export reuse performs no notebook execution, exporter import, or
+exporter-source check. An exporter module referenced only by the ExportSpec is
+seen at this fast path only when the file also belongs to the producer environment
+discovered during preflight. A separate repository forces a repository miss, but
+marimo can still reuse a matching computation-cache entry after execution starts.
 
 When exact reuse is unavailable, file-backed planning opens one `OwnedNotebook`
 for baseline inspection. It resolves the plan through the same kernel bridge
@@ -125,6 +132,10 @@ Within the reservation, live capture:
 4. assembles the complete export
 5. commits against the exact current generation observed before replacement
 
+File and live preparation serialize callers for the same repository identity.
+A waiting caller rechecks exact reuse after acquiring the reservation and can
+reuse the generation committed by the prior owner.
+
 The capture bridge verifies the parent document again after downloading every
 asset. A changed live notebook fails the operation before repository commit.
 
@@ -137,18 +148,24 @@ when its individual operations continue to make progress.
 
 Repository reuse and Marimo computation caching solve different work:
 
-| Change                         | Repository work                         | Marimo work during state execution      |
-| ------------------------------ | --------------------------------------- | --------------------------------------- |
-| Exact repeat                   | Reuse exact generation                  | No notebook starts                      |
-| HTML, CSS, or view-host change | Reuse exact generation                  | No notebook starts                      |
-| Default alias change           | Reuse prepared states, assemble export  | No state needs new computation          |
-| One added state                | Prepare one missing state               | Native cache may restore its cells      |
-| One removed state              | Reuse remaining states, assemble export | Zero state executions                   |
-| Output plan change             | New output-plan identity                | Native cache may restore notebook cells |
-| Producer identity change       | New producer scope                      | Marimo decides native cache validity    |
+| Change                                  | Repository work                               | Marimo work during state execution      |
+| --------------------------------------- | --------------------------------------------- | --------------------------------------- |
+| Exact repeat                            | Reuse exact generation                        | No notebook starts                      |
+| HTML, CSS, or view-host change          | Reuse exact generation                        | No notebook starts                      |
+| Default alias change                    | Reuse prepared states, assemble export        | No state needs new computation          |
+| Add one state, input names unchanged    | Prepare one missing fingerprint               | Native cache may restore its cells      |
+| Remove one state, input names unchanged | Reuse remaining fingerprints, assemble export | Zero state executions                   |
+| Add or remove an input name             | Recompute every affected fingerprint          | Native cache decides cell reuse         |
+| Output plan change                      | New output-plan identity                      | Native cache may restore notebook cells |
+| Producer identity change                | New producer scope                            | Marimo decides native cache validity    |
 
 State aliases share one prepared-state artifact. An export generation records
 the exact alias mapping and default alias requested by its spec.
+
+State-level reuse depends on the complete inferred input-name set. Adding a row
+key can expand every complete vector. Removing the last row key for an otherwise
+uninferred input can shrink every vector. Either change can invalidate every
+state fingerprint.
 
 ## Progress and cancellation
 
@@ -168,6 +185,11 @@ State events carry completed count, total count, authored and projection cache
 activity, state alias, and elapsed execution time when available. The CLI renders
 the same records as human progress or JSONL. Applications can pass their own
 callback.
+
+Cache activity counts only cells attempted in missing-state child runs. Exact
+prepared-export reuse and prepared-state reuse add no cache activity. Read
+[Execution and caching](execution-and-caching.md#cache-activity-counts-executed-child-work)
+for field semantics.
 
 The `cancelled` callback is checked before expensive transitions, before each
 missing state, and before generation assembly. Cancellation releases the
@@ -191,19 +213,22 @@ commit rejects the stale owner.
 - prepared and reused state fingerprints
 - observed Marimo cache activity for work that ran
 - `open()` for a verified `NotebookExport`
-- `asset()` for one independently leased declared file
+- `asset()` for one declared file through an independently owned generation lease
 - `manifest()` for browser prepared-publication control
 - `write()` for atomic caller-owned output
-- `renew()` and idempotent `close()`
+- `renew()` for an immediate lease-liveness and index-integrity check
+- idempotent `close()`
 
 Use it as a context manager. When `prepare()` opened the default repository,
 closing the handle closes that repository after the generation lease releases.
+The lease heartbeat extends SQLite expiry. `renew()` checks current liveness and
+integrity but does not force a synchronous catalog heartbeat.
 
 `manifest(export_url, state=...)` emits `marimo-export.prepared.v1`. Its
 `instance` field identifies the immutable notebook export. The complete manifest
 associates that identity with the export URL, selected inputs, state fingerprint,
 and optional refresh interval. The default selection comes from the export's
-explicit default state.
+explicit default state fingerprint.
 
 ## Durable write
 

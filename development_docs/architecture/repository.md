@@ -19,18 +19,18 @@ contains `index.json` and its declared assets.
 
 ## Repository and computation cache are separate
 
-| Store               | Owner         | Retained value                                        |
-| ------------------- | ------------- | ----------------------------------------------------- |
-| Marimo native cache | marimo        | Restorable notebook cell definitions and returns      |
-| Export repository   | marimo-export | Portable prepared outputs and lifecycle metadata      |
-| Notebook export     | marimo-export | Canonical index and content-addressed consumer assets |
+| Store               | Owner         | Retained value                                                         |
+| ------------------- | ------------- | ---------------------------------------------------------------------- |
+| Marimo native cache | marimo        | Restorable notebook cell definitions and returns                       |
+| Export repository   | marimo-export | Prepared-state and export-generation artifacts plus lifecycle metadata |
+| Notebook export     | marimo-export | Canonical index and content-addressed consumer assets                  |
 
 Marimo computes cache keys, selects the configured cache store, validates cache
 entries, serializes values, verifies signatures, and restores cell state.
 marimo-export observes native hit and miss decisions and reads verified native
 returns through the compatibility adapter.
 
-The export repository stores the result after it has crossed the portable
+The export repository stores a prepared-state artifact after its results have crossed the portable
 output boundary. Repository reuse can therefore avoid notebook startup. If a
 prepared state is absent, Marimo's native cache may still avoid notebook cell
 computation while that state is rebuilt.
@@ -57,11 +57,11 @@ implementation identity.
 `output_plan_sha256` is the output-plan identity. It covers the authored output
 declarations. Presentation HTML, CSS, JavaScript, route names, and view
 host IDs remain outside that identity.
-Two applications can therefore reuse the same prepared outputs when they request
+Two applications can therefore reuse the same prepared states when they request
 the same producer, outputs, and states.
 
 `spec_sha256` covers the complete canonical ExportSpec, including state aliases
-and the default state. Changing presentation assets preserves repository reuse.
+and the default alias. Changing presentation assets preserves repository reuse.
 Adding one state retains matching prepared states and prepares the missing
 fingerprint.
 
@@ -109,14 +109,14 @@ callers:
   reservations, staging, guarded commit, and revision-consistent observation
   reads for producer services.
 
-The repository uses Python's built-in `sqlite3`. marimo-studio reaches the
-repository through public marimo-export operations and carries no database
-schema or SQL.
+The repository uses Python's built-in `sqlite3`. Applications reach it through
+public marimo-export operations and carry no database schema or SQL.
 
 ## Observations are authoring evidence
 
-`ObservationLedger` receives complete portable input vectors from successful
-normal notebook runs. The Marimo adapter records a candidate after a run that
+`ObservationLedger` receives portable input vectors that are complete for the
+eligible user-interface root relation observed in one successful normal notebook
+run. The marimo adapter records a candidate after a run that
 finished with no exception, interruption, cancellation, or scratch-cell work.
 
 Before persistence, the worker verifies that the live cell signature matches
@@ -220,10 +220,11 @@ Opening a prepared state or generation creates a renewable cross-process lease.
 `PreparedExport` owns the generation lease and renews it while the handle is in
 use.
 
-`PreparedExport.asset(relative)` detaches an independent lease for one declared
-regular file. The response asset has a lifetime independent of the view-level
-handle. A server closes it after sending the response. `PreparedExport.close()`
-is idempotent and releases an owned repository after its artifact lease closes.
+`PreparedExport.asset(relative)` detaches an independently owned generation
+lease for access to one declared regular file. The response asset has a lifetime
+independent of the view-level handle, but it pins the complete export generation.
+A server closes it after sending the response. `PreparedExport.close()` is
+idempotent and releases an owned repository after its artifact lease closes.
 
 `PreparedExport` retains the verified file closure. It rechecks `index.json`
 before path access, opening, or renewal. `PreparedAsset` checks the declared path,
@@ -241,18 +242,28 @@ unavailable so callers cannot use an unprotected artifact.
 generations, metadata bytes, artifact bytes, total repository bytes, lease
 lifetimes, and heartbeat cadence.
 
+`observation_relation_bytes` is currently enforced per producer and separately
+for the current-observation and observation-event tables. Each limit spans every
+input-name relation retained for that producer.
+
 The limits belong to one opened repository handle and are not persisted in the
 SQLite catalog. Another process or later handle can apply another policy to the
 same repository. `prepared_state_bytes` and `generation_bytes` each enforce both
 a per-artifact maximum and an aggregate retained-content budget.
 
-Admission applies retention before a new artifact commits. Retention chooses
-victims from least-recently-used unleased instances. It preserves active leases,
-the current generation for each identity admitted by `retained_identities`, and
-the prepared states required by retained generations. An older unleased identity
-can lose its current generation. The filesystem tree is first moved to a
-repository-owned quarantine name. The catalog then removes matching rows and
-accounts any tree awaiting deletion.
+Admission applies retention before a new artifact commits. The retention pass
+uses current repository contents and does not reserve room for the incoming
+artifact. The final transaction applies the candidate's metadata and content
+bytes as a hard cumulative check. A commit can therefore raise
+`repository_limit_exceeded` even when older unleased artifacts exist that a
+candidate-aware retention pass could evict.
+
+Retention chooses victims from least-recently-used unleased instances. It
+preserves active leases, the current generation for each identity admitted by
+`retained_identities`, and the prepared states required by retained generations.
+An older unleased identity can lose its current generation. The filesystem tree
+is first moved to a repository-owned quarantine name. The catalog then removes
+matching rows and accounts any tree awaiting deletion.
 
 `repository.prune(dry_run=True)` reports eligible prepared states, generations,
 and bytes. A live prune returns counts and released bytes after rechecking the
@@ -269,11 +280,19 @@ repository above that value until retention can retire the predecessor.
 Repository opening validates the SQLite schema and attempts one maintenance
 recovery. Another process may already hold maintenance ownership. In that case,
 opening continues and later reads verify the selected artifact before returning
-it. Recovery:
+it.
+
+An incompatible schema or confirmed catalog corruption causes a complete catalog
+reset. Opening renames the catalog files, creates a fresh catalog, then retires
+the renamed database and every prepared-state, export-generation, and staging
+tree that no longer has a catalog row. The quarantine name is a transactional
+step before accounted deletion, not a backup or recovery archive.
+
+Normal maintenance recovery:
 
 - removes abandoned unleased staging directories
-- restores a verified installation backup when directory replacement was interrupted
-- quarantines and removes an installed tree whose catalog commit was interrupted
+- restores a verified catalog-known installation backup when directory replacement was interrupted
+- quarantines and removes exact digest-shaped artifact roots whose catalog commit was interrupted
 - verifies prepared-state identity, metadata, closure, and derived key
 - verifies notebook export identity and closure
 - quarantines invalid artifact trees and removes catalog rows only for confirmed integrity failures
@@ -284,9 +303,9 @@ Public error translation depends on the failing boundary. Artifact-tree I/O can
 become `ExportUnavailableError`. Member verification and lease heartbeat
 failures can surface as `RepositoryError` or `RuntimeError`. Confirmed integrity
 failures retire the affected artifact while temporary availability failures
-preserve the current pointer. A confirmed SQLite corruption or incompatible
-internal schema is quarantined before a fresh catalog opens. A fresh catalog
-also resets catalog-backed observation history.
+preserve the current pointer. Confirmed SQLite corruption and incompatible
+internal schemas follow the complete catalog-reset scope described in this
+section.
 
 ## Status and maintenance results
 
@@ -294,6 +313,9 @@ also resets catalog-backed observation history.
 path and counts for producers, retained observation fingerprints, prepared-state
 instances, repository identities, export generation instances, and active
 artifact leases. It removes expired artifact leases before counting them.
+
+`active_leases` counts durable owner-artifact lease rows. Several Python handles
+can share one durable row, so the value is not a live Python-object count.
 
 `content_bytes` is accounted artifact content. It includes prepared states,
 export generations, and retired artifacts awaiting deletion. It does not report
@@ -341,5 +363,5 @@ The plan-shaped facade constructs raw repository keys internally.
 
 Preparation services use `_repository/preparation.py`. The observation ledger
 uses `_repository/observations.py`. Tests may construct private repository
-fixtures to exercise concurrency and recovery. Application code and
-marimo-studio import neither `_repository` nor `sqlite3`.
+fixtures to exercise concurrency and recovery. Application code imports neither
+`_repository` nor `sqlite3`.

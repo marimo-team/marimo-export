@@ -16,9 +16,11 @@
   },
   "devDependencies": {
     "@types/node": "catalog:",
+    "mermaid": "catalog:",
     "portless": "catalog:",
     "typescript": "catalog:",
     "vitepress": "catalog:",
+    "vitepress-mermaid-renderer": "catalog:",
     "vitepress-plugin-llms": "1.13.5",
     "vue": "catalog:"
   }

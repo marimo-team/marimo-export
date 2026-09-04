@@ -138,16 +138,21 @@ finally:
 keep_cached_cells_compatible() -> Callable[[], None]
 ```
 
-The function validates the installed marimo adapter, installs the cache repairs
-required by an interactive host, and returns a release callback. The repairs
-cover restored UI definitions and cache representations used by marimo-export's
-supported producer boundary.
+The function validates the installed marimo adapter, installs process-global
+cache repairs, and returns a release callback. The repairs cover restored UI
+definition detection, Polars lazy-value stub selection, and contiguous tensor
+bytes used by marimo-export's supported producer boundary. They affect every
+marimo kernel in the process while a lease is active.
 
 Keep the lease active for the complete host lifecycle that can restore those
 values. Releasing it restores the prior marimo behavior after the final active
 lease closes. If another owner replaces the patched behavior before release,
 the operation raises `CompatibilityError` with code
 `marimo_cache_patch_conflict`.
+
+A multi-kernel host should acquire this lease once for its shared process
+lifecycle and release it after the final participating kernel stops. The release
+callback is idempotent.
 
 ## Detect an owned producer session
 

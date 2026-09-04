@@ -47,8 +47,11 @@ sets owner-only permissions on POSIX systems. It attempts maintenance recovery
 for the private SQLite catalog and invalid repository artifacts. When another
 process holds the maintenance transaction lock, opening continues without that pass.
 Recovery can quarantine a corrupt catalog and open a fresh one, which also
-resets catalog-backed observation history. Recovery never treats the repository
-as a notebook export directory.
+resets catalog-backed observation history. Prepared states, export generations,
+and staging directories from the replaced catalog become unindexed and are
+retired by maintenance. Catalog quarantine is a transactional rename before
+accounted cleanup, not a durable backup or forensic archive. Recovery never
+treats the repository as a notebook export directory.
 
 `limits` defaults to `RepositoryLimits()`. The policy belongs to the opened
 handle and is not persisted with the repository path. A later handle can apply
@@ -110,29 +113,30 @@ when no exact export generation matches.
 retention policy and removes candidates when `dry_run=False`. A dry run reports
 prepared states, generations, and bytes. A live prune can also remove producer
 records and their observation history, which `PruneResult` does not count.
-Active staging, state, generation, and detached asset leases protect their
-artifacts from pruning.
+Active staging, state, and generation leases protect their repository artifacts
+from pruning. A detached `PreparedAsset` owns an independent handle to its
+generation lease, so one open asset protects the complete export generation.
 
 ## `RepositoryLimits`
 
 `RepositoryLimits` is an immutable storage and lifecycle policy:
 
-| Field                               | Default | Contract                                                |
-| ----------------------------------- | ------: | ------------------------------------------------------- |
-| `observation_bytes`                 |   1 MiB | Maximum canonical bytes in one observation              |
-| `observations_per_producer`         |     256 | Retained observations per producer                      |
-| `observation_relation_bytes`        |  16 MiB | Retained observation bytes across one producer relation |
-| `retained_producers`                |      32 | Producer histories retained by observation cleanup      |
-| `retained_identities`               |     128 | Exact prepared-export identities retained               |
-| `retained_generations_per_identity` |       4 | Generations retained for one identity                   |
-| `retained_generations`              |     128 | Generations retained across the repository              |
-| `retained_prepared_states`          |    4096 | Prepared states retained across producers               |
-| `metadata_bytes`                    |  16 MiB | Repository metadata budget                              |
-| `prepared_state_bytes`              | 512 MiB | Per-state maximum and aggregate prepared-state budget   |
-| `generation_bytes`                  |   1 GiB | Per-generation maximum and aggregate generation budget  |
-| `repository_bytes`                  |   2 GiB | Total repository content budget                         |
-| `lease_ttl_seconds`                 |  `30.0` | Lease expiry after heartbeat loss                       |
-| `lease_heartbeat_seconds`           |   `5.0` | Active lease renewal interval                           |
+| Field                               | Default | Contract                                                                              |
+| ----------------------------------- | ------: | ------------------------------------------------------------------------------------- |
+| `observation_bytes`                 |   1 MiB | Maximum canonical bytes in one observation                                            |
+| `observations_per_producer`         |     256 | Retained observations per producer                                                    |
+| `observation_relation_bytes`        |  16 MiB | Retained bytes per observation table for one producer across its input-name relations |
+| `retained_producers`                |      32 | Producer histories retained by observation cleanup                                    |
+| `retained_identities`               |     128 | Exact prepared-export identities retained                                             |
+| `retained_generations_per_identity` |       4 | Generations retained for one identity                                                 |
+| `retained_generations`              |     128 | Generations retained across the repository                                            |
+| `retained_prepared_states`          |    4096 | Prepared states retained across producers                                             |
+| `metadata_bytes`                    |  16 MiB | Repository metadata budget                                                            |
+| `prepared_state_bytes`              | 512 MiB | Per-state maximum and aggregate prepared-state budget                                 |
+| `generation_bytes`                  |   1 GiB | Per-generation maximum and aggregate generation budget                                |
+| `repository_bytes`                  |   2 GiB | Total repository content budget                                                       |
+| `lease_ttl_seconds`                 |  `30.0` | Lease expiry after heartbeat loss                                                     |
+| `lease_heartbeat_seconds`           |   `5.0` | Active lease renewal interval                                                         |
 
 Integer limits must be positive and fit SQLite's signed integer range. Lease
 durations must be positive finite numbers. The heartbeat interval must be
@@ -140,6 +144,16 @@ shorter than the time to live.
 
 `repository_bytes` is a steady-state admission budget. Replacing a leased
 generation can temporarily retain old and new bytes above that value.
+Admission applies retention to current repository contents before it adds the
+candidate size. The candidate size does not select additional least-recently-used
+victims. A write can therefore raise `repository_limit_exceeded` while an
+older unleased artifact remains. To make room, prune through a handle with a
+tighter retention policy or raise the admission budget. Inspect
+`repository.prune(dry_run=True)` before changing either policy.
+
+`observation_relation_bytes` is applied separately to canonical observation
+rows and observation event rows. Despite the field name, each table's budget is
+producer-wide and can combine several recorded input-name relations.
 
 ## Repository result records
 
@@ -162,6 +176,12 @@ lists and dictionaries are detached mutable values. `fingerprint` is computed
 from the complete canonical values. `to_dict()` returns producer identity,
 revision, fingerprint, and another detached values object.
 
+An `ObservedState` returned by `repository.observations(plan)` has the plan's
+exact ordered input relation. Planning can also project a compatible broader
+observation to the plan's input names. A record created by that revision-consistent
+planning snapshot carries the snapshot revision. Latest-observation selection
+retains the selected event revision.
+
 ### `RepositoryStatus`
 
 ```python
@@ -176,6 +196,9 @@ active_leases: int
 ```
 
 `to_dict()` returns the same fields and serializes `path` as a string.
+`active_leases` counts durable owner-artifact lease rows in the catalog. Several
+Python handles can share one durable owner and artifact row, so this field is not
+a live Python-object count.
 
 ### `PruneResult`
 
@@ -190,10 +213,12 @@ dry_run: bool
 
 ## Observation model
 
-An observation is one successful complete input vector retained as authoring
-evidence. Observations can inform a future `ExportPlan`, but they enter a
-notebook export only when an author places the desired values in an explicit
-`ExportSpec` state row.
+An observation is one successful input vector that is complete for its recorded
+input-name relation and retained as authoring evidence. A host hook records
+eligible user-interface roots, which can form a broader relation than a later
+plan. Planning projects compatible superset relations to its inferred input
+names. Observations enter a notebook export only when an author places the
+desired values in an explicit `ExportSpec` state row.
 
 Use `record_observation()` when an application already has a complete plan and
 input vector. Use `ObservationLedger` when a host records successful notebook
@@ -220,6 +245,11 @@ observed.values: FrozenJsonObject
 observed.canonical_values: bytes
 observed.byte_count: int
 ```
+
+`ObservedInputs.values` is recursively immutable. Nested arrays become tuples
+and nested objects become immutable mappings. This differs from the persisted
+`ObservedState.values` access described earlier, whose top-level mapping is
+read-only and whose newly decoded nested containers are mutable.
 
 ## `ObservationLedger`
 

@@ -24,10 +24,14 @@ def test_root_help_names_the_command_tree(
         "doctor",
     ):
         assert command in output
+    assert "Prepare and read verified marimo notebook exports." in output
+    assert "plan states and reusable work" in output
+    assert "list or clear observations" in output
+    assert "inspect or prune the export repository" in output
     assert "\n    session " not in output
 
 
-def test_nested_command_help_names_repository_operations(
+def test_nested_help_uses_observation_and_export_repository_language(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     with pytest.raises(SystemExit, match="0"):
@@ -39,11 +43,22 @@ def test_nested_command_help_names_repository_operations(
     observation_help = capsys.readouterr().out
     assert "NOTEBOOK" in observation_help
     assert "--spec FILE" in observation_help
+    assert "marimo Python notebook" in observation_help
+    assert "export repository" in observation_help
     assert "--producer" not in observation_help
 
     with pytest.raises(SystemExit, match="0"):
         cli.main(["repository", "--help"])
-    assert "{status,prune}" in capsys.readouterr().out
+    repository_help = capsys.readouterr().out
+    assert "{status,prune}" in repository_help
+    assert "show export repository usage" in repository_help
+    assert "apply export repository retention" in repository_help
+
+    with pytest.raises(SystemExit, match="0"):
+        cli.main(["doctor", "--help"])
+    doctor_help = capsys.readouterr().out
+    assert "effective export repository and marimo compatibility" in doctor_help
+    assert "export repository" in doctor_help
 
 
 @pytest.mark.parametrize("command", ["capture", "inspect"])

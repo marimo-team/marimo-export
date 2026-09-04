@@ -168,9 +168,10 @@ Selects one exact complete input vector. The object must contain every
 
 ### `ExportState.resolve(patch)`
 
-Merges a sparse root-input patch over the current exported state, then selects the exact
-matching exported vector. An empty patch returns the same state object. Unknown
-input names raise `state_input_invalid`.
+Replaces each named root input in the current exported state, then selects the
+exact matching exported vector. Nested arrays and objects are not deep-merged.
+An empty patch returns the same state object. Unknown input names raise
+`state_input_invalid`.
 
 ```ts
 interface ExportState {

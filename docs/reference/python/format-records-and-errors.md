@@ -21,6 +21,7 @@ Import portable JSON types and functions from `marimo_export.wire`:
 from marimo_export.wire import (
     FrozenJsonObject,
     FrozenJsonValue,
+    JsonValue,
     canonical_json_bytes,
     canonical_json_sha256,
     parse_canonical_json,
@@ -304,25 +305,25 @@ and fields.
 Several public modules re-export the same type for a focused use. Prefer these
 locations in application code:
 
-| API                                                           | Canonical application import                    |
-| ------------------------------------------------------------- | ----------------------------------------------- |
-| Common producer and reader workflow                           | `marimo_export`                                 |
-| `Client`, `Session`, `connect`                                | `marimo_export.sessions`                        |
-| `VerificationResult`, `verify_export`                         | `marimo_export` or `marimo_export.verification` |
-| `NotebookProvenance`, `ProducerProvenance` while reading      | `marimo_export.reader`                          |
-| `FrozenJsonValue`, `FrozenJsonObject`, canonical JSON helpers | `marimo_export.wire`                            |
-| `ExporterSpec`, `importable`                                  | `marimo_export.exporters`                       |
-| Output descriptors and codec constants                        | `marimo_export.descriptors`                     |
-| Durable index records                                         | `marimo_export.index`                           |
+| API                                                                        | Canonical application import                    |
+| -------------------------------------------------------------------------- | ----------------------------------------------- |
+| Common producer and reader workflow                                        | `marimo_export`                                 |
+| `Client`, `Session`, `connect`                                             | `marimo_export.sessions`                        |
+| `VerificationResult`, `verify_export`                                      | `marimo_export` or `marimo_export.verification` |
+| `NotebookProvenance`, `ProducerProvenance` while reading                   | `marimo_export.reader`                          |
+| `JsonValue`, `FrozenJsonValue`, `FrozenJsonObject`, canonical JSON helpers | `marimo_export.wire`                            |
+| `ExporterSpec`, `importable`                                               | `marimo_export.exporters`                       |
+| Output descriptors and codec constants                                     | `marimo_export.descriptors`                     |
+| Durable index records                                                      | `marimo_export.index`                           |
 
 `StrPath` is the public alias `str | os.PathLike[str]` exported by
 `marimo_export.spec`. It appears in signatures but ordinary callers can pass a
 string or path-like object without importing the alias.
 
-`CaptureLimits`, `CacheSummary`, `StateRunTimings`, and `PhaseTimings` describe
+`CaptureLimits`, `CacheSummary`, `StateRunTimings`, and `PhaseTimings` are
 lower-level producer protocol records. [Produce an
-export](produce#narrow-protocol-records) defines their current reachability
-from high-level calls.
+export](produce#narrow-protocol-records) defines their fields and current
+reachability from high-level calls.
 
 `OwnedNotebook` is a single-use inspection context. [Sessions and
 inspection](sessions-and-inspection#narrow-ownednotebook-handle) defines its

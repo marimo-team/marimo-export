@@ -5,9 +5,14 @@ producer creates and owns the kernel process. A live-session producer borrows a
 kernel that an application already owns. Both paths use the same bridge request,
 response, and asset-transfer contracts.
 
-```text
-file source -> OwnedNotebook -> ManagedServer -> Client -> Session -> bridge
-live server -------------------------------> Client -> Session -> bridge
+```mermaid
+flowchart LR
+    file["File source"] --> notebook[OwnedNotebook]
+    notebook --> server[ManagedServer]
+    server --> client[Client]
+    live["Live server"] --> client
+    client --> session[Session]
+    session --> bridge[Bridge]
 ```
 
 ## Terms and ownership
@@ -167,8 +172,13 @@ Credentials use dedicated arguments and headers:
 
 | Credential     | Header                          | Role                                                   |
 | -------------- | ------------------------------- | ------------------------------------------------------ |
-| `access_token` | `Authorization: Bearer <value>` | Authenticate to the Marimo server                      |
+| `access_token` | `Authorization: Bearer <value>` | Authorize the client at the Marimo server              |
 | `server_token` | `Marimo-Server-Token: <value>`  | Satisfy Marimo server-token and skew-protection checks |
+
+HTTPS protects transport and server identity for non-loopback hosts. The access
+token authorizes the client. The server token satisfies a separate Marimo server
+check. Neither credential reduces the selected kernel's filesystem, package,
+credential, or network authority.
 
 `Client` reads `MARIMO_EXPORT_ACCESS_TOKEN` and
 `MARIMO_EXPORT_SERVER_TOKEN` when the corresponding explicit argument is
@@ -228,20 +238,22 @@ line-feed framing, multiline `data` fields, comments, and unknown fields. It
 rejects NUL bytes, invalid UTF-8, empty or oversized event names, more than 4096
 data lines, and events beyond their configured byte limit.
 
-| Value                                 |             Bound |
-| ------------------------------------- | ----------------: |
-| Managed or scratchpad event           |            40 MiB |
-| Bridge response extracted from stdout |             8 MiB |
-| Session registry                      |             1 MiB |
-| One session filename or path          | 32 KiB characters |
-| Retained failed-scratchpad stderr     |  8 KiB characters |
-| Bridge request JSON                   |             8 MiB |
+| Value                                               |             Bound |
+| --------------------------------------------------- | ----------------: |
+| Managed or scratchpad event                         |            40 MiB |
+| Bridge response extracted from stdout               |             8 MiB |
+| Session registry                                    |             1 MiB |
+| Managed instantiate, run, or shutdown JSON response |             1 MiB |
+| One session filename or path                        | 32 KiB characters |
+| Retained failed-scratchpad stderr                   |  8 KiB characters |
+| Bridge request JSON                                 |             8 MiB |
 
 The scratchpad reader accepts `stdout`, `stderr`, and `done`. Unknown event names
-are ignored. Events after `done`, an absent `done`, invalid JSON, an invalid
-success flag, multiple response markers, and a missing response marker fail the
-operation. Structured bridge error messages and nested detail keys and values
-pass through credential redaction before becoming `BridgeError`.
+are ignored. `done` ends the read, so events after it are not inspected. An absent
+`done`, invalid JSON, an invalid success flag, multiple response markers, and a
+missing response marker fail the operation. Structured bridge error messages and
+nested detail keys and values pass through credential redaction before becoming
+`BridgeError`.
 
 ## Timeout semantics
 

@@ -1,9 +1,9 @@
 ---
-title: Build or capture
-description: Choose the producer that owns the notebook, prepare missing states, and write one verified export.
+title: Build and capture
+description: Choose the producer that owns the notebook, prepare missing states, and write one notebook export whose bytes were verified before commit.
 ---
 
-# Build or capture
+# Build and capture
 
 Use `build` when a saved notebook file is the source of truth. Use `capture`
 when a running marimo session already owns the environment or current baseline.
@@ -96,27 +96,40 @@ distribution versions, and relevant local source files. The output-plan
 identity covers the output declarations. The ExportSpec identity covers the
 complete requested relation.
 
-This combined value is the plan identity used for repository lookup. A committed
-notebook export has a separate export identity, which is the SHA-256 digest of
-its canonical `index.json`.
+This combined value is the repository identity used for exact lookup.
+`ExportPlan.identity` carries that value. A committed notebook export has a
+separate export identity, which is the SHA-256 digest of its canonical
+`index.json`.
 
 When the repository contains that exact verified generation, `plan`, `prepare`,
 and `build` reuse it before a notebook process starts. marimo-export still
 rechecks the file producer identity and verifies the selected repository
 artifact.
 
+Exact reuse also means the notebook performs no data refresh and imports no
+exporter module. A different output destination does not change the repository
+identity. When freshness depends on mutable files, services, or custom exporter
+source outside the producer source roots, include a version or digest in notebook
+source, an exported input, or the affected cell's marimo computation-cache key.
+A separate export repository forces notebook startup, but a matching marimo
+computation-cache key can still restore a prior cell result.
+
 When the exact generation is absent, planning compares state fingerprints under
 the same producer and output plan. It reuses matching prepared states and runs
 the missing states. Common changes behave as follows:
 
-| Change                                  | Preparation result                                    |
-| --------------------------------------- | ----------------------------------------------------- |
-| Exact repeat                            | Reuse the complete generation before notebook startup |
-| Change the default alias                | Reuse matching states and assemble a new generation   |
-| Add one state                           | Prepare the new state and reuse matching states       |
-| Remove one state                        | Assemble a new generation from the remaining states   |
-| Change an output declaration            | Create a new output-plan scope                        |
-| Change notebook or producer environment | Create a new producer scope                           |
+| Change                                                 | Preparation result                                    |
+| ------------------------------------------------------ | ----------------------------------------------------- |
+| Exact repeat                                           | Reuse the complete generation before notebook startup |
+| Change the default alias                               | Reuse matching states and assemble a new generation   |
+| Add one state without changing inferred input names    | Prepare the new fingerprint and reuse matching states |
+| Remove one state without changing inferred input names | Assemble a generation from matching remaining states  |
+| Change an output declaration                           | Create a new output-plan scope                        |
+| Change notebook or producer environment                | Create a new producer scope                           |
+
+Adding a state-row key can expand the inferred input-name set. Removing the last
+row that names an input can shrink it. Either change rewrites every complete
+input vector and can invalidate prepared-state reuse for every state.
 
 Observations do not make an exact export stale because they are authoring
 evidence, not published states. Update the `ExportSpec` when an observed vector
@@ -144,9 +157,10 @@ with prepare("examples/quickstart/report.py", spec=spec) as prepared:
 ```
 
 The `PreparedExport` owns a generation lease. Keep the handle open while reading
-its files. `prepared.asset(relative)` creates an independent asset lease for a
-file consumer or HTTP response that can outlive the parent handle. Close each
-asset handle after its consumer finishes.
+its files. `prepared.asset(relative)` creates file-scoped access with an
+independently owned generation lease, so one open asset handle protects the
+complete export generation from retention. Close each asset handle after its
+file consumer or HTTP response finishes.
 
 ## Capture a running session
 
@@ -273,5 +287,5 @@ uv run marimo-export verify dist/quickstart
 
 `verify` reads the canonical index and every declared asset, then checks sizes,
 SHA-256 digests, native framing, state fingerprints, and descriptor agreement.
-Use [Manage the export repository](manage-repository) to inspect reusable
-storage or [Consume a notebook export](consume-an-export) to read the result.
+Use [Repository storage](manage-repository) to inspect reusable storage or [Read
+an export](consume-an-export) to read the result.

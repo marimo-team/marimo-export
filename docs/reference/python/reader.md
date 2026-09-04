@@ -45,6 +45,13 @@ Malformed paths, indexes, and relations raise `NotebookExportError`.
 `NotebookExport` is immutable. Its identity is the lowercase SHA-256 of the
 exact canonical `index.json` bytes.
 
+Obtain a validated reader from `open_export()` or `PreparedExport.open()`.
+Direct `NotebookExport(path, index, identity)` construction accepts already
+parsed records and does not perform the canonical-byte, filesystem, symlink,
+size, or asset-closure checks owned by those opening operations. An
+`isinstance(value, NotebookExport)` check is therefore not evidence that files
+were opened and verified through the public reader boundary.
+
 Properties:
 
 ```python

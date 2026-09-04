@@ -1,144 +1,91 @@
 ---
-title: Outputs and representations
-description: Follow a notebook result through selection, export, storage, loading, and mounting.
+title: Outputs
+description: Follow a notebook result as it becomes a named output, stored value, and consumer value.
 ---
 
-# Outputs and representations
+# Outputs
 
-A notebook computes results as Python values or rendered cell output. An
-`ExportSpec` publishes selected results under output names. Each output keeps
-one representation across every exported state.
+The quickstart computes the same information in two forms:
 
-Consider three notebook results. The `outputs` fragment of their `ExportSpec`
-publishes each result under one name:
+| Notebook result      | Output name | Stored as                        | Reader receives        |
+| -------------------- | ----------- | -------------------------------- | ---------------------- |
+| `summary` dictionary | `summary`   | Portable JSON in `index.json`    | Structured data        |
+| Rendered `report`    | `report`    | Rendered output in an asset file | Rendered output record |
 
-```yaml
-outputs:
-  summary:
-    source: { kind: json, selector: report.summary }
-  prices:
-    source: { kind: export, selector: selected_prices }
-    exporter: parquet.table
-  chart:
-    source: { kind: export, selector: performance }
-    exporter: altair.vegalite
+An **output** is a published name and stored form available in every exported
+state. The notebook value before publication is a **notebook result**.
+
+The quickstart app reads both outputs from the selected state. `summary` supplies
+structured data while `report` supplies the rendered notebook result.
+
+<StaticApp example="quickstart" />
+
+```mermaid
+flowchart TD
+    result[Notebook result]
+    output[Named output and format]
+    storage[Inline value or asset]
+    reader[Reader or loader]
+
+    result --> output --> storage --> reader
 ```
 
-`summary`, `prices`, and `chart` are output names. `report.summary`,
-`selected_prices`, and `performance` are selectors for notebook results. The
-source kind and optional exporter choose the stored representation.
+## Choose the notebook value
 
-```text
-notebook result
-      |
-      v
- output source     select a value, rendered output, or complete cell
-      |
-      v
-   exporter        convert a selected value when kind is export
-      |
-      v
-  descriptor       declare codec, media type, provenance, and data location
-      |
-      v
- inline value or content-addressed asset
-      |
-      v
- consumer loader   validate and decode the representation
+Each output source chooses what the producer captures:
+
+| Source kind | Selected result                                                          |
+| ----------- | ------------------------------------------------------------------------ |
+| `json`      | Portable Python value                                                    |
+| `native`    | Value supported by [marimo's cache](https://docs.marimo.io/api/caching/) |
+| `export`    | Python value converted by an exporter                                    |
+| `output`    | Value formatted by marimo                                                |
+| `cell`      | Complete named or inspected cell record                                  |
+
+The quickstart uses `json` for `summary` and `output` for `report`. Selected-value
+sources begin with a Python definition name and can follow supported attribute or
+item steps. A cell source identifies the complete cell.
+
+## Each output is captured separately
+
+marimo-export captures each named output separately for every state. This
+output-specific capture is called a **projection**.
+
+Separate resource identifiers let a consumer display several outputs together
+without collisions.
+
+## A representation tells readers how to decode an output
+
+Each output records a codec and media type. Together they define its
+**representation**. The output descriptor also records:
+
+- provenance for the stored Python value
+- an inline value or content-addressed asset reference
+
+An exporter can convert a selected Python value into a `BlobAsset` with bytes,
+media type, optional filename, and portable metadata. Built-in exporters cover
+text, HTML, Parquet, Altair, PNG, AnyWidget, and versioned JSON assets.
+
+## Consumers load, then optionally mount
+
+Python readers use representation-specific accessors such as `json()`,
+`asset_bytes()`, and `blob_asset()`. Browser readers load through an explicit
+output loader:
+
+```ts
+const summary = await state.output("summary").load(jsonLoader());
+const report = await state.output("report").load(marimoOutputLoader());
 ```
 
-## An output is a published name
+Loading verifies the selected asset before decoding it. The report loader
+returns an inert rendered-output snapshot. Other loaders can return a value with
+`mount(element)`.
 
-Every normalized state exposes the exact same output-name set. A consumer asks
-for `summary` or `chart` without knowing which notebook cell produced it.
+Mounting attaches an interactive value to the document and grants its code the
+page's authority. Dispose the mounted view before replacing it or tearing down
+the page.
 
-An output name is part of the application contract. The selected notebook value
-can change from state to state, while the output's codec and media type remain
-stable.
-
-Use “notebook result” for the Python value or rendered result before export. Use
-“output” for the published name and descriptor available to consumers.
-
-## A source selects the notebook result
-
-Each output has one source kind:
-
-| Source kind | Selected result                              | Stored form                                                           |
-| ----------- | -------------------------------------------- | --------------------------------------------------------------------- |
-| `json`      | Portable Python value                        | Canonical portable JSON inline in `index.json`                        |
-| `native`    | Value supported by marimo's cache serializer | Scalar, portable JSON, NumPy, Arrow, or `BlobAsset` form              |
-| `export`    | Python value accepted by an exporter         | `BlobAsset` returned by that exporter                                 |
-| `output`    | Value formatted by marimo                    | Rendered-output snapshot and replay resources                         |
-| `cell`      | Named cell or inspected runtime cell ID      | Cell identity, output, console records, outcome, and replay resources |
-
-JSON, native, export, and rendered-output sources use a selector. A selector
-starts from one Python definition and can follow attributes, nonnegative integer
-items, or JSON-string items. Mapping keys take precedence over attributes.
-
-A cell source uses an authored cell name or an inspected runtime cell ID because it
-targets the complete cell record.
-
-## An exporter creates a BlobAsset
-
-An exporter converts one selected Python value into a `BlobAsset`. A
-`BlobAsset` contains representation bytes, a media type, an optional portable
-filename, and portable JSON metadata.
-
-Built-in exporters cover JSON, text, HTML, Parquet tables, Altair charts, PNG
-images, and AnyWidget state. A custom exporter is an importable `module:symbol`
-callable that returns a `BlobAsset`.
-
-Declare every helper module whose source affects the returned bytes, including
-ordinary imported helpers. The exporter module and declared dependencies then
-participate in source identity and drift detection.
-
-## A representation joins producer and consumer
-
-An output representation consists of a codec and media type:
-
-- The codec identifies the stable marimo-export storage envelope.
-- The media type identifies the stored data. For a `BlobAsset`, it identifies
-  the data carried inside the envelope.
-
-The closed codec set covers inline scalar and JSON values, rendered marimo
-output, complete marimo cells, [NumPy](https://numpy.org/) arrays,
-[Apache Arrow](https://arrow.apache.org/) tables, and `BlobAsset` envelopes.
-Versioned media types let custom producer and consumer code evolve together.
-
-An asset is a content-addressed file referenced by an output descriptor. Its
-path follows from the codec and SHA-256 digest. Equal codec and digest pairs
-share one asset across states.
-
-## A loader decodes one representation
-
-Python readers expose representation-specific methods such as `scalar()`,
-`json()`, `asset_bytes()`, and `blob_asset()`.
-
-Browser readers require an explicit loader:
-
-| Representation                                 | Browser loader        | Decoded result                           |
-| ---------------------------------------------- | --------------------- | ---------------------------------------- |
-| Portable JSON                                  | `jsonLoader()`        | Frozen JSON value                        |
-| NumPy NPY                                      | `numpyLoader()`       | Typed multidimensional array record      |
-| Arrow IPC                                      | `arrowTableLoader()`  | Arrow table                              |
-| [Parquet](https://parquet.apache.org/)         | `parquetRowsLoader()` | Array of row objects                     |
-| [Vega-Lite](https://vega.github.io/vega-lite/) | `vegaLiteLoader()`    | Mountable chart                          |
-| [AnyWidget](https://anywidget.dev/)            | `anyWidgetLoader()`   | Saved model state with a mount lifecycle |
-
-Loading verifies the selected asset before decoding it. A loader can return inert
-data or a mountable value.
-
-## Mounting starts an executable lifecycle
-
-`mount(element)` attaches a chart, widget, image, or custom interactive value to
-the document. It returns a disposable view. Dispose that view before replacing
-it or tearing down the page.
-
-Opening, resolving, and verifying parse inert records. Mounting AnyWidget,
-Vega-Lite, or custom interactive code grants that code the page's authority.
-Review executable modules, allowed origins, and Content Security Policy before
-mounting them.
-
-Use [Output representations](../reference/representations) for the complete
-exporter, loader, and peer-dependency matrix. Use [Integrity and
-trust](integrity-and-trust) for the executable-code boundary.
+Related: [Reuse](preparation-and-reuse) explains when the
+producer creates these outputs. [Output
+representations](../reference/representations) lists every source, exporter,
+loader, peer dependency, and media contract.

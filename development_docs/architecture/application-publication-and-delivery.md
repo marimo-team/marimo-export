@@ -5,12 +5,12 @@ manifest route, then assemble those exports with application files in one staged
 directory. Publication owns which generation is current. Delivery owns the
 filesystem transaction that makes a complete application directory visible.
 
-```text
-PreparedExport
-  -> PreparedPublicationController
-  -> mutable current manifest + immutable instance routes
-  -> StagedDelivery
-  -> committed application directory
+```mermaid
+flowchart LR
+    prepared[PreparedExport] --> controller[PreparedPublicationController]
+    controller --> routes["Mutable current manifest + immutable instance routes"]
+    routes --> staged[StagedDelivery]
+    staged --> committed["Committed application directory"]
 ```
 
 ## Terms and ownership
@@ -32,41 +32,14 @@ filesystem transaction. Neither changes the immutable notebook export format.
 ## Prepared manifest contract
 
 `PreparedExport.manifest()` rechecks the prepared export index, opens the local
-reader, selects one state, and returns:
+reader, selects one state, and returns the prepared manifest. The record binds
+one complete input vector to one immutable notebook export identity and URL.
+`prepared_manifest_bytes()` canonicalizes an application record and enforces the
+browser's 256 KiB limit. It does not validate an application-defined wrapper
+schema.
 
-```json
-{
-  "schema": "marimo-export.prepared.v1",
-  "instance": "<export identity>",
-  "export_url": "./<instance>/",
-  "inputs": {},
-  "state_fingerprint": "<state fingerprint>",
-  "refresh_interval_ms": 1000
-}
-```
-
-`state` accepts an alias, a complete input mapping, or `None`. `None` selects the
-export's explicit default state. The producer resolves the selected mapping
-against the immutable export before constructing the manifest.
-
-| Field                 | Contract                                                   |
-| --------------------- | ---------------------------------------------------------- |
-| `schema`              | Exact `marimo-export.prepared.v1` identifier               |
-| `instance`            | Lowercase SHA-256 of the canonical export index            |
-| `export_url`          | Nonempty URL of at most 8192 UTF-8 bytes                   |
-| `inputs`              | Complete portable JSON input object for the selected state |
-| `state_fingerprint`   | Lowercase SHA-256 matching `inputs`                        |
-| `refresh_interval_ms` | Optional `0`, or an integer from 250 through 60,000        |
-
-`prepared_manifest_bytes()` serializes an application manifest as canonical
-portable JSON and enforces the browser's 256 KiB limit. Applications may wrap
-the core manifest with presentation metadata. The nested core record remains the
-marimo-export contract.
-
-The browser parser rejects unknown fields, invalid portable JSON, malformed
-digests, invalid intervals, and oversized URLs. Opening a publication also
-requires the fetched export identity and normalized base URL to match the
-manifest. The complete inputs must resolve to the declared state fingerprint.
+The exact fields, limits, selection rules, and browser parser contract live in
+the public [prepared publication reference](../../docs/reference/browser/prepared-publications.md).
 
 `PreparedPublicationRefresh` requests the mutable current manifest with fetch
 cache mode `no-store`. Immutable instance routes can use content-addressed
@@ -83,7 +56,11 @@ browser-side refresh, state transition, and mount disposal.
 | `repository`          | `None`    | Supplied repositories remain caller-owned. `None` creates one lazily and closes it with the controller |
 | `supersession_key`    | Exact key | Maps a publication key to its cancellation and replacement group                                       |
 | `route_key`           | Exact key | Maps a publication key to the namespace used by immutable asset routes                                 |
-| `route_grace_seconds` | `60.0`    | Nonnegative retention duration for replaced routes                                                     |
+| `route_grace_seconds` | `60.0`    | Retention duration added to `monotonic()` for replaced routes                                          |
+
+The current constructor rejects negative values but does not reject booleans,
+NaN, or positive infinity. Callers must supply a finite nonnegative real value.
+Treat stricter constructor validation as an implementation gap.
 
 `prepare(key, callback)` executes the synchronous callback in a worker thread.
 The callback receives the selected `ExportRepository` and a cancellation
@@ -133,11 +110,12 @@ during the replacement commit.
 `asset(route, instance, relative)` searches current and route-grace publications
 for the exact route group and immutable export identity. It returns `None` when
 no retained publication can provide the declared file. A successful lookup
-returns a `PreparedAsset` with an independently detached repository lease.
+returns a `PreparedAsset` with an independently owned generation lease.
 
 `PreparedAsset` verifies the declared member when borrowed and again when its
-path or bytes are read. Closing or releasing the controller publication does not
-invalidate an already detached response asset. The HTTP response owner closes
+path or bytes are read. Its file-scoped handle owns a detached lease for the
+complete export generation. Closing or releasing the controller publication does
+not invalidate an already detached response asset. The HTTP response owner closes
 that asset after sending the response.
 
 The route layout therefore has one mutable pointer and immutable instance paths:
@@ -150,6 +128,10 @@ The route layout therefore has one mutable pointer and immutable instance paths:
 
 The current route may advance before every client has observed it. Route grace
 keeps the older instance path live during that interval.
+
+Route grace and detached response assets pin complete generations. High
+replacement frequency, long grace, and slow responses can retain several
+generations and contribute to `repository_limit_exceeded`.
 
 ## Polling, release, and close
 
@@ -166,7 +148,8 @@ across those groups.
 The refresh task compares the repository observation revision with the revision
 captured in the publication plan. A newer revision calls the original prepare
 callback again. Refresh cancellation and ordinary refresh errors preserve the
-last-good publication and remain background outcomes.
+last-good publication. The current Python controller swallows those background
+failures and exposes no error callback or status channel.
 
 `release(key)` acts on the key's complete supersession group. It signals pending
 work, closes current and retired publications in that group, clears the desired
@@ -278,8 +261,9 @@ replacement.
 
 macOS and Linux first attempt a native directory exchange:
 
-```text
-staging <atomic exchange> destination
+```mermaid
+flowchart LR
+    staging[Staging] <-->|"Atomic exchange"| destination[Destination]
 ```
 
 The exchange keeps the destination path continuously present. The previous
@@ -290,11 +274,12 @@ a named sibling recovery path and reports that path.
 
 Platforms and filesystems without native exchange use rollback replacement:
 
-```text
-destination -> recovery sibling
-verify recovery identity
-staging -> destination
-retain or remove recovery sibling
+```mermaid
+flowchart LR
+    destination[Destination] --> recovery["Recovery sibling"]
+    recovery --> verify["Verify recovery identity"]
+    verify --> install["Install staging at destination"]
+    install --> cleanup["Retain or remove recovery sibling"]
 ```
 
 This path preserves failure rollback but has a rename interval in which the
@@ -336,6 +321,10 @@ When exchange recovery cannot restore the original name, or rollback restoration
 cannot complete, the error reports the path that retains the previous or
 interrupted tree. Operators should inspect those explicit sibling paths before
 retrying or removing them.
+
+Rollback failures currently carry recovery sibling paths in exception text.
+Post-commit cleanup warnings carry their path in structured `details`. Machine
+callers must not assume rollback failures expose a structured recovery field.
 
 Closing an uncommitted staged delivery removes its sibling staging directory on
 a best-effort basis. Context exit and the finalizer use the same discard path,

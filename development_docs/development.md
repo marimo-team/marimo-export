@@ -1,7 +1,9 @@
 # Development
 
 The workspace pins Python 3.14 for local development with Node 24.14.1, pnpm
-11.25.0, uv, and Vite+. The root `devEngines.runtime` lets pnpm install the exact
+11.25.0, uv, and [Vite+](https://viteplus.dev/guide), the unified TypeScript
+toolchain used for formatting, linting, type checks, tests, builds, packaging,
+and workspace tasks. The root `devEngines.runtime` lets pnpm install the exact
 Node runtime and records it in `pnpm-lock.yaml`. Package CI verifies Python 3.10
 through 3.14 on Ubuntu and Windows.
 
@@ -93,12 +95,15 @@ prepare
 verify_export
 ```
 
-Advanced capabilities live in focused modules such as
-`marimo_export.sessions`, `marimo_export.observations`,
-`marimo_export.outputs`, `marimo_export.diagnostics`, and
-`marimo_export.wire`. Core export failures live in `marimo_export.errors`.
-Repository and observation modules expose the failures tied to their own
-lifecycle contracts.
+Focused public capabilities live in modules such as
+`marimo_export.sessions`, `marimo_export.client`, `marimo_export.producer`,
+`marimo_export.observations`, `marimo_export.publication`,
+`marimo_export.delivery`, `marimo_export.outputs`,
+`marimo_export.diagnostics`, and `marimo_export.wire`. Read
+[Ports and composition](architecture/ports.md) for the complete public module
+inventory and canonical imports. Core export failures live in
+`marimo_export.errors`. Repository and observation modules expose failures tied
+to their lifecycle contracts.
 
 ## Change planning or preparation
 
@@ -140,8 +145,9 @@ together.
 
 The Marimo checkout is an external source reference for this integration.
 Implement current adapter behavior in marimo-export through package-owned ports.
-Read [Execution and caching](architecture/execution-and-caching.md) and
-[Marimo upstream candidates](architecture/marimo-upstream-candidates.md).
+Read [Execution and caching](architecture/execution-and-caching.md). Proposed
+public Marimo seams live in
+[marimo upstream capabilities](proposals/marimo-upstream-capabilities.md).
 
 ## Add an exporter
 

@@ -6,8 +6,8 @@ description: Commit complete application directories, create prepared manifests,
 # Delivery and publications
 
 `stage()` commits application files and one or more notebook exports as a single
-directory. `PreparedPublicationController` keeps a last-good prepared export
-available while application inputs or observations change.
+directory. The Python `PreparedPublicationController` keeps a last-good prepared
+export available while application inputs or observations change.
 
 Use directory delivery for a static build. Use the publication controller for a
 long-running Python service that serves prepared manifests and assets.
@@ -169,7 +169,7 @@ body = prepared_manifest_bytes(manifest)
 `PreparedManifestLimitError` with code `prepared_manifest_limit_exceeded` and
 encoded `size_bytes` and `max_bytes` details.
 
-## Retain a changing prepared publication
+## Retain a changing Python prepared publication
 
 `PreparedPublicationController` associates an application-defined key with one
 last-good `PreparedExport`. It runs synchronous preparation callbacks in worker
@@ -263,8 +263,16 @@ the complete key. A replaced generation remains eligible for `asset()` for
 `route_grace_seconds`, which defaults to 60 seconds. This lets in-flight
 manifest requests finish after a replacement commits.
 
-Use a finite, nonnegative `route_grace_seconds`. A value of zero closes a
-replaced publication during the replacement commit.
+The supported caller contract is a finite, nonnegative
+`route_grace_seconds`. A value of zero closes a replaced publication during the
+replacement commit. Construction currently rejects values whose comparison with
+zero is negative. It does not independently reject booleans, NaN, or positive
+infinity, which are outside the supported contract and can prevent predictable
+retirement.
+
+Route grace and slow responses can keep several complete export generations
+leased at once. Those generations count toward repository byte limits. Choose a
+grace period that covers expected response duration and publication churn.
 
 Methods and properties:
 
@@ -287,16 +295,25 @@ grace entries. `poll()` returns the same current publication immediately and
 schedules one asynchronous revision check when no refresh is active. That check
 uses the last successful preparation callback only when the repository
 observation revision has advanced. Refresh failure preserves the current
-publication.
+publication and is not reported through a callback or status record. An
+application that needs refresh health must instrument its preparation callback
+or run a separate health check.
 
 The controller and every call to `poll()` belong to one running `asyncio` event
 loop. Call `poll()` from an asynchronous handler on that loop. The preparation
 callback itself runs in a worker thread.
 
 `asset()` matches the application route, notebook export identity, and
-declared relative export file. It searches current and retained generations and
-returns an independently leased `PreparedAsset`. It returns `None` when no live
-generation matches. Close a returned asset after its response finishes.
+declared relative export file. It searches current and route-grace publications
+and returns a `PreparedAsset` with file-scoped access backed by an independently
+owned generation lease. It returns `None` when no live publication matches. One
+open asset protects the complete export generation from retention. Close the
+asset after its response finishes.
+
+`PreparedAsset.path` verifies the selected file before returning its filesystem
+path. The server owns the later open and any filesystem race. Prefer
+`read_bytes()` when the response body should come from bytes opened and verified
+in one operation.
 
 `release(key)` cancels pending work and closes current and retained publications
 in the key's supersession group. `close()` is asynchronous and idempotent. It
@@ -305,7 +322,7 @@ publication, and closes an owned repository.
 
 ### `PreparedPublication`
 
-`controller.prepare()` and lookup methods return controller-owned
+`controller.prepare()` and lookup methods return controller-owned Python
 `PreparedPublication` values. Callers cannot construct or close them directly.
 
 ```python

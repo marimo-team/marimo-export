@@ -1,26 +1,26 @@
 ---
 layout: home
-title: "marimo-export: Prepare notebook results. Read them anywhere."
+title: "marimo-export: Prepare notebook results. Share them anywhere."
 titleTemplate: false
-description: Build a portable, verified export from selected marimo notebook states. Browser applications and agents can use it without a Python runtime.
+description: Select the states and outputs to publish from a marimo notebook. marimo-export writes a portable, verified notebook export that browser applications and agents read without a Python runtime or a copy of the notebook source.
 
 hero:
-  text: Prepare notebook results. Read them anywhere.
-  tagline: Select the states and outputs to run through marimo. marimo-export writes a portable, verified artifact that browser applications and agents read after the producer stops, without a Python runtime.
+  text: Prepare notebook results. Share them anywhere.
+  tagline: Select the states and outputs to publish from a marimo notebook. marimo-export writes a portable, verified notebook export that browser applications and agents read without a Python runtime or a copy of the notebook source.
   image:
     light: /brand/marimo-export-lockup-stacked-light.svg
     dark: /brand/marimo-export-lockup-stacked-dark.svg
     alt: marimo-export
   actions:
     - theme: brand
-      text: Build your first export
+      text: Get started
       link: ./guide/getting-started
     - theme: alt
-      text: Why export notebook states?
+      text: When to use it
       link: ./why
 
 features:
-  - title: Declare finite states
+  - title: Select states
     icon:
       light: /feature-icons/route-light.svg
       dark: /feature-icons/route-dark.svg
@@ -28,32 +28,10 @@ features:
       width: "24"
       height: "24"
       wrap: true
-    details: Name the state rows and outputs that every consumer can select.
+    details: Name the notebook input combinations available to every consumer.
     link: ./concepts/states-and-inputs
-    linkText: Learn states and inputs
-  - title: Reuse prepared results
-    icon:
-      light: /feature-icons/database-light.svg
-      dark: /feature-icons/database-dark.svg
-      alt: ""
-      width: "24"
-      height: "24"
-      wrap: true
-    details: Reuse matching states and complete exports across producer runs.
-    link: ./concepts/preparation-and-reuse
-    linkText: Understand reuse
-  - title: Build or capture
-    icon:
-      light: /feature-icons/git-fork-light.svg
-      dark: /feature-icons/git-fork-dark.svg
-      alt: ""
-      width: "24"
-      height: "24"
-      wrap: true
-    details: Prepare from a saved notebook or a named live marimo session.
-    link: ./guide/build-and-capture
-    linkText: Choose a producer
-  - title: Read from any client
+    linkText: States
+  - title: Publish outputs
     icon:
       light: /feature-icons/braces-light.svg
       dark: /feature-icons/braces-dark.svg
@@ -61,21 +39,10 @@ features:
       width: "24"
       height: "24"
       wrap: true
-    details: Resolve exported states and load named outputs from Python or TypeScript.
-    link: ./guide/consume-an-export
-    linkText: Choose a reader
-  - title: Publish and deploy
-    icon:
-      light: /feature-icons/cloud-upload-light.svg
-      dark: /feature-icons/cloud-upload-dark.svg
-      alt: ""
-      width: "24"
-      height: "24"
-      wrap: true
-    details: Serve immutable exports and configure caching, origins, and browser policy.
-    link: ./guide/deploy
-    linkText: Deploy an export
-  - title: Verify before use
+    details: Expose structured data, rendered output, files, tables, charts, and widgets under stable names.
+    link: ./concepts/outputs-and-representations
+    linkText: Outputs
+  - title: Read static files
     icon:
       light: /feature-icons/shield-check-light.svg
       dark: /feature-icons/shield-check-dark.svg
@@ -83,19 +50,15 @@ features:
       width: "24"
       height: "24"
       wrap: true
-    details: Check canonical index bytes and every declared asset before consumption.
-    link: ./concepts/integrity-and-trust
-    linkText: Understand integrity
+    details: Browser applications and agents verify and read the export without a Python runtime or notebook source.
+    link: ./guide/consume-an-export
+    linkText: Read an export
 ---
 
-## Explore the exported dashboard
+## Notebook and exported app
 
-The Notebook tab opens a static HTML export of the original marimo source and
-its captured outputs. The Exported app tab reads five prepared states from a
-verified notebook export. The application starts no Python runtime, WebAssembly
-runtime, or application server.
+Switch between the original [marimo](https://marimo.io/) notebook and a browser
+application built from five exported states. The application reads static files
+and starts no Python or WebAssembly runtime.
 
-<StaticApp />
-
-[Run the market dashboard](guide/market-dashboard.md) or
-[build your first export](guide/getting-started.md).
+<StaticApp compact />

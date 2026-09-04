@@ -1,14 +1,14 @@
 ---
-title: Consume a notebook export
+title: Read an export
 description: Read the same exported states and outputs from Python, a browser, an agent, or another client.
 ---
 
-# Consume a notebook export
+# Read an export
 
-A notebook export gives every consumer the same default state, authored state
-aliases, complete input vectors, and named outputs. The examples on this page
-use `dist/report`, created by
-[Build your first notebook export](getting-started).
+A notebook export gives every consumer the same default exported state, authored
+state aliases, complete input vectors, and named outputs. The examples on this
+page use `dist/report`, created by
+[Get started](getting-started).
 
 | Job                                   | Interface                                         |
 | ------------------------------------- | ------------------------------------------------- |
@@ -20,7 +20,8 @@ use `dist/report`, created by
 
 ## Open from Python
 
-Select the `monthly` state and decode its JSON output:
+Select the `monthly` exported state, decode its JSON output, and read its
+rendered report bytes:
 
 ```python
 from marimo_export import open_export
@@ -28,19 +29,25 @@ from marimo_export import open_export
 notebook_export = open_export("dist/report")
 monthly = notebook_export.state("monthly")
 summary = monthly.output("summary").json()
+report = monthly.output("report")
+
+print(dict(monthly.inputs))
 print(dict(summary))
+print(report.codec, len(report.asset_bytes()) > 0)
 ```
 
 Expected output:
 
 ```text
+{'days': 30}
 {'days': 30, 'label': 'Last 30 days'}
+marimo.output.v1 True
 ```
 
 Opening validates canonical `index.json` and leaves output assets lazy. The
 quickstart keeps `summary` inline, so `json()` decodes it directly from the
-index. When an output references an asset, its reader verifies that asset before
-decoding it. The reader also exposes:
+index. `asset_bytes()` reads and verifies the selected `report` asset. The
+reader also exposes:
 
 - `identity`, the SHA-256 of the exact `index.json` bytes
 - `spec_sha256`, the identity of the authored `ExportSpec`
@@ -64,8 +71,8 @@ new input vector requires another producer operation or a Python service.
 
 ## Read an asset-backed output from Python
 
-After building the [market dashboard](market-dashboard), an output backed by
-a `BlobAsset` exposes verified bytes and media metadata:
+After building the [market dashboard](market-dashboard), an output backed by a
+`BlobAsset` exposes bytes verified during that access and its media metadata:
 
 ```python
 from marimo_export import open_export
@@ -86,21 +93,27 @@ marimo snapshot semantics.
 ## Open from a browser
 
 A browser reads the export over HTTP. Configure the static server so
-`dist/report` is available at `/exports/report/`, then open the same
-`monthly` state:
+`dist/report` is available at `/export/`, then open the same `monthly`
+exported state and both outputs:
 
 ```ts
 import { openExport } from "@marimo-team/marimo-export";
 import { jsonLoader } from "@marimo-team/marimo-export/loader/json";
+import { marimoOutputLoader } from "@marimo-team/marimo-export/loader/marimo-output";
 
-const notebookExport = await openExport("/exports/report/");
+const notebookExport = await openExport("/export/");
 const monthly = notebookExport.state("monthly");
 const summary = await monthly.output("summary").load(jsonLoader());
+const report = await monthly.output("report").load(marimoOutputLoader());
 
 console.log(summary); // { days: 30, label: "Last 30 days" }
+console.log(report.output?.mimetype); // text/markdown
 ```
 
-The JSON loader has no peer runtime. Specialized loaders can require one.
+Both quickstart loaders have no peer runtime. The rendered report loader returns
+an inert snapshot record. Treat its `output.data` as text until the application
+applies an explicit rendering and sanitization policy. Specialized loaders can
+require a peer runtime.
 [Output representations](../reference/representations) maps stored
 representations to browser loaders and their peer dependencies.
 
@@ -115,15 +128,19 @@ import {
   openPreparedPublication,
 } from "@marimo-team/marimo-export/prepared";
 
-const manifestUrl = new URL("/runtime/prepared.json", location.href);
+const manifestUrl = new URL("/prepared/current.json", location.href);
 const manifest = await fetchPreparedExportManifest(manifestUrl);
 const publication = await openPreparedPublication(manifest, manifestUrl);
 ```
 
 The manifest binds one immutable export identity, export URL, complete input
 vector, and state fingerprint. `PreparedStateController` owns semantic state
-updates and cancellation. `PreparedPublicationRefresh` swaps to a newer verified
-manifest while preserving a compatible current selection.
+updates and cancellation. `PreparedPublicationRefresh` validates a newer
+manifest before replacing the browser publication and preserves a compatible
+current selection.
+
+Use [Prepared publications](prepared-publications) to create and serve a
+concrete static manifest before adding refresh and route-grace behavior.
 
 ## Verify the complete export
 
@@ -160,6 +177,6 @@ Bind data-driven claims to the selected state and output. Retain notebook,
 producer, spec, state fingerprint, codec, media type, asset SHA-256, and
 verification facts when the answer needs an auditable source.
 
-[Use notebook exports with agents](agents-and-automation) develops this
-workflow. [Build a browser application](browser-applications) covers complete
+[Agents and automation](agents-and-automation) develops this workflow. [Browser
+applications](browser-applications) covers complete
 state transitions and mount disposal.

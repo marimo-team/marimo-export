@@ -5,15 +5,25 @@ services implement planning and preparation against focused repository and
 Marimo capabilities. Composition roots select the private implementations that
 satisfy those boundaries.
 
-```text
-application or CLI -> public SDK operation
-  producer operation -> preparation service -> records and capabilities
-  reader operation   -> reader and verification -> export records
-  repository API     -> ExportRepository -> SQLite and artifact adapters
-  diagnostics        -> Marimo composition root -> compat adapter
-
-observation ledger -> ObservationRepository -> SQLite adapter
-producer service   -> PreparationRepository -> repository adapters
+```mermaid
+flowchart LR
+    entry["Application or CLI"] --> sdk["Public SDK operation"]
+    sdk --> producer["Producer operation"]
+    producer --> service["Preparation service"]
+    service --> records["Records and capabilities"]
+    sdk --> reader["Reader operation"]
+    reader --> verification["Reader and verification"]
+    verification --> exports["Export records"]
+    sdk --> repositoryApi["Repository API"]
+    repositoryApi --> repository[ExportRepository]
+    repository --> adapters["SQLite and artifact adapters"]
+    sdk --> diagnostics[Diagnostics]
+    diagnostics --> composition["Marimo composition root"]
+    composition --> compat["Compat adapter"]
+    ledger["Observation ledger"] --> observationRepository[ObservationRepository]
+    observationRepository --> sqlite["SQLite adapter"]
+    producerService["Producer service"] --> preparationRepository[PreparationRepository]
+    preparationRepository --> repositoryAdapters["Repository adapters"]
 ```
 
 ## Public Python surface
@@ -44,26 +54,40 @@ from marimo_export import (
 Focused modules carry capabilities needed by applications with longer
 lifecycles:
 
-| Module                       | Contract                                                   |
-| ---------------------------- | ---------------------------------------------------------- |
-| `marimo_export.sessions`     | Connect to a server and borrow a live `Session`            |
-| `marimo_export.inspection`   | Inspect definitions, cells, input roots, and capabilities  |
-| `marimo_export.prepared`     | Hold a prepared export or one independently leased asset   |
-| `marimo_export.publication`  | Retain last-good prepared exports for application keys     |
-| `marimo_export.manifest`     | Encode a bounded canonical prepared manifest               |
-| `marimo_export.delivery`     | Stage and commit an application directory                  |
-| `marimo_export.observations` | Record successful input vectors through a bounded ledger   |
-| `marimo_export.outputs`      | Return a package-owned `BlobAsset` from a custom exporter  |
-| `marimo_export.diagnostics`  | Validate the installed Marimo adapter                      |
-| `marimo_export.integration`  | Install host capabilities and expose integration records   |
-| `marimo_export.exporters`    | Define built-in and importable output exporters            |
-| `marimo_export.limits`       | Configure capture byte limits                              |
-| `marimo_export.errors`       | Handle typed Python failures                               |
-| `marimo_export.reader`       | Use detailed reader, state, output, and provenance records |
-| `marimo_export.repository`   | Configure retention and inspect repository records         |
-| `marimo_export.descriptors`  | Inspect low-level output descriptors                       |
-| `marimo_export.verification` | Verify a notebook export                                   |
-| `marimo_export.wire`         | Use canonical portable JSON and fingerprint operations     |
+| Module                       | Contract                                                                    |
+| ---------------------------- | --------------------------------------------------------------------------- |
+| `marimo_export.sessions`     | Connect to a server and borrow a live `Session`                             |
+| `marimo_export.client`       | Provide the concrete `Client`, `Session`, and capture wrapper               |
+| `marimo_export.producer`     | Expose the single-use `OwnedNotebook` inspection context                    |
+| `marimo_export.inspection`   | Inspect definitions, cells, input roots, and capabilities                   |
+| `marimo_export.prepared`     | Hold a prepared export or file access backed by a detached generation lease |
+| `marimo_export.publication`  | Retain last-good prepared exports for application keys                      |
+| `marimo_export.manifest`     | Encode a bounded canonical prepared manifest                                |
+| `marimo_export.delivery`     | Stage and commit an application directory                                   |
+| `marimo_export.observations` | Record successful input vectors through a bounded ledger                    |
+| `marimo_export.outputs`      | Return a package-owned `BlobAsset` from a custom exporter                   |
+| `marimo_export.diagnostics`  | Validate the installed Marimo adapter                                       |
+| `marimo_export.integration`  | Install host capabilities and expose integration records                    |
+| `marimo_export.exporters`    | Define built-in and importable output exporters                             |
+| `marimo_export.limits`       | Configure capture byte limits                                               |
+| `marimo_export.errors`       | Handle typed Python failures                                                |
+| `marimo_export.cli`          | Provide the console entry point and process exit constants                  |
+| `marimo_export.reader`       | Use detailed reader, state, output, and provenance records                  |
+| `marimo_export.repository`   | Configure retention and inspect repository records                          |
+| `marimo_export.spec`         | Construct StateSpace, ExportSpec, and OutputSpec                            |
+| `marimo_export.planning`     | Inspect planned states and repository identity helpers                      |
+| `marimo_export.progress`     | Consume progress event and cache activity records                           |
+| `marimo_export.result`       | Inspect write results, timings, and post-commit warnings                    |
+| `marimo_export.index`        | Inspect durable export index and control-binding records                    |
+| `marimo_export.descriptors`  | Inspect low-level output descriptors                                        |
+| `marimo_export.verification` | Verify a notebook export                                                    |
+| `marimo_export.wire`         | Use canonical portable JSON and fingerprint operations                      |
+
+Application documentation uses `marimo_export.sessions` as the canonical import
+for `Client`, `Session`, and `connect`. `marimo_export.client` remains a supported
+module because it defines those concrete types and exposes the capture wrapper.
+`marimo_export.producer` is the supported narrow path for `OwnedNotebook` and
+`open_notebook()`.
 
 The CLI delegates to the same SDK operations. Human output, JSON output, JSONL
 progress, and exit categories belong to `_cli`. Planning and preparation
@@ -75,16 +99,16 @@ Public planning and result records are frozen package values. They contain
 strings, numbers, portable JSON, paths, and other marimo-export records.
 `PreparedExport` is a lifecycle handle over immutable export data.
 
-| Record               | Owner         | Meaning                                                |
-| -------------------- | ------------- | ------------------------------------------------------ |
-| `StateSpace`         | `spec.py`     | Reusable states and explicit default state             |
-| `ExportSpec`         | `spec.py`     | State space combined with output declarations          |
-| `ExportPlan`         | `planning.py` | Resolved states, identities, and reusable work         |
-| `ProgressEvent`      | `progress.py` | Ordered preparation or write progress                  |
-| `PreparedExport`     | `prepared.py` | Leased immutable export ready to open, serve, or write |
-| `ExportResult`       | `result.py`   | Durable write result and producer diagnostics          |
-| `NotebookExport`     | `reader.py`   | Immutable verified local reader                        |
-| `VerificationResult` | `reader.py`   | Verified state, output, asset, and byte counts         |
+| Record               | Owner         | Meaning                                                   |
+| -------------------- | ------------- | --------------------------------------------------------- |
+| `StateSpace`         | `spec.py`     | Reusable states and explicit default alias                |
+| `ExportSpec`         | `spec.py`     | State space combined with output declarations             |
+| `ExportPlan`         | `planning.py` | Resolved states, identities, and reusable work            |
+| `ProgressEvent`      | `progress.py` | Ordered preparation or write progress                     |
+| `PreparedExport`     | `prepared.py` | Leased immutable export ready to open, serve, or write    |
+| `ExportResult`       | `result.py`   | Durable write result and producer diagnostics             |
+| `NotebookExport`     | `reader.py`   | Immutable verified local reader                           |
+| `VerificationResult` | `reader.py`   | Verified state, state-output pair, asset, and byte counts |
 
 SQLite rows, Marimo graphs, kernel contexts, cache loaders, HTTP responses, and
 process handles remain private adapter values.
@@ -206,13 +230,14 @@ codec, fingerprint, or manifest field.
 
 The prepared controller receives a `PreparedStatePort`. An application owns
 how complete loaded output state is applied to its document. The controller
-owns state selection, supersession, cancellation, publication replacement,
-query updates, control updates, settlement, and disposal.
+owns state selection, transition cancellation, generation ordering, publication
+replacement, query updates, control updates, settlement, and disposal.
 
 ## Composition roots
 
 | Root                       | Concrete choices                                               |
 | -------------------------- | -------------------------------------------------------------- |
+| `_build.py`                | Destination preflight, preparation, write, and handle lifetime |
 | `ExportRepository.open()`  | Repository path, SQLite catalog, artifact files, lease manager |
 | `_marimo/composition.py`   | Pinned private kernel and transfer adapters                    |
 | `producer.open_notebook()` | Owned source copy, managed server, client, and session         |

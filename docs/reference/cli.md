@@ -8,16 +8,19 @@ description: Command syntax, repository selection, machine output, side effects,
 `marimo-export` plans, prepares, verifies, and manages notebook exports.
 
 ```text
-marimo-export {
-  plan,
-  build,
-  capture,
-  inspect,
-  verify,
-  observations,
-  repository,
+marimo-export
+  plan
+  build
+  capture
+  inspect
+  verify
+  observations
+    list
+    clear
+  repository
+    status
+    prune
   doctor
-} ...
 ```
 
 ## `plan`
@@ -76,11 +79,21 @@ marimo-export inspect NOTEBOOK_OR_SERVER
                       [--timeout SECONDS] [--json]
 ```
 
-With a notebook path, executes the initial autorun and reports definitions,
-cells, input modes, control paths, and producer facts. With a server URL, lists
-sessions. Add `--session ID` to inspect one live session.
+With a notebook path, executes the initial autorun and inspects one
+`SessionDescription`. With a server URL and no session ID, it lists sessions.
+Add `--session ID` to inspect one live session.
+
+Human output for a notebook or selected session reports the session ID, notebook
+filename, document digest, marimo and marimo-export versions, capabilities, and
+one summary row per definition with its name, kind, Python type, and input
+eligibility. `--json` returns the complete `SessionDescription`, including the
+session path, implementation digest, cells, input modes, siblings, values,
+domains, control paths, and input dependencies.
 
 Server inspection reads the live authentication environment variables.
+The CLI recognizes a server operand by a lowercase `http://` or `https://`
+prefix. An uppercase URL scheme is treated as a notebook path before the shared
+URL validator runs.
 
 ## `verify`
 
@@ -227,24 +240,30 @@ Progress objects include every `ProgressEvent` field. Unused fields are `null`.
 `--json` suppresses progress. `--json` and `--jsonl` are mutually exclusive.
 Machine modes write one compact sorted-key object per line to standard output.
 
+The command redacts configured access and server tokens, plus rejected
+credential-like argument values, from progress, messages, detail keys, and detail
+values. Rendered failure messages are limited to 2,048 characters. Treat the
+remaining machine output under the application's normal secret-handling policy.
+
 `doctor --json` always returns its diagnostic record under `result`. A failed
 compatibility check sets `ok` to `false`, returns exit code `4`, and keeps the
 individual check result available for automation.
 
 ## Command result records
 
-| Command              | Stable `result` content                                        |
-| -------------------- | -------------------------------------------------------------- |
-| `plan`               | Complete `ExportPlan` record                                   |
-| `build`, `capture`   | Complete `ExportResult` record                                 |
-| `inspect NOTEBOOK`   | `SessionDescription` record                                    |
-| `inspect SERVER`     | `sessions` array with ID, filename, and path                   |
-| `verify`             | State, output, asset, and verified-byte counts                 |
-| `observations list`  | Producer, inputs, revision, and observed vectors               |
-| `observations clear` | Producer, prior revision, and removed-vector count             |
-| `repository status`  | Repository counts, accounted bytes, and active artifact leases |
-| `repository prune`   | Retired state, generation, and byte counts                     |
-| `doctor`             | Repository, Python, package, and marimo compatibility facts    |
+| Command                       | Stable `result` content                                        |
+| ----------------------------- | -------------------------------------------------------------- |
+| `plan`                        | Complete `ExportPlan` record                                   |
+| `build`, `capture`            | Complete `ExportResult` record                                 |
+| `inspect NOTEBOOK`            | `SessionDescription` record                                    |
+| `inspect SERVER`              | `sessions` array with ID, filename, and path                   |
+| `inspect SERVER --session ID` | `SessionDescription` record                                    |
+| `verify`                      | State, output, asset, and verified-byte counts                 |
+| `observations list`           | Producer, inputs, revision, and observed vectors               |
+| `observations clear`          | Producer, prior revision, and removed-vector count             |
+| `repository status`           | Repository counts, accounted bytes, and active artifact leases |
+| `repository prune`            | Retired state, generation, and byte counts                     |
+| `doctor`                      | Repository, Python, package, and marimo compatibility facts    |
 
 Use the [Python records and errors](python/format-records-and-errors) reference
 for planning, result, warning, and error field contracts.
@@ -264,5 +283,5 @@ for planning, result, warning, and error field contracts.
 | `130` | Interrupted                               |
 | `141` | Closed output pipe                        |
 
-[Build or capture](../guide/build-and-capture) provides the complete producer
+[Build and capture](../guide/build-and-capture) provides the complete producer
 workflow.

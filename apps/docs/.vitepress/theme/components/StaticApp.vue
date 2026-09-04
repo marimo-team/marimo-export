@@ -1,12 +1,21 @@
 <script setup lang="ts">
 import { withBase } from "vitepress";
-import { computed, onBeforeUnmount, ref } from "vue";
+import { computed, onBeforeUnmount, ref, watch } from "vue";
 
-import { documentationExample } from "../../../example.ts";
+import { documentationExamples, type DocumentationExampleName } from "../../../example.ts";
 
-type TabKey = (typeof documentationExample.tabs)[number]["key"];
+type TabKey = "application" | "notebook";
 
-const selectedKey = ref<TabKey>(documentationExample.defaultTab);
+const props = withDefaults(
+  defineProps<{ compact?: boolean; example?: DocumentationExampleName }>(),
+  {
+    compact: false,
+    example: "market",
+  },
+);
+
+const documentationExample = computed(() => documentationExamples[props.example]);
+const selectedKey = ref<TabKey>(documentationExample.value.defaultTab);
 const loaded = ref(false);
 const frame = ref<HTMLIFrameElement>();
 const frameHeight = ref(720);
@@ -16,8 +25,8 @@ let mutationObserver: MutationObserver | undefined;
 
 const selected = computed(
   () =>
-    documentationExample.tabs.find((candidate) => candidate.key === selectedKey.value) ??
-    documentationExample.tabs[0],
+    documentationExample.value.tabs.find((candidate) => candidate.key === selectedKey.value) ??
+    documentationExample.value.tabs[0]!,
 );
 const href = computed(() => withBase(selected.value.href));
 
@@ -57,8 +66,7 @@ const measure = (): void => {
   frameHeight.value = Math.max(document.body.scrollHeight, document.body.offsetHeight);
 };
 
-const select = (key: TabKey): void => {
-  if (selectedKey.value === key) return;
+const resetFrame = (key: TabKey): void => {
   resizeObserver?.disconnect();
   mutationObserver?.disconnect();
   selectedKey.value = key;
@@ -66,6 +74,16 @@ const select = (key: TabKey): void => {
   frameHeight.value = 720;
   frameKey.value += 1;
 };
+
+const select = (key: TabKey): void => {
+  if (selectedKey.value === key) return;
+  resetFrame(key);
+};
+
+watch(
+  () => props.example,
+  () => resetFrame(documentationExample.value.defaultTab),
+);
 
 const markLoaded = (): void => {
   resizeObserver?.disconnect();
@@ -97,7 +115,10 @@ onBeforeUnmount(() => {
 
 <template>
   <figure class="static-app">
-    <header class="static-app__controls">
+    <header
+      class="static-app__controls"
+      :class="{ 'static-app__controls--compact': props.compact }"
+    >
       <nav aria-label="Trace the notebook source to its exported application">
         <template v-for="(tab, index) in documentationExample.tabs" :key="tab.key">
           <span v-if="index > 0" class="static-app__flow" aria-hidden="true">→</span>
@@ -114,15 +135,15 @@ onBeforeUnmount(() => {
         rel="noopener noreferrer"
         :aria-label="`Open ${selected.label.toLowerCase()} full page`"
       >
-        Open full page <span aria-hidden="true">↗</span>
+        Open <span aria-hidden="true">↗</span>
       </a>
 
-      <span class="static-app__runtime" aria-live="polite">
+      <span v-if="!props.compact" class="static-app__runtime" aria-live="polite">
         <span class="static-app__status"><span aria-hidden="true" /> {{ selected.status }}</span>
         <span class="static-app__runtime-boundary">{{ selected.boundary }}</span>
       </span>
 
-      <span class="static-app__source-links">
+      <span v-if="!props.compact" class="static-app__source-links">
         <strong>Source</strong>
         <a :href="documentationExample.source.notebook" target="_blank" rel="noopener noreferrer">
           Notebook
@@ -163,6 +184,7 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .static-app {
+  container-type: inline-size;
   display: grid;
   grid-template-rows: auto auto;
   margin: 2rem 0 3rem;
@@ -185,6 +207,12 @@ onBeforeUnmount(() => {
   color: var(--vp-c-text-3);
   font-family: var(--vp-font-family-mono);
   font-size: 0.64rem;
+}
+
+.static-app__controls--compact {
+  grid-template-areas: "tabs open";
+  min-height: 0;
+  padding-block: 0.65rem;
 }
 
 .static-app__controls nav {
@@ -235,6 +263,7 @@ onBeforeUnmount(() => {
   align-items: center;
   color: var(--vp-c-brand-1);
   font-weight: 650;
+  white-space: nowrap;
 }
 
 .static-app__status > span {
@@ -317,6 +346,20 @@ onBeforeUnmount(() => {
   text-transform: uppercase;
 }
 
+@container (max-width: 48rem) {
+  .static-app__controls:not(.static-app__controls--compact) {
+    grid-template-areas:
+      "tabs open"
+      "runtime runtime"
+      "source source";
+    gap: 0.35rem 0.75rem;
+  }
+
+  .static-app__source-links {
+    justify-self: start;
+  }
+}
+
 @media (max-width: 639px) {
   .static-app {
     margin-inline: -1rem;
@@ -325,7 +368,7 @@ onBeforeUnmount(() => {
     border-radius: 0;
   }
 
-  .static-app__controls {
+  .static-app__controls:not(.static-app__controls--compact) {
     grid-template-areas:
       "tabs open"
       "runtime runtime";

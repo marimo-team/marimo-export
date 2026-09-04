@@ -1,76 +1,149 @@
 ---
-title: Build a browser application
+title: Browser applications
 description: Open a notebook export, resolve states, load outputs, and replace mounted values safely.
 ---
 
-# Build a browser application
+# Browser applications
 
-The browser package reads a notebook export through HTTP. It validates
-`index.json` when opening the export, verifies an asset when loading that output,
-and gives the application control over rendering and mount disposal.
+The browser package reads a notebook export through HTTP. Build the
+[deterministic quickstart](getting-started) first. Its `dist/report`
+directory contains `weekly` and `monthly` exported states, an inline `summary`,
+and an asset-backed rendered `report`.
 
-This guide starts from the [first notebook export](getting-started). Copy
-`dist/report` into the static files served by your application at
-`/export/`.
+## Create the Vite application
 
-## Install the browser reader
-
-Install the package in a TypeScript application. [Vite](https://vite.dev/) is
-one bundler that can serve the application and its `public` directory.
+Install [Node.js](https://nodejs.org/) and [pnpm](https://pnpm.io/), then create
+a [Vite](https://vite.dev/) TypeScript application beside `dist/`:
 
 ```bash
+pnpm create vite browser --template vanilla-ts
+cd browser
+pnpm install
 pnpm add @marimo-team/marimo-export
+mkdir -p public/export
+cp -R ../dist/report/. public/export/
 ```
 
-Add one host and two state buttons to the page:
+The copy makes the complete notebook export available at `/export/` through
+Vite's static-file server. Copy the complete directory so `index.json` and every
+declared asset remain together.
+
+Replace `index.html` with two state buttons and hosts for both outputs:
 
 ```html
-<main>
-  <div aria-label="Report period">
-    <button type="button" data-state="weekly">Weekly</button>
-    <button type="button" data-state="monthly">Monthly</button>
-  </div>
-  <pre id="summary" aria-live="polite"></pre>
-</main>
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Quickstart report</title>
+  </head>
+  <body>
+    <main id="app">
+      <div aria-label="Report period">
+        <button type="button" data-state="weekly">Weekly</button>
+        <button type="button" data-state="monthly">Monthly</button>
+      </div>
+      <p id="status" role="status" aria-live="polite">Loading weekly</p>
+      <pre id="summary"></pre>
+      <pre id="report"></pre>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
 ```
 
-Open the export and render its JSON output:
+Replace `src/main.ts` with the browser reader:
 
 ```ts
 import { openExport } from "@marimo-team/marimo-export";
 import { jsonLoader } from "@marimo-team/marimo-export/loader/json";
+import { marimoOutputLoader } from "@marimo-team/marimo-export/loader/marimo-output";
 
 const notebookExport = await openExport("/export/");
-const summary = document.querySelector<HTMLPreElement>("#summary");
+const summaryHost = required<HTMLPreElement>("#summary");
+const reportHost = required<HTMLPreElement>("#report");
+const status = required<HTMLParagraphElement>("#status");
 
-if (summary === null) throw new Error("Summary host is missing");
-
-const show = async (name: string): Promise<void> => {
+const show = async (name: "weekly" | "monthly"): Promise<void> => {
+  status.textContent = `Loading ${name}`;
   const state = notebookExport.state(name);
-  const value = await state.output("summary").load(jsonLoader());
-  summary.textContent = JSON.stringify(value, null, 2);
+  const [summary, report] = await Promise.all([
+    state.output("summary").load(jsonLoader()),
+    state.output("report").load(marimoOutputLoader()),
+  ]);
+  if (report.output?.mimetype !== "text/markdown" || typeof report.output.data !== "string") {
+    throw new Error("The report output is not rendered Markdown");
+  }
+
+  summaryHost.textContent = JSON.stringify(summary, null, 2);
+  const parsed = new DOMParser().parseFromString(report.output.data, "text/html");
+  reportHost.textContent = parsed.body.textContent?.trim() ?? "";
+  status.textContent = `${name} ready`;
+  for (const button of document.querySelectorAll<HTMLButtonElement>("[data-state]")) {
+    button.setAttribute("aria-pressed", String(button.dataset.state === name));
+  }
 };
 
 for (const button of document.querySelectorAll<HTMLButtonElement>("[data-state]")) {
-  button.addEventListener("click", () => void show(button.dataset.state ?? "weekly"));
+  button.addEventListener("click", () => {
+    const name = button.dataset.state === "monthly" ? "monthly" : "weekly";
+    void show(name).catch(showError);
+  });
 }
 
-await show("weekly");
+function required<T extends Element>(selector: string): T {
+  const element = document.querySelector<T>(selector);
+  if (element === null) throw new Error(`${selector} is missing`);
+  return element;
+}
+
+function showError(error: unknown): void {
+  console.error(error);
+  status.textContent = "The notebook export could not be read";
+}
+
+await show("weekly").catch(showError);
 ```
 
-Selecting Monthly renders:
+Start the application:
 
-```json
+```bash
+pnpm dev --host 127.0.0.1
+```
+
+Open the printed loopback URL. The page first shows:
+
+```text
+weekly ready
+{
+  "days": 7,
+  "label": "Last 7 days"
+}
+Last 7 days
+Selected window: 7 days
+```
+
+Selecting Monthly changes both outputs:
+
+```text
 {
   "days": 30,
   "label": "Last 30 days"
 }
+Last 30 days
+Selected window: 30 days
 ```
 
-`state(name)` selects an authored state name. `resolve(inputs)` selects an exact
-complete input vector. `state.resolve(patch)` applies a sparse patch to the
-current vector and selects the matching exported state. Resolution never runs
-notebook Python.
+`openExport()` validates canonical `index.json`. The JSON loader reads the inline
+summary. The rendered-output loader verifies and decodes the selected report
+asset as an inert snapshot. The example presents its Markdown as text, so it
+does not attach notebook-authored markup to the page.
+
+`state(name)` selects an authored alias. `resolve(inputs)` selects an exact
+complete input vector. `state.resolve(patch)` applies a sparse root-input patch
+to the current vector and selects the matching exported state. Resolution runs
+no notebook Python.
 
 ## Cancel a stale state transition
 
@@ -91,7 +164,7 @@ const selectState = async (name: string): Promise<void> => {
   });
 
   current.signal.throwIfAborted();
-  summary.textContent = JSON.stringify(value, null, 2);
+  summaryHost.textContent = JSON.stringify(value, null, 2);
 };
 ```
 

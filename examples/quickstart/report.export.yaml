@@ -7,3 +7,5 @@ states:
 outputs:
   summary:
     source: { kind: json, selector: summary }
+  report:
+    source: { kind: output, selector: report }

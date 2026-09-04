@@ -282,6 +282,12 @@ A native BlobAsset MessagePack envelope contains exactly:
 The envelope's media type, filename, and metadata must agree with the index
 descriptor before a reader returns the representation.
 
+The browser scanner accepts the canonical minimal-width encoding for null,
+booleans, integers, finite float64 values, strings, binary data, arrays, and maps
+with unique string keys. It rejects float32 values, extension tokens, duplicate
+map keys, trailing bytes, nesting deeper than 256 levels, and more than 100,000
+MessagePack values.
+
 ## Verification
 
 Readers verify:
@@ -312,6 +318,8 @@ the lowercase SHA-256 of the exact canonical `index.json` bytes.
 | Control binding path                            |                    256 typed steps |
 | Media type                                      |        1,024 printable ASCII bytes |
 | BlobAsset metadata                              | 256 KiB of canonical portable JSON |
+| Browser BlobAsset MessagePack nesting           |                         256 levels |
+| Browser BlobAsset MessagePack values            |                            100,000 |
 | Python producer or local-reader asset           |                             64 MiB |
 | Python export closure                           |     512 MiB including `index.json` |
 

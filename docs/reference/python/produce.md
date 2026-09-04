@@ -78,9 +78,11 @@ ExportSpec.from_state_space(
 `to_value()` returns normalized explicit states after matrix expansion. The
 `digest` is the SHA-256 identity of that normalized form.
 
-Invalid documents and state-space values fail validation before planning. Shape
-and value failures raise `SpecError` or `TypeError` according to the rejected
-field.
+`from_file()` accepts `.json`, `.yaml`, and `.yml` files up to 16 MiB. JSON and
+YAML reject duplicate keys. YAML also rejects aliases and merge keys. Both
+formats enforce 256 container levels and 100,000 composed values. Invalid
+documents and state-space values fail before planning with `SpecError` or
+`TypeError` according to the rejected field.
 
 ## `ExportSpec`
 
@@ -345,6 +347,19 @@ between bounded preparation phases and while waiting for a preparation
 reservation. Cancellation raises an execution error with code
 `preparation_cancelled` and preserves the previous committed generation.
 
+Preparation operations for the same repository identity are serialized across
+threads and processes. A waiter uses `timeout` as the reservation-acquisition
+deadline. When the active operation commits first, the waiter rechecks the
+repository and can return that exact generation without starting another
+notebook. Reservation timeout raises the public `RepositoryBusyError` base with
+code `repository_reservation_timeout`.
+
+Each reservation carries a monotonically increasing fencing token. Loss of the
+reservation removes commit authority. A later state or generation commit then
+raises the public `RepositoryError` base with code `repository_fence_stale`,
+preserving the current committed generation. The acquisition timeout does not
+limit the duration of a reservation after it has been acquired.
+
 ## `build()`
 
 ```python
@@ -422,18 +437,43 @@ prepared.close() -> None
 ```
 
 `open()`, `path`, `asset()`, `renew()`, and `write()` verify the required
-repository files while the lease is alive. Keep the `PreparedExport` open while
-using a `NotebookExport` returned by `open()`.
+repository files while the lease is alive. `renew()` is an immediate lease
+liveness and `index.json` integrity check. The repository heartbeat owns catalog
+expiry renewal. Keep the `PreparedExport` open while using a `NotebookExport`
+returned by `open()`.
 
-`PreparedAsset` owns an independent lease and exposes `path`, `size`,
-`read_bytes()`, and idempotent `close()`. It can outlive its parent
-`PreparedExport`. Close it after the response or file consumer finishes.
+`PreparedAsset` gives file-scoped access through an independently owned lease on
+the complete export generation. It can outlive its parent `PreparedExport`, and
+one open asset keeps that whole generation protected from retention. Close it
+after the response or file consumer finishes.
+
+The handle exposes `path`, `size`, `read_bytes()`, and idempotent `close()`.
+Accessing `path` verifies the file at that point and returns a filesystem path.
+The code that opens the path owns any later filesystem race. `read_bytes()`
+opens and verifies the returned bytes in one operation.
 
 Calls that need files raise `RepositoryError` after close or lease loss.
 Integrity changes raise `IntegrityError`. `close()` is idempotent.
 
 [Delivery and publications](delivery-and-publications) defines prepared
 manifests and application-level retention.
+
+## Narrow protocol records
+
+Several focused modules export records used between the high-level producer and
+its capture protocol:
+
+| Record                                        | Fields                                                                                           | Reachability from high-level calls                                                                                                                        |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `CaptureLimits` from `marimo_export.limits`   | `max_asset_bytes`, `max_closure_bytes`                                                           | High-level `prepare()`, `build()`, and `capture()` apply the fixed 64 MiB asset and 512 MiB closure defaults. They do not accept this record as an option |
+| `CacheSummary` from `marimo_export.result`    | `hits`, `misses`                                                                                 | Validates cache counts carried by the capture bridge. Public producer results expose the classified `CacheActivity` record                                |
+| `StateRunTimings` from `marimo_export.result` | `states` and setup, dependency execution, UI update, output materialization, and cleanup seconds | Validates state-run timing data carried by the capture bridge. It is not returned by the high-level producer result                                       |
+| `PhaseTimings` from `marimo_export.result`    | total, capture, export write, state run, and optional server lifecycle seconds                   | Public construction record with no high-level producer return path                                                                                        |
+
+These records validate nonnegative counts and finite nonnegative durations.
+`CaptureLimits` accepts positive safe integers no larger than the fixed producer
+limits. Use `PreparedExport.cache_activity`, `ExportResult.cache_activity`, and
+`ProgressEvent.cache` for supported application cache reporting.
 
 ## Progress callbacks
 
@@ -457,7 +497,7 @@ uses `None` when a field does not apply.
 
 | Event                | Fields and timing                                                                                                    |
 | -------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `inspection_started` | Emitted before file inspection and for every live plan or capture. File exact reuse omits it.                        |
+| `inspection_started` | Emitted before file inspection and for every live plan or capture. Exact prepared-export reuse omits it.             |
 | `plan_ready`         | `completed` is the reusable-state count and `total` is the normalized-state count.                                   |
 | `prepared_reused`    | Emitted by `prepare()` and `capture()` for exact export reuse, with both counts equal to the normalized-state count. |
 | `state_started`      | `state` is the primary alias. `completed` counts missing states already finished.                                    |
@@ -488,9 +528,21 @@ CacheActivity(
 )
 ```
 
-`CacheActivity` contains nonnegative `authored_hits`, `authored_misses`,
-`projection_hits`, and `projection_misses`. `to_dict()` returns those four
-fields. Exceptions raised by the callback propagate to the producer call.
+`CacheActivity` reports effective marimo computation-cache decisions for states
+that executed during this producer operation:
+
+| Field               | Count                                                                                  |
+| ------------------- | -------------------------------------------------------------------------------------- |
+| `authored_hits`     | Non-projection cell attempts restored from cache in executed state children            |
+| `authored_misses`   | Non-projection cell attempts executed in state children                                |
+| `projection_hits`   | Transient output or snapshot leaf attempts restored from cache                         |
+| `projection_misses` | Transient output or snapshot leaf attempts executed, including forced live output work |
+
+The counters exclude exact prepared-export reuse and prepared-state reuse. An
+exact prepared-export reuse returns four zero counters. Zero therefore does not
+mean that the notebook has no cacheable cells. `to_dict()` returns the four
+nonnegative fields. Exceptions raised by the callback propagate to the producer
+call.
 
 Progress callbacks are notifications, not transaction guards. A
 `state_finished` event follows the prepared-state commit. A
