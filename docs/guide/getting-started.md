@@ -181,7 +181,7 @@ True
 `open_export()` validates canonical `index.json`. `json()` reads the inline
 summary. `asset_bytes()` reads and verifies the selected report asset.
 
-Continue with [What is marimo-export?](../overview) for the concepts,
-[Build a browser application](browser-applications) for the TypeScript reader,
-or [Build or capture](build-and-capture) for planning, live sessions, progress,
+Related: [What is marimo-export?](../overview) explains the concepts. [Build a
+browser application](browser-applications) covers the TypeScript reader. [Build
+or capture](build-and-capture) covers planning, live sessions, progress,
 cancellation, and replacement behavior.

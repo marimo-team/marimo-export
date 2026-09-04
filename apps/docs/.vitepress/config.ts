@@ -13,7 +13,7 @@ import { documentationSidebar, llmsSidebar, topNavigation } from "../navigation.
 const repository = "https://github.com/marimo-team/marimo-export";
 const siteUrl = new URL("https://marimo-team.github.io/marimo-export/");
 const description =
-  "Select the states to run through marimo and the outputs to publish. marimo-export writes them as a portable, verified notebook export. Browser applications and agents read it after the Python producer stops. They need neither its runtime nor the notebook source code.";
+  "Select the states and outputs to publish from a marimo notebook. marimo-export writes a portable, verified notebook export. Browser applications and agents read it after Python stops, without a Python runtime or the notebook's Python source code.";
 const socialTitle = "Prepare notebook results. Read them anywhere.";
 const socialImageAlt =
   "marimo-export mark pointing from prepared notebook states toward a portable export.";

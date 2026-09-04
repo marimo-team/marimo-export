@@ -71,6 +71,7 @@ requires a new producer run.
 A written notebook export remains readable after both producer-side stores are
 removed. Its readers select exported states and verify output assets.
 
-Continue with [Update an application with new exports](exports-and-publications)
-to choose how an application receives newer exports. Use [Reuse earlier
-results](preparation-and-reuse) for exact identities, plan fields, and leases.
+Related: [Update an application with new exports](exports-and-publications)
+covers how an application receives newer exports. [Reuse earlier
+results](preparation-and-reuse) defines exact identities, plan fields, and
+leases.

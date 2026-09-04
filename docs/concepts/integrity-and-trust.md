@@ -78,6 +78,7 @@ Notebook export verification protects the portable files after preparation.
 Configure both when the producer restores cached computation and consumers must
 verify exported bytes.
 
-[Choose a guide](../guide/) to build, consume, publish, deploy, or operate an
-export. Use the [export format reference](../reference/export-format) for exact
-canonical JSON, codec, asset, and size rules.
+[Build or capture](../guide/build-and-capture) produces an export. [Read an
+export](../guide/consume-an-export) covers Python, browser, and agent consumers.
+Use the [export format reference](../reference/export-format) for exact canonical
+JSON, codec, asset, and size rules.

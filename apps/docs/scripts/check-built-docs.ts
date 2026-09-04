@@ -142,7 +142,7 @@ const expectedSocialMetadata = new Map([
   ["og:title", "marimo-export: Prepare notebook results. Read them anywhere."],
   [
     "og:description",
-    "Select the states to run through marimo and the outputs to publish. marimo-export writes them as a portable, verified notebook export. Browser applications and agents read it after the Python producer stops. They need neither its runtime nor the notebook source code.",
+    "Select the states and outputs to publish from a marimo notebook. marimo-export writes a portable, verified notebook export. Browser applications and agents read it after Python stops, without a Python runtime or the notebook's Python source code.",
   ],
   ["og:image", new URL(socialImagePath, siteUrl).href],
   ["og:image:width", "2400"],
@@ -155,7 +155,7 @@ const expectedSocialMetadata = new Map([
   ["twitter:title", "marimo-export: Prepare notebook results. Read them anywhere."],
   [
     "twitter:description",
-    "Select the states to run through marimo and the outputs to publish. marimo-export writes them as a portable, verified notebook export. Browser applications and agents read it after the Python producer stops. They need neither its runtime nor the notebook source code.",
+    "Select the states and outputs to publish from a marimo notebook. marimo-export writes a portable, verified notebook export. Browser applications and agents read it after Python stops, without a Python runtime or the notebook's Python source code.",
   ],
   ["twitter:image", new URL(socialImagePath, siteUrl).href],
 ]);

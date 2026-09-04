@@ -103,5 +103,5 @@ Observations remain authoring evidence until a chosen vector becomes an explicit
 state row. Run `marimo-export observations list NOTEBOOK --spec FILE` to inspect
 them.
 
-Continue with [Store and load outputs](outputs-and-representations) to
-follow `summary` and `report` from notebook results to consumer values.
+Related: [Store and load outputs](outputs-and-representations) follows `summary`
+and `report` from notebook results to consumer values.

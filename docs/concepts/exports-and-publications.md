@@ -63,7 +63,8 @@ The application still authenticates the manifest route and export origin. An
 export on another origin also needs a matching [Cross-Origin Resource Sharing
 (CORS)](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/CORS) policy.
 
-Continue with [Verify and trust an export](integrity-and-trust). Use [Serve a
-prepared publication](../guide/prepared-publications) for the complete workflow and the
-[browser prepared reference](../reference/browser/prepared-publications) for
+Related: [Verify and trust an export](integrity-and-trust) separates file
+verification from publisher trust. [Serve a prepared
+publication](../guide/prepared-publications) covers the complete workflow. The
+[browser prepared reference](../reference/browser/prepared-publications) defines
 controller, refresh, cancellation, and error contracts.

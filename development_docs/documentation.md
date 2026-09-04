@@ -6,19 +6,19 @@ validation, and release mechanics needed to keep that public contract true.
 
 ## Source ownership
 
-| Surface                    | Reader job                                                               | Owner                                                               |
-| -------------------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------- |
-| Root README                | Evaluate the project and reach one result                                | `README.md`                                                         |
-| Registry README            | Adopt one published package                                              | Package `README.md`                                                 |
-| Start                      | Decide when to use the product and see how an export works               | `docs/overview.md`, `docs/why.md`                                   |
-| Concepts                   | Predict states, outputs, reuse, integrity, and trust                     | `docs/concepts/`                                                    |
-| Guides                     | Complete a producer, consumer, integration, deployment, or recovery task | `docs/guide/`                                                       |
-| Reference                  | Look up exact public contracts                                           | `docs/reference/`                                                   |
-| Contributor entry          | Choose the code and validation owner                                     | `development_docs/README.md`                                        |
-| Architecture               | Change an ownership or lifecycle boundary                                | `development_docs/architecture/`                                    |
-| Proposals                  | Review an unimplemented cross-repository or upstream design              | `development_docs/proposals/`                                       |
-| Development and validation | Run the workspace and prove a change                                     | `development_docs/development.md`, `development_docs/validation.md` |
-| Release                    | Publish coordinated Python and npm packages                              | `development_docs/releasing.md`                                     |
+| Surface                    | Reader job                                                          | Owner                                                               |
+| -------------------------- | ------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| Root README                | Evaluate the project and reach one result                           | `README.md`                                                         |
+| Registry README            | Adopt one published package                                         | Package `README.md`                                                 |
+| Introduction               | Understand the product, decide when to use it, and build one export | `docs/overview.md`, `docs/why.md`, `docs/guide/getting-started.md`  |
+| Guide                      | Understand concepts and complete producer or consumer tasks         | `docs/concepts/`, `docs/guide/`                                     |
+| Examples                   | Inspect a complete multi-output browser application                 | `docs/guide/market-dashboard.md`                                    |
+| Reference                  | Look up exact public contracts                                      | `docs/reference/`                                                   |
+| Contributor entry          | Choose the code and validation owner                                | `development_docs/README.md`                                        |
+| Architecture               | Change an ownership or lifecycle boundary                           | `development_docs/architecture/`                                    |
+| Proposals                  | Review an unimplemented cross-repository or upstream design         | `development_docs/proposals/`                                       |
+| Development and validation | Run the workspace and prove a change                                | `development_docs/development.md`, `development_docs/validation.md` |
+| Release                    | Publish coordinated Python and npm packages                         | `development_docs/releasing.md`                                     |
 
 Public docs define a term at first meaningful use and repeat one canonical noun.
 The [terminology reference](../docs/reference/terminology.md) is the lookup owner.
@@ -56,12 +56,10 @@ The public structure supports four primary paths:
 
 ```mermaid
 flowchart LR
-    start[Start] --> first["First export"]
-    first --> concepts[Concepts]
-    concepts --> guides[Guides]
-    guides --> reference[Reference]
-    concepts --> integrations["Integrations and operations"]
-    concepts --> troubleshooting[Troubleshooting]
+    introduction[Introduction] --> guide[Guide]
+    guide --> examples[Examples]
+    guide --> reference[Reference]
+    guide --> operations["Publishing and operations"]
 ```
 
 `apps/docs/navigation.ts` is the canonical route manifest. It drives top

@@ -85,7 +85,7 @@ Mounting attaches an interactive value to the document and grants its code the
 page's authority. Dispose the mounted view before replacing it or tearing down
 the page.
 
-Continue with [Reuse earlier results](preparation-and-reuse) to see when the
-producer creates these outputs. Use [Output
-representations](../reference/representations) for every source, exporter,
+Related: [Reuse earlier results](preparation-and-reuse) explains when the
+producer creates these outputs. [Output
+representations](../reference/representations) lists every source, exporter,
 loader, peer dependency, and media contract.

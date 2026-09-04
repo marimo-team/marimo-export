@@ -93,6 +93,6 @@ with prepare("report.py", spec=spec) as prepared:
 HTTP response that can outlive the parent handle. That handle protects the
 complete export generation from retention. Close it after the consumer finishes.
 
-Continue with [How notebook caching fits](caching) for the cell-level decision. Use
-[Produce an export from Python](../reference/python/produce) for complete plan,
-prepare, progress, result, and lease contracts.
+Related: [How notebook caching fits](caching) covers the cell-level decision.
+[Produce an export from Python](../reference/python/produce) defines the complete
+plan, prepare, progress, result, and lease contracts.

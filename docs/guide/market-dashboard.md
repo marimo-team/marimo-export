@@ -126,5 +126,5 @@ uv run --locked --package marimo-export-vite-vanilla-example \
 session active. The dashboard consumes the same `index.json` contract from
 either producer path.
 
-Next, [choose states and outputs](choose-states) for your own notebook or
-[consume a notebook export](consume-an-export) from another client.
+Related: [Choose states and outputs](choose-states) for your own notebook.
+[Read an export](consume-an-export) covers Python, browser, and agent consumers.

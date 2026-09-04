@@ -14,142 +14,120 @@ type NavigationItem = NavigationPage | NavigationGroup;
 interface DocumentationSection {
   readonly key: string;
   readonly text: string;
-  readonly prefix: string;
   readonly items: readonly NavigationItem[];
 }
 
-export const documentationSections = [
+const introductionItems = [
+  { text: "marimo-export", link: "/" },
+  { text: "What is marimo-export?", link: "/overview" },
+  { text: "When to use marimo-export", link: "/why" },
+  { text: "Get started", link: "/guide/getting-started" },
+] satisfies readonly NavigationItem[];
+
+const guideItems = [
   {
-    key: "introduction",
-    text: "Start",
-    prefix: "/",
+    text: "Core ideas",
+    collapsed: false,
     items: [
-      { text: "marimo-export", link: "/" },
-      { text: "When to use marimo-export", link: "/why" },
-      { text: "What is marimo-export?", link: "/overview" },
-    ],
-  },
-  {
-    key: "concepts",
-    text: "Concepts",
-    prefix: "/concepts/",
-    items: [
-      { text: "Understand notebook exports", link: "/concepts/" },
-      { text: "Choose notebook states", link: "/concepts/states-and-inputs" },
+      { text: "Notebook states", link: "/concepts/states-and-inputs" },
       {
-        text: "Store and load outputs",
+        text: "Outputs",
         link: "/concepts/outputs-and-representations",
       },
-      { text: "Reuse earlier results", link: "/concepts/preparation-and-reuse" },
-      { text: "How notebook caching fits", link: "/concepts/caching" },
+      { text: "Reuse", link: "/concepts/preparation-and-reuse" },
+      { text: "Caching", link: "/concepts/caching" },
       {
-        text: "Update an application with new exports",
+        text: "Publishing updates",
         link: "/concepts/exports-and-publications",
       },
-      { text: "Verify and trust an export", link: "/concepts/integrity-and-trust" },
+      { text: "Verification and trust", link: "/concepts/integrity-and-trust" },
     ],
   },
   {
-    key: "guides",
-    text: "Guides",
-    prefix: "/guide/",
+    text: "Build and use",
+    collapsed: true,
     items: [
-      { text: "Choose a guide", link: "/guide/" },
+      { text: "Choose states and outputs", link: "/guide/choose-states" },
+      { text: "Build or capture", link: "/guide/build-and-capture" },
+      { text: "Read an export", link: "/guide/consume-an-export" },
+      { text: "Build a browser application", link: "/guide/browser-applications" },
+      { text: "Use exports with agents", link: "/guide/agents-and-automation" },
+    ],
+  },
+  {
+    text: "Publish and operate",
+    collapsed: true,
+    items: [
+      { text: "Serve a prepared publication", link: "/guide/prepared-publications" },
+      { text: "Create a representation", link: "/guide/custom-representations" },
+      { text: "Manage repository storage", link: "/guide/manage-repository" },
+      { text: "Deploy an export", link: "/guide/deploy" },
+      { text: "Troubleshoot", link: "/guide/troubleshooting" },
+    ],
+  },
+] satisfies readonly NavigationItem[];
+
+const exampleItems = [
+  { text: "Market dashboard", link: "/guide/market-dashboard" },
+] satisfies readonly NavigationItem[];
+
+const referenceItems = [
+  { text: "Reference overview", link: "/reference/" },
+  { text: "StateSpace and ExportSpec", link: "/reference/export-spec" },
+  { text: "Output representations", link: "/reference/representations" },
+  { text: "Export format reference", link: "/reference/export-format" },
+  { text: "CLI reference", link: "/reference/cli" },
+  {
+    text: "Python",
+    collapsed: true,
+    items: [
+      { text: "Python API", link: "/reference/python-api" },
+      { text: "Produce an export from Python", link: "/reference/python/produce" },
+      { text: "Read and verify exports from Python", link: "/reference/python/reader" },
       {
-        text: "Start",
-        items: [
-          { text: "Build your first export", link: "/guide/getting-started" },
-          { text: "Run the market dashboard", link: "/guide/market-dashboard" },
-        ],
+        text: "Sessions and inspection",
+        link: "/reference/python/sessions-and-inspection",
       },
       {
-        text: "Author",
-        items: [
-          { text: "Choose states and outputs", link: "/guide/choose-states" },
-          { text: "Build or capture", link: "/guide/build-and-capture" },
-        ],
+        text: "Repository and observations",
+        link: "/reference/python/repository-and-observations",
       },
       {
-        text: "Consume",
-        items: [
-          { text: "Read an export", link: "/guide/consume-an-export" },
-          { text: "Build a browser application", link: "/guide/browser-applications" },
-          { text: "Use exports with agents", link: "/guide/agents-and-automation" },
-        ],
+        text: "Delivery and publications",
+        link: "/reference/python/delivery-and-publications",
       },
+      { text: "Advanced host integration", link: "/reference/python/host-integration" },
       {
-        text: "Integrate",
-        items: [
-          { text: "Serve a prepared publication", link: "/guide/prepared-publications" },
-          { text: "Create a representation", link: "/guide/custom-representations" },
-        ],
-      },
-      {
-        text: "Operate",
-        items: [
-          { text: "Manage repository storage", link: "/guide/manage-repository" },
-          { text: "Deploy an export", link: "/guide/deploy" },
-          { text: "Troubleshoot", link: "/guide/troubleshooting" },
-        ],
+        text: "Format records and errors",
+        link: "/reference/python/format-records-and-errors",
       },
     ],
   },
   {
-    key: "reference",
-    text: "Reference",
-    prefix: "/reference/",
+    text: "Browser",
+    collapsed: true,
     items: [
-      { text: "Reference overview", link: "/reference/" },
-      { text: "StateSpace and ExportSpec", link: "/reference/export-spec" },
-      { text: "Output representations", link: "/reference/representations" },
-      { text: "Export format reference", link: "/reference/export-format" },
-      { text: "CLI reference", link: "/reference/cli" },
+      { text: "Browser API reference", link: "/reference/browser-api" },
+      { text: "Browser reader", link: "/reference/browser/reader" },
       {
-        text: "Python",
-        collapsed: true,
-        items: [
-          { text: "Python API", link: "/reference/python-api" },
-          { text: "Produce an export from Python", link: "/reference/python/produce" },
-          { text: "Read and verify exports from Python", link: "/reference/python/reader" },
-          {
-            text: "Sessions and inspection",
-            link: "/reference/python/sessions-and-inspection",
-          },
-          {
-            text: "Repository and observations",
-            link: "/reference/python/repository-and-observations",
-          },
-          {
-            text: "Delivery and publications",
-            link: "/reference/python/delivery-and-publications",
-          },
-          { text: "Advanced host integration", link: "/reference/python/host-integration" },
-          {
-            text: "Format records and errors",
-            link: "/reference/python/format-records-and-errors",
-          },
-        ],
+        text: "Prepared publications",
+        link: "/reference/browser/prepared-publications",
       },
-      {
-        text: "Browser",
-        collapsed: true,
-        items: [
-          { text: "Browser API reference", link: "/reference/browser-api" },
-          { text: "Browser reader", link: "/reference/browser/reader" },
-          {
-            text: "Prepared publications",
-            link: "/reference/browser/prepared-publications",
-          },
-          { text: "Output loaders", link: "/reference/browser/loaders" },
-          { text: "marimo snapshots", link: "/reference/browser/snapshots" },
-          { text: "Browser errors and limits", link: "/reference/browser/errors-and-limits" },
-        ],
-      },
-      { text: "Portable JSON", link: "/reference/portable-json" },
-      { text: "Compatibility", link: "/reference/compatibility" },
-      { text: "Terminology", link: "/reference/terminology" },
+      { text: "Output loaders", link: "/reference/browser/loaders" },
+      { text: "marimo snapshots", link: "/reference/browser/snapshots" },
+      { text: "Browser errors and limits", link: "/reference/browser/errors-and-limits" },
     ],
   },
+  { text: "Portable JSON", link: "/reference/portable-json" },
+  { text: "Compatibility", link: "/reference/compatibility" },
+  { text: "Terminology", link: "/reference/terminology" },
+] satisfies readonly NavigationItem[];
+
+export const documentationSections = [
+  { key: "introduction", text: "Introduction", items: introductionItems },
+  { key: "guide", text: "Guide", items: guideItems },
+  { key: "examples", text: "Examples", items: exampleItems },
+  { key: "reference", text: "Reference", items: referenceItems },
 ] satisfies readonly DocumentationSection[];
 
 export const flattenNavigationPages = (items: readonly NavigationItem[]): NavigationPage[] =>
@@ -163,28 +141,40 @@ const pageByLink = new Map(documentationPages.map((page) => [page.link, page]));
 
 const page = (link: string): NavigationPage => {
   const item = pageByLink.get(link);
-  if (!item) {
-    throw new Error(`Navigation route is not declared: ${link}`);
-  }
+  if (!item) throw new Error(`Navigation route is not declared: ${link}`);
   return item;
 };
 
 export const topNavigation = [
   {
-    text: "Start",
+    text: "Overview",
+    link: page("/overview").link,
+    activeMatch: "^/(?:overview|why)$",
+  },
+  {
+    text: "Guide",
     items: [
-      { text: "Build your first export", link: page("/guide/getting-started").link },
-      { text: "When to use marimo-export", link: page("/why").link },
-      { text: "What is marimo-export?", link: page("/overview").link },
-      { text: "Choose a guide", link: page("/guide/").link },
+      { text: "Get started", link: page("/guide/getting-started").link },
+      { text: "Notebook states", link: page("/concepts/states-and-inputs").link },
+      {
+        text: "Outputs",
+        link: page("/concepts/outputs-and-representations").link,
+      },
+      { text: "Build or capture", link: page("/guide/build-and-capture").link },
+      { text: "Read an export", link: page("/guide/consume-an-export").link },
+      { text: "Browser applications", link: page("/guide/browser-applications").link },
+      { text: "Caching", link: page("/concepts/caching").link },
+      {
+        text: "Publishing updates",
+        link: page("/concepts/exports-and-publications").link,
+      },
     ],
   },
   {
-    text: "Concepts",
-    link: page("/concepts/").link,
-    activeMatch: "^/(?:overview|concepts(?:/|$))",
+    text: "Examples",
+    link: page("/guide/market-dashboard").link,
+    activeMatch: "^/guide/market-dashboard$",
   },
-  { text: "Guides", link: page("/guide/").link, activeMatch: "^/guide/" },
   { text: "Reference", link: page("/reference/").link, activeMatch: "^/reference/" },
   {
     text: "Project",
@@ -205,16 +195,36 @@ export const topNavigation = [
   },
 ];
 
-export const documentationSidebar = Object.fromEntries(
-  documentationSections.map((activeSection) => [
-    activeSection.prefix,
-    documentationSections.map((section) => ({
-      text: section.text,
-      collapsed: section.key !== activeSection.key,
-      items: section.items,
-    })),
-  ]),
-);
+export const documentationSidebar = {
+  "/reference/": [
+    {
+      text: "Reference",
+      collapsed: false,
+      items: referenceItems,
+    },
+  ],
+  "/": [
+    {
+      text: "Introduction",
+      collapsed: false,
+      items: introductionItems.slice(1),
+    },
+    {
+      text: "Guide",
+      collapsed: false,
+      items: guideItems,
+    },
+    {
+      text: "Examples",
+      collapsed: false,
+      items: exampleItems,
+    },
+    {
+      text: "Reference",
+      items: [{ text: "API and file formats", link: page("/reference/").link }],
+    },
+  ],
+};
 
 // The pinned LLM bundle plugin drops VitePress's deployment base when it
 // descends into nested sidebar groups. A flat copy preserves page order while

@@ -6,9 +6,13 @@ import { documentationExamples, type DocumentationExampleName } from "../../../e
 
 type TabKey = "application" | "notebook";
 
-const props = withDefaults(defineProps<{ example?: DocumentationExampleName }>(), {
-  example: "market",
-});
+const props = withDefaults(
+  defineProps<{ compact?: boolean; example?: DocumentationExampleName }>(),
+  {
+    compact: false,
+    example: "market",
+  },
+);
 
 const documentationExample = computed(() => documentationExamples[props.example]);
 const selectedKey = ref<TabKey>(documentationExample.value.defaultTab);
@@ -111,7 +115,10 @@ onBeforeUnmount(() => {
 
 <template>
   <figure class="static-app">
-    <header class="static-app__controls">
+    <header
+      class="static-app__controls"
+      :class="{ 'static-app__controls--compact': props.compact }"
+    >
       <nav aria-label="Trace the notebook source to its exported application">
         <template v-for="(tab, index) in documentationExample.tabs" :key="tab.key">
           <span v-if="index > 0" class="static-app__flow" aria-hidden="true">→</span>
@@ -128,15 +135,15 @@ onBeforeUnmount(() => {
         rel="noopener noreferrer"
         :aria-label="`Open ${selected.label.toLowerCase()} full page`"
       >
-        Open full page <span aria-hidden="true">↗</span>
+        Open <span aria-hidden="true">↗</span>
       </a>
 
-      <span class="static-app__runtime" aria-live="polite">
+      <span v-if="!props.compact" class="static-app__runtime" aria-live="polite">
         <span class="static-app__status"><span aria-hidden="true" /> {{ selected.status }}</span>
         <span class="static-app__runtime-boundary">{{ selected.boundary }}</span>
       </span>
 
-      <span class="static-app__source-links">
+      <span v-if="!props.compact" class="static-app__source-links">
         <strong>Source</strong>
         <a :href="documentationExample.source.notebook" target="_blank" rel="noopener noreferrer">
           Notebook
@@ -199,6 +206,12 @@ onBeforeUnmount(() => {
   color: var(--vp-c-text-3);
   font-family: var(--vp-font-family-mono);
   font-size: 0.64rem;
+}
+
+.static-app__controls--compact {
+  grid-template-areas: "tabs open";
+  min-height: 0;
+  padding-block: 0.65rem;
 }
 
 .static-app__controls nav {

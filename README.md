@@ -26,10 +26,10 @@
   <a href="LICENSE"><img alt="Apache License 2.0" src="https://img.shields.io/badge/license-Apache--2.0-6c6f78.svg"></a>
 </p>
 
-Select the states to run through [marimo](https://marimo.io/) and the outputs to
-publish. marimo-export writes them as a portable, verified **notebook export**.
-Browser applications and agents read it after the Python producer stops. They
-need neither its runtime nor the notebook source code.
+Select the states and outputs to publish from a [marimo](https://marimo.io/)
+notebook. marimo-export writes a portable, verified **notebook export**. Browser
+applications and agents read it after Python stops, without a Python runtime or
+the notebook's Python source code.
 
 ## Build the quickstart
 

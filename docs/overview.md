@@ -91,7 +91,5 @@ A consumer can resolve `weekly`, `monthly`, or either complete input vector. An
 input vector absent from the export needs another producer run or a live Python
 service.
 
-Continue with [Choose notebook states](concepts/states-and-inputs) for baseline
-completion and state identity, then [Store and load
-outputs](concepts/outputs-and-representations) for the path from notebook result
-to consumer value.
+Related: [Choose notebook states](concepts/states-and-inputs) and [Store and load
+outputs](concepts/outputs-and-representations).

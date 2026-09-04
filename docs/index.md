@@ -2,46 +2,28 @@
 layout: home
 title: "marimo-export: Prepare notebook results. Read them anywhere."
 titleTemplate: false
-description: Select the states to run through marimo and the outputs to publish. marimo-export writes them as a portable, verified notebook export. Browser applications and agents read it after the Python producer stops. They need neither its runtime nor the notebook source code.
+description: Select the states and outputs to publish from a marimo notebook. marimo-export writes a portable, verified notebook export. Browser applications and agents read it after Python stops, without a Python runtime or the notebook's Python source code.
 
 hero:
   text: Prepare notebook results. Read them anywhere.
-  tagline: Select the states to run through marimo and the outputs to publish. marimo-export writes them as a portable, verified notebook export. Browser applications and agents read it after the Python producer stops. They need neither its runtime nor the notebook source code.
+  tagline: Select the states and outputs to publish from a marimo notebook. marimo-export writes a portable, verified notebook export. Browser applications and agents read it after Python stops, without a Python runtime or the notebook's Python source code.
   image:
     light: /brand/marimo-export-lockup-stacked-light.svg
     dark: /brand/marimo-export-lockup-stacked-dark.svg
     alt: marimo-export
   actions:
     - theme: brand
-      text: Build your first export
+      text: Get started
       link: ./guide/getting-started
     - theme: alt
-      text: When to use marimo-export
+      text: When to use it
       link: ./why
 ---
 
-## Explore the exported dashboard
+## Notebook and exported app
 
-The Notebook tab opens a static HTML export of the original
-[marimo](https://marimo.io/) source and its captured outputs. The Exported app
-tab reads five exported states from a verified notebook export. The application
-starts no Python runtime, WebAssembly runtime, or application server.
+Switch between the original [marimo](https://marimo.io/) notebook and a browser
+application built from five exported states. The application reads static files
+and starts no Python or WebAssembly runtime.
 
-<StaticApp />
-
-[Run the market dashboard](guide/market-dashboard.md) or
-[build your first export](guide/getting-started.md).
-
-## How marimo-export works
-
-- [When to use marimo-export](why) compares published results with a Python
-  service and browser Python.
-- [What is marimo-export?](overview) traces notebook source into states,
-  outputs, files, and consumer views.
-- [How notebook caching fits](concepts/caching) separates marimo cell reuse from
-  reusing completed exports.
-- [Verify and trust an export](concepts/integrity-and-trust) explains file
-  verification, publisher trust, and when browser code can run.
-
-Verification checks that the files match `index.json`. A trusted origin
-establishes who published that index.
+<StaticApp compact />
