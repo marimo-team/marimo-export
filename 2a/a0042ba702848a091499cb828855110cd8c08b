@@ -1,0 +1,58 @@
+.github/workflows/publish.yml
+  s_28b7e01ac2912a::t_e32efd9d0835ba 135,164,224,249-251,253,255,257
+packages/python/tests/test_repository_lifecycle.py
+  s_28b7e01ac2912a::t_102b69d54d06b0 35-36
+packages/python/tests/test_managed_server_process.py
+  s_28b7e01ac2912a::t_117c2490736684 22-23
+packages/python/tests/test_repository_generation_integrity.py
+  s_28b7e01ac2912a::t_102b69d54d06b0 25-26
+  s_28b7e01ac2912a::t_6e65413b552997 257,259-265
+packages/python/tests/test_repository_concurrency.py
+  s_28b7e01ac2912a::t_102b69d54d06b0 32-33
+packages/python/tests/test_managed_server_integration.py
+  s_28b7e01ac2912a::t_117c2490736684 14-15
+Makefile
+  s_28b7e01ac2912a::t_d81b4c1f1678b0 30,52,65-66
+  s_28b7e01ac2912a::t_102b69d54d06b0 67,70
+packages/python/tests/test_repository_fencing.py
+  s_28b7e01ac2912a::t_102b69d54d06b0 36-37
+packages/python/tests/test_marimo_observations.py
+  s_28b7e01ac2912a::t_d81b4c1f1678b0 3,252-253,257-258,268-286,290-291
+packages/python/tests/test_managed_server_cleanup.py
+  s_28b7e01ac2912a::t_117c2490736684 16-17
+.github/workflows/ci.yml
+  s_28b7e01ac2912a::t_102b69d54d06b0 109,120,124-133
+  s_28b7e01ac2912a::t_4e1af06d551646 118-119
+  s_28b7e01ac2912a::t_d81b4c1f1678b0 121
+development_docs/releasing.md
+  s_28b7e01ac2912a::t_e32efd9d0835ba 134-135
+packages/python/tests/test_ordinary_projection_integration.py
+  s_28b7e01ac2912a::t_d81b4c1f1678b0 12,24-26,28,31-35,39-41,53-59,61-66,73-77,79-83,86-89,94-99
+packages/python/tests/test_repository_recovery.py
+  s_28b7e01ac2912a::t_102b69d54d06b0 42-43
+packages/python/tests/test_release.py
+  s_28b7e01ac2912a::t_e32efd9d0835ba 261
+pyproject.toml
+  s_28b7e01ac2912a::t_d81b4c1f1678b0 9-15
+  s_28b7e01ac2912a::t_102b69d54d06b0 17-18
+packages/python/tests/test_observations.py
+  s_28b7e01ac2912a::t_d81b4c1f1678b0 254-272,275-276
+packages/loader-anywidget/vite.config.ts
+  s_28b7e01ac2912a::t_d81b4c1f1678b0 23-30
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "2aa0042ba702848a091499cb828855110cd8c08b",
+  "prompts": {},
+  "sessions": {
+    "s_28b7e01ac2912a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06912-67c3-70d1-ac41-de1397df8b93",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
