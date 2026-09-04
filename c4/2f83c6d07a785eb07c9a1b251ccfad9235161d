@@ -1,0 +1,26 @@
+packages/python/tests/test_repository_concurrency.py
+  s_023f36f891e9c5::t_36fbc80101a87d 313-314,337,344,388-395
+  s_023f36f891e9c5::t_5809fca5e7677d 582,613-620
+  s_023f36f891e9c5::t_2f58988fa0b8a8 654
+  s_023f36f891e9c5::t_9698c91680e7fd 583-612,621-622,624-628,638-639,641-646,648-653,655-665
+packages/python/src/marimo_export/_repository/sqlite/maintenance.py
+  s_023f36f891e9c5::t_962b0ae22ddcb8 179
+  s_023f36f891e9c5::t_466852c4b5c630 8,178
+  s_023f36f891e9c5::t_5809fca5e7677d 55,171,175-177
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "c42f83c6d07a785eb07c9a1b251ccfad9235161d",
+  "prompts": {},
+  "sessions": {
+    "s_023f36f891e9c5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06dd4-ef8f-7650-9ac1-307381a5a90e",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
