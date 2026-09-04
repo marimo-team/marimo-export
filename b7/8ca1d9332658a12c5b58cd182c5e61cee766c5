@@ -1,0 +1,23 @@
+packages/portable-json/tests/packed-install.mjs
+  s_fd44300258949f::t_688b54a016b21c 39,47
+packages/browser/tests/packed-install.mjs
+  s_fd44300258949f::t_688b54a016b21c 129,141
+scripts/smoke_npm_packages.mjs
+  s_fd44300258949f::t_688b54a016b21c 17-20,22
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "b78ca1d9332658a12c5b58cd182c5e61cee766c5",
+  "prompts": {},
+  "sessions": {
+    "s_fd44300258949f": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06c2e-82e1-72c1-9ca1-825eb34d248a",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
