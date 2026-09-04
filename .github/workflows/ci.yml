@@ -115,7 +115,8 @@ jobs:
           --group test
           --all-extras
           --python "${{ matrix.python-version }}"
-          pytest -q packages/python/tests
+          pytest -q -n 4 --dist worksteal --max-worker-restart=0
+          --durations=50 packages/python/tests
           --ignore packages/python/tests/test_vite_vanilla_example.py
 
       - name: Run application and skill contracts
@@ -155,9 +156,6 @@ jobs:
 
       - name: Enable pnpm
         run: corepack enable pnpm
-
-      - name: Install AnyWidget test browser
-        run: pnpm --filter @marimo-export/internal-loader-anywidget exec playwright install --with-deps --only-shell chromium
 
       - name: Test frontend
         run: >-

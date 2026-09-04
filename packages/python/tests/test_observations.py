@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import threading
-import time
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, cast
@@ -252,15 +251,29 @@ def test_record_remains_nonblocking_while_worker_persists(tmp_path: Path) -> Non
     repository = _Repository(started=started, release=release)
     ledger = _ledger(_source(tmp_path), repository)
     observed = ObservedInputs({"values": list(range(20_000))})
+    finished = threading.Event()
+    errors: list[BaseException] = []
 
-    started_at = time.perf_counter()
-    ledger.record(observed, producer_sha256="a" * 64)
-    elapsed = time.perf_counter() - started_at
+    def record() -> None:
+        try:
+            ledger.record(observed, producer_sha256="a" * 64)
+        except BaseException as error:
+            errors.append(error)
+        finally:
+            finished.set()
 
-    assert started.wait(5)
-    assert elapsed < 0.1
-    release.set()
+    caller = threading.Thread(target=record)
+    caller.start()
+    try:
+        assert started.wait(5)
+        assert finished.wait(5)
+    finally:
+        release.set()
+        caller.join(timeout=5)
     ledger.close()
+
+    assert not caller.is_alive()
+    assert errors == []
 
 
 def test_bounded_eviction_advances_revision_without_retaining_state(
