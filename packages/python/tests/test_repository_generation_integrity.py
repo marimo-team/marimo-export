@@ -251,10 +251,16 @@ while True:
         stderr=subprocess.PIPE,
         text=True,
     )
-    deadline = time.monotonic() + 10
-    while not ready.exists() and time.monotonic() < deadline:
+    deadline = time.monotonic() + 30
+    while not ready.exists() and process.poll() is None and time.monotonic() < deadline:
         time.sleep(0.02)
-    assert ready.exists()
+    if not ready.exists():
+        if process.poll() is None:
+            process.kill()
+        stdout, stderr = process.communicate(timeout=10)
+        pytest.fail(
+            f"lease holder did not become ready (exit {process.returncode})\n{stdout}{stderr}"
+        )
 
     try:
         with ExportRepository.open(root, limits=limits) as repository:
