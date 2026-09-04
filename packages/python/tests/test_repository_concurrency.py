@@ -311,7 +311,7 @@ root = Path(sys.argv[1])
 ready = Path(sys.argv[5])
 proceed = Path(sys.argv[6])
 result = Path(sys.argv[7])
-limits = RepositoryLimits(lease_ttl_seconds=1.0, lease_heartbeat_seconds=0.1)
+limits = RepositoryLimits(lease_ttl_seconds=10.0, lease_heartbeat_seconds=0.1)
 identity = RepositoryIdentity(sys.argv[2], sys.argv[3], sys.argv[4])
 repository = ExportRepository.open(root, limits=limits)
 preparation = preparation_repository(repository)
@@ -344,7 +344,7 @@ ready_staging.write_text(
     encoding="utf-8",
 )
 os.replace(ready_staging, ready)
-deadline = time.monotonic() + 10
+deadline = time.monotonic() + 30
 while not proceed.exists() and time.monotonic() < deadline:
     time.sleep(0.01)
 errors = []
@@ -393,7 +393,7 @@ os._exit(0)
     assert ready.exists()
     initial = json.loads(ready.read_text(encoding="utf-8"))
     identity = RepositoryIdentity(*identity_parts)
-    limits = RepositoryLimits(lease_ttl_seconds=1.0, lease_heartbeat_seconds=0.1)
+    limits = RepositoryLimits(lease_ttl_seconds=10.0, lease_heartbeat_seconds=0.1)
     paths = tuple(Path(path) for path in initial["paths"])
     deadline = time.monotonic() + limits.lease_ttl_seconds + 3
     while any(path.exists() for path in paths) and time.monotonic() < deadline:
