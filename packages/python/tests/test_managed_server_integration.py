@@ -11,6 +11,8 @@ from marimo_export import ExportSpec, OutputSpec, build, open_export
 from marimo_export._remote.managed import ManagedServer
 from marimo_export.errors import TransportError
 
+pytestmark = pytest.mark.serial
+
 
 @pytest.mark.timeout(30)
 def test_managed_initial_autorun_restores_native_cell_cache(tmp_path: Path) -> None:
