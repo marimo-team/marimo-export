@@ -18,6 +18,41 @@ hero:
     - theme: alt
       text: When to use it
       link: ./why
+
+features:
+  - title: Select states
+    icon:
+      light: /feature-icons/route-light.svg
+      dark: /feature-icons/route-dark.svg
+      alt: ""
+      width: "24"
+      height: "24"
+      wrap: true
+    details: Name the notebook input combinations available to every consumer.
+    link: ./concepts/states-and-inputs
+    linkText: States
+  - title: Publish outputs
+    icon:
+      light: /feature-icons/braces-light.svg
+      dark: /feature-icons/braces-dark.svg
+      alt: ""
+      width: "24"
+      height: "24"
+      wrap: true
+    details: Expose structured data, rendered output, files, tables, charts, and widgets under stable names.
+    link: ./concepts/outputs-and-representations
+    linkText: Outputs
+  - title: Read static files
+    icon:
+      light: /feature-icons/shield-check-light.svg
+      dark: /feature-icons/shield-check-dark.svg
+      alt: ""
+      width: "24"
+      height: "24"
+      wrap: true
+    details: Browser applications and agents verify and read the export without a Python runtime or notebook source.
+    link: ./guide/consume-an-export
+    linkText: Read an export
 ---
 
 ## Notebook and exported app
