@@ -6,9 +6,8 @@ The `marimo-export` Python package plans and prepares selected
 prepare from a saved notebook or a named live session.
 
 Select the states and outputs to publish from a marimo notebook. marimo-export
-writes a portable, verified notebook export. Browser applications and agents
-read it after Python stops, without a Python runtime or the notebook's Python
-source code.
+writes a portable, verified notebook export that browser applications and
+agents read without a Python runtime or a copy of the notebook source.
 
 [uv](https://docs.astral.sh/uv/) adds the package to a Python project:
 

@@ -27,9 +27,9 @@
 </p>
 
 Select the states and outputs to publish from a [marimo](https://marimo.io/)
-notebook. marimo-export writes a portable, verified **notebook export**. Browser
-applications and agents read it after Python stops, without a Python runtime or
-the notebook's Python source code.
+notebook. marimo-export writes a portable, verified **notebook export** that
+browser applications and agents read without a Python runtime or a copy of the
+notebook source.
 
 ## Build the quickstart
 

@@ -3,9 +3,8 @@
 `@marimo-team/marimo-export` opens **notebook exports** in browser applications,
 resolves exported states, and loads named outputs. Select the states and outputs
 to publish from a [marimo](https://marimo.io/) notebook. marimo-export writes a
-portable, verified notebook export. Browser applications and agents read it
-after Python stops, without a Python runtime or the notebook's Python source
-code.
+portable, verified notebook export that browser applications and agents read
+without a Python runtime or a copy of the notebook source.
 
 [pnpm](https://pnpm.io/) adds the package to a TypeScript project:
 
