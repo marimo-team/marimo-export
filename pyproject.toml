@@ -6,7 +6,16 @@ constraint-dependencies = ["pymdown-extensions==11.0.1"]
 
 [dependency-groups]
 dev = ["packaging==26.3", "ruff>=0.15", "tomli==2.4.1", "ty>=0.0.39"]
-test = ["jsonschema>=4.23", "pytest>=9", "pytest-asyncio>=1.3", "pytest-timeout>=2.4"]
+test = [
+  "jsonschema>=4.23",
+  "pytest>=9",
+  "pytest-asyncio>=1.3",
+  "pytest-timeout>=2.4",
+  "pytest-xdist==3.8.0",
+]
+
+[tool.pytest.ini_options]
+markers = ["serial: run lifecycle timing tests without other pytest workers"]
 
 [tool.ruff]
 line-length = 100

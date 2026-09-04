@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import time
+import threading
 from collections import OrderedDict
 from collections.abc import Callable, Mapping
 from pathlib import Path
@@ -249,10 +249,13 @@ def test_finish_hook_defers_saved_parse_and_producer_identity(
     )
     context = SimpleNamespace(_kernel=kernel, filename=str(source))
     revision = compat._source_revision(source)
+    read_started = threading.Event()
+    read_release = threading.Event()
 
     def read_saved(_source: Path, expected: object) -> compat._SavedProducer:
         assert expected == revision
-        time.sleep(0.2)
+        read_started.set()
+        assert read_release.wait(5)
         return compat._SavedProducer(revision, "a" * 64, compat._live_cell_signature(kernel))
 
     monkeypatch.setattr(compat, "_read_saved_producer", read_saved)
@@ -262,14 +265,30 @@ def test_finish_hook_defers_saved_parse_and_producer_identity(
         lambda _kernel: ObservedInputs({"scale": 3}),
     )
     release = compat.install_observation_ledger(context, ledger)
+    callback_finished = threading.Event()
+    callback_errors: list[BaseException] = []
 
-    started = time.perf_counter()
-    _callback(hooks)(_finished(graph))
-    elapsed = time.perf_counter() - started
+    def finish_cell() -> None:
+        try:
+            _callback(hooks)(_finished(graph))
+        except BaseException as error:
+            callback_errors.append(error)
+        finally:
+            callback_finished.set()
+
+    caller = threading.Thread(target=finish_cell)
+    caller.start()
+    try:
+        assert read_started.wait(5)
+        assert callback_finished.wait(5)
+    finally:
+        read_release.set()
+        caller.join(timeout=5)
     release()
     ledger.close()
 
-    assert elapsed < 0.05
+    assert not caller.is_alive()
+    assert callback_errors == []
     assert repository.records == [("a" * 64, {"scale": 3}, 1)]
 
 

@@ -131,24 +131,5 @@ version's integrity with the tagged tarball. PyPI publication compares existing
 files through the simple index and skips files whose hashes match.
 
 Rerun a failed job when every existing registry artifact matches the tagged
-artifact.
-
-When recovery tooling needs a source fix after an artifact reaches a registry,
-merge the fix and wait for push-event CI on `main`. Then dispatch `publish.yml`
-with the original tag and failed release run ID:
-
-```console
-gh workflow run publish.yml --ref main \
-  -f tag=vX.Y.Z \
-  -f run_id=RUN_ID
-```
-
-Recovery requires an annotated tag on `main`. It accepts artifacts from a
-completed tag-triggered Release run only when that run used the tag commit and
-its build and provenance jobs passed. The workflow downloads those immutable
-artifacts, verifies their package contracts, republishes matching registry
-artifacts idempotently, and continues the remaining verification and release
-jobs.
-
-Advance both public packages to the next patch version when a published artifact
-differs or needs a source correction.
+artifact. Advance both public packages to the next patch version when a
+published artifact differs or needs a source correction.

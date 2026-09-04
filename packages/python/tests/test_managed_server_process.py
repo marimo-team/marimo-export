@@ -19,6 +19,8 @@ from marimo_export._diagnostics import cleanup_failures
 from marimo_export._remote.managed import ManagedServer
 from marimo_export.errors import TransportError
 
+pytestmark = pytest.mark.serial
+
 
 def _process_tree(root_pid: int) -> tuple[set[int], set[int]]:
     listed = subprocess.run(

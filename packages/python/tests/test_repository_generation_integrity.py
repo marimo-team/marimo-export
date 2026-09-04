@@ -22,6 +22,8 @@ from repository_test_support import (
     _state,
 )
 
+pytestmark = pytest.mark.serial
+
 
 def test_interrupted_generation_swap_restores_verified_backup(tmp_path: Path) -> None:
     root = tmp_path / "repository"
@@ -252,9 +254,15 @@ while True:
         text=True,
     )
     deadline = time.monotonic() + 10
-    while not ready.exists() and time.monotonic() < deadline:
+    while not ready.exists() and process.poll() is None and time.monotonic() < deadline:
         time.sleep(0.02)
-    assert ready.exists()
+    if not ready.exists():
+        if process.poll() is None:
+            process.kill()
+        stdout, stderr = process.communicate(timeout=10)
+        pytest.fail(
+            f"lease holder did not become ready (exit {process.returncode})\n{stdout}{stderr}"
+        )
 
     try:
         with ExportRepository.open(root, limits=limits) as repository:

@@ -33,6 +33,8 @@ from repository_test_support import (
     _write_index,
 )
 
+pytestmark = pytest.mark.serial
+
 
 def test_stale_reservation_fence_cannot_replace_new_owner_state(tmp_path: Path) -> None:
     root = tmp_path / "repository"

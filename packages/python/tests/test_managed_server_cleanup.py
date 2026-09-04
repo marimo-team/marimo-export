@@ -13,6 +13,8 @@ import marimo_export._remote.managed as managed_module
 import pytest
 from marimo_export._remote.managed import ManagedServer
 
+pytestmark = pytest.mark.serial
+
 
 @pytest.mark.skipif(sys.platform != "win32", reason="Windows Job Object contract")
 @pytest.mark.timeout(15)

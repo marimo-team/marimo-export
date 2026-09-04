@@ -27,6 +27,7 @@ FORMAT_PATHS := \
 	vite.config.ts
 LINT_PATHS := .pnpmfile.mjs apps examples packages vite.config.ts
 PYTHON_PATHS := packages/python scripts skills
+PYTEST_WORKERS ?= 4
 DIST_DIR := $(CURDIR)/dist
 PYTHON_DIST_DIR := $(DIST_DIR)/python
 NPM_DIST_DIR := $(DIST_DIR)/npm
@@ -48,7 +49,7 @@ bootstrap: ## Install the locked Python and TypeScript workspaces.
 	pnpm install --frozen-lockfile
 
 _anti-slop-check:
-	node --test --test-concurrency=1 tools/oxlint/anti-slop/test/*.test.ts tools/oxlint/anti-slop/test/compatibility/*.test.ts
+	node --test tools/oxlint/anti-slop/test/*.test.ts tools/oxlint/anti-slop/test/compatibility/*.test.ts
 	tsc -p tools/oxlint/anti-slop/tsconfig.json --noEmit
 
 lint: _anti-slop-check ## Check Python and TypeScript source.
@@ -61,9 +62,12 @@ typecheck: ## Type-check every Python and TypeScript package.
 
 test: ## Run Python, browser core, loader, skill, and example tests.
 	$(VP) run -r test
-	uv run --group test --all-extras pytest -q \
+	uv run --group test --all-extras pytest -q -n $(PYTEST_WORKERS) --dist worksteal \
+		--max-worker-restart=0 \
+		-m "not serial" \
 		packages/python/tests \
 		skills/notebook-to-static-app/tests
+	uv run --group test --all-extras pytest -q -m serial packages/python/tests
 
 build: ## Build Python, npm, docs, and example packages.
 	$(VP) run -r build

@@ -32,6 +32,8 @@ from marimo_export.repository import (
 )
 from marimo_export.wire import state_fingerprint
 
+pytestmark = pytest.mark.serial
+
 
 def _digest(value: str) -> str:
     return sha256(value.encode()).hexdigest()
