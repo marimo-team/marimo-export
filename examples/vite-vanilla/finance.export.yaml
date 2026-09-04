@@ -13,7 +13,7 @@ states:
     symbols_selector: [AAPL, CRWV, MSFT, GOOGL, AMZN]
 outputs:
   market_explorer:
-    source: { kind: export, selector: quote_detail }
+    source: { kind: export, selector: market_explorer }
     exporter: anywidget.bundle
   market_summary:
     source: { kind: export, selector: selected_prices }

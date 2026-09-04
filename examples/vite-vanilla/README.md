@@ -78,6 +78,8 @@ active. Python callers can use `capture()` when they need to retain the leased
 - [`finance.py`](finance.py) contains the analysis, controls, chart, and widget.
 - [`finance.export.yaml`](finance.export.yaml) declares the default, states,
   outputs, and representations.
+- [`quote_detail.py`](quote_detail.py) owns the browser widget rendered by the
+  notebook and application.
 - [`src/main.ts`](src/main.ts) verifies the export, loads each representation,
   and owns browser transitions and mount disposal.
 

@@ -13,33 +13,84 @@
 
 import marimo
 
-__generated_with = "0.23.15"
+__generated_with = "0.24.0"
 app = marimo.App(width="medium")
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _():
+    import altair as alt
+    import marimo as mo
+    import polars as pl
+    import yfinance as yf
+
+    from quote_detail import QuoteDetail
+
+    return QuoteDetail, alt, mo, pl, yf
+
+
+@app.cell
+def _(mo):
+    mo.md(r"""
+    # Technology watchlist
+
+    Compare large technology platforms and the AI buildout across one fixed
+    month of market history. The notebook owns data retrieval, state
+    selection, analysis, and the outputs consumed by the static application.
+    """)
+    return
+
+
+@app.cell
+def _(mo):
     symbols = ["AAPL", "CRWV", "MSFT", "GOOGL", "AMZN"]
     interval = "1d"
     start = "2025-04-01"
     end = "2025-05-02"
     chart_width = 980
+    mo.md(f"""
+    - **Analysis window:** `{start}` through `{end}` at `{interval}` resolution
+    - **Universe:** {", ".join(symbols)}
+    """)
     return chart_width, end, interval, start, symbols
 
 
+@app.cell
+def _(mo):
+    mo.md(r"""
+    ## Load and normalize
+
+    Retrieve one fixed historical window, reshape the provider response into
+    one row per trading session and symbol, then derive daily price changes.
+    """)
+    return
+
+
 @app.cell(hide_code=True)
-def _(end, interval, pl, start, symbols, yf):
-    _history = pl.from_pandas(
+def _(end, interval, mo, pl, start, symbols, yf):
+    history = pl.from_pandas(
         yf.Tickers(symbols)
         .history(
             interval=interval,
             start=start,
             end=end,
+            progress=False,
         )
         .reset_index()
     )
-    _wide = (
-        _history.rename({"('Date', '')": "Date"})
+    mo.vstack(
+        [
+            mo.md(f"Loaded **{history.height:,} provider rows** for **{len(symbols)} symbols**."),
+            history,
+        ]
+    )
+    return (history,)
+
+
+@app.cell(hide_code=True)
+def _(history, mo, pl):
+    _wide_history = (
+        history.rename({"('Date', '')": "Date"})
         .unpivot(index="Date")
         .with_columns(
             pl.col("variable").str.extract_groups(
@@ -54,7 +105,7 @@ def _(end, interval, pl, start, symbols, yf):
         )
         .sort(["Symbol", "Date"])
     )
-    df = _wide.with_columns(
+    df = _wide_history.with_columns(
         *(
             pl.col(_field)
             .pct_change()
@@ -74,7 +125,29 @@ def _(end, interval, pl, start, symbols, yf):
         "Close",
         "Close Change",
     )
+    _session_count = df.get_column("Date").n_unique()
+    mo.vstack(
+        [
+            mo.md(
+                f"Normalized **{df.height:,} price observations** across "
+                f"**{_session_count} trading sessions**."
+            ),
+            df,
+        ]
+    )
     return (df,)
+
+
+@app.cell
+def _(mo):
+    mo.md(r"""
+    ## Choose a market view
+
+    The watchlist control is the notebook input behind four saved company
+    groups. A fifth exported state keeps the full watchlist and changes the
+    sampling interval to weekly closes.
+    """)
+    return
 
 
 @app.cell(hide_code=True)
@@ -84,11 +157,12 @@ def _(mo, symbols):
         label="Watchlist",
         value=["AAPL", "MSFT", "GOOGL"],
     )
+    symbols_selector
     return (symbols_selector,)
 
 
 @app.cell(hide_code=True)
-def _(df, pl, symbols_selector):
+def _(df, mo, pl, symbols_selector):
     selected_prices = (
         df.filter(pl.col("Symbol").is_in(symbols_selector.value))
         .sort(["Symbol", "Date"])
@@ -98,7 +172,43 @@ def _(df, pl, symbols_selector):
             )
         )
     )
+    mo.md(
+        f"Selected **{selected_prices.get_column('Symbol').n_unique()} companies** "
+        f"and **{selected_prices.height:,} observations**."
+    )
     return (selected_prices,)
+
+
+@app.cell(hide_code=True)
+def _(mo, pl, selected_prices):
+    _latest_prices = selected_prices.group_by("Symbol", maintain_order=True).tail(1).select(
+        "Symbol",
+        pl.col("Date").dt.strftime("%b %d, %Y").alias("Session"),
+        pl.col("Close").round(2),
+        (pl.col("Close Change") * 100).round(1).alias("Day change (%)"),
+    )
+    _latest_rows = "\n".join(
+        f"| {_row['Symbol']} | {_row['Session']} | ${_row['Close']:,.2f} | "
+        f"{_row['Day change (%)']:+.1f}% |"
+        for _row in _latest_prices.iter_rows(named=True)
+    )
+    mo.md(f"""
+    | Symbol | Session | Close | Day change |
+    | :-- | :-- | --: | --: |
+    {_latest_rows}
+    """)
+    return
+
+
+@app.cell
+def _(mo):
+    mo.md(r"""
+    ## Compare relative performance
+
+    Each series starts at 100, which makes period movement comparable across
+    companies with different share prices.
+    """)
+    return
 
 
 @app.cell(hide_code=True)
@@ -143,225 +253,39 @@ def _(alt, chart_width, selected_prices):
         )
         .configure_view(stroke=None)
     )
+    performance
     return (performance,)
 
 
 @app.cell(hide_code=True)
-def _():
-    import anywidget
-    import traitlets
-
-    class QuoteDetail(anywidget.AnyWidget):
-        _esm = r"""
-        const svgNS = "http://www.w3.org/2000/svg";
-
-        function render({ model, el }) {
-          const root = document.createElement("section");
-          root.className = "quote-detail";
-          const header = document.createElement("header");
-          const heading = document.createElement("div");
-          heading.innerHTML = "<span>Quote detail</span><strong>Daily close and range</strong>";
-          const select = document.createElement("select");
-          select.setAttribute("aria-label", "Ticker");
-          header.append(heading, select);
-
-          const stats = document.createElement("div");
-          stats.className = "quote-stats";
-          const svg = document.createElementNS(svgNS, "svg");
-          svg.setAttribute("viewBox", "0 0 640 180");
-          svg.setAttribute("role", "img");
-          svg.setAttribute("aria-label", "Closing price history");
-          root.append(header, stats, svg);
-          el.append(root);
-
-          const formatPrice = (value) =>
-            new Intl.NumberFormat(undefined, {
-              style: "currency",
-              currency: "USD",
-              maximumFractionDigits: 2,
-            }).format(Number(value));
-          const stat = (label, value) => {
-            const item = document.createElement("div");
-            const name = document.createElement("span");
-            const result = document.createElement("strong");
-            name.textContent = label;
-            result.textContent = value;
-            item.append(name, result);
-            return item;
-          };
-
-          function draw() {
-            const rows = model.get("rows") || [];
-            const symbols = [...new Set(rows.map((row) => row.Symbol))];
-            let symbol = model.get("symbol");
-            if (!symbols.includes(symbol)) symbol = symbols[0] || "";
-            select.replaceChildren(
-              ...symbols.map((name) => {
-                const option = document.createElement("option");
-                option.value = name;
-                option.textContent = name;
-                option.selected = name === symbol;
-                return option;
-              }),
-            );
-
-            const series = rows
-              .filter((row) => row.Symbol === symbol)
-              .sort((left, right) => new Date(left.Date) - new Date(right.Date));
-            const latest = series.at(-1);
-            if (!latest) return;
-            const first = series[0];
-            const periodMove = Number(latest.Close) / Number(first.Close) - 1;
-            stats.replaceChildren(
-              stat("Close", formatPrice(latest.Close)),
-              stat("Period", `${periodMove >= 0 ? "+" : ""}${(periodMove * 100).toFixed(1)}%`),
-              stat("Day range", `${formatPrice(latest.Low)} – ${formatPrice(latest.High)}`),
-            );
-
-            const values = series.map((row) => Number(row.Close));
-            const low = Math.min(...values);
-            const high = Math.max(...values);
-            const span = Math.max(high - low, 1);
-            const x = (index) => 24 + (index / Math.max(series.length - 1, 1)) * 592;
-            const y = (value) => 154 - ((value - low) / span) * 128;
-            const path = document.createElementNS(svgNS, "path");
-            path.setAttribute(
-              "d",
-              values
-                .map((value, index) => `${index ? "L" : "M"}${x(index)} ${y(value)}`)
-                .join(" "),
-            );
-            path.setAttribute("class", "quote-line");
-            const guide = document.createElementNS(svgNS, "line");
-            guide.setAttribute("x1", "24");
-            guide.setAttribute("x2", "616");
-            guide.setAttribute("y1", "154");
-            guide.setAttribute("y2", "154");
-            guide.setAttribute("class", "quote-guide");
-            svg.replaceChildren(guide, path);
-          }
-
-          const changeSymbol = () => {
-            model.set("symbol", select.value);
-            model.save_changes();
-          };
-          select.addEventListener("change", changeSymbol);
-          model.on("change:rows", draw);
-          model.on("change:symbol", draw);
-          draw();
-
-          return () => {
-            select.removeEventListener("change", changeSymbol);
-            model.off("change:rows", draw);
-            model.off("change:symbol", draw);
-          };
-        }
-
-        export default { render };
-        """
-        _css = r"""
-        .quote-detail {
-          color: var(--foreground, #0f172a);
-          display: grid;
-          gap: 18px;
-        }
-        .quote-detail header {
-          align-items: end;
-          display: flex;
-          justify-content: space-between;
-        }
-        .quote-detail header div {
-          display: grid;
-          gap: 2px;
-        }
-        .quote-detail header span,
-        .quote-stats span {
-          color: var(--muted-foreground, #64748b);
-          font-size: 12px;
-        }
-        .quote-detail header strong {
-          font-family: Lora, serif;
-          font-size: 20px;
-        }
-        .quote-detail select {
-          background: var(--surface, #fff);
-          border: 1px solid var(--border, #e2e8f0);
-          border-radius: 6px;
-          color: inherit;
-          font: inherit;
-          min-height: 34px;
-          padding: 4px 30px 4px 10px;
-        }
-        .quote-stats {
-          display: grid;
-          grid-template-columns: repeat(3, 1fr);
-        }
-        .quote-stats div {
-          border-left: 1px solid var(--border, #e2e8f0);
-          display: grid;
-          gap: 3px;
-          padding-left: 14px;
-        }
-        .quote-stats div:first-child {
-          border-left: 0;
-          padding-left: 0;
-        }
-        .quote-stats strong {
-          font-family: "Fira Mono", monospace;
-          font-size: 14px;
-        }
-        .quote-detail svg {
-          height: auto;
-          width: 100%;
-        }
-        .quote-line {
-          fill: none;
-          stroke: #0880ea;
-          stroke-linecap: round;
-          stroke-linejoin: round;
-          stroke-width: 3;
-        }
-        .quote-guide {
-          stroke: var(--border, #e2e8f0);
-          stroke-dasharray: 4 5;
-        }
-        @media (max-width: 520px) {
-          .quote-stats {
-            gap: 12px;
-            grid-template-columns: 1fr;
-          }
-          .quote-stats div {
-            border-left: 0;
-            padding-left: 0;
-          }
-        }
-        """
-
-        rows = traitlets.List(traitlets.Dict(), default_value=[]).tag(sync=True)
-        symbol = traitlets.Unicode("").tag(sync=True)
-
-    return (QuoteDetail,)
-
-
-@app.cell(hide_code=True)
-def _(QuoteDetail, mo, pl, selected_prices, symbols_selector):
-    quote_detail = mo.ui.anywidget(
-        QuoteDetail(
-            rows=selected_prices.with_columns(pl.col("Date").cast(pl.String)).to_dicts(),
-            symbol=symbols_selector.value[0],
-        )
-    )
+def _(QuoteDetail, mo):
+    quote_detail = mo.ui.anywidget(QuoteDetail())
     return (quote_detail,)
 
 
 @app.cell(hide_code=True)
-def _():
-    import altair as alt
-    import marimo as mo
-    import polars as pl
-    import yfinance as yf
+def _(mo, pl, quote_detail, selected_prices, symbols_selector):
+    quote_detail.widget.rows = selected_prices.with_columns(
+        pl.col("Date").cast(pl.String)
+    ).to_dicts()
+    quote_detail.widget.symbol = symbols_selector.value[0]
+    market_explorer = quote_detail.widget
+    mo.vstack([mo.md("## Inspect one quote"), quote_detail])
+    return (market_explorer,)
 
-    return alt, mo, pl, yf
+
+@app.cell
+def _(mo):
+    mo.md(r"""
+    ## Export contract
+
+    `finance.export.yaml` prepares five named states. Every state publishes
+    the same five outputs: `market_summary`, `price_history`,
+    `performance_chart`, `performance_snapshot`, and `market_explorer`.
+    Python, TypeScript, agents, and the dashboard can read the resulting
+    notebook export after this notebook process stops.
+    """)
+    return
 
 
 if __name__ == "__main__":
