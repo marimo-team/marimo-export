@@ -102,8 +102,8 @@ and browser Python execution.
 
 ## Compatibility and trust
 
-The Python package requires Python 3.10 or newer, is tested on Python 3.10
-through 3.14, and installs the marimo release pinned by its package metadata.
+The Python package supports Python 3.10 through 3.14 and installs the marimo
+release pinned by its package metadata.
 Browser applications install `@marimo-team/marimo-export` and any dependencies
 required by their selected output loaders. See
 [Compatibility](docs/reference/compatibility.md) for the complete matrix.

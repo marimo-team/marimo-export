@@ -15,8 +15,8 @@ agents read without a Python runtime or a copy of the notebook source.
 uv add marimo-export
 ```
 
-The package requires Python 3.10 or newer, is tested on Python 3.10 through
-3.14, and installs the marimo release pinned by its package metadata.
+The package supports Python 3.10 through 3.14 and installs the marimo release
+pinned by its package metadata.
 
 Create `report.py`:
 
@@ -109,6 +109,28 @@ print(result.path)
 A matching later call with a new destination can reuse the prepared export
 before notebook startup. Pass `replace=True` to replace an existing complete
 destination.
+
+## Use from marimo code mode
+
+Marimo discovers the installed agent module through its capability registry:
+
+```python
+import marimo._code_mode as cm
+import marimo_export.agent as export_agent
+
+print(cm.capabilities()["marimo-export"])
+help(export_agent)
+```
+
+`help(export_agent)` shows the public Python workflow and the installed path to
+the version-matched
+[Agent Skill](https://agentskills.io/specification). Code can inspect the same
+resources directly:
+
+```python
+skill = export_agent.agent_skill()
+print(skill.body)
+```
 
 ## Read the export
 

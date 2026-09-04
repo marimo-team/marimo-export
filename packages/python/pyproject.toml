@@ -1,6 +1,6 @@
 [build-system]
-requires = ["uv_build>=0.11.28,<0.13.0"]
-build-backend = "uv_build"
+requires = ["agent-plugins>=0.1.0", "uv_build>=0.11.28,<0.13.0"]
+build-backend = "agent_plugins.build.uv_build"
 
 [project]
 name = "marimo-export"
@@ -10,13 +10,15 @@ readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
 authors = [{ name = "marimo team" }]
-requires-python = ">=3.10"
+requires-python = ">=3.10,<3.15"
 dependencies = [
+  "agent-plugins>=0.1.0",
   "cryptography==50.0.1",
   "idna==3.19",
   "marimo==0.24.0",
   "msgspec>=0.20",
   "numpy>=1.23.5",
+  "packaging==26.3",
   "pydantic>=2,<3",
   "PyYAML>=6.0.1",
 ]
@@ -43,8 +45,14 @@ marimo-export = "marimo_export.cli:main"
 [project.entry-points."marimo.kernel.lifespan"]
 marimo-export = "marimo_export._marimo.entrypoints:kernel_lifespan"
 
+[project.entry-points."marimo.agent.capability"]
+marimo-export = "marimo_export.agent"
+
 [project.optional-dependencies]
 anywidget = ["anywidget>=0.9,<1"]
 charts = ["altair>=5,<7", "vl-convert-python>=1.8"]
 parquet = ["pyarrow>=15"]
 all = ["altair>=5,<7", "anywidget>=0.9,<1", "pyarrow>=15", "vl-convert-python>=1.8"]
+
+[tool.agent-plugins]
+root = "../.."

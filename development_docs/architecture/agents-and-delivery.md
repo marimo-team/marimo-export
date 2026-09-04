@@ -43,6 +43,32 @@ provenance, and staged directory creation. The generated application owns its
 presentation. The skill owns the complete inspect, author, produce, verify,
 build, browser, and evidence workflow.
 
+An installed skill pins the generated Python and browser projects to its
+marimo-export release. A checkout build vendors the current Python wheel and
+npm tarball. Both paths intersect notebook metadata with the package's Python
+range and retain the notebook filename plus SHA-256 provenance.
+
+The Python wheel carries the workflow as an
+[Agent Plugin](https://agent-plugins.org/) and registers `marimo_export.agent`
+in marimo's `marimo.agent.capability` entry-point group.
+
+## Code mode discovers the Python SDK and packaged skill
+
+Marimo reads `marimo.agent.capability` metadata and maps `marimo-export` to
+`marimo_export.agent` before importing the provider module. Importing the
+module gives a code-mode agent dynamic help built from the active installation.
+The help begins with inspection, planning, build, capture, and verification
+through the canonical public Python modules.
+
+`agent_plugin()` locates the Agent Plugin installed by the active
+`marimo-export` distribution. `agent_skill()` selects its
+`notebook-to-static-app` skill. The returned paths identify resources from the
+same package version as the imported Python SDK.
+
+`agent.py` owns discovery, resource access, and code-mode guidance. Producer,
+reader, repository, inspection, and diagnostic behavior stays in the public
+SDK modules used by the CLI and Python applications.
+
 ## Package boundaries match public distribution
 
 The uv workspace builds one `marimo-export` wheel and source archive. The pnpm
@@ -55,6 +81,7 @@ public browser subpaths with their required peer dependencies.
 Workspace builds and package smoke verify:
 
 - Python root exports and console command
+- code-mode capability metadata and the complete packaged Agent Skill
 - managed kernel lifespan entry point
 - standalone browser core installation
 - every loader subpath with its required peer runtime

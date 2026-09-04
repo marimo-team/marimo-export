@@ -10,11 +10,11 @@ and one or more consumers. Check the boundary that matches your workflow.
 
 ## Python and marimo
 
-| Component     | Contract                                                                                                                |
-| ------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| Python        | The package requires Python 3.10 or newer. Continuous integration tests Python 3.10 through 3.14 on Ubuntu and Windows. |
-| marimo        | The Python package metadata pins the exact supported marimo release.                                                    |
-| marimo-export | A live capture client and the selected kernel must load the same package version and implementation identity.           |
+| Component     | Contract                                                                                                                    |
+| ------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| Python        | The package supports Python 3.10 through 3.14. Continuous integration runs on each supported version on Ubuntu and Windows. |
+| marimo        | The Python package metadata pins the exact supported marimo release.                                                        |
+| marimo-export | A live capture client and the selected kernel must load the same package version and implementation identity.               |
 
 Run the compatibility diagnostic in the producer environment:
 

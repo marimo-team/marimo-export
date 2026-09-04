@@ -21,6 +21,7 @@ FORMAT_PATHS := \
 	README.md \
 	SECURITY.md \
 	package.json \
+	plugin.json \
 	pnpm-workspace.yaml \
 	pyproject.toml \
 	tsconfig.base.json \
@@ -66,8 +67,7 @@ test: ## Run Python, browser core, loader, skill, and example tests.
 	uv run --group test --all-extras pytest -q -n $(PYTEST_WORKERS) --dist worksteal \
 		--max-worker-restart=0 \
 		-m "not serial and not application" \
-		packages/python/tests \
-		skills/notebook-to-static-app/tests
+		packages/python/tests
 	uv run --group test --all-extras pytest -q -m serial packages/python/tests
 	@$(MAKE) --no-print-directory test-application
 
