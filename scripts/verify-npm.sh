@@ -12,14 +12,14 @@ if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
 	exit 1
 fi
 
-browser="@marimo-team/marimo-export@$version"
 npm_dist="${NPM_DIST_DIR:-dist/npm}"
 browser_tarball="$npm_dist/marimo-team-marimo-export-$version.tgz"
 
 for ((attempt = 1; attempt <= 18; attempt++)); do
-	if [[ "$(npm view "$browser" version 2>/dev/null || true)" == "$version" ]]; then
-		./scripts/publish-npm.sh --verify-only "$browser_tarball"
-		node scripts/smoke_npm_packages.mjs "$browser" "$version"
+	if ./scripts/publish-npm.sh --verify-only "$browser_tarball"; then
+		node scripts/smoke_npm_packages.mjs \
+			"@marimo-team/marimo-export@$version" \
+			"$version"
 		exit 0
 	fi
 

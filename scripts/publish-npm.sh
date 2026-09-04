@@ -18,6 +18,7 @@ if [[ ! -f "$tarball" ]]; then
 	exit 1
 fi
 tarball="$(cd "$(dirname "$tarball")" && pwd)/$(basename "$tarball")"
+cd "$(dirname "$tarball")"
 
 package_identity="$(
 	# shellcheck disable=SC2016
