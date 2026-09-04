@@ -18,7 +18,7 @@ In the quickstart, we can see the two kinds of reuse happen at different times:
 | Change only the `monthly` input | Reuse `weekly`, run `monthly` | Restore compatible cells while the new state runs |
 
 ```mermaid
-flowchart LR
+flowchart TD
     request[Requested ExportSpec]
     repository{Prepared work exists?}
     reuse[Reuse prepared export or state]

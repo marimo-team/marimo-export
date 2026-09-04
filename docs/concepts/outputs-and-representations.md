@@ -21,7 +21,7 @@ structured data while `report` supplies the rendered notebook result.
 <StaticApp example="quickstart" />
 
 ```mermaid
-flowchart LR
+flowchart TD
     result[Notebook result]
     output[Named output and format]
     storage[Inline value or asset]

@@ -47,7 +47,7 @@ the baseline, and closes the owned session.
 ## Run the missing states
 
 ```mermaid
-flowchart LR
+flowchart TD
     plan[ExportPlan]
     prepare[Prepare missing states]
     prepared[Leased PreparedExport]

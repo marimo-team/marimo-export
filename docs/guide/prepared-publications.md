@@ -11,7 +11,7 @@ and export. Add the long-running publication controller when observations or
 application events must replace that export while the server stays active.
 
 ```mermaid
-flowchart LR
+flowchart TD
     route[GET /prepared/current.json]
     manifest[Prepared manifest]
     index[Immutable index.json]

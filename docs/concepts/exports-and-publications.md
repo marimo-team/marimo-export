@@ -14,7 +14,7 @@ selected state. Together, the manifest and opened export form a **prepared
 publication**.
 
 ```mermaid
-flowchart LR
+flowchart TD
     route[Stable application URL]
     manifest[Prepared manifest]
     export[Immutable notebook export]

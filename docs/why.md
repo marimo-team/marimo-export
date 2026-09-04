@@ -33,7 +33,7 @@ results. A browser can switch between `weekly` and `monthly` without starting a
 Python runtime.
 
 ```mermaid
-flowchart LR
+flowchart TD
     notebook[Notebook source] --> producer[Python producer]
     private[Files, packages, and credentials] --> producer
     producer --> export[index.json and assets]

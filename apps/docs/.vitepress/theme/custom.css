@@ -25,12 +25,28 @@
 
 .VPNav {
   border-bottom: 1px solid var(--vp-c-divider);
+  background: var(--vp-c-bg);
 }
 
 .VPNavBarTitle .logo {
   width: 128px;
   height: auto;
   margin-right: 0;
+}
+
+@media (min-width: 768px) and (max-width: 959px) {
+  .VPNav .VPNavBarMenu,
+  .VPNav .VPNavBarExtra {
+    display: none;
+  }
+
+  .VPNav .VPNavBarHamburger {
+    display: flex;
+  }
+
+  .VPNav .VPNavScreen {
+    display: block;
+  }
 }
 
 .VPNavBarMenuLink.active,
