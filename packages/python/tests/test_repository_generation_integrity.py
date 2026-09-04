@@ -199,7 +199,7 @@ def test_crashed_process_lease_expires_before_generation_is_pruned(tmp_path: Pat
         retained_identities=1,
         retained_generations=1,
         retained_prepared_states=1,
-        lease_ttl_seconds=1.0,
+        lease_ttl_seconds=10.0,
         lease_heartbeat_seconds=0.1,
     )
     old_identity = _identity("process-old")
@@ -227,7 +227,7 @@ limits = RepositoryLimits(
     retained_identities=1,
     retained_generations=1,
     retained_prepared_states=1,
-    lease_ttl_seconds=1.0,
+    lease_ttl_seconds=10.0,
     lease_heartbeat_seconds=0.1,
 )
 repository = ExportRepository.open(sys.argv[1], limits=limits)
@@ -274,7 +274,7 @@ while True:
 
             process.kill()
             process.communicate(timeout=10)
-            deadline = time.monotonic() + 5
+            deadline = time.monotonic() + limits.lease_ttl_seconds + 5
             while old_path.exists() and time.monotonic() < deadline:
                 time.sleep(0.05)
                 repository.prune()

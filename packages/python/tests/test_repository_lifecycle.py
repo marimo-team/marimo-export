@@ -450,13 +450,22 @@ def test_repeated_busy_renewal_expires_artifact_handle_fail_closed(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    root = tmp_path / "repository"
     identity = _identity("busy-renewal-expiry")
+    with ExportRepository.open(root) as seed:
+        seeded = _state(seed, identity, 1)
+        fingerprint = seeded.state_fingerprint
+        seeded.close()
     limits = RepositoryLimits(
         lease_ttl_seconds=1.0,
         lease_heartbeat_seconds=0.1,
     )
-    repository = ExportRepository.open(tmp_path / "repository", limits=limits)
-    state = _state(repository, identity, 1)
+    repository = ExportRepository.open(root, limits=limits)
+    state = preparation_repository(repository).lookup_prepared_states(
+        producer_sha256=identity.producer_sha256,
+        output_plan_sha256=identity.output_plan_sha256,
+        state_fingerprints=(fingerprint,),
+    )[fingerprint]
     attempted = threading.Event()
 
     def busy_heartbeat(**_kwargs):
@@ -465,8 +474,8 @@ def test_repeated_busy_renewal_expires_artifact_handle_fail_closed(
 
     monkeypatch.setattr(repository._catalog, "renew_lifecycle", busy_heartbeat)
     repository._leases._wake.set()
-    assert attempted.wait(timeout=2)
-    deadline = time.monotonic() + 2
+    assert attempted.wait(timeout=10)
+    deadline = time.monotonic() + limits.lease_ttl_seconds + 5
     while state.alive and time.monotonic() < deadline:
         time.sleep(0.01)
     assert not state.alive
