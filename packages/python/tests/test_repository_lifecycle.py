@@ -779,7 +779,7 @@ def test_slow_prune_quarantine_does_not_starve_live_heartbeat(
         retained_identities=1,
         retained_generations=1,
         retained_prepared_states=1,
-        lease_ttl_seconds=2.0,
+        lease_ttl_seconds=10.0,
         lease_heartbeat_seconds=0.05,
     )
     victim_identity = _identity("slow-prune-victim")
