@@ -296,7 +296,6 @@ def test_busy_renewal_expires_cross_process_reservation_and_staging(
     tmp_path: Path,
 ) -> None:
     root = tmp_path / "repository"
-    ready = tmp_path / "ready.json"
     proceed = tmp_path / "proceed"
     result = tmp_path / "result.json"
     identity_parts = (_digest("busy-producer"), _digest("busy-outputs"), _digest("busy-spec"))
@@ -311,9 +310,8 @@ from marimo_export._repository.preparation import RepositoryIdentity, preparatio
 from marimo_export.repository import ExportRepository, RepositoryLimits
 
 root = Path(sys.argv[1])
-ready = Path(sys.argv[5])
-proceed = Path(sys.argv[6])
-result = Path(sys.argv[7])
+proceed = Path(sys.argv[5])
+result = Path(sys.argv[6])
 limits = RepositoryLimits(lease_ttl_seconds=10.0, lease_heartbeat_seconds=0.1)
 identity = RepositoryIdentity(sys.argv[2], sys.argv[3], sys.argv[4])
 repository = ExportRepository.open(root, limits=limits)
@@ -336,17 +334,15 @@ def busy_heartbeat(**_kwargs):
 
 repository._catalog.renew_lifecycle = busy_heartbeat
 repository._leases._wake.set()
-ready_staging = ready.with_name(f".{ready.name}.tmp")
-ready_staging.write_text(
+print(
     json.dumps(
         {
             "fence": reservation.fence,
             "paths": [str(staged_state.path), str(staged_export.path)],
         }
     ),
-    encoding="utf-8",
+    flush=True,
 )
-os.replace(ready_staging, ready)
 deadline = time.monotonic() + 30
 while not proceed.exists() and time.monotonic() < deadline:
     time.sleep(0.01)
@@ -382,7 +378,6 @@ os._exit(0)
             code,
             str(root),
             *identity_parts,
-            str(ready),
             str(proceed),
             str(result),
         ],
@@ -390,11 +385,14 @@ os._exit(0)
         stderr=subprocess.PIPE,
         text=True,
     )
-    deadline = time.monotonic() + 30
-    while not ready.exists() and process.poll() is None and time.monotonic() < deadline:
-        time.sleep(0.01)
-    assert ready.exists()
-    initial = json.loads(ready.read_text(encoding="utf-8"))
+    assert process.stdout is not None
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        ready_line = executor.submit(process.stdout.readline)
+        try:
+            initial = json.loads(ready_line.result(timeout=30))
+        except TimeoutError:
+            process.kill()
+            raise
     identity = RepositoryIdentity(*identity_parts)
     limits = RepositoryLimits(lease_ttl_seconds=10.0, lease_heartbeat_seconds=0.1)
     paths = tuple(Path(path) for path in initial["paths"])
@@ -581,11 +579,53 @@ def test_maintenance_connection_retries_when_database_identity_changes(
     assert attempts == 2
 
 
+def test_maintenance_connection_defers_retired_lock_cleanup(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    path = tmp_path / "maintenance.sqlite3"
+    connection = sqlite3.connect(path)
+    try:
+        connection.execute("CREATE TABLE maintenance_lock(wrong INTEGER)")
+        connection.commit()
+    finally:
+        connection.close()
+    native_unlink = Path.unlink
+    attempts = 0
+
+    def transient_unlink(candidate: Path, *, missing_ok: bool = False) -> None:
+        nonlocal attempts
+        if candidate.name.startswith(".maintenance.sqlite3.corrupt-") and attempts == 0:
+            attempts += 1
+            raise PermissionError("retired lock is still open")
+        attempts += 1
+        native_unlink(candidate, missing_ok=missing_ok)
+
+    monkeypatch.setattr(Path, "unlink", transient_unlink)
+
+    recovered = maintenance_module._connect(path, timeout_seconds=1)
+    try:
+        assert tuple(
+            row[1] for row in recovered.execute('PRAGMA table_info("maintenance_lock")')
+        ) == ("singleton",)
+    finally:
+        recovered.close()
+    retired = tuple(tmp_path.glob(".maintenance.sqlite3.corrupt-*"))
+    assert attempts == 1
+    assert len(retired) == 1
+
+    monkeypatch.setattr(Path, "unlink", native_unlink)
+    reopened = maintenance_module._connect(path, timeout_seconds=1)
+    reopened.close()
+    assert not tuple(tmp_path.glob(".maintenance.sqlite3.corrupt-*"))
+
+
 @pytest.mark.skipif(os.name != "nt", reason="Windows open-handle replacement contract")
-def test_wrong_maintenance_schema_waits_for_peer_handle_on_windows(tmp_path: Path) -> None:
-    root = tmp_path / "repository"
-    root.mkdir()
-    path = root / "maintenance.sqlite3"
+def test_maintenance_connection_waits_for_peer_handle_on_windows(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    path = tmp_path / "maintenance.sqlite3"
     connection = sqlite3.connect(path)
     try:
         connection.execute("PRAGMA journal_mode = WAL")
@@ -595,14 +635,32 @@ def test_wrong_maintenance_schema_waits_for_peer_handle_on_windows(tmp_path: Pat
         connection.close()
     peer = sqlite3.connect(path)
     peer.execute("SELECT * FROM maintenance_lock").fetchall()
+    blocked = threading.Event()
+    native_replace = os.replace
 
-    def open_once() -> int:
-        with ExportRepository.open(root) as repository:
-            return repository.status().generations
+    def observed_replace(source: Path, target: Path) -> None:
+        try:
+            native_replace(source, target)
+        except PermissionError:
+            blocked.set()
+            raise
 
-    with ThreadPoolExecutor(max_workers=1) as executor:
-        opening = executor.submit(open_once)
-        time.sleep(0.1)
-        assert not opening.done()
+    monkeypatch.setattr(maintenance_module.os, "replace", observed_replace)
+
+    def connect_once() -> tuple[str, ...]:
+        recovered = maintenance_module._connect(path, timeout_seconds=5)
+        try:
+            return tuple(
+                str(row[1]) for row in recovered.execute('PRAGMA table_info("maintenance_lock")')
+            )
+        finally:
+            recovered.close()
+
+    try:
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            opening = executor.submit(connect_once)
+            assert blocked.wait(timeout=10)
+            peer.close()
+            assert opening.result(timeout=10) == ("singleton",)
+    finally:
         peer.close()
-        assert opening.result(timeout=5) == 0
