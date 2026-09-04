@@ -22,6 +22,8 @@ from repository_test_support import (
     _state,
 )
 
+pytestmark = pytest.mark.serial
+
 
 def test_interrupted_generation_swap_restores_verified_backup(tmp_path: Path) -> None:
     root = tmp_path / "repository"
@@ -251,7 +253,7 @@ while True:
         stderr=subprocess.PIPE,
         text=True,
     )
-    deadline = time.monotonic() + 30
+    deadline = time.monotonic() + 10
     while not ready.exists() and process.poll() is None and time.monotonic() < deadline:
         time.sleep(0.02)
     if not ready.exists():

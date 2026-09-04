@@ -64,8 +64,10 @@ test: ## Run Python, browser core, loader, skill, and example tests.
 	$(VP) run -r test
 	uv run --group test --all-extras pytest -q -n $(PYTEST_WORKERS) --dist worksteal \
 		--max-worker-restart=0 \
+		-m "not serial" \
 		packages/python/tests \
 		skills/notebook-to-static-app/tests
+	uv run --group test --all-extras pytest -q -m serial packages/python/tests
 
 build: ## Build Python, npm, docs, and example packages.
 	$(VP) run -r build

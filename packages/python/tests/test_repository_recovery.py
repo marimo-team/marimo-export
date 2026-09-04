@@ -39,6 +39,8 @@ from repository_test_support import (
     _write_index,
 )
 
+pytestmark = pytest.mark.serial
+
 
 def test_corrupt_observation_fails_closed_and_is_removed(tmp_path: Path) -> None:
     root = tmp_path / "repository"

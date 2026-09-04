@@ -14,6 +14,9 @@ test = [
   "pytest-xdist==3.8.0",
 ]
 
+[tool.pytest.ini_options]
+markers = ["serial: run lifecycle timing tests without other pytest workers"]
+
 [tool.ruff]
 line-length = 100
 target-version = "py310"
