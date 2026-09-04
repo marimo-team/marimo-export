@@ -1,0 +1,68 @@
+development_docs/architecture/agents-and-delivery.md
+  s_d5f69d44a7a67a::t_6cbb35f9bed73c 46,48-49,51
+  s_d5f69d44a7a67a::t_f1c8d11c9d66b1 47,50,52-71,84
+.github/workflows/ci.yml
+  s_d5f69d44a7a67a::t_2e0e62668404d2 160
+packages/python/pyproject.toml
+  s_d5f69d44a7a67a::t_f1c8d11c9d66b1 2-3,13,15,21,48-50,56-58
+README.md
+  s_d5f69d44a7a67a::t_f1c8d11c9d66b1 105-106
+packages/python/src/marimo_export/agent.py
+  s_d5f69d44a7a67a::t_f1c8d11c9d66b1 1-113
+docs/reference/python-api.md
+  s_d5f69d44a7a67a::t_a6f27b4e180929 41
+  s_d5f69d44a7a67a::t_e5dad44bfc8d81 10-12
+packages/python/README.md
+  s_d5f69d44a7a67a::t_f1c8d11c9d66b1 18-19,113-133
+docs/guide/getting-started.md
+  s_d5f69d44a7a67a::t_f1c8d11c9d66b1 17
+  s_d5f69d44a7a67a::t_e5dad44bfc8d81 18-19
+development_docs/architecture/ports.md
+  s_d5f69d44a7a67a::t_02570ece5df0b0 10,59
+  s_d5f69d44a7a67a::t_f1c8d11c9d66b1 93-96
+packages/python/tests/test_scaffold_app.py
+  s_d5f69d44a7a67a::t_f1c8d11c9d66b1 1-162
+pyproject.toml
+  s_d5f69d44a7a67a::t_f1c8d11c9d66b1 8
+docs/reference/compatibility.md
+  s_d5f69d44a7a67a::t_788e46de8b77d2 13-14,16-17
+  s_d5f69d44a7a67a::t_e5dad44bfc8d81 15
+docs/guide/agents-and-automation.md
+  s_d5f69d44a7a67a::t_f1c8d11c9d66b1 110-148
+packages/python/tests/test_agent.py
+  s_d5f69d44a7a67a::t_f1c8d11c9d66b1 1-131
+skills/notebook-to-static-app/references/workflow.md
+  s_d5f69d44a7a67a::t_f1c8d11c9d66b1 3,8-10,12,19-27
+scripts/verify_release_artifacts.py
+  s_d5f69d44a7a67a::t_f1c8d11c9d66b1 60-67,92-93
+plugin.json
+  s_d5f69d44a7a67a::t_f1c8d11c9d66b1 1-10
+scripts/smoke_python_package.py
+  s_d5f69d44a7a67a::t_f1c8d11c9d66b1 5-6,8,10-17,20-36,78-80,83-84,90-94,144-198
+.github/filters.yml
+  s_d5f69d44a7a67a::t_f1c8d11c9d66b1 26,29,138,140
+development_docs/README.md
+  s_d5f69d44a7a67a::t_f1c8d11c9d66b1 73
+skills/notebook-to-static-app/SKILL.md
+  s_d5f69d44a7a67a::t_f1c8d11c9d66b1 83-85,222-223
+skills/notebook-to-static-app/scripts/scaffold_app.py
+  s_d5f69d44a7a67a::t_f1c8d11c9d66b1 11,13,19-23,36,56,63-64,82-83,89-90,92-104,115-118,123-126,149,162,183,192,213,216,220-222,226-227,236-241,243-246,250-260,308-309,315-325,338-346,354-355,359-361
+Makefile
+  s_d5f69d44a7a67a::t_f1c8d11c9d66b1 24,70
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "e6640c4ecdd6f6c5990b98bb05d11f4183d1d6f3",
+  "prompts": {},
+  "sessions": {
+    "s_d5f69d44a7a67a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06db3-c344-7a31-8931-61f8c41d977b",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
