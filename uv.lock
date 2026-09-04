@@ -929,7 +929,7 @@ wheels = [
 
 [[package]]
 name = "marimo-export"
-version = "0.0.1"
+version = "0.0.2"
 source = { editable = "packages/python" }
 dependencies = [
     { name = "cryptography" },
