@@ -1,0 +1,25 @@
+docs/index.md
+  s_7bd1a1825d4e15::t_3f5c543b6afde5 3,8
+README.md
+  s_7bd1a1825d4e15::t_3f5c543b6afde5 11
+apps/docs/scripts/check-built-docs.ts
+  s_7bd1a1825d4e15::t_3f5c543b6afde5 142,155
+apps/docs/.vitepress/config.ts
+  s_7bd1a1825d4e15::t_0a860aafddee02 17
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "d622ca5e4709ad31e6759752c046d5440435a11d",
+  "prompts": {},
+  "sessions": {
+    "s_7bd1a1825d4e15": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06c69-4fb2-7271-bbed-a0abfc74e547",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
