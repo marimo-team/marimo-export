@@ -101,6 +101,13 @@ jobs:
         if: github.event_name == 'push'
         run: make package
 
+      - name: Rebuild recovered Python source archive
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          mkdir -p dist/python/from-sdist
+          uv build --wheel dist/python/*.tar.gz \
+            --out-dir dist/python/from-sdist
+
       - name: Verify recovered release artifacts
         if: github.event_name == 'workflow_dispatch'
         run: python scripts/verify_release_artifacts.py
