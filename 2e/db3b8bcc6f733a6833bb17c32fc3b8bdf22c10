@@ -1,0 +1,471 @@
+examples/quickstart/tsconfig.json
+  s_7bd1a1825d4e15::t_40c43213846261 1-4
+docs/reference/python/repository-and-observations.md
+  s_7bd1a1825d4e15::t_164a859992c9f8 199-201
+  s_7bd1a1825d4e15::t_40031dd041d4a4 50-54,116-118,128,154-156,179-184,216-221,249-252
+  s_7bd1a1825d4e15::t_878cf46f4b18b4 147-149
+  s_7bd1a1825d4e15::t_e4a864eefcfb6e 150-152
+  s_7bd1a1825d4e15::t_9f8d7431b0c745 124-127,129-139
+apps/docs/scripts/check-built-docs.ts
+  s_7bd1a1825d4e15::t_e1c48277c5892e 85,94
+  s_7bd1a1825d4e15::t_68ae2a20dbb791 145,158
+  s_7bd1a1825d4e15::t_d97d8c070a8af3 171-177
+  s_7bd1a1825d4e15::t_d6c97c9584fadc 1,87-92,98-99,199-202,204,255,257-262,264
+  s_7bd1a1825d4e15::t_bbb5623cef683a 2,5,65-84,86,93,95-97,188-198,203,205-209,231,233-234,236-237,240-254,256,275
+  s_7bd1a1825d4e15::t_2d3265aa50116e 62-64,184-187
+docs/reference/python/reader.md
+  s_7bd1a1825d4e15::t_17f5ab3d53786c 48-54
+docs/concepts/outputs-and-representations.md
+  s_7bd1a1825d4e15::t_1a821eb2691cf2 18-19,21
+  s_7bd1a1825d4e15::t_c7c2d5ec6903ef 40
+  s_7bd1a1825d4e15::t_3eee49c796a649 2,6
+  s_7bd1a1825d4e15::t_6e9e37a6bcf163 3,10-13,28,30,49,51-52,54-55,57,59-60
+  s_7bd1a1825d4e15::t_0e34903800138a 88
+  s_7bd1a1825d4e15::t_f150f1a72948be 15,26,33
+  s_7bd1a1825d4e15::t_c7175dc9eba9c3 37-39,41-43
+  s_7bd1a1825d4e15::t_9dd027fef64766 8,16,23-25,27,31,35,45-47,62-63,65-67,69,71-73,75-78,80-82,84-86,89-91
+development_docs/README.md
+  s_7bd1a1825d4e15::t_eb579bded2e190 17-32
+  s_7bd1a1825d4e15::t_dbe500f5622eed 42-43
+  s_7bd1a1825d4e15::t_d484f0e927ab6c 44
+  s_7bd1a1825d4e15::t_25ebcba620e991 52-55
+  s_7bd1a1825d4e15::t_9545d6bfa48476 66,85
+examples/quickstart/tests/dev-transform.mjs
+  s_7bd1a1825d4e15::t_02c298e10eba11 2,12-15
+  s_7bd1a1825d4e15::t_40c43213846261 1,3-11,16-46
+docs/reference/python/format-records-and-errors.md
+  s_7bd1a1825d4e15::t_9f8d7431b0c745 308-317
+  s_7bd1a1825d4e15::t_58edf9535aaf5b 24,323,325-326
+docs/guide/consume-an-export.md
+  s_7bd1a1825d4e15::t_d4154a4670b837 23-24,32-34,36,42,44,49-50,74-75,97,102,104,107,110,113-114,131
+  s_7bd1a1825d4e15::t_063b7194366a17 10,96
+  s_7bd1a1825d4e15::t_4149a82d07e942 8-9,115-116,138-143
+docs/guide/market-dashboard.md
+  s_7bd1a1825d4e15::t_865ffe29cef02d 15-17
+  s_7bd1a1825d4e15::t_d4154a4670b837 14,91-95
+docs/reference/python/sessions-and-inspection.md
+  s_7bd1a1825d4e15::t_88472bbb48a1dc 156-162
+development_docs/architecture/live-transport-and-processes.md
+  s_7bd1a1825d4e15::t_d5255edb33e69a 8-15
+  s_7bd1a1825d4e15::t_6a65f70bd20ee7 175
+  s_7bd1a1825d4e15::t_08c112156e692c 178-182,252-256
+  s_7bd1a1825d4e15::t_43e54eae1cb101 241-249
+docs/concepts/index.md
+  s_7bd1a1825d4e15::t_6a221bb95001d2 15-16,21-22,25-26
+  s_7bd1a1825d4e15::t_56ea1d49be93ec 3,8-10,12-13,18,20,24,28-29
+  s_7bd1a1825d4e15::t_3eee49c796a649 2,6,17,19,23
+development_docs/architecture/failure-and-concurrency.md
+  s_7bd1a1825d4e15::t_d5255edb33e69a 26-34
+  s_7bd1a1825d4e15::t_68fb8acd151ceb 3-5,9-11,13-17,59,95-98
+  s_7bd1a1825d4e15::t_d2e7a260a4ee3f 1-2,6-8,18-25,35-46,60-94,99-132
+  s_7bd1a1825d4e15::t_9484d92aa0e9a9 12,47-58
+examples/quickstart/README.md
+  s_7bd1a1825d4e15::t_ff1cb0425544a9 3-4,16-33,45-48
+  s_7bd1a1825d4e15::t_9e7640f100299c 49-62
+examples/quickstart/index.html
+  s_7bd1a1825d4e15::t_40c43213846261 1-67
+docs/reference/cli.md
+  s_7bd1a1825d4e15::t_988b5a58ad893b 11-22
+  s_7bd1a1825d4e15::t_a423156a2b8488 82-91,243-247
+  s_7bd1a1825d4e15::t_ba85907f9319d2 94-96
+  s_7bd1a1825d4e15::t_9f8d7431b0c745 254-266
+apps/docs/.vitepress/env.d.ts
+  s_7bd1a1825d4e15::t_167d85ccf65860 3-6
+  s_7bd1a1825d4e15::t_a727a283d1a5d9 7
+apps/docs/.vitepress/theme/custom.css
+  s_7bd1a1825d4e15::t_45daecd409cf76 206-210
+docs/why.md
+  s_7bd1a1825d4e15::t_14f651478b4b76 26-29,35-36
+  s_7bd1a1825d4e15::t_21c0f8949d7689 51-55
+  s_7bd1a1825d4e15::t_cfd90cbaaa3b34 9-11,20-25,30-34,46,57-58,60,71-75,78,80-84,86-88,90-92
+  s_7bd1a1825d4e15::t_d17fabea8a7856 37-40
+  s_7bd1a1825d4e15::t_3eee49c796a649 2-3,6
+  s_7bd1a1825d4e15::t_34eb0584694e59 12-19,48-49,76
+  s_7bd1a1825d4e15::t_e7eea12653aeff 44
+docs/index.md
+  s_7bd1a1825d4e15::t_0e34903800138a 19
+  s_7bd1a1825d4e15::t_66f1141e0ffbbc 45
+  s_7bd1a1825d4e15::t_a42712af98b817 37
+  s_7bd1a1825d4e15::t_fda603f98f6d97 25-28,38,40
+  s_7bd1a1825d4e15::t_d17ea4cd7690cf 35
+  s_7bd1a1825d4e15::t_cb7091288a351e 41-44,46-47
+  s_7bd1a1825d4e15::t_2d7db838918b18 39
+  s_7bd1a1825d4e15::t_68ae2a20dbb791 5,9
+docs/reference/browser/snapshots.md
+  s_7bd1a1825d4e15::t_0e34903800138a 57
+README.md
+  s_7bd1a1825d4e15::t_72e6012f4e1b3d 46-47
+  s_7bd1a1825d4e15::t_d17fabea8a7856 69
+  s_7bd1a1825d4e15::t_14f651478b4b76 71-79
+  s_7bd1a1825d4e15::t_66f1141e0ffbbc 83
+  s_7bd1a1825d4e15::t_3e7f95715d55cc 29-30
+  s_7bd1a1825d4e15::t_b4a0cf0318f191 36,40,43,49-50,56
+  s_7bd1a1825d4e15::t_68ae2a20dbb791 31-32,87-90
+packages/browser/package.json
+  s_7bd1a1825d4e15::t_b4a0cf0318f191 4
+examples/quickstart/vite.config.ts
+  s_7bd1a1825d4e15::t_40c43213846261 1-20
+examples/quickstart/package.json
+  s_7bd1a1825d4e15::t_40c43213846261 1-17,19-24
+  s_7bd1a1825d4e15::t_007a0cad191fd4 18
+development_docs/architecture/ports.md
+  s_7bd1a1825d4e15::t_fdef10eced0a1e 85-90
+  s_7bd1a1825d4e15::t_a55c8909cce3ba 233-234
+  s_7bd1a1825d4e15::t_d5255edb33e69a 8-26
+  s_7bd1a1825d4e15::t_aa1e9de368a147 63
+  s_7bd1a1825d4e15::t_43e54eae1cb101 102-110
+  s_7bd1a1825d4e15::t_1daa5103127665 240
+  s_7bd1a1825d4e15::t_1ef1051a8ad198 111
+  s_7bd1a1825d4e15::t_eb579bded2e190 57-62,64-84
+development_docs/proposals/README.md
+  s_7bd1a1825d4e15::t_43e54eae1cb101 6-7,9
+  s_7bd1a1825d4e15::t_3863f4ed5d0d4c 1-5,10-13
+  s_7bd1a1825d4e15::t_83761f2e12946b 8
+AGENTS.md
+  s_7bd1a1825d4e15::t_5fdbdb6ac2b134 53-55,153,210,217-218
+development_docs/development.md
+  s_7bd1a1825d4e15::t_25ebcba620e991 4-6
+  s_7bd1a1825d4e15::t_ba080fe29b3ca8 98-106,148-150
+docs/overview.md
+  s_7bd1a1825d4e15::t_2d7db838918b18 3,48,79,88
+  s_7bd1a1825d4e15::t_a62e110b5a3ef4 10-11
+  s_7bd1a1825d4e15::t_f150f1a72948be 9,14-15,30,32-33,81-83,85-86
+  s_7bd1a1825d4e15::t_21c0f8949d7689 35-38
+  s_7bd1a1825d4e15::t_6be1d4bfa64a40 46
+  s_7bd1a1825d4e15::t_0e34903800138a 94-97
+  s_7bd1a1825d4e15::t_d17fabea8a7856 43-44
+  s_7bd1a1825d4e15::t_e9e1fc8abf811f 13,26-27,40-41,50-65,71-72,75-77,90-92
+  s_7bd1a1825d4e15::t_a5c7dc3e8c7160 8
+pnpm-workspace.yaml
+  s_7bd1a1825d4e15::t_c12b25810f0201 33-34
+docs/reference/export-format.md
+  s_7bd1a1825d4e15::t_e887407107eca7 285-290,321-322
+packages/python/tests/test_quickstart_example.py
+  s_7bd1a1825d4e15::t_ff1cb0425544a9 4,28,40-42,44-48,52,56-69
+  s_7bd1a1825d4e15::t_ff5145e1d714ba 9,12-13,19-25
+apps/docs/example.ts
+  s_7bd1a1825d4e15::t_d17fabea8a7856 21
+  s_7bd1a1825d4e15::t_e933f15c647515 1-9,11-20,22-35,37-55,57-58
+docs/concepts/caching.md
+  s_7bd1a1825d4e15::t_0e34903800138a 74-75
+  s_7bd1a1825d4e15::t_b90c7e377e91b7 1,4-5,7,11,13,20-47,49-59,61-62,64,70-71
+  s_7bd1a1825d4e15::t_025586bf2c9372 12,19,48,63,65-69,72-73,76
+  s_7bd1a1825d4e15::t_21c0f8949d7689 14-18
+  s_7bd1a1825d4e15::t_3eee49c796a649 2,6
+  s_7bd1a1825d4e15::t_a5c7dc3e8c7160 8-10
+  s_7bd1a1825d4e15::t_3b41add4f28410 3,60
+docs/guide/choose-states.md
+  s_7bd1a1825d4e15::t_d4154a4670b837 12-13,25-26,29-33,135-139,225-227
+  s_7bd1a1825d4e15::t_421248b4c95ddc 228-230
+docs/guide/build-and-capture.md
+  s_7bd1a1825d4e15::t_d4154a4670b837 3,99-102,109-111,116,129-132,160-163
+  s_7bd1a1825d4e15::t_421248b4c95ddc 112-115
+  s_7bd1a1825d4e15::t_9e98cb155caf47 121-128
+docs/concepts/states-and-inputs.md
+  s_7bd1a1825d4e15::t_0e34903800138a 106
+  s_7bd1a1825d4e15::t_3b41add4f28410 3,54,62-64,98-100
+  s_7bd1a1825d4e15::t_4b9799201f8aef 8,10-12,14,17,19-21,24-25,31-32,41-42,46,48-49,51-53,56-58,66-67,70-72,75-76,78,80-82,90,92-94,102-104,107
+  s_7bd1a1825d4e15::t_3eee49c796a649 2,6
+  s_7bd1a1825d4e15::t_1a821eb2691cf2 26-29,34-35,37,86-89
+  s_7bd1a1825d4e15::t_a5c7dc3e8c7160 44-45
+  s_7bd1a1825d4e15::t_025586bf2c9372 39,60,84,96
+development_docs/architecture/identities-and-protocols.md
+  s_7bd1a1825d4e15::t_75003ebe929ebc 18,60-65
+  s_7bd1a1825d4e15::t_7cc5158e738584 54
+  s_7bd1a1825d4e15::t_43e54eae1cb101 10-17,19-24
+development_docs/architecture.md
+  s_7bd1a1825d4e15::t_eb579bded2e190 238-252
+  s_7bd1a1825d4e15::t_adf4799f0ac5ab 137-138
+  s_7bd1a1825d4e15::t_ecf2756666523e 136,151-153
+  s_7bd1a1825d4e15::t_453abdf936b882 126
+  s_7bd1a1825d4e15::t_43e54eae1cb101 185,196,201,203,222-225,227-229
+  s_7bd1a1825d4e15::t_ff8ea3a943e58b 25-27,29,62,167,176,226,271,275-276,278
+  s_7bd1a1825d4e15::t_73d9f61b0c42af 277
+  s_7bd1a1825d4e15::t_dbf7849057b4d6 43
+  s_7bd1a1825d4e15::t_d5255edb33e69a 7-14,35-39,112-118
+docs/concepts/integrity-and-trust.md
+  s_7bd1a1825d4e15::t_3eee49c796a649 2,6
+  s_7bd1a1825d4e15::t_025586bf2c9372 16,24,55,81-83
+  s_7bd1a1825d4e15::t_21c0f8949d7689 26-30
+  s_7bd1a1825d4e15::t_5819831f82fd5d 65-67
+  s_7bd1a1825d4e15::t_c7c2d5ec6903ef 74,76
+  s_7bd1a1825d4e15::t_3b41add4f28410 3,8-9
+  s_7bd1a1825d4e15::t_45aeec80a828e9 11-14,18-19,21-22,32-34,36,38-40,42-44,46,48-50,52-53,57-60,62,64,68-69,71-72,77-79
+development_docs/architecture/preparation.md
+  s_7bd1a1825d4e15::t_9d6bde1e3fd5ef 219-220,224-225
+  s_7bd1a1825d4e15::t_43e54eae1cb101 151-160
+  s_7bd1a1825d4e15::t_d8f52a29544982 77-82,165-169,189-192
+  s_7bd1a1825d4e15::t_6abbc2cbf38804 39-41,135-138,216
+  s_7bd1a1825d4e15::t_561ae04a8fca43 231
+development_docs/architecture/application-publication-and-delivery.md
+  s_7bd1a1825d4e15::t_d5255edb33e69a 8-13,264-266,277-282
+  s_7bd1a1825d4e15::t_aa1e9de368a147 113
+  s_7bd1a1825d4e15::t_09c726c4fdeca2 35-39,41-42,59-63,116-118,132-135,151-152
+  s_7bd1a1825d4e15::t_464baf813e21a9 325-328
+docs/guide/custom-representations.md
+  s_7bd1a1825d4e15::t_eb4ba0b9bf0682 44-45,59-64,67,70,77,85-86,88-98,100-101,110
+packages/python/tests/test_cli_help.py
+  s_7bd1a1825d4e15::t_b4a0cf0318f191 27-28,30,46-47,52-61
+  s_7bd1a1825d4e15::t_f60d1b31198def 29
+  s_7bd1a1825d4e15::t_08045bef3f36be 34
+packages/browser/README.md
+  s_7bd1a1825d4e15::t_5add095e46555c 86-87
+  s_7bd1a1825d4e15::t_b4a0cf0318f191 3,21,41-43,52-57,133
+  s_7bd1a1825d4e15::t_68ae2a20dbb791 7-8
+  s_7bd1a1825d4e15::t_3e7f95715d55cc 4-6
+  s_7bd1a1825d4e15::t_08045bef3f36be 16-20
+  s_7bd1a1825d4e15::t_c5b568f656d269 62-63
+  s_7bd1a1825d4e15::t_96aad49e2161d3 24-25,32,34,50-51
+docs/reference/python/delivery-and-publications.md
+  s_7bd1a1825d4e15::t_4c06d54a0e6139 9-10,172,273-275,298-300,307-316,325
+  s_7bd1a1825d4e15::t_42c8b329f09876 266-271
+docs/concepts/preparation-and-reuse.md
+  s_7bd1a1825d4e15::t_6e9e37a6bcf163 3,8-10,23,25,29,37,47,66,77,79-80
+  s_7bd1a1825d4e15::t_79cd894ad6d060 7,11,19-21,33-35,39-41,43-46,48-56,58,62-65,67,72,76,78,97-98
+  s_7bd1a1825d4e15::t_f150f1a72948be 12-18
+  s_7bd1a1825d4e15::t_c7c2d5ec6903ef 59-60,75
+  s_7bd1a1825d4e15::t_853bdc7c956cb7 92-94
+  s_7bd1a1825d4e15::t_21c0f8949d7689 27-28,30-31
+  s_7bd1a1825d4e15::t_a62e110b5a3ef4 89
+  s_7bd1a1825d4e15::t_1967091eb2ffb6 68-71
+  s_7bd1a1825d4e15::t_0e34903800138a 96
+  s_7bd1a1825d4e15::t_ecbaa07aec8c0a 86
+  s_7bd1a1825d4e15::t_3cffe747265d98 73-74
+  s_7bd1a1825d4e15::t_3eee49c796a649 2,6
+docs/reference/python/produce.md
+  s_7bd1a1825d4e15::t_1f5b61d699a9f5 81-85,350-353,355-358,362,440-443,445-453,461-464,472-477,531-533,539-541
+  s_7bd1a1825d4e15::t_94ad78c6005b28 500,542-545
+  s_7bd1a1825d4e15::t_9f8d7431b0c745 466-471,534-538
+  s_7bd1a1825d4e15::t_289c051832a27a 354,359-361
+apps/docs/scripts/build-examples.ts
+  s_7bd1a1825d4e15::t_b8a7f61f66d4b3 83,85-88,90-93,97-98
+  s_7bd1a1825d4e15::t_cc477102e8df53 11-17,78-82,89,94,96,99,109,118-119,133-134,136,138,142,158-168,170-179,181,191-204,214,225,238,240,260,271-275
+  s_7bd1a1825d4e15::t_53a64f9299e03e 84
+  s_7bd1a1825d4e15::t_c669fe907ad2a9 135,188-190
+  s_7bd1a1825d4e15::t_5dbfe2a0828578 46,50,54,70,74,103-108,110-117,120,126,137,139-141,143-157,169,180,182-187,230,258
+  s_7bd1a1825d4e15::t_d6c97c9584fadc 95
+docs/guide/prepared-publications.md
+  s_7bd1a1825d4e15::t_38032d08c8d79b 3,8-12,21-56,58-60,72,74-92,94-96,99,101-107,109-127,139,144,175-187,189-193,195,197-201,203-211,232,243-246,248,257-259
+  s_7bd1a1825d4e15::t_988b5a58ad893b 63-69
+  s_7bd1a1825d4e15::t_ff5145e1d714ba 57
+  s_7bd1a1825d4e15::t_14f651478b4b76 13-20
+development_docs/architecture/portable-json.md
+  s_7bd1a1825d4e15::t_9b85d191e11e4c 8-12,34-36,42,48,106-116,130
+  s_7bd1a1825d4e15::t_f7ee36e137be2c 39-41
+  s_7bd1a1825d4e15::t_43e54eae1cb101 97-105
+  s_7bd1a1825d4e15::t_6abbc2cbf38804 57-59
+docs/reference/python/host-integration.md
+  s_7bd1a1825d4e15::t_845bb6c6b44222 141-145,153-155
+docs/reference/browser-api.md
+  s_7bd1a1825d4e15::t_9f8d7431b0c745 20-25
+  s_7bd1a1825d4e15::t_cb36cd89d076af 55
+apps/docs/.vitepress/theme/accessibility.ts
+  s_7bd1a1825d4e15::t_b36b2c046d0b7c 71-80,131,258-261
+apps/docs/navigation.ts
+  s_7bd1a1825d4e15::t_8ad435642b2c54 45,47-48,181-182,185
+  s_7bd1a1825d4e15::t_9155f274855398 175,180
+  s_7bd1a1825d4e15::t_9820f6a3829317 78-83
+  s_7bd1a1825d4e15::t_38ea9391a6f16f 34
+  s_7bd1a1825d4e15::t_78900a66bab726 46
+  s_7bd1a1825d4e15::t_fda603f98f6d97 176,179
+  s_7bd1a1825d4e15::t_3eee49c796a649 28,37-38,40,43-44,49,177
+  s_7bd1a1825d4e15::t_2d7db838918b18 178,183-184
+docs/guide/index.md
+  s_7bd1a1825d4e15::t_025586bf2c9372 8,29-30,36-37
+  s_7bd1a1825d4e15::t_9f2843f2ef840c 12-16
+  s_7bd1a1825d4e15::t_9820f6a3829317 33-35
+examples/quickstart/report.py
+  s_7bd1a1825d4e15::t_ff1cb0425544a9 12,16,18-19
+apps/docs/.vitepress/theme/components/StaticApp.vue
+  s_7bd1a1825d4e15::t_e933f15c647515 3,7,9-14,24,78-80,82
+  s_7bd1a1825d4e15::t_2d3265aa50116e 5
+  s_7bd1a1825d4e15::t_00bc9ea1135318 25,65,74-76,81
+docs/reference/terminology.md
+  s_7bd1a1825d4e15::t_e0a6c3c7c65934 123-126
+  s_7bd1a1825d4e15::t_a3167f9fa51210 73-92,94-95
+  s_7bd1a1825d4e15::t_e80440b9abb5c8 24-44,48-69,93
+docs/reference/compatibility.md
+  s_7bd1a1825d4e15::t_ea36f70b849143 49,76-84
+  s_7bd1a1825d4e15::t_9f8d7431b0c745 42-48
+docs/guide/agents-and-automation.md
+  s_7bd1a1825d4e15::t_0e34903800138a 106
+  s_7bd1a1825d4e15::t_d4154a4670b837 21,27-29,35-38
+  s_7bd1a1825d4e15::t_929bd257df0dd6 3,47,60,75
+development_docs/proposals/marimo-upstream-capabilities.md
+  s_7bd1a1825d4e15::t_b1e5f7157b1db6 1,217,223-225
+  s_7bd1a1825d4e15::t_d5255edb33e69a 21-25
+  s_7bd1a1825d4e15::t_43e54eae1cb101 3-9
+  s_7bd1a1825d4e15::t_31e369c8832e08 270
+  s_7bd1a1825d4e15::t_83b313e1cf5e9c 2,10-20,26-216,218-222,226-269,271-287
+development_docs/architecture/agents-and-delivery.md
+  s_7bd1a1825d4e15::t_5b92066771dc61 5-7,31,41-44,88
+  s_7bd1a1825d4e15::t_43e54eae1cb101 33-39,83-87,89-90
+development_docs/architecture/browser-loaders-and-mounts.md
+  s_7bd1a1825d4e15::t_3d0da6d8fdfbe4 56-57,152-156
+  s_7bd1a1825d4e15::t_43e54eae1cb101 180-185
+  s_7bd1a1825d4e15::t_ae64daba28598d 12-14,19-21,43-45,137-139,178-179,186-187
+  s_7bd1a1825d4e15::t_6abbc2cbf38804 86-89
+  s_7bd1a1825d4e15::t_dbf9e54d7518fa 66
+  s_7bd1a1825d4e15::t_a32fb84a3a085b 85
+development_docs/proposals/studio-prepared-runtime.md
+  s_7bd1a1825d4e15::t_4b3e13aad7b7a9 1-2,10-25,35-119,124-207
+  s_7bd1a1825d4e15::t_380c7788aceccc 120-123
+  s_7bd1a1825d4e15::t_d5255edb33e69a 26-34
+  s_7bd1a1825d4e15::t_eb579bded2e190 3-9
+apps/docs/.vitepress/theme/index.ts
+  s_7bd1a1825d4e15::t_a70759a189dc8f 38-42
+  s_7bd1a1825d4e15::t_7db7ead90efeeb 37
+  s_7bd1a1825d4e15::t_357712562b956f 3,5-6,10,15-36,43-53
+packages/python/pyproject.toml
+  s_7bd1a1825d4e15::t_b4a0cf0318f191 8
+development_docs/architecture/marimo-integration.md
+  s_7bd1a1825d4e15::t_6d81aa450dff6e 252,309-311
+  s_7bd1a1825d4e15::t_ebf8a4f314b290 307
+development_docs/architecture/product-and-export.md
+  s_7bd1a1825d4e15::t_1b5ba60a1d15be 13-14
+  s_7bd1a1825d4e15::t_66f1141e0ffbbc 31
+  s_7bd1a1825d4e15::t_68fb8acd151ceb 141-143
+  s_7bd1a1825d4e15::t_afa0cf4524325b 76-79,104-108
+docs/reference/browser/loaders.md
+  s_7bd1a1825d4e15::t_b7ef710b343596 322-323
+  s_7bd1a1825d4e15::t_528a1ccc97cb50 335-337,347,464-466,568-572,579-581
+  s_7bd1a1825d4e15::t_259700f258a080 34
+  s_7bd1a1825d4e15::t_9f8d7431b0c745 23-33,35-36,338-346,573-578
+  s_7bd1a1825d4e15::t_b3b7b88ce5ed59 50-51
+  s_7bd1a1825d4e15::t_d8b4fb0271645d 319-321,324
+examples/vite-vanilla/README.md
+  s_7bd1a1825d4e15::t_b4a0cf0318f191 8-11
+apps/docs/.vitepress/config.ts
+  s_7bd1a1825d4e15::t_68ae2a20dbb791 16
+docs/guide/browser-applications.md
+  s_7bd1a1825d4e15::t_063b7194366a17 24
+  s_7bd1a1825d4e15::t_cc845c89c73d32 13,34-53
+  s_7bd1a1825d4e15::t_5fe469d4672abd 9
+  s_7bd1a1825d4e15::t_e6811408461dea 8,10-11,15-16,19-21,23,27-31,56,61,64-66,68-69,71-79,82-85,89-92,95-105,107-112,115,117-122,127,138-140,142-146
+  s_7bd1a1825d4e15::t_3a627b6c6fbe63 129,167
+  s_7bd1a1825d4e15::t_59a7c6447f8dac 80-81,123-124,134-135,141
+  s_7bd1a1825d4e15::t_421248b4c95ddc 106
+docs/reference/browser/reader.md
+  s_7bd1a1825d4e15::t_1573868036e08d 171-174
+development_docs/validation.md
+  s_7bd1a1825d4e15::t_aa1e9de368a147 85,179
+  s_7bd1a1825d4e15::t_640d0a4d2cd66b 203,205-209,223,239,241-242,244-248,251-253,258-266
+  s_7bd1a1825d4e15::t_abb630d07fbd8f 47,67,124,142,268
+docs/guide/getting-started.md
+  s_7bd1a1825d4e15::t_3c6e16d1a565b5 94-95,97-100,114-116,128-134,185-187
+  s_7bd1a1825d4e15::t_dfd74dbff79066 33,71-72,127,136-137,164,178
+  s_7bd1a1825d4e15::t_3f4f4bcd11eca6 3,11,19,57,61,63-64,74,90-91,96,119,121-126,147-148,159-163,176,181-182
+  s_7bd1a1825d4e15::t_988b5a58ad893b 140-144
+  s_7bd1a1825d4e15::t_e93b1723822a95 8-10,12-13,117-118,120
+  s_7bd1a1825d4e15::t_2d7db838918b18 184
+docs/concepts/exports-and-publications.md
+  s_7bd1a1825d4e15::t_3eee49c796a649 2,6
+  s_7bd1a1825d4e15::t_a8cb757ec5ade3 1,4-5,7,10,15-17,19-24,26,34-39,41-45,47-52,56,58-65,68-69
+  s_7bd1a1825d4e15::t_6e9e37a6bcf163 3,8-9,11-14,25,27-33,40,46,57
+  s_7bd1a1825d4e15::t_f2ecb56fe7ffc0 18,53-55
+  s_7bd1a1825d4e15::t_0e34903800138a 66-67
+examples/quickstart/src/vite-env.d.ts
+  s_7bd1a1825d4e15::t_40c43213846261 1
+docs/reference/browser/errors-and-limits.md
+  s_7bd1a1825d4e15::t_da57e742f44f36 166-167,178-180
+  s_7bd1a1825d4e15::t_398de466cb56f4 186-190
+docs/guide/manage-repository.md
+  s_7bd1a1825d4e15::t_19858b82bee93f 8-12,60-64,67-75,102-104,140-150,183,198-200,204-206,218-220
+  s_7bd1a1825d4e15::t_8f41eb8dd4e3b9 65-66,94-95
+  s_7bd1a1825d4e15::t_9e98cb155caf47 88-93,96-97,179-182,184-194
+docs/reference/python-api.md
+  s_7bd1a1825d4e15::t_9f8d7431b0c745 40-43
+  s_7bd1a1825d4e15::t_0f59a64455e4d8 38
+docs/guide/troubleshooting.md
+  s_7bd1a1825d4e15::t_9e98cb155caf47 11-15,17-20
+  s_7bd1a1825d4e15::t_063b7194366a17 99,261
+  s_7bd1a1825d4e15::t_d0642a96a0737b 16,21,81-98,100-104,114-117,119-123,129-136,138-158,212-236,251-254,259-260,262-266
+  s_7bd1a1825d4e15::t_cc845c89c73d32 72
+  s_7bd1a1825d4e15::t_8f41eb8dd4e3b9 137
+  s_7bd1a1825d4e15::t_3a627b6c6fbe63 255-258
+development_docs/architecture/execution-and-caching.md
+  s_7bd1a1825d4e15::t_da827299daefcc 64-66
+  s_7bd1a1825d4e15::t_68fb8acd151ceb 33-34,39-47
+  s_7bd1a1825d4e15::t_e284afd8a06161 172-186,221-223,240-241
+  s_7bd1a1825d4e15::t_d5255edb33e69a 55-61
+development_docs/architecture/runtime-profiles.md
+  s_7bd1a1825d4e15::t_4c843d8fb98c62 3-5,13-14,16,26-29,31-33,35,41-43,45,49-53,55-62,66-69,71-73
+  s_7bd1a1825d4e15::t_d5255edb33e69a 18-23
+examples/quickstart/src/main.ts
+  s_7bd1a1825d4e15::t_4c2b32dfe98b69 78-82,85
+  s_7bd1a1825d4e15::t_00bc9ea1135318 46-47,94-97,169
+  s_7bd1a1825d4e15::t_40c43213846261 8-14,20-37,39-45,48-76,83-84,87,89-93,98-128,167-168,170-179
+  s_7bd1a1825d4e15::t_007a0cad191fd4 1-7,15-19,77,86,88,129-166
+  s_7bd1a1825d4e15::t_853bdc7c956cb7 38
+docs/reference/portable-json.md
+  s_7bd1a1825d4e15::t_6b421f11317243 15-16
+  s_7bd1a1825d4e15::t_ba27ef5fcc0131 85-89
+  s_7bd1a1825d4e15::t_9f8d7431b0c745 21,56-61,122-130
+  s_7bd1a1825d4e15::t_04c3d10aa6f2ce 138-140
+  s_7bd1a1825d4e15::t_ee913f792c19c5 3,8-11,13-14,17-18,23,26,45-47,49,54,63-66,68,70-71,73-74,77-78,81-84,90-103,106,108-112,114-116,118,120,132,135,142-145
+  s_7bd1a1825d4e15::t_37f67a0ab6a35b 50-52
+packages/portable-json/README.md
+  s_7bd1a1825d4e15::t_b4a0cf0318f191 9-10
+development_docs/documentation.md
+  s_7bd1a1825d4e15::t_7edbb1b514ae8d 98-100,108-114
+  s_7bd1a1825d4e15::t_5ac03fa384cb72 19,90-92
+  s_7bd1a1825d4e15::t_d5255edb33e69a 57-59,62
+  s_7bd1a1825d4e15::t_004c4e0a05505a 45-47,52
+  s_7bd1a1825d4e15::t_143a397a0029cc 13-14,60-61,63-64
+  s_7bd1a1825d4e15::t_f70a416c0fd8e8 48-51
+development_docs/architecture/repository.md
+  s_7bd1a1825d4e15::t_e1e7c85051708c 112-113,117-119,223-227,245-248,254-257,260,283-291,294-295,317-319,366-367
+  s_7bd1a1825d4e15::t_16f70823731ce9 258-259
+  s_7bd1a1825d4e15::t_d3f3e73ebee1ee 60
+  s_7bd1a1825d4e15::t_a9e35dfd823e01 261-266,306-308
+  s_7bd1a1825d4e15::t_881f5c6266b4f7 25,33
+  s_7bd1a1825d4e15::t_ba8567fc09c94a 64
+  s_7bd1a1825d4e15::t_43e54eae1cb101 22-24,26
+packages/python/src/marimo_export/_cli/arguments.py
+  s_7bd1a1825d4e15::t_59a7c6447f8dac 67,79,232
+  s_7bd1a1825d4e15::t_b4a0cf0318f191 48,55-56,58,66,69,78,82,100,108,129,133,138,144,146,149,161,218,237
+examples/quickstart/report.export.yaml
+  s_7bd1a1825d4e15::t_11b1e719c897c2 10-11
+apps/docs/package.json
+  s_7bd1a1825d4e15::t_c12b25810f0201 19,23
+docs/reference/index.md
+  s_7bd1a1825d4e15::t_0f59a64455e4d8 40
+  s_7bd1a1825d4e15::t_cb36cd89d076af 19,47-48
+  s_7bd1a1825d4e15::t_2d7db838918b18 10
+  s_7bd1a1825d4e15::t_9f8d7431b0c745 23-32,36-39,41-43
+packages/python/README.md
+  s_7bd1a1825d4e15::t_b4a0cf0318f191 3-6,123-125
+  s_7bd1a1825d4e15::t_08045bef3f36be 70,74,77,92,97-99
+  s_7bd1a1825d4e15::t_72e6012f4e1b3d 116,122
+  s_7bd1a1825d4e15::t_3e7f95715d55cc 8-9
+  s_7bd1a1825d4e15::t_ff5145e1d714ba 22-38,40-68
+  s_7bd1a1825d4e15::t_59a7c6447f8dac 73
+  s_7bd1a1825d4e15::t_68ae2a20dbb791 10-11
+docs/reference/representations.md
+  s_7bd1a1825d4e15::t_9f8d7431b0c745 69-73,75-77,157
+  s_7bd1a1825d4e15::t_6fbe9e3a411961 165-166
+  s_7bd1a1825d4e15::t_0adbf1a5bfea72 74
+  s_7bd1a1825d4e15::t_109e8bab4031ba 136-137,150-152,154-156,180,183,191-192
+  s_7bd1a1825d4e15::t_a4c2f66ed99e5b 161-164,167-170,175
+examples/quickstart/src/style.css
+  s_7bd1a1825d4e15::t_40c43213846261 1-4,12-277
+  s_7bd1a1825d4e15::t_2d3265aa50116e 5-11
+docs/guide/deploy.md
+  s_7bd1a1825d4e15::t_4d0bd8e4770124 110-111
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "2edb3b8bcc6f733a6833bb17c32fc3b8bdf22c10",
+  "prompts": {},
+  "sessions": {
+    "s_7bd1a1825d4e15": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06c69-4fb2-7271-bbed-a0abfc74e547",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
