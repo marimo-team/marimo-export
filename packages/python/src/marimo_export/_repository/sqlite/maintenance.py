@@ -5,7 +5,7 @@ import sqlite3
 import stat
 import time
 from collections.abc import Iterator
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from pathlib import Path
 from uuid import uuid4
 
@@ -52,6 +52,7 @@ def maintenance_lock(root: Path, *, timeout_seconds: float = 10.0) -> Iterator[N
 
 def _connect(path: Path, *, timeout_seconds: float) -> sqlite3.Connection:
     deadline = time.monotonic() + max(0.001, timeout_seconds)
+    _cleanup_retired_locks(path)
     schema_attempt = 0
     while schema_attempt < 2:
         before = _lock_stat(path)
@@ -138,7 +139,6 @@ def _discard_corrupt_lock(
         if not suffix and not os.path.samestat(expected, inspected):
             return
         candidates.append((source, inspected))
-    retired: list[Path] = []
     for source, inspected in candidates:
         target = path.parent / f".{source.name}.corrupt-{token}"
         while True:
@@ -166,12 +166,17 @@ def _discard_corrupt_lock(
                     ) from error
                 time.sleep(min(0.01, remaining))
                 continue
-            retired.append(target)
             break
     sync_directory(path.parent)
-    for target in retired:
-        target.unlink(missing_ok=True)
+    _cleanup_retired_locks(path)
     sync_directory(path.parent)
+
+
+def _cleanup_retired_locks(path: Path) -> None:
+    for suffix in ("", "-wal", "-shm"):
+        for target in path.parent.glob(f".{path.name}{suffix}.corrupt-*"):
+            with suppress(PermissionError):
+                target.unlink(missing_ok=True)
 
 
 __all__ = ["maintenance_lock"]
