@@ -47,7 +47,7 @@ if [[ -z "$name" || -z "$version" ]]; then
 fi
 
 local_integrity="sha512-$(openssl dgst -sha512 -binary "$tarball" | openssl base64 -A)"
-if published_integrity="$(npm view "$name@$version" dist.integrity 2>/dev/null)"; then
+if published_integrity="$(pnpm view "$name@$version" dist.integrity 2>/dev/null)"; then
 	if [[ "$published_integrity" != "$local_integrity" ]]; then
 		printf 'ERROR: npm already contains different bytes for %s@%s\n' "$name" "$version" >&2
 		exit 1
@@ -61,4 +61,5 @@ if [[ "$verify_only" == "1" ]]; then
 	exit 1
 fi
 
+# npm trusted publishing performs its OIDC exchange inside the npm publish command.
 npm publish "$tarball" --access public
