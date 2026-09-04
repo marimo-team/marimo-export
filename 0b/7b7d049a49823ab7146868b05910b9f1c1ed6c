@@ -1,0 +1,98 @@
+docs/guide/custom-representations.md
+  s_7bd1a1825d4e15::t_51d94009dddc72 2,6
+docs/reference/browser-api.md
+  s_7bd1a1825d4e15::t_9554bee36ca7b0 90
+docs/guide/getting-started.md
+  s_7bd1a1825d4e15::t_85f0e3c9b653c2 56-60,62-63,67,69-74,76-77,84-86
+  s_7bd1a1825d4e15::t_3a92b3e02ad49c 198-200
+  s_7bd1a1825d4e15::t_51d94009dddc72 2,6
+packages/python/README.md
+  s_7bd1a1825d4e15::t_3a92b3e02ad49c 182
+  s_7bd1a1825d4e15::t_85f0e3c9b653c2 36-40,42-43,47,49-54,56-57
+docs/concepts/preparation-and-reuse.md
+  s_7bd1a1825d4e15::t_51d94009dddc72 2,6
+  s_7bd1a1825d4e15::t_bfb0bf588fa457 96
+docs/guide/choose-states.md
+  s_7bd1a1825d4e15::t_3a92b3e02ad49c 151,244
+docs/concepts/exports-and-publications.md
+  s_7bd1a1825d4e15::t_bfb0bf588fa457 66
+  s_7bd1a1825d4e15::t_51d94009dddc72 2,6
+docs/reference/cli.md
+  s_7bd1a1825d4e15::t_9554bee36ca7b0 286
+docs/guide/deploy.md
+  s_7bd1a1825d4e15::t_51d94009dddc72 2,6
+  s_7bd1a1825d4e15::t_3a92b3e02ad49c 110
+docs/concepts/states-and-inputs.md
+  s_7bd1a1825d4e15::t_bfb0bf588fa457 106
+  s_7bd1a1825d4e15::t_51d94009dddc72 2,6
+docs/guide/build-and-capture.md
+  s_7bd1a1825d4e15::t_51d94009dddc72 2,6
+  s_7bd1a1825d4e15::t_3a92b3e02ad49c 290-291
+docs/guide/market-dashboard.md
+  s_7bd1a1825d4e15::t_51d94009dddc72 2,6
+docs/guide/browser-applications.md
+  s_7bd1a1825d4e15::t_51d94009dddc72 2,6
+docs/guide/troubleshooting.md
+  s_7bd1a1825d4e15::t_51d94009dddc72 2,6
+development_docs/architecture/agents-and-delivery.md
+  s_7bd1a1825d4e15::t_bfb0bf588fa457 37
+docs/why.md
+  s_7bd1a1825d4e15::t_bfb0bf588fa457 90-92
+packages/browser/README.md
+  s_7bd1a1825d4e15::t_3a92b3e02ad49c 130
+docs/guide/manage-repository.md
+  s_7bd1a1825d4e15::t_51d94009dddc72 2,6
+apps/docs/example.ts
+  s_7bd1a1825d4e15::t_85f0e3c9b653c2 13,17,21,25,39,43,47,51
+apps/docs/navigation.ts
+  s_7bd1a1825d4e15::t_51d94009dddc72 22,32,51,53-54,61-64,158,163
+docs/overview.md
+  s_7bd1a1825d4e15::t_bfb0bf588fa457 94-95
+  s_7bd1a1825d4e15::t_51d94009dddc72 2,6
+docs/guide/agents-and-automation.md
+  s_7bd1a1825d4e15::t_51d94009dddc72 2,6
+  s_7bd1a1825d4e15::t_3a92b3e02ad49c 106,126
+apps/docs/.vitepress/theme/components/StaticApp.vue
+  s_7bd1a1825d4e15::t_85f0e3c9b653c2 187,266,349-362,371
+docs/concepts/caching.md
+  s_7bd1a1825d4e15::t_cf5c2d567f8b9d 12
+  s_7bd1a1825d4e15::t_51d94009dddc72 2,6
+  s_7bd1a1825d4e15::t_b96b28977ef35d 74-76
+docs/concepts/outputs-and-representations.md
+  s_7bd1a1825d4e15::t_bfb0bf588fa457 88
+  s_7bd1a1825d4e15::t_51d94009dddc72 2,6
+docs/guide/prepared-publications.md
+  s_7bd1a1825d4e15::t_51d94009dddc72 2,6
+docs/guide/consume-an-export.md
+  s_7bd1a1825d4e15::t_51d94009dddc72 2,6
+  s_7bd1a1825d4e15::t_3a92b3e02ad49c 11,142,180-181
+README.md
+  s_7bd1a1825d4e15::t_3895a51c14651e 94
+  s_7bd1a1825d4e15::t_9554bee36ca7b0 87,92
+  s_7bd1a1825d4e15::t_2a8aa74bdeb05d 95-101
+docs/concepts/integrity-and-trust.md
+  s_7bd1a1825d4e15::t_51d94009dddc72 2,6
+  s_7bd1a1825d4e15::t_bfb0bf588fa457 81
+examples/quickstart/report.py
+  s_7bd1a1825d4e15::t_85f0e3c9b653c2 11-15,17-18,22,24-29,31-32
+docs/reference/browser/snapshots.md
+  s_7bd1a1825d4e15::t_9554bee36ca7b0 57
+docs/reference/terminology.md
+  s_7bd1a1825d4e15::t_9554bee36ca7b0 123-126
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "0b7b7d049a49823ab7146868b05910b9f1c1ed6c",
+  "prompts": {},
+  "sessions": {
+    "s_7bd1a1825d4e15": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06c69-4fb2-7271-bbed-a0abfc74e547",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
