@@ -15,7 +15,10 @@ test = [
 ]
 
 [tool.pytest.ini_options]
-markers = ["serial: run lifecycle timing tests without other pytest workers"]
+markers = [
+  "application: run deterministic notebook application contracts",
+  "serial: run lifecycle timing tests without other pytest workers",
+]
 
 [tool.ruff]
 line-length = 100

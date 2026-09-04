@@ -3,41 +3,46 @@ from __future__ import annotations
 import json
 import os
 import re
-import shutil
 import subprocess
+import sys
 from collections.abc import Mapping
 from pathlib import Path
 
+import pytest
 from marimo_export import open_export
 from marimo_export._remote.managed import ManagedServer
 from marimo_export.sessions import Client
 
 _REPOSITORY = Path(__file__).parents[3]
-_EXAMPLE = _REPOSITORY / "examples" / "vite-vanilla"
+_FIXTURES = Path(__file__).parent / "fixtures"
+_NOTEBOOK = _FIXTURES / "deterministic_market.py"
+_SPEC = _FIXTURES / "deterministic_market.export.yaml"
 
 
 def _run(
     *arguments: str,
     extra_environment: Mapping[str, str] | None = None,
 ) -> subprocess.CompletedProcess[str]:
+    assert arguments[0] == "marimo-export"
     environment = dict(os.environ)
     environment["UV_NO_PROGRESS"] = "1"
     if extra_environment is not None:
         environment.update(extra_environment)
     return subprocess.run(
         [
-            "uv",
-            "run",
-            "--locked",
-            "--package",
-            "marimo-export-vite-vanilla-example",
-            *arguments,
+            sys.executable,
+            "-c",
+            (
+                "import sys; from marimo_export.cli import main; "
+                "raise SystemExit(main(sys.argv[1:]))"
+            ),
+            *arguments[1:],
         ],
         cwd=_REPOSITORY,
         env=environment,
         capture_output=True,
         text=True,
-        timeout=360,
+        timeout=240,
         check=False,
     )
 
@@ -64,11 +69,8 @@ def _assert_export(path: Path) -> None:
         sorted(state.fingerprint for state in states)
     )
     assert tuple(sorted(alias for state in states for alias in state.aliases)) == (
-        "ai_buildout",
         "baseline",
-        "cloud_platforms",
-        "full_watchlist",
-        "weekly_view",
+        "full_market",
     )
     assert export.output_names == (
         "market_explorer",
@@ -83,51 +85,43 @@ def _assert_export(path: Path) -> None:
         "application/vnd.marimo-export.anywidget.v1+json"
     )
     expected_widget_symbols = {
-        "ai_buildout": ("CRWV", {"CRWV", "GOOGL", "MSFT"}),
-        "baseline": ("AAPL", {"AAPL", "GOOGL", "MSFT"}),
-        "cloud_platforms": ("MSFT", {"AMZN", "GOOGL", "MSFT"}),
-        "full_watchlist": ("AAPL", {"AAPL", "AMZN", "CRWV", "GOOGL", "MSFT"}),
-        "weekly_view": ("AAPL", {"AAPL", "AMZN", "CRWV", "GOOGL", "MSFT"}),
+        "baseline": ("ALPHA", {"ALPHA", "BETA"}),
+        "full_market": ("ALPHA", {"ALPHA", "BETA", "GAMMA"}),
     }
     for alias, (selected, symbols) in expected_widget_symbols.items():
         payload = json.loads(export.state(alias).output("market_explorer").blob_asset().data)
         widget = payload["modelNotifications"][0]["message"]["state"]
         assert widget["symbol"] == selected
-        assert {row["Symbol"] for row in widget["rows"]} == symbols
-    summary = baseline.output("market_summary").blob_asset()
-    assert summary.media_type == "application/vnd.marimo-export.market-summary.v1+json"
-    assert summary.filename == "market-summary.json"
-    summary_value = json.loads(summary.data)
-    assert summary_value["schema"] == "marimo-export.market-summary.v1"
-    assert summary_value["currency"] == "USD"
-    assert summary_value["company_count"] == 3
-    assert len(summary_value["period_returns"]) == 3
+        assert {row["symbol"] for row in widget["rows"]} == symbols
+    summary = baseline.output("market_summary").json()
+    assert summary == {
+        "schema": "marimo-export.test-market.v1",
+        "symbols": ("ALPHA", "BETA"),
+        "observations": 6,
+    }
     assert baseline.output("performance_chart").media_type == ("application/vnd.vegalite.v6+json")
     assert baseline.output("performance_snapshot").media_type == "image/png"
-    assert baseline.output("price_history").media_type == "application/vnd.apache.parquet"
-    assert export.verify().states == 5
+    history = baseline.output("price_history").blob_asset()
+    assert history.media_type == "application/vnd.apache.parquet"
+    assert history.filename == "price-history.parquet"
+    assert export.verify().states == 2
 
 
-def test_vite_vanilla_example_builds_and_captures_live_export(
-    tmp_path: Path,
-) -> None:
-    notebook_path = tmp_path / "finance.py"
+@pytest.mark.application
+def test_notebook_application_builds_reuses_and_captures_export(tmp_path: Path) -> None:
     build_path = tmp_path / "build"
     warm_build_path = tmp_path / "build-warm"
     capture_path = tmp_path / "capture"
     build_repository = tmp_path / "build-repository"
     capture_repository = tmp_path / "capture-repository"
-    source = (_EXAMPLE / "finance.py").read_bytes()
-    shutil.copy2(_EXAMPLE / "finance.py", notebook_path)
-    shutil.copy2(_EXAMPLE / "market_summary.py", tmp_path / "market_summary.py")
-    shutil.copy2(_EXAMPLE / "quote_detail.py", tmp_path / "quote_detail.py")
+    source = _NOTEBOOK.read_bytes()
 
     build = _run(
         "marimo-export",
         "build",
-        str(notebook_path),
+        str(_NOTEBOOK),
         "--spec",
-        str(_EXAMPLE / "finance.export.yaml"),
+        str(_SPEC),
         "--output",
         str(build_path),
         "--repository",
@@ -136,19 +130,19 @@ def test_vite_vanilla_example_builds_and_captures_live_export(
 
     assert build.returncode == 0, build.stdout + build.stderr
     assert "Built notebook export at" in build.stdout
-    assert "States: 5" in build.stdout
+    assert "States: 2" in build.stdout
     assert "Outputs: 5" in build.stdout
-    assert sum(_projection_cache(build.stdout)) == 25
+    assert sum(_projection_cache(build.stdout)) == 10
     assert sum(_marimo_cache(build.stdout)) > 0
     assert "Elapsed:" in build.stdout
-    assert notebook_path.read_bytes() == source
+    assert _NOTEBOOK.read_bytes() == source
 
     warm_build = _run(
         "marimo-export",
         "build",
-        str(notebook_path),
+        str(_NOTEBOOK),
         "--spec",
-        str(_EXAMPLE / "finance.export.yaml"),
+        str(_SPEC),
         "--output",
         str(warm_build_path),
         "--repository",
@@ -157,10 +151,10 @@ def test_vite_vanilla_example_builds_and_captures_live_export(
     assert warm_build.returncode == 0, warm_build.stdout + warm_build.stderr
     assert _projection_cache(warm_build.stdout) == (0, 0)
     assert _marimo_cache(warm_build.stdout) == (0, 0)
-    assert "Prepared reused (5/5)" in warm_build.stderr
-    assert notebook_path.read_bytes() == source
+    assert "Prepared reused (2/2)" in warm_build.stderr
+    assert _NOTEBOOK.read_bytes() == source
 
-    server = ManagedServer(notebook_path, timeout=120)
+    server = ManagedServer(_NOTEBOOK, timeout=120)
     try:
         server.activate()
         capture = _run(
@@ -170,7 +164,7 @@ def test_vite_vanilla_example_builds_and_captures_live_export(
             "--session",
             server.session_id,
             "--spec",
-            str(_EXAMPLE / "finance.export.yaml"),
+            str(_SPEC),
             "--output",
             str(capture_path),
             "--repository",
@@ -181,9 +175,9 @@ def test_vite_vanilla_example_builds_and_captures_live_export(
         )
         assert capture.returncode == 0, capture.stdout + capture.stderr
         assert "Captured notebook export at" in capture.stdout
-        assert "States: 5" in capture.stdout
+        assert "States: 2" in capture.stdout
         assert "Outputs: 5" in capture.stdout
-        assert sum(_projection_cache(capture.stdout)) == 25
+        assert sum(_projection_cache(capture.stdout)) == 10
         with Client(
             server.base_url,
             access_token=server.access_token,
@@ -193,7 +187,7 @@ def test_vite_vanilla_example_builds_and_captures_live_export(
     finally:
         server.stop()
 
-    assert notebook_path.read_bytes() == source
+    assert _NOTEBOOK.read_bytes() == source
     for export_path in (build_path, warm_build_path, capture_path):
         _assert_export(export_path)
     relations = [
@@ -204,4 +198,4 @@ def test_vite_vanilla_example_builds_and_captures_live_export(
 
     verify = _run("marimo-export", "verify", str(capture_path))
     assert verify.returncode == 0, verify.stdout + verify.stderr
-    assert "for 5 states" in verify.stdout
+    assert "for 2 states" in verify.stdout

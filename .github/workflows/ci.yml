@@ -118,9 +118,8 @@ jobs:
           --python "${{ matrix.python-version }}"
           pytest -q -n 4
           --dist worksteal --max-worker-restart=0
-          -m "not serial"
+          -m "not serial and not application"
           --durations=50 packages/python/tests
-          --ignore packages/python/tests/test_vite_vanilla_example.py
 
       - name: Run Python contracts on Windows
         if: matrix.os == 'windows-latest'
@@ -132,8 +131,8 @@ jobs:
           --group test
           --all-extras
           --python "${{ matrix.python-version }}"
-          pytest -q --durations=50 packages/python/tests
-          --ignore packages/python/tests/test_vite_vanilla_example.py
+          pytest -q -m "not application"
+          --durations=50 packages/python/tests
 
       - name: Run lease timing contracts
         if: matrix.os != 'windows-latest'
@@ -149,16 +148,16 @@ jobs:
 
       - name: Run application and skill contracts
         if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
-        run: >-
-          uv run
-          --frozen
-          --isolated
-          --group test
-          --all-extras
-          --python "${{ matrix.python-version }}"
-          pytest -q
-          packages/python/tests/test_vite_vanilla_example.py
-          skills/notebook-to-static-app/tests
+        run: |
+          make test-application \
+            APPLICATION_UV_FLAGS="--frozen --isolated --python ${{ matrix.python-version }}"
+          uv run \
+            --frozen \
+            --isolated \
+            --group test \
+            --all-extras \
+            --python "${{ matrix.python-version }}" \
+            pytest -q skills/notebook-to-static-app/tests
 
   test-frontend:
     name: Frontend

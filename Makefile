@@ -2,7 +2,7 @@ SHELL := /bin/bash
 .SHELLFLAGS := -eu -o pipefail -c
 .DEFAULT_GOAL := help
 
-.PHONY: help bootstrap format lint typecheck test build docs-examples docs-build docs-serve check package
+.PHONY: help bootstrap format lint typecheck test test-application build docs-examples docs-build docs-serve check package
 .PHONY: _anti-slop-check
 
 FORMAT_PATHS := \
@@ -28,6 +28,7 @@ FORMAT_PATHS := \
 LINT_PATHS := .pnpmfile.mjs apps examples packages vite.config.ts
 PYTHON_PATHS := packages/python scripts skills
 PYTEST_WORKERS ?= 4
+APPLICATION_UV_FLAGS ?=
 DIST_DIR := $(CURDIR)/dist
 PYTHON_DIST_DIR := $(DIST_DIR)/python
 NPM_DIST_DIR := $(DIST_DIR)/npm
@@ -64,10 +65,15 @@ test: ## Run Python, browser core, loader, skill, and example tests.
 	$(VP) run -r test
 	uv run --group test --all-extras pytest -q -n $(PYTEST_WORKERS) --dist worksteal \
 		--max-worker-restart=0 \
-		-m "not serial" \
+		-m "not serial and not application" \
 		packages/python/tests \
 		skills/notebook-to-static-app/tests
 	uv run --group test --all-extras pytest -q -m serial packages/python/tests
+	@$(MAKE) --no-print-directory test-application
+
+test-application: ## Run deterministic notebook build, reuse, and capture contracts.
+	uv run $(APPLICATION_UV_FLAGS) --group test --all-extras \
+		pytest -q -m application packages/python/tests
 
 build: ## Build Python, npm, docs, and example packages.
 	$(VP) run -r build
