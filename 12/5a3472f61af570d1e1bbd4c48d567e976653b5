@@ -1,0 +1,22 @@
+packages/portable-json/tests/portable-json.test.ts
+  s_7bd1a1825d4e15::t_6d3197f141e55c 90-95
+packages/portable-json/src/convert.ts
+  s_7bd1a1825d4e15::t_e5a7d6cefdbdc4 148
+  s_7bd1a1825d4e15::t_a7ddf47492471a 137,141,145-147,149-150
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "125a3472f61af570d1e1bbd4c48d567e976653b5",
+  "prompts": {},
+  "sessions": {
+    "s_7bd1a1825d4e15": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06c69-4fb2-7271-bbed-a0abfc74e547",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
