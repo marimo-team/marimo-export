@@ -24,7 +24,7 @@ python_inputs: &python_inputs
   - "packages/python/src/**"
   - "packages/python/tests/**"
   - "scripts/*.py"
-  - "scripts/check-release.sh"
+  - "scripts/*.sh"
   - "skills/notebook-to-static-app/scripts/**"
   - "skills/notebook-to-static-app/tests/**"
   - "examples/quickstart/*.py"

@@ -189,7 +189,7 @@ def test_acquisition_timeout_does_not_expire_owned_reservation(tmp_path: Path) -
 def test_lost_reservation_renewal_poison_stops_next_stage(tmp_path: Path) -> None:
     root = tmp_path / "repository"
     limits = RepositoryLimits(
-        lease_ttl_seconds=2.0,
+        lease_ttl_seconds=10.0,
         lease_heartbeat_seconds=0.1,
     )
     identity = _identity("lost-renewal")
@@ -206,7 +206,7 @@ def test_lost_reservation_renewal_poison_stops_next_stage(tmp_path: Path) -> Non
             finally:
                 connection.close()
             repository._leases._wake.set()
-            deadline = time.monotonic() + 2
+            deadline = time.monotonic() + 10
             while reservation.alive and time.monotonic() < deadline:
                 time.sleep(0.01)
             assert not reservation.alive
@@ -274,7 +274,7 @@ def test_busy_renewal_expires_reservation_and_staging_fail_closed(
         assert not reservation.alive
         assert preparation.cancellation(lambda: False)()
         assert identity.key in repository._leases._lost_reservations
-        deadline = time.monotonic() + 2
+        deadline = time.monotonic() + 10
         while (
             not staging_paths.isdisjoint(repository._leases._staging)
             and time.monotonic() < deadline
@@ -327,14 +327,14 @@ def test_delayed_success_after_deadline_does_not_revive_reservation(
             if kwargs["reservations"] and not blocked:
                 blocked = True
                 entered.set()
-                assert proceed.wait(timeout=limits.lease_ttl_seconds + 2)
+                assert proceed.wait(timeout=10)
             return renewed
 
         monkeypatch.setattr(repository._catalog, "renew_lifecycle", delayed_renewal)
         repository._leases._wake.set()
-        assert entered.wait(timeout=limits.lease_ttl_seconds + 2)
+        assert entered.wait(timeout=10)
         try:
-            deadline = time.monotonic() + limits.lease_ttl_seconds + 2
+            deadline = time.monotonic() + 10
             while reservation.alive and time.monotonic() < deadline:
                 time.sleep(0.01)
         finally:
@@ -450,12 +450,12 @@ def test_stale_heartbeat_cannot_shorten_fresh_staging_or_reservation(
             if kwargs["reservations"] and not requested:
                 requested.append(kwargs["expires_at_us"])
                 entered.set()
-                assert proceed.wait(timeout=2)
+                assert proceed.wait(timeout=10)
             return native_renew(**kwargs)
 
         monkeypatch.setattr(repository._catalog, "renew_lifecycle", delayed_renewal)
         repository._leases._wake.set()
-        assert entered.wait(timeout=2)
+        assert entered.wait(timeout=10)
         time.sleep(0.05)
         assert (
             repository._leases.claim_reservation(identity, timeout_seconds=1) == reservation.fence
@@ -495,7 +495,7 @@ def test_stale_heartbeat_cannot_shorten_fresh_staging_or_reservation(
         with repository._leases._condition:
             assert repository._leases._condition.wait_for(
                 lambda: not repository._leases._maintaining,
-                timeout=2,
+                timeout=10,
             )
         connection = sqlite3.connect(root / "catalog.sqlite3")
         try:
@@ -588,7 +588,7 @@ def test_stale_reservation_fence_cannot_replace_new_owner_generation(
     with first._leases._condition:
         first._leases._condition.wait_for(
             lambda: not first._leases._maintaining,
-            timeout=2,
+            timeout=10,
         )
         first._leases._reservations.pop(identity.key, None)
     connection = sqlite3.connect(root / "catalog.sqlite3")

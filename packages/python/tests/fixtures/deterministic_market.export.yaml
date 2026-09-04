@@ -1,0 +1,30 @@
+schema: marimo-export.spec.v2
+default_state: baseline
+states:
+  baseline: {}
+  full_market:
+    symbols_selector: [ALPHA, BETA, GAMMA]
+outputs:
+  market_explorer:
+    source: { kind: export, selector: market_explorer }
+    exporter: anywidget.bundle
+  market_summary:
+    source: { kind: json, selector: market_summary }
+  performance_chart:
+    source: { kind: export, selector: performance }
+    exporter: altair.vegalite
+  performance_snapshot:
+    source: { kind: export, selector: performance }
+    exporter:
+      name: altair.png
+      options:
+        scale: 1
+      dependencies: []
+  price_history:
+    source: { kind: export, selector: price_history }
+    exporter:
+      name: parquet.table
+      options:
+        compression: snappy
+        filename: price-history.parquet
+      dependencies: []

@@ -40,6 +40,17 @@ def _checksum_writer() -> Callable[[Path], Path]:
     return cast(Callable[[Path], Path], module.write_checksum_manifest)
 
 
+def _public_release_verifier() -> Any:
+    spec = spec_from_file_location(
+        "verify_public_release",
+        ROOT / "scripts/verify_public_release.py",
+    )
+    assert spec is not None and spec.loader is not None
+    module = module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def _git(root: Path, *arguments: str) -> str:
     result = subprocess.run(
         ["git", *arguments],
@@ -229,6 +240,69 @@ def test_publish_preflight_accepts_exact_sha_with_successful_ci(tmp_path: Path) 
     assert result.returncode == 0, result.stderr
 
 
+def test_release_preflight_accepts_detached_checkout_at_origin_main(tmp_path: Path) -> None:
+    remote = tmp_path / "remote.git"
+    checkout = tmp_path / "checkout"
+    commands = tmp_path / "commands"
+    remote.mkdir()
+    checkout.mkdir()
+    commands.mkdir()
+    _git(remote, "init", "--bare")
+    _git(checkout, "init", "--initial-branch=main")
+    _git(checkout, "config", "user.email", "release@example.com")
+    _git(checkout, "config", "user.name", "marimo-export Release")
+    scripts = checkout / "scripts"
+    scripts.mkdir()
+    shutil.copy2(ROOT / "scripts/release.sh", scripts / "release.sh")
+    _git(checkout, "add", "scripts/release.sh")
+    _git(checkout, "commit", "-m", "release")
+    _git(checkout, "remote", "add", "origin", str(remote))
+    _git(checkout, "push", "--set-upstream", "origin", "main")
+    _git(checkout, "checkout", "--detach")
+    assert _git(checkout, "branch", "--show-current") == ""
+
+    _write_command(commands / "uv", "#!/bin/sh\nprintf '0.1.0\\n'\n")
+    _write_command(commands / "node", "#!/bin/sh\nprintf '0.1.0\\n'\n")
+    _write_command(
+        commands / "curl",
+        """#!/bin/sh
+case "$*" in
+  *0.1.0*) printf '404\n' ;;
+  *) printf '200\n' ;;
+esac
+""",
+    )
+    _write_command(
+        commands / "gh",
+        """#!/bin/sh
+if [ "$1 $2" = "repo view" ]; then
+    case "$*" in
+      *visibility*) printf 'PUBLIC\n' ;;
+      *) printf 'https://example.test/marimo-export\n' ;;
+    esac
+elif [ "$1" = "api" ]; then
+    printf '1\n'
+else
+    printf '123\ncompleted\nsuccess\nhttps://example.test/ci\n'
+fi
+""",
+    )
+
+    result = subprocess.run(
+        [_bash(), "scripts/release.sh", "--dry-run"],
+        cwd=checkout,
+        env={
+            **os.environ,
+            "PATH": f"{commands}{os.pathsep}{os.environ['PATH']}",
+        },
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "Dry run complete" in result.stdout
+
+
 def _workflow() -> tuple[str, dict[str, Any]]:
     source = ROOT.joinpath(".github/workflows/publish.yml").read_text(encoding="utf-8")
     workflow = cast(dict[str, Any], yaml.load(source, Loader=yaml.BaseLoader))
@@ -247,6 +321,7 @@ def test_publish_workflow_coordinates_python_and_browser_distributions() -> None
     assert isinstance(jobs, dict)
 
     build = jobs["build"]
+    assert all(step.get("name") != "Run release gate" for step in build["steps"])
     upload = _step(build, "Upload release artifacts")
     assert upload["with"]["path"].splitlines() == [
         "dist/SHA256SUMS",
@@ -274,6 +349,7 @@ def test_publish_workflow_scopes_oidc_to_attestation_and_registry_jobs() -> None
     npm_setup = _step(jobs["publish-npm"], "Set up Node.js")
     assert npm_setup["with"]["node-version"] == "24"
     assert "registry-url" not in npm_setup["with"]
+    assert _step(jobs["publish-npm"], "Enable pnpm")["run"] == "corepack enable pnpm"
     assert jobs["publish-pypi"]["environment"]["name"] == "pypi"
     assert jobs["publish-pypi"]["permissions"]["id-token"] == "write"
     assert "secrets." not in source
@@ -349,6 +425,51 @@ def test_checksum_manifest_addresses_flat_github_release_assets(tmp_path: Path) 
     }
 
 
+def test_public_release_verifier_checks_the_complete_downloaded_package_set(
+    tmp_path: Path,
+) -> None:
+    version = "0.1.0"
+    artifacts = {
+        f"marimo-team-marimo-export-{version}.tgz": b"browser",
+        f"marimo_export-{version}-py3-none-any.whl": b"wheel",
+        f"marimo_export-{version}.tar.gz": b"source",
+    }
+    for name, contents in artifacts.items():
+        (tmp_path / name).write_bytes(contents)
+    (tmp_path / "SHA256SUMS").write_text(
+        "".join(
+            f"{sha256(contents).hexdigest()}  {name}\n"
+            for name, contents in sorted(artifacts.items())
+        ),
+        encoding="utf-8",
+    )
+    verifier = _public_release_verifier()
+    names = verifier._expected_artifacts(
+        version,
+        [{"name": name} for name in (*artifacts, "SHA256SUMS")],
+    )
+
+    checksums = verifier._verify_checksums(tmp_path, names)
+
+    assert checksums == {name: sha256(contents).hexdigest() for name, contents in artifacts.items()}
+
+
+def test_public_release_verifier_rejects_an_extra_release_asset() -> None:
+    verifier = _public_release_verifier()
+
+    with pytest.raises(RuntimeError, match="package set"):
+        verifier._expected_artifacts(
+            "0.1.0",
+            [
+                {"name": "SHA256SUMS"},
+                {"name": "marimo-team-marimo-export-0.1.0.tgz"},
+                {"name": "marimo_export-0.1.0-py3-none-any.whl"},
+                {"name": "marimo_export-0.1.0.tar.gz"},
+                {"name": "unexpected.zip"},
+            ],
+        )
+
+
 def test_npm_publisher_runs_registry_commands_from_the_artifact_directory(
     tmp_path: Path,
 ) -> None:
@@ -363,9 +484,7 @@ def test_npm_publisher_runs_registry_commands_from_the_artifact_directory(
 
     commands = tmp_path / "commands"
     commands.mkdir()
-    _write_command(
-        commands / "npm",
-        """#!/bin/sh
+    registry_command = """#!/bin/sh
 directory="$PWD"
 while [ "$directory" != "/" ]; do
     if [ -f "$directory/package.json" ]; then
@@ -377,11 +496,9 @@ while [ "$directory" != "/" ]; do
     fi
     directory="$parent"
 done
-if [ "$1" = "view" ]; then
-    exit 1
-fi
-""",
-    )
+"""
+    _write_command(commands / "pnpm", registry_command + "exit 1\n")
+    _write_command(commands / "npm", registry_command)
     result = subprocess.run(
         [_bash(), str(ROOT / "scripts/publish-npm.sh"), str(tarball)],
         cwd=ROOT,

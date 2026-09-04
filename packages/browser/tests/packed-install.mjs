@@ -8,7 +8,6 @@ import { fileURLToPath } from "node:url";
 const packageRoot = fileURLToPath(new URL("..", import.meta.url));
 const manifest = JSON.parse(await readFile(join(packageRoot, "package.json"), "utf8"));
 const temporaryRoot = await mkdtemp(join(tmpdir(), "marimo-export-browser-package-"));
-const npm = process.platform === "win32" ? "npm.cmd" : "npm";
 const pnpm = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
 const pnpmTarball = join(temporaryRoot, "marimo-export-pnpm.tgz");
 const peerNames = Object.keys(manifest.peerDependencies);
@@ -127,7 +126,7 @@ void openExport;
 `,
     tarball: pnpmTarball,
   });
-  await validateProject(coreRoot, [], npm);
+  await validateProject(coreRoot, [], pnpm);
   await inspectInstalledManifest(coreRoot);
 
   await Promise.all(
@@ -139,7 +138,7 @@ void openExport;
     }),
   );
 
-  process.stdout.write("Packed browser npm and pnpm consumer contracts passed.\n");
+  process.stdout.write("Packed browser pnpm consumer contracts passed.\n");
 } finally {
   await rm(temporaryRoot, { recursive: true, force: true });
 }

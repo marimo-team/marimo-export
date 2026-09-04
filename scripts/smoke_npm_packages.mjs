@@ -10,28 +10,16 @@ if (browserDependency === undefined || expectedVersion === undefined) {
 
 const browserSpec = await packageSpec(browserDependency);
 const temporaryRoot = await mkdtemp(resolve(tmpdir(), "marimo-export-npm-smoke-"));
-const npm = process.platform === "win32" ? "npm.cmd" : "npm";
 const pnpm = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
 const node = process.execPath;
 
 try {
-  for (const manager of [npm, pnpm]) {
-    const name = manager === npm ? "npm" : "pnpm";
-    const root = resolve(temporaryRoot, name);
-    // Keep each package manager isolated from the other's temporary install.
-    // oxlint-disable-next-line no-await-in-loop
-    await createConsumer(root);
-    const installArguments =
-      manager === npm
-        ? ["install", "--ignore-scripts", "--no-audit", "--no-fund"]
-        : ["install", "--ignore-scripts"];
-    // oxlint-disable-next-line no-await-in-loop
-    await run(manager, installArguments, root);
-    // oxlint-disable-next-line no-await-in-loop
-    await run(node, ["smoke.mjs", expectedVersion], root);
-  }
+  const root = resolve(temporaryRoot, "pnpm");
+  await createConsumer(root);
+  await run(pnpm, ["install", "--ignore-scripts"], root);
+  await run(node, ["smoke.mjs", expectedVersion], root);
   process.stdout.write(
-    `Verified marimo-export ${expectedVersion} through isolated npm and pnpm installs.\n`,
+    `Verified marimo-export ${expectedVersion} through an isolated pnpm install.\n`,
   );
 } finally {
   await rm(temporaryRoot, { recursive: true, force: true });

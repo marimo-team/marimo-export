@@ -8,10 +8,9 @@ usage() {
 	cat <<'EOF'
 Usage: ./scripts/release.sh [--dry-run]
 
-Releases the coordinated Python and npm package version committed to main. The
-command requires a clean, synchronized main branch and successful CI for its
-current commit. It creates and pushes the annotated vX.Y.Z tag that starts
-trusted publishing.
+Releases the coordinated Python and npm package version at origin/main. The
+command requires a clean checkout at that exact commit and successful CI. It
+creates and pushes the annotated vX.Y.Z tag that starts trusted publishing.
 EOF
 }
 
@@ -101,11 +100,6 @@ for command in curl gh git node uv; do
 	require_command "$command"
 done
 
-branch="$(git branch --show-current)"
-if [[ "$branch" != "main" ]]; then
-	error "Releases must run from main. Current branch: $branch"
-	exit 1
-fi
 if [[ -n "$(git status --porcelain)" ]]; then
 	error "The working tree must be clean"
 	git status --short >&2
@@ -116,7 +110,7 @@ git fetch origin main --tags
 commit="$(git rev-parse HEAD)"
 remote_commit="$(git rev-parse origin/main)"
 if [[ "$commit" != "$remote_commit" ]]; then
-	error "Local main must match origin/main"
+	error "HEAD must match origin/main"
 	exit 1
 fi
 
@@ -137,13 +131,12 @@ if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
 	error "Package version must use final X.Y.Z form: $version"
 	exit 1
 fi
-for manifest in packages/browser/package.json; do
-	npm_version="$(node -p "require('./$manifest').version")"
-	if [[ "$npm_version" != "$version" ]]; then
-		error "Public package versions must match: Python $version, $manifest $npm_version"
-		exit 1
-	fi
-done
+manifest="packages/browser/package.json"
+npm_version="$(node -p "require('./$manifest').version")"
+if [[ "$npm_version" != "$version" ]]; then
+	error "Public package versions must match: Python $version, $manifest $npm_version"
+	exit 1
+fi
 
 tag="v$version"
 if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
