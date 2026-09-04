@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import io
+import json
 import os
 import shutil
 import subprocess
+import tarfile
 from collections.abc import Callable
 from hashlib import sha256
 from importlib.util import module_from_spec, spec_from_file_location
@@ -357,3 +360,46 @@ def test_checksum_manifest_addresses_flat_github_release_assets(tmp_path: Path) 
         Path(relative).name: sha256(contents).hexdigest()
         for relative, contents in artifacts.items()
     }
+
+
+def test_npm_publisher_runs_registry_commands_from_the_artifact_directory(
+    tmp_path: Path,
+) -> None:
+    artifacts = tmp_path / "artifacts"
+    artifacts.mkdir()
+    artifacts.joinpath("artifact-directory").touch()
+    tarball = artifacts / "marimo-export.tgz"
+    manifest = json.dumps({"name": "@marimo-team/marimo-export", "version": "0.0.1"}).encode()
+    with tarfile.open(tarball, "w:gz") as archive:
+        info = tarfile.TarInfo("package/package.json")
+        info.size = len(manifest)
+        archive.addfile(info, io.BytesIO(manifest))
+
+    commands = tmp_path / "commands"
+    commands.mkdir()
+    _write_command(
+        commands / "npm",
+        """#!/bin/sh
+if [ -f package.json ]; then
+    exit 70
+fi
+if [ ! -f artifact-directory ]; then
+    exit 71
+fi
+if [ "$1" = "view" ]; then
+    exit 1
+fi
+""",
+    )
+    result = subprocess.run(
+        [_bash(), str(ROOT / "scripts/publish-npm.sh"), str(tarball)],
+        cwd=ROOT,
+        env={
+            **os.environ,
+            "PATH": f"{commands}{os.pathsep}{os.environ['PATH']}",
+        },
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
