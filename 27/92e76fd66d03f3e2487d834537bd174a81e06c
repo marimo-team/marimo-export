@@ -1,0 +1,21 @@
+apps/docs/public/brand/marimo-export-favicon-dark.svg
+  s_58ce063196a79b::t_3bb50344cbb527 1-14
+apps/docs/public/brand/marimo-export-favicon-light.svg
+  s_58ce063196a79b::t_3bb50344cbb527 1-14
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "2792e76fd66d03f3e2487d834537bd174a81e06c",
+  "prompts": {},
+  "sessions": {
+    "s_58ce063196a79b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06c0d-da14-7bb0-8620-e863bee14000",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
