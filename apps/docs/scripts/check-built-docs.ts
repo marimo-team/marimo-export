@@ -139,7 +139,7 @@ const socialMetadata = new Map(
     .filter((entry): entry is readonly [string, string] => entry[0] !== undefined),
 );
 const expectedSocialMetadata = new Map([
-  ["og:title", "marimo-export: Prepare notebook results. Read them anywhere."],
+  ["og:title", "marimo-export: Prepare notebook results. Share them anywhere."],
   [
     "og:description",
     "Select the states and outputs to publish from a marimo notebook. marimo-export writes a portable, verified notebook export that browser applications and agents read without a Python runtime or a copy of the notebook source.",
@@ -152,7 +152,7 @@ const expectedSocialMetadata = new Map([
     "marimo-export mark pointing from prepared notebook states toward a portable export.",
   ],
   ["twitter:card", "summary_large_image"],
-  ["twitter:title", "marimo-export: Prepare notebook results. Read them anywhere."],
+  ["twitter:title", "marimo-export: Prepare notebook results. Share them anywhere."],
   [
     "twitter:description",
     "Select the states and outputs to publish from a marimo notebook. marimo-export writes a portable, verified notebook export that browser applications and agents read without a Python runtime or a copy of the notebook source.",

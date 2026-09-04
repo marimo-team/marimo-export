@@ -8,7 +8,7 @@
 </p>
 
 <p align="center">
-  <strong>Prepare notebook results. Read them anywhere.</strong>
+  <strong>Prepare notebook results. Share them anywhere.</strong>
 </p>
 
 <p align="center">

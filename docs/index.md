@@ -1,11 +1,11 @@
 ---
 layout: home
-title: "marimo-export: Prepare notebook results. Read them anywhere."
+title: "marimo-export: Prepare notebook results. Share them anywhere."
 titleTemplate: false
 description: Select the states and outputs to publish from a marimo notebook. marimo-export writes a portable, verified notebook export that browser applications and agents read without a Python runtime or a copy of the notebook source.
 
 hero:
-  text: Prepare notebook results. Read them anywhere.
+  text: Prepare notebook results. Share them anywhere.
   tagline: Select the states and outputs to publish from a marimo notebook. marimo-export writes a portable, verified notebook export that browser applications and agents read without a Python runtime or a copy of the notebook source.
   image:
     light: /brand/marimo-export-lockup-stacked-light.svg
