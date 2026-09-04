@@ -331,7 +331,8 @@ def busy_heartbeat(**_kwargs):
 
 repository._catalog.renew_lifecycle = busy_heartbeat
 repository._leases._wake.set()
-ready.write_text(
+ready_staging = ready.with_name(f".{ready.name}.tmp")
+ready_staging.write_text(
     json.dumps(
         {
             "fence": reservation.fence,
@@ -340,6 +341,7 @@ ready.write_text(
     ),
     encoding="utf-8",
 )
+os.replace(ready_staging, ready)
 deadline = time.monotonic() + 10
 while not proceed.exists() and time.monotonic() < deadline:
     time.sleep(0.01)
