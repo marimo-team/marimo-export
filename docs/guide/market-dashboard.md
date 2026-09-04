@@ -10,6 +10,13 @@ five states from a Yahoo Finance notebook, verifies the notebook export, then
 opens a vanilla [TypeScript](https://www.typescriptlang.org/) application that consumes five output
 representations.
 
+The Notebook tab opens a static HTML export of the original marimo source and
+its captured outputs. The Exported app tab reads five prepared states from a
+verified notebook export. The application starts no Python runtime, WebAssembly
+runtime, or application server.
+
+<StaticApp />
+
 ## Prerequisites
 
 Run this example from a repository checkout with:

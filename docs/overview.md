@@ -103,6 +103,13 @@ Opening validates the index. Loading verifies one selected asset. Complete
 verification checks the full export closure. Mounting a chart, widget, or custom
 interactive result grants its code the browser page's authority.
 
+## Application integration
+
+[Marimo Studio](https://github.com/marimo-team/marimo-studio) uses marimo-export
+to pair authored web views with prepared notebook states for zero-Python static
+exports. Studio owns view source and presentation while marimo-export owns state
+preparation, portable outputs, integrity, and browser loading.
+
 ## The finite boundary
 
 A consumer can resolve input vectors already present in the state-output

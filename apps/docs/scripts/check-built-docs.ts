@@ -2,6 +2,7 @@ import { readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { documentationExample } from "../example.ts";
 import { documentationPages, topNavigation } from "../navigation.ts";
 
 const outputDirectory = fileURLToPath(new URL("../.vitepress/dist/", import.meta.url));
@@ -106,6 +107,16 @@ const escapedBaseReferences = baseName
       .filter(isString)
       .filter((reference) => !reference.startsWith(`${assetPrefix}/`))
   : [];
+const applicationTab = documentationExample.tabs.find(({ key }) => key === "application");
+const notebookTab = documentationExample.tabs.find(({ key }) => key === "notebook");
+if (applicationTab === undefined || notebookTab === undefined) {
+  throw new Error("Documentation example tabs are incomplete.");
+}
+const applicationPath = applicationTab.href.replace(/^\//, "");
+const notebookPath = notebookTab.href.replace(/^\//, "");
+const exampleIndex = await readFile(join(outputDirectory, applicationPath), "utf8").catch(() => "");
+const notebookIndex = await readFile(join(outputDirectory, notebookPath), "utf8").catch(() => "");
+const exampleHref = `${assetPrefix}${applicationTab.href}`;
 const errors = [
   ...formatList("Missing or empty build artifacts", missing),
   ...formatList("Duplicate llms.txt links", duplicates(llmsLinks)),
@@ -126,6 +137,25 @@ const errors = [
   ...(index.includes(`href="${navigationHref}"`)
     ? []
     : [`Built index does not use the expected navigation prefix ${assetPrefix || "/"}.`]),
+  ...(renderedDocumentation.includes(`src="${exampleHref}"`)
+    ? []
+    : [`Built documentation does not embed the market dashboard at ${exampleHref}.`]),
+  ...((
+    await missingFiles([
+      applicationPath,
+      "examples/market-dashboard/application/export/index.json",
+      notebookPath,
+    ])
+  ).length === 0
+    ? []
+    : ["Built documentation is missing the market dashboard application, export, or notebook."]),
+  ...(exampleIndex && !/\b(?:href|src)="\/(?!\/)/.test(exampleIndex)
+    ? []
+    : ["Built market dashboard assets are not document-relative."]),
+  ...(notebookIndex.includes("<marimo-code hidden") &&
+  notebookIndex.includes("<marimo-filename hidden>finance.py")
+    ? []
+    : ["Built documentation notebook is missing its source or captured output."]),
   ...formatList("Root-absolute references outside the configured base path", [
     ...new Set(escapedBaseReferences),
   ]),
@@ -136,5 +166,5 @@ if (errors.length > 0) {
 }
 
 console.log(
-  `Built documentation contains ${documentationPages.length} HTML, Markdown, LLM, and sitemap routes.`,
+  `Built documentation contains ${documentationPages.length} routes, one static notebook, and one verified static application.`,
 );
