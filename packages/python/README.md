@@ -33,15 +33,28 @@ app = marimo.App()
 def _():
     import marimo as mo
 
-    days = mo.ui.slider(1, 30, value=7, label="Days")
-    return days, mo
+    return (mo,)
 
 
 @app.cell
-def _(days, mo):
+def _(mo):
+    days = mo.ui.slider(1, 30, value=7, label="Days")
+    days
+    return (days,)
+
+
+@app.cell
+def _(days):
     summary = {"days": days.value, "label": f"Last {days.value} days"}
+    summary
+    return (summary,)
+
+
+@app.cell
+def _(days, mo, summary):
     report = mo.md(f"## {summary['label']}\n\nSelected window: **{days.value} days**")
-    return report, summary
+    report
+    return (report,)
 
 
 if __name__ == "__main__":
@@ -166,7 +179,7 @@ AnyWidget bundles.
 - [Python API](https://marimo-team.github.io/marimo-export/reference/python-api)
 - [Choose states and outputs](https://marimo-team.github.io/marimo-export/guide/choose-states)
 - [CLI reference](https://marimo-team.github.io/marimo-export/reference/cli)
-- [Use notebook exports with agents](https://marimo-team.github.io/marimo-export/guide/agents-and-automation)
+- [Agents and automation](https://marimo-team.github.io/marimo-export/guide/agents-and-automation)
 
 Preparing an export executes notebook code with the notebook environment's file,
 credential, network, and package access.

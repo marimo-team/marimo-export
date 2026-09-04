@@ -127,7 +127,7 @@ the page's authority. Apply the application's rendering policy,
 [Content Security Policy](https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP), and origin rules before
 mounting executable output.
 
-- [Build a browser application](https://marimo-team.github.io/marimo-export/guide/browser-applications)
+- [Browser applications](https://marimo-team.github.io/marimo-export/guide/browser-applications)
 - [Browser API](https://marimo-team.github.io/marimo-export/reference/browser-api)
 - [Browser compatibility and limits](https://marimo-team.github.io/marimo-export/reference/browser/errors-and-limits)
 - [Output representations](https://marimo-team.github.io/marimo-export/reference/representations)

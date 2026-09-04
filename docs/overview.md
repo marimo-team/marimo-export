@@ -1,9 +1,9 @@
 ---
-title: What is marimo-export?
+title: Overview
 description: Run selected marimo notebook states and publish their outputs for browsers, Python, and agents.
 ---
 
-# What is marimo-export?
+# Overview
 
 marimo-export runs selected states of a [marimo](https://marimo.io/) notebook and writes their named
 outputs to a portable directory called a **notebook export**. Browser
@@ -91,5 +91,5 @@ A consumer can resolve `weekly`, `monthly`, or either complete input vector. An
 input vector absent from the export needs another producer run or a live Python
 service.
 
-Related: [Choose notebook states](concepts/states-and-inputs) and [Store and load
-outputs](concepts/outputs-and-representations).
+Related: [States](concepts/states-and-inputs) and
+[Outputs](concepts/outputs-and-representations).

@@ -120,7 +120,7 @@ The concept pages introduce them through worked examples.
 | Authentication           | Evidence supplied by a delivery channel or another trust system that establishes who published the integrity root. Export verification establishes consistency with that root. |
 | marimo computation cache | marimo-owned storage for notebook cell results, invalidation, restoration, serialization, signing, and cache stores. It is separate from the export repository.                |
 
-Read [Choose notebook states](../concepts/states-and-inputs), [Store and load
-outputs](../concepts/outputs-and-representations), [Reuse earlier
-results](../concepts/preparation-and-reuse), and [Verify and trust an
-export](../concepts/integrity-and-trust) for worked explanations.
+Read [States](../concepts/states-and-inputs),
+[Outputs](../concepts/outputs-and-representations),
+[Reuse](../concepts/preparation-and-reuse), and [Verification and
+trust](../concepts/integrity-and-trust) for worked explanations.

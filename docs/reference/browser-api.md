@@ -87,5 +87,5 @@ and verifying do not import notebook-authored browser modules. Mounting an
 AnyWidget, Vega-Lite chart, or custom interactive value grants that code the
 page's authority.
 
-[Build a browser application](../guide/browser-applications) applies these
+[Browser applications](../guide/browser-applications) applies these
 contracts to staged loading, visible commit, and mount disposal.

@@ -1,9 +1,9 @@
 ---
-title: Reuse earlier results
+title: Reuse
 description: See when notebook states run and when marimo-export can reuse earlier results.
 ---
 
-# Reuse earlier results
+# Reuse
 
 The first quickstart build runs `weekly` and `monthly`. Later builds can reuse
 one state's outputs or the complete export when the notebook, output
@@ -93,6 +93,6 @@ with prepare("report.py", spec=spec) as prepared:
 HTTP response that can outlive the parent handle. That handle protects the
 complete export generation from retention. Close it after the consumer finishes.
 
-Related: [How notebook caching fits](caching) covers the cell-level decision.
+Related: [Caching](caching) covers the cell-level decision.
 [Produce an export from Python](../reference/python/produce) defines the complete
 plan, prepare, progress, result, and lease contracts.

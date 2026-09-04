@@ -87,6 +87,6 @@ The producer retains notebook execution, private data access, credentials,
 Python dependencies, and responsibility for preparing new states. The notebook
 source code is not part of the notebook export.
 
-[Build your first notebook export](guide/getting-started) when the finite
-boundary fits. The quickstart creates the two states and two outputs in the
-example, verifies the written files, and reads them back.
+With `weekly` and `monthly`, two states and two outputs are enough to serve the
+application. [Get started](guide/getting-started) builds, verifies, and reads
+that export.

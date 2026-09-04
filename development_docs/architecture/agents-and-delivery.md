@@ -34,7 +34,7 @@ lifecycle.
 | -------------------------- | ---------------------------------------------------- | --------------------------------------------------------------------------------- |
 | Inspection                 | `inspection.py`, `producer.py`, live-session bridge  | [Sessions and inspection](../../docs/reference/python/sessions-and-inspection.md) |
 | State and output authoring | `spec.py`, `_execution/plan.py`                      | [StateSpace and ExportSpec](../../docs/reference/export-spec.md)                  |
-| File and live production   | `_build.py`, `_services`, `producer.py`, `client.py` | [Build or capture](../../docs/guide/build-and-capture.md)                         |
+| File and live production   | `_build.py`, `_services`, `producer.py`, `client.py` | [Build and capture](../../docs/guide/build-and-capture.md)                        |
 | Agent workflow             | `skills/notebook-to-static-app`                      | [Agents and automation](../../docs/guide/agents-and-automation.md)                |
 | Command-line interface     | `_cli`                                               | [CLI reference](../../docs/reference/cli.md)                                      |
 

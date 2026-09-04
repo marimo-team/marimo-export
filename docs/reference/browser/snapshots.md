@@ -54,7 +54,7 @@ interface MarimoOutputSnapshot {
 ```
 
 `projectionSha256` identifies the output-specific capture used to produce this
-published output. [Store and load outputs](../../concepts/outputs-and-representations)
+published output. [Outputs](../../concepts/outputs-and-representations)
 explains that projection boundary. `ownerCellId`
 identifies the authored cell that owns the output's UI object graph. `output` is
 `null` when the formatted value has no terminal output.

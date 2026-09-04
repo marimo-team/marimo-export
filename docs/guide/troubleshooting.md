@@ -1,9 +1,9 @@
 ---
-title: Troubleshoot notebook exports
+title: Troubleshooting
 description: Diagnose producer, repository, integrity, browser, and mount failures from the smallest observable boundary.
 ---
 
-# Troubleshoot notebook exports
+# Troubleshooting
 
 Start with the command or consumer that failed. Preserve its stable error code,
 details, and cause before changing files or clearing repository state.

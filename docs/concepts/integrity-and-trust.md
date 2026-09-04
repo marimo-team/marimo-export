@@ -1,9 +1,9 @@
 ---
-title: Verify and trust an export
+title: Verification and trust
 description: Learn what verification checks, how to trust a publisher, and when an output can run browser code.
 ---
 
-# Verify and trust an export
+# Verification and trust
 
 The quickstart's `report` output points to an asset file named by its SHA-256
 digest. Its descriptor records the expected path, size, and digest.
@@ -78,7 +78,7 @@ Notebook export verification protects the portable files after preparation.
 Configure both when the producer restores cached computation and consumers must
 verify exported bytes.
 
-[Build or capture](../guide/build-and-capture) produces an export. [Read an
+[Build and capture](../guide/build-and-capture) produces an export. [Read an
 export](../guide/consume-an-export) covers Python, browser, and agent consumers.
 Use the [export format reference](../reference/export-format) for exact canonical
 JSON, codec, asset, and size rules.

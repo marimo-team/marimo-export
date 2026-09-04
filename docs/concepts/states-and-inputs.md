@@ -1,9 +1,9 @@
 ---
-title: Choose notebook states
+title: States
 description: See how omitted inputs get values, identical states share work, and readers select a state.
 ---
 
-# Choose notebook states
+# States
 
 The quickstart notebook begins with one input:
 
@@ -103,5 +103,5 @@ Observations remain authoring evidence until a chosen vector becomes an explicit
 state row. Run `marimo-export observations list NOTEBOOK --spec FILE` to inspect
 them.
 
-Related: [Store and load outputs](outputs-and-representations) follows `summary`
+Related: [Outputs](outputs-and-representations) follows `summary`
 and `report` from notebook results to consumer values.

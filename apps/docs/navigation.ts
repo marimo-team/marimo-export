@@ -19,7 +19,7 @@ interface DocumentationSection {
 
 const introductionItems = [
   { text: "marimo-export", link: "/" },
-  { text: "What is marimo-export?", link: "/overview" },
+  { text: "Overview", link: "/overview" },
   { text: "When to use marimo-export", link: "/why" },
   { text: "Get started", link: "/guide/getting-started" },
 ] satisfies readonly NavigationItem[];
@@ -29,7 +29,7 @@ const guideItems = [
     text: "Core ideas",
     collapsed: false,
     items: [
-      { text: "Notebook states", link: "/concepts/states-and-inputs" },
+      { text: "States", link: "/concepts/states-and-inputs" },
       {
         text: "Outputs",
         link: "/concepts/outputs-and-representations",
@@ -48,20 +48,20 @@ const guideItems = [
     collapsed: true,
     items: [
       { text: "Choose states and outputs", link: "/guide/choose-states" },
-      { text: "Build or capture", link: "/guide/build-and-capture" },
+      { text: "Build and capture", link: "/guide/build-and-capture" },
       { text: "Read an export", link: "/guide/consume-an-export" },
-      { text: "Build a browser application", link: "/guide/browser-applications" },
-      { text: "Use exports with agents", link: "/guide/agents-and-automation" },
+      { text: "Browser applications", link: "/guide/browser-applications" },
+      { text: "Agents and automation", link: "/guide/agents-and-automation" },
     ],
   },
   {
     text: "Publish and operate",
     collapsed: true,
     items: [
-      { text: "Serve a prepared publication", link: "/guide/prepared-publications" },
-      { text: "Create a representation", link: "/guide/custom-representations" },
-      { text: "Manage repository storage", link: "/guide/manage-repository" },
-      { text: "Deploy an export", link: "/guide/deploy" },
+      { text: "Prepared publications", link: "/guide/prepared-publications" },
+      { text: "Custom representations", link: "/guide/custom-representations" },
+      { text: "Repository storage", link: "/guide/manage-repository" },
+      { text: "Deployment", link: "/guide/deploy" },
       { text: "Troubleshoot", link: "/guide/troubleshooting" },
     ],
   },
@@ -155,12 +155,12 @@ export const topNavigation = [
     text: "Guide",
     items: [
       { text: "Get started", link: page("/guide/getting-started").link },
-      { text: "Notebook states", link: page("/concepts/states-and-inputs").link },
+      { text: "States", link: page("/concepts/states-and-inputs").link },
       {
         text: "Outputs",
         link: page("/concepts/outputs-and-representations").link,
       },
-      { text: "Build or capture", link: page("/guide/build-and-capture").link },
+      { text: "Build and capture", link: page("/guide/build-and-capture").link },
       { text: "Read an export", link: page("/guide/consume-an-export").link },
       { text: "Browser applications", link: page("/guide/browser-applications").link },
       { text: "Caching", link: page("/concepts/caching").link },

@@ -184,6 +184,7 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .static-app {
+  container-type: inline-size;
   display: grid;
   grid-template-rows: auto auto;
   margin: 2rem 0 3rem;
@@ -262,6 +263,7 @@ onBeforeUnmount(() => {
   align-items: center;
   color: var(--vp-c-brand-1);
   font-weight: 650;
+  white-space: nowrap;
 }
 
 .static-app__status > span {
@@ -344,6 +346,20 @@ onBeforeUnmount(() => {
   text-transform: uppercase;
 }
 
+@container (max-width: 48rem) {
+  .static-app__controls:not(.static-app__controls--compact) {
+    grid-template-areas:
+      "tabs open"
+      "runtime runtime"
+      "source source";
+    gap: 0.35rem 0.75rem;
+  }
+
+  .static-app__source-links {
+    justify-self: start;
+  }
+}
+
 @media (max-width: 639px) {
   .static-app {
     margin-inline: -1rem;
@@ -352,7 +368,7 @@ onBeforeUnmount(() => {
     border-radius: 0;
   }
 
-  .static-app__controls {
+  .static-app__controls:not(.static-app__controls--compact) {
     grid-template-areas:
       "tabs open"
       "runtime runtime";

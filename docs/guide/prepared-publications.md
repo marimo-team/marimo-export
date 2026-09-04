@@ -1,9 +1,9 @@
 ---
-title: Serve a prepared publication
+title: Prepared publications
 description: Publish a prepared manifest beside an immutable notebook export, then add refresh and route-grace ownership when the application needs updates.
 ---
 
-# Serve a prepared publication
+# Prepared publications
 
 A prepared publication gives a browser one small manifest that selects an
 exported state from one immutable notebook export. Start with a static manifest

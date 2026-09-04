@@ -1,9 +1,9 @@
 ---
-title: Build a browser application
+title: Browser applications
 description: Open a notebook export, resolve states, load outputs, and replace mounted values safely.
 ---
 
-# Build a browser application
+# Browser applications
 
 The browser package reads a notebook export through HTTP. Build the
 [deterministic quickstart](getting-started) first. Its `dist/report`

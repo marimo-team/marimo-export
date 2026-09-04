@@ -1,9 +1,9 @@
 ---
-title: Create a custom representation
+title: Custom representations
 description: Convert one notebook result to a versioned BlobAsset and validate it with a matching browser loader.
 ---
 
-# Create a custom representation
+# Custom representations
 
 A custom representation pairs a Python exporter with a consumer that recognizes
 the same versioned media type. Use a built-in representation when its data shape

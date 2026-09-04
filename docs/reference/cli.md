@@ -283,5 +283,5 @@ for planning, result, warning, and error field contracts.
 | `130` | Interrupted                               |
 | `141` | Closed output pipe                        |
 
-[Build or capture](../guide/build-and-capture) provides the complete producer
+[Build and capture](../guide/build-and-capture) provides the complete producer
 workflow.

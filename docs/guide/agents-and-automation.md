@@ -1,9 +1,9 @@
 ---
-title: Use notebook exports with agents
+title: Agents and automation
 description: Give agents prepared notebook data, verify its export bytes, and retain exact state and representation evidence.
 ---
 
-# Use notebook exports with agents
+# Agents and automation
 
 A notebook export gives an agent a finite, named data source. The agent can
 verify the complete export, select an exported state, decode a supported output,
@@ -103,7 +103,7 @@ and network access. Review the notebook and selected outputs before allowing an
 agent to run them.
 
 The plan reports complete state vectors, reusable state fingerprints, and
-missing work. [Reuse earlier results](../concepts/preparation-and-reuse)
+missing work. [Reuse](../concepts/preparation-and-reuse)
 defines when an exact match can return before notebook startup and how external
 data freshness enters producer identity and marimo caching.
 
@@ -123,6 +123,6 @@ Require the resulting application to:
 - load notebook results from the deployed export origin
 - open no Python kernel or WebSocket for exported state changes
 
-Use [Build a browser application](browser-applications) for the consumer
+Use [Browser applications](browser-applications) for the consumer
 lifecycle and [Troubleshooting](troubleshooting) for evidence to collect when
 an agent workflow fails.

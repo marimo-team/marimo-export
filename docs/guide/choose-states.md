@@ -148,7 +148,7 @@ Observations show states that have worked in the matching saved notebook. They
 do not add states to the notebook export. Copy a chosen vector into `states` and
 give it a stable name when consumers should be able to select it.
 
-Use [Manage the export repository](manage-repository) to inspect, clear, and
+Use [Repository storage](manage-repository) to inspect, clear, and
 repopulate observation history.
 
 ## Choose each output source
@@ -241,5 +241,5 @@ uv run marimo-export plan examples/quickstart/report.py \
 
 Inspect `inputs`, the complete `states` mappings, `default_alias`, `outputs`,
 `observations`, `reusable_states`, `missing_states`, and `exact_reuse`. Continue
-with [Build or capture](build-and-capture) after the relation matches the
+with [Build and capture](build-and-capture) after the relation matches the
 states and outputs your consumers need.

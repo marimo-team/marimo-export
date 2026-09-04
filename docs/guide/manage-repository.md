@@ -1,9 +1,9 @@
 ---
-title: Manage the export repository
+title: Repository storage
 description: Inspect reusable artifacts, apply retention, and manage observed notebook inputs.
 ---
 
-# Manage the export repository
+# Repository storage
 
 The export repository stores reusable prepared states, immutable export
 generations, observations, leases, and retention metadata for a Python producer.

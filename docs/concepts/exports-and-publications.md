@@ -1,9 +1,9 @@
 ---
-title: Update an application with new exports
+title: Publishing
 description: Choose between one fixed export URL and a stable application URL that follows newer exports.
 ---
 
-# Update an application with new exports
+# Publishing
 
 Serve a notebook export directly when one URL identifies the complete result.
 Its `index.json` and assets form one immutable set of files.
@@ -63,7 +63,7 @@ The application still authenticates the manifest route and export origin. An
 export on another origin also needs a matching [Cross-Origin Resource Sharing
 (CORS)](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/CORS) policy.
 
-Related: [Verify and trust an export](integrity-and-trust) separates file
+Related: [Verification and trust](integrity-and-trust) separates file
 verification from publisher trust. [Serve a prepared
 publication](../guide/prepared-publications) covers the complete workflow. The
 [browser prepared reference](../reference/browser/prepared-publications) defines

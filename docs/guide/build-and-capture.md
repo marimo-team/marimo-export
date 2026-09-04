@@ -1,9 +1,9 @@
 ---
-title: Build or capture
+title: Build and capture
 description: Choose the producer that owns the notebook, prepare missing states, and write one notebook export whose bytes were verified before commit.
 ---
 
-# Build or capture
+# Build and capture
 
 Use `build` when a saved notebook file is the source of truth. Use `capture`
 when a running marimo session already owns the environment or current baseline.
@@ -287,5 +287,5 @@ uv run marimo-export verify dist/quickstart
 
 `verify` reads the canonical index and every declared asset, then checks sizes,
 SHA-256 digests, native framing, state fingerprints, and descriptor agreement.
-Use [Manage the export repository](manage-repository) to inspect reusable
-storage or [Consume a notebook export](consume-an-export) to read the result.
+Use [Repository storage](manage-repository) to inspect reusable storage or [Read
+an export](consume-an-export) to read the result.

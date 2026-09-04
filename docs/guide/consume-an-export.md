@@ -1,14 +1,14 @@
 ---
-title: Consume a notebook export
+title: Read an export
 description: Read the same exported states and outputs from Python, a browser, an agent, or another client.
 ---
 
-# Consume a notebook export
+# Read an export
 
 A notebook export gives every consumer the same default exported state, authored
 state aliases, complete input vectors, and named outputs. The examples on this
 page use `dist/report`, created by
-[Build your first notebook export](getting-started).
+[Get started](getting-started).
 
 | Job                                   | Interface                                         |
 | ------------------------------------- | ------------------------------------------------- |
@@ -139,7 +139,7 @@ updates and cancellation. `PreparedPublicationRefresh` validates a newer
 manifest before replacing the browser publication and preserves a compatible
 current selection.
 
-Use [Serve a prepared publication](prepared-publications) to create and serve a
+Use [Prepared publications](prepared-publications) to create and serve a
 concrete static manifest before adding refresh and route-grace behavior.
 
 ## Verify the complete export
@@ -177,6 +177,6 @@ Bind data-driven claims to the selected state and output. Retain notebook,
 producer, spec, state fingerprint, codec, media type, asset SHA-256, and
 verification facts when the answer needs an auditable source.
 
-[Use notebook exports with agents](agents-and-automation) develops this
-workflow. [Build a browser application](browser-applications) covers complete
+[Agents and automation](agents-and-automation) develops this workflow. [Browser
+applications](browser-applications) covers complete
 state transitions and mount disposal.

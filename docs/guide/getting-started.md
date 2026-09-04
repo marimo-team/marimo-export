@@ -1,9 +1,9 @@
 ---
-title: Build your first notebook export
+title: Get started
 description: Create two deterministic notebook states, publish JSON and rendered output, verify the files, and read one state.
 ---
 
-# Build your first notebook export
+# Get started
 
 Create a local [marimo](https://marimo.io/) reactive Python notebook, run it for
 `weekly` and `monthly`, publish a JSON summary and rendered report for each
@@ -53,23 +53,37 @@ app = marimo.App()
 def _():
     import marimo as mo
 
-    days = mo.ui.slider(1, 30, value=7, label="Days")
-    return days, mo
+    return (mo,)
 
 
 @app.cell
-def _(days, mo):
+def _(mo):
+    days = mo.ui.slider(1, 30, value=7, label="Days")
+    days
+    return (days,)
+
+
+@app.cell
+def _(days):
     summary = {"days": days.value, "label": f"Last {days.value} days"}
+    summary
+    return (summary,)
+
+
+@app.cell
+def _(days, mo, summary):
     report = mo.md(f"## {summary['label']}\n\nSelected window: **{days.value} days**")
-    return report, summary
+    report
+    return (report,)
 
 
 if __name__ == "__main__":
     app.run()
 ```
 
-The slider starts at `7` days. The second cell makes that choice visible in two
-forms. `summary` is structured data. `report` is rendered notebook output.
+The slider starts at `7` days. Each following cell shows one value: `days` is
+the input, `summary` is structured data, and `report` is rendered notebook
+output.
 
 ## Declare two states and two outputs
 
@@ -181,7 +195,7 @@ True
 `open_export()` validates canonical `index.json`. `json()` reads the inline
 summary. `asset_bytes()` reads and verifies the selected report asset.
 
-Related: [What is marimo-export?](../overview) explains the concepts. [Build a
-browser application](browser-applications) covers the TypeScript reader. [Build
-or capture](build-and-capture) covers planning, live sessions, progress,
+Related: [Overview](../overview) explains the concepts. [Browser
+applications](browser-applications) covers the TypeScript reader. [Build and
+capture](build-and-capture) covers planning, live sessions, progress,
 cancellation, and replacement behavior.

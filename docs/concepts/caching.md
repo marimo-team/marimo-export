@@ -1,15 +1,15 @@
 ---
-title: How notebook caching fits
+title: Caching
 description: See what marimo-export can reuse before a notebook runs and what marimo can restore while it runs.
 ---
 
-# How notebook caching fits
+# Caching
 
 marimo-export and [marimo](https://marimo.io/) reuse different work. The export
 repository reuses finished state and output data. marimo's computation cache
 reuses notebook cell results when a state still needs to run.
 
-The quickstart makes the difference concrete:
+In the quickstart, we can see the two kinds of reuse happen at different times:
 
 | Request                         | marimo-export                 | marimo                                            |
 | ------------------------------- | ----------------------------- | ------------------------------------------------- |
@@ -71,7 +71,6 @@ requires a new producer run.
 A written notebook export remains readable after both producer-side stores are
 removed. Its readers select exported states and verify output assets.
 
-Related: [Update an application with new exports](exports-and-publications)
-covers how an application receives newer exports. [Reuse earlier
-results](preparation-and-reuse) defines exact identities, plan fields, and
-leases.
+Related: [Publishing](exports-and-publications) covers how an application
+receives newer exports. [Reuse](preparation-and-reuse) defines exact identities,
+plan fields, and leases.

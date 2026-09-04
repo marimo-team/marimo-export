@@ -1,9 +1,9 @@
 ---
-title: Deploy a notebook export
+title: Deployment
 description: Verify files, configure static hosting, and preserve the integrity and browser trust boundaries.
 ---
 
-# Deploy a notebook export
+# Deployment
 
 A deployed notebook export is a directory whose `index.json` and declared
 assets remain available at stable HTTP URLs. Verify the directory before upload,
@@ -107,5 +107,5 @@ After upload:
    host can transform uploaded files.
 
 Use [Troubleshooting](troubleshooting) for CORS, CSP, integrity, state, and
-loader failures. Use [Serve a prepared publication](prepared-publications) when
+loader failures. Use [Prepared publications](prepared-publications) when
 one mutable manifest must select among immutable deployed exports.

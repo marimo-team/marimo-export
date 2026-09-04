@@ -84,21 +84,21 @@ each row from the captured baseline. Every exported state has the same
 output-name set. A representation identifies how one output is stored and
 decoded.
 
-[What is marimo-export?](docs/overview.md) follows the quickstart from notebook
+[Overview](docs/overview.md) follows the quickstart from notebook
 states to the files consumers read. [When to use
 marimo-export](docs/why.md) compares notebook exports with live Python services
 and browser Python execution.
 
-## Choose the next task
+## Documentation
 
-| Goal                                        | Start here                                                        |
-| ------------------------------------------- | ----------------------------------------------------------------- |
-| Select states and output representations    | [Choose states and outputs](docs/guide/choose-states.md)          |
-| Build from a file or capture a live session | [Build or capture](docs/guide/build-and-capture.md)               |
-| Read from Python, a browser, or an agent    | [Consume an export](docs/guide/consume-an-export.md)              |
-| Build state transitions in a browser        | [Build a browser application](docs/guide/browser-applications.md) |
-| Publish and deploy immutable exports        | [Deploy an export](docs/guide/deploy.md)                          |
-| Look up an exact contract                   | [Reference](docs/reference/index.md)                              |
+| Task                                        | Documentation                                              |
+| ------------------------------------------- | ---------------------------------------------------------- |
+| Select states and output representations    | [Choose states and outputs](docs/guide/choose-states.md)   |
+| Build from a file or capture a live session | [Build and capture](docs/guide/build-and-capture.md)       |
+| Read from Python, a browser, or an agent    | [Read an export](docs/guide/consume-an-export.md)          |
+| Build state transitions in a browser        | [Browser applications](docs/guide/browser-applications.md) |
+| Publish and deploy immutable exports        | [Deployment](docs/guide/deploy.md)                         |
+| Look up an exact contract                   | [Reference](docs/reference/index.md)                       |
 
 ## Compatibility and trust
 

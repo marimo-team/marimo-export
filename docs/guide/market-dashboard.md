@@ -1,9 +1,9 @@
 ---
-title: Run the market dashboard
+title: Market dashboard
 description: Build and open the advanced Yahoo Finance example from the repository checkout.
 ---
 
-# Run the market dashboard
+# Market dashboard
 
 The market dashboard is an advanced producer-to-browser example. It prepares
 five states from a Yahoo Finance notebook, verifies the notebook export, then

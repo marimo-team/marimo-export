@@ -1,9 +1,9 @@
 ---
-title: Store and load outputs
+title: Outputs
 description: Follow a notebook result as it becomes a named output, stored value, and consumer value.
 ---
 
-# Store and load outputs
+# Outputs
 
 The quickstart computes the same information in two forms:
 
@@ -85,7 +85,7 @@ Mounting attaches an interactive value to the document and grants its code the
 page's authority. Dispose the mounted view before replacing it or tearing down
 the page.
 
-Related: [Reuse earlier results](preparation-and-reuse) explains when the
+Related: [Reuse](preparation-and-reuse) explains when the
 producer creates these outputs. [Output
 representations](../reference/representations) lists every source, exporter,
 loader, peer dependency, and media contract.
