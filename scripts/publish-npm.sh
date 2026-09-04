@@ -18,7 +18,12 @@ if [[ ! -f "$tarball" ]]; then
 	exit 1
 fi
 tarball="$(cd "$(dirname "$tarball")" && pwd)/$(basename "$tarball")"
-cd "$(dirname "$tarball")"
+npm_workdir="$(mktemp -d)"
+cleanup() {
+	rmdir "$npm_workdir" 2>/dev/null || true
+}
+trap cleanup EXIT
+cd "$npm_workdir"
 
 package_identity="$(
 	# shellcheck disable=SC2016

@@ -367,7 +367,6 @@ def test_npm_publisher_runs_registry_commands_from_the_artifact_directory(
 ) -> None:
     artifacts = tmp_path / "artifacts"
     artifacts.mkdir()
-    artifacts.joinpath("artifact-directory").touch()
     tarball = artifacts / "marimo-export.tgz"
     manifest = json.dumps({"name": "@marimo-team/marimo-export", "version": "0.0.1"}).encode()
     with tarfile.open(tarball, "w:gz") as archive:
@@ -380,12 +379,17 @@ def test_npm_publisher_runs_registry_commands_from_the_artifact_directory(
     _write_command(
         commands / "npm",
         """#!/bin/sh
-if [ -f package.json ]; then
-    exit 70
-fi
-if [ ! -f artifact-directory ]; then
-    exit 71
-fi
+directory="$PWD"
+while [ "$directory" != "/" ]; do
+    if [ -f "$directory/package.json" ]; then
+        exit 70
+    fi
+    parent="$(dirname "$directory")"
+    if [ "$parent" = "$directory" ]; then
+        break
+    fi
+    directory="$parent"
+done
 if [ "$1" = "view" ]; then
     exit 1
 fi
