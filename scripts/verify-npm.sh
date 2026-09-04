@@ -17,9 +17,7 @@ browser_tarball="$npm_dist/marimo-team-marimo-export-$version.tgz"
 
 for ((attempt = 1; attempt <= 18; attempt++)); do
 	if ./scripts/publish-npm.sh --verify-only "$browser_tarball"; then
-		node scripts/smoke_npm_packages.mjs \
-			"@marimo-team/marimo-export@$version" \
-			"$version"
+		node scripts/smoke_npm_packages.mjs "$version" "$version"
 		exit 0
 	fi
 

@@ -3,12 +3,12 @@ import { access, mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { isAbsolute, resolve } from "node:path";
 
-const [browserInput, expectedVersion] = process.argv.slice(2);
-if (browserInput === undefined || expectedVersion === undefined) {
-  throw new Error("Usage: node scripts/smoke_npm_packages.mjs BROWSER_SPEC VERSION");
+const [browserDependency, expectedVersion] = process.argv.slice(2);
+if (browserDependency === undefined || expectedVersion === undefined) {
+  throw new Error("Usage: node scripts/smoke_npm_packages.mjs BROWSER_DEPENDENCY VERSION");
 }
 
-const browserSpec = await packageSpec(browserInput);
+const browserSpec = await packageSpec(browserDependency);
 const temporaryRoot = await mkdtemp(resolve(tmpdir(), "marimo-export-npm-smoke-"));
 const npm = process.platform === "win32" ? "npm.cmd" : "npm";
 const pnpm = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
