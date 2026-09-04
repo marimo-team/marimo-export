@@ -130,6 +130,51 @@ fi
     )
 
 
+def _run_recovery_check(
+    root: Path,
+    *,
+    tag_commit: str,
+    main_commit: str,
+    run_commit: str | None = None,
+) -> subprocess.CompletedProcess[str]:
+    commands = root / "commands"
+    commands.mkdir()
+    _write_command(commands / "uv", "#!/bin/sh\nprintf '0.1.0\\n'\n")
+    _write_command(commands / "node", "#!/bin/sh\nprintf '0.1.0\\n'\n")
+    run = {
+        "name": "Release",
+        "event": "push",
+        "headSha": tag_commit if run_commit is None else run_commit,
+        "status": "completed",
+        "conclusion": "failure",
+        "url": "https://example.test/release",
+        "jobs": [
+            {"name": "Build and verify", "conclusion": "success"},
+            {"name": "Attest build provenance", "conclusion": "success"},
+        ],
+    }
+    _write_command(commands / "gh", "#!/bin/sh\nprintf '%s' \"$FAKE_RECOVERY_RUN\"\n")
+    return subprocess.run(
+        [
+            _bash(),
+            str(ROOT / "scripts/check-release-recovery.sh"),
+            "v0.1.0",
+            "12345",
+        ],
+        cwd=root,
+        env={
+            **os.environ,
+            "FAKE_RECOVERY_RUN": json.dumps(run),
+            "GH_TOKEN": "test-token",
+            "GITHUB_REF_NAME": "main",
+            "GITHUB_SHA": main_commit,
+            "PATH": f"{commands}{os.pathsep}{os.environ['PATH']}",
+        },
+        capture_output=True,
+        text=True,
+    )
+
+
 def test_publish_preflight_accepts_tagged_commit_after_main_advances(
     tmp_path: Path,
 ) -> None:
@@ -229,6 +274,34 @@ def test_publish_preflight_accepts_exact_sha_with_successful_ci(tmp_path: Path) 
     assert result.returncode == 0, result.stderr
 
 
+def test_recovery_preflight_accepts_attested_artifacts_from_the_release_tag(
+    tmp_path: Path,
+) -> None:
+    tag_commit, main_commit = _release_repository(tmp_path, advance_main=True)
+
+    result = _run_recovery_check(
+        tmp_path,
+        tag_commit=tag_commit,
+        main_commit=main_commit,
+    )
+
+    assert result.returncode == 0, result.stderr
+
+
+def test_recovery_preflight_rejects_artifacts_from_another_commit(tmp_path: Path) -> None:
+    tag_commit, main_commit = _release_repository(tmp_path, advance_main=True)
+
+    result = _run_recovery_check(
+        tmp_path,
+        tag_commit=tag_commit,
+        main_commit=main_commit,
+        run_commit=main_commit,
+    )
+
+    assert result.returncode == 1
+    assert "does not match v0.1.0" in result.stderr
+
+
 def _workflow() -> tuple[str, dict[str, Any]]:
     source = ROOT.joinpath(".github/workflows/publish.yml").read_text(encoding="utf-8")
     workflow = cast(dict[str, Any], yaml.load(source, Loader=yaml.BaseLoader))
@@ -258,7 +331,7 @@ def test_publish_workflow_coordinates_python_and_browser_distributions() -> None
     assert jobs["publish-npm"]["needs"] == "attest"
     publish = _step(jobs["publish-npm"], "Publish npm packages")
     assert publish["run"] == (
-        './scripts/publish-npm.sh "dist/npm/marimo-team-marimo-export-${GITHUB_REF_NAME#v}.tgz"'
+        './scripts/publish-npm.sh "dist/npm/marimo-team-marimo-export-${RELEASE_TAG#v}.tgz"'
     )
     assert jobs["publish-pypi"]["needs"] == "verify-npm"
     assert jobs["release-notes"]["needs"] == ["verify-npm", "verify-pypi"]
@@ -275,6 +348,34 @@ def test_publish_workflow_installs_the_browser_used_by_release_tests() -> None:
         "--with-deps --only-shell chromium"
     )
     assert build["steps"].index(browser) < build["steps"].index(release_gate)
+
+
+def test_publish_workflow_recovers_attested_artifacts_from_a_failed_run() -> None:
+    _source, workflow = _workflow()
+    inputs = workflow["on"]["workflow_dispatch"]["inputs"]
+    assert set(inputs) == {"tag", "run_id"}
+    assert workflow["env"]["RELEASE_TAG"] == (
+        "${{ github.event_name == 'push' && github.ref_name || inputs.tag }}"
+    )
+
+    build = workflow["jobs"]["build"]
+    recovery = _step(build, "Verify recovery source")
+    download = _step(build, "Download recovered release artifacts")
+    verify = _step(build, "Verify recovered release artifacts")
+    assert recovery["if"] == "github.event_name == 'workflow_dispatch'"
+    assert download["with"]["run-id"] == "${{ inputs.run_id }}"
+    assert download["with"]["github-token"] == "${{ github.token }}"
+    assert verify["run"] == "python scripts/verify_release_artifacts.py"
+
+    for name in (
+        "Set up Vite+",
+        "Enable pnpm",
+        "Install AnyWidget test browser",
+        "Install Python workspace",
+        "Run release gate",
+        "Build release artifacts",
+    ):
+        assert _step(build, name)["if"] == "github.event_name == 'push'"
 
 
 def test_publish_workflow_scopes_oidc_to_attestation_and_registry_jobs() -> None:

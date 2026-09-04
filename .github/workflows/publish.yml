@@ -4,6 +4,19 @@ on:
   push:
     tags:
       - "v[0-9]*.[0-9]*.[0-9]*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Annotated release tag to recover
+        required: true
+        type: string
+      run_id:
+        description: Failed release run containing verified artifacts
+        required: true
+        type: string
+
+env:
+  RELEASE_TAG: ${{ github.event_name == 'push' && github.ref_name || inputs.tag }}
 
 permissions:
   contents: read
@@ -37,11 +50,29 @@ jobs:
         run: git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
 
       - name: Verify release source
+        if: github.event_name == 'push'
         env:
           GH_TOKEN: ${{ github.token }}
         run: ./scripts/check-release.sh
 
+      - name: Verify recovery source
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RECOVERY_RUN_ID: ${{ inputs.run_id }}
+        run: ./scripts/check-release-recovery.sh "$RELEASE_TAG" "$RECOVERY_RUN_ID"
+
+      - name: Download recovered release artifacts
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          github-token: ${{ github.token }}
+          name: release-artifacts
+          path: dist
+          run-id: ${{ inputs.run_id }}
+
       - name: Set up Vite+
+        if: github.event_name == 'push'
         uses: voidzero-dev/setup-vp@1b32467adbe183473499fd9d5d372c3ed9641754 # v1.18.0
         with:
           version: 0.2.4
@@ -51,19 +82,28 @@ jobs:
             - args: ['--frozen-lockfile']
 
       - name: Enable pnpm
+        if: github.event_name == 'push'
         run: corepack enable pnpm
 
       - name: Install AnyWidget test browser
+        if: github.event_name == 'push'
         run: pnpm --filter @marimo-export/internal-loader-anywidget exec playwright install --with-deps --only-shell chromium
 
       - name: Install Python workspace
+        if: github.event_name == 'push'
         run: uv sync --all-packages --all-extras --locked
 
       - name: Run release gate
+        if: github.event_name == 'push'
         run: make check
 
       - name: Build release artifacts
+        if: github.event_name == 'push'
         run: make package
+
+      - name: Verify recovered release artifacts
+        if: github.event_name == 'workflow_dispatch'
+        run: python scripts/verify_release_artifacts.py
 
       - name: Upload release artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -135,7 +175,7 @@ jobs:
           path: dist
 
       - name: Publish npm packages
-        run: ./scripts/publish-npm.sh "dist/npm/marimo-team-marimo-export-${GITHUB_REF_NAME#v}.tgz"
+        run: ./scripts/publish-npm.sh "dist/npm/marimo-team-marimo-export-${RELEASE_TAG#v}.tgz"
 
   verify-npm:
     name: Verify npm packages
@@ -164,7 +204,7 @@ jobs:
           path: dist
 
       - name: Verify public npm packages
-        run: ./scripts/verify-npm.sh
+        run: RELEASE_VERSION="${RELEASE_TAG#v}" ./scripts/verify-npm.sh
 
   publish-pypi:
     name: Publish Python package
@@ -224,7 +264,7 @@ jobs:
           path: dist
 
       - name: Verify public Python package
-        run: ./scripts/verify-pypi.sh
+        run: RELEASE_VERSION="${RELEASE_TAG#v}" ./scripts/verify-pypi.sh
 
   release-notes:
     name: Create GitHub release
@@ -249,15 +289,15 @@ jobs:
             dist/python/*.whl
             dist/python/*.tar.gz
           )
-          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            gh release edit "$GITHUB_REF_NAME" \
-              --title "marimo-export $GITHUB_REF_NAME" \
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release edit "$RELEASE_TAG" \
+              --title "marimo-export $RELEASE_TAG" \
               --verify-tag
-            gh release upload "$GITHUB_REF_NAME" "${artifacts[@]}" --clobber
+            gh release upload "$RELEASE_TAG" "${artifacts[@]}" --clobber
           else
-            gh release create "$GITHUB_REF_NAME" "${artifacts[@]}" \
+            gh release create "$RELEASE_TAG" "${artifacts[@]}" \
               --generate-notes \
-              --title "marimo-export $GITHUB_REF_NAME" \
+              --title "marimo-export $RELEASE_TAG" \
               --verify-tag
           fi
         env:
