@@ -1,0 +1,19 @@
+packages/python/tests/test_repository_generation_integrity.py
+  s_28b7e01ac2912a::t_6e65413b552997 254-255,257-263
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "c3e3b939380ee095e29b121972860d9c71a9e727",
+  "prompts": {},
+  "sessions": {
+    "s_28b7e01ac2912a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06912-67c3-70d1-ac41-de1397df8b93",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
