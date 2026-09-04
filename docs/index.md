@@ -87,3 +87,15 @@ features:
     link: ./concepts/integrity-and-trust
     linkText: Understand integrity
 ---
+
+## Explore the exported dashboard
+
+The Notebook tab opens a static HTML export of the original marimo source and
+its captured outputs. The Exported app tab reads five prepared states from a
+verified notebook export. The application starts no Python runtime, WebAssembly
+runtime, or application server.
+
+<StaticApp />
+
+[Run the market dashboard](guide/market-dashboard.md) or
+[build your first export](guide/getting-started.md).

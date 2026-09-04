@@ -73,6 +73,13 @@ pages:
   - *javascript_workspace
   - "apps/docs/**"
   - "docs/**"
+  - ".python-version"
+  - "uv.lock"
+  - "packages/python/**"
+  - "packages/browser/**"
+  - "packages/portable-json/**"
+  - "packages/loader-*/**"
+  - "examples/vite-vanilla/**"
 
 quality:
   - "**"

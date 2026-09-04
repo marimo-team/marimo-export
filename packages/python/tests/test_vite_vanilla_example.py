@@ -82,6 +82,18 @@ def _assert_export(path: Path) -> None:
     assert baseline.output("market_explorer").media_type == (
         "application/vnd.marimo-export.anywidget.v1+json"
     )
+    expected_widget_symbols = {
+        "ai_buildout": ("CRWV", {"CRWV", "GOOGL", "MSFT"}),
+        "baseline": ("AAPL", {"AAPL", "GOOGL", "MSFT"}),
+        "cloud_platforms": ("MSFT", {"AMZN", "GOOGL", "MSFT"}),
+        "full_watchlist": ("AAPL", {"AAPL", "AMZN", "CRWV", "GOOGL", "MSFT"}),
+        "weekly_view": ("AAPL", {"AAPL", "AMZN", "CRWV", "GOOGL", "MSFT"}),
+    }
+    for alias, (selected, symbols) in expected_widget_symbols.items():
+        payload = json.loads(export.state(alias).output("market_explorer").blob_asset().data)
+        widget = payload["modelNotifications"][0]["message"]["state"]
+        assert widget["symbol"] == selected
+        assert {row["Symbol"] for row in widget["rows"]} == symbols
     summary = baseline.output("market_summary").blob_asset()
     assert summary.media_type == "application/vnd.marimo-export.market-summary.v1+json"
     assert summary.filename == "market-summary.json"
@@ -108,6 +120,7 @@ def test_vite_vanilla_example_builds_and_captures_live_export(
     source = (_EXAMPLE / "finance.py").read_bytes()
     shutil.copy2(_EXAMPLE / "finance.py", notebook_path)
     shutil.copy2(_EXAMPLE / "market_summary.py", tmp_path / "market_summary.py")
+    shutil.copy2(_EXAMPLE / "quote_detail.py", tmp_path / "quote_detail.py")
 
     build = _run(
         "marimo-export",

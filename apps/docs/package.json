@@ -4,13 +4,14 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "node scripts/check-navigation.ts && vitepress build && node scripts/check-built-docs.ts",
+    "build": "pnpm test && pnpm examples:build && vitepress build && pnpm check:built",
     "check:built": "node scripts/check-built-docs.ts",
     "check:navigation": "node scripts/check-navigation.ts",
-    "dev": "portless",
-    "dev:server": "vitepress dev",
+    "dev": "portless docs.marimo-export pnpm run dev:server",
+    "dev:server": "pnpm examples:build && vitepress dev",
+    "examples:build": "node scripts/build-examples.ts",
     "preview": "vitepress preview --host 127.0.0.1 --port 54173 --strictPort",
-    "test": "node scripts/check-navigation.ts",
+    "test": "node --test scripts/example-publication.test.ts && node scripts/check-navigation.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {
@@ -20,9 +21,5 @@
     "vitepress": "catalog:",
     "vitepress-plugin-llms": "1.13.5",
     "vue": "catalog:"
-  },
-  "portless": {
-    "name": "docs.marimo-export",
-    "script": "dev:server"
   }
 }

@@ -86,6 +86,13 @@ descriptors, Python reads, and export closure. Loader packages test their own
 browser runtimes. The complete dashboard loading, transition, and mount path
 requires a browser journey check.
 
+`make docs-examples` exports the original notebook to static HTML, prepares and
+verifies the dashboard export, and builds the Vite application with
+document-relative assets. It atomically publishes both artifacts under
+`apps/docs/public/examples/`. `make docs-build` runs that step before VitePress
+and verifies the notebook and application in the final site tree. GitHub Pages
+uploads the resulting `apps/docs/.vitepress/dist` directory as one static site.
+
 When a page uses a partial snippet, it must name the fixture, variable, DOM
 host, server route, or framework context supplied by the surrounding page.
 
@@ -100,10 +107,11 @@ make docs-serve
 ```
 
 [Portless](https://portless.sh/) assigns the VitePress server an available port
-and exposes it at `https://docs.marimo-export.localhost/`. Linked Git worktrees
-receive a branch prefix, so each running workspace has its own URL. Use the URL
-printed by `make docs-serve`. On its first HTTPS run, Portless may request local
-administrator access to bind port 443 and trust its local certificate authority.
+and exposes it at `https://docs.marimo-export.localhost/`. The fixed hostname has
+one active owner, so stop another marimo-export documentation server before
+starting this command in a different worktree. On its first HTTPS run, Portless
+may request local administrator access to bind port 443 and trust its local
+certificate authority.
 
 The development server uses an empty deployment base.
 

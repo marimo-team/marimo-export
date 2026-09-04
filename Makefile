@@ -2,7 +2,7 @@ SHELL := /bin/bash
 .SHELLFLAGS := -eu -o pipefail -c
 .DEFAULT_GOAL := help
 
-.PHONY: help bootstrap format lint typecheck test build docs-build docs-serve check package
+.PHONY: help bootstrap format lint typecheck test build docs-examples docs-build docs-serve check package
 .PHONY: _anti-slop-check
 
 FORMAT_PATHS := \
@@ -96,6 +96,9 @@ docs-build: ## Build the public documentation site.
 	test -s apps/docs/.vitepress/dist/llms.txt
 	test -s apps/docs/.vitepress/dist/llms-full.txt
 	test -s apps/docs/.vitepress/dist/sitemap.xml
+
+docs-examples: ## Build static applications for the documentation site.
+	pnpm --filter @marimo-team/marimo-export-docs examples:build
 
 docs-serve: ## Serve public documentation through Portless.
 	BASE_PATH= $(VP) run --filter @marimo-team/marimo-export-docs dev

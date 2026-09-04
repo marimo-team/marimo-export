@@ -22,3 +22,4 @@ __pycache__/
 **/__marimo__/
 examples/*/dist/
 examples/*/public/export/
+apps/docs/public/examples/

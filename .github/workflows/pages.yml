@@ -116,6 +116,11 @@ jobs:
       - name: Enable pnpm
         run: corepack enable pnpm
 
+      - name: Set up uv
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          enable-cache: true
+
       - name: Configure GitHub Pages
         if: github.event_name != 'pull_request'
         id: pages
@@ -124,7 +129,7 @@ jobs:
       - name: Build docs
         env:
           BASE_PATH: ${{ steps.pages.outputs.base_path }}
-        run: pnpm --filter @marimo-team/marimo-export-docs build
+        run: make docs-build
 
       - name: Upload GitHub Pages artifact
         if: github.event_name != 'pull_request'
