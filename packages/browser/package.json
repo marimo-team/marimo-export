@@ -1,6 +1,6 @@
 {
   "name": "@marimo-team/marimo-export",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Load precomputed marimo notebook results in browser applications",
   "homepage": "https://marimo-team.github.io/marimo-export/",
   "bugs": {
