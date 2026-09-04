@@ -7,20 +7,21 @@ planning, repository storage, or a cross-language boundary.
 
 ## Identity map
 
-| Name                       | Covers                                                                                                            | Primary use                                         |
-| -------------------------- | ----------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
-| Source SHA-256             | Exact saved notebook bytes                                                                                        | Detect source changes during a file operation       |
-| Document SHA-256           | Canonical parsed notebook cells and configuration                                                                 | Match saved and live notebook documents             |
-| Implementation SHA-256     | Installed marimo-export Python source manifest                                                                    | Invalidate work after an implementation change      |
-| Environment SHA-256        | Installed distributions and relevant local Python sources                                                         | Bind results to imported code and package versions  |
-| Producer SHA-256           | Notebook source and document, Python and operating system, Marimo, marimo-export, implementation, and environment | Scope observations and reusable prepared states     |
-| Output-plan SHA-256        | Canonical `ExportSpec.outputs`                                                                                    | Reuse prepared states across state-relation changes |
-| Spec SHA-256               | Complete canonical `ExportSpec`                                                                                   | Bind aliases, default state, states, and outputs    |
-| State fingerprint          | Canonical complete input object                                                                                   | Address one normalized state vector                 |
-| Repository identity        | Producer, output-plan, and spec SHA-256 values                                                                    | Find the current exact export generation            |
-| Prepared-state instance    | Exact canonical prepared-state manifest                                                                           | Name one immutable prepared-state directory         |
-| Notebook export identity   | Exact canonical `index.json` bytes                                                                                | Verify one portable notebook export                 |
-| Export generation instance | Notebook export identity                                                                                          | Name one immutable repository export directory      |
+| Name                        | Covers                                                                                                            | Primary use                                         |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| Source SHA-256              | Exact saved notebook bytes                                                                                        | Detect source changes during a file operation       |
+| Document SHA-256            | Canonical parsed notebook cells and configuration                                                                 | Match saved and live notebook documents             |
+| Implementation SHA-256      | Installed marimo-export Python source manifest                                                                    | Invalidate work after an implementation change      |
+| Environment SHA-256         | Installed distributions and relevant local Python sources                                                         | Bind results to imported code and package versions  |
+| Producer SHA-256            | Notebook source and document, Python and operating system, Marimo, marimo-export, implementation, and environment | Scope observations and reusable prepared states     |
+| Output-plan SHA-256         | Canonical `ExportSpec.outputs`                                                                                    | Reuse prepared states across state-relation changes |
+| Exporter execution identity | Resolved exporter callable, options, declared dependency sources, and marimo-export implementation                | Change an executed exporter leaf's marimo cache key |
+| Spec SHA-256                | Complete canonical `ExportSpec`                                                                                   | Bind aliases, default alias, states, and outputs    |
+| State fingerprint           | Canonical complete input object                                                                                   | Address one normalized state vector                 |
+| Repository identity         | Producer, output-plan, and spec SHA-256 values                                                                    | Find the current exact export generation            |
+| Prepared-state instance     | Exact canonical prepared-state manifest                                                                           | Name one immutable prepared-state directory         |
+| Notebook export identity    | Exact canonical `index.json` bytes                                                                                | Verify one portable notebook export                 |
+| Export generation instance  | Notebook export identity                                                                                          | Name one immutable repository export directory      |
 
 `ExportPlan.identity` is the repository identity. It is SHA-256 over a canonical
 object containing `producer_sha256`, `output_plan_sha256`, and `spec_sha256`.
@@ -50,11 +51,18 @@ producer + output plan + complete ExportSpec
   -> generation instance = notebook export identity
 ```
 
-Changing a state alias or the default state changes the spec and repository
+Changing a state alias or the default alias changes the spec and repository
 identity while preserving matching prepared states. Changing an output
 plan changes both the output-plan and repository identities.
 Changing notebook source, relevant local source, an installed distribution, the
 Python runtime, Marimo, or marimo-export changes the producer identity.
+
+Exporter execution identity is resolved inside the kernel when capture prepares
+exporters. It enters the transient exporter leaf source and its marimo cache key.
+It is not unconditionally part of `producer_sha256`. An exact prepared-export hit
+returns before exporter import or exporter-source validation. Exporter source
+affects that fast path only when it also belongs to the producer environment
+discovered during preflight.
 
 Presentation HTML, Cascading Style Sheets, browser JavaScript, route names, and
 view host IDs stay outside these identities. An application can change its

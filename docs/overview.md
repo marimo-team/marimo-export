@@ -1,19 +1,20 @@
 ---
 title: What is marimo-export?
-description: Follow selected marimo notebook results from an ExportSpec to a portable notebook export and its readers.
+description: Run selected marimo notebook states and publish their outputs for browsers, Python, and agents.
 ---
 
 # What is marimo-export?
 
-marimo-export runs selected states of a [marimo](https://marimo.io/) notebook
-and writes their named results to a portable directory. Python, TypeScript,
-agents, and custom clients can read that directory after the producer stops.
+marimo-export runs selected states of a [marimo](https://marimo.io/) notebook and writes their named
+outputs to a portable directory called a **notebook export**. Browser
+applications, Python programs, agents, and custom clients can read it after the
+Python producer stops.
 
-Suppose `report.py` derives a summary and chart from a `days` slider. This
-`ExportSpec` publishes weekly and monthly results:
+The [quickstart](guide/getting-started) starts with one `days` slider and two
+notebook results. An `ExportSpec` is the declaration that chooses which states
+to run and which results to publish:
 
 ```yaml
-schema: marimo-export.spec.v2
 default_state: weekly
 states:
   weekly: {}
@@ -22,102 +23,75 @@ states:
 outputs:
   summary:
     source: { kind: json, selector: summary }
-  chart:
-    source: { kind: output, selector: chart }
+  report:
+    source: { kind: output, selector: report }
 ```
 
-The `weekly` **state row** keeps the slider's initial value. The `monthly` row
-sets it to `30`. Planning fills omitted inputs from the captured input baseline,
-so every row becomes a **complete input vector**.
+## States are rows and outputs are columns
 
-`summary` and `chart` are **outputs**. An output is a stable consumer-facing
-name available in every exported state. Its source selects a notebook result.
-Its **representation**, a codec and media type, tells readers how that result is
-stored and decoded.
+The notebook starts with `days: 7`. The empty `weekly` row keeps that value. The
+`monthly` row replaces it with `30`.
 
-Together, the complete input vectors and named outputs form the export's finite
-**state-output relation**:
+| State     | Input          | `summary`     | `report`             |
+| --------- | -------------- | ------------- | -------------------- |
+| `weekly`  | `{"days": 7}`  | JSON in index | Rendered output file |
+| `monthly` | `{"days": 30}` | JSON in index | Rendered output file |
 
-| Exported state | Complete inputs | `summary`   | `chart`                  |
-| -------------- | --------------- | ----------- | ------------------------ |
-| `weekly`       | `{"days": 7}`   | JSON record | Rendered-output snapshot |
-| `monthly`      | `{"days": 30}`  | JSON record | Rendered-output snapshot |
+This table is the **state-output relation**. Each row is an exported state with a
+complete input vector. Each column is a named output available in every state.
 
-## From notebook to consumer
+The embedded quickstart application reads that generated export. Switching the
+report window selects another row and renders both outputs from it.
 
-Each public operation owns one transition:
+<StaticApp example="quickstart" />
 
-| Operation | What it does                                                                     | Result                    |
-| --------- | -------------------------------------------------------------------------------- | ------------------------- |
-| `plan`    | Inspects the producer, completes state rows, and finds reusable and missing work | `ExportPlan`              |
-| `prepare` | Starts a saved notebook and prepares missing states                              | Leased `PreparedExport`   |
-| `capture` | Borrows a named live session and prepares missing states                         | Leased `PreparedExport`   |
-| `write`   | Copies one prepared export to a destination and verifies it                      | Notebook export directory |
-| `build`   | Runs `prepare`, then `write`, for a saved notebook                               | Notebook export directory |
-| `open`    | Validates canonical `index.json` and creates an immutable reader                 | `NotebookExport` reader   |
-| `resolve` | Selects an exported state by alias or input values                               | `ExportState`             |
-| `load`    | Verifies and decodes one output representation                                   | Loaded value              |
-| `mount`   | Attaches a loaded interactive value to a document element                        | Disposable mounted view   |
+## Choose how each output is stored
 
-The written notebook export has one entry point:
+`summary` and `report` begin as notebook results. The `ExportSpec` publishes each
+under a stable output name.
+
+An output representation tells a consumer how to read the stored value. The
+summary uses portable JSON inside `index.json`. The report uses a
+rendered-output snapshot in a content-addressed asset.
+
+## Producers write and consumers read
+
+The Python environment that runs the notebook is the **producer**. It inspects
+the notebook, completes state rows, executes missing states, and writes the
+notebook export.
+
+A Python reader, browser application, agent, or custom client is a **consumer**.
+It opens the written files, selects an exported state, and reads a named output.
+Selecting another exported state runs no notebook code.
 
 ```text
 dist/report/
   index.json
   assets/
-    <content-addressed files>
+    <sha256>.output.json
+    <sha256>.output.json
 ```
 
-`index.json` records notebook and producer provenance, state aliases, complete
-input vectors, output descriptors, and asset references. An output descriptor
-records the representation, provenance, and either an inline value or a
-content-addressed asset reference.
+`index.json` records the state-output relation and points to its assets. Opening
+validates the index. Reading an asset-backed output verifies that asset. Complete
+verification checks every declared asset.
 
-## Preparation and reuse
+## Reuse results between builds
 
-marimo-export keeps reusable producer results in an **export repository**. A
-**prepared state** belongs to one producer identity, output plan, and complete
-input fingerprint. A **prepared export** is a lease-protected export generation
-for one exact `ExportSpec`.
+marimo-export can reuse compatible results from earlier builds. When the
+notebook must run, marimo can also restore compatible cell results. [Learn how
+reuse works](concepts/caching).
 
-The export repository and marimo's computation cache solve different problems:
+Applications that change over time can point one stable URL at successive
+exports. [Learn how to publish updates](concepts/exports-and-publications).
 
-| Storage                  | Reuses                                          |
-| ------------------------ | ----------------------------------------------- |
-| marimo computation cache | Notebook cell results during producer execution |
-| marimo-export repository | Prepared states and complete export generations |
+## Readers select states already in the export
 
-An exact repository match can satisfy a request before a notebook starts. When
-one state changes, preparation can reuse matching prepared states and execute
-the missing state. [Preparation and reuse](concepts/preparation-and-reuse)
-explains the identity and lease model.
+A consumer can resolve `weekly`, `monthly`, or either complete input vector. An
+input vector absent from the export needs another producer run or a live Python
+service.
 
-## Reading and publishing
-
-A reader opens one immutable notebook export. A **prepared manifest** is a small
-JSON record that points to one export and selects one exported state. A browser
-can follow a changing manifest through a **prepared publication**, preserving
-the last committed view while a replacement loads.
-
-Opening validates the index. Loading verifies one selected asset. Complete
-verification checks the full export closure. Mounting a chart, widget, or custom
-interactive result grants its code the browser page's authority.
-
-## Application integration
-
-[Marimo Studio](https://github.com/marimo-team/marimo-studio) uses marimo-export
-to pair authored web views with prepared notebook states for zero-Python static
-exports. Studio owns view source and presentation while marimo-export owns state
-preparation, portable outputs, integrity, and browser loading.
-
-## The finite boundary
-
-A consumer can resolve input vectors already present in the state-output
-relation. Another Python-derived input vector requires another preparation run
-or a live Python service. This makes marimo-export a fit for reports,
-dashboards, static applications, and agent inputs whose supported states can be
-declared before consumption.
-
-Continue with [Why export notebook states?](why) to evaluate that boundary, or
-[build your first notebook export](guide/getting-started) to run the complete
-two-state example.
+Continue with [Choose notebook states](concepts/states-and-inputs) for baseline
+completion and state identity, then [Store and load
+outputs](concepts/outputs-and-representations) for the path from notebook result
+to consumer value.

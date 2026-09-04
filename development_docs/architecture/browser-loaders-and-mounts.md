@@ -9,13 +9,16 @@ application-owned document.
 ```mermaid
 flowchart TB
     app[Browser application]
-    core[packages/browser]
-    loaders[OutputLoader workspaces]
+    publicLoaders[Public browser loader subpaths]
+    core[Browser core]
+    loaders[Private loader workspaces]
     anywidget[AnyWidget byte decoder]
     runtimes[Optional peer runtimes]
 
     app --> core
-    app --> loaders
+    app --> publicLoaders
+    publicLoaders --> core
+    publicLoaders --> loaders
     loaders --> core
     core --> anywidget
     loaders --> runtimes
@@ -37,25 +40,21 @@ The public npm package exposes loader facades through
 importing specialized runtimes and prevents loader packages from importing one
 another.
 
+Applications import those public subpaths. They do not import the private
+`@marimo-export/internal-loader-*` workspaces.
+
 ## Opening and resolution are immutable
 
 `openExport(base)` fetches and validates `index.json`, then returns an immutable
 `NotebookExport`. Its `identity` is the SHA-256 of the fetched canonical index
 bytes. Assets remain lazy.
 
-```ts
-import { openExport } from "@marimo-team/marimo-export";
-
-const notebookExport = await openExport("./export/");
-const leaders = notebookExport.state("leaders");
-const cloud = leaders.resolve({
-  symbols_selector: ["MSFT", "GOOGL", "AMZN"],
-});
-```
-
 `state(name)` selects an authored name. `resolve(completeInputs)` selects one
 exact vector. `state.resolve(patch)` completes a sparse transition from the
 current vector, then resolves the matching fingerprint.
+
+The public [browser reader reference](../../docs/reference/browser/reader.md)
+owns signatures, examples, and caller options.
 
 The detached base URL cannot be mutated to redirect later asset requests. A
 fixed base query is copied to the index and every asset URL. Derived object
@@ -64,7 +63,7 @@ paths cannot replace that query.
 ## The prepared subpath owns mutable selection
 
 `@marimo-team/marimo-export/prepared` connects one mutable manifest route to
-immutable notebook export instances. The strict core manifest is:
+immutable notebook export instances. The strict prepared manifest is:
 
 ```json
 {
@@ -83,10 +82,11 @@ interval. `openPreparedPublication()` opens the notebook export.
 complete input vector, and verifies the selected fingerprint.
 
 `PreparedStateController` owns pending input intent, sparse input updates,
-patchable control updates, query-string selection, supersession, cancellation,
-publication replacement, settlement, and disposal. A control binding with an
-`element` path stays application-owned and `updateControl()` returns `false`.
-An application supplies one `PreparedStatePort`:
+patchable control updates, query-string selection, transition cancellation,
+generation ordering, publication replacement, settlement, and disposal. A
+control binding with an `element` path stays application-owned and
+`updateControl()` returns `false`. An application supplies one
+`PreparedStatePort`:
 
 ```ts
 interface PreparedStatePort {
@@ -134,6 +134,10 @@ Before invoking a representation runtime, browser core checks:
 The loader then validates representation shape, allocation bounds, and the
 abort signal.
 
+BlobAsset envelopes use a strict MessagePack scanner. It limits nesting to 256
+levels and values to 100,000, rejects duplicate string map keys and trailing
+bytes, requires minimal-width canonical tokens, and accepts finite float64 values.
+
 Browser core brands `NotebookExportError` with a versioned global symbol.
 The constructor freezes each instance. The error class is an immutable direct
 value. `isNotebookExportError()` checks the shared brand, public error name,
@@ -145,20 +149,11 @@ The prepared subpath has its own frozen `PreparedExportError`. Its codes are
 `isPreparedExportError()` recognizes the versioned brand across realms. Loading,
 integrity, state, and output failures continue to use `NotebookExportError`.
 
-| Loader                 | Application result                      | Runtime dependency                                                                              |
-| ---------------------- | --------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| `scalarLoader()`       | Native scalar                           | None                                                                                            |
-| `jsonLoader()`         | Immutable portable JSON                 | None                                                                                            |
-| `marimoOutputLoader()` | Immutable rendered-output record        | None                                                                                            |
-| `marimoCellLoader()`   | Immutable complete-cell record          | None                                                                                            |
-| `textLoader()`         | UTF-8 text                              | None                                                                                            |
-| `htmlLoader()`         | UTF-8 HTML source                       | None                                                                                            |
-| `imageLoader()`        | Mountable image                         | Browser Blob and object URL APIs                                                                |
-| `numpyLoader()`        | Shape, dtype, order, numeric buffer     | None                                                                                            |
-| `arrowTableLoader()`   | Flechette table                         | `@uwdata/flechette`, `lz4js`                                                                    |
-| `parquetRowsLoader()`  | Readonly row objects                    | `hyparquet`                                                                                     |
-| `vegaLiteLoader()`     | Immutable specification and mount       | `vega-embed`                                                                                    |
-| `anyWidgetLoader()`    | Saved model graph, model API, and mount | Runtime modules declared by the saved graph. `@anywidget/types` is an optional type-level peer. |
+Core loaders decode scalar, JSON, text, HTML, image, and marimo snapshot values.
+Private loader workspaces own NumPy, Arrow, Parquet, Vega-Lite, and AnyWidget
+implementations that appear through public browser subpaths. The public
+[output loader reference](../../docs/reference/browser/loaders.md) owns the exact
+loader catalog, result types, and peer dependency requirements.
 
 The Marimo output and cell loaders validate canonical replay records. They
 return data that an application can adapt to its own renderer. The records
@@ -179,6 +174,17 @@ registry. Temporary Blob URLs are revoked when their imports settle.
 Opening, resolution, loading, and verification execute no notebook-authored
 browser module. Mounting an interactive representation grants that code page
 authority.
+
+The shared mount signal has representation-specific lifetime:
+
+| Mount     | Signal after `mount()` resolves                       | Portable owner action                                                  |
+| --------- | ----------------------------------------------------- | ---------------------------------------------------------------------- |
+| Image     | Aborting disposes the mounted image                   | Dispose explicitly during replacement or teardown                      |
+| AnyWidget | Aborting starts full registry disposal                | Dispose explicitly and await teardown                                  |
+| Vega-Lite | The listener is removed after import and embed settle | Dispose the returned view to finalize the chart                        |
+| Custom    | Defined by the loader implementation                  | Document pending and settled behavior, then expose idempotent disposal |
+
+Explicit `dispose()` is the common ownership rule across representations.
 
 ## The application commits visible state
 

@@ -1,8 +1,8 @@
-import { readFile, stat } from "node:fs/promises";
-import { join } from "node:path";
+import { readFile, readdir, stat } from "node:fs/promises";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { documentationExample } from "../example.ts";
+import { documentationExamples } from "../example.ts";
 import { documentationPages, topNavigation } from "../navigation.ts";
 
 const outputDirectory = fileURLToPath(new URL("../.vitepress/dist/", import.meta.url));
@@ -59,7 +59,44 @@ const files = documentationPages.flatMap(({ link }) => [
   markdownForRoute(link),
 ]);
 const socialImagePath = "brand/marimo-export-og.png";
-const requiredFiles = [...files, socialImagePath, "llms.txt", "llms-full.txt", "sitemap.xml"];
+const marketApplicationTab = documentationExamples.market.tabs.find(
+  ({ key }) => key === "application",
+);
+const marketNotebookTab = documentationExamples.market.tabs.find(({ key }) => key === "notebook");
+const quickstartApplicationTab = documentationExamples.quickstart.tabs.find(
+  ({ key }) => key === "application",
+);
+const quickstartNotebookTab = documentationExamples.quickstart.tabs.find(
+  ({ key }) => key === "notebook",
+);
+if (
+  marketApplicationTab === undefined ||
+  marketNotebookTab === undefined ||
+  quickstartApplicationTab === undefined ||
+  quickstartNotebookTab === undefined
+) {
+  throw new Error("Documentation example tabs are incomplete.");
+}
+const marketApplicationPath = marketApplicationTab.href.replace(/^\//, "");
+const marketNotebookPath = marketNotebookTab.href.replace(/^\//, "");
+const quickstartApplicationPath = quickstartApplicationTab.href.replace(/^\//, "");
+const quickstartNotebookPath = quickstartNotebookTab.href.replace(/^\//, "");
+const quickstartApplicationRoot = dirname(quickstartApplicationPath);
+const marketIndexPath = join(dirname(marketApplicationPath), "export", "index.json");
+const quickstartIndexPath = join(quickstartApplicationRoot, "export", "index.json");
+const requiredFiles = [
+  ...files,
+  socialImagePath,
+  "llms.txt",
+  "llms-full.txt",
+  "sitemap.xml",
+  marketApplicationPath,
+  marketIndexPath,
+  marketNotebookPath,
+  quickstartApplicationPath,
+  quickstartNotebookPath,
+  quickstartIndexPath,
+];
 const missing = await missingFiles(requiredFiles);
 
 const llms = await readFile(join(outputDirectory, "llms.txt"), "utf8");
@@ -105,7 +142,7 @@ const expectedSocialMetadata = new Map([
   ["og:title", "marimo-export: Prepare notebook results. Read them anywhere."],
   [
     "og:description",
-    "Build a portable, verified export from selected marimo notebook states. Browser applications and agents can use it without a Python runtime.",
+    "Select the states to run through marimo and the outputs to publish. marimo-export writes them as a portable, verified notebook export. Browser applications and agents read it after the Python producer stops. They need neither its runtime nor the notebook source code.",
   ],
   ["og:image", new URL(socialImagePath, siteUrl).href],
   ["og:image:width", "2400"],
@@ -118,7 +155,7 @@ const expectedSocialMetadata = new Map([
   ["twitter:title", "marimo-export: Prepare notebook results. Read them anywhere."],
   [
     "twitter:description",
-    "Build a portable, verified export from selected marimo notebook states. Browser applications and agents can use it without a Python runtime.",
+    "Select the states to run through marimo and the outputs to publish. marimo-export writes them as a portable, verified notebook export. Browser applications and agents read it after the Python producer stops. They need neither its runtime nor the notebook source code.",
   ],
   ["twitter:image", new URL(socialImagePath, siteUrl).href],
 ]);
@@ -131,25 +168,45 @@ const incorrectSocialMetadata = [...expectedSocialMetadata].flatMap(([name, expe
 
 const baseName = process.env.BASE_PATH?.trim().replace(/^\/+|\/+$/g, "");
 const assetPrefix = baseName ? `/${baseName}` : "";
-const firstNavigation = topNavigation[0];
-if (firstNavigation === undefined) throw new Error("Top navigation is empty.");
-const navigationHref = `${assetPrefix}${firstNavigation.link}`;
+const firstNavigationLink = topNavigation.flatMap((item) =>
+  "link" in item
+    ? [item.link]
+    : item.items.flatMap((child) => ("link" in child ? [child.link] : [])),
+)[0];
+if (firstNavigationLink === undefined) throw new Error("Top navigation has no linked item.");
+const navigationHref = `${assetPrefix}${firstNavigationLink}`;
 const escapedBaseReferences = baseName
   ? [...renderedDocumentation.matchAll(/\b(?:href|src)="(\/(?!\/)[^"#?]+)"/g)]
       .map((match) => match[1])
       .filter(isString)
       .filter((reference) => !reference.startsWith(`${assetPrefix}/`))
   : [];
-const applicationTab = documentationExample.tabs.find(({ key }) => key === "application");
-const notebookTab = documentationExample.tabs.find(({ key }) => key === "notebook");
-if (applicationTab === undefined || notebookTab === undefined) {
-  throw new Error("Documentation example tabs are incomplete.");
-}
-const applicationPath = applicationTab.href.replace(/^\//, "");
-const notebookPath = notebookTab.href.replace(/^\//, "");
-const exampleIndex = await readFile(join(outputDirectory, applicationPath), "utf8").catch(() => "");
-const notebookIndex = await readFile(join(outputDirectory, notebookPath), "utf8").catch(() => "");
-const exampleHref = `${assetPrefix}${applicationTab.href}`;
+const marketApplication = await readFile(
+  join(outputDirectory, marketApplicationPath),
+  "utf8",
+).catch(() => "");
+const marketNotebook = await readFile(join(outputDirectory, marketNotebookPath), "utf8").catch(
+  () => "",
+);
+const quickstartApplication = await readFile(
+  join(outputDirectory, quickstartApplicationPath),
+  "utf8",
+).catch(() => "");
+const quickstartNotebook = await readFile(
+  join(outputDirectory, quickstartNotebookPath),
+  "utf8",
+).catch(() => "");
+const quickstartIndex = await readFile(join(outputDirectory, quickstartIndexPath), "utf8").catch(
+  () => "",
+);
+const quickstartAssets = await readdir(
+  join(outputDirectory, quickstartApplicationRoot, "export", "assets"),
+).catch(() => []);
+const quickstartFiles = await readdir(join(outputDirectory, quickstartApplicationRoot), {
+  recursive: true,
+}).catch(() => []);
+const marketApplicationHref = `${assetPrefix}${marketApplicationTab.href}`;
+const quickstartApplicationHref = `${assetPrefix}${quickstartApplicationTab.href}`;
 const errors = [
   ...formatList("Missing or empty build artifacts", missing),
   ...formatList("Duplicate llms.txt links", duplicates(llmsLinks)),
@@ -171,25 +228,40 @@ const errors = [
   ...(index.includes(`href="${navigationHref}"`)
     ? []
     : [`Built index does not use the expected navigation prefix ${assetPrefix || "/"}.`]),
-  ...(renderedDocumentation.includes(`src="${exampleHref}"`)
+  ...(renderedDocumentation.includes(`src="${marketApplicationHref}"`)
     ? []
-    : [`Built documentation does not embed the market dashboard at ${exampleHref}.`]),
-  ...((
-    await missingFiles([
-      applicationPath,
-      "examples/market-dashboard/application/export/index.json",
-      notebookPath,
-    ])
-  ).length === 0
+    : [`Built documentation does not embed the market dashboard at ${marketApplicationHref}.`]),
+  ...(renderedDocumentation.includes(`src="${quickstartApplicationHref}"`)
     ? []
-    : ["Built documentation is missing the market dashboard application, export, or notebook."]),
-  ...(exampleIndex && !/\b(?:href|src)="\/(?!\/)/.test(exampleIndex)
+    : [`Built documentation does not embed the quickstart at ${quickstartApplicationHref}.`]),
+  ...(marketApplication && !/\b(?:href|src)="\/(?!\/)/.test(marketApplication)
     ? []
     : ["Built market dashboard assets are not document-relative."]),
-  ...(notebookIndex.includes("<marimo-code hidden") &&
-  notebookIndex.includes("<marimo-filename hidden>finance.py")
+  ...(quickstartApplication && !/\b(?:href|src)="\/(?!\/)/.test(quickstartApplication)
     ? []
-    : ["Built documentation notebook is missing its source or captured output."]),
+    : ["Built quickstart application assets are not document-relative."]),
+  ...(marketNotebook.includes("<marimo-code hidden") &&
+  marketNotebook.includes("<marimo-filename hidden>finance.py")
+    ? []
+    : ["Built finance notebook is missing its source or captured output."]),
+  ...(quickstartNotebook.includes("<marimo-code hidden") &&
+  quickstartNotebook.includes("<marimo-filename hidden>report.py")
+    ? []
+    : ["Built quickstart notebook is missing its source or captured output."]),
+  ...(!quickstartApplication.includes("<marimo-code") &&
+  !quickstartApplication.includes("<marimo-filename") &&
+  quickstartApplication.includes("Ships no Python source or runtime") &&
+  quickstartFiles.every((file) => !file.endsWith(".py"))
+    ? []
+    : ["Built quickstart application crosses the Python producer boundary."]),
+  ...(quickstartIndex.includes('"inputs":["days"]') &&
+  quickstartIndex.includes('"outputs":["report","summary"]') &&
+  quickstartIndex.includes('"codec":"marimo.json.v1"') &&
+  quickstartIndex.includes('"codec":"marimo.output.v1"') &&
+  quickstartAssets.length === 2 &&
+  quickstartAssets.every((asset) => asset.endsWith(".output.json"))
+    ? []
+    : ["Built documentation quickstart export is incomplete."]),
   ...formatList("Root-absolute references outside the configured base path", [
     ...new Set(escapedBaseReferences),
   ]),
@@ -200,5 +272,5 @@ if (errors.length > 0) {
 }
 
 console.log(
-  `Built documentation contains ${documentationPages.length} routes, one static notebook, and one verified static application.`,
+  `Built documentation contains ${documentationPages.length} routes, two static notebooks, and two verified static applications.`,
 );

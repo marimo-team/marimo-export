@@ -1,7 +1,14 @@
 # marimo-export
 
-The `marimo-export` Python package plans, prepares, writes, opens, and verifies
-notebook exports from saved [marimo](https://marimo.io/) notebooks or named live sessions.
+The `marimo-export` Python package plans and prepares selected
+[marimo](https://marimo.io/) notebook states, publishes named outputs as a
+**notebook export**, and opens and verifies that export from Python. It can
+prepare from a saved notebook or a named live session.
+
+Select the states to run through marimo and the outputs to publish.
+marimo-export writes them as a portable, verified notebook export. Browser
+applications and agents read it after the Python producer stops. They need
+neither its runtime nor the notebook source code.
 
 [uv](https://docs.astral.sh/uv/) adds the package to a Python project:
 
@@ -12,19 +19,62 @@ uv add marimo-export
 The package requires Python 3.10 or newer, is tested on Python 3.10 through
 3.14, and installs the marimo release pinned by its package metadata.
 
-The examples use the repository's
-[`report.py`](https://github.com/marimo-team/marimo-export/blob/main/examples/quickstart/report.py)
-and
-[`report.export.yaml`](https://github.com/marimo-team/marimo-export/blob/main/examples/quickstart/report.export.yaml).
-Download both files into the current directory before running them.
+Create `report.py`:
 
-## Run the CLI from PyPI
+<!-- quickstart-source: report.py -->
+
+```python
+import marimo
+
+__generated_with = "0.24.0"
+app = marimo.App()
+
+
+@app.cell
+def _():
+    import marimo as mo
+
+    days = mo.ui.slider(1, 30, value=7, label="Days")
+    return days, mo
+
+
+@app.cell
+def _(days, mo):
+    summary = {"days": days.value, "label": f"Last {days.value} days"}
+    report = mo.md(f"## {summary['label']}\n\nSelected window: **{days.value} days**")
+    return report, summary
+
+
+if __name__ == "__main__":
+    app.run()
+```
+
+Create `report.export.yaml`:
+
+<!-- quickstart-source: report.export.yaml -->
+
+```yaml
+schema: marimo-export.spec.v2
+default_state: weekly
+states:
+  weekly: {}
+  monthly:
+    days: 30
+outputs:
+  summary:
+    source: { kind: json, selector: summary }
+  report:
+    source: { kind: output, selector: report }
+```
+
+## Run the CLI
 
 ```bash
-uvx marimo-export build report.py \
+mkdir -p dist
+uv run marimo-export build report.py \
   --spec report.export.yaml \
   --output dist/report
-uvx marimo-export verify dist/report
+uv run marimo-export verify dist/report
 ```
 
 `build` prepares missing states, writes the export, verifies every declared
@@ -39,13 +89,14 @@ from marimo_export import ExportSpec, build
 
 Path("dist").mkdir(exist_ok=True)
 spec = ExportSpec.from_file("report.export.yaml")
-result = build("report.py", spec=spec, output="dist/report")
+result = build("report.py", spec=spec, output="dist/python-report")
 
 print(result.path)
 ```
 
-A matching later call with a new destination or `replace=True` can reuse the
-prepared export before notebook startup.
+A matching later call with a new destination can reuse the prepared export
+before notebook startup. Pass `replace=True` to replace an existing complete
+destination.
 
 ## Read the export
 
@@ -62,13 +113,16 @@ print(verified.states, verified.outputs)
 
 ```text
 {'days': 30, 'label': 'Last 30 days'}
-2 2
+2 4
 ```
 
 Opening validates canonical `index.json` and leaves asset data lazy. Complete
 verification reads every declared asset and returns exported-state,
 state-output-pair, unique-asset, and verified-byte counts. The example has two
-states and one output name, so `verified.outputs` is `2`.
+states and two output names, so `verified.outputs` is `4`.
+
+Verification checks the notebook export against its loaded `index.json`. The
+consumer still authenticates the publisher and delivery source.
 
 ## Capture a live session
 

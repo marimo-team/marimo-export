@@ -50,11 +50,9 @@ Run focused package commands while developing, then finish with `make check`.
    `packages/browser` owns export parsing, integrity, immutable readers,
    prepared-publication control, and loader contracts. Each
    `packages/loader-*` owns one representation runtime.
-8. marimo-studio loads a public StateSpace, then compiles an authored view to
-   ExportSpec outputs and view bindings. It consumes the public Python SDK, the
-   public browser `prepared` subpath, and the public host-cache integration
-   capability. Preparation, repository, and Marimo cache behavior stay in
-   marimo-export.
+8. Applications compose the public Python SDK and browser `prepared` subpath.
+   The proposed marimo-studio prepared runtime remains outside current
+   architecture until its cross-repository acceptance conditions pass.
 9. `docs/` owns user workflows and reference. `development_docs/` owns code
    ownership, lifecycle, compatibility seams, and contributor validation.
 
@@ -152,7 +150,7 @@ or another implementation of the export format.
 | One output representation                      | `packages/loader-*` and exporter runtime                                       | Peer dependency, malformed input, abort, and disposal tests  |
 | CLI or public Python API                       | `_cli`, package root, public records                                           | Human output, JSON, JSONL, exit, and wheel smoke             |
 | Application directory delivery                 | `delivery.py`, `_directory*`                                                   | Materialization, races, rollback, and Windows tests          |
-| marimo-studio integration                      | Public SDK and browser `prepared` subpath                                      | Studio unit, server, static export, and browser tests        |
+| External consumer integration                  | Public SDK and browser `prepared` subpath                                      | Consumer revision and cross-repository acceptance tests      |
 | Example or browser transition                  | `examples/vite-vanilla`                                                        | Typecheck, build, desktop, and narrow browser proof          |
 | Public documentation                           | `docs/`, VitePress config                                                      | Examples, links, search, LLM bundles, and rendered proof     |
 
@@ -209,14 +207,15 @@ or another implementation of the export format.
 - [Ports and composition](development_docs/architecture/ports.md)
 - [Execution and caching](development_docs/architecture/execution-and-caching.md)
 - [marimo integration](development_docs/architecture/marimo-integration.md)
-- [Marimo upstream candidates](development_docs/architecture/marimo-upstream-candidates.md)
+- [Proposed Marimo upstream capabilities](development_docs/proposals/marimo-upstream-capabilities.md)
 - [Browser loaders and mounts](development_docs/architecture/browser-loaders-and-mounts.md)
 - [Live transport and processes](development_docs/architecture/live-transport-and-processes.md)
 - [Application publication and delivery](development_docs/architecture/application-publication-and-delivery.md)
 - [Identities and protocols](development_docs/architecture/identities-and-protocols.md)
 - [Portable JSON](development_docs/architecture/portable-json.md)
 - [Runtime profiles](development_docs/architecture/runtime-profiles.md)
-- [marimo-studio integration](development_docs/architecture/studio-integration.md)
+- [Proposed marimo-studio prepared runtime](development_docs/proposals/studio-prepared-runtime.md)
+- [Failure and concurrency](development_docs/architecture/failure-and-concurrency.md)
 - [Product surfaces and distribution](development_docs/architecture/agents-and-delivery.md)
 - [Development](development_docs/development.md)
 - [Documentation system](development_docs/documentation.md)

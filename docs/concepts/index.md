@@ -1,28 +1,29 @@
 ---
-title: Concepts
-description: Learn the state, output, preparation, reuse, integrity, and trust model behind notebook exports.
+title: Understand notebook exports
+description: See how states, outputs, reuse, caching, publication, integrity, and trust fit together.
 ---
 
-# Understand the model
+# Understand notebook exports
 
-A notebook export contains a finite **state-output relation**. Every exported
-state has one complete input vector and the same set of named outputs. Each
-output has one representation that its readers know how to decode.
+marimo-export runs selected notebook states, publishes named outputs, and writes
+a notebook export that other programs can read. These pages explain how the
+states, outputs, files, and readers fit together.
 
-Read the concepts in the order the producer encounters them:
+Start with [What is marimo-export?](../overview) for the complete path or [build
+your first notebook export](../guide/getting-started) to run it.
 
-1. [States and inputs](states-and-inputs) explains authored state rows,
-   captured baseline values, complete input vectors, aliases, and observations.
-2. [Outputs and representations](outputs-and-representations) follows one
-   notebook result through an output source, descriptor, optional asset, loader,
-   and mount.
-3. [Preparation and reuse](preparation-and-reuse) separates planning,
-   prepared-state reuse, the marimo computation cache, and the leased prepared
-   export.
-4. [Integrity and trust](integrity-and-trust) distinguishes index validation,
-   asset verification, publisher authentication, producer execution, and browser
-   authority.
+- [Choose notebook states](states-and-inputs) shows how sparse rows become
+  complete input values that readers can select.
+- [Store and load outputs](outputs-and-representations) shows how notebook results
+  receive stable names and stored forms.
+- [Reuse earlier results](preparation-and-reuse) explains when states
+  run and when earlier results can be reused.
+- [How notebook caching fits](caching) separates notebook cell caching from
+  reusing finished export results.
+- [Update an application with new exports](exports-and-publications) compares one
+  fixed export URL with a stable route that follows newer exports.
+- [Verify and trust an export](integrity-and-trust) explains what verification
+  checks, how to trust a publisher, and when an output can run browser code.
 
-[What is marimo-export?](../overview) shows the complete lifecycle first.
-Use [Terminology](../reference/terminology) for exact lookup after the model
-is familiar.
+[Choose a guide](../guide/) for a complete task or use
+[Terminology](../reference/terminology) for an exact definition.

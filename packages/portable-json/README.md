@@ -6,6 +6,8 @@ TypeScript boundaries. Vite+ bundles it into the public browser package.
 
 ```bash
 pnpm --filter @marimo-team/portable-json test
+pnpm --filter @marimo-team/portable-json typecheck
+pnpm --filter @marimo-team/portable-json test:package
 ```
 
 ## Convert a JavaScript value

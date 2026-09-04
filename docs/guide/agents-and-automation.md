@@ -1,6 +1,6 @@
 ---
 title: Use notebook exports with agents
-description: Give agents verified prepared data, exact state identity, and representation-aware evidence.
+description: Give agents prepared notebook data, verify its export bytes, and retain exact state and representation evidence.
 ---
 
 # Use notebook exports with agents
@@ -18,19 +18,23 @@ mode:
 uv run marimo-export verify dist/report --json
 ```
 
-Stable result shape:
+Example result:
 
 ```json
 {
   "ok": true,
   "result": {
-    "assets": 0,
-    "bytes_verified": 0,
-    "outputs": 2,
+    "assets": 2,
+    "bytes_verified": 923,
+    "outputs": 4,
     "states": 2
   }
 }
 ```
+
+The exact byte count can change when the pinned marimo snapshot encoding
+changes. The stable quickstart contract is two exported states, four
+state-output pairs, two assets, and a positive verified-byte count.
 
 Read the monthly summary and retain its evidence identity:
 
@@ -40,6 +44,7 @@ from marimo_export import open_export
 notebook_export = open_export("dist/report")
 state = notebook_export.state("monthly")
 output = state.output("summary")
+report = state.output("report")
 
 evidence = {
     "export_sha256": notebook_export.identity,
@@ -52,6 +57,7 @@ evidence = {
 }
 
 print(output.json())
+print(report.codec, len(report.asset_bytes()) > 0)
 ```
 
 The selected representation determines what the agent can inspect. Pair a chart
@@ -66,7 +72,7 @@ Keep these facts with a data-driven answer or generated application:
 - ExportSpec SHA-256
 - notebook export identity from canonical `index.json`
 - marimo and marimo-export producer versions
-- state name, complete inputs, and state fingerprint
+- state alias, complete inputs, and state fingerprint
 - output name, codec, media type, and stored Python type. Exporter-backed
   outputs record `marimo_export.outputs.BlobAsset`
 - asset SHA-256 when the output references an asset
@@ -97,7 +103,7 @@ and network access. Review the notebook and selected outputs before allowing an
 agent to run them.
 
 The plan reports complete state vectors, reusable state fingerprints, and
-missing work. [Preparation and reuse](../concepts/preparation-and-reuse)
+missing work. [Reuse earlier results](../concepts/preparation-and-reuse)
 defines when an exact match can return before notebook startup and how external
 data freshness enters producer identity and marimo caching.
 

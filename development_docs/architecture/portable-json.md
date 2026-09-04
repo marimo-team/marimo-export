@@ -5,9 +5,11 @@ consumers. It accepts values whose type and numeric identity survive the
 language boundary, then provides deterministic bytes for fingerprints and wire
 protocols.
 
-`packages/portable-json` owns JavaScript and TypeScript validation. Python owns
-the matching value and canonical byte rules in `_json.py`, exposed through
-`marimo_export.wire`.
+`packages/portable-json` is a private workspace bundled into the public browser
+package. It owns JavaScript and TypeScript validation. Python owns the matching
+value and canonical byte rules in `_json.py`, exposed through
+`marimo_export.wire`. The exact public value contract lives in the
+[Portable JSON reference](../../docs/reference/portable-json.md).
 
 ## Value contract
 
@@ -29,17 +31,21 @@ The shared limits are:
 | Integer magnitude                         | JavaScript safe integer range, from `-(2**53 - 1)` through `2**53 - 1` |
 | Strict JSON number lexeme                 | 1,024 characters                                                       |
 
-Conversion rejects `NaN`, infinity, lone Unicode surrogates, unsupported object
-types, and integers outside the safe range. Negative zero becomes zero in a
-portable value. JavaScript arrays must be dense. Active container cycles fail,
+Python conversion rejects `NaN`, infinity, lone Unicode surrogates, unsupported
+object types, and integers outside the safe range. Negative zero becomes zero in
+a portable value. JavaScript arrays must be dense. Active container cycles fail,
 while a repeated reference is copied into each position.
+
+The TypeScript converter distinguishes primitive strings, numbers, and booleans
+from boxed objects before conversion. Focused tests keep those wrapper objects
+outside the portable value contract.
 
 Object keys such as `__proto__` remain data properties. Conversion does not use
 them to mutate an object's prototype.
 
 ## Conversion and parsing are different operations
 
-The TypeScript root package exposes:
+The private TypeScript workspace root exposes:
 
 ```text
 portableJsonValue(input, path?)
@@ -48,8 +54,9 @@ parseStrictJson(source, maximumValues?)
 parsePortableJson(source)
 ```
 
-`portableJsonValue()` and `portableJsonObject()` detach the accepted tree and
-recursively freeze the JavaScript result. `parseStrictJson()` checks one JSON
+For valid `JsonValue` input, `portableJsonValue()` and `portableJsonObject()`
+detach the accepted tree and recursively freeze the JavaScript result.
+`parseStrictJson()` checks one JSON
 text before `JSON.parse` runs. It rejects duplicate decoded object keys, excess
 nesting, excess values, oversized number lexemes, and fractional source numbers
 that JavaScript would round to an integer. `parsePortableJson()` adds the
@@ -87,20 +94,26 @@ canonical value that contributes to a state, plan, or export identity.
 
 ## Ownership by runtime
 
-| Owner                                   | Responsibility                                                                           |
-| --------------------------------------- | ---------------------------------------------------------------------------------------- |
-| `packages/portable-json/src/convert.ts` | JavaScript value conversion, detachment, freezing, and bounds                            |
-| `packages/portable-json/src/parse.ts`   | Strict JSON scanning and duplicate-key rejection                                         |
-| `packages/portable-json/src/types.ts`   | Shared JavaScript types and limits                                                       |
-| `packages/portable-json/src/zod.ts`     | Optional Zod schemas and transformed-key collision checks                                |
-| `_json.py`                              | Python value validation, strict decoding, canonical number spelling, and canonical bytes |
-| `wire.py`                               | Public Python conversion, canonical parsing, hashing, and state fingerprints             |
-| `packages/browser/src/schema.ts`        | Export-specific parsing after portable JSON validation                                   |
+| Owner                                    | Responsibility                                                                           |
+| ---------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `packages/portable-json/src/convert.ts`  | JavaScript value conversion, detachment, freezing, and bounds                            |
+| `packages/portable-json/src/parse.ts`    | Strict JSON scanning and duplicate-key rejection                                         |
+| `packages/portable-json/src/types.ts`    | Shared JavaScript types and limits                                                       |
+| `packages/portable-json/src/zod.ts`      | Optional Zod schemas and transformed-key collision checks                                |
+| `_json.py`                               | Python value validation, strict decoding, canonical number spelling, and canonical bytes |
+| `wire.py`                                | Public Python conversion, canonical parsing, hashing, and state fingerprints             |
+| `packages/browser/src/schema.ts`         | Export-specific parsing after portable JSON validation                                   |
+| `packages/loader-anywidget/src/index.ts` | AnyWidget envelope JSON parsing before payload validation                                |
 
-The package root has no runtime peer dependency. The optional
-The workspace package's `zod` subpath requires Zod and lets repository code
-compose portable values with a larger Zod schema. `losslessRecordSchema()`
-rejects two source keys when a key transform maps them to the same parsed key.
+The workspace root has no runtime peer dependency. Its optional `zod` subpath
+requires Zod and lets workspace code compose portable values with a larger Zod
+schema. `losslessRecordSchema()` rejects two source keys when a key transform
+maps them to the same parsed key.
+
+The AnyWidget browser decoder currently calls `JSON.parse()` for its inner graph
+payload. It does not reject duplicate keys or enforce the shared depth and value
+limits before recursive payload validation. Treat this as a cross-language
+parity gap until the decoder uses the strict bounded parser.
 
 ## Change and validation rules
 
@@ -114,6 +127,7 @@ protocol that embeds the changed value. Update these surfaces together:
 5. export index and prepared-manifest consumers
 6. malformed, depth, count, numeric, Unicode, and duplicate-key tests
 7. packed root and Zod subpath consumers
+8. AnyWidget inner graph parsing and malformed cross-language fixtures
 
 Run:
 

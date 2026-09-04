@@ -1,12 +1,17 @@
 <script setup lang="ts">
 import { withBase } from "vitepress";
-import { computed, onBeforeUnmount, ref } from "vue";
+import { computed, onBeforeUnmount, ref, watch } from "vue";
 
-import { documentationExample } from "../../../example.ts";
+import { documentationExamples, type DocumentationExampleName } from "../../../example.ts";
 
-type TabKey = (typeof documentationExample.tabs)[number]["key"];
+type TabKey = "application" | "notebook";
 
-const selectedKey = ref<TabKey>(documentationExample.defaultTab);
+const props = withDefaults(defineProps<{ example?: DocumentationExampleName }>(), {
+  example: "market",
+});
+
+const documentationExample = computed(() => documentationExamples[props.example]);
+const selectedKey = ref<TabKey>(documentationExample.value.defaultTab);
 const loaded = ref(false);
 const frame = ref<HTMLIFrameElement>();
 const frameHeight = ref(720);
@@ -16,8 +21,8 @@ let mutationObserver: MutationObserver | undefined;
 
 const selected = computed(
   () =>
-    documentationExample.tabs.find((candidate) => candidate.key === selectedKey.value) ??
-    documentationExample.tabs[0],
+    documentationExample.value.tabs.find((candidate) => candidate.key === selectedKey.value) ??
+    documentationExample.value.tabs[0]!,
 );
 const href = computed(() => withBase(selected.value.href));
 
@@ -57,8 +62,7 @@ const measure = (): void => {
   frameHeight.value = Math.max(document.body.scrollHeight, document.body.offsetHeight);
 };
 
-const select = (key: TabKey): void => {
-  if (selectedKey.value === key) return;
+const resetFrame = (key: TabKey): void => {
   resizeObserver?.disconnect();
   mutationObserver?.disconnect();
   selectedKey.value = key;
@@ -66,6 +70,16 @@ const select = (key: TabKey): void => {
   frameHeight.value = 720;
   frameKey.value += 1;
 };
+
+const select = (key: TabKey): void => {
+  if (selectedKey.value === key) return;
+  resetFrame(key);
+};
+
+watch(
+  () => props.example,
+  () => resetFrame(documentationExample.value.defaultTab),
+);
 
 const markLoaded = (): void => {
   resizeObserver?.disconnect();

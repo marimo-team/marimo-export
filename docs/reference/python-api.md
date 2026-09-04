@@ -35,9 +35,12 @@ Install a producer extra when an `ExportSpec` uses its exporter:
 | Open states and decode outputs                                          | [Read and verify exports](python/reader)                          |
 | Inspect a notebook or capture a live session                            | [Sessions and inspection](python/sessions-and-inspection)         |
 | Configure retention or record observed inputs                           | [Repository and observations](python/repository-and-observations) |
-| Commit an application directory or retain a changing publication        | [Delivery and publications](python/delivery-and-publications)     |
+| Commit an application directory or retain a Python prepared publication | [Delivery and publications](python/delivery-and-publications)     |
 | Embed marimo-export behavior in a marimo host                           | [Host integration](python/host-integration)                       |
-| Implement against canonical JSON, indexes, descriptors, or typed errors | [Format records and errors](python/format-records-and-errors)     |
+| Convert portable values or encode canonical JSON                        | [Portable JSON](portable-json)                                    |
+| Construct indexes and descriptors or handle typed errors                | [Format records and errors](python/format-records-and-errors)     |
+| Interpret progress events and cache activity                            | [Produce an export](python/produce#progress-callbacks)            |
+| Check lower-level capture record reachability                           | [Narrow protocol records](python/produce#narrow-protocol-records) |
 
 ## The common workflow
 

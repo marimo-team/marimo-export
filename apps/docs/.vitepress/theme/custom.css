@@ -203,6 +203,11 @@
   border-radius: 8px;
 }
 
+.vp-doc .mermaid-container {
+  min-height: 15rem;
+  max-height: 24rem;
+}
+
 @media (max-width: 639px) {
   .VPHome .VPHero {
     padding-top: 88px;

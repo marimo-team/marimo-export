@@ -163,6 +163,8 @@ expand what a standard producer writes.
 | Control path                                     |                                            256 steps |
 | Descriptor provenance text                       |                                    2,048 UTF-8 bytes |
 | BlobAsset metadata                               |                            256 KiB of canonical JSON |
+| BlobAsset MessagePack nesting                    |                                           256 levels |
+| BlobAsset MessagePack values                     |                                              100,000 |
 | Media type                                       |                          1,024 printable ASCII bytes |
 | One declared descriptor asset                    |                                  2,147,483,647 bytes |
 | marimo snapshot values                           |                                            2,000,000 |
@@ -173,9 +175,18 @@ expand what a standard producer writes.
 | AnyWidget external module URL                    |                                    8,192 UTF-8 bytes |
 | AnyWidget data URL media type                    |                                    1,024 UTF-8 bytes |
 
+The BlobAsset scanner also requires minimal-width MessagePack tokens, finite
+float64 values, unique string map keys, and no trailing bytes. It rejects
+float32 and extension tokens. Envelope failures surface as `asset_invalid`.
+
 [Export format](../export-format) defines field shapes and producer limits.
 [Portable JSON](../portable-json) defines its separate 256-level and
 100,000-value limits.
+
+The current AnyWidget loader parses its inner JSON document before graph
+validation and applies no separate depth or value-count limit to that graph.
+Use `maxBytes` to set a conservative outer asset budget and load AnyWidget
+content from a trusted publisher.
 
 ## Browser requirements
 

@@ -68,6 +68,16 @@ const normalizeNavigationFlyouts = (): void => {
   }
 };
 
+const normalizeAppearanceSwitch = (): void => {
+  const appearance = document.querySelector<HTMLElement>(".VPSwitchAppearance[role='switch']");
+  if (appearance === null) return;
+  setAttribute(
+    appearance,
+    "aria-checked",
+    String(document.documentElement.classList.contains("dark")),
+  );
+};
+
 const normalizeSearch = (search: HTMLElement): void => {
   const input = search.querySelector<HTMLElement>("#localsearch-input");
   if (input !== null) {
@@ -118,6 +128,7 @@ export const installAccessibilityEnhancements = (): void => {
     document.querySelector<HTMLElement>(".VPHome")?.setAttribute("role", "main");
     normalizeSidebarGroups();
     normalizeNavigationFlyouts();
+    normalizeAppearanceSwitch();
 
     const search = document.querySelector<HTMLElement>("body > .VPLocalSearchBox");
     const searchIsOpen = search !== null;
@@ -243,6 +254,11 @@ export const installAccessibilityEnhancements = (): void => {
     attributes: true,
     childList: true,
     subtree: true,
+  });
+  const themeObserver = new MutationObserver(synchronize);
+  themeObserver.observe(document.documentElement, {
+    attributeFilter: ["class"],
+    attributes: true,
   });
   mobileSidebar.addEventListener("change", synchronize);
   synchronize();

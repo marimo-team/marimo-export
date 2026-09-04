@@ -1,0 +1,24 @@
+{
+  "name": "@marimo-team/marimo-export-example-quickstart",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vp build",
+    "check": "vp check",
+    "dev": "vp dev --host 127.0.0.1",
+    "export": "uv run --locked --package marimo-export marimo-export build report.py --spec report.export.yaml --output public/export --replace",
+    "notebook": "uv run --locked --package marimo-export marimo edit report.py",
+    "preview": "vp preview --host 127.0.0.1",
+    "test": "node tests/dev-transform.mjs",
+    "typecheck": "tsc --noEmit",
+    "verify:export": "uv run --locked --package marimo-export marimo-export verify public/export"
+  },
+  "dependencies": {
+    "@marimo-team/marimo-export": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "catalog:",
+    "vite-plus": "catalog:"
+  }
+}

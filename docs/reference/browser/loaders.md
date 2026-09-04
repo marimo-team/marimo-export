@@ -20,20 +20,20 @@ const summary = await state.output("summary").load(jsonLoader());
 
 ## Loader catalog
 
-| Loader and import                                   | Accepted representation                             | Result                                       | Dependency                              |
-| --------------------------------------------------- | --------------------------------------------------- | -------------------------------------------- | --------------------------------------- |
-| `scalarLoader()` from package root                  | `marimo.scalar.v1`                                  | `null`, boolean, string, number, or `bigint` | None                                    |
-| `jsonLoader()` from `/loader/json`                  | `marimo.json.v1`                                    | Frozen portable `JsonValue`                  | None                                    |
-| `textLoader()` from `/loader/text`                  | Non-HTML `text/*` with UTF-8 or unspecified charset | String                                       | None                                    |
-| `htmlLoader()` from `/loader/html`                  | `text/html` with UTF-8 or unspecified charset       | Inert HTML source string                     | None                                    |
-| `imageLoader()` from package root                   | Any image BlobAsset media type                      | `MountableValue`                             | Browser Blob and object URL APIs        |
-| `numpyLoader()` from `/loader/numpy`                | `numpy.npy.v1`                                      | `NumpyArray`                                 | None                                    |
-| `arrowTableLoader()` from `/loader/arrow`           | `apache.arrow.file.v1`                              | Flechette `Table`                            | `@uwdata/flechette`, `lz4js`            |
-| `parquetRowsLoader()` from `/loader/parquet`        | Apache Parquet BlobAsset                            | Frozen array of `ParquetRow`                 | `hyparquet`                             |
-| `vegaLiteLoader()` from `/loader/vegalite`          | Versioned Vega-Lite BlobAsset                       | `VegaLiteChart`                              | `vega-embed`                            |
-| `anyWidgetLoader()` from `/loader/anywidget`        | `application/vnd.marimo-export.anywidget.v1+json`   | `LoadedAnyWidget`                            | `@anywidget/types` for TypeScript types |
-| `marimoOutputLoader()` from `/loader/marimo-output` | `marimo.output.v1`                                  | `MarimoOutputSnapshot`                       | None                                    |
-| `marimoCellLoader()` from `/loader/marimo-cell`     | `marimo.cell.v1`                                    | `MarimoCellSnapshot`                         | None                                    |
+| Loader and import                                   | Accepted representation                             | Result                                       | Dependency                                     |
+| --------------------------------------------------- | --------------------------------------------------- | -------------------------------------------- | ---------------------------------------------- |
+| `scalarLoader()` from package root                  | `marimo.scalar.v1`                                  | `null`, boolean, string, number, or `bigint` | None                                           |
+| `jsonLoader()` from `/loader/json`                  | `marimo.json.v1`                                    | Frozen portable `JsonValue`                  | None                                           |
+| `textLoader()` from `/loader/text`                  | Non-HTML `text/*` with UTF-8 or unspecified charset | String                                       | None                                           |
+| `htmlLoader()` from `/loader/html`                  | `text/html` with UTF-8 or unspecified charset       | Inert HTML source string                     | None                                           |
+| `imageLoader()` from package root                   | Any image BlobAsset media type                      | `MountableValue`                             | Browser Blob and object URL APIs               |
+| `numpyLoader()` from `/loader/numpy`                | `numpy.npy.v1`                                      | `NumpyArray`                                 | None                                           |
+| `arrowTableLoader()` from `/loader/arrow`           | `apache.arrow.file.v1`                              | Flechette `Table`                            | `@uwdata/flechette ^2.5.0`, `lz4js 0.2.0`      |
+| `parquetRowsLoader()` from `/loader/parquet`        | Apache Parquet BlobAsset                            | Frozen array of `ParquetRow`                 | `hyparquet ^1.26.2`                            |
+| `vegaLiteLoader()` from `/loader/vegalite`          | Versioned Vega-Lite BlobAsset                       | `VegaLiteChart`                              | `vega-embed ^7.1.0`                            |
+| `anyWidgetLoader()` from `/loader/anywidget`        | `application/vnd.marimo-export.anywidget.v1+json`   | `LoadedAnyWidget`                            | `@anywidget/types ^0.4.0` for TypeScript types |
+| `marimoOutputLoader()` from `/loader/marimo-output` | `marimo.output.v1`                                  | `MarimoOutputSnapshot`                       | None                                           |
+| `marimoCellLoader()` from `/loader/marimo-cell`     | `marimo.cell.v1`                                    | `MarimoCellSnapshot`                         | None                                           |
 
 Install the package and the peers for the loaders your application imports:
 
@@ -47,7 +47,8 @@ pnpm add @anywidget/types
 
 The dependencies are optional at the package root. A specialized loader subpath
 uses its listed dependency. [Output representations](../representations)
-maps producer forms to these browser loaders.
+maps producer forms to these browser loaders. [Compatibility](../compatibility)
+lists the supported peer version ranges.
 
 ## Scalar and JSON
 
@@ -315,6 +316,12 @@ Loading validates the complete reachable model graph, restores binary buffers,
 and returns a frozen copy of the root model's saved state. Buffer `DataView`
 instances remain mutable. Loading does not import the widget module.
 
+The loader decodes the inner AnyWidget document with the browser's `JSON.parse()`
+before graph validation. Duplicate keys therefore use the final decoded value.
+The inner graph traversal has no separate portable JSON depth or value-count
+limit. Apply a conservative `ExportOutput.load(loader, { maxBytes })` budget and
+load AnyWidget payloads from a trusted publisher.
+
 Mounting imports module definitions, creates an isolated browser-local model
 graph, inserts model CSS into the element's document or shadow root, initializes
 the graph, and renders the root view. Nested model references resolve through
@@ -324,6 +331,19 @@ the AnyWidget host and widget manager APIs.
 and exported initialization methods operate in the browser-local graph.
 `save_changes()` acknowledges local dirty fields and sends no request to Python.
 The experimental Python invocation API raises an error.
+
+The mounted model implements the `AnyModel` shape with these browser-local
+semantics:
+
+| Member                             | Browser-local behavior                                            |
+| ---------------------------------- | ----------------------------------------------------------------- |
+| `get()` and `set()`                | Read and update one mount's isolated model state                  |
+| `on()` and `off()`                 | Register and remove local change listeners                        |
+| `save_changes()`                   | Clear local dirty-field bookkeeping without a network request     |
+| `send(content, callback, buffers)` | Discard content and buffers, then queue a callable callback       |
+| `widget_manager.get_model()`       | Resolve a model inside the mounted graph                          |
+| `msg:custom` listeners             | Register successfully, with no kernel channel that emits messages |
+| `experimental.invoke()`            | Reject because the exported widget has no Python kernel           |
 
 Each mount owns separate models, views, styles, listeners, and cleanup
 callbacks. Dispose a mount before reusing its element. Disposal runs view and
@@ -441,6 +461,9 @@ map. If closing a removal fails, the target map remains uninstalled. Call
 
 Settle each replacement with `commit()` or `rollback()` before starting another
 replacement or creating a checkpoint. Both settlement methods are idempotent.
+The first successful settlement is final. A later settlement call has no effect.
+When rollback settles first, a later `commit()` resolves to `undefined`. When a
+commit attempt fails, `rollback()` can still restore the previous graph.
 
 `PreparedWidgetGraphReplacementError` has `remount: true`. It means rollback
 could not restore a trustworthy live registry or a failure occurred after a
@@ -541,6 +564,21 @@ interface MountableValue {
   mount(element: HTMLElement, options?: { readonly signal?: AbortSignal }): Promise<MountedView>;
 }
 ```
+
+### Abort signal duration
+
+Pass separate signals to `ExportOutput.load()` and a later `mount()` when both
+phases can become stale. The built-in mount signals have these lifetimes:
+
+| Mount               | While `mount()` is pending                                           | After `mount()` resolves                                     |
+| ------------------- | -------------------------------------------------------------------- | ------------------------------------------------------------ |
+| `imageLoader()`     | Aborts construction and removes partial resources                    | Aborting disposes the image and revokes its Blob URL         |
+| `vegaLiteLoader()`  | Races the module import and embed task, then cleans up a late result | Aborting has no effect. Call the returned `dispose()` handle |
+| `anyWidgetLoader()` | Aborts initialization and rendering, then runs available cleanup     | Aborting starts disposal of the mounted model graph          |
+| Custom mount        | Defined by the loader                                                | Define and document whether the signal owns the settled view |
+
+Explicit `dispose()` remains the common ownership contract. Call it during route
+teardown and after a complete replacement commits.
 
 A restrictive [Content Security Policy
 (CSP)](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/CSP) may need to

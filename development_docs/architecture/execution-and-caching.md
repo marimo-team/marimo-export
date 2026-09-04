@@ -30,15 +30,21 @@ borrowed parent sessions retain their application-owned policy.
 
 The SciPy 2026 article [Content-Addressed Caching for Reactive
 Notebooks](https://dmadisetti.github.io/scipy_proceedings_2026/) supplies the
-design rationale for the upstream implementation:
+design rationale for graph-derived keys, typed cache blobs, and cached
+WebAssembly delivery:
 
 - Cache keys combine compiled cell behavior with content-addressed references.
 - A reference that cannot be addressed directly contributes its producing
   parent cell's hash, forming a Merkle dependency graph.
-- Lazy manifests and typed value blobs let the runtime hydrate definitions when
-  a downstream computation first needs them.
-- Cached WebAssembly exports bundle native manifests and blobs so browser Python
-  can derive the same keys and restore the values.
+- Per-definition manifests and typed blobs separate cache identity from stored
+  values.
+- Cached WebAssembly exports carry native manifests and blobs so browser Python
+  can derive the same keys and restore values.
+
+The pinned marimo 0.24.0 loader verifies the manifest and loads every resolvable
+referenced definition and return value before skipping the cell body. Values
+whose required module is unavailable can remain as stubs and cause live
+recomputation when a consumer needs them.
 
 marimo-export preserves those upstream decisions. It adds graph-scoped execution
 policy needed to prepare an explicit state-output relation, flushes pending
@@ -46,18 +52,18 @@ native writes, verifies the selected return receipt, and translates supported
 returns into package-owned output descriptors. Marimo remains authoritative for
 the cache key, store, manifest, blob, codec, signature, and restoration behavior.
 
-```text
-marimo reactive scheduler
-  -> native cache key and lookup
-  -> execute miss or hydrate hit
-  -> native manifest and value blobs
-  -> marimo-export receipt verification
-  -> OutputDescriptor and prepared-state artifact
+```mermaid
+flowchart LR
+    scheduler["marimo reactive scheduler"] --> lookup["Native cache key and lookup"]
+    lookup --> execution["Execute miss or hydrate hit"]
+    execution --> native["Native manifest and value blobs"]
+    native --> verification["marimo-export receipt verification"]
+    verification --> output["OutputDescriptor and prepared-state artifact"]
 ```
 
-The export repository stores verified portable output artifacts after Marimo
-has executed or restored the notebook cells that produce them. Marimo's native
-store remains the computation cache.
+The export repository stores prepared-state artifacts after Marimo has executed
+or restored the notebook cells that produce them. Marimo's native store remains
+the computation cache.
 
 ## Exact supported adapter
 
@@ -163,6 +169,21 @@ For an owned export graph, the adapter can:
 Graph scopes are registered and removed through context managers. Forced cells
 exist only inside one active scope.
 
+## Cache activity counts executed child work
+
+`CacheActivity` records effective marimo cache decisions for cells that entered
+a missing-state child run:
+
+- `authored_hits` and `authored_misses` count non-projection cell attempts.
+- `projection_hits` and `projection_misses` count transient output and snapshot
+  leaf attempts.
+- A forced live run counts as an effective miss even when marimo initially found
+  a stored entry.
+
+Exact prepared-export reuse and prepared-state reuse execute no child work and
+therefore add no cache activity. Zero counts can mean repository reuse. They do
+not prove that the notebook contains no cacheable cells.
+
 ## Sequential lazy loader
 
 `SequentialLazyLoader` subclasses Marimo's native `LazyLoader`. It moves blob
@@ -197,12 +218,9 @@ translation occurs after the cache adapter returns its package record.
 ## Interactive host compatibility
 
 `marimo_export.integration.keep_cached_cells_compatible()` installs the cache
-repairs required by an interactive host process. marimo-studio calls this public
-integration capability when it constructs its kernel adapter.
-
-Studio's `_CachedCellCompatibility` wrapper retains the returned release
-callback for the kernel lifecycle. Private host repair imports and mutations
-remain in `marimo_export._marimo.compat.cache.host`.
+repairs required by an interactive host process. The host retains the returned
+release callback for its kernel lifecycle. Private host repair imports and
+mutations remain in `marimo_export._marimo.compat.cache.host`.
 
 The host lease owns three pinned Marimo seams:
 
@@ -219,9 +237,9 @@ mutation raises `marimo_cache_patch_conflict`.
 
 Each complete state runs in an in-memory Marimo child graph containing:
 
-- authored notebook cells
+- one copied set of authored notebook cells, with selected ordinary assignments
+  rewritten in their owning cells
 - one complete state fingerprint cell
-- copied authored cells with selected ordinary assignments rewritten
 - registry update commands for selected UI inputs
 - transient snapshot-token cells when an output needs one
 - one deterministic leaf per requested output

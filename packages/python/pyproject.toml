@@ -5,7 +5,7 @@ build-backend = "uv_build"
 [project]
 name = "marimo-export"
 version = "0.0.2"
-description = "Precompute and read verified exports of selected marimo notebook results."
+description = "Prepare and read verified exports of selected marimo notebook outputs."
 readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE"]

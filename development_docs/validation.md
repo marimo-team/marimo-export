@@ -44,7 +44,7 @@ builds, packed npm installation, and isolated Python wheel imports.
 | Planning and preparation                  | Plan and preparation service tests                     | Exact repeat, one-state addition, file and live capture |
 | Observations                              | Queue, ledger, source-match, SQLite observation tests  | Successful normal-run recording in a live kernel        |
 | Repository                                | Repository, concurrency, integrity, lifecycle tests    | Multiprocess contention, owner death, Windows matrix    |
-| Marimo cache adapter                      | Probe, patch, graph scope, receipt, cleanup tests      | Warm owned build and borrowed capture                   |
+| marimo cache adapter                      | Probe, patch, graph scope, receipt, cleanup tests      | Warm owned build and borrowed capture                   |
 | Managed process lifecycle                 | Producer, managed server, startup, shutdown tests      | Source-preserving file preparation                      |
 | Live transport and authentication         | Client, auth, SSE, remote response, redaction tests    | HTTPS borrowed capture and same-origin transfer         |
 | Transfer, writer, local reader            | Limits, digest, framing, rollback, filesystem tests    | Public capture and `verify`                             |
@@ -52,7 +52,6 @@ builds, packed npm installation, and isolated Python wheel imports.
 | Application directory delivery            | Delivery, directory security, race, rollback tests     | Complete staged application commit                      |
 | Prepared browser control                  | Manifest, query, control, refresh, controller tests    | Rapid state changes and publication rotation            |
 | Browser reader or loader                  | Parser, integrity, decode, cancellation, disposal      | Packed subpath with required peer                       |
-| marimo-studio integration                 | Compiler, registry, route, static delivery tests       | Live Zero-Python preview and static bundle              |
 | Visible application                       | Typecheck and production build                         | Desktop, narrow, rapid changes, mounted action          |
 | Documentation                             | Prose, links, VitePress build                          | Navigation, search, source view, LLM text, browser      |
 
@@ -65,7 +64,7 @@ uv run pytest -q \
 ```
 
 These tests protect the package root, focused public modules, the
-service-to-`PreparationRepository` boundary, private Marimo containment,
+service-to-`PreparationRepository` boundary, private marimo containment,
 deferred imports, and package source identity.
 
 ## Planning, observations, and preparation
@@ -83,7 +82,7 @@ Required behavioral cases:
 
 - exact repeat returns before notebook startup
 - equal state vectors share one prepared state
-- adding one state executes one missing vector
+- adding one state executes one missing vector when inferred input names stay equal
 - changing the default reuses prepared states
 - cancellation leaves the prior generation current
 - a live producer change fails before publication
@@ -122,7 +121,7 @@ Repository changes require evidence for:
 Use multiprocess tests for cross-process claims. The Windows CI matrix is the
 authority for native Windows locking, paths, and process behavior.
 
-## Marimo cache adapter
+## marimo cache adapter
 
 ```bash
 uv run pytest -q \
@@ -140,7 +139,7 @@ Run the public probe:
 marimo-export doctor
 ```
 
-Adapter evidence must cover the exact Marimo release, private source drift,
+Adapter evidence must cover the exact marimo release, private source drift,
 reversible overlapping leases, foreign patch conflicts, unrelated graph
 isolation, native reuse across output plans, live complete-cell execution,
 signed receipts, incomplete cache data,
@@ -177,7 +176,7 @@ uv run pytest -q \
 ```
 
 Cover supersession, last-good preservation, observation-driven polling, route
-grace, detached asset leases, nested export verification, directory identity,
+grace, detached response generation leases, nested export verification, directory identity,
 native exchange, rollback replacement, recovery paths, and warnings emitted
 after the new directory becomes visible.
 
@@ -201,21 +200,13 @@ identity binding, default state, query and control updates, missing states,
 supersession, restoration, publication refresh, selection preservation,
 settlement, and idempotent disposal.
 
-## marimo-studio consumer
+## External integration proposals
 
-Run Studio's Python, TypeScript, and browser gates in the Studio checkout using
-the editable marimo-export workspace dependency. Required integration cases:
-
-- view compilation produces public OutputSpec records and separate host bindings
-- live preview uses `Session.plan()` and `Session.capture()`
-- independently leased assets survive manifest rotation
-- Studio source contains no repository schema or SQL
-- static delivery calls public `prepare()` and copies the verified export
-- the Studio renderer implements `PreparedStatePort`
-- rapid transitions preserve the last complete view
-- current-manifest refresh preserves a valid local selection
-- notebook-scope close releases prepared handles and pending work
-- Studio host-cache setup calls the public marimo-export integration capability
+No external application is part of the current repository gate. A proposed
+marimo-studio prepared runtime and its cross-repository acceptance conditions
+live in [Proposals](proposals/studio-prepared-runtime.md). Add an external gate
+here only after the owner repository declares the dependency and records exact
+setup, test, static-export, and browser commands.
 
 ## Live application path
 
@@ -229,7 +220,7 @@ Exercise every declared state and one interaction inside each mounted runtime.
 Check rapid changes, final state, staging cleanup, console errors, failed
 requests, duplicate IDs, page overflow, and desktop and narrow layouts.
 
-A Zero-Python deployment check must confirm that prepared manifests, export
+A prepared-runtime deployment check must confirm that prepared manifests, export
 files, state transitions, and controls use the static origin and open no kernel
 or WebSocket connection.
 
@@ -245,21 +236,34 @@ Check local links and fragments, navigation parity, local search, code block
 rendering, `llms.txt`, `llms-full.txt`, desktop layout, and narrow layout.
 VitePress build success alone does not prove these delivery properties.
 
-## Open validation gaps
+## Known validation gaps
 
-The following source behaviors need focused witnesses before their stronger
-architectural claims can be treated as enforced:
+The following statements describe current source behavior that lacks a focused
+boundary witness. They are not stronger supported guarantees:
 
-- clearing observations does not advance the producer revision, so
+- adding or removing a state-row key can change the inferred input-name set and
+  invalidate every state fingerprint
+- exact prepared-export reuse can bypass exporter import and exporter-source
+  checks when that source lies outside the discovered producer environment
+- clearing observations leaves the producer revision unchanged, so
   observation-driven publication polling does not react to the deletion
 - public exact observation lookup and plan-time projection of stored supersets
-  have different matching semantics
-- combined repository-byte admission can reject a write before evicting every
-  otherwise eligible historical artifact
+  use different matching and revision semantics
+- repository admission can reject a candidate before an otherwise eligible
+  historical artifact is explicitly pruned
 - prepared-state corruption can delete dependent generation rows before the
   same recovery pass quarantines their directories
 - a valid reservation has no focused negative test for a current-pointer change
   immediately before final publication
+- `route_grace_seconds` lacks finite-number and boolean validation
+- Python publication refresh failures have no callback or status channel
+- a scratchpad `done` event ends reading, so later events are not rejected
+- AnyWidget inner JSON parsing lacks duplicate-key, depth, and value bounds
+- strict BlobAsset MessagePack has thin malformed-token coverage
+- Parquet uses an injected decoder in tests, and image and Vega-Lite lack real
+  browser runtime acceptance
+- the market dashboard has no automated browser journey for rapid transitions,
+  mounted interaction, disposal, or narrow layout
 - internal and public projection cache summaries count different cell sets
-- private Marimo transfer values and signature exceptions can cross the current
+- private marimo transfer values and signature exceptions can cross the current
   capability boundary

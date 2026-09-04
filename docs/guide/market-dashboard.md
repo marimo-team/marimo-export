@@ -11,9 +11,10 @@ opens a vanilla [TypeScript](https://www.typescriptlang.org/) application that c
 representations.
 
 The Notebook tab opens a static HTML export of the original marimo source and
-its captured outputs. The Exported app tab reads five prepared states from a
-verified notebook export. The application starts no Python runtime, WebAssembly
-runtime, or application server.
+its captured outputs. The Exported app tab reads five exported states from a
+notebook export whose declared assets were verified during the documentation
+build. The application starts no Python runtime, WebAssembly runtime, or
+application server.
 
 <StaticApp />
 
@@ -86,6 +87,12 @@ pnpm run export
 The [export repository](manage-repository) stores reusable prepared states.
 The matching `ExportSpec`, producer identity, and state fingerprints let the
 second build reuse the prepared export before notebook startup.
+
+This second build demonstrates reuse, not market-data freshness. Exact reuse can
+return before the notebook imports Yahoo Finance or requests data. A different
+output directory also retains the same repository identity. Use the
+[freshness boundary](build-and-capture#inspect-reuse-before-preparation) when a
+new market-data retrieval is required.
 
 ## Capture the open notebook
 

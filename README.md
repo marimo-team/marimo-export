@@ -26,32 +26,34 @@
   <a href="LICENSE"><img alt="Apache License 2.0" src="https://img.shields.io/badge/license-Apache--2.0-6c6f78.svg"></a>
 </p>
 
-marimo-export runs selected states of a [marimo](https://marimo.io/) notebook
-and writes their named results to a portable, verified **notebook export**.
-Browser applications and agents can read that export after the producer stops,
-without a Python runtime. Python and TypeScript clients use the same files.
+Select the states to run through [marimo](https://marimo.io/) and the outputs to
+publish. marimo-export writes them as a portable, verified **notebook export**.
+Browser applications and agents read it after the Python producer stops. They
+need neither its runtime nor the notebook source code.
 
 ## Build the quickstart
 
-From a repository checkout, run the CLI directly from PyPI:
+From a repository checkout, run the CLI in the workspace environment:
 
 ```bash
 mkdir -p dist
-uvx marimo-export build examples/quickstart/report.py \
+uv run marimo-export build examples/quickstart/report.py \
   --spec examples/quickstart/report.export.yaml \
   --output dist/quickstart
-uvx marimo-export verify dist/quickstart
+uv run marimo-export verify dist/quickstart
 ```
 
-`dist/quickstart/index.json` describes two exported states and one JSON output.
-Read the monthly state:
+`dist/quickstart/index.json` describes two exported states and two named outputs.
+Two report assets sit under `dist/quickstart/assets`. Read the monthly JSON state:
 
-```python
+```bash
+uv run python - <<'PY'
 from marimo_export import open_export
 
 export = open_export("dist/quickstart")
 summary = export.state("monthly").output("summary").json()
 print(dict(summary))
+PY
 ```
 
 Expected output:
@@ -64,24 +66,28 @@ Install the Python package in another project with `uv add marimo-export`. The
 [getting-started guide](docs/guide/getting-started.md) creates the same notebook
 and export from an empty directory.
 
-## Follow the product model
+## How notebook exports work
 
-```text
-notebook + ExportSpec
-  -> plan complete states and named outputs
-  -> prepare missing results through marimo
-  -> write index.json and declared assets
-  -> open, resolve, and load from a consumer
+```mermaid
+flowchart LR
+    source[Notebook and ExportSpec]
+    plan[Plan states and outputs]
+    prepare[Prepare missing states]
+    write[Write index and assets]
+    consume[Open, resolve, and load]
+
+    source --> plan --> prepare --> write --> consume
 ```
 
 An `ExportSpec` contains sparse state rows and named outputs. Planning completes
-each row from the captured input baseline. Every exported state has the same
+each row from the captured baseline. Every exported state has the same
 output-name set. A representation identifies how one output is stored and
 decoded.
 
-[What is marimo-export?](docs/overview.md) introduces each object and operation
-in order. [Why export notebook states?](docs/why.md) compares finite prepared
-results with live Python and browser Python execution.
+[What is marimo-export?](docs/overview.md) follows the quickstart from notebook
+states to the files consumers read. [When to use
+marimo-export](docs/why.md) compares notebook exports with live Python services
+and browser Python execution.
 
 ## Choose the next task
 

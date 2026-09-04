@@ -1,4 +1,15 @@
-# Marimo upstream candidates
+# Proposal: marimo upstream capabilities
+
+| Field                            | Value                                                                                                 |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| Status                           | Proposed                                                                                              |
+| Date                             | 2026-09-04                                                                                            |
+| Owner repository                 | `marimo-team/marimo` for supported upstream APIs, `marimo-team/marimo-export` for adapter replacement |
+| Inspected marimo-export revision | `1c898c27376b6437d31739758c0363841a3bfd6e`                                                            |
+| Inspected marimo release         | `0.24.0` at `854f7f2910b4bb4b6aebe650efc1f83ad40d9bef`                                                |
+
+This proposal records possible supported Marimo APIs that could replace private
+compatibility adapters. It does not describe APIs available in Marimo 0.24.0.
 
 marimo-export targets the published Marimo 0.24.0 package through local ports
 and private compatibility adapters. Each candidate on this page names a public
@@ -7,11 +18,11 @@ marimo-export service contract.
 
 The migration rule is:
 
-```text
-keep marimo-export record and port
-replace one compat adapter at a composition root
-run the same contract and live consumer tests
-delete the private probe for the replaced seam
+```mermaid
+flowchart LR
+    boundary["Keep marimo-export record and port"] --> adapter["Replace one compat adapter at a composition root"]
+    adapter --> tests["Run the same contract and live consumer tests"]
+    tests --> probe["Delete the private probe for the replaced seam"]
 ```
 
 Changes to an upstream interface should preserve Marimo's cache keys, stores,
@@ -203,15 +214,15 @@ cached execution owners.
 ### Current implementation
 
 `cache/host.py` owns one reference-counted lease over the private restored-UI
-check, Polars lazy-stub loader entries, and tensor byte encoder. Studio acquires
+check, Polars lazy-stub loader entries, and tensor byte encoder. A host acquires
 the lease through `marimo_export.integration.keep_cached_cells_compatible()`.
 
 ### Upstream shape
 
 Marimo could make composite UI discovery, Polars stub selection, and tensor
-serialization native cache behavior. The Studio call can remain as a capability
-check until every supported Marimo release provides those semantics, then the
-composition root can return an idempotent empty release handle.
+serialization native cache behavior. The host integration call can remain as a
+capability check until every supported Marimo release provides those semantics,
+then the composition root can return an idempotent empty release handle.
 
 ## Successful-run observation hook
 
@@ -256,7 +267,7 @@ cleanup rules for files, models, and functions.
 marimo-export would continue to select outputs, bind them to state and producer
 identity, enforce portable limits, and write the durable export format.
 
-## Upstream acceptance
+## Acceptance conditions
 
 Replace a private seam when the supported Marimo capability passes the existing
 marimo-export tests for:

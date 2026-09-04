@@ -5,15 +5,15 @@ description: Build, inspect, consume, and deploy notebook exports from saved not
 
 # Guides
 
-Start with the deterministic quickstart, then choose the task that matches the
-next boundary in your application.
+Build the quickstart first. Then choose the guide for the task at hand.
 
 ## Start
 
-1. [Build your first notebook export](getting-started) creates two exported
-   states, verifies the directory, and reads one result from Python.
-2. [Run the market dashboard](market-dashboard) builds a browser application
-   with five states and several output representations.
+- [Build your first notebook export](getting-started) creates two exported
+  states, verifies JSON and rendered-output forms, and reads them from Python
+  and a browser.
+- [Run the market dashboard](market-dashboard) builds a browser application
+  with five states and several output representations.
 
 ## Author an export
 
@@ -26,12 +26,15 @@ next boundary in your application.
 
 - [Read an export](consume-an-export) compares Python, browser, agent, and
   custom-reader paths.
-- [Build a browser application](browser-applications) resolves exported
-  states, loads output representations, and owns mount disposal.
-- [Serve a prepared publication](prepared-publications) lets a browser follow
-  a changing manifest that points at immutable exports.
+- [Build a browser application](browser-applications) selects exported states,
+  loads their outputs, and replaces mounted views safely.
 - [Use exports with agents](agents-and-automation) retains the state,
   representation, and verification evidence behind an answer.
+
+## Integrate an export
+
+- [Serve a prepared publication](prepared-publications) starts with one
+  manifest, then keeps the current export visible while newer exports load.
 - [Create a representation](custom-representations) pairs a Python exporter
   with a validating consumer loader.
 

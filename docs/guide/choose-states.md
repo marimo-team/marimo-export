@@ -9,7 +9,8 @@ An `ExportSpec` selects a finite state-output relation from one notebook. Each
 named state becomes a complete input assignment, and each output publishes one
 selected notebook result in every state.
 
-The deterministic quickstart declares two states and one JSON output:
+The deterministic quickstart declares two states, one JSON output, and one
+rendered report output:
 
 ```yaml
 schema: marimo-export.spec.v2
@@ -21,12 +22,15 @@ states:
 outputs:
   summary:
     source: { kind: json, selector: summary }
+  report:
+    source: { kind: output, selector: report }
 ```
 
-The notebook defines a `days` slider with a value of `7` and derives `summary`
-from `days.value`. Planning infers `days` as the input because it affects the
-selected output. `default_state` names the alias that readers select when they
-do not request another state.
+The notebook defines a `days` slider with a value of `7`, then derives `summary`
+and the rendered `report` from `days.value`. Planning infers `days` as the input
+because it affects both selected outputs. `default_state` names the default
+alias. Readers return the matching default exported state when no other state is
+selected.
 
 ## Inspect the notebook inputs
 
@@ -128,9 +132,11 @@ defines the complete wire contract.
 
 ## Treat observations as authoring evidence
 
-An observation is a complete portable input vector recorded after a successful
-normal notebook run. Planning returns a revision-consistent set of observations
-projected to the inferred inputs:
+An observation is a portable input vector that is complete for the input-name
+relation recorded after a successful normal notebook run. A host can record a
+broader user-interface relation than a later `ExportPlan` needs. Planning takes
+one revision-consistent snapshot and projects compatible observations to the
+plan's inferred inputs:
 
 ```bash
 uv run marimo-export observations list examples/quickstart/report.py \
@@ -215,6 +221,13 @@ helper module whose source affects the returned bytes, including ordinary
 imports. Custom exporter calls run for each state that needs preparation.
 Restart a live session after changing an exporter or helper module that the
 session already imported.
+
+When a state executes, exporter source and declared dependencies contribute to
+the output leaf's marimo computation-cache identity and are checked again before
+capture completes. Exact prepared-export reuse returns before importing the
+exporter. Include a version or digest for mutable external exporter source in
+notebook source or an exported input when an edit must invalidate the exact
+generation.
 
 ## Check the resolved relation
 

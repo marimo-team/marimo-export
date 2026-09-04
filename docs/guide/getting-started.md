@@ -1,19 +1,22 @@
 ---
 title: Build your first notebook export
-description: Create, build, verify, and read a deterministic two-state notebook export with Python and uv.
+description: Create two deterministic notebook states, publish JSON and rendered output, verify the files, and read one state.
 ---
 
 # Build your first notebook export
 
-Create a local marimo notebook, prepare two exported states, verify the resulting
-files, then read the monthly state from Python. This quickstart uses no external
-data or optional exporter package.
+Create a local [marimo](https://marimo.io/) reactive Python notebook, run it for
+`weekly` and `monthly`, publish a JSON summary and rendered report for each
+state, then verify and read the written notebook export.
+
+If you are still choosing where Python should run, read [When to use
+marimo-export](../why) first.
 
 ## Install marimo-export
 
 Install [Python 3.10 or newer](https://www.python.org/) and
 [uv](https://docs.astral.sh/uv/). Continuous integration tests Python 3.10
-through 3.14. The package metadata pins its exact supported marimo release.
+through 3.14. The package metadata pins its supported marimo release.
 
 Create an empty project:
 
@@ -27,7 +30,7 @@ uv add marimo-export
 The installation downloads packages from the Python package registry when they
 are absent from the local uv cache.
 
-Confirm the producer environment:
+Check the installation:
 
 ```bash
 uv run marimo-export doctor
@@ -51,23 +54,24 @@ def _():
     import marimo as mo
 
     days = mo.ui.slider(1, 30, value=7, label="Days")
-    return (days,)
+    return days, mo
 
 
 @app.cell
-def _(days):
+def _(days, mo):
     summary = {"days": days.value, "label": f"Last {days.value} days"}
-    return (summary,)
+    report = mo.md(f"## {summary['label']}\n\nSelected window: **{days.value} days**")
+    return report, summary
 
 
 if __name__ == "__main__":
     app.run()
 ```
 
-The `days` slider is an input. The `summary` dictionary is the notebook result
-this quickstart will publish.
+The slider starts at `7` days. The second cell makes that choice visible in two
+forms. `summary` is structured data. `report` is rendered notebook output.
 
-## Select states and an output
+## Declare two states and two outputs
 
 Create `report.export.yaml`:
 
@@ -83,10 +87,17 @@ states:
 outputs:
   summary:
     source: { kind: json, selector: summary }
+  report:
+    source: { kind: output, selector: report }
 ```
 
-The `weekly` state keeps the notebook's initial slider value. The `monthly`
-state replaces it with `30`. Both states publish `summary` as portable JSON.
+The empty `weekly` row keeps the slider's starting value. The `monthly` row uses
+`30`. Both states publish the same output names:
+
+| State     | `days` | Outputs             |
+| --------- | ------ | ------------------- |
+| `weekly`  | `7`    | `summary`, `report` |
+| `monthly` | `30`   | `summary`, `report` |
 
 ## Build and verify the export
 
@@ -100,19 +111,41 @@ uv run marimo-export build report.py \
 uv run marimo-export verify dist/report
 ```
 
-`build` executes the selected states through marimo, stages the notebook export,
-verifies it, and commits `dist/report`. The JSON values fit inside
-`index.json`, so this example creates no separate asset files.
+`build` runs the notebook as a Python program with your file, credential,
+package, and network access. Review the notebook before running it.
 
-The verifier prints:
+`build` runs both states, writes the notebook export, and verifies `index.json`
+and both report assets.
+
+You should see:
 
 ```text
-Verified 0 assets and 0 B for 2 states
+Verified 2 assets and 923 B for 2 states
 ```
 
-If `dist/report` already exists, `--replace` installs the new export as the
-complete directory. Files that exist only in the old directory, including
-permitted root sidecars, are removed by the replacement.
+The byte count can change when the supported marimo snapshot encoding changes.
+The stable result is two states with two named outputs each.
+
+The static application below reads the same generated export. Switch between
+the two states to see the JSON summary and rendered report change together.
+
+<StaticApp example="quickstart" />
+
+## Inspect the files
+
+The written directory has one entry point and two asset files named by their
+content hashes:
+
+```text
+dist/report/
+  index.json
+  assets/
+    <sha256>.output.json
+    <sha256>.output.json
+```
+
+`summary` stays inline in `index.json`. Each state produces a distinct `report`
+snapshot, so each report has its own asset.
 
 ## Read the monthly state
 
@@ -123,8 +156,12 @@ from marimo_export import open_export
 
 notebook_export = open_export("dist/report")
 monthly = notebook_export.state("monthly")
-summary = monthly.output("summary").json()
-print(dict(summary))
+summary = monthly.output("summary")
+report = monthly.output("report")
+
+print(dict(monthly.inputs))
+print(dict(summary.json()))
+print(len(report.asset_bytes()) > 0)
 ```
 
 Run it:
@@ -136,22 +173,15 @@ uv run python read_report.py
 Expected output:
 
 ```text
+{'days': 30}
 {'days': 30, 'label': 'Last 30 days'}
+True
 ```
 
-Opening validates canonical `index.json`. The `monthly` alias selects one
-complete exported state. `json()` returns the immutable portable value stored
-for the `summary` output.
+`open_export()` validates canonical `index.json`. `json()` reads the inline
+summary. `asset_bytes()` reads and verifies the selected report asset.
 
-## Continue from the first export
-
-- [What is marimo-export?](../overview) names each object in the lifecycle.
-- [Choose states and outputs](choose-states) develops input inspection,
-  sparse rows, output sources, and exporter dependencies.
-- [Consume a notebook export](consume-an-export) opens the same export from
-  Python and a browser.
-- [Run the market dashboard](market-dashboard) builds a multi-representation
-  application from a repository checkout and live market data.
-
-The repository keeps the same deterministic source under
-`examples/quickstart/` and runs it through the Python integration suite.
+Continue with [What is marimo-export?](../overview) for the concepts,
+[Build a browser application](browser-applications) for the TypeScript reader,
+or [Build or capture](build-and-capture) for planning, live sessions, progress,
+cancellation, and replacement behavior.

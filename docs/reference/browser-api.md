@@ -17,11 +17,12 @@ The package uses
 [ECMAScript modules](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Modules),
 the browser-native JavaScript module format, and targets ES2022:
 
-| Import                                | Contract                                                                                        |
-| ------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| `@marimo-team/marimo-export`          | Immutable reader, scalar and image loaders, custom-loader definitions, errors, and shared types |
-| `@marimo-team/marimo-export/prepared` | Prepared manifest, controller, query, control, refresh, and cancellation APIs                   |
-| `@marimo-team/marimo-export/loader/*` | One explicit output loader per representation family                                            |
+| Import                                    | Contract                                                                                        |
+| ----------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `@marimo-team/marimo-export`              | Immutable reader, scalar and image loaders, custom-loader definitions, errors, and shared types |
+| `@marimo-team/marimo-export/prepared`     | Prepared manifest, controller, query, control, refresh, and cancellation APIs                   |
+| `@marimo-team/marimo-export/loader/*`     | One explicit output loader per representation family                                            |
+| `@marimo-team/marimo-export/package.json` | Published package metadata for tooling that supports JSON module imports                        |
 
 Place DOM mounts, Blob URLs, dynamic imports, canvas rendering, and widget styles
 inside a client-side boundary in React, Next.js, Astro, or another
@@ -51,7 +52,7 @@ Opening validates canonical `index.json`. Output assets remain lazy until
 | Choose a built-in loader, mount an interactive result, or write a custom loader   | [Output loaders](browser/loaders)                      |
 | Consume rendered-output and complete-cell replay records                          | [marimo snapshots](browser/snapshots)                  |
 | Handle errors, choose byte limits, or check browser requirements                  | [Errors and limits](browser/errors-and-limits)         |
-| Convert or parse the common Python and JavaScript JSON subset                     | [Portable JSON](portable-json)                         |
+| Understand the JSON values shared with Python and import their TypeScript types   | [Portable JSON](portable-json)                         |
 
 ## Browser nouns
 

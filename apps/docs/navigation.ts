@@ -25,23 +25,28 @@ export const documentationSections = [
     prefix: "/",
     items: [
       { text: "marimo-export", link: "/" },
+      { text: "When to use marimo-export", link: "/why" },
       { text: "What is marimo-export?", link: "/overview" },
-      { text: "Why export notebook states?", link: "/why" },
     ],
   },
   {
     key: "concepts",
-    text: "Understand",
+    text: "Concepts",
     prefix: "/concepts/",
     items: [
-      { text: "Understand the model", link: "/concepts/" },
-      { text: "States and inputs", link: "/concepts/states-and-inputs" },
+      { text: "Understand notebook exports", link: "/concepts/" },
+      { text: "Choose notebook states", link: "/concepts/states-and-inputs" },
       {
-        text: "Outputs and representations",
+        text: "Store and load outputs",
         link: "/concepts/outputs-and-representations",
       },
-      { text: "Preparation and reuse", link: "/concepts/preparation-and-reuse" },
-      { text: "Integrity and trust", link: "/concepts/integrity-and-trust" },
+      { text: "Reuse earlier results", link: "/concepts/preparation-and-reuse" },
+      { text: "How notebook caching fits", link: "/concepts/caching" },
+      {
+        text: "Update an application with new exports",
+        link: "/concepts/exports-and-publications",
+      },
+      { text: "Verify and trust an export", link: "/concepts/integrity-and-trust" },
     ],
   },
   {
@@ -69,8 +74,13 @@ export const documentationSections = [
         items: [
           { text: "Read an export", link: "/guide/consume-an-export" },
           { text: "Build a browser application", link: "/guide/browser-applications" },
-          { text: "Serve a prepared publication", link: "/guide/prepared-publications" },
           { text: "Use exports with agents", link: "/guide/agents-and-automation" },
+        ],
+      },
+      {
+        text: "Integrate",
+        items: [
+          { text: "Serve a prepared publication", link: "/guide/prepared-publications" },
           { text: "Create a representation", link: "/guide/custom-representations" },
         ],
       },
@@ -162,8 +172,17 @@ const page = (link: string): NavigationPage => {
 export const topNavigation = [
   {
     text: "Start",
-    link: page("/overview").link,
-    activeMatch: "^/(?:$|overview|why|concepts(?:/|$))",
+    items: [
+      { text: "Build your first export", link: page("/guide/getting-started").link },
+      { text: "When to use marimo-export", link: page("/why").link },
+      { text: "What is marimo-export?", link: page("/overview").link },
+      { text: "Choose a guide", link: page("/guide/").link },
+    ],
+  },
+  {
+    text: "Concepts",
+    link: page("/concepts/").link,
+    activeMatch: "^/(?:overview|concepts(?:/|$))",
   },
   { text: "Guides", link: page("/guide/").link, activeMatch: "^/guide/" },
   { text: "Reference", link: page("/reference/").link, activeMatch: "^/reference/" },

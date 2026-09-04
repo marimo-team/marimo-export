@@ -153,6 +153,13 @@ downloads, and server-sent event inactivity. Cancellation is checked between
 bounded phases. It cannot stop a remote scratchpad operation that is already
 running.
 
+Captures for the same repository identity serialize behind one fenced
+preparation reservation. A waiter can reuse the winner's committed generation.
+Reservation acquisition timeout raises `repository_reservation_timeout`, and a
+producer that loses its fencing token cannot publish stale state or generation
+data. [Produce an export](produce#prepare) defines the shared coordination
+contract.
+
 `observe_inputs()` returns portable values for eligible live UI roots and typed
 control bindings. Use it to inspect current input state. Durable observation
 history uses the [repository observation APIs](repository-and-observations).

@@ -1,33 +1,30 @@
 ---
 title: Portable JSON
-description: Cross-language JSON values, conversion, strict parsing, limits, errors, and the optional Zod adapter.
+description: The shared Python and JavaScript value domain, canonical encoding, limits, and published interfaces.
 ---
 
 # Portable JSON
 
-`@marimo-team/portable-json` validates values before they cross the Python and
-JavaScript boundary used by notebook exports. It normalizes primitive values and
-returns detached, frozen copies of valid array and object inputs.
+Portable JSON is the value contract shared by Python producers and browser
+consumers. It contains null, booleans, Unicode scalar strings, finite numbers,
+arrays, and string-keyed objects that preserve their meaning across Python and
+JavaScript.
 
-```bash
-pnpm add @marimo-team/portable-json
-```
+The Python package publishes runtime conversion and canonical encoding through
+`marimo_export.wire`. The browser package publishes the matching TypeScript
+types and applies the value checks inside its reader, prepared-manifest, JSON
+loader, and snapshot APIs.
+
+## Value contract
 
 ```ts
-import { parsePortableJson, portableJsonObject } from "@marimo-team/portable-json";
+import type { JsonObject, JsonPrimitive, JsonValue } from "@marimo-team/marimo-export";
 
-const inputs = portableJsonObject({
+const inputs: JsonObject = {
   symbols: ["AAPL", "MSFT"],
   window: 30,
-});
-const response = parsePortableJson('{"status":"ready","rows":2}');
+};
 ```
-
-Use the package for state inputs, manifest data, descriptor metadata, custom
-loader payloads, and other contracts that must agree with Python's portable
-JSON implementation.
-
-## Value types
 
 ```ts
 type JsonPrimitive = string | number | boolean | null;
@@ -45,166 +42,104 @@ A portable value can contain:
 - dense arrays of portable values
 - objects with string keys and portable values
 
-Supported inputs use plain JavaScript primitives, arrays, and ordinary objects
-that match `JsonValue`. Boxed wrappers such as `new String("value")` are outside
-the public input contract.
+Strings and object keys contain Unicode scalar values. An unpaired UTF-16
+surrogate is invalid. Negative zero becomes positive zero during portable
+conversion.
 
-Strings and object keys must contain Unicode scalar values. An unpaired UTF-16
-surrogate fails conversion. Negative zero becomes positive zero.
+The TypeScript declarations describe values that already satisfy the contract.
+Export indexes, prepared manifests, state-resolution inputs, and built-in loader
+values are validated by the owning operation. A custom loader owns validation of
+its representation bytes before returning a `JsonValue`.
 
-## Convert JavaScript values
+## Limits
+
+| Boundary                                  |                         Limit |
+| ----------------------------------------- | ----------------------------: |
+| Container depth below the root            |                           256 |
+| Values in one tree, including object keys |                       100,000 |
+| Integer magnitude                         | JavaScript safe-integer range |
+| Strict JSON number lexeme                 |              1,024 characters |
+
+Conversion rejects sparse arrays, active container cycles, nonfinite numbers,
+unsafe integers, invalid Unicode strings, and incompatible object types. A
+repeated container reference is copied at each position. Object keys such as
+`__proto__` remain own data properties.
+
+## Convert values in Python
+
+```python
+from marimo_export.wire import JsonValue, portable_json
+
+source = {"symbols": ["AAPL", "MSFT"], "window": 30}
+value: JsonValue = portable_json(source, "inputs")
+```
+
+```python
+portable_json(value: object, path: str = "value") -> JsonValue
+```
+
+`portable_json()` returns detached mutable Python data. Mappings become
+dictionaries. Non-string, non-byte sequences become lists. `path` labels a
+bounded validation error and has no effect on the returned value.
+
+Some reader, specification, inspection, and host-observation records expose
+recursively immutable aliases with tuples and immutable mappings. Persisted
+repository observation records expose a read-only top-level mapping with newly
+decoded mutable nested containers. Their `to_dict()` or `to_value()` methods
+return detached mutable data.
+
+## Canonical JSON in Python
+
+```python
+from marimo_export.wire import (
+    canonical_json_bytes,
+    canonical_json_sha256,
+    parse_canonical_json,
+    state_fingerprint,
+)
+
+inputs = {"items": [1, -0.0], "label": "ready"}
+assert canonical_json_bytes(inputs) == b'{"items":[1,0],"label":"ready"}'
+assert state_fingerprint(inputs) == canonical_json_sha256(inputs)
+```
+
+Canonical JSON has one UTF-8 byte representation for each supported value:
+
+- object keys sort by Unicode code point
+- insignificant whitespace is absent
+- JSON literals are lowercase
+- finite numbers use the ECMAScript-compatible spelling
+- negative zero encodes as `0`
+
+`parse_canonical_json()` accepts a string or contiguous byte buffer. It rejects
+invalid UTF-8, duplicate decoded keys, nonportable values, noncanonical key or
+number spelling, whitespace, and any input whose canonical re-encoding differs.
+
+## Browser protocol boundaries
+
+The published browser package applies portable JSON at these entry points:
+
+| Operation                                          | Accepted or returned value              |
+| -------------------------------------------------- | --------------------------------------- |
+| `NotebookExport.resolve(inputs)`                   | Complete `JsonObject` input vector      |
+| `ExportState.resolve(patch)`                       | Sparse root-input `JsonObject`          |
+| `jsonLoader()`                                     | Detached recursively frozen `JsonValue` |
+| Prepared manifest parsing                          | Complete manifest input object          |
+| `PreparedStateController.updateInputs(patch)`      | Sparse root-input object                |
+| `PreparedStateController.updateControl(id, value)` | One portable control value              |
+| `NotebookExportError.details`                      | Optional frozen diagnostic object       |
+
+Import browser types from the public package root:
 
 ```ts
-function portableJsonValue<Input>(input: Input, path?: string): JsonValue;
-function portableJsonObject<Input>(input: Input, path?: string): JsonObject;
+import type { JsonObject, JsonPrimitive, JsonValue } from "@marimo-team/marimo-export";
 ```
 
-For inputs that match `JsonValue`, `portableJsonValue()` copies every array and
-object and freezes each copied container. Mutating the source after conversion
-cannot change a container result. When the same source object appears in several
-positions, each position receives its own copy. A container cycle raises
-`TypeError`.
+These are compile-time types. The published browser package has no standalone
+portable JSON converter or parser. A custom representation loader must validate
+its decoded value before returning it.
 
-`portableJsonObject()` applies the same conversion and requires an object at the
-root. Its default diagnostic path is `value`. Pass a project noun to identify a
-failure:
-
-Given an unknown `candidate` from application input:
-
-```ts
-const config = portableJsonObject(candidate, "chart configuration");
-```
-
-Conversion preserves reserved own keys such as `__proto__`, `constructor`, and
-`toString` as data. It does not mutate `Object.prototype`.
-
-Incompatible values raise `TypeError`. Examples include a function, `undefined`,
-a sparse array, NaN, infinity, an unsafe integer, an invalid Unicode string, or
-a cycle.
-
-## Conversion limits
-
-```ts
-import { MAX_JSON_DEPTH, MAX_JSON_VALUES } from "@marimo-team/portable-json";
-
-console.log(MAX_JSON_DEPTH); // 256
-console.log(MAX_JSON_VALUES); // 100000
-```
-
-| Limit                            |                     Count |
-| -------------------------------- | ------------------------: |
-| Maximum nesting depth            | 256 levels below the root |
-| Maximum values in one conversion |                   100,000 |
-
-The value count includes the root, every array item, every object value, and
-every object key. Conversion checks a large or sparse array before allocating
-its output array. Diagnostic paths are bounded so malformed input cannot create
-an unbounded error message.
-
-## Parse JSON text
-
-### `parsePortableJson(source)`
-
-```ts
-function parsePortableJson(source: string): JsonValue;
-```
-
-Parses one strict JSON value, rejects duplicate decoded object keys at every
-depth, applies the portable value rules, and returns detached frozen data.
-
-Duplicate detection uses decoded keys. These spellings collide and fail:
-
-```json
-{ "name": 1, "\u006eame": 2 }
-```
-
-Syntax failures raise `SyntaxError`. A syntactically valid value that violates
-the portable contract raises `TypeError`.
-
-### `parseStrictJson(source, maximumValues?)`
-
-```ts
-function parseStrictJson(source: string, maximumValues?: number): JsonValue;
-```
-
-Use the strict parser when another protocol parser owns its schema and value
-policy. It enforces:
-
-- one complete JSON value and JSON whitespace
-- unique decoded object keys
-- the 256-level depth limit
-- the supplied positive safe-integer value limit, or 100,000 by default
-- number lexemes of at most 1,024 characters
-- preservation of a written fractional component during JavaScript number conversion
-
-`parseStrictJson()` returns the direct `JSON.parse()` value. It does not detach
-or freeze that value. It also leaves the portable safe-integer, Unicode scalar,
-and negative-zero rules to the caller. Use `parsePortableJson()` when those
-cross-language guarantees are required.
-
-An invalid `maximumValues` raises `TypeError`. Invalid JSON, a duplicate key, or
-a breached parser limit raises `SyntaxError` with a bounded character offset.
-
-## Compose with Zod
-
-[Zod](https://zod.dev/) builds runtime schemas whose TypeScript types follow the
-validated result. Install it when the portable value must compose with another
-Zod contract:
-
-```bash
-pnpm add @marimo-team/portable-json zod
-```
-
-```ts
-import {
-  jsonObjectSchema,
-  jsonValueSchema,
-  losslessRecordSchema,
-} from "@marimo-team/portable-json/zod";
-import { z } from "zod";
-
-const config = jsonObjectSchema.parse({ theme: "dark" });
-
-const values = losslessRecordSchema(z.string().trim(), jsonValueSchema).parse({
-  status: "ready",
-});
-```
-
-### `jsonValueSchema`
-
-A `z.ZodType<JsonValue>` that applies `portableJsonValue()` as a transform.
-Conversion failures become one custom Zod issue.
-
-### `jsonObjectSchema`
-
-A `z.ZodType<JsonObject>` that applies `portableJsonObject()` as a transform.
-
-### `losslessRecordSchema(keySchema, valueSchema)`
-
-```ts
-function losslessRecordSchema<KeySchema extends z.ZodType<string>, ValueSchema extends z.ZodType>(
-  keySchema: KeySchema,
-  valueSchema: ValueSchema,
-): z.ZodType<Readonly<Record<string, z.output<ValueSchema>>>>;
-```
-
-Parses each own object entry through the supplied schemas and returns a frozen
-record. It rejects non-object input, more than 100,000 source entries, an invalid
-entry, or two source keys that transform to the same parsed key.
-
-Key-collision rejection prevents a key transform such as trimming or
-lowercasing from silently overwriting an earlier entry. Reserved keys remain
-own data properties.
-
-Zod is an optional peer. Importing `@marimo-team/portable-json` at the package
-root does not load or require Zod.
-
-## Use in a custom output loader
-
-Decode bytes with fatal UTF-8 handling, parse portable JSON, then validate the
-representation-specific fields and ranges. Portable conversion owns the shared
-primitive and container rules. The representation loader owns application
-meaning.
-
-[Define a custom representation](representations#define-a-custom-representation)
-shows the complete producer and browser pair.
+Use [Format records and errors](python/format-records-and-errors) for the Python
+signatures. Use [Browser reader](browser/reader) and [Prepared
+publications](browser/prepared-publications) for the TypeScript operations that
+validate portable values.

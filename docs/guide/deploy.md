@@ -107,4 +107,5 @@ After upload:
    host can transform uploaded files.
 
 Use [Troubleshooting](troubleshooting) for CORS, CSP, integrity, state, and
-loader failures.
+loader failures. Use [Serve a prepared publication](prepared-publications) when
+one mutable manifest must select among immutable deployed exports.

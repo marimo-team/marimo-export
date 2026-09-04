@@ -5,11 +5,11 @@ description: Inspect reusable artifacts, apply retention, and manage observed no
 
 # Manage the export repository
 
-The export repository is a local producer cache for reusable prepared states,
-immutable export generations, and observations. Deploy the notebook export
-written to `dist/` or another destination. Do not serve the repository tree,
-which also contains old generations, observation history, staging data, and
-private SQLite coordination records.
+The export repository stores reusable prepared states, immutable export
+generations, observations, leases, and retention metadata for a Python producer.
+Deploy the notebook export written to `dist/` or another destination. Do not
+serve the repository tree, which also contains old generations, observation
+history, staging data, and private SQLite coordination records.
 
 ## Select one repository
 
@@ -57,10 +57,22 @@ with ExportRepository.open(".exports") as repository:
 
 `default_path()` reports the effective default without creating it. Opening a
 repository attempts maintenance recovery. When another process holds the
-maintenance transaction lock, opening continues without that pass. A status or dry-run
-command can still create the repository, tighten its permissions, quarantine a
-corrupt catalog, retire an invalid artifact, or open a fresh catalog after an
-incompatible schema.
+maintenance transaction lock, opening continues without that pass. Every command
+that opens the repository, including status and dry-run commands, can create the
+directory, tighten its permissions, replace a corrupt or incompatible catalog,
+or retire an invalid repository artifact.
+
+### Understand catalog replacement
+
+::: danger Catalog replacement resets reusable repository data
+When opening confirms catalog corruption or an incompatible schema, it renames
+the catalog files, opens a fresh catalog, then retires the prepared-state,
+export-generation, and staging directories that the new catalog does not index.
+Normal retirement cleanup removes the renamed catalog snapshot. The renamed
+files are a transactional recovery step, not a backup. Preserve written notebook
+exports separately and rebuild reusable repository data from the notebook and
+`ExportSpec` after this reset.
+:::
 
 ## Inspect storage
 
@@ -73,22 +85,23 @@ uv run marimo-export repository status --json
 
 The result contains:
 
-| Field             | Meaning                                                              |
-| ----------------- | -------------------------------------------------------------------- |
-| `path`            | Absolute repository root                                             |
-| `producers`       | Producer identities with retained repository history                 |
-| `observations`    | Retained distinct observed input vectors                             |
-| `prepared_states` | Reusable state artifacts                                             |
-| `identities`      | Exact producer, output-plan, and ExportSpec identities               |
-| `generations`     | Retained immutable prepared exports                                  |
-| `content_bytes`   | Accounted bytes in states, generations, and retired artifacts        |
-| `active_leases`   | Artifact leases held by states, prepared exports, or detached assets |
+| Field             | Meaning                                                       |
+| ----------------- | ------------------------------------------------------------- |
+| `path`            | Absolute repository root                                      |
+| `producers`       | Producer identities with retained repository history          |
+| `observations`    | Retained distinct observed input vectors                      |
+| `prepared_states` | Reusable state artifacts                                      |
+| `identities`      | Repository identities used for exact prepared-export lookup   |
+| `generations`     | Retained export generations                                   |
+| `content_bytes`   | Accounted bytes in states, generations, and retired artifacts |
+| `active_leases`   | Active durable owner-artifact lease rows                      |
 
 Status removes expired leases before counting. `content_bytes` excludes catalog
 files, observation rows, staging directories, and unindexed files.
 `active_leases` excludes staging leases and preparation reservations. Status
-does not open or verify every artifact. Artifact lookup validates the selected
-files and retires a confirmed integrity failure.
+does not count live Python handles because several handles can share one durable
+lease row. Status also does not open or verify every artifact. Artifact lookup
+validates the selected files and retires a confirmed integrity failure.
 
 ## Preview and apply retention
 
@@ -124,11 +137,17 @@ Retention pins the current generation for each retained identity. An unleased
 identity that falls beyond `retained_identities` can lose its current generation.
 The next producer run can prepare it again.
 
-marimo-export also applies retention before admitting a newly prepared state or
-generation. If protected and retained content still exceeds a byte limit, the
-write fails with `repository_limit_exceeded`. Close unused `PreparedExport` and
-`PreparedAsset` handles before pruning when those artifacts no longer need
-protection.
+marimo-export applies retention to current repository contents before admitting
+a newly prepared state or generation. Final admission then adds the candidate's
+content and metadata to the totals. That final check can raise
+`repository_limit_exceeded` even when another unleased artifact could be evicted,
+because the admission pass does not perform a second candidate-sized eviction.
+
+Close unused `PreparedExport` and `PreparedAsset` handles, prune with the limits
+you intend to enforce, then retry preparation. One `PreparedAsset` protects the
+complete export generation that contains its file. If the candidate itself
+exceeds `prepared_state_bytes` or `generation_bytes`, reduce the selected output
+data or open the repository with a larger trusted limit.
 
 ## Configure retention limits from Python
 
@@ -157,33 +176,34 @@ CLI maintenance commands open with `RepositoryLimits()` defaults.
 
 Defaults:
 
-| Limit                               |    Default | Effect                                                            |
-| ----------------------------------- | ---------: | ----------------------------------------------------------------- |
-| `observation_bytes`                 |      1 MiB | Maximum canonical size of one observed vector                     |
-| `observations_per_producer`         |        256 | Retained observation rows for one producer                        |
-| `observation_relation_bytes`        |     16 MiB | Retained observation bytes for one producer relation              |
-| `retained_producers`                |         32 | Producer histories retained after their artifacts leave retention |
-| `retained_identities`               |        128 | Exact export identities retained                                  |
-| `retained_generations_per_identity` |          4 | Generations retained for one exact identity                       |
-| `retained_generations`              |        128 | Generations retained across the repository                        |
-| `retained_prepared_states`          |      4,096 | Prepared states retained across the repository                    |
-| `metadata_bytes`                    |     16 MiB | Metadata retained across prepared states and generations          |
-| `prepared_state_bytes`              |    512 MiB | Maximum for one prepared state and its aggregate retained content |
-| `generation_bytes`                  |      1 GiB | Maximum for one generation and its aggregate retained content     |
-| `repository_bytes`                  |      2 GiB | State, generation, and retired content across the repository      |
-| `lease_ttl_seconds`                 | 30 seconds | Lifetime of a lease without renewal                               |
-| `lease_heartbeat_seconds`           |  5 seconds | Renewal interval for active leases                                |
+| Limit                               |    Default | Effect                                                                                 |
+| ----------------------------------- | ---------: | -------------------------------------------------------------------------------------- |
+| `observation_bytes`                 |      1 MiB | Maximum canonical size of one observed vector                                          |
+| `observations_per_producer`         |        256 | Retained rows per producer in each observation table                                   |
+| `observation_relation_bytes`        |     16 MiB | Retained bytes per producer in each observation table, across its input-name relations |
+| `retained_producers`                |         32 | Producer histories retained after their artifacts leave retention                      |
+| `retained_identities`               |        128 | Exact export identities retained                                                       |
+| `retained_generations_per_identity` |          4 | Generations retained for one exact identity                                            |
+| `retained_generations`              |        128 | Generations retained across the repository                                             |
+| `retained_prepared_states`          |      4,096 | Prepared states retained across the repository                                         |
+| `metadata_bytes`                    |     16 MiB | Metadata retained across prepared states and generations                               |
+| `prepared_state_bytes`              |    512 MiB | Maximum for one prepared state and its aggregate retained content                      |
+| `generation_bytes`                  |      1 GiB | Maximum for one generation and its aggregate retained content                          |
+| `repository_bytes`                  |      2 GiB | State, generation, and retired content across the repository                           |
+| `lease_ttl_seconds`                 | 30 seconds | Lifetime of a lease without renewal                                                    |
+| `lease_heartbeat_seconds`           |  5 seconds | Renewal interval for active leases                                                     |
 
 All count and byte limits are positive integers. Lease durations are positive
 finite numbers, and the heartbeat must be shorter than the lease lifetime.
-`repository_bytes` is a steady-state admission budget. A replacement can
-temporarily exceed it while leases protect both the old and new generations.
+`repository_bytes` is the accounted admission budget. Filesystem staging and a
+replacement can temporarily require more disk space than that value while both
+old and new directories exist.
 
 ## List observed input vectors
 
-An observation is a complete portable input vector recorded from a successful
-normal run of a matching saved notebook. List the observations relevant to an
-ExportSpec:
+An observation is a portable input vector that is complete for the input-name
+relation recorded during a successful normal run of a matching saved notebook.
+List the observations relevant to an `ExportSpec`:
 
 ```bash
 uv run marimo-export observations list examples/quickstart/report.py \
@@ -195,9 +215,9 @@ observation revision, and each projected vector with its fingerprint and
 revision.
 
 The command resolves an `ExportPlan` first. It can execute the notebook's initial
-autorun when no exact prepared export supplies the plan. The returned vectors
-are projected to that plan's input names, while repository storage remains keyed
-by the complete producer identity.
+autorun when no exact prepared export supplies the plan. The repository can hold
+broader observations from the same producer. The command projects compatible
+vectors to the plan's inferred input names and reports the snapshot revision.
 
 Observations support authoring. They do not become published states until an
 application or author places selected values in an explicit `ExportSpec`.

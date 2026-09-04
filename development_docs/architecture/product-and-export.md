@@ -10,8 +10,8 @@ format stores that relation as canonical JSON and content-addressed assets.
 | ----------------- | ----------------------------------------------------------------------------------------------- |
 | Notebook          | Saved marimo source and its reactive dependency graph                                           |
 | Baseline          | Private kernel record with definitions, values, UI state, cell ownership, and document identity |
-| StateSpace        | Reusable named state rows, matrix expansion, and default state                                  |
-| ExportSpec        | Default state, sparse named states, and output specifications                                   |
+| StateSpace        | Reusable named state rows, matrix expansion, and default alias                                  |
+| ExportSpec        | Default alias, sparse named states, and output specifications                                   |
 | ExportPlan        | Inferred inputs, complete states, identities, and reusable work                                 |
 | Exported state    | One complete input assignment, canonical fingerprint, aliases, and named outputs                |
 | Control binding   | Scoped UI object ID mapped to an input and semantic tree path                                   |
@@ -28,7 +28,7 @@ format stores that relation as canonical JSON and content-addressed assets.
 `StateSpace` owns reusable authored state rows. It validates explicit rows,
 expands a Cartesian input matrix, resolves the default name, and returns
 validated matrix-expanded rows. Planning completes and normalizes those rows
-against the captured input baseline. An application that discovers its outputs
+against the captured baseline. An application that discovers its outputs
 composes the rows with `OutputSpec` values through
 `ExportSpec.from_state_space()`.
 
@@ -73,11 +73,10 @@ capture Marimo-owned output records through the child recording stream and
 
 ## Selectors and exporters
 
-`ValueSelector` owns JSON, native, exporter, and rendered-output selection. A
-selector contains at most 2,048 UTF-8 bytes. It starts with an ASCII
-identifier-shaped root, then traverses ASCII dot names, nonnegative integer
-indexes, or JSON-string mapping keys. Mapping keys win over attributes when a
-runtime value supports both.
+`ValueSelector` owns JSON, native, exporter, and rendered-output selection.
+`spec.py` binds one parsed selector and optional exporter to each output name.
+The exact selector grammar, size limit, and public constructors live in the
+[ExportSpec reference](../../docs/reference/export-spec.md).
 
 `OutputSpec` binds one source to an optional `ExporterSpec`. Only an export
 source accepts an exporter. `ExporterSpec` resolves a built-in name or an
@@ -102,21 +101,11 @@ states × outputs -> descriptor
 The state fingerprint is SHA-256 over canonical JSON for the complete input
 object. One output name keeps one codec and media type across every state.
 
-Export format version 1 accepts seven export codecs:
-
-```text
-marimo.scalar.v1
-marimo.json.v1
-marimo.output.v1
-marimo.cell.v1
-numpy.npy.v1
-apache.arrow.file.v1
-marimo.blob-asset.msgpack.v1
-```
-
-The BlobAsset codec carries extensible media types. A custom representation
-adds a media type, Python exporter, and consumer decoder while the codec set
-remains closed for version 1.
+Export format version 1 has a closed codec set. The BlobAsset codec carries
+extensible media types, so a custom representation adds a media type, Python
+exporter, and consumer decoder. The public
+[export format reference](../../docs/reference/export-format.md) owns the exact
+codec and media-type inventory.
 
 ## `ExportIndex` owns durable data
 
@@ -149,9 +138,9 @@ fingerprints. `cache_activity` reports Marimo work that ran while preparing
 missing states.
 
 Session inspection and the durable producer record expose the kernel's
-`implementation_sha256`. Capture freezes the value before state execution and
-verifies it again before committing the index. Publication coordinators bind
-reuse keys and capture receipts to that same digest.
+`implementation_sha256`. The capture bridge freezes the value before state
+execution and verifies it again before committing the index. Producer identity
+and the durable index retain that digest after capture.
 
 ## Assets and commit form one transaction
 

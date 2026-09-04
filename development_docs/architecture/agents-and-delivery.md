@@ -2,8 +2,9 @@
 
 The product workflow starts with an unchanged notebook and ends with a verified
 notebook export for people, agents, Python automation, browser applications,
-and custom consumers. The repository also delivers three installable packages,
-an agent workflow, a reference application, and documentation for the same
+and custom consumers. The repository delivers two public packages, one Python
+source distribution, private TypeScript workspaces, one agent skill, a
+deterministic example, a browser application, and documentation for the same
 contracts.
 
 ## Delivery pipeline
@@ -27,81 +28,20 @@ Operation paths, process handles, credentials, temporary virtual files,
 repository leases, and mounted browser resources remain owned by their runtime
 lifecycle.
 
-## Inspection resolves definitions before state preparation
+## Product surface owners
 
-File inspection through `marimo-export inspect` starts an owned notebook, runs
-its initial autorun, and returns notebook identity, definitions, UI domains,
-input mode, version, and capability records. Server inspection borrows a live
-session. `Session.inspect()` returns the live-session contract. A person or
-agent can therefore use real definition names before preparing a state space.
+| Surface                    | Internal owner                                       | Public contract                                                                   |
+| -------------------------- | ---------------------------------------------------- | --------------------------------------------------------------------------------- |
+| Inspection                 | `inspection.py`, `producer.py`, live-session bridge  | [Sessions and inspection](../../docs/reference/python/sessions-and-inspection.md) |
+| State and output authoring | `spec.py`, `_execution/plan.py`                      | [StateSpace and ExportSpec](../../docs/reference/export-spec.md)                  |
+| File and live production   | `_build.py`, `_services`, `producer.py`, `client.py` | [Build or capture](../../docs/guide/build-and-capture.md)                         |
+| Agent workflow             | `skills/notebook-to-static-app`                      | [Agents and automation](../../docs/guide/agents-and-automation.md)                |
+| Command-line interface     | `_cli`                                               | [CLI reference](../../docs/reference/cli.md)                                      |
 
-`plan()` takes a separate exact-reuse fast path. When the repository already
-contains the matching prepared export, it reconstructs the public plan from the
-verified artifact and starts no notebook.
-
-ExportSpec supports YAML, JSON, and Python construction through one validation
-model. Humans and agents can review the finite export relation before `build`
-or `capture` begins.
-
-## Exports ground agent answers
-
-An agent can inspect exported states and output representations, verify the
-asset closure, read structured data, and retain notebook, state, producer, and
-asset identity with its answer. Agent-oriented exports pair concise summaries
-with inspectable tables, arrays, or versioned JSON. Visual and interactive
-representations remain companion evidence for human review.
-
-The same export can ground a coding agent that creates a bespoke frontend. The
-frontend uses exported values as its fixtures and notebook-computation results.
-
-## Producer choice follows source ownership
-
-| Source context                                                   | Preparation operation | Prepare-and-write command |
-| ---------------------------------------------------------------- | --------------------- | ------------------------- |
-| The workflow owns notebook startup, execution, and cleanup       | `prepare`             | `build`                   |
-| A live session already owns the environment or completed results | `capture`             | CLI `capture`             |
-
-Both modes run the same ExportSpec through the same bridge and export format.
-The live finance acceptance path exercises both modes.
-
-## The app scaffold keeps presentation separate
-
-`skills/notebook-to-static-app/scripts/scaffold_app.py` creates a relocatable uv
-and Vite workspace. It vendors the reviewed Python wheel and npm tarball,
-copies notebook dependency metadata, intersects the Python range with the
-package floor, and stores source filename plus SHA-256 provenance.
-
-The scaffold stages the complete directory before commit. The notebook remains
-unchanged. The generated `src/main.ts` is a loading shell that the agent
-replaces with the audience-facing application.
-
-The skill workflow requires agents to:
-
-1. inspect notebook definitions
-2. author sparse named states and focused outputs
-3. select `build` or `capture` from source ownership
-4. verify the export and build the browser application
-5. exercise every state and one mounted interaction in the browser
-6. return evidence bound to notebook, export, app build, and rendered result
-
-## The CLI supports people and agents
-
-`plan`, `build`, `capture`, `inspect`, `verify`, `observations`, `repository`,
-and `doctor` provide human output. `--json` returns one bounded result.
-Preparation commands can emit ordered progress through `--jsonl`. Failures
-carry stable codes and exit categories. The CLI parses arguments, calls the
-importable Python SDK, and renders results. Product modules own no terminal
-behavior.
-
-The Python `capture()` operation returns `PreparedExport`. The CLI `capture`
-command requires `--output` and composes that operation with
-`PreparedExport.write()` so one invocation writes the verified live-session
-export.
-
-`observations list` and `observations clear` require a notebook and ExportSpec.
-Each command resolves an `ExportPlan` first. `list` renders the plan's
-revision-consistent observation snapshot. `clear` passes that plan to
-`ExportRepository.clear_observations(plan)`.
+The application scaffold owns local Python and Vite plumbing, package artifact
+provenance, and staged directory creation. The generated application owns its
+presentation. The skill owns the complete inspect, author, produce, verify,
+build, browser, and evidence workflow.
 
 ## Package boundaries match public distribution
 
@@ -140,14 +80,14 @@ VitePress builds the rendered site, local search, `llms.txt`, and
 
 ## Evidence follows the changed boundary
 
-| Change                | Focused evidence                  | Complete evidence                                 |
-| --------------------- | --------------------------------- | ------------------------------------------------- |
-| CLI or Python API     | Targeted pytest                   | Wheel import and command smoke                    |
-| Build, capture, cache | Integration test                  | Live file build and session capture               |
-| Scaffold              | Source-preserving relocation test | Generated workspace install and build             |
-| Browser application   | Typecheck and production build    | Desktop, narrow, rapid transition, mounted action |
-| Documentation         | Prose, links, and docs build      | Search, source view, LLM bundle, rendered browser |
-| npm facade or loader  | Package types and tests           | Isolated packed core and loader builds            |
+| Change                | Focused evidence                  | Complete evidence                                                                  |
+| --------------------- | --------------------------------- | ---------------------------------------------------------------------------------- |
+| CLI or Python API     | Targeted pytest                   | Wheel import and command smoke                                                     |
+| Build, capture, cache | Integration test                  | Live file build and session capture                                                |
+| Scaffold              | Source-preserving relocation test | Generated workspace install and build                                              |
+| Browser application   | Typecheck and production build    | Separate browser journey for desktop, narrow, rapid transition, and mounted action |
+| Documentation         | Prose, links, and docs build      | Search, source view, LLM bundle, rendered browser                                  |
+| npm facade or loader  | Package types and tests           | Isolated packed core and loader builds                                             |
 
 [Validation](../validation.md) lists the root commands and required browser
 checks.

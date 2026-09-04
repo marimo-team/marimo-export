@@ -45,17 +45,17 @@ class ArgumentParser(argparse.ArgumentParser):
 def parser() -> ArgumentParser:
     result = ArgumentParser(
         prog="marimo-export",
-        description="Prepare and read verified Marimo notebook exports.",
+        description="Prepare and read verified marimo notebook exports.",
     )
     result.add_argument("--version", action="version", version=f"%(prog)s {package_version()}")
     commands = result.add_subparsers(dest="command", required=True)
 
     plan = commands.add_parser(
         "plan",
-        help="resolve states and reusable work",
-        description="Inspect NOTEBOOK and resolve the exact work described by FILE.",
+        help="plan states and reusable work",
+        description="Inspect NOTEBOOK and plan the exact work described by FILE.",
     )
-    plan.add_argument("notebook", metavar="NOTEBOOK", help="Marimo Python notebook")
+    plan.add_argument("notebook", metavar="NOTEBOOK", help="marimo Python notebook")
     _add_spec(plan)
     _add_repository(plan)
     _add_timeout(plan, "notebook inspection timeout")
@@ -63,10 +63,10 @@ def parser() -> ArgumentParser:
 
     build = commands.add_parser(
         "build",
-        help="write a notebook export from a file",
-        description="Prepare NOTEBOOK and atomically write its verified export to DIR.",
+        help="prepare and write a notebook export from a file",
+        description="Prepare NOTEBOOK and write its verified export to DIR.",
     )
-    build.add_argument("notebook", metavar="NOTEBOOK", help="Marimo Python notebook")
+    build.add_argument("notebook", metavar="NOTEBOOK", help="marimo Python notebook")
     _add_spec(build)
     _add_output(build)
     _add_repository(build)
@@ -75,11 +75,11 @@ def parser() -> ArgumentParser:
 
     capture = commands.add_parser(
         "capture",
-        help="write a notebook export from a live session",
-        description="Prepare one live Marimo session and atomically write its verified export.",
+        help="prepare and write a notebook export from a live session",
+        description="Prepare one live marimo session and write its verified export.",
         epilog=_LIVE_AUTH_EPILOG,
     )
-    capture.add_argument("server", metavar="SERVER", help="absolute Marimo server URL")
+    capture.add_argument("server", metavar="SERVER", help="absolute marimo server URL")
     capture.add_argument(
         "--session",
         dest="session_id",
@@ -97,7 +97,7 @@ def parser() -> ArgumentParser:
         "inspect",
         help="discover notebook definitions and live sessions",
         description=(
-            "Inspect a notebook file or discover one Marimo server. File inspection "
+            "Inspect a notebook file or discover one marimo server. File inspection "
             "executes the notebook's initial autorun."
         ),
         epilog=_LIVE_AUTH_EPILOG,
@@ -105,7 +105,7 @@ def parser() -> ArgumentParser:
     inspect.add_argument(
         "source",
         metavar="NOTEBOOK_OR_SERVER",
-        help="Marimo Python notebook or absolute Marimo server URL",
+        help="marimo Python notebook or absolute marimo server URL",
     )
     inspect.add_argument(
         "--session",
@@ -126,27 +126,27 @@ def parser() -> ArgumentParser:
 
     observations = commands.add_parser(
         "observations",
-        help="inspect or clear observed input states",
+        help="list or clear observations for one notebook export plan",
     ).add_subparsers(dest="observations_command", required=True)
     observations_list = observations.add_parser(
         "list",
-        help="list observed input states for one notebook export plan",
+        help="list observations for one notebook export plan",
     )
     _add_observation_plan(observations_list)
     observations_clear = observations.add_parser(
         "clear",
-        help="clear observed input states for one notebook export plan",
+        help="clear observations for one notebook export plan",
     )
     _add_observation_plan(observations_clear)
 
     repository = commands.add_parser(
         "repository",
-        help="inspect or prune prepared export storage",
+        help="inspect or prune the export repository",
     ).add_subparsers(dest="repository_command", required=True)
-    repository_status = repository.add_parser("status", help="show repository usage")
+    repository_status = repository.add_parser("status", help="show export repository usage")
     _add_repository(repository_status)
     _add_machine_output(repository_status, jsonl=False)
-    repository_prune = repository.add_parser("prune", help="apply repository retention")
+    repository_prune = repository.add_parser("prune", help="apply export repository retention")
     repository_prune.add_argument(
         "--dry-run",
         action="store_true",
@@ -158,7 +158,7 @@ def parser() -> ArgumentParser:
     doctor = commands.add_parser(
         "doctor",
         help="check the local export environment",
-        description="Report the effective repository and Marimo compatibility.",
+        description="Report the effective export repository and marimo compatibility.",
     )
     _add_repository(doctor)
     _add_machine_output(doctor, jsonl=False)
@@ -215,7 +215,7 @@ def _add_repository(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--repository",
         metavar="DIR",
-        help=f"prepared export repository (then {_REPOSITORY_ENV}, then platform default)",
+        help=f"export repository (then {_REPOSITORY_ENV}, then platform default)",
     )
 
 
@@ -229,12 +229,12 @@ def _add_output(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--replace",
         action="store_true",
-        help="atomically replace an existing export directory",
+        help="replace an existing export directory through native exchange or guarded rollback",
     )
 
 
 def _add_observation_plan(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("notebook", metavar="NOTEBOOK", help="Marimo Python notebook")
+    parser.add_argument("notebook", metavar="NOTEBOOK", help="marimo Python notebook")
     _add_spec(parser)
     _add_repository(parser)
     _add_timeout(parser, "notebook inspection timeout")

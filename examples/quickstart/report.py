@@ -9,13 +9,14 @@ def _():
     import marimo as mo
 
     days = mo.ui.slider(1, 30, value=7, label="Days")
-    return (days,)
+    return days, mo
 
 
 @app.cell
-def _(days):
+def _(days, mo):
     summary = {"days": days.value, "label": f"Last {days.value} days"}
-    return (summary,)
+    report = mo.md(f"## {summary['label']}\n\nSelected window: **{days.value} days**")
+    return report, summary
 
 
 if __name__ == "__main__":
