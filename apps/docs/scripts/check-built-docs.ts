@@ -58,7 +58,8 @@ const files = documentationPages.flatMap(({ link }) => [
   htmlForRoute(link),
   markdownForRoute(link),
 ]);
-const requiredFiles = [...files, "llms.txt", "llms-full.txt", "sitemap.xml"];
+const socialImagePath = "brand/marimo-export-og.png";
+const requiredFiles = [...files, socialImagePath, "llms.txt", "llms-full.txt", "sitemap.xml"];
 const missing = await missingFiles(requiredFiles);
 
 const llms = await readFile(join(outputDirectory, "llms.txt"), "utf8");
@@ -95,6 +96,38 @@ const expectedCanonicalLinks = new Set(
 const llmsDifference = compareSets(expectedMarkdownLinks, new Set(llmsLinks));
 const llmsFullDifference = compareSets(expectedMarkdownLinks, new Set(llmsFullLinks));
 const sitemapDifference = compareSets(expectedCanonicalLinks, new Set(sitemapLinks));
+const socialMetadata = new Map(
+  [...index.matchAll(/<meta (?:property|name)="([^"]+)" content="([^"]*)">/g)]
+    .map((match) => [match[1], match[2]] as const)
+    .filter((entry): entry is readonly [string, string] => entry[0] !== undefined),
+);
+const expectedSocialMetadata = new Map([
+  ["og:title", "marimo-export: Prepare notebook results. Read them anywhere."],
+  [
+    "og:description",
+    "Build a portable, verified export from selected marimo notebook states. Browser applications and agents can use it without a Python runtime.",
+  ],
+  ["og:image", new URL(socialImagePath, siteUrl).href],
+  ["og:image:width", "2400"],
+  ["og:image:height", "1260"],
+  [
+    "og:image:alt",
+    "marimo-export mark pointing from prepared notebook states toward a portable export.",
+  ],
+  ["twitter:card", "summary_large_image"],
+  ["twitter:title", "marimo-export: Prepare notebook results. Read them anywhere."],
+  [
+    "twitter:description",
+    "Build a portable, verified export from selected marimo notebook states. Browser applications and agents can use it without a Python runtime.",
+  ],
+  ["twitter:image", new URL(socialImagePath, siteUrl).href],
+]);
+const incorrectSocialMetadata = [...expectedSocialMetadata].flatMap(([name, expected]) => {
+  const actual = socialMetadata.get(name);
+  return actual === expected
+    ? []
+    : [`${name}: expected ${expected}, received ${actual ?? "missing"}`];
+});
 
 const baseName = process.env.BASE_PATH?.trim().replace(/^\/+|\/+$/g, "");
 const assetPrefix = baseName ? `/${baseName}` : "";
@@ -128,6 +161,7 @@ const errors = [
   ...formatList("Duplicate sitemap URLs", duplicates(sitemapLinks)),
   ...formatList("Missing sitemap URLs", sitemapDifference.missing),
   ...formatList("Unexpected sitemap URLs", sitemapDifference.unexpected),
+  ...formatList("Incorrect social metadata", incorrectSocialMetadata),
   ...(index.includes(`href="${assetPrefix}/assets/`)
     ? []
     : [`Built index does not use the expected stylesheet prefix ${assetPrefix || "/"}.`]),
