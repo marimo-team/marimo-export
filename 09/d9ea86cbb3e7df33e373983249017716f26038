@@ -1,0 +1,27 @@
+packages/python/tests/test_repository_generation_integrity.py
+  s_fd44300258949f::t_688b54a016b21c 119,139
+packages/python/tests/test_repository_recovery.py
+  s_fd44300258949f::t_688b54a016b21c 314,335
+packages/python/tests/test_repository_fencing.py
+  s_fd44300258949f::t_688b54a016b21c 192,209,277,330,335,337,453,458,498,591
+packages/python/tests/test_repository_concurrency.py
+  s_fd44300258949f::t_688b54a016b21c 243,267,279-287,467,471,473,476-478,485-487,489-490,510,519
+packages/python/tests/test_repository_lifecycle.py
+  s_fd44300258949f::t_688b54a016b21c 164,174-175,179,341,362-370,426,437,514,518,520,551,556,582,628,632,634,654,669,674,822
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "09d9ea86cbb3e7df33e373983249017716f26038",
+  "prompts": {},
+  "sessions": {
+    "s_fd44300258949f": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06c2e-82e1-72c1-9ca1-825eb34d248a",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
