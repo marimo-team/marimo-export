@@ -70,7 +70,7 @@ formatting, linting, type checks, tests, builds, packaging, and workspace tasks.
 | Browser prepared controller              | `pnpm --filter @marimo-team/marimo-export test -- prepared`                                                                                                                |
 | Browser core                             | `pnpm --filter @marimo-team/marimo-export test`                                                                                                                            |
 | One loader                               | `pnpm --filter @marimo-export/internal-loader-<name> test`                                                                                                                 |
-| Skill scaffold                           | `uv run pytest skills/notebook-to-static-app/tests`                                                                                                                        |
+| Skill scaffold                           | `uv run pytest packages/python/tests/test_scaffold_app.py`                                                                                                                 |
 | Documentation                            | `node apps/docs/scripts/check-navigation.ts && make docs-build`                                                                                                            |
 
 Add live producer or browser evidence when the contract crosses a process,

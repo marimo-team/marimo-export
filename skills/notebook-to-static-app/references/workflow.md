@@ -1,23 +1,30 @@
 # Workspace workflow
 
-Run the scaffold from a marimo-export checkout:
+Resolve the scaffold from the installed marimo-export Agent Skill:
 
 ```bash
 NOTEBOOK_PATH=/absolute/path/to/notebook.py
 STATIC_APP_DIR=/absolute/path/to/static-app
+SCAFFOLD_PATH="$(
+  python -c 'import marimo_export.agent as agent; print(agent.agent_skill() / "scripts" / "scaffold_app.py")'
+)"
 
-uv run --frozen --group dev python \
-  skills/notebook-to-static-app/scripts/scaffold_app.py \
+python "$SCAFFOLD_PATH" \
   --notebook "$NOTEBOOK_PATH" \
   --output "$STATIC_APP_DIR" \
   --loader parquet \
   --loader vegalite
 ```
 
-The scaffold vendors the current Python wheel and browser package, reads PEP 723
-dependencies, and creates one uv and Vite workspace. Loader choices include
-`anywidget`, `arrow`, `html`, `json`, `marimo-cell`, `marimo-output`, `numpy`,
-`parquet`, `text`, and `vegalite`.
+From an installed release, the scaffold pins the generated Python and browser
+projects to that marimo-export version. From a marimo-export checkout, it builds
+and vendors the current Python wheel and browser package. Pass
+`--marimo-export-root` to select a checkout explicitly, or pass
+`--python-package` and `--browser-package` to vendor existing artifacts.
+
+The scaffold reads the notebook's PEP 723 metadata and creates one uv and Vite
+workspace. Loader choices include `anywidget`, `arrow`, `html`, `json`,
+`marimo-cell`, `marimo-output`, `numpy`, `parquet`, `text`, and `vegalite`.
 
 Install the generated environments:
 

@@ -157,7 +157,7 @@ jobs:
             --group test \
             --all-extras \
             --python "${{ matrix.python-version }}" \
-            pytest -q skills/notebook-to-static-app/tests
+            pytest -q packages/python/tests/test_scaffold_app.py
 
   test-frontend:
     name: Frontend

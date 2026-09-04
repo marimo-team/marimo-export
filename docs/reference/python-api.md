@@ -7,8 +7,9 @@ description: Choose the Python API for producing, reading, serving, or integrati
 
 The Python package prepares selected marimo notebook states, writes verified
 notebook exports, and reads the same files that browser applications consume.
-Python 3.10 or newer is required. Continuous integration tests Python 3.10
-through 3.14, and the package metadata pins its exact supported marimo release.
+Python 3.10 through 3.14 is supported. Continuous integration tests each
+supported version, and the package metadata pins its exact supported marimo
+release.
 See [Compatibility](compatibility) for the complete boundary.
 
 Install the base package to produce and read portable JSON, scalar, NumPy,
@@ -37,6 +38,7 @@ Install a producer extra when an `ExportSpec` uses its exporter:
 | Configure retention or record observed inputs                           | [Repository and observations](python/repository-and-observations) |
 | Commit an application directory or retain a Python prepared publication | [Delivery and publications](python/delivery-and-publications)     |
 | Embed marimo-export behavior in a marimo host                           | [Host integration](python/host-integration)                       |
+| Discover the version-matched code-mode workflow                         | [`marimo_export.agent`](../guide/agents-and-automation)           |
 | Convert portable values or encode canonical JSON                        | [Portable JSON](portable-json)                                    |
 | Construct indexes and descriptors or handle typed errors                | [Format records and errors](python/format-records-and-errors)     |
 | Interpret progress events and cache activity                            | [Produce an export](python/produce#progress-callbacks)            |

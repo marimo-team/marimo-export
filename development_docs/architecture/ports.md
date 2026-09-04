@@ -7,7 +7,7 @@ satisfy those boundaries.
 
 ```mermaid
 flowchart LR
-    entry["Application or CLI"] --> sdk["Public SDK operation"]
+    entry["Application, CLI, or code-mode agent"] --> sdk["Public SDK operation"]
     sdk --> producer["Producer operation"]
     producer --> service["Preparation service"]
     service --> records["Records and capabilities"]
@@ -56,6 +56,7 @@ lifecycles:
 
 | Module                       | Contract                                                                    |
 | ---------------------------- | --------------------------------------------------------------------------- |
+| `marimo_export.agent`        | Discover code-mode help and version-matched skill resources                 |
 | `marimo_export.sessions`     | Connect to a server and borrow a live `Session`                             |
 | `marimo_export.client`       | Provide the concrete `Client`, `Session`, and capture wrapper               |
 | `marimo_export.producer`     | Expose the single-use `OwnedNotebook` inspection context                    |
@@ -89,9 +90,10 @@ module because it defines those concrete types and exposes the capture wrapper.
 `marimo_export.producer` is the supported narrow path for `OwnedNotebook` and
 `open_notebook()`.
 
-The CLI delegates to the same SDK operations. Human output, JSON output, JSONL
-progress, and exit categories belong to `_cli`. Planning and preparation
-services contain no terminal behavior.
+The CLI and code-mode guidance lead to the same SDK operations. Human output,
+JSON output, JSON Lines progress, and exit categories belong to `_cli`.
+Capability discovery and packaged skill lookup belong to `agent.py`. Planning
+and preparation services contain no terminal behavior.
 
 ## Stable records
 

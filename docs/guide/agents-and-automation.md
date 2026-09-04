@@ -107,6 +107,45 @@ missing work. [Reuse](../concepts/preparation-and-reuse)
 defines when an exact match can return before notebook startup and how external
 data freshness enters producer identity and marimo caching.
 
+## Discover the workflow from marimo code mode
+
+The Python distribution carries its `notebook-to-static-app`
+[Agent Skill](https://agentskills.io/specification) in an
+[Agent Plugin](https://agent-plugins.org/) and registers `marimo_export.agent`
+as a marimo code-mode capability. A code-mode agent can discover the module
+before importing it:
+
+```python
+import marimo._code_mode as cm
+
+print(cm.capabilities()["marimo-export"])
+```
+
+Import the discovered module and read its generated help:
+
+```python
+import marimo_export.agent as export_agent
+
+help(export_agent)
+```
+
+The help starts with the public Python inspection, planning, build, capture,
+and verification operations. It also resolves the installed Agent Plugin and
+the skill files that match the active marimo-export version:
+
+```python
+plugin = export_agent.agent_plugin()
+skill = export_agent.agent_skill()
+
+print(plugin.tree())
+print(skill.body)
+print(skill / "references" / "workflow.md")
+```
+
+The CLI and the code-mode workflow use the same public Python operations.
+Argument parsing, terminal rendering, JSON Lines progress, and exit codes stay
+inside the CLI.
+
 ## Ask an agent to create a browser application
 
 The repository includes a [notebook-to-static-app

@@ -57,6 +57,14 @@ def _wheel_payload(path: Path) -> dict[str, bytes]:
 
 def _verify_wheel(path: Path, version: str) -> None:
     with zipfile.ZipFile(path) as archive:
+        plugin_entries = [name for name in archive.namelist() if ".agent-plugin/" in name]
+        generated = [
+            name
+            for name in plugin_entries
+            if "/__pycache__/" in name or name.endswith((".pyc", ".pyo"))
+        ]
+        if generated:
+            raise RuntimeError(f"{path.name} contains generated Agent Plugin files: {generated}")
         metadata_name = _single(
             [Path(name) for name in archive.namelist() if name.endswith(".dist-info/METADATA")],
             f"METADATA record in {path.name}",
@@ -81,6 +89,8 @@ def _verify_wheel(path: Path, version: str) -> None:
             raise RuntimeError(f"{path.name} has no marimo-export console entry point")
         if "marimo-export = marimo_export._marimo.entrypoints:kernel_lifespan" not in entries:
             raise RuntimeError(f"{path.name} has no managed kernel lifespan entry point")
+        if "marimo-export = marimo_export.agent" not in entries:
+            raise RuntimeError(f"{path.name} has no code-mode capability entry point")
 
 
 def _verify_sdist(path: Path, version: str) -> None:

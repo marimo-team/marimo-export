@@ -80,9 +80,9 @@ Export only values the application loads.
 
 ### 3. Create the app workspace
 
-Use `scripts/scaffold_app.py` to create local Python and Vite plumbing from the
-notebook's PEP 723 dependencies. Select only the browser loader families the app
-will import.
+Resolve `scripts/scaffold_app.py` through `marimo_export.agent.agent_skill()` and
+create the local Python and Vite workspace from the notebook's PEP 723
+dependencies. Select only the browser loader families the app will import.
 
 Treat the generated `src/main.ts` as a loading shell. Replace it with the real
 application after the ExportSpec is known.
@@ -219,8 +219,8 @@ Treat failures as product evidence.
   loader pair.
 - Custom exporter import failure: keep its module in the app and run the
   notebook, build, and capture with the app directory on `PYTHONPATH`.
-- Capture package mismatch: run the notebook from the app environment
-  containing the same local marimo-export checkout.
+- Capture package mismatch: run the notebook from the app environment with the
+  same marimo-export version and implementation.
 - Loader resolution failure: consume the packed browser package, then install
   the peer dependency for the imported loader.
 - Blank or duplicated mount: make disposal and abort ownership explicit.

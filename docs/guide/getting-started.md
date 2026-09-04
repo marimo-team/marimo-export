@@ -14,9 +14,9 @@ marimo-export](../why) first.
 
 ## Install marimo-export
 
-Install [Python 3.10 or newer](https://www.python.org/) and
-[uv](https://docs.astral.sh/uv/). Continuous integration tests Python 3.10
-through 3.14. The package metadata pins its supported marimo release.
+Install [Python 3.10 through 3.14](https://www.python.org/downloads/) and
+[uv](https://docs.astral.sh/uv/). Continuous integration tests each supported
+version. The package metadata pins its supported marimo release.
 
 Create an empty project:
 
