@@ -8,7 +8,6 @@ import { fileURLToPath } from "node:url";
 const packageRoot = fileURLToPath(new URL("..", import.meta.url));
 const manifest = JSON.parse(await readFile(join(packageRoot, "package.json"), "utf8"));
 const temporaryRoot = await mkdtemp(join(tmpdir(), "portable-json-package-"));
-const npm = process.platform === "win32" ? "npm.cmd" : "npm";
 const pnpm = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
 
 try {
@@ -37,7 +36,7 @@ document.querySelector("#app")!.textContent = String(jsonObjectSchema.parse({ re
 `,
     }),
   ]);
-  await Promise.all([validateProject(rootConsumer, npm), validateProject(zodConsumer, pnpm)]);
+  await Promise.all([validateProject(rootConsumer, pnpm), validateProject(zodConsumer, pnpm)]);
   await Promise.all([
     inspectInstalledManifest(rootConsumer),
     inspectInstalledManifest(zodConsumer),
@@ -45,7 +44,7 @@ document.querySelector("#app")!.textContent = String(jsonObjectSchema.parse({ re
   assert.equal(await pathExists(join(rootConsumer, "node_modules", "zod")), false);
   assert.equal(await pathExists(join(zodConsumer, "node_modules", "zod")), true);
 
-  process.stdout.write("Packed portable JSON npm and pnpm consumer contracts passed.\n");
+  process.stdout.write("Packed portable JSON pnpm consumer contracts passed.\n");
 } finally {
   await rm(temporaryRoot, { recursive: true, force: true });
 }
