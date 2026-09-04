@@ -13,9 +13,10 @@ import { documentationSidebar, llmsSidebar, topNavigation } from "../navigation.
 const repository = "https://github.com/marimo-team/marimo-export";
 const siteUrl = new URL("https://marimo-team.github.io/marimo-export/");
 const description =
-  "Select marimo notebook states and outputs, prepare them once, and read the resulting export from applications, agents, Python, and TypeScript.";
-const socialTitle = "Prepare notebook results for any application.";
-const socialImageAlt = `marimo-export: ${socialTitle}`;
+  "Build a portable, verified export from selected marimo notebook states. Browser applications and agents can use it without a Python runtime.";
+const socialTitle = "Prepare notebook results. Read them anywhere.";
+const socialImageAlt =
+  "marimo-export mark pointing from prepared notebook states toward a portable export.";
 const socialImageUrl = new URL("brand/marimo-export-og.png", siteUrl).href;
 const baseName = process.env.BASE_PATH?.trim().replace(/^\/+|\/+$/g, "");
 const basePath = baseName ? `/${baseName}` : "";
@@ -64,7 +65,7 @@ export default defineConfig({
     [
       "link",
       {
-        href: publicPath("/brand/marimo-export-mark-light.svg"),
+        href: publicPath("/brand/marimo-export-favicon-light.svg"),
         media: "(prefers-color-scheme: light)",
         rel: "icon",
         type: "image/svg+xml",
@@ -73,7 +74,7 @@ export default defineConfig({
     [
       "link",
       {
-        href: publicPath("/brand/marimo-export-mark-dark.svg"),
+        href: publicPath("/brand/marimo-export-favicon-dark.svg"),
         media: "(prefers-color-scheme: dark)",
         rel: "icon",
         type: "image/svg+xml",

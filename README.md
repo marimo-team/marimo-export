@@ -8,7 +8,7 @@
 </p>
 
 <p align="center">
-  <em>Prepare notebook results once, then read the same export from Python, TypeScript, agents, or custom applications.</em>
+  <strong>Prepare notebook results. Read them anywhere.</strong>
 </p>
 
 <p align="center">
@@ -27,9 +27,9 @@
 </p>
 
 marimo-export runs selected states of a [marimo](https://marimo.io/) notebook
-and writes their named results to a portable **notebook export**. Python,
-TypeScript, agents, and custom clients can read that export after the producer
-stops.
+and writes their named results to a portable, verified **notebook export**.
+Browser applications and agents can read that export after the producer stops,
+without a Python runtime. Python and TypeScript clients use the same files.
 
 ## Build the quickstart
 

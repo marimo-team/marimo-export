@@ -1,12 +1,12 @@
 ---
 layout: home
-title: "marimo-export: Prepare notebook results for any application"
+title: "marimo-export: Prepare notebook results. Read them anywhere."
 titleTemplate: false
-description: Select the marimo notebook states and outputs an application needs, prepare them once, and read the resulting export from Python, TypeScript, agents, or custom clients.
+description: Build a portable, verified export from selected marimo notebook states. Browser applications and agents can use it without a Python runtime.
 
 hero:
-  text: Prepare notebook results for any application.
-  tagline: Select the notebook states and outputs your application needs. Run them through marimo, write one portable export, then read it from Python, TypeScript, agents, or custom clients.
+  text: Prepare notebook results. Read them anywhere.
+  tagline: Select the states and outputs to run through marimo. marimo-export writes a portable, verified artifact that browser applications and agents read after the producer stops, without a Python runtime.
   image:
     light: /brand/marimo-export-lockup-stacked-light.svg
     dark: /brand/marimo-export-lockup-stacked-dark.svg
