@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+from typing import cast
+
 import pytest
-from marimo_export.progress import CacheActivity, ProgressEvent
+from marimo_export.progress import CacheActivity, ProgressEvent, ProgressKind
 
 
 def test_progress_event_serializes_every_field() -> None:
@@ -39,6 +41,14 @@ def test_progress_event_serializes_every_field() -> None:
 def test_progress_event_rejects_inconsistent_counts() -> None:
     with pytest.raises(ValueError, match="completed cannot exceed total"):
         ProgressEvent(kind="state_started", completed=2, total=1)
+
+
+@pytest.mark.parametrize(
+    "kind",
+    ("delivery_verification_started", "delivery_commit_started"),
+)
+def test_progress_event_accepts_delivery_kinds(kind: str) -> None:
+    assert ProgressEvent(kind=cast(ProgressKind, kind)).kind == kind
 
 
 def test_cache_activity_rejects_boolean_counts() -> None:

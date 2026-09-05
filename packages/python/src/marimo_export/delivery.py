@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import shutil
+import time
 import weakref
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -42,6 +43,7 @@ from marimo_export._services.write_export import (
 )
 from marimo_export.errors import NotebookExportError
 from marimo_export.prepared import PreparedExport
+from marimo_export.progress import ProgressEvent
 from marimo_export.result import ExportResult, ExportWarning
 from marimo_export.spec import StrPath
 
@@ -72,6 +74,7 @@ class StagedDelivery:
         "_finalizer",
         "_lock",
         "_materialized",
+        "_notifying",
         "_path",
         "_target",
     )
@@ -79,6 +82,7 @@ class StagedDelivery:
     _finalizer: weakref.finalize
     _lock: RLock
     _materialized: dict[str, tuple[str, DirectoryIdentity]]
+    _notifying: bool
     _path: Path
     _target: DirectoryTarget
 
@@ -91,6 +95,7 @@ class StagedDelivery:
         self._target = target
         self._path = path
         self._materialized = {}
+        self._notifying = False
         self._lock = RLock()
         self._closed = False
         self._finalizer = weakref.finalize(self, _discard, path)
@@ -108,11 +113,15 @@ class StagedDelivery:
         self,
         prepared: PreparedExport,
         at: str | os.PathLike[str],
+        *,
+        progress: Callable[[ProgressEvent], None] | None = None,
     ) -> ExportResult:
         """Write and verify one prepared export below the staging directory."""
 
         if not isinstance(prepared, PreparedExport):
             raise TypeError("prepared must be a PreparedExport")
+        if progress is not None and not callable(progress):
+            raise TypeError("progress must be callable or None")
         relative = _relative_directory(at)
         with self._lock:
             self._require_open()
@@ -125,30 +134,55 @@ class StagedDelivery:
             ):
                 raise ValueError(f"prepared export materialization overlaps {key!r}")
             destination = _materialization_path(self._path, relative)
-            result = _materialize_prepared_export(prepared, destination)
+            events: list[ProgressEvent] = []
+            result = _materialize_prepared_export(
+                prepared,
+                destination,
+                progress=events.append if progress is not None else None,
+            )
             closure = directory_identity(destination)
             if closure is None:
                 raise AssertionError("materialized export directory is unavailable")
             self._materialized[key] = (result.identity, closure)
+            for event in events:
+                self._emit_progress(progress, event)
             return result
 
     def commit(
         self,
         *,
         guard: Callable[[], None] | None = None,
+        progress: Callable[[ProgressEvent], None] | None = None,
     ) -> DeliveryResult:
         """Verify nested exports and install the complete directory with rollback."""
 
         if guard is not None and not callable(guard):
             raise TypeError("guard must be callable or None")
+        if progress is not None and not callable(progress):
+            raise TypeError("progress must be callable or None")
         with self._lock:
             self._require_open()
             retired: Path | None = None
             try:
+                self._emit_progress(
+                    progress,
+                    ProgressEvent(kind="delivery_verification_started"),
+                )
+                started = time.monotonic()
                 _verify_materialized(self._path, self._materialized)
                 files = _verified_file_count(self._path)
                 if guard is not None:
                     guard()
+                if progress is not None:
+                    self._emit_progress(
+                        progress,
+                        ProgressEvent(
+                            kind="delivery_commit_started",
+                            elapsed_seconds=time.monotonic() - started,
+                        ),
+                    )
+                    _verify_materialized(self._path, self._materialized)
+                    files = _verified_file_count(self._path)
                 retired = commit_directory(
                     self._path,
                     self._target,
@@ -198,6 +232,8 @@ class StagedDelivery:
 
     def close(self) -> None:
         with self._lock:
+            if self._notifying:
+                raise RuntimeError("A staged delivery progress callback is active.")
             if self._closed:
                 return
             self._closed = True
@@ -213,8 +249,23 @@ class StagedDelivery:
         self.close()
 
     def _require_open(self) -> None:
+        if self._notifying:
+            raise RuntimeError("A staged delivery progress callback is active.")
         if self._closed:
             raise RuntimeError("The staged delivery is closed.")
+
+    def _emit_progress(
+        self,
+        callback: Callable[[ProgressEvent], None] | None,
+        event: ProgressEvent,
+    ) -> None:
+        if callback is None:
+            return
+        self._notifying = True
+        try:
+            callback(event)
+        finally:
+            self._notifying = False
 
 
 def stage(

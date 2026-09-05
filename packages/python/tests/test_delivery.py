@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import stat
 import sys
+from collections.abc import Callable
 from pathlib import Path
 from threading import Event, Thread
 from types import SimpleNamespace
@@ -25,6 +26,7 @@ from marimo_export.index import (
     StateEntry,
 )
 from marimo_export.prepared import PreparedExport
+from marimo_export.progress import ProgressEvent
 from marimo_export.wire import state_fingerprint
 
 
@@ -77,9 +79,11 @@ class _PreparedFixture:
         progress: object = None,
     ) -> object:
         assert replace is False
-        assert progress is None
         written = write_export(self.index, {}, output, replace=False)
-        return SimpleNamespace(path=written.path, identity=open_export(output).identity)
+        result = SimpleNamespace(path=written.path, identity=open_export(output).identity)
+        if progress is not None:
+            cast(Callable[[ProgressEvent], None], progress)(ProgressEvent(kind="write_finished"))
+        return result
 
 
 @pytest.fixture
@@ -88,7 +92,7 @@ def prepared(monkeypatch: pytest.MonkeyPatch) -> PreparedExport:
     monkeypatch.setattr(
         delivery_module,
         "_materialize_prepared_export",
-        lambda prepared, output: prepared.write(output),
+        lambda prepared, output, *, progress: prepared.write(output, progress=progress),
     )
     return cast(PreparedExport, _PreparedFixture())
 
@@ -109,6 +113,103 @@ def test_delivery_materializes_and_commits_a_verified_nested_export(
     assert materialized.identity == open_export(output / "data/export").identity
     assert open_export(output / "data/export").verify().states == 1
     assert output.joinpath("index.html").read_text(encoding="utf-8") == "site"
+
+
+def test_delivery_reports_materialization_and_precommit_progress(
+    tmp_path: Path,
+    prepared: PreparedExport,
+) -> None:
+    output = tmp_path / "site"
+    events: list[ProgressEvent] = []
+
+    with stage(output) as staged:
+        staged.path.joinpath("index.html").write_text("site", encoding="utf-8")
+
+        def materialization_progress(event: ProgressEvent) -> None:
+            events.append(event)
+            with pytest.raises(RuntimeError, match="progress callback is active"):
+                staged.commit()
+
+        staged.materialize(
+            prepared,
+            "data/export",
+            progress=materialization_progress,
+        )
+
+        def progress(event: ProgressEvent) -> None:
+            events.append(event)
+            if event.kind == "delivery_commit_started":
+                assert not output.exists()
+
+        staged.commit(progress=progress)
+
+    assert [event.kind for event in events] == [
+        "write_finished",
+        "delivery_verification_started",
+        "delivery_commit_started",
+    ]
+    assert events[-1].elapsed_seconds is not None
+
+
+def test_delivery_reverifies_callback_changes_before_commit(
+    tmp_path: Path,
+    prepared: PreparedExport,
+) -> None:
+    output = tmp_path / "site"
+
+    with stage(output) as staged:
+        staged_path = staged.path
+        staged.materialize(prepared, "data/export")
+
+        def change_nested_export(event: ProgressEvent) -> None:
+            if event.kind == "delivery_commit_started":
+                staged_path.joinpath("data/export/index.json").write_text(
+                    "changed",
+                    encoding="utf-8",
+                )
+
+        with pytest.raises((IntegrityError, NotebookExportError)):
+            staged.commit(progress=change_nested_export)
+
+    assert not output.exists()
+
+
+def test_materialization_progress_failure_keeps_registered_export(
+    tmp_path: Path,
+    prepared: PreparedExport,
+) -> None:
+    output = tmp_path / "site"
+
+    with stage(output) as staged:
+
+        def fail(event: ProgressEvent) -> None:
+            assert event.kind == "write_finished"
+            raise RuntimeError("progress failed")
+
+        with pytest.raises(RuntimeError, match="progress failed"):
+            staged.materialize(prepared, "data/export", progress=fail)
+        staged.commit()
+
+    assert open_export(output / "data/export").verify().states == 1
+
+
+def test_delivery_progress_failure_before_commit_preserves_destination(
+    tmp_path: Path,
+) -> None:
+    output = tmp_path / "site"
+    _site(output, "old")
+
+    with stage(output, replace=True) as staged:
+        staged.path.joinpath("index.html").write_text("new", encoding="utf-8")
+
+        def fail_before_commit(event: ProgressEvent) -> None:
+            if event.kind == "delivery_commit_started":
+                raise RuntimeError("progress failed")
+
+        with pytest.raises(RuntimeError, match="progress failed"):
+            staged.commit(progress=fail_before_commit)
+
+    assert output.joinpath("index.html").read_text(encoding="utf-8") == "old"
 
 
 @pytest.mark.skipif(

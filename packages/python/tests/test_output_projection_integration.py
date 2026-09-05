@@ -293,8 +293,20 @@ if __name__ == "__main__":
             timeout=30,
         )
 
-    assert raised.value.code == "output_execution_failed"
-    assert raised.value.details["functions"] == ["validate"]
+    assert raised.value.code == "output_not_portable"
+    details = raised.value.details
+    assert {
+        key: value for key, value in details.items() if key not in {"cell_id", "object_id"}
+    } == {
+        "functions": ["validate"],
+        "output": "form",
+        "reason": "python_functions",
+        "selector": "form",
+        "source_kind": "output",
+        "state": "baseline",
+    }
+    assert isinstance(details["cell_id"], str) and details["cell_id"]
+    assert isinstance(details["object_id"], str) and details["object_id"]
 
 
 def test_rendered_plain_text_preserves_a_literal_cell_id(tmp_path: Path) -> None:

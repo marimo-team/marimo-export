@@ -10,7 +10,7 @@ from io import BytesIO
 from typing import TYPE_CHECKING, Any, cast
 
 from marimo_export._diagnostics import record_cleanup_failure
-from marimo_export._execution.plan import ExecutionPlan
+from marimo_export._execution.plan import PlannedOutput
 from marimo_export._json import (
     JsonObject,
     JsonValue,
@@ -283,40 +283,42 @@ def capture_materialized_output(snapshot_bytes: bytes) -> object:
     )
 
 
-def materialize_projection_tokens(child: StateChild, plan: ExecutionPlan) -> None:
-    """Populate every snapshot token before transient output cells run."""
+def materialize_projection_token(
+    child: StateChild,
+    planned_output: PlannedOutput,
+) -> None:
+    """Populate one snapshot token before its transient output cell runs."""
 
     from marimo_export._execution.plan import (
         planned_output_identity,
         snapshot_token_name,
     )
 
-    for output, planned_output in plan.planned_outputs.items():
-        source = planned_output.source
-        if isinstance(source, RenderedOutputSource):
-            path = tuple((step.kind, step.key) for step in source.selector.path)
-            child.runner.globals[snapshot_token_name(planned_output)] = materialize_rendered_output(
-                child.runner.globals[source.selector.root],
-                path,
-                owner_cell_id=planned_output.owner_cell_id,
-                projection_identity=planned_output_identity(planned_output),
-            )
-            continue
-        if not isinstance(source, CellSource):
-            continue
-        cell = planned_output.cell
-        if cell is None:
-            raise OutputError(
-                f"complete-cell output {output!r} has no resolved cell",
-                code="output_execution_failed",
-            )
-        child.runner.globals[snapshot_token_name(planned_output)] = materialize_complete_cell(
-            cell_id=cell.id,
-            name=cell.name,
-            code_sha256=cell.code_sha256,
-            config=cell.config,
+    source = planned_output.source
+    if isinstance(source, RenderedOutputSource):
+        path = tuple((step.kind, step.key) for step in source.selector.path)
+        child.runner.globals[snapshot_token_name(planned_output)] = materialize_rendered_output(
+            child.runner.globals[source.selector.root],
+            path,
+            owner_cell_id=planned_output.owner_cell_id,
             projection_identity=planned_output_identity(planned_output),
         )
+        return
+    if not isinstance(source, CellSource):
+        return
+    cell = planned_output.cell
+    if cell is None:
+        raise OutputError(
+            f"complete-cell output {planned_output.name!r} has no resolved cell",
+            code="output_execution_failed",
+        )
+    child.runner.globals[snapshot_token_name(planned_output)] = materialize_complete_cell(
+        cell_id=cell.id,
+        name=cell.name,
+        code_sha256=cell.code_sha256,
+        config=cell.config,
+        projection_identity=planned_output_identity(planned_output),
+    )
 
 
 def materialize_complete_cell(
@@ -468,7 +470,7 @@ __all__ = [
     "capture_materialized_output",
     "capture_native_value",
     "materialize_complete_cell",
-    "materialize_projection_tokens",
+    "materialize_projection_token",
     "materialize_rendered_output",
     "record_child_notifications",
     "resolve_value_path",

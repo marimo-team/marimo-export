@@ -477,7 +477,8 @@ limits. Use `PreparedExport.cache_activity`, `ExportResult.cache_activity`, and
 
 ## Progress callbacks
 
-`progress` receives ordered immutable `ProgressEvent` values synchronously:
+Producer and staged-delivery `progress` callbacks receive ordered immutable
+`ProgressEvent` values synchronously:
 
 ```text
 inspection_started
@@ -487,23 +488,27 @@ state_started
 state_finished
 prepared_committed
 write_finished
+delivery_verification_started
+delivery_commit_started
 ```
 
 Each event contains `kind` and optional `completed`, `total`, `state`, `cache`,
 `elapsed_seconds`, and `message` fields. `to_dict()` includes every field and
 uses `None` when a field does not apply.
 
-`ProgressKind` is the type alias for the seven supported `kind` strings.
+`ProgressKind` is the type alias for the nine supported `kind` strings.
 
-| Event                | Fields and timing                                                                                                    |
-| -------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `inspection_started` | Emitted before file inspection and for every live plan or capture. Exact prepared-export reuse omits it.             |
-| `plan_ready`         | `completed` is the reusable-state count and `total` is the normalized-state count.                                   |
-| `prepared_reused`    | Emitted by `prepare()` and `capture()` for exact export reuse, with both counts equal to the normalized-state count. |
-| `state_started`      | `state` is the primary alias. `completed` counts missing states already finished.                                    |
-| `state_finished`     | Advances `completed` and adds this state's cache activity and execution time.                                        |
-| `prepared_committed` | Emitted after the complete export generation commits.                                                                |
-| `write_finished`     | Emitted after destination writing and verification, with write duration.                                             |
+| Event                           | Fields and timing                                                                                                    |
+| ------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `inspection_started`            | Emitted before file inspection and for every live plan or capture. Exact prepared-export reuse omits it.             |
+| `plan_ready`                    | `completed` is the reusable-state count and `total` is the normalized-state count.                                   |
+| `prepared_reused`               | Emitted by `prepare()` and `capture()` for exact export reuse, with both counts equal to the normalized-state count. |
+| `state_started`                 | `state` is the primary alias. `completed` counts missing states already finished.                                    |
+| `state_finished`                | Advances `completed` and adds this state's cache activity and execution time.                                        |
+| `prepared_committed`            | Emitted after the complete export generation commits.                                                                |
+| `write_finished`                | Emitted after destination writing and verification, with write duration.                                             |
+| `delivery_verification_started` | Emitted before a staged application verifies its nested exports and outer tree.                                      |
+| `delivery_commit_started`       | Emitted after staged verification and the commit guard, before final revalidation and destination mutation.          |
 
 An exact `prepare()` or `capture()` reuse path emits `plan_ready` and
 `prepared_reused` before a later write. An exact `plan()` reuse emits
@@ -544,13 +549,18 @@ mean that the notebook has no cacheable cells. `to_dict()` returns the four
 nonnegative fields. Exceptions raised by the callback propagate to the producer
 call.
 
-Progress callbacks are notifications, not transaction guards. A
+Producer progress callbacks are notifications, not transaction guards. A
 `state_finished` event follows the prepared-state commit. A
 `prepared_committed` event follows the generation commit. A `write_finished`
 event follows destination commit and verification. An exception from one of
 those callbacks leaves the preceding durable state available even though the
-producer call raises. Use `StagedDelivery.commit(guard=...)` when an application
-needs a check immediately before an outer directory commit.
+producer call raises.
+
+`StagedDelivery.commit()` emits its two delivery events before destination
+mutation. A callback exception therefore preserves the previous destination.
+Use `guard` for application preconditions such as cancellation or source
+revision checks. The returned `DeliveryResult` is the terminal signal after the
+new application directory becomes visible.
 
 ## `ExportResult` and warnings
 

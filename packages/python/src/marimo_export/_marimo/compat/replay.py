@@ -144,8 +144,12 @@ def resources(
             if not inert_form_validation:
                 raise OutputError(
                     f"UI object {object_id!r} exposes nonportable Python functions",
-                    code="output_execution_failed",
-                    details={"object_id": object_id, "functions": names},
+                    code="output_not_portable",
+                    details={
+                        "object_id": object_id,
+                        "reason": "python_functions",
+                        "functions": names,
+                    },
                 )
             names = []
         functions[scoped_ui_ids[object_id]] = names

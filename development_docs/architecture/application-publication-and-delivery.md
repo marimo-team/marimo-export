@@ -195,6 +195,13 @@ returns the nested export's `ExportResult`. `commit()` returns a `DeliveryResult
 with the absolute destination path, regular-file count, and post-visibility
 warnings.
 
+`materialize(progress=...)` forwards the writer's `write_finished` event.
+`commit(progress=...)` emits `delivery_verification_started` before nested and
+outer-tree validation. It emits `delivery_commit_started` after the guard and
+before a final staged-tree revalidation and the first destination mutation.
+Callbacks cannot reenter the same `StagedDelivery`. No callback runs after
+visibility. The returned `DeliveryResult` is the terminal completion signal.
+
 ## Directory identity and security
 
 An existing destination's `DirectoryIdentity` records:

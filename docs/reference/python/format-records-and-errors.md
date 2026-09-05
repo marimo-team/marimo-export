@@ -274,20 +274,27 @@ live in `marimo_export.observations`. `PreparedManifestLimitError` lives in
 An error instance can refine its class default. Handle the code when recovery
 depends on the exact failed operation:
 
-| Area                  | Codes                                                                                                                                                                                                                                                                       |
-| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Spec and selection    | `spec_invalid`, `spec_value_invalid`, `spec_output_invalid`, `spec_exporter_invalid`, `spec_definition_missing`, `spec_definition_conflict`, `spec_input_invalid`, `spec_input_sensitive`, `input_value_invalid`, `control_input_invalid`, `control_input_conflict`         |
-| Exporter and codec    | `runtime_distribution_unavailable`, `exporter_unavailable`, `exporter_invalid`, `exporter_dependency_unavailable`, `exporter_identity_failed`, `exporter_source_changed`, `codec_invalid`, `cache_receipt_missing`, `cache_receipt_invalid`                                 |
-| Session and transport | `transport_failed`, `session_error`, `session_not_found`, `session_ambiguous`, `client_closed`, `owned_notebook_closed`, `bridge_version_mismatch`, `implementation_changed`                                                                                                |
-| Notebook execution    | `notebook_invalid`, `notebook_changed`, `parent_document_changed`, `parent_state_changed`, `state_execution_failed`, `state_cleanup_failed`, `output_execution_failed`, `output_cell_unavailable`, `preparation_cancelled`, `server_start_failed`, `server_shutdown_failed` |
-| Reader and integrity  | `export_invalid`, `export_noncanonical`, `export_unavailable`, `integrity_failed`, `asset_invalid`, `asset_undeclared`, `asset_conflict`, `state_input_invalid`, `state_not_found`, `state_unavailable`, `output_not_found`                                                 |
-| Destination           | `destination_invalid`, `destination_exists`, `destination_changed`, `export_commit_failed`                                                                                                                                                                                  |
-| Repository            | `repository_error`, `repository_limit_exceeded`, `repository_integrity_failed`, `repository_unavailable`, `repository_busy`, `repository_reservation_timeout`, `repository_fence_stale`                                                                                     |
-| Host and observation  | `marimo_incompatible`, `marimo_cache_patch_conflict`, `observation_rejected`, `observation_persistence_failed`, `prepared_manifest_limit_exceeded`                                                                                                                          |
+| Area                  | Codes                                                                                                                                                                                                                                                                                              |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Spec and selection    | `spec_invalid`, `spec_value_invalid`, `spec_output_invalid`, `spec_exporter_invalid`, `spec_definition_missing`, `spec_definition_conflict`, `spec_input_invalid`, `spec_input_sensitive`, `input_value_invalid`, `control_input_invalid`, `control_input_conflict`                                |
+| Exporter and codec    | `runtime_distribution_unavailable`, `exporter_unavailable`, `exporter_invalid`, `exporter_dependency_unavailable`, `exporter_identity_failed`, `exporter_source_changed`, `codec_invalid`, `cache_receipt_missing`, `cache_receipt_invalid`                                                        |
+| Session and transport | `transport_failed`, `session_error`, `session_not_found`, `session_ambiguous`, `client_closed`, `owned_notebook_closed`, `bridge_version_mismatch`, `implementation_changed`                                                                                                                       |
+| Notebook execution    | `notebook_invalid`, `notebook_changed`, `parent_document_changed`, `parent_state_changed`, `state_execution_failed`, `state_cleanup_failed`, `output_execution_failed`, `output_not_portable`, `output_cell_unavailable`, `preparation_cancelled`, `server_start_failed`, `server_shutdown_failed` |
+| Reader and integrity  | `export_invalid`, `export_noncanonical`, `export_unavailable`, `integrity_failed`, `asset_invalid`, `asset_undeclared`, `asset_conflict`, `state_input_invalid`, `state_not_found`, `state_unavailable`, `output_not_found`                                                                        |
+| Destination           | `destination_invalid`, `destination_exists`, `destination_changed`, `export_commit_failed`                                                                                                                                                                                                         |
+| Repository            | `repository_error`, `repository_limit_exceeded`, `repository_integrity_failed`, `repository_unavailable`, `repository_busy`, `repository_reservation_timeout`, `repository_fence_stale`                                                                                                            |
+| Host and observation  | `marimo_incompatible`, `marimo_cache_patch_conflict`, `observation_rejected`, `observation_persistence_failed`, `prepared_manifest_limit_exceeded`                                                                                                                                                 |
 
 `export_parent_sync_failed` and `retired_destination_cleanup_failed` are
 post-commit `ExportWarning` codes. They accompany a successful result after the
 new destination becomes visible.
+
+`output_not_portable` identifies a selected output whose replay resources
+require live Python behavior. The error is an `OutputError`. Its details identify
+the `state`, published `output`, `source_kind`, authored `selector`, and source
+`cell_id`. A complete-cell source also includes `selector_by`. When a projected
+UI object exposes Python callbacks, `reason` is `python_functions`, `functions`
+lists their registered names, and `object_id` identifies the UI object.
 
 Some repository subclasses remain implementation-owned, but their codes can
 surface through the public `RepositoryError` base. Catch the public base and

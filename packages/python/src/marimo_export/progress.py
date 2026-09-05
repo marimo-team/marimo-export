@@ -16,6 +16,8 @@ ProgressKind = Literal[
     "state_finished",
     "prepared_committed",
     "write_finished",
+    "delivery_verification_started",
+    "delivery_commit_started",
 ]
 
 
@@ -68,6 +70,8 @@ class ProgressEvent:
             "state_finished",
             "prepared_committed",
             "write_finished",
+            "delivery_verification_started",
+            "delivery_commit_started",
         }:
             raise ValueError("progress event kind is invalid")
         for name, value in (("completed", self.completed), ("total", self.total)):
