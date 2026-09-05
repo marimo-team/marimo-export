@@ -1,0 +1,19 @@
+pyproject.toml
+  s_4682c665baa21e::t_82c2f826dfeaaf 8
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "86f22f9c1a1fa48d510ad29b10d3d59f25b04a5a",
+  "prompts": {},
+  "sessions": {
+    "s_4682c665baa21e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a07092-e3dd-7dc2-9924-2e83454b461a",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
