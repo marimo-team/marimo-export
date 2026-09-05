@@ -19,7 +19,7 @@ from marimo_export._execution.plan import (
     output_cell_code,
     snapshot_token_code,
 )
-from marimo_export._json import JsonObject
+from marimo_export._json import JsonObject, JsonValue
 from marimo_export._marimo.capabilities import PreparedExporter
 from marimo_export.errors import ExecutionError, MarimoExportError, OutputError
 from marimo_export.spec import CellSource, RenderedOutputSource
@@ -427,6 +427,7 @@ def raise_child_errors(
     state_name: str,
     *,
     output: str | None = None,
+    output_details: Mapping[str, JsonValue] | None = None,
     stop_provenance: StopProvenance | None = None,
     source_cell_ids: Mapping[Any, str] | None = None,
 ) -> None:
@@ -457,6 +458,8 @@ def raise_child_errors(
         }
         if output is not None:
             details["output"] = output
+        if output_details is not None:
+            details.update(output_details)
         if isinstance(error, MarimoExportError):
             error._merge_details(details)
             raise error

@@ -179,12 +179,20 @@ state_started
 state_finished
 prepared_committed
 write_finished
+delivery_verification_started
+delivery_commit_started
 ```
 
 State events carry completed count, total count, authored and projection cache
 activity, state alias, and elapsed execution time when available. The CLI renders
 the same records as human progress or JSONL. Applications can pass their own
 callback.
+
+`StagedDelivery.materialize()` forwards `write_finished` after nested export
+verification. `StagedDelivery.commit()` emits `delivery_verification_started`
+before validating the staged tree and `delivery_commit_started` immediately
+before final revalidation and destination mutation. `DeliveryResult` remains the
+terminal signal after visibility.
 
 Cache activity counts only cells attempted in missing-state child runs. Exact
 prepared-export reuse and prepared-state reuse add no cache activity. Read

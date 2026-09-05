@@ -179,6 +179,14 @@ if __name__ == "__main__":
         )
 
     assert raised.value.code == "output_execution_failed"
+    assert {key: value for key, value in raised.value.details.items() if key != "cell_id"} == {
+        "output": "secret",
+        "selector": "secret_cell",
+        "selector_by": "name",
+        "source_kind": "cell",
+        "state": "baseline",
+    }
+    assert isinstance(raised.value.details["cell_id"], str)
     assert not (tmp_path / "export").exists()
 
 

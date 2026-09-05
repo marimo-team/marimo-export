@@ -65,8 +65,14 @@ staged.path: Path
 staged.materialize(
     prepared: PreparedExport,
     at: str | os.PathLike[str],
+    *,
+    progress: Callable[[ProgressEvent], None] | None = None,
 ) -> ExportResult
-staged.commit(*, guard: Callable[[], None] | None = None) -> DeliveryResult
+staged.commit(
+    *,
+    guard: Callable[[], None] | None = None,
+    progress: Callable[[ProgressEvent], None] | None = None,
+) -> DeliveryResult
 staged.close() -> None
 ```
 
@@ -77,6 +83,10 @@ before `commit()`.
 relative directory `at`. The path cannot be absolute, empty, `.` or `..`, and
 cannot overlap another materialized export root. Its target inside `staged.path`
 must not already exist. The method returns the nested export's `ExportResult`.
+When `progress` is supplied, it receives `write_finished` after the nested
+export is written, verified, and registered with the staged delivery. A callback
+exception leaves that registered export available for a later `commit()` or
+context cleanup.
 
 `commit()` performs these observable steps:
 
@@ -91,6 +101,21 @@ The guard runs after verification and before the directory becomes visible. It
 must leave the staging tree unchanged. A
 guard exception preserves the previous destination and leaves the staged
 context available for cleanup.
+
+The `progress` callback receives `delivery_verification_started` before steps 1
+through 3. It receives `delivery_commit_started` after the guard. The staged
+tree is reverified after that callback and before step 5. The second event's
+`elapsed_seconds` reports the first verification and guard time. A callback
+exception propagates and preserves the previous destination.
+
+Progress callbacks cannot reenter `path`, `materialize()`, `commit()`, or
+`close()` on the same staged delivery. Retained filesystem paths remain
+caller-owned. Changes made through a retained path during
+`delivery_commit_started` must pass the final revalidation.
+
+`DeliveryResult` is the terminal delivery signal. No progress event is emitted
+after the directory becomes visible, so a post-commit callback failure cannot
+hide a successful installation.
 
 Target creation or metadata drift after preflight raises a `destination_*`
 error. A failed directory transaction preserves or restores the previous

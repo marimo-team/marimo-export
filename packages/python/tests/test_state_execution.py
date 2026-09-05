@@ -149,6 +149,8 @@ if __name__ == "__main__":
         "state": "blocked",
         "output": "answer",
         "cell_id": cells["answer"],
+        "selector": "result",
+        "source_kind": "json",
         "raising_cell_id": cells["guard"],
         "status": "stopped",
     }

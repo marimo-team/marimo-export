@@ -10,8 +10,9 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Any
 
-from marimo_export._execution.plan import ExecutionPlan, NormalizedState
+from marimo_export._execution.plan import ExecutionPlan, NormalizedState, PlannedOutput
 from marimo_export._json import (
+    JsonObject,
     JsonValue,
     json_equal,
 )
@@ -29,7 +30,7 @@ from marimo_export._marimo.compat.child_run import (
     run_state_child,
 )
 from marimo_export._marimo.compat.inspection import _ui_baseline_value
-from marimo_export._marimo.compat.projections import materialize_projection_tokens
+from marimo_export._marimo.compat.projections import materialize_projection_token
 from marimo_export._marimo.compat.receipts import collect_output_receipts
 from marimo_export.errors import ExecutionError, OutputError
 from marimo_export.index import ControlBinding
@@ -317,15 +318,21 @@ async def _execute_outputs(
     runner = child.runner
     graph = runner._kernel.graph
     for output in plan.outputs:
-        raise_stopped_output(
-            state_name=state.primary_alias,
-            output=output,
-            owner_cell=run_plan.output_owners[output],
-            dependency_cells=run_plan.output_dependencies[output],
-            source_cell_ids=child.source_cell_ids,
-            stop_provenance=child.stop_provenance,
-        )
-    materialize_projection_tokens(child, plan)
+        planned_output = plan.planned_outputs[output]
+        details = _output_error_details(state.primary_alias, planned_output)
+        try:
+            raise_stopped_output(
+                state_name=state.primary_alias,
+                output=output,
+                owner_cell=run_plan.output_owners[output],
+                dependency_cells=run_plan.output_dependencies[output],
+                source_cell_ids=child.source_cell_ids,
+                stop_provenance=child.stop_provenance,
+            )
+            materialize_projection_token(child, planned_output)
+        except OutputError as error:
+            error._merge_details(details)
+            raise
     control_bindings = _control_binding_mapping(
         state,
         runner.globals,
@@ -351,6 +358,10 @@ async def _execute_outputs(
             {cell_id},
             state.primary_alias,
             output=output,
+            output_details=_output_error_details(
+                state.primary_alias,
+                plan.planned_outputs[output],
+            ),
             stop_provenance=child.stop_provenance,
             source_cell_ids=child.source_cell_ids,
         )
@@ -367,6 +378,22 @@ async def _execute_outputs(
         control_bindings=control_bindings,
         seconds=time.monotonic() - started,
     )
+
+
+def _output_error_details(state_name: str, planned_output: PlannedOutput) -> JsonObject:
+    source = planned_output.source
+    details: JsonObject = {
+        "state": state_name,
+        "output": planned_output.name,
+        "source_kind": source.kind,
+        "cell_id": planned_output.owner_cell_id,
+    }
+    if isinstance(source, CellSource):
+        details["selector"] = source.value
+        details["selector_by"] = source.by
+    else:
+        details["selector"] = source.selector.source
+    return details
 
 
 def _ui_update_batches(

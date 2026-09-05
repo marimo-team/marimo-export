@@ -76,6 +76,8 @@ def write_prepared_export(
 def materialize_prepared_export(
     prepared: PreparedExport,
     output: StrPath,
+    *,
+    progress: Callable[[ProgressEvent], None] | None,
 ) -> ExportResult:
     """Write one prepared export into an application-owned staging directory."""
 
@@ -91,7 +93,7 @@ def materialize_prepared_export(
     try:
         index, assets = _prepared_source(prepared)
         written = materialize_export(index, assets, destination)
-        return _export_result(prepared, written, started=started, progress=None)
+        return _export_result(prepared, written, started=started, progress=progress)
     except BaseException as error:
         with suppress(OSError):
             shutil.rmtree(destination)
