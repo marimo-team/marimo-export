@@ -1,0 +1,64 @@
+packages/python/src/marimo_export/_marimo/compat/projections.py
+  s_69438f28ecbc59::t_45687bb00f0c48 13
+  s_69438f28ecbc59::t_305cc3a4f4b2f1 286-290,297-303,306-321,473
+development_docs/architecture/application-publication-and-delivery.md
+  s_69438f28ecbc59::t_b5466e31df45b3 201-202
+  s_69438f28ecbc59::t_98a7a898d19f47 198-200,203-204
+packages/python/tests/test_progress.py
+  s_69438f28ecbc59::t_e17330748a4c8d 3-4,6,51
+  s_69438f28ecbc59::t_305cc3a4f4b2f1 46-50,52-53
+docs/reference/python/format-records-and-errors.md
+  s_69438f28ecbc59::t_98a7a898d19f47 282-286,292-297
+packages/python/src/marimo_export/_marimo/compat/child_run.py
+  s_69438f28ecbc59::t_77215a7fd3efc4 22,430
+  s_69438f28ecbc59::t_305cc3a4f4b2f1 461-462
+packages/python/src/marimo_export/_marimo/compat/replay.py
+  s_69438f28ecbc59::t_305cc3a4f4b2f1 147-152
+packages/python/src/marimo_export/_marimo/compat/execution.py
+  s_69438f28ecbc59::t_305cc3a4f4b2f1 13,15,33,321-335,361-364,383-396
+development_docs/architecture/preparation.md
+  s_69438f28ecbc59::t_b5466e31df45b3 194-195
+  s_69438f28ecbc59::t_98a7a898d19f47 182-183,191-193
+packages/python/tests/test_state_execution.py
+  s_69438f28ecbc59::t_8b0241da602ff1 152-153
+docs/reference/python/delivery-and-publications.md
+  s_69438f28ecbc59::t_98a7a898d19f47 68-69,71-75,86,105,115-118
+  s_69438f28ecbc59::t_b5466e31df45b3 87-89,106-114
+packages/python/src/marimo_export/delivery.py
+  s_69438f28ecbc59::t_45687bb00f0c48 123-124
+  s_69438f28ecbc59::t_8b74bde2983dde 171
+  s_69438f28ecbc59::t_b5466e31df45b3 77,85,98,137,141,147-148,167-170,177-178,182,184-185,235-236,252-253,257-268
+  s_69438f28ecbc59::t_305cc3a4f4b2f1 7,46,116-117,138-140,142,155,161-162,176,179-181,183
+packages/python/src/marimo_export/_services/write_export.py
+  s_69438f28ecbc59::t_305cc3a4f4b2f1 79-80,96
+packages/python/tests/test_output_projection_integration.py
+  s_69438f28ecbc59::t_305cc3a4f4b2f1 296,301-307
+  s_69438f28ecbc59::t_e17330748a4c8d 297-300,308-309
+packages/python/tests/test_delivery.py
+  s_69438f28ecbc59::t_b5466e31df45b3 85,128-138,152-193
+  s_69438f28ecbc59::t_e17330748a4c8d 6,83-84,86
+  s_69438f28ecbc59::t_305cc3a4f4b2f1 29,95,118-127,139-151,194-212
+packages/python/tests/test_cell_projection_resources.py
+  s_69438f28ecbc59::t_8b0241da602ff1 182-189
+packages/python/src/marimo_export/progress.py
+  s_69438f28ecbc59::t_305cc3a4f4b2f1 19-20,73-74
+docs/reference/python/produce.md
+  s_69438f28ecbc59::t_98a7a898d19f47 480-481,491-492,499,552,557-563
+  s_69438f28ecbc59::t_b5466e31df45b3 501-511
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "eff8c600bbc2c928c608fca95f0ede340cf89312",
+  "prompts": {},
+  "sessions": {
+    "s_69438f28ecbc59": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a071e9-e5ab-7c90-ab1a-819389679a51",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
