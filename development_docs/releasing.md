@@ -120,14 +120,31 @@ The publish workflow then:
    commit.
 2. Rebuilds and verifies every artifact.
 3. Writes SHA-256 checksums and records GitHub build provenance.
-4. Publishes the browser package to npm.
-5. Verifies the npm archive by integrity and through a fresh pnpm consumer.
-6. Publishes the Python wheel and source archive through PyPI trusted
-   publishing.
-7. Verifies the PyPI file hashes, a fresh public Python installation, and the
-   CLI.
-8. Creates a GitHub Release with generated notes, distributions, and the
-   checksum manifest.
+4. Starts independent npm and PyPI publication lanes. Each lane publishes its
+   artifacts, verifies the registry hashes, and installs the public package in
+   a fresh consumer. The Python consumer checks the installed version, package
+   contracts, and CLI in one environment.
+5. Creates a GitHub Release with generated notes, distributions, and the
+   checksum manifest after both lanes verify successfully.
+6. Requires every publication and verification stage to pass the release gate.
+
+```mermaid
+flowchart LR
+  build[Build and verify] --> attest[Attest build provenance]
+  attest --> npm[Publish npm]
+  attest --> pypi[Publish PyPI]
+  npm --> verifyNpm[Verify npm]
+  pypi --> verifyPypi[Verify PyPI]
+  verifyNpm --> release[Create GitHub release]
+  verifyPypi --> release
+  release --> gate[Release gate]
+```
+
+Each verifier makes up to 18 attempts, with a 10-second wait between failed
+attempts. Success requires both matching registry bytes and a working fresh
+installation. This covers delays between release metadata, package-index
+visibility, and archive availability. Permanent failures return a nonzero exit
+status, and each verification job has a 10-minute timeout.
 
 ## Recover a partial release
 
@@ -172,8 +189,8 @@ jobs:
 gh run rerun RUN_ID --failed
 ```
 
-When verification tooling needs a correction after npm publication, merge the
-corrected workflow and scripts into `main`, then resume the original release:
+When verification tooling needs a correction, merge the corrected workflow and
+scripts into `main`, then resume the original release:
 
 ```console
 gh workflow run publish.yml --ref main -f version="$VERSION" -f source_run="$RUN_ID"
@@ -183,11 +200,15 @@ Recovery accepts a completed tag-triggered `publish.yml` run whose commit
 matches the annotated version tag. Its build and attestation must have passed,
 and its `release-artifacts` payload must still be retained. The latest main CI
 must pass for both the tagged commit and the recovery workflow commit before
-publication can begin. The workflow checks
-the original checksum manifest's signed provenance and every archive digest,
-then verifies the already-published npm bytes before continuing with PyPI and
-the GitHub release. The original artifact bytes and attestation remain the
-release's provenance. Recovery requires `main` and preserves the version tag.
+publication can begin.
+
+The workflow checks the original checksum manifest's signed provenance and every
+archive digest, then starts both registry lanes independently. Each publisher
+verifies matching existing artifacts or publishes missing artifacts. Both
+verifiers must pass before the GitHub release is created.
+
+The original artifact bytes and attestation remain the release's provenance.
+Recovery requires `main` and preserves the version tag.
 The `release-recovery.json` GitHub release asset records both run identities,
 the signed source attempt, and the checksum-manifest digest. It remains separate
 from the original signed checksum manifest. Actions retains the archive payload

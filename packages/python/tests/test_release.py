@@ -3,11 +3,13 @@ from __future__ import annotations
 import io
 import json
 import os
+import re
 import shutil
 import subprocess
 import tarfile
+from base64 import b64encode
 from collections.abc import Callable
-from hashlib import sha256
+from hashlib import sha256, sha512
 from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
 from typing import Any, cast
@@ -310,6 +312,75 @@ fi
     assert "Dry run complete" in result.stdout
 
 
+def _verify_registry(root: Path, registry: str, scenario: str) -> subprocess.CompletedProcess[str]:
+    commands = root / "commands"
+    scripts = root / "scripts"
+    commands.mkdir()
+    scripts.mkdir()
+    # Stand in for registry visibility and installation at the child-command boundary.
+    probe = """
+printf '%s\\n' "$stage" >> "$PROBE_ROOT/events"
+case "$SCENARIO:$stage" in
+    unavailable:artifacts|broken:consumer) exit 1 ;;
+    delayed:*)
+        if [ ! -f "$PROBE_ROOT/$stage" ]; then
+            touch "$PROBE_ROOT/$stage"
+            exit 1
+        fi
+        ;;
+esac
+if [ "$stage" = consumer ]; then
+    printf 'consumer passed\\n'
+fi
+"""
+    _write_command(
+        commands / "uv",
+        '#!/bin/sh\ncase "$*" in\n*verify_pypi_artifacts.py*) stage=artifacts ;;\n'
+        "*) stage=consumer ;;\nesac\n" + probe,
+    )
+    _write_command(commands / "node", "#!/bin/sh\nstage=consumer\n" + probe)
+    _write_command(scripts / "publish-npm.sh", "#!/bin/sh\nstage=artifacts\n" + probe)
+    _write_command(commands / "sleep", "#!/bin/sh\nexit 0\n")
+    return subprocess.run(
+        [_bash(), str(ROOT / f"scripts/verify-{registry}.sh")],
+        cwd=root,
+        env={
+            **os.environ,
+            "PATH": f"{commands}{os.pathsep}{os.environ['PATH']}",
+            "PROBE_ROOT": root.as_posix(),
+            "RELEASE_VERSION": "0.1.0",
+            "SCENARIO": scenario,
+        },
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+
+
+@pytest.mark.parametrize("registry", ["pypi", "npm"])
+def test_registry_verification_waits_for_files_and_a_working_install(
+    tmp_path: Path, registry: str
+) -> None:
+    result = _verify_registry(tmp_path, registry, "delayed")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "consumer passed" in result.stdout
+
+
+@pytest.mark.parametrize("registry", ["pypi", "npm"])
+@pytest.mark.parametrize("scenario", ["unavailable", "broken"])
+def test_registry_verification_exhausts_its_retry_budget(
+    tmp_path: Path, registry: str, scenario: str
+) -> None:
+    result = _verify_registry(tmp_path, registry, scenario)
+
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "0.1.0" in result.stderr
+    attempts = (tmp_path / "events").read_text().splitlines()
+    assert attempts.count("artifacts") == 18
+    assert attempts.count("consumer") == (18 if scenario == "broken" else 0)
+
+
 def _workflow() -> tuple[str, dict[str, Any]]:
     source = ROOT.joinpath(".github/workflows/publish.yml").read_text(encoding="utf-8")
     workflow = cast(dict[str, Any], yaml.load(source, Loader=yaml.BaseLoader))
@@ -341,8 +412,53 @@ def test_publish_workflow_coordinates_python_and_browser_distributions() -> None
     assert publish["run"] == (
         './scripts/publish-npm.sh "dist/npm/marimo-team-marimo-export-$RELEASE_VERSION.tgz"'
     )
-    assert set(jobs["publish-pypi"]["needs"]) == {"build", "verify-npm"}
+    assert set(jobs["publish-pypi"]["needs"]) == {"build", "attest"}
+    for registry in ("npm", "pypi"):
+        assert set(jobs[f"verify-{registry}"]["needs"]) == {"build", f"publish-{registry}"}
+    assert jobs["publish-pypi"]["if"] == jobs["publish-npm"]["if"]
+    assert "if" not in publish
     assert set(jobs["release-notes"]["needs"]) == {"verify-npm", "verify-pypi", "build"}
+
+
+@pytest.mark.parametrize(
+    ("event", "failed_registry"),
+    [("push", None), ("workflow_dispatch", None), ("push", "npm"), ("push", "pypi")],
+)
+def test_release_gate_requires_both_verified_registries(
+    failed_registry: str | None, event: str
+) -> None:
+    _, workflow = _workflow()
+    gate = workflow["jobs"]["complete"]
+    assert gate["if"] == "always()"
+    assert set(gate["needs"]) == {
+        "build",
+        "attest",
+        "publish-npm",
+        "verify-npm",
+        "publish-pypi",
+        "verify-pypi",
+        "release-notes",
+    }
+    results = {name: "success" for name in gate["needs"]}
+    results["attest"] = "success" if event == "push" else "skipped"
+    if failed_registry is not None:
+        results[f"verify-{failed_registry}"] = "failure"
+    step = _step(gate, "Require completed publication and verification")
+    environment = {"EXPECTED_ATTEST": "success" if event == "push" else "skipped"}
+    for name, expression in step["env"].items():
+        if name == "EXPECTED_ATTEST":
+            continue
+        reference = re.fullmatch(r"\$\{\{\s*needs\.([a-z-]+)\.result\s*\}\}", expression)
+        assert reference is not None, expression
+        environment[name] = results[reference[1]]
+    result = subprocess.run(
+        [_bash(), "-eu", "-o", "pipefail", "-c", step["run"]],
+        env={**os.environ, **environment},
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    assert result.returncode == (0 if failed_registry is None else 1), result.stderr
 
 
 def test_publish_workflow_scopes_oidc_to_attestation_and_registry_jobs() -> None:
@@ -476,8 +592,10 @@ def test_public_release_verifier_rejects_an_extra_release_asset() -> None:
         )
 
 
-def test_npm_publisher_runs_registry_commands_from_the_artifact_directory(
+@pytest.mark.parametrize("published", ["absent", "matching", "different"])
+def test_npm_publisher_resumes_from_registry_state(
     tmp_path: Path,
+    published: str,
 ) -> None:
     artifacts = tmp_path / "artifacts"
     artifacts.mkdir()
@@ -503,20 +621,29 @@ while [ "$directory" != "/" ]; do
     directory="$parent"
 done
 """
-    _write_command(commands / "pnpm", registry_command + "exit 1\n")
-    _write_command(commands / "npm", registry_command)
+    integrity = "sha512-" + b64encode(sha512(tarball.read_bytes()).digest()).decode()
+    if published == "different":
+        integrity = "sha512-" + b64encode(sha512(b"different archive").digest()).decode()
+    lookup = "exit 1\n" if published == "absent" else 'printf "%s\\n" "$PUBLISHED_INTEGRITY"\n'
+    _write_command(commands / "pnpm", registry_command + lookup)
+    _write_command(commands / "npm", registry_command + 'touch "$PUBLISH_MARKER"\n')
     result = subprocess.run(
         [_bash(), str(ROOT / "scripts/publish-npm.sh"), str(tarball)],
         cwd=ROOT,
         env={
             **os.environ,
+            "PUBLISHED_INTEGRITY": integrity,
+            "PUBLISH_MARKER": (tmp_path / "published").as_posix(),
             "PATH": f"{commands}{os.pathsep}{os.environ['PATH']}",
         },
         capture_output=True,
         text=True,
     )
 
-    assert result.returncode == 0, result.stdout + result.stderr
+    assert result.returncode == (1 if published == "different" else 0), (
+        result.stdout + result.stderr
+    )
+    assert (tmp_path / "published").exists() == (published == "absent")
 
 
 @pytest.fixture
