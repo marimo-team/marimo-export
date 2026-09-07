@@ -111,6 +111,7 @@ jobs:
           pytest -q -n 4
           --dist worksteal --max-worker-restart=0
           -m "not serial and not application"
+          --ignore=packages/python/tests/test_release.py
           --durations=50 packages/python/tests
 
       - name: Run Python contracts on Windows
@@ -124,6 +125,7 @@ jobs:
           --all-extras
           --python "${{ matrix.python-version }}"
           pytest -q -m "not application"
+          --ignore=packages/python/tests/test_release.py
           --durations=50 packages/python/tests
 
       - name: Run lease timing contracts

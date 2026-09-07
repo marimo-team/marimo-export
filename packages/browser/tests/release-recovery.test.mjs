@@ -95,8 +95,21 @@ const evidence = () => ({
   ],
 });
 
-it("recovers the original tagged and attested release artifact", () => {
-  expect(validateRecovery(evidence())).toEqual({
+it.each(["npm", "Python"])("recovers after only %s publication succeeds", (published) => {
+  const input = evidence();
+  input.jobs.push(
+    {
+      name: "Publish npm packages",
+      conclusion: published === "npm" ? "success" : "failure",
+      run_attempt: 1,
+    },
+    {
+      name: "Publish Python package",
+      conclusion: published === "Python" ? "success" : "failure",
+      run_attempt: 1,
+    },
+  );
+  expect(validateRecovery(input)).toEqual({
     schema: 1,
     version: "0.0.3",
     tag: "v0.0.3",

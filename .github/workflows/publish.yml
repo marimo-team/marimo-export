@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: Published npm version to finish, in X.Y.Z form
+        description: Release version to finish, in X.Y.Z form
         required: true
         type: string
       source_run:
@@ -196,11 +196,6 @@ jobs:
 
       - name: Publish npm packages
         run: ./scripts/publish-npm.sh "dist/npm/marimo-team-marimo-export-$RELEASE_VERSION.tgz"
-        if: github.event_name == 'push'
-      - name: Verify previously published npm bytes
-        if: github.event_name == 'workflow_dispatch'
-        run: ./scripts/publish-npm.sh --verify-only
-          "dist/npm/marimo-team-marimo-export-$RELEASE_VERSION.tgz"
     if: "!cancelled() && needs.build.result == 'success' && ((github.event_name == 'push' &&
       needs.attest.result == 'success') || (github.event_name == 'workflow_dispatch' &&
       needs.attest.result == 'skipped'))"
@@ -246,8 +241,8 @@ jobs:
   publish-pypi:
     name: Publish Python package
     needs:
-      - verify-npm
       - build
+      - attest
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment:
@@ -277,7 +272,9 @@ jobs:
     env:
       RELEASE_VERSION: ${{ needs.build.outputs.version }}
       RELEASE_TAG: ${{ needs.build.outputs.tag }}
-    if: "!cancelled() && needs.verify-npm.result == 'success' && needs.build.result == 'success'"
+    if: "!cancelled() && needs.build.result == 'success' && ((github.event_name == 'push' &&
+      needs.attest.result == 'success') || (github.event_name == 'workflow_dispatch' &&
+      needs.attest.result == 'skipped'))"
 
   verify-pypi:
     name: Verify Python package

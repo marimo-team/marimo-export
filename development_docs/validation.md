@@ -22,10 +22,18 @@ Ubuntu:  3.10, 3.11, 3.12, 3.13, 3.14
 Windows: 3.10, 3.11, 3.12, 3.13, 3.14
 ```
 
+The `Release contracts` job tests publication tooling on Ubuntu with Python
+3.12. Release-script changes select that job and package verification. Changes
+to the shared Python test setup select both release and SDK suites.
+
 The Ubuntu jobs check formatting, lint, Python and TypeScript types, frontend
 tests and builds, packed npm consumers, and isolated wheel smoke. The Pages
 workflow checks documentation changes on pull requests and builds the site when
 its source or toolchain inputs change.
+
+Tests isolate the default export repository and Marimo cache signing key.
+Notebook processes within a test inherit the same key, keeping warm-cache
+checks independent of another process initializing its signing identity.
 
 ## Root gate
 
