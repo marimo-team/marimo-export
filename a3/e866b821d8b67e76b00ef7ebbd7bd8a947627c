@@ -1,0 +1,49 @@
+packages/browser/src/marimo-snapshot.ts
+  s_56e158cb000e90::t_a1bfad9aa16dbc 209
+  s_56e158cb000e90::t_2dce59cd779e17 214-216
+packages/browser/tests/replay-resources.test.ts
+  s_56e158cb000e90::t_2dce59cd779e17 1-17,26-34,42-59,66-68,75-87,91-95,102,127-129,138,147-148
+  s_56e158cb000e90::t_7d6d0ffea3ae86 18-25,35-41,60-65,69-74,88-90,96-101,103-122,124-126,130-137,139-146
+packages/browser/tests/packed-install.mjs
+  s_56e158cb000e90::t_6681d60043b0b2 21,26,73-74,76
+development_docs/architecture/browser-loaders-and-mounts.md
+  s_56e158cb000e90::t_bd20a9353e18fb 276-280
+  s_56e158cb000e90::t_aaa899c38570e9 120-123,170-180
+docs/reference/browser/loaders.md
+  s_56e158cb000e90::t_bd20a9353e18fb 424-427,430-434
+  s_56e158cb000e90::t_c824ec6c1fa604 390
+  s_56e158cb000e90::t_62170d6ce705ee 461-462
+  s_56e158cb000e90::t_14d33ff62af807 428-429
+docs/reference/browser/prepared-publications.md
+  s_56e158cb000e90::t_6681d60043b0b2 124-142
+packages/browser/src/index.ts
+  s_56e158cb000e90::t_a1bfad9aa16dbc 10
+docs/reference/browser/snapshots.md
+  s_56e158cb000e90::t_6681d60043b0b2 44-48,50-61
+  s_56e158cb000e90::t_aaa899c38570e9 49
+packages/loader-anywidget/tests/prepared-graph.test.ts
+  s_56e158cb000e90::t_750b3794010fae 61,102,159-166,168-176,178-188
+  s_56e158cb000e90::t_c824ec6c1fa604 101,103-112
+packages/browser/src/replay-resources.ts
+  s_56e158cb000e90::t_7d6d0ffea3ae86 9,16,41-44,50-52,72,75-77
+  s_56e158cb000e90::t_ede265f78ca0bd 17-26
+  s_56e158cb000e90::t_a1bfad9aa16dbc 1-8,10-15,27-40,45-49,53-71,73-74,78-123
+packages/loader-anywidget/src/runtime/prepared-graph.ts
+  s_56e158cb000e90::t_c824ec6c1fa604 19,364,372-377,379-385,447-452,462-464,466-471,473
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "a3e866b821d8b67e76b00ef7ebbd7bd8a947627c",
+  "prompts": {},
+  "sessions": {
+    "s_56e158cb000e90": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a07b45-7b01-7401-b27e-69a603864d00",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
