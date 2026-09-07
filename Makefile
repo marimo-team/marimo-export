@@ -76,6 +76,7 @@ test-application: ## Run deterministic notebook build, reuse, and capture contra
 		pytest -q -m application packages/python/tests
 
 build: ## Build Python, npm, docs, and example packages.
+	@$(MAKE) --no-print-directory docs-examples
 	$(VP) run -r build
 	test -s apps/docs/.vitepress/dist/llms.txt
 	test -s apps/docs/.vitepress/dist/llms-full.txt
@@ -97,7 +98,7 @@ package: ## Build and verify Python and npm release artifacts.
 		--out-dir "$(PYTHON_DIST_DIR)/from-sdist"
 	./scripts/verify-dist.sh
 
-docs-build: ## Build the public documentation site.
+docs-build: docs-examples ## Build the public documentation site.
 	pnpm --filter @marimo-team/marimo-export-docs build
 	test -s apps/docs/.vitepress/dist/llms.txt
 	test -s apps/docs/.vitepress/dist/llms-full.txt

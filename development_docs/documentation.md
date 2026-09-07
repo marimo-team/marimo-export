@@ -104,12 +104,34 @@ browser runtimes. The complete dashboard loading, transition, and mount path
 requires a browser journey check.
 
 `make docs-examples` builds a static notebook, verified notebook export, and
-Vite application for both examples. Each application uses document-relative
+Vite application for both examples using the locked workspace dependencies.
+Each application uses document-relative
 assets and contains its own export directory. The script publishes each complete
-example under `apps/docs/public/examples/`. `make docs-build` runs that step
-before VitePress and verifies both notebooks and applications in the final site
-tree. GitHub Pages uploads the resulting `apps/docs/.vitepress/dist` directory
-as one static site.
+example under `apps/docs/public/examples/`. The quickstart preparation repository
+persists in `apps/docs/.vitepress/cache/quickstart-repository`, so repeated builds
+can reuse prepared exports. The market dashboard uses its notebook repository.
+
+`make docs-build`, `make build`, and `make check` produce examples before rendering
+the documentation. The build records content digests of the example sources,
+producer and browser packages, dependency locks, build configuration, and
+published example files in the ignored VitePress cache. Source inventory uses
+Git and includes tracked files and new files allowed by the repository ignore
+rules. Rendering checks these digests and rejects changed or missing inputs.
+
+For prose and theme iteration after producing examples, run:
+
+```bash
+pnpm --filter @marimo-team/marimo-export-docs build
+make docs-serve
+```
+
+These commands reuse the verified examples. Run `make docs-examples` after changing
+an example or its producer, browser, or build inputs. This check proves source and
+artifact identity with the completed build. Refreshing external market data still
+requires a new example build and the notebook's cache policy.
+
+The final site check verifies routes, metadata, notebooks, and application bundles.
+GitHub Pages uploads `apps/docs/.vitepress/dist` as one static site.
 
 When a page uses a partial snippet, it must name the fixture, variable, DOM
 host, server route, or framework context supplied by the surrounding page.

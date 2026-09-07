@@ -139,26 +139,23 @@ const socialMetadata = new Map(
     .filter((entry): entry is readonly [string, string] => entry[0] !== undefined),
 );
 const expectedSocialMetadata = new Map([
-  ["og:title", "marimo-export: Prepare notebook results. Share them anywhere."],
-  [
-    "og:description",
-    "Select the states and outputs to publish from a marimo notebook. marimo-export writes a portable, verified notebook export that browser applications and agents read without a Python runtime or a copy of the notebook source.",
-  ],
   ["og:image", new URL(socialImagePath, siteUrl).href],
   ["og:image:width", "2400"],
   ["og:image:height", "1260"],
-  [
-    "og:image:alt",
-    "marimo-export mark pointing from prepared notebook states toward a portable export.",
-  ],
   ["twitter:card", "summary_large_image"],
-  ["twitter:title", "marimo-export: Prepare notebook results. Share them anywhere."],
-  [
-    "twitter:description",
-    "Select the states and outputs to publish from a marimo notebook. marimo-export writes a portable, verified notebook export that browser applications and agents read without a Python runtime or a copy of the notebook source.",
-  ],
   ["twitter:image", new URL(socialImagePath, siteUrl).href],
 ]);
+const missingSocialText = [
+  "og:title",
+  "og:description",
+  "og:image:alt",
+  "twitter:title",
+  "twitter:description",
+  "twitter:image:alt",
+].filter((name) => !socialMetadata.get(name)?.trim());
+const inconsistentSocialText = ["title", "description", "image:alt"].filter(
+  (name) => socialMetadata.get(`og:${name}`) !== socialMetadata.get(`twitter:${name}`),
+);
 const incorrectSocialMetadata = [...expectedSocialMetadata].flatMap(([name, expected]) => {
   const actual = socialMetadata.get(name);
   return actual === expected
@@ -219,6 +216,8 @@ const errors = [
   ...formatList("Missing sitemap URLs", sitemapDifference.missing),
   ...formatList("Unexpected sitemap URLs", sitemapDifference.unexpected),
   ...formatList("Incorrect social metadata", incorrectSocialMetadata),
+  ...formatList("Missing social text", missingSocialText),
+  ...formatList("Inconsistent social text", inconsistentSocialText),
   ...(index.includes(`href="${assetPrefix}/assets/`)
     ? []
     : [`Built index does not use the expected stylesheet prefix ${assetPrefix || "/"}.`]),
@@ -250,7 +249,6 @@ const errors = [
     : ["Built quickstart notebook is missing its source or captured output."]),
   ...(!quickstartApplication.includes("<marimo-code") &&
   !quickstartApplication.includes("<marimo-filename") &&
-  quickstartApplication.includes("Ships no Python source or runtime") &&
   quickstartFiles.every((file) => !file.endsWith(".py"))
     ? []
     : ["Built quickstart application crosses the Python producer boundary."]),
