@@ -1,10 +1,13 @@
 import { describe, expect, test } from "vite-plus/test";
+import { parseStrictJson } from "@marimo-team/portable-json";
 
 import {
   mergeMarimoReplayResources,
+  parseMarimoOutputSnapshot,
   type MarimoModelLifecycleNotification,
   type MarimoOutputSnapshot,
 } from "../src/index.js";
+import { canonicalJson } from "../src/schema.js";
 
 const digest = "a".repeat(64);
 const parent = `projection-${digest}-model-0`;
@@ -124,6 +127,32 @@ describe("replay resource composition", () => {
     ]);
     expect(result.uiValues[first]).toEqual(values);
     expect(result.uiValues[second]).toEqual(values);
+  });
+
+  test("deduplicates decoded lifecycle sequences containing several large valid model states", () => {
+    const values = Array.from({ length: 55_000 }, (_, index) => index);
+    const messages = [
+      notification(parent, {
+        method: "open",
+        state: { values },
+        buffer_paths: [],
+        buffers: [],
+        esm_spec: null,
+      }),
+      notification(parent, {
+        method: "update",
+        state: { values: values.map((value) => value + 1) },
+        buffer_paths: [],
+        buffers: [],
+        esm_spec: null,
+      }),
+    ];
+    const document = parseStrictJson(JSON.stringify(snapshot(messages)), 2_000_000);
+    const decoded = parseMarimoOutputSnapshot(new TextEncoder().encode(canonicalJson(document)));
+
+    const result = mergeMarimoReplayResources([decoded, decoded]);
+
+    expect(result.modelNotifications).toEqual(messages);
   });
 
   test("validates replay ownership and function capability before composition", () => {
