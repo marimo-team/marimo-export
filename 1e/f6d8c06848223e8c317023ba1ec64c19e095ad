@@ -1,0 +1,41 @@
+.github/filters.yml
+  s_6628195629b8dd::t_d5f1a503269380 20
+  s_6628195629b8dd::t_ea802910121961 10,53-58,64,89-90,97,138-141
+packages/python/tests/test_js_toolchain.py
+  s_6628195629b8dd::t_b4be84d53c6de4 4,35-48,56-64,73-74,76
+  s_6628195629b8dd::t_77300136de0c5f 52-54,75
+  s_6628195629b8dd::t_bc938e4cce6f72 49-51,55
+.github/workflows/publish.yml
+  s_6628195629b8dd::t_1d8f256e1a3c5a 58-59
+packages/browser/tests/release-selection.test.mjs
+  s_6628195629b8dd::t_b182c09d7486d2 130
+  s_6628195629b8dd::t_1c077b35ea947e 72,74-85,104-129,131-137
+  s_6628195629b8dd::t_d5f1a503269380 99-101
+  s_6628195629b8dd::t_6c1e410208c264 18,52-71,73,86-98,102-103
+  s_6628195629b8dd::t_b3371dd26dc530 40-42
+.github/workflows/pages.yml
+  s_6628195629b8dd::t_1d8f256e1a3c5a 56-57,98-99
+.github/actions/setup-js/action.yml
+  s_6628195629b8dd::t_ea802910121961 1-20
+development_docs/validation.md
+  s_6628195629b8dd::t_a0f18f89c15b4a 14-16
+.github/workflows/ci.yml
+  s_6628195629b8dd::t_1d8f256e1a3c5a 55-56,167-168,198-199
+  s_6628195629b8dd::t_0e1addf6627ec9 243,245,247,249,251,257-265
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "1ef6d8c06848223e8c317023ba1ec64c19e095ad",
+  "prompts": {},
+  "sessions": {
+    "s_6628195629b8dd": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a07c52-9946-7fe2-adcb-3a256c68154f",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
