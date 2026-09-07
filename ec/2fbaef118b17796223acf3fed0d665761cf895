@@ -1,0 +1,33 @@
+pnpm-workspace.yaml
+  s_6628195629b8dd::t_d67f5b95247c5b 31,43,56-58
+packages/python/tests/test_js_toolchain.py
+  s_6628195629b8dd::t_aab0eeddfdb3c1 13-25,37,58
+pnpm-lock.yaml
+  ai_agent 1-101,159-160,170,191,203,221,2855-2856,3288-3289,3293,4282,4346,5375,5397,5432,6052,6092
+AGENTS.md
+  s_6628195629b8dd::t_c25c42047b059f 9
+development_docs/development.md
+  s_6628195629b8dd::t_c25c42047b059f 4,251
+package.json
+  s_6628195629b8dd::t_d67f5b95247c5b 27
+development_docs/documentation.md
+  s_6628195629b8dd::t_c25c42047b059f 30
+skills/notebook-to-static-app/scripts/scaffold_app.py
+  s_6628195629b8dd::t_c25c42047b059f 383
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "ec2fbaef118b17796223acf3fed0d665761cf895",
+  "prompts": {},
+  "sessions": {
+    "s_6628195629b8dd": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a07c52-9946-7fe2-adcb-3a256c68154f",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
