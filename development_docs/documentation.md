@@ -27,7 +27,7 @@ more precise internal hash and schema vocabulary.
 
 ## VitePress runtime
 
-`apps/docs` pins VitePress 2.0.0-alpha.19 through the pnpm catalog and lockfile.
+`apps/docs` pins VitePress 2.0.0-alpha.20 through the pnpm catalog and lockfile.
 `.vitepress/config.ts` owns site configuration. `navigation.ts` is the typed
 route manifest. The directly executed TypeScript checks stay within Node's
 erasable syntax and run on the workspace's declared Node runtime.

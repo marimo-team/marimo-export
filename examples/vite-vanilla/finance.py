@@ -75,6 +75,8 @@ def _(end, interval, mo, pl, start, symbols, yf):
             start=start,
             end=end,
             progress=False,
+            # yfinance initializes shared SQLite caches on the first request.
+            threads=False,
         )
         .reset_index()
     )

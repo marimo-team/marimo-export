@@ -7,7 +7,9 @@ import { expect, it } from "vite-plus/test";
 
 import { createConsumer } from "../../../scripts/smoke_npm_packages.mjs";
 
-const { parse } = createRequire(import.meta.resolve("vite-plus/package.json"))("yaml");
+const { Document, parse, parseAllDocuments } = createRequire(
+  import.meta.resolve("vite-plus/package.json"),
+)("yaml");
 
 it("the isolated consumer uses the repository toolchain and a writable pnpm workspace", async () => {
   const root = await mkdtemp(join(tmpdir(), "release-consumer-"));
@@ -27,11 +29,26 @@ it("the isolated consumer uses the repository toolchain and a writable pnpm work
     expect(manifest.packageManager).toBe(repository.packageManager);
     const workspace = parse(await readFile(join(consumer, "pnpm-workspace.yaml"), "utf8"));
     expect(workspace.minimumReleaseAgeExclude).toEqual(["@marimo-team/*"]);
-    execFileSync("pnpm", ["install", "--lockfile-only", "--offline", "--ignore-scripts"], {
-      cwd: consumer,
-      stdio: "pipe",
-      timeout: 15_000,
-    });
+    // Offline installation needs pnpm 12's locked package-manager metadata.
+    const [environment] = parseAllDocuments(
+      await readFile(new URL("../../../pnpm-lock.yaml", import.meta.url), "utf8"),
+    );
+    const project = new Document({ lockfileVersion: "9.0", importers: {} });
+    await writeFile(
+      join(consumer, "pnpm-lock.yaml"),
+      environment.toString() + project.toString({ directives: true }),
+    );
+    execFileSync(
+      "pnpm",
+      [
+        "install",
+        "--lockfile-only",
+        "--offline",
+        "--ignore-scripts",
+        `--config.cache-dir=${join(root, "cache")}`,
+      ],
+      { cwd: consumer, stdio: "pipe", timeout: 15_000 },
+    );
     expect(await readFile(join(consumer, "pnpm-lock.yaml"), "utf8")).toContain(
       "@marimo-team/marimo-export",
     );

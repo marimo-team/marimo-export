@@ -1,7 +1,7 @@
 # Development
 
 The workspace pins Python 3.14 for local development with Node 24.14.1, pnpm
-11.25.0, uv, and [Vite+](https://viteplus.dev/guide), the unified TypeScript
+12.3.4, uv, and [Vite+](https://viteplus.dev/guide), the unified TypeScript
 toolchain used for formatting, linting, type checks, tests, builds, packaging,
 and workspace tasks. The root `devEngines.runtime` lets pnpm install the exact
 Node runtime and records it in `pnpm-lock.yaml`. Package CI verifies Python 3.10
@@ -248,7 +248,7 @@ exact contracts under `docs/reference/`. `apps/docs/navigation.ts` owns every
 route and feeds the site and LLM text bundles. Read
 [Documentation system](documentation.md) before adding or moving a page.
 
-VitePress 2.0.0-alpha.19 builds the site, local search, per-page Markdown,
+VitePress 2.0.0-alpha.20 builds the site, local search, per-page Markdown,
 `llms.txt`, and `llms-full.txt`.
 
 Run:

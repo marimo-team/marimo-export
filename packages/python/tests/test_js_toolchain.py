@@ -10,6 +10,19 @@ import yaml
 ROOT = Path(__file__).resolve().parents[3]
 
 
+def _project_lockfile(path: Path) -> dict[str, Any]:
+    projects = []
+    for document in yaml.safe_load_all(path.read_text(encoding="utf-8")):
+        if not isinstance(document, dict):
+            continue
+        importers = document.get("importers")
+        root = importers.get(".") if isinstance(importers, dict) else None
+        if isinstance(root, dict) and isinstance(root.get("devDependencies"), dict):
+            projects.append(document)
+    assert len(projects) == 1, f"Expected one project lockfile document in {path}"
+    return projects[0]
+
+
 def test_pnpm_owns_the_workspace_node_runtime() -> None:
     manifest = cast(
         dict[str, Any],
@@ -21,10 +34,7 @@ def test_pnpm_owns_the_workspace_node_runtime() -> None:
         "onFail": "download",
     }
 
-    lock = cast(
-        dict[str, Any],
-        yaml.safe_load(ROOT.joinpath("pnpm-lock.yaml").read_text(encoding="utf-8")),
-    )
+    lock = _project_lockfile(ROOT / "pnpm-lock.yaml")
     assert lock["importers"]["."]["devDependencies"]["node"] == {
         "specifier": "runtime:24.14.1",
         "version": "runtime:24.14.1",
@@ -45,7 +55,7 @@ def test_vite_setup_discovers_the_pnpm_runtime() -> None:
     inputs = setup["with"]
     runtime = json.loads(ROOT.joinpath(inputs["node-version-file"]).read_text())
     workspace = yaml.safe_load(ROOT.joinpath(inputs["version-file"]).read_text())
-    lock = yaml.safe_load(ROOT.joinpath(inputs["cache-dependency-path"]).read_text())
+    lock = _project_lockfile(ROOT / inputs["cache-dependency-path"])
     node_version = runtime["devEngines"]["runtime"]["version"]
     vite_version = workspace["catalog"]["vite-plus"]
     assert inputs.get("node-version", node_version) == node_version

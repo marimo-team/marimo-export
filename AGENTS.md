@@ -6,7 +6,7 @@ export for applications, agents, Python, and custom clients.
 
 ## Commands
 
-Use Python 3.14 for local development with Node 24.14.1, pnpm 11.25.0, uv,
+Use Python 3.14 for local development with Node 24.14.1, pnpm 12.3.4, uv,
 and Vite+. CI verifies the Python package on 3.10 through 3.14 on Ubuntu and
 Windows.
 
