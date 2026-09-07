@@ -1,0 +1,20 @@
+packages/python/src/marimo_export/_services/export_artifacts.py
+  s_6628195629b8dd::t_d27f44226d89a9 193-195
+  s_6628195629b8dd::t_735b2acad4497e 189-192,198-199
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "65c5d741c6d02b156199f292a814c03c063f5eba",
+  "prompts": {},
+  "sessions": {
+    "s_6628195629b8dd": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a07c52-9946-7fe2-adcb-3a256c68154f",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
