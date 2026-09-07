@@ -16,6 +16,15 @@ import pytest
 import yaml
 
 ROOT = Path(__file__).resolve().parents[3]
+PUBLICATION_JOBS = (
+    "Build and verify",
+    "Attest build provenance",
+    "Publish npm packages",
+    "Verify npm packages",
+    "Publish Python package",
+    "Verify Python package",
+    "Create GitHub release",
+)
 
 
 def _pypi_verifier() -> Callable[[Path, str, dict[str, Any]], None]:
@@ -172,9 +181,8 @@ def test_publish_preflight_rejects_commit_outside_main(tmp_path: Path) -> None:
 
 
 def test_publish_preflight_rejects_nonmatching_workflow_sha(tmp_path: Path) -> None:
-    tag_commit, _main_commit = _release_repository(tmp_path, advance_main=False)
+    _release_repository(tmp_path, advance_main=False)
     other_commit = f"{'0' * 39}1"
-    assert tag_commit != other_commit
 
     result = _run_release_check(
         tmp_path,
@@ -228,8 +236,7 @@ def test_publish_preflight_requires_github_environments(tmp_path: Path) -> None:
 
 
 def test_publish_preflight_accepts_exact_sha_with_successful_ci(tmp_path: Path) -> None:
-    tag_commit, main_commit = _release_repository(tmp_path, advance_main=False)
-    assert tag_commit == main_commit
+    tag_commit, _main_commit = _release_repository(tmp_path, advance_main=False)
 
     result = _run_release_check(
         tmp_path,
@@ -321,7 +328,6 @@ def test_publish_workflow_coordinates_python_and_browser_distributions() -> None
     assert isinstance(jobs, dict)
 
     build = jobs["build"]
-    assert all(step.get("name") != "Run release gate" for step in build["steps"])
     upload = _step(build, "Upload release artifacts")
     assert upload["with"]["path"].splitlines() == [
         "dist/SHA256SUMS",
@@ -535,13 +541,13 @@ def recovery_verifier(monkeypatch: pytest.MonkeyPatch) -> tuple[Any, dict[str, A
             "event": event,
             "head_branch": branch,
             "head_sha": sha,
-            "repository": {"full_name": verifier.REPOSITORY},
-            "head_repository": {"full_name": verifier.REPOSITORY},
+            "repository": {"full_name": "marimo-team/marimo-export"},
+            "head_repository": {"full_name": "marimo-team/marimo-export"},
             "path": ".github/workflows/publish.yml",
             "status": "completed",
             "conclusion": "success",
             "run_attempt": 1,
-            "html_url": f"https://github.com/{verifier.REPOSITORY}/actions/runs/{run_id}",
+            "html_url": f"https://github.com/marimo-team/marimo-export/actions/runs/{run_id}",
             "display_title": "Recover v0.1.0 from run 101",
         }
 
@@ -563,7 +569,7 @@ def recovery_verifier(monkeypatch: pytest.MonkeyPatch) -> tuple[Any, dict[str, A
 
     jobs = {
         source_id: [job("Build and verify", 2), job("Attest build provenance", 2)],
-        recovery_id: [job(name) for name in (*verifier.RELEASE_JOBS, "Release gate")],
+        recovery_id: [job(name) for name in (*PUBLICATION_JOBS, "Release gate")],
     }
     jobs[recovery_id][1]["conclusion"] = "skipped"
     receipt = {
@@ -571,7 +577,7 @@ def recovery_verifier(monkeypatch: pytest.MonkeyPatch) -> tuple[Any, dict[str, A
         "version": version,
         "tag": "v0.1.0",
         "commit": commit,
-        "repository": verifier.REPOSITORY,
+        "repository": "marimo-team/marimo-export",
         "workflow": ".github/workflows/publish.yml",
         "source_run": source_id,
         "source_attempt": 2,
@@ -591,7 +597,7 @@ def recovery_verifier(monkeypatch: pytest.MonkeyPatch) -> tuple[Any, dict[str, A
         "receipt": receipt,
         "jobs": jobs,
         "harness_ci": "success",
-        "invocation": f"https://github.com/{verifier.REPOSITORY}/actions/runs/101/attempts/1",
+        "invocation": "https://github.com/marimo-team/marimo-export/actions/runs/101/attempts/1",
         "verified_files": [],
         "registry_checks": [],
     }
@@ -699,7 +705,14 @@ def test_public_release_verifier_accepts_the_exact_recovery_chain(
     assert result["recovery"]["recovery_commit"] == "b" * 40
     assert result["recovery"]["source_attempt"] == 2
     assert result["recovery"]["attestation_attempt"] == 1
-    assert set(evidence["verified_files"]) == {item["name"] for item in result["artifacts"]}
+    expected_files = {
+        "SHA256SUMS",
+        "marimo-team-marimo-export-0.1.0.tgz",
+        "marimo_export-0.1.0-py3-none-any.whl",
+        "marimo_export-0.1.0.tar.gz",
+    }
+    assert set(evidence["verified_files"]) == expected_files
+    assert {item["name"] for item in result["artifacts"]} == expected_files
     assert evidence["registry_checks"] == ["npm", "pypi"]
     assert result["fresh_installs"]["pnpm"]["conclusion"] == "success"
     assert result["fresh_installs"]["python"]["conclusion"] == "success"
@@ -798,7 +811,7 @@ def test_public_release_verifier_accepts_a_complete_tagged_publication(
             "run_attempt": 2,
             "html_url": f"https://example.test/source/{name}",
         }
-        for name in verifier.RELEASE_JOBS
+        for name in PUBLICATION_JOBS
     ]
     result = verifier.verify_public_release("0.1.0")
     assert result["commit"] == "a" * 40

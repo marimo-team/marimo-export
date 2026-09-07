@@ -34,7 +34,9 @@ make check
 
 The gate checks formatting, dependency direction, Python and TypeScript types,
 unit and integration contracts, browser loader tests, package and documentation
-builds, packed npm installation, and isolated Python wheel imports.
+builds, packed npm installation, and isolated Python wheel imports. The package
+stage verifies the release archives, rebuilds the wheel from the source archive,
+and compares both wheel payloads.
 
 ## Select evidence by boundary
 

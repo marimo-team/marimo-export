@@ -23,17 +23,7 @@ uv run python scripts/verify_release_artifacts.py --write-checksums
 export UV_NO_CONFIG=1
 for wheel in "${wheels[@]}"; do
 	uv run --no-project --isolated --no-cache --with "$wheel" \
-		python scripts/smoke_python_package.py
-	uv run --no-project --isolated --no-cache --with "$wheel" \
-		marimo-export --help >/dev/null
-	actual="$(
-		uv run --no-project --isolated --no-cache --with "$wheel" \
-			marimo-export --version
-	)"
-	if [[ "$actual" != "marimo-export $version" ]]; then
-		printf 'ERROR: Unexpected marimo-export version output: %s\n' "$actual" >&2
-		exit 1
-	fi
+		python scripts/smoke_python_package.py --expected-version "$version"
 done
 
 node scripts/smoke_npm_packages.mjs \

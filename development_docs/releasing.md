@@ -7,14 +7,14 @@ to npm from the same source commit.
 
 ```console
 make check
-make package
 ./scripts/release.sh --dry-run
 ```
 
 `make package` writes the release candidates under `dist/python` and
 `dist/npm`. It installs the npm tarball through pnpm, installs the direct and
 source-rebuilt Python wheels in isolated environments, and compares the two
-wheel payloads.
+wheel payloads. `make check` runs this package gate after source checks and
+application builds.
 
 ## Coordinated version
 
@@ -85,7 +85,6 @@ version and run:
 ```console
 make bootstrap
 make check
-make package
 ```
 
 Review these artifact facts before merging:

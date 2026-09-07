@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 import subprocess
 import sys
@@ -73,7 +74,12 @@ _FOCUSED_NAMES = {
 }
 
 
-def main() -> None:
+def main(expected_version: str | None = None) -> None:
+    package_version = metadata.version("marimo-export")
+    if expected_version is not None and package_version != expected_version:
+        raise RuntimeError(
+            f"Installed marimo-export {package_version} does not match expected {expected_version}"
+        )
     requirements = metadata.requires("marimo-export") or []
     requires_python = metadata.metadata("marimo-export")["Requires-Python"]
     if SpecifierSet(requires_python) != SpecifierSet(">=3.10,<3.15"):
@@ -158,7 +164,24 @@ def main() -> None:
     if installed_plugin_files != _AGENT_PLUGIN_FILES:
         raise RuntimeError("marimo-export wheel contains an unexpected Agent Plugin file inventory")
     skill = export_agent.agent_skill()
-    _verify_installed_scaffold(skill.path, metadata.version("marimo-export"))
+    _verify_installed_scaffold(skill.path, package_version)
+    _verify_installed_cli(package_version)
+
+
+def _verify_installed_cli(package_version: str) -> None:
+    command = Path(sys.executable).with_name(
+        "marimo-export.exe" if sys.platform == "win32" else "marimo-export"
+    )
+    subprocess.run([str(command), "--help"], stdout=subprocess.DEVNULL, check=True, timeout=30)
+    version = subprocess.run(
+        [str(command), "--version"],
+        stdout=subprocess.PIPE,
+        text=True,
+        check=True,
+        timeout=30,
+    )
+    if version.stdout.strip() != f"marimo-export {package_version}":
+        raise RuntimeError(f"Unexpected marimo-export version output: {version.stdout.strip()}")
 
 
 def _verify_installed_scaffold(skill: Path, package_version: str) -> None:
@@ -199,4 +222,6 @@ def _verify_installed_scaffold(skill: Path, package_version: str) -> None:
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--expected-version")
+    main(parser.parse_args().expected_version)
