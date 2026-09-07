@@ -1,0 +1,23 @@
+examples/README.md
+  s_6628195629b8dd::t_b2bc2ff8efae5b 6-8
+docs/guide/browser-applications.md
+  s_6628195629b8dd::t_b2bc2ff8efae5b 68-69,71-73,76-101,108,123-125,167,169-172,174-175
+README.md
+  s_6628195629b8dd::t_c24c64582c78cf 29-32,34-41,43-48,51,54-55,58-60,63-64,66-67,69-72,74,76-84,86-88,90-91
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "ab2731185815c99d1e971b0c1e95cdb75dfd8e15",
+  "prompts": {},
+  "sessions": {
+    "s_6628195629b8dd": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a07c52-9946-7fe2-adcb-3a256c68154f",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
