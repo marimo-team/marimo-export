@@ -16,7 +16,6 @@ javascript_workspace: &javascript_workspace
 
 python_inputs: &python_inputs
   - *ci_control
-  - ".github/workflows/publish.yml"
   - ".python-version"
   - "pyproject.toml"
   - "uv.lock"
@@ -51,6 +50,10 @@ frontend_inputs: &frontend_inputs
   - "examples/vite-vanilla/vite.config.ts"
   - "tests/fixtures/**"
   - "tools/oxlint/**"
+  - .github/workflows/publish.yml
+  - scripts/recover-release.mjs
+  - scripts/smoke_npm_packages.mjs
+  - scripts/fixtures/npm-consumer/**
 
 documentation:
   - "README.md"
@@ -138,3 +141,13 @@ distribution:
   - "plugin.json"
   - "scripts/**"
   - "skills/notebook-to-static-app/**"
+release_contracts:
+  - *ci_control
+  - .github/workflows/publish.yml
+  - scripts/**
+  - packages/python/tests/test_release.py
+  - pyproject.toml
+  - uv.lock
+  - package.json
+  - packages/browser/package.json
+  - packages/python/pyproject.toml

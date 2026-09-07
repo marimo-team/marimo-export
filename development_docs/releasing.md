@@ -173,6 +173,32 @@ jobs:
 gh run rerun RUN_ID --failed
 ```
 
+When verification tooling needs a correction after npm publication, merge the
+corrected workflow and scripts into `main`, then resume the original release:
+
+```console
+gh workflow run publish.yml --ref main -f version="$VERSION" -f source_run="$RUN_ID"
+```
+
+Recovery accepts a completed tag-triggered `publish.yml` run whose commit
+matches the annotated version tag. Its build and attestation must have passed,
+and its `release-artifacts` payload must still be retained. The latest main CI
+must pass for both the tagged commit and the recovery workflow commit before
+publication can begin. The workflow checks
+the original checksum manifest's signed provenance and every archive digest,
+then verifies the already-published npm bytes before continuing with PyPI and
+the GitHub release. The original artifact bytes and attestation remain the
+release's provenance. Recovery requires `main` and preserves the version tag.
+The `release-recovery.json` GitHub release asset records both run identities,
+the signed source attempt, and the checksum-manifest digest. It remains separate
+from the original signed checksum manifest. Actions retains the archive payload
+and working recovery receipt for 90 days.
+
+The isolated npm consumer uses the repository's exact pnpm pin. Its workspace
+fixture uses block YAML so pnpm can update consumer installation metadata.
+The fixture exempts `@marimo-team/*` releases from the package-age delay and
+retains the configured age policy for other dependencies.
+
 Advance both public packages to the next patch version when published bytes
 differ or the source needs a correction.
 
@@ -189,3 +215,10 @@ bytes, metadata, and fresh consumer jobs with one command:
 The command downloads release assets into a temporary directory and leaves the
 working tree unchanged. It uses the release workflow's pnpm and Python consumer
 jobs as fresh-install evidence, so local package age policy stays active.
+
+For a recovered release, verification binds the successful main workflow and
+its recovery receipt to the original tagged build, checksum manifest, and
+signing attempt. The JSON result records the release and recovery commits
+separately. The auxiliary `release-recovery.json` release asset preserves that
+chain after workflow artifacts expire. Use `--recovery-run RUN_ID` to require
+one specific recovery run.
