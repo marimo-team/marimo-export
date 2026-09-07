@@ -9,6 +9,7 @@ from pathlib import Path
 from threading import RLock
 from typing import TYPE_CHECKING, Protocol
 
+import marimo_export._secure_io as _secure_io
 from marimo_export._json import JsonObject, sha256_bytes
 from marimo_export._prepared_integrity import (
     ClosureMember,
@@ -118,10 +119,25 @@ class PreparedAsset:
         with self._lock:
             self._require_open()
             try:
-                value = self._path.read_bytes()
-            except OSError as error:
+                if self._relative == "index.json":
+                    value = _secure_io.read_export_index(
+                        self._path.parent, max_bytes=max(1, self._member.size)
+                    )
+                else:
+                    value = _secure_io.read_export_asset(
+                        self._path.parent.parent,
+                        self._relative,
+                        expected_size=self._member.size,
+                        max_bytes=max(1, self._member.size),
+                    )
+            except _secure_io.SecureReadUnavailableError as error:
                 raise ExportUnavailableError(
                     "The prepared export asset storage is unavailable.",
+                    details={"path": self._relative},
+                ) from error
+            except _secure_io.SecureReadError as error:
+                raise IntegrityError(
+                    "The prepared export asset changed after preparation.",
                     details={"path": self._relative},
                 ) from error
             if len(value) != self._member.size or sha256_bytes(value) != self._member.sha256:

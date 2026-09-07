@@ -114,6 +114,33 @@ describe("anywidget", () => {
     await expect(loading).rejects.toThrow("does not target existing state");
   });
 
+  test("preserves own model-state keys at every depth", async () => {
+    const state = {
+      ["__proto__"]: { label: "root" },
+      nested: { ["__proto__"]: "nested", constructor: "saved", prototype: null },
+    };
+    const loaded = await loadPayload<typeof state>(
+      payload({
+        modelNotifications: [
+          notification({
+            id: "model-0",
+            state,
+            moduleUrl: moduleUrl("export default { render() {} }"),
+          }),
+        ],
+      }),
+    );
+
+    expect(Object.hasOwn(loaded.initialState, "__proto__")).toBe(true);
+    expect(loaded.initialState.__proto__).toEqual({ label: "root" });
+    expect(Object.hasOwn(loaded.initialState.nested, "__proto__")).toBe(true);
+    expect(loaded.initialState.nested).toEqual({
+      ["__proto__"]: "nested",
+      constructor: "saved",
+      prototype: null,
+    });
+  });
+
   test("rejects reserved buffer tokens without changing the source prototype", async () => {
     const binary = {};
     const prototype = Object.getPrototypeOf(binary);

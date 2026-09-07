@@ -40,6 +40,14 @@ the cell's compiled behavior, tracked references, and registered side effects.
 On a usable hit, marimo restores compatible definitions and skips the cell body.
 On a miss, marimo executes the cell and persists the successful result.
 
+File-based builds also track local Python dependencies and installed package
+versions. Editing a helper module invalidates prepared results and automatic
+cell-cache entries. Explicit `mo.cache` and `mo.persistent_cache` calls retain
+their authored keys and reference dependencies.
+Notebook-only edits still let marimo reuse unaffected cells. Restart a live
+notebook session after changing imported Python code so capture sees the new
+module values.
+
 The article [Content-Addressed Caching for Reactive
 Notebooks](https://dmadisetti.github.io/scipy_proceedings_2026/) explains the
 graph-derived key model. marimo's [caching

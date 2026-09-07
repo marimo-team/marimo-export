@@ -58,9 +58,8 @@ browser-side refresh, state transition, and mount disposal.
 | `route_key`           | Exact key | Maps a publication key to the namespace used by immutable asset routes                                 |
 | `route_grace_seconds` | `60.0`    | Retention duration added to `monotonic()` for replaced routes                                          |
 
-The current constructor rejects negative values but does not reject booleans,
-NaN, or positive infinity. Callers must supply a finite nonnegative real value.
-Treat stricter constructor validation as an implementation gap.
+`route_grace_seconds` must be a finite nonnegative number. Invalid numbers raise
+`ValueError`. Booleans and other types raise `TypeError`.
 
 `prepare(key, callback)` executes the synchronous callback in a worker thread.
 The callback receives the selected `ExportRepository` and a cancellation
@@ -72,7 +71,7 @@ Preparation follows this order:
    hashable.
 2. Signal cancellation to pending work in the same supersession group.
 3. Record a monotonically increasing desired-work token for that group.
-4. Run the callback in a worker thread.
+4. Acquire the repository and run the callback in a worker thread.
 5. Wrap the returned prepared export and metadata as `PreparedPublication`.
 6. Recheck controller state, callback cancellation, and the desired-work token.
 7. Close a stale candidate, or commit the candidate as current.
@@ -145,11 +144,13 @@ retired publication, or preparation task. `keys` returns each current,
 route-grace, and preparing application key once, preserving its first occurrence
 across those groups.
 
-The refresh task compares the repository observation revision with the revision
-captured in the publication plan. A newer revision calls the original prepare
-callback again. Refresh cancellation and ordinary refresh errors preserve the
-last-good publication. The current Python controller swallows those background
-failures and exposes no error callback or status channel.
+The refresh task captures its group's desired-work token when scheduled and
+compares the repository observation revision with the revision captured in the
+publication plan. A newer revision calls the original prepare callback when the
+publication and desired-work token still match. New preparation and release
+supersede outstanding revision checks. Refresh cancellation and ordinary refresh
+errors preserve the last-good publication. The current Python controller swallows
+those background failures and exposes no error callback or status channel.
 
 `release(key)` acts on the key's complete supersession group. It signals pending
 work, closes current and retired publications in that group, clears the desired

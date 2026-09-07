@@ -7,9 +7,11 @@ import time
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass
+from pathlib import Path
 from types import MappingProxyType
 from typing import Any
 
+from marimo_export._environment import environment_identity
 from marimo_export._execution.plan import ExecutionPlan, NormalizedState, PlannedOutput
 from marimo_export._json import (
     JsonObject,
@@ -21,6 +23,7 @@ from marimo_export._marimo.compat.cache.attempts import (
     CacheAttemptLog,
     force_cache_misses,
     track_notebook_cache,
+    tracked_environment,
 )
 from marimo_export._marimo.compat.child_run import (
     StateChild,
@@ -94,9 +97,16 @@ async def execute_state(
                 state=state,
                 plan=plan,
             )
+            environment = tracked_environment(state_child.context.parent.graph)
+            if environment is None:
+                source = state_child.context.filename
+                environment = environment_identity(
+                    None if source is None else Path(source), exclude_source=True
+                )
             with track_notebook_cache(
                 state_child.runner._kernel.graph,
                 run_plan.transient_cache_cells,
+                environment=environment,
             ) as notebook_cache:
                 input_phase = await _execute_inputs(state_child, state, run_plan)
                 output_phase = await _execute_outputs(

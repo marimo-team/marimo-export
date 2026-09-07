@@ -76,6 +76,7 @@ test-application: ## Run deterministic notebook build, reuse, and capture contra
 		pytest -q -m application packages/python/tests
 
 build: ## Build Python, npm, docs, and example packages.
+	@$(MAKE) --no-print-directory docs-examples
 	$(VP) run -r build
 	test -s apps/docs/.vitepress/dist/llms.txt
 	test -s apps/docs/.vitepress/dist/llms-full.txt
@@ -85,8 +86,8 @@ build: ## Build Python, npm, docs, and example packages.
 package: ## Build and verify Python and npm release artifacts.
 	rm -rf "$(DIST_DIR)"
 	mkdir -p "$(PYTHON_DIST_DIR)/from-sdist" "$(NPM_DIST_DIR)"
-	pnpm --filter @marimo-team/portable-json build
-	pnpm --filter @marimo-team/marimo-export build
+	pnpm --filter @marimo-team/portable-json test:package
+	pnpm --filter @marimo-team/marimo-export test:package
 	@set -eu; \
 		version=$$(uv version --package marimo-export --short); \
 		(cd packages/browser && pnpm --config.ignore-scripts=true pack \
@@ -97,7 +98,7 @@ package: ## Build and verify Python and npm release artifacts.
 		--out-dir "$(PYTHON_DIST_DIR)/from-sdist"
 	./scripts/verify-dist.sh
 
-docs-build: ## Build the public documentation site.
+docs-build: docs-examples ## Build the public documentation site.
 	pnpm --filter @marimo-team/marimo-export-docs build
 	test -s apps/docs/.vitepress/dist/llms.txt
 	test -s apps/docs/.vitepress/dist/llms-full.txt
@@ -115,12 +116,6 @@ check: ## Run the complete local quality gate.
 	@$(MAKE) --no-print-directory lint
 	@$(MAKE) --no-print-directory typecheck
 	@$(MAKE) --no-print-directory test
-	@$(MAKE) --no-print-directory build
-	pnpm --filter @marimo-team/portable-json test:package
-	pnpm --filter @marimo-team/marimo-export test:package
-	@set -eu; \
-		wheel=$$(printf '%s\n' ./dist/marimo_export-*.whl); \
-		test -f "$$wheel"; \
-		uv run --isolated --no-project --with "$$wheel" python scripts/smoke_python_package.py; \
-		uv run --isolated --no-project --with "$$wheel" marimo-export --help >/dev/null; \
-		uv run --isolated --no-project --with "$$wheel" marimo-export --version >/dev/null
+	@$(MAKE) --no-print-directory docs-examples
+	$(VP) run --filter './apps/**' --filter './examples/**' --fail-if-no-match build
+	@$(MAKE) --no-print-directory package

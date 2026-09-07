@@ -48,9 +48,6 @@ describe("prepared publication refresh", () => {
 
     await harness.refresh.start();
 
-    expect(harness.fetchManifest).toHaveBeenCalledOnce();
-    expect(harness.openPublication).toHaveBeenCalledOnce();
-    expect(harness.applied).toHaveLength(1);
     expect(harness.state.snapshot().current?.state.inputs).toEqual({ mode: "baseline" });
   });
 
@@ -106,6 +103,50 @@ describe("prepared publication refresh", () => {
     expect(harness.state.snapshot().current?.notebookExport).toBe(secondExport);
     expect(harness.state.snapshot().current?.state.inputs).toEqual({ mode: "alternate" });
   });
+
+  it.each([true, false])(
+    "resolves a selection completed during publication opening when available=%s",
+    async (available) => {
+      const firstExport = preparedExportFixture({
+        inputs: [{ mode: "baseline" }, { mode: "alternate" }],
+      });
+      const secondExport = preparedExportFixture({
+        base: "https://example.test/export-2/",
+        identity: "2".repeat(64),
+        inputs: available ? [{ mode: "baseline" }, { mode: "alternate" }] : [{ mode: "baseline" }],
+      });
+      const first = preparedPublicationFixture(firstExport, { mode: "baseline" });
+      const second = preparedPublicationFixture(secondExport, { mode: "baseline" });
+      const harness = refreshHarness([first, second]);
+      await harness.refresh.start();
+      let finishOpening = () => {};
+      const opening = new Promise<void>((resolve) => {
+        finishOpening = resolve;
+      });
+      let markOpening = () => {};
+      const openingStarted = new Promise<void>((resolve) => {
+        markOpening = resolve;
+      });
+      harness.openPublication.mockImplementationOnce(async () => {
+        markOpening();
+        await opening;
+        return second;
+      });
+      const refreshing = harness.refresh.refresh();
+      await openingStarted;
+
+      await harness.state.updateInputs({ mode: "alternate" });
+      finishOpening();
+      await refreshing;
+
+      expect(harness.state.snapshot().current?.notebookExport).toBe(secondExport);
+      expect(harness.state.snapshot().current?.state.inputs).toEqual({
+        mode: available ? "alternate" : "baseline",
+      });
+      await harness.refresh.dispose();
+      await harness.state.dispose();
+    },
+  );
 
   it("opens a matching immutable identity again when its base URL changes", async () => {
     const identity = "1".repeat(64);

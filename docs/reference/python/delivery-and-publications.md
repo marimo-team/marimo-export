@@ -274,8 +274,9 @@ PreparedPublicationController(
 )
 ```
 
-The controller opens the default repository lazily when `repository` is absent
-and closes it during `close()`. A supplied repository stays caller-owned.
+The controller opens the default repository lazily in a worker thread when
+`repository` is absent and closes it during `close()`. A supplied repository
+stays caller-owned.
 
 `supersession_key` groups keys whose preparation and current publication
 replace one another. The default returns the complete key. Starting new work for
@@ -288,12 +289,9 @@ the complete key. A replaced generation remains eligible for `asset()` for
 `route_grace_seconds`, which defaults to 60 seconds. This lets in-flight
 manifest requests finish after a replacement commits.
 
-The supported caller contract is a finite, nonnegative
-`route_grace_seconds`. A value of zero closes a replaced publication during the
-replacement commit. Construction currently rejects values whose comparison with
-zero is negative. It does not independently reject booleans, NaN, or positive
-infinity, which are outside the supported contract and can prevent predictable
-retirement.
+`route_grace_seconds` accepts a finite, nonnegative number. A value of zero
+closes a replaced publication during the replacement commit. Invalid numbers
+raise `ValueError`. Booleans and other types raise `TypeError`.
 
 Route grace and slow responses can keep several complete export generations
 leased at once. Those generations count toward repository byte limits. Choose a
@@ -319,7 +317,9 @@ grace state is retained. `keys` includes current, preparing, and retained keys.
 grace entries. `poll()` returns the same current publication immediately and
 schedules one asynchronous revision check when no refresh is active. That check
 uses the last successful preparation callback only when the repository
-observation revision has advanced. Refresh failure preserves the current
+observation revision has advanced and the group's preparation intent is still
+current. A newer `prepare()` or `release()` supersedes an outstanding revision
+check. Refresh failure preserves the current
 publication and is not reported through a callback or status record. An
 application that needs refresh health must instrument its preparation callback
 or run a separate health check.

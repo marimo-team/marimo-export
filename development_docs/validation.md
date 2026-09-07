@@ -11,8 +11,9 @@ supports 3.10 through 3.14.
 
 GitHub Actions classifies changed files before starting the quality, Python,
 frontend, package, and documentation jobs. Each job runs when its owned inputs
-change. The `Required` job accepts successful and skipped jobs, and fails when
-change classification or an executed CI job fails.
+change. The `Required` job requires success for selected jobs and a skipped
+result for unselected jobs. Missing classification, failure, cancellation, or
+an unexpected skip fails the gate.
 
 The Python job runs the package contracts on:
 
@@ -34,7 +35,9 @@ make check
 
 The gate checks formatting, dependency direction, Python and TypeScript types,
 unit and integration contracts, browser loader tests, package and documentation
-builds, packed npm installation, and isolated Python wheel imports.
+builds, packed npm installation, and isolated Python wheel imports. The package
+stage verifies the release archives, rebuilds the wheel from the source archive,
+and compares both wheel payloads.
 
 ## Select evidence by boundary
 
@@ -200,13 +203,17 @@ identity binding, default state, query and control updates, missing states,
 supersession, restoration, publication refresh, selection preservation,
 settlement, and idempotent disposal.
 
-## External integration proposals
+## External consumer acceptance
 
-No external application is part of the current repository gate. A proposed
-marimo-studio prepared runtime and its cross-repository acceptance conditions
-live in [Proposals](proposals/studio-prepared-runtime.md). Add an external gate
-here only after the owner repository declares the dependency and records exact
-setup, test, static-export, and browser commands.
+marimo-studio composes the public producer, publication, delivery, and browser
+APIs. Its [integration record](proposals/studio-prepared-runtime.md) identifies
+the inspected revision and cross-repository acceptance conditions.
+
+An external acceptance run must install candidate wheel and npm artifacts into
+a pinned consumer checkout and record both revisions, the Marimo version, and
+the exact setup, test, static-export, and browser commands. The consumer owns
+its integration assertions. Keep the framework's generic contracts independently
+covered by this repository's tests and examples.
 
 ## Live application path
 

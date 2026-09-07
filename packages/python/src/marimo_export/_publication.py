@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import math
 import threading
 from collections.abc import Callable, Hashable
 from dataclasses import dataclass, field
@@ -54,8 +55,12 @@ class PublicationControllerState(Generic[KeyT, MetadataT]):
         route_key: Callable[[KeyT], Hashable] | None,
         route_grace_seconds: float,
     ) -> None:
-        if route_grace_seconds < 0:
-            raise ValueError("route_grace_seconds must be nonnegative")
+        if isinstance(route_grace_seconds, bool) or not isinstance(
+            route_grace_seconds, (int, float)
+        ):
+            raise TypeError("route_grace_seconds must be a number")
+        if not math.isfinite(route_grace_seconds) or route_grace_seconds < 0:
+            raise ValueError("route_grace_seconds must be a finite nonnegative number")
         self._repository_value = repository
         self._owns_repository = repository is None
         self._repository_lock = threading.Lock()
@@ -118,7 +123,9 @@ class PublicationControllerState(Generic[KeyT, MetadataT]):
             return None
         pending = any(work.group == owned.group for work in self._work.values())
         if key not in self._refresh_tasks and not pending:
-            task = asyncio.create_task(self._refresh_if_stale(owned))
+            task = asyncio.create_task(
+                self._refresh_if_stale(owned, self._desired.get(owned.group))
+            )
             self._refresh_tasks[key] = task
             task.add_done_callback(
                 lambda completed, selected_key=key: self._refresh_finished(selected_key, completed)
@@ -202,9 +209,7 @@ class PublicationControllerState(Generic[KeyT, MetadataT]):
         work: _Work[KeyT, MetadataT],
     ) -> PreparedPublication[KeyT, MetadataT]:
         candidate = await asyncio.to_thread(
-            work.prepare,
-            self._repository(),
-            work.cancelled.is_set,
+            lambda: work.prepare(self._repository(), work.cancelled.is_set)
         )
         if not isinstance(candidate, PreparedPublicationCandidate):
             raise TypeError("prepare must return a PreparedPublicationCandidate")
@@ -245,6 +250,7 @@ class PublicationControllerState(Generic[KeyT, MetadataT]):
     async def _refresh_if_stale(
         self,
         selected: _OwnedPublication[KeyT, MetadataT],
+        desired: int | None,
     ) -> None:
         try:
             revision = await asyncio.to_thread(
@@ -254,6 +260,7 @@ class PublicationControllerState(Generic[KeyT, MetadataT]):
             if (
                 self._closed
                 or self._current.get(selected.key) is not selected
+                or self._desired.get(selected.group) != desired
                 or revision <= selected.publication.plan.observation_revision
             ):
                 return

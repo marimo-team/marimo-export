@@ -2,19 +2,40 @@
 
 | Field                                | Value                                                                                                                          |
 | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
-| Status                               | Proposed                                                                                                                       |
-| Date                                 | 2026-09-04                                                                                                                     |
+| Status                               | Consumer implemented, cross-repository acceptance pending                                                                      |
+| Date                                 | 2026-09-07                                                                                                                     |
 | Owner repository                     | `marimo-team/marimo-studio` for application integration, `marimo-team/marimo-export` for public producer and browser contracts |
-| Inspected marimo-export revision     | `1c898c27376b6437d31739758c0363841a3bfd6e`                                                                                     |
-| Inspected consumer revision (Studio) | `fb06814fe25aa1595e46a6a7463f4478b4c461ac`                                                                                     |
+| Inspected marimo-export revision     | `f1dc798c331eea058bd7c041ea95365b587e74d8`                                                                                     |
+| Inspected consumer revision (Studio) | `83816e40234392790ac2ccb32039b2b9aa462302`                                                                                     |
 
-The inspected marimo-studio revision implements Server and Browser WebAssembly
-runtimes. It carries no marimo-export dependency, prepared runtime,
-`CompiledExportView`, `PreparedViewRegistry`, `marimo-studio.prepared.v1`, or
-`zero-python` route. Studio also owns a private Marimo cache compatibility patch.
+marimo-studio implements a prepared runtime using marimo-export's public APIs.
+Its inspected Python package pins marimo-export 0.0.2, while this repository
+develops 0.0.3. Source inspection establishes the composition described here.
+Acceptance against candidate release artifacts still requires the checks at
+the end of this page.
 
-This proposal describes a possible finite prepared runtime. It becomes current
-architecture only after the acceptance conditions pass in both repositories.
+marimo-export owns the reusable producer and consumer contracts. Studio is one
+application of them and owns its presentation, authentication, routes, and
+deployment assembly.
+
+## Implemented consumer boundary
+
+The inspected Studio checkout places the integration in these owners:
+
+| Studio owner                                  | Composition                                                                                |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `_prepared/compiler.py`                       | Converts finite mount declarations into `ExportSpec` and separate `ViewBindings`           |
+| `_prepared/static.py`                         | Calls public `prepare()` for static output                                                 |
+| `_server/prepared_views.py`                   | Wraps `PreparedPublicationController` with Studio keys and capture callbacks               |
+| `_delivery/export.py`                         | Uses `delivery.stage()` to assemble the complete application                               |
+| `apps/browser/src/zero-python/composition.ts` | Connects `PreparedStateController` and `PreparedPublicationRefresh` to the Studio renderer |
+| `_compat/kernel_values/kernel.py`             | Acquires the public cache compatibility lease for the kernel lifecycle                     |
+
+Python paths in this table are relative to
+`packages/marimo-studio/src/marimo_studio`. The original proposal, inspected at
+Studio revision `fb06814fe25aa1595e46a6a7463f4478b4c461ac`, preceded this
+implementation. The following design and acceptance conditions describe the
+intended complete integration.
 
 ## Intended outcome
 
@@ -164,20 +185,17 @@ The Studio port would dispose every staged mount that did not commit.
 
 ## Cache compatibility decision
 
-The inspected Studio revision and marimo-export both patch the same
-process-global Marimo cache seams. Activating both owners without a coordinated
-lifecycle can raise a foreign-patch conflict.
-
-Before integration, choose one owner for:
+Studio acquires `marimo_export.integration.keep_cached_cells_compatible()` for
+its kernel lifecycle. This gives marimo-export ownership of the process-global
+Marimo cache repairs for:
 
 - restored user-interface definition detection
 - Polars lazy-stub loader selection
 - contiguous Polars tensor bytes
 
-If marimo-export becomes the owner, Studio would call
-`marimo_export.integration.keep_cached_cells_compatible()` and retain its release
-callback for the kernel lifecycle. The migration must remove Studio's equivalent
-private patch in the same change.
+The host retains the returned release callback and releases it during kernel
+teardown. Cross-repository validation must exercise overlapping leases and
+reverse-order teardown against the pinned Marimo release.
 
 ## Acceptance conditions
 
@@ -202,6 +220,6 @@ The proposal becomes current architecture when all conditions pass:
     revisions plus the exact Python, TypeScript, static-export, and browser
     commands.
 
-Until these conditions pass, current architecture and validation should describe
-the generic host, publication, delivery, and browser contracts without naming
-Studio as a consumer.
+Record the exact tested revisions and commands when these conditions pass.
+Keep generic host, publication, delivery, and browser contracts authoritative
+for every application, including Studio.

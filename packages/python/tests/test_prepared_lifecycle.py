@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import stat
 from hashlib import sha256
 from pathlib import Path
@@ -164,6 +165,37 @@ def test_prepared_handle_rejects_committed_index_drift(
 
     prepared.close()
     repository.close()
+
+
+@pytest.mark.skipif(os.name != "posix", reason="requires POSIX symbolic links")
+def test_borrowed_asset_rejects_same_content_symbolic_link(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    spec = _spec(states={"baseline": {"choice": "A"}})
+    preflight = _preflight(tmp_path / "notebook.py", spec)
+    monkeypatch.setattr(
+        "marimo_export._services.prepare_export.preflight_plan",
+        lambda *_args, **_kwargs: preflight,
+    )
+    monkeypatch.setattr(
+        "marimo_export._services.prepare_export.require_preflight_current",
+        lambda _preflight: None,
+    )
+    with ExportRepository.open(tmp_path / "repository") as repository:
+        _install_export(repository, preflight.repository_identity, spec, preflight.producer)
+        with (
+            prepare(spec=spec, source=tmp_path / "notebook.py", repository=repository) as prepared,
+            prepared.asset("index.json") as asset,
+        ):
+            path = asset.path
+            outside = tmp_path / "index-copy.json"
+            outside.write_bytes(asset.read_bytes())
+            path.parent.chmod(stat.S_IRWXU)
+            path.unlink()
+            path.symlink_to(outside)
+            with pytest.raises(IntegrityError):
+                asset.read_bytes()
 
 
 def test_prepared_asset_rejects_declared_payload_drift(

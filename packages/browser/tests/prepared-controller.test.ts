@@ -94,7 +94,15 @@ describe("prepared state controller", () => {
 
   it("serializes rapid superseding transitions and commits the final request", async () => {
     const notebookExport = preparedExportFixture({
-      inputs: Array.from({ length: 41 }, (_, count) => ({ count })),
+      inputs: [{ count: 0 }, { count: 1 }, { count: 2 }, { count: 3 }],
+    });
+    let enterFirst = () => {};
+    const firstStarted = new Promise<void>((resolve) => {
+      enterFirst = resolve;
+    });
+    let finishFirst = () => {};
+    const firstReady = new Promise<void>((resolve) => {
+      finishFirst = resolve;
     });
     let active = 0;
     let maximumActive = 0;
@@ -104,7 +112,10 @@ describe("prepared state controller", () => {
         active += 1;
         maximumActive = Math.max(maximumActive, active);
         try {
-          await new Promise<void>((resolve) => setTimeout(resolve, 1));
+          if (change.next.state.inputs.count === 1) {
+            enterFirst();
+            await firstReady;
+          }
           signal.throwIfAborted();
           committed.push(numberValue(change.next.state.inputs.count));
         } finally {
@@ -115,15 +126,19 @@ describe("prepared state controller", () => {
     const controller = new PreparedStateController(port);
     await controller.start(preparedPublicationFixture(notebookExport, { count: 0 }));
 
-    const updates = Array.from({ length: 40 }, (_, index) =>
-      controller.updateInputs({ count: index + 1 }),
-    );
-    const results = await Promise.allSettled(updates);
+    const first = controller.updateInputs({ count: 1 });
+    await firstStarted;
+    const second = controller.updateInputs({ count: 2 });
+    const third = controller.updateInputs({ count: 3 });
+    const settled = Promise.allSettled([first, second, third]);
+    finishFirst();
+    const results = await settled;
 
-    expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+    expect(results.map((result) => result.status)).toEqual(["rejected", "rejected", "fulfilled"]);
     expect(maximumActive).toBe(1);
-    expect(committed.at(-1)).toBe(40);
-    expect(controller.snapshot().current?.state.inputs).toEqual({ count: 40 });
+    expect(committed).toEqual([0, 3]);
+    expect(controller.snapshot().current?.state.inputs).toEqual({ count: 3 });
+    await controller.dispose();
   });
 
   it("restores the last committed state when application fails", async () => {

@@ -12,6 +12,7 @@ from marimo_export._marimo.compat.cache.attempts import (
     _empty_attempt,
     _rerun_unavailable_attempt,
     has_cache_scope,
+    record_cache_miss,
 )
 
 
@@ -23,6 +24,7 @@ class CompleteCachedLifecycle(CachedLifecycle):
         if not has_cache_scope(self._graph):
             return decision
         if not isinstance(decision, Skip):
+            record_cache_miss(self._graph, cell.cell_id)
             return decision
         attempt = self._attempts.get(cell.cell_id)
         if attempt is None:
@@ -36,6 +38,7 @@ class CompleteCachedLifecycle(CachedLifecycle):
             return decision
         self._attempts[cell.cell_id] = retry
         self._exec_starts[cell.cell_id] = time.time()
+        record_cache_miss(self._graph, cell.cell_id)
         return None
 
 

@@ -51,8 +51,17 @@ class ExportRepository:
             self._leases,
             limits,
         )
-        self._preparation = PreparationRepository(self)
-        self._observations = ObservationRepository(self)
+        self._observations = ObservationRepository(
+            catalog=self._catalog,
+            limits=limits,
+            require_open=self._require_open,
+        )
+        self._preparation = PreparationRepository(
+            artifacts=self._artifacts,
+            leases=self._leases,
+            observations=self._observations,
+            require_open=self._require_open,
+        )
         try:
             if replaced_catalogs:
                 self._artifacts.retire_catalog_snapshots(replaced_catalogs)

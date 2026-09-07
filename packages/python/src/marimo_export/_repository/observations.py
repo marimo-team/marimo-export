@@ -1,27 +1,37 @@
 from __future__ import annotations
 
 import time
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from typing import TYPE_CHECKING
 
 from marimo_export._repository.models import (
     ObservationSnapshot,
     ObservedState,
     RepositoryLimitError,
+    RepositoryLimits,
     digest,
     positive_integer,
 )
 from marimo_export._repository.sqlite.observations import input_names_bytes
 
 if TYPE_CHECKING:
+    from marimo_export._repository.sqlite.catalog import SqliteCatalog
     from marimo_export.repository import ExportRepository
 
 
 class ObservationRepository:
     """Private raw observation persistence used by ledgers and preparation."""
 
-    def __init__(self, repository: ExportRepository) -> None:
-        self._repository = repository
+    def __init__(
+        self,
+        *,
+        catalog: SqliteCatalog,
+        limits: RepositoryLimits,
+        require_open: Callable[[], None],
+    ) -> None:
+        self._catalog = catalog
+        self._limits = limits
+        self._require_open = require_open
 
     def record(
         self,
@@ -30,21 +40,21 @@ class ObservationRepository:
         values: Mapping[str, object],
         occurrences: int = 1,
     ) -> ObservedState:
-        self._repository._require_open()
+        self._require_open()
         digest(producer_sha256, "producer_sha256")
         count = positive_integer(occurrences, "occurrences")
         initial = ObservedState(producer_sha256=producer_sha256, revision=0, values=values)
-        if initial.byte_count > self._repository._limits.observation_bytes:
+        if initial.byte_count > self._limits.observation_bytes:
             raise RepositoryLimitError(
                 "One observed input vector exceeds the repository byte limit."
             )
-        revision = self._repository._catalog.record_observation(
+        revision = self._catalog.record_observation(
             producer_sha256=producer_sha256,
             observed=initial,
             occurrences=count,
             input_names=input_names_bytes(initial.input_names),
             now_us=_now_us(),
-            limits=self._repository._limits,
+            limits=self._limits,
         )
         return ObservedState(
             producer_sha256=producer_sha256,
@@ -58,23 +68,23 @@ class ObservationRepository:
         producer_sha256: str,
         occurrences: int = 1,
     ) -> int:
-        self._repository._require_open()
+        self._require_open()
         digest(producer_sha256, "producer_sha256")
-        return self._repository._catalog.advance_observation_revision(
+        return self._catalog.advance_observation_revision(
             producer_sha256,
             positive_integer(occurrences, "occurrences"),
             _now_us(),
         )
 
     def revision(self, producer_sha256: str) -> int:
-        self._repository._require_open()
+        self._require_open()
         digest(producer_sha256, "producer_sha256")
-        return self._repository._catalog.observation_revision(producer_sha256)
+        return self._catalog.observation_revision(producer_sha256)
 
     def clear(self, producer_sha256: str) -> int:
-        self._repository._require_open()
+        self._require_open()
         digest(producer_sha256, "producer_sha256")
-        return self._repository._catalog.clear_observations(producer_sha256)
+        return self._catalog.clear_observations(producer_sha256)
 
     def observations(
         self,
@@ -82,9 +92,9 @@ class ObservationRepository:
         producer_sha256: str,
         inputs: tuple[str, ...],
     ) -> tuple[ObservedState, ...]:
-        self._repository._require_open()
+        self._require_open()
         digest(producer_sha256, "producer_sha256")
-        return self._repository._catalog.observations(
+        return self._catalog.observations(
             producer_sha256,
             input_names_bytes(_input_names(inputs)),
         )
@@ -96,18 +106,18 @@ class ObservationRepository:
         inputs: tuple[str, ...],
         through_revision: int | None = None,
     ) -> ObservedState | None:
-        self._repository._require_open()
+        self._require_open()
         digest(producer_sha256, "producer_sha256")
-        return self._repository._catalog.latest_observation(
+        return self._catalog.latest_observation(
             producer_sha256,
             input_names_bytes(_input_names(inputs)),
             through_revision,
         )
 
     def snapshot(self, producer_sha256: str) -> ObservationSnapshot:
-        self._repository._require_open()
+        self._require_open()
         digest(producer_sha256, "producer_sha256")
-        return self._repository._catalog.observation_snapshot(producer_sha256)
+        return self._catalog.observation_snapshot(producer_sha256)
 
 
 def observation_repository(repository: ExportRepository) -> ObservationRepository:

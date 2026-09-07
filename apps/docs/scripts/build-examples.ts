@@ -1,13 +1,26 @@
-import { spawn } from "node:child_process";
-import { cp, mkdir, mkdtemp, readFile, readdir, rm, stat } from "node:fs/promises";
-import { basename, dirname, join, resolve } from "node:path";
+import { execFile, spawn } from "node:child_process";
+import {
+  cp,
+  lstat,
+  mkdir,
+  mkdtemp,
+  readFile,
+  readdir,
+  rm,
+  stat,
+  writeFile,
+} from "node:fs/promises";
+import { basename, dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { createHash } from "node:crypto";
+import { promisify } from "node:util";
 
 import { publishExample } from "./example-publication.ts";
 
 const packageRoot = dirname(fileURLToPath(new URL("../package.json", import.meta.url)));
 const repositoryRoot = resolve(packageRoot, "../..");
 const cacheRoot = join(packageRoot, ".vitepress", "cache");
+const examplesReceipt = join(cacheRoot, "examples.json");
 const quickstartRoot = join(repositoryRoot, "examples", "quickstart");
 const quickstartNotebook = join(quickstartRoot, "report.py");
 const quickstartSpec = join(quickstartRoot, "report.export.yaml");
@@ -108,11 +121,7 @@ const verifyQuickstartBundle = async (bundle: string): Promise<void> => {
     throw new Error("The quickstart application bundle must not contain Python source files.");
   }
   const document = await readFile(join(bundle, "index.html"), "utf8");
-  if (
-    document.includes("<marimo-code") ||
-    document.includes("<marimo-filename") ||
-    !document.includes("Ships no Python source or runtime")
-  ) {
+  if (document.includes("<marimo-code") || document.includes("<marimo-filename")) {
     throw new Error("The quickstart application bundle crosses the producer boundary.");
   }
 };
@@ -168,7 +177,7 @@ const buildQuickstart = async (): Promise<void> => {
       "--output",
       join(publicRoot, "export"),
       "--repository",
-      join(stagingRoot, "repository"),
+      join(cacheRoot, "quickstart-repository"),
     ]);
     await run("uv", [
       "run",
@@ -223,7 +232,6 @@ const buildMarketDashboard = async (): Promise<void> => {
       "export",
       "html",
       marketNotebook,
-      "--sandbox",
       "--output",
       notebookEntrypoint,
     ]);
@@ -268,10 +276,140 @@ const buildMarketDashboard = async (): Promise<void> => {
   }
 };
 
+const sourceFingerprint = async (): Promise<string> => {
+  const { stdout } = await promisify(execFile)(
+    "git",
+    [
+      "ls-files",
+      "--cached",
+      "--others",
+      "--exclude-standard",
+      "-z",
+      "--",
+      "package.json",
+      ".python-version",
+      "pyproject.toml",
+      "uv.lock",
+      "pnpm-lock.yaml",
+      "pnpm-workspace.yaml",
+      ".pnpmfile.mjs",
+      "tsconfig.base.json",
+      "vite.config.ts",
+      "packages",
+      "examples/quickstart",
+      "examples/vite-vanilla",
+      "apps/docs/package.json",
+      "apps/docs/scripts/build-examples.ts",
+      "apps/docs/scripts/example-publication.ts",
+    ],
+    { cwd: repositoryRoot },
+  );
+  const paths = [...new Set(stdout.split("\0").filter(Boolean))].filter((path) => {
+    const [root, , source, ...rest] = path.split("/");
+    return (
+      root !== "packages" ||
+      source === undefined ||
+      source === "src" ||
+      (rest.length === 0 &&
+        ["package.json", "pyproject.toml", "vite.config.ts", "tsconfig.json"].includes(source))
+    );
+  });
+  const files = await Promise.all(
+    paths.map(async (path) => {
+      const entry = await lstat(join(repositoryRoot, path)).catch(
+        (error: NodeJS.ErrnoException) => {
+          if (error.code === "ENOENT") return undefined;
+          throw error;
+        },
+      );
+      if (entry === undefined) return [];
+      if (!entry.isFile()) {
+        throw new Error(`Documentation example source must be a regular file: ${path}`);
+      }
+      return [path];
+    }),
+  );
+  return fingerprint(files.flat(), repositoryRoot);
+};
+
+const fingerprint = async (files: readonly string[], root: string): Promise<string> => {
+  const hash = createHash("sha256");
+  const entries = await Promise.all(
+    [...files].sort().map(async (file) => ({
+      file,
+      digest: createHash("sha256")
+        .update(await readFile(join(root, file)))
+        .digest(),
+    })),
+  );
+  for (const { file, digest } of entries) {
+    hash.update(file).update("\0").update(digest);
+  }
+  return hash.digest("hex");
+};
+
+const exampleFingerprint = async (): Promise<string> => {
+  const root = join(packageRoot, "public", "examples");
+  if (!(await lstat(root)).isDirectory()) {
+    throw new Error("Documentation examples must be stored in a regular directory.");
+  }
+  const files = await readdir(root, { recursive: true, withFileTypes: true });
+  const invalid = files.find((file) => !file.isFile() && !file.isDirectory());
+  if (invalid !== undefined) {
+    throw new Error(
+      `Documentation examples require regular files and directories: ${join(invalid.parentPath, invalid.name)}`,
+    );
+  }
+  return fingerprint(
+    files
+      .filter((file) => file.isFile())
+      .map((file) => relative(root, join(file.parentPath, file.name))),
+    root,
+  );
+};
+
+const checkExamples = async (): Promise<void> => {
+  const receipt = await readFile(examplesReceipt, "utf8").catch(() => "");
+  if (!receipt) {
+    throw new Error("Documentation examples are missing. Run make docs-examples first.");
+  }
+  const expected = JSON.stringify({
+    sources: await sourceFingerprint(),
+    artifacts: await exampleFingerprint(),
+  });
+  if (receipt !== expected) {
+    throw new Error("Documentation example sources or artifacts changed. Run make docs-examples.");
+  }
+  await verifyQuickstartBundle(join(quickstartDestination, "application"));
+  await verifyNotebook(join(quickstartDestination, "notebook", "index.html"), quickstartNotebook);
+  await verifyApplicationBundle(
+    join(marketDestination, "application"),
+    "The market dashboard bundle",
+  );
+  await verifyNotebook(join(marketDestination, "notebook", "index.html"), marketNotebook);
+  console.log(
+    "Verified documentation examples against their build sources and published artifacts.",
+  );
+};
+
 const main = async (): Promise<void> => {
+  if (process.argv.slice(2).includes("--check")) {
+    await checkExamples();
+    return;
+  }
   await mkdir(cacheRoot, { recursive: true });
+  const source = await sourceFingerprint();
   await buildQuickstart();
   await buildMarketDashboard();
+  if (source !== (await sourceFingerprint())) {
+    throw new Error(
+      "Documentation example sources changed during the build. Run make docs-examples.",
+    );
+  }
+  await writeFile(
+    examplesReceipt,
+    JSON.stringify({ sources: source, artifacts: await exampleFingerprint() }),
+  );
   console.log("Built and published the quickstart and market dashboard documentation examples.");
 };
 

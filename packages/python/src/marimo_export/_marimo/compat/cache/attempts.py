@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import ast
+import copy
 import threading
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
@@ -54,6 +56,7 @@ class _GraphScope:
     graph: Any
     output_cells: frozenset[Any]
     activity: CacheAttemptLog
+    environment: str | None = None
     forced_cells: frozenset[Any] = frozenset()
 
 
@@ -65,6 +68,8 @@ _SCOPES: dict[int, _GraphScope] = {}
 def track_notebook_cache(
     child_graph: Any,
     output_cell_ids: frozenset[Any],
+    *,
+    environment: str | None = None,
 ) -> Iterator[CacheAttemptLog]:
     """Record effective cache decisions for one exact child graph."""
 
@@ -72,6 +77,7 @@ def track_notebook_cache(
         graph=child_graph,
         output_cells=output_cell_ids,
         activity=CacheAttemptLog(),
+        environment=environment,
     )
     key = id(child_graph)
     with _SCOPES_LOCK:
@@ -88,10 +94,10 @@ def track_notebook_cache(
 
 
 @contextmanager
-def track_managed_parent_cache(graph: Any) -> Iterator[None]:
+def track_managed_parent_cache(graph: Any, *, environment: str | None = None) -> Iterator[None]:
     """Activate export cache policy for one owned parent graph."""
 
-    with track_notebook_cache(graph, frozenset()):
+    with track_notebook_cache(graph, frozenset(), environment=environment):
         yield
 
 
@@ -124,6 +130,11 @@ def cache_attempt_wrapper(native: Callable[..., Cache]) -> Callable[..., Cache]:
         *args: Any,
         **kwargs: Any,
     ) -> Cache:
+        with _SCOPES_LOCK:
+            scope = _SCOPES.get(id(graph))
+            environment = scope.environment if scope is not None and scope.graph is graph else None
+        if environment is not None:
+            module, scope_values = _with_environment(module, scope_values, environment)
         attempt = native(
             module,
             graph,
@@ -160,6 +171,42 @@ def cache_attempt_wrapper(native: Callable[..., Cache]) -> Callable[..., Cache]:
     return tracked
 
 
+def _with_environment(
+    module: ast.Module,
+    scope: dict[str, Any],
+    environment: str,
+) -> tuple[ast.Module, dict[str, Any]]:
+    from marimo._ast.transformers import DeprivateVisitor
+    from marimo._ast.variables import unmangle_local
+    from marimo._ast.visitor import ScopedVisitor
+
+    lookup = DeprivateVisitor().visit(copy.deepcopy(module))
+    visitor = ScopedVisitor("", ignore_local=True)
+    visitor.visit(lookup)
+    names = visitor.defs | visitor.refs | {unmangle_local(name).name for name in scope}
+    name = "__marimo_export_cache_environment"
+    while name in scope or name in names:
+        name += "_"
+    reference = ast.Expr(value=ast.Name(id=name, ctx=ast.Load()))
+    # The native hasher receives this reference. Authored execution keeps its
+    # original AST and scope, so the dependency input creates no notebook name.
+    lookup.body.append(reference)
+    return ast.fix_missing_locations(lookup), {**scope, name: environment}
+
+
+def record_cache_miss(graph: Any, cell_id: Any) -> None:
+    """Record a live run chosen after native restoration."""
+
+    with _SCOPES_LOCK:
+        scope = _scope_for(graph)
+        target = (
+            scope.activity.output_cells
+            if cell_id in scope.output_cells
+            else scope.activity.authored_cells
+        )
+        target[cell_id] = "miss"
+
+
 def _scope_for(graph: Any) -> _GraphScope:
     scope = _SCOPES.get(id(graph))
     if scope is None or scope.graph is not graph:
@@ -173,6 +220,14 @@ def has_cache_scope(graph: Any) -> bool:
     with _SCOPES_LOCK:
         scope = _SCOPES.get(id(graph))
         return scope is not None and scope.graph is graph
+
+
+def tracked_environment(graph: Any) -> str | None:
+    """Return the dependency identity frozen by this graph's owner."""
+
+    with _SCOPES_LOCK:
+        scope = _SCOPES.get(id(graph))
+        return scope.environment if scope is not None and scope.graph is graph else None
 
 
 def _rerun_unavailable_attempt(attempt: Cache) -> Cache:
@@ -213,6 +268,8 @@ __all__ = [
     "cache_attempt_wrapper",
     "force_cache_misses",
     "has_cache_scope",
+    "record_cache_miss",
     "track_managed_parent_cache",
     "track_notebook_cache",
+    "tracked_environment",
 ]

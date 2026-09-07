@@ -186,21 +186,17 @@ def _copy_assets(
     entries: Mapping[str, StateEntry],
     prepared: Mapping[str, PreparedState],
 ) -> None:
+    owners: dict[tuple[OutputCodec, str], PreparedState] = {}
+    for fingerprint, entry in entries.items():
+        for descriptor in entry.outputs.values():
+            if not isinstance(descriptor, (ScalarDescriptor, JsonDescriptor)):
+                owners.setdefault(
+                    (descriptor.codec, descriptor.asset.sha256), prepared[fingerprint]
+                )
     for codec, asset in index.assets():
         relative = asset_path(codec, asset.sha256)
-        source = next(
-            (
-                prepared[fingerprint].asset(relative)
-                for fingerprint, entry in entries.items()
-                if any(
-                    not isinstance(descriptor, (ScalarDescriptor, JsonDescriptor))
-                    and descriptor.codec == codec
-                    and descriptor.asset.sha256 == asset.sha256
-                    for descriptor in entry.outputs.values()
-                )
-            ),
-            None,
-        )
+        owner = owners.get((codec, asset.sha256))
+        source = None if owner is None else owner.asset(relative)
         if source is None:
             raise ExecutionError("prepared state asset is unavailable", code="export_invalid")
         target = destination / relative

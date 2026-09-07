@@ -7,6 +7,7 @@ pages_control: &pages_control
   - ".github/workflows/pages.yml"
 
 javascript_workspace: &javascript_workspace
+  - ".github/actions/setup-js/**"
   - ".pnpmfile.mjs"
   - "package.json"
   - "pnpm-lock.yaml"
@@ -16,6 +17,7 @@ javascript_workspace: &javascript_workspace
 
 python_inputs: &python_inputs
   - *ci_control
+  - "Makefile"
   - ".python-version"
   - "pyproject.toml"
   - "uv.lock"
@@ -48,11 +50,18 @@ frontend_inputs: &frontend_inputs
   - "examples/vite-vanilla/tests/**"
   - "examples/vite-vanilla/tsconfig.json"
   - "examples/vite-vanilla/vite.config.ts"
+  - "examples/quickstart/package.json"
+  - "examples/quickstart/index.html"
+  - "examples/quickstart/src/**"
+  - "examples/quickstart/tests/**"
+  - "examples/quickstart/tsconfig.json"
+  - "examples/quickstart/vite.config.ts"
   - "tests/fixtures/**"
   - "tools/oxlint/**"
   - .github/workflows/publish.yml
   - scripts/recover-release.mjs
   - scripts/smoke_npm_packages.mjs
+  - scripts/verify-npm.sh
   - scripts/fixtures/npm-consumer/**
 
 documentation:
@@ -77,12 +86,15 @@ pages:
   - "apps/docs/**"
   - "docs/**"
   - ".python-version"
+  - "Makefile"
+  - "pyproject.toml"
   - "uv.lock"
   - "packages/python/**"
   - "packages/browser/**"
   - "packages/portable-json/**"
   - "packages/loader-*/**"
   - "examples/vite-vanilla/**"
+  - "examples/quickstart/**"
 
 quality:
   - "**"
@@ -123,10 +135,10 @@ distribution:
   - "packages/browser/tests/*.mjs"
   - "packages/browser/tsconfig.json"
   - "packages/browser/vite.config.ts"
-  - "packages/loader-anywidget/package.json"
-  - "packages/loader-anywidget/src/**"
-  - "packages/loader-anywidget/tsconfig.json"
-  - "packages/loader-anywidget/vite.config.ts"
+  - "packages/loader-*/package.json"
+  - "packages/loader-*/src/**"
+  - "packages/loader-*/tsconfig.json"
+  - "packages/loader-*/vite.config.ts"
   - "packages/portable-json/LICENSE"
   - "packages/portable-json/README.md"
   - "packages/portable-json/package.json"

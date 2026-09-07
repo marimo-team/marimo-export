@@ -49,6 +49,7 @@ def require_cache_capabilities() -> None:
 
     try:
         import marimo._runtime.context as context_module
+        import marimo._save.hash as hash_module
         import marimo._save.loaders as loaders_module
         import marimo._save.loaders.lazy as lazy_module
         import marimo._save.stubs as stubs_module
@@ -71,6 +72,7 @@ def require_cache_capabilities() -> None:
     blob_schema = getattr(stubs_module, "BlobAsset", None)
 
     symbols = {
+        "BlockHasher": getattr(hash_module, "BlockHasher", None),
         "CachedLifecycle.__init__": getattr(lifecycle, "__init__", None),
         "CachedLifecycle._restored_ui_defs": restored_ui_defs,
         "CachedLifecycle.setup": getattr(lifecycle, "setup", None),

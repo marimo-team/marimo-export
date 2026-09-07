@@ -5,6 +5,9 @@ from __future__ import annotations
 import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
+
+from marimo_export._environment import environment_identity
 
 _MANAGED_CACHE_COMPAT_ENV = "MARIMO_EXPORT_MANAGED_CACHE_COMPAT"
 _MANAGED_CACHE_ACTIVATION_ENV = "MARIMO_EXPORT_MANAGED_CACHE_ACTIVATION"
@@ -39,14 +42,13 @@ async def kernel_lifespan(_: None) -> AsyncIterator[None]:
     from marimo_export._marimo.compat.inspection import install_parent_stop_provenance
 
     context = get_context()
-    if not isinstance(context, KernelRuntimeContext):
+    if not isinstance(context, KernelRuntimeContext) or context.filename is None:
         raise RuntimeError("managed cache integration requires a file-backed marimo kernel")
     require_cache_capabilities()
+    environment = environment_identity(Path(context.filename), exclude_source=True)
     release_stop_provenance = install_parent_stop_provenance(context)
     try:
-        with managed_cache_compat(context._kernel._hooks, context.graph):
-            from pathlib import Path
-
+        with managed_cache_compat(context._kernel._hooks, context.graph, environment=environment):
             Path(activation_path).write_text(activation_token, encoding="utf-8")
             yield
     finally:
