@@ -16,17 +16,17 @@ npm_dist="${NPM_DIST_DIR:-dist/npm}"
 browser_tarball="$npm_dist/marimo-team-marimo-export-$version.tgz"
 
 for ((attempt = 1; attempt <= 18; attempt++)); do
-	if ./scripts/publish-npm.sh --verify-only "$browser_tarball"; then
-		node scripts/smoke_npm_packages.mjs "$version" "$version"
+	if ./scripts/publish-npm.sh --verify-only "$browser_tarball" &&
+		node scripts/smoke_npm_packages.mjs "$version" "$version"; then
 		exit 0
 	fi
 
-	printf 'npm verification attempt %s of 18 did not find marimo-export %s\n' \
+	printf 'npm verification attempt %s of 18 did not verify marimo-export %s\n' \
 		"$attempt" "$version"
 	if [[ "$attempt" -lt 18 ]]; then
 		sleep 10
 	fi
 done
 
-printf 'ERROR: npm did not verify marimo-export %s within three minutes\n' "$version" >&2
+printf 'ERROR: npm did not verify marimo-export %s after 18 attempts\n' "$version" >&2
 exit 1

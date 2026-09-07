@@ -1,28 +1,33 @@
+import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { access, mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { access, copyFile, mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { isAbsolute, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const [browserDependency, expectedVersion] = process.argv.slice(2);
-if (browserDependency === undefined || expectedVersion === undefined) {
-  throw new Error("Usage: node scripts/smoke_npm_packages.mjs BROWSER_DEPENDENCY VERSION");
+export async function smokePackages(browserDependency, expectedVersion) {
+  const browserSpec = await packageSpec(browserDependency);
+  const temporaryRoot = await mkdtemp(resolve(tmpdir(), "marimo-export-npm-smoke-"));
+  const pnpm = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
+  try {
+    const root = resolve(temporaryRoot, "pnpm");
+    await createConsumer(root, browserSpec);
+    await run(pnpm, ["install", "--ignore-scripts"], root);
+    await run(process.execPath, ["smoke.mjs", expectedVersion], root);
+    process.stdout.write(
+      `Verified marimo-export ${expectedVersion} through an isolated pnpm install.\n`,
+    );
+  } finally {
+    await rm(temporaryRoot, { recursive: true, force: true });
+  }
 }
 
-const browserSpec = await packageSpec(browserDependency);
-const temporaryRoot = await mkdtemp(resolve(tmpdir(), "marimo-export-npm-smoke-"));
-const pnpm = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
-const node = process.execPath;
-
-try {
-  const root = resolve(temporaryRoot, "pnpm");
-  await createConsumer(root);
-  await run(pnpm, ["install", "--ignore-scripts"], root);
-  await run(node, ["smoke.mjs", expectedVersion], root);
-  process.stdout.write(
-    `Verified marimo-export ${expectedVersion} through an isolated pnpm install.\n`,
-  );
-} finally {
-  await rm(temporaryRoot, { recursive: true, force: true });
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  const [browserDependency, expectedVersion] = process.argv.slice(2);
+  if (browserDependency === undefined || expectedVersion === undefined) {
+    throw new Error("Usage: node scripts/smoke_npm_packages.mjs BROWSER_DEPENDENCY VERSION");
+  }
+  await smokePackages(browserDependency, expectedVersion);
 }
 
 async function packageSpec(value) {
@@ -36,7 +41,15 @@ async function packageSpec(value) {
   return `file:${candidate}`;
 }
 
-async function createConsumer(root) {
+export async function createConsumer(root, browserSpec) {
+  const { packageManager } = JSON.parse(
+    await readFile(new URL("../package.json", import.meta.url), "utf8"),
+  );
+  assert.match(
+    packageManager,
+    /^pnpm@\d+\.\d+\.\d+(?:\+sha512\.[a-f0-9]+)?$/,
+    "The release consumer requires the repository pnpm version pin",
+  );
   await mkdir(root);
   await Promise.all([
     writeFile(
@@ -47,6 +60,7 @@ async function createConsumer(root) {
           version: "0.0.0",
           private: true,
           type: "module",
+          packageManager,
           dependencies: {
             "@marimo-team/marimo-export": browserSpec,
           },
@@ -55,15 +69,9 @@ async function createConsumer(root) {
         2,
       )}\n`,
     ),
-    writeFile(
+    copyFile(
+      new URL("./fixtures/npm-consumer/pnpm-workspace.yaml", import.meta.url),
       resolve(root, "pnpm-workspace.yaml"),
-      `${JSON.stringify(
-        {
-          packages: ["."],
-        },
-        null,
-        2,
-      )}\n`,
     ),
     writeFile(
       resolve(root, "smoke.mjs"),

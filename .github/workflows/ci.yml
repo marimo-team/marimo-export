@@ -25,6 +25,7 @@ jobs:
       frontend_contracts: ${{ steps.filter.outputs.frontend_contracts }}
       python_contracts: ${{ steps.filter.outputs.python_contracts }}
       quality: ${{ steps.filter.outputs.quality }}
+      release_contracts: ${{ steps.filter.outputs.release_contracts }}
     steps:
       - name: Check out repository
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
@@ -240,10 +241,30 @@ jobs:
       - name: Build and verify packages
         run: make package
 
+  release-contracts:
+    name: Release contracts
+    needs: changes
+    if: needs.changes.outputs.release_contracts == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          persist-credentials: false
+      - name: Set up uv and Python
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d
+        with:
+          enable-cache: true
+          python-version: "3.12"
+      - name: Test release source and publication evidence
+        run: uv run --frozen --isolated --no-dev --group test --all-extras --python 3.12 pytest -q
+          packages/python/tests/test_release.py
+
   required:
     name: Required
     if: always()
-    needs: [changes, quality, test-python, test-frontend, package]
+    needs: [changes, quality, test-python, test-frontend, package, release-contracts]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -254,6 +275,8 @@ jobs:
           QUALITY: ${{ needs.quality.result }}
           TEST_FRONTEND: ${{ needs.test-frontend.result }}
           TEST_PYTHON: ${{ needs.test-python.result }}
+          RELEASE_CONTRACTS: ${{ needs.release-contracts.result }}
+          RELEASE_REQUIRED: ${{ needs.changes.outputs.release_contracts }}
         run: |
           if [ "$CHANGES" != success ]; then
             printf 'Change classification failed: %s\n' "$CHANGES" >&2
@@ -266,3 +289,10 @@ jobs:
               exit 1
             fi
           done
+
+          expected_release=skipped
+          if [ "$RELEASE_REQUIRED" = true ]; then expected_release=success; fi
+          if [ "$RELEASE_CONTRACTS" != "$expected_release" ]; then
+            printf 'Release contracts returned %s, expected %s\n' "$RELEASE_CONTRACTS" "$expected_release" >&2
+            exit 1
+          fi

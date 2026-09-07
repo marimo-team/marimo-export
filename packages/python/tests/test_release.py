@@ -330,13 +330,13 @@ def test_publish_workflow_coordinates_python_and_browser_distributions() -> None
         "dist/python/*.tar.gz",
     ]
     assert jobs["attest"]["needs"] == "build"
-    assert jobs["publish-npm"]["needs"] == "attest"
+    assert set(jobs["publish-npm"]["needs"]) == {"build", "attest"}
     publish = _step(jobs["publish-npm"], "Publish npm packages")
     assert publish["run"] == (
-        './scripts/publish-npm.sh "dist/npm/marimo-team-marimo-export-${GITHUB_REF_NAME#v}.tgz"'
+        './scripts/publish-npm.sh "dist/npm/marimo-team-marimo-export-$RELEASE_VERSION.tgz"'
     )
-    assert jobs["publish-pypi"]["needs"] == "verify-npm"
-    assert jobs["release-notes"]["needs"] == ["verify-npm", "verify-pypi"]
+    assert set(jobs["publish-pypi"]["needs"]) == {"build", "verify-npm"}
+    assert set(jobs["release-notes"]["needs"]) == {"verify-npm", "verify-pypi", "build"}
 
 
 def test_publish_workflow_scopes_oidc_to_attestation_and_registry_jobs() -> None:
@@ -511,3 +511,295 @@ done
     )
 
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+@pytest.fixture
+def recovery_verifier(monkeypatch: pytest.MonkeyPatch) -> tuple[Any, dict[str, Any]]:
+    verifier = _public_release_verifier()
+    version = "0.1.0"
+    commit, harness = "a" * 40, "b" * 40
+    source_id, recovery_id = 101, 202
+    packages = {
+        "marimo-team-marimo-export-0.1.0.tgz": b"browser",
+        "marimo_export-0.1.0-py3-none-any.whl": b"wheel",
+        "marimo_export-0.1.0.tar.gz": b"source",
+    }
+    manifest = "".join(
+        f"{sha256(payload).hexdigest()}  {name}\n" for name, payload in sorted(packages.items())
+    ).encode()
+    files = {**packages, "SHA256SUMS": manifest}
+
+    def run_record(run_id: int, event: str, branch: str, sha: str) -> dict[str, Any]:
+        return {
+            "id": run_id,
+            "event": event,
+            "head_branch": branch,
+            "head_sha": sha,
+            "repository": {"full_name": verifier.REPOSITORY},
+            "head_repository": {"full_name": verifier.REPOSITORY},
+            "path": ".github/workflows/publish.yml",
+            "status": "completed",
+            "conclusion": "success",
+            "run_attempt": 1,
+            "html_url": f"https://github.com/{verifier.REPOSITORY}/actions/runs/{run_id}",
+            "display_title": "Recover v0.1.0 from run 101",
+        }
+
+    source = {
+        **run_record(source_id, "push", "v0.1.0", commit),
+        "run_attempt": 2,
+        "conclusion": "failure",
+    }
+    recovery = run_record(recovery_id, "workflow_dispatch", "main", harness)
+
+    def job(name: str, attempt: int = 1) -> dict[str, Any]:
+        return {
+            "name": name,
+            "run_attempt": attempt,
+            "status": "completed",
+            "conclusion": "success",
+            "html_url": f"https://example.test/jobs/{name}",
+        }
+
+    jobs = {
+        source_id: [job("Build and verify", 2), job("Attest build provenance", 2)],
+        recovery_id: [job(name) for name in (*verifier.RELEASE_JOBS, "Release gate")],
+    }
+    jobs[recovery_id][1]["conclusion"] = "skipped"
+    receipt = {
+        "schema": 1,
+        "version": version,
+        "tag": "v0.1.0",
+        "commit": commit,
+        "repository": verifier.REPOSITORY,
+        "workflow": ".github/workflows/publish.yml",
+        "source_run": source_id,
+        "source_attempt": 2,
+        "artifact_id": 303,
+        "attestation_attempt": 1,
+        "checksums_sha256": sha256(manifest).hexdigest(),
+        "recovery_run": recovery_id,
+        "recovery_attempt": 1,
+        "recovery_commit": harness,
+        "recovery_ref": "refs/heads/main",
+    }
+    evidence: dict[str, Any] = {
+        "source": source,
+        "has_recovery": True,
+        "tag_run": {**run_record(909, "push", "v0.1.0", commit), "conclusion": "cancelled"},
+        "recovery": recovery,
+        "receipt": receipt,
+        "jobs": jobs,
+        "harness_ci": "success",
+        "invocation": f"https://github.com/{verifier.REPOSITORY}/actions/runs/101/attempts/1",
+        "verified_files": [],
+        "registry_checks": [],
+    }
+
+    def json_command(*arguments: str) -> Any:
+        if arguments[:3] == ("gh", "run", "list"):
+            workflow = arguments[arguments.index("--workflow") + 1]
+            selected = arguments[arguments.index("--commit") + 1]
+            return [
+                {
+                    "databaseId": evidence["tag_run"]["id"] if workflow == "publish.yml" else 404,
+                    "headSha": selected,
+                    "status": "completed",
+                    "conclusion": evidence["tag_run"]["conclusion"]
+                    if workflow == "publish.yml"
+                    else (evidence["harness_ci"] if selected == harness else "success"),
+                    "url": "https://example.test/workflow",
+                }
+            ]
+        if arguments[:3] == ("gh", "release", "view"):
+            return {
+                "tagName": "v0.1.0",
+                "isDraft": False,
+                "isPrerelease": False,
+                "url": "https://example.test/release",
+                "assets": [{"name": n} for n in files]
+                + ([{"name": "release-recovery.json"}] if evidence["has_recovery"] else []),
+            }
+        endpoint = arguments[-1]
+        if "/git/ref/tags/" in endpoint:
+            return {"object": {"type": "tag", "sha": "c" * 40}}
+        if "/git/tags/" in endpoint:
+            return {"tag": "v0.1.0", "object": {"type": "commit", "sha": commit}}
+        if endpoint.endswith("/jobs?filter=all&per_page=100"):
+            run_id = int(endpoint.split("/runs/")[1].split("/")[0])
+            return [{"jobs": jobs[run_id]}]
+        if endpoint.endswith("/runs/909"):
+            return evidence["tag_run"]
+        if endpoint.endswith(f"/runs/{source_id}"):
+            return source
+        if endpoint.endswith(f"/runs/{recovery_id}"):
+            return recovery
+        raise RuntimeError(f"unavailable GitHub evidence: {arguments}")
+
+    def command(*arguments: str, **_kwargs: Any) -> str:
+        if arguments[:3] in {("gh", "run", "download"), ("gh", "release", "download")}:
+            directory = Path(arguments[arguments.index("--dir") + 1])
+            if arguments[1] == "run":
+                directory.joinpath("release-recovery.json").write_text(json.dumps(receipt))
+            else:
+                for name, content in files.items():
+                    directory.joinpath(name).write_bytes(content)
+                if evidence["has_recovery"]:
+                    directory.joinpath("release-recovery.json").write_text(json.dumps(receipt))
+            return ""
+        if arguments[:3] == ("gh", "attestation", "verify"):
+            evidence["verified_files"].append(Path(arguments[3]).name)
+            assert arguments[arguments.index("--source-ref") + 1] == "refs/tags/v0.1.0"
+            assert arguments[arguments.index("--source-digest") + 1] == commit
+            return json.dumps(
+                [
+                    {
+                        "verificationResult": {
+                            "signature": {
+                                "certificate": {"runInvocationURI": evidence["invocation"]}
+                            }
+                        }
+                    }
+                ]
+            )
+        if arguments[0] == "./scripts/publish-npm.sh":
+            evidence["registry_checks"].append("npm")
+            return ""
+        raise AssertionError(arguments)
+
+    class PyPI:
+        @staticmethod
+        def _fetch_release(_version: str) -> dict[str, Any]:
+            return {}
+
+        @staticmethod
+        def verify_release(directory: Path, selected: str, _metadata: Any) -> None:
+            assert selected == version
+            assert {path.name for path in directory.iterdir()} == {
+                "marimo_export-0.1.0-py3-none-any.whl",
+                "marimo_export-0.1.0.tar.gz",
+            }
+            evidence["registry_checks"].append("pypi")
+
+    monkeypatch.setattr(verifier.shutil, "which", lambda name: f"/tools/{name}")
+    monkeypatch.setattr(verifier, "_json_command", json_command)
+    monkeypatch.setattr(verifier, "_run", command)
+    monkeypatch.setattr(verifier, "_pypi_verifier", lambda: PyPI)
+    return verifier, evidence
+
+
+@pytest.mark.parametrize("selected_run", [None, 202])
+def test_public_release_verifier_accepts_the_exact_recovery_chain(
+    recovery_verifier: Any,
+    selected_run: int | None,
+) -> None:
+    verifier, evidence = recovery_verifier
+    result = verifier.verify_public_release("0.1.0", recovery_run=selected_run)
+    assert result["commit"] == "a" * 40
+    assert result["recovery"]["recovery_commit"] == "b" * 40
+    assert result["recovery"]["source_attempt"] == 2
+    assert result["recovery"]["attestation_attempt"] == 1
+    assert set(evidence["verified_files"]) == {item["name"] for item in result["artifacts"]}
+    assert evidence["registry_checks"] == ["npm", "pypi"]
+    assert result["fresh_installs"]["pnpm"]["conclusion"] == "success"
+    assert result["fresh_installs"]["python"]["conclusion"] == "success"
+
+
+@pytest.mark.parametrize(
+    ("owner", "field", "value"),
+    [
+        ("source", "event", "workflow_dispatch"),
+        ("source", "head_branch", "main"),
+        ("source", "head_sha", "d" * 40),
+        ("recovery", "head_branch", "topic"),
+        ("recovery", "event", "push"),
+        ("recovery", "conclusion", "failure"),
+        ("receipt", "source_run", 999),
+        ("receipt", "source_attempt", 3),
+        ("receipt", "recovery_commit", "d" * 40),
+        ("receipt", "recovery_attempt", 2),
+        ("receipt", "attestation_attempt", 3),
+        ("receipt", "checksums_sha256", "0" * 64),
+    ],
+)
+def test_public_release_verifier_rejects_mismatched_recovery_identity(
+    recovery_verifier: Any,
+    owner: str,
+    field: str,
+    value: Any,
+) -> None:
+    verifier, evidence = recovery_verifier
+    evidence[owner][field] = value
+    with pytest.raises(RuntimeError):
+        verifier.verify_public_release("0.1.0", recovery_run=202)
+    assert evidence["registry_checks"] == []
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [
+        "original-attest",
+        "gate",
+        "fresh-attest",
+        "harness-ci",
+        "unrelated-dispatch",
+        "wrong-signing-run",
+        "wrong-signing-attempt",
+    ],
+)
+def test_public_release_verifier_requires_recovery_prerequisites(
+    recovery_verifier: Any,
+    failure: str,
+) -> None:
+    verifier, evidence = recovery_verifier
+    if failure == "original-attest":
+        evidence["jobs"][101][1]["conclusion"] = "failure"
+    elif failure == "gate":
+        evidence["jobs"][202][-1]["conclusion"] = "skipped"
+    elif failure == "fresh-attest":
+        evidence["jobs"][202][1]["conclusion"] = "success"
+    elif failure == "harness-ci":
+        evidence["harness_ci"] = "failure"
+    elif failure == "unrelated-dispatch":
+        evidence["recovery"]["display_title"] = "Some other successful dispatch"
+    elif failure == "wrong-signing-run":
+        evidence["invocation"] = evidence["invocation"].replace("/101/", "/999/")
+    else:
+        evidence["invocation"] = evidence["invocation"].replace("/attempts/1", "/attempts/2")
+    with pytest.raises(RuntimeError):
+        verifier.verify_public_release("0.1.0")
+    assert evidence["registry_checks"] == []
+
+
+def test_public_release_verifier_retains_receipt_identity_across_downstream_retries(
+    recovery_verifier: Any,
+) -> None:
+    verifier, evidence = recovery_verifier
+    evidence["recovery"]["run_attempt"] = 2
+    evidence["source"]["run_attempt"] = 3
+    result = verifier.verify_public_release("0.1.0")
+    assert result["recovery"]["recovery_attempt"] == 1
+    assert result["recovery"]["source_attempt"] == 2
+    assert result["recovery"]["attestation_attempt"] == 1
+
+
+def test_public_release_verifier_accepts_a_complete_tagged_publication(
+    recovery_verifier: Any,
+) -> None:
+    verifier, evidence = recovery_verifier
+    evidence["has_recovery"] = False
+    evidence["source"]["conclusion"] = "success"
+    evidence["tag_run"] = evidence["source"]
+    evidence["jobs"][101] = [
+        {
+            "name": name,
+            "status": "completed",
+            "conclusion": "success",
+            "run_attempt": 2,
+            "html_url": f"https://example.test/source/{name}",
+        }
+        for name in verifier.RELEASE_JOBS
+    ]
+    result = verifier.verify_public_release("0.1.0")
+    assert result["commit"] == "a" * 40
+    assert evidence["registry_checks"] == ["npm", "pypi"]

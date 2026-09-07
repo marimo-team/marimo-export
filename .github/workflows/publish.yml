@@ -4,6 +4,16 @@ on:
   push:
     tags:
       - "v[0-9]*.[0-9]*.[0-9]*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Published npm version to finish, in X.Y.Z form
+        required: true
+        type: string
+      source_run:
+        description: Original tagged release run that built and attested the artifacts
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -18,6 +28,7 @@ jobs:
     permissions:
       actions: read
       contents: read
+      attestations: read
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -32,14 +43,17 @@ jobs:
         with:
           enable-cache: true
           version: "0.12.9"
+        if: github.event_name == 'push'
 
       - name: Fetch current main
         run: git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
+        if: github.event_name == 'push'
 
       - name: Verify release source
         env:
           GH_TOKEN: ${{ github.token }}
         run: ./scripts/check-release.sh
+        if: github.event_name == 'push'
 
       - name: Set up Vite+
         uses: voidzero-dev/setup-vp@49c3e4e92c52e7f8392712a9267bbe71c5ab30e5 # v1.19.0
@@ -49,15 +63,67 @@ jobs:
           cache: true
           run-install: |
             - args: ['--frozen-lockfile']
+        if: github.event_name == 'push'
 
       - name: Enable pnpm
         run: corepack enable pnpm
+        if: github.event_name == 'push'
 
       - name: Install Python workspace
         run: uv sync --all-packages --all-extras --locked
+        if: github.event_name == 'push'
 
       - name: Build release artifacts
         run: make package
+        if: github.event_name == 'push'
+      - name: Record release identity
+        id: identity
+        if: github.event_name == 'push'
+        run: printf 'version=%s\ntag=%s\n' "${GITHUB_REF_NAME#v}" "$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
+      - name: Validate original release evidence
+        id: recovery
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ inputs.version }}
+          SOURCE_RUN: ${{ inputs.source_run }}
+          RECOVERY_RECEIPT: ${{ runner.temp }}/release-recovery.json
+        run: node scripts/recover-release.mjs inspect "$RELEASE_VERSION" "$SOURCE_RUN"
+      - name: Download original release artifacts
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          artifact-ids: ${{ steps.recovery.outputs.artifact_id }}
+          run-id: ${{ inputs.source_run }}
+          github-token: ${{ github.token }}
+          merge-multiple: true
+          path: dist
+      - name: Verify original release bytes and provenance
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ steps.recovery.outputs.version }}
+          RELEASE_TAG: ${{ steps.recovery.outputs.tag }}
+          RELEASE_COMMIT: ${{ steps.recovery.outputs.commit }}
+          RECOVERY_RECEIPT: ${{ runner.temp }}/release-recovery.json
+          RECOVERY_ATTESTATION: ${{ runner.temp }}/release-attestation.json
+        run: |-
+          node scripts/recover-release.mjs verify "$RELEASE_VERSION" dist
+          gh attestation verify dist/SHA256SUMS \
+            --repo "$GITHUB_REPOSITORY" \
+            --source-ref "refs/tags/$RELEASE_TAG" \
+            --source-digest "$RELEASE_COMMIT" \
+            --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/publish.yml" \
+            --format=json > "$RECOVERY_ATTESTATION"
+          node scripts/recover-release.mjs receipt "$RELEASE_VERSION" dist
+      - name: Upload recovery source evidence
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: release-recovery
+          path: ${{ runner.temp }}/release-recovery.json
+          retention-days: 90
+          if-no-files-found: error
 
       - name: Upload release artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -68,8 +134,12 @@ jobs:
             dist/npm/*.tgz
             dist/python/*.whl
             dist/python/*.tar.gz
-          retention-days: 1
+          retention-days: 90
           if-no-files-found: error
+    if: github.event_name == 'push' || github.ref == 'refs/heads/main'
+    outputs:
+      version: ${{ steps.recovery.outputs.version || steps.identity.outputs.version }}
+      tag: ${{ steps.recovery.outputs.tag || steps.identity.outputs.tag }}
 
   attest:
     name: Attest build provenance
@@ -97,10 +167,13 @@ jobs:
             dist/npm/*.tgz
             dist/python/*.whl
             dist/python/*.tar.gz
+    if: github.event_name == 'push'
 
   publish-npm:
     name: Publish npm packages
-    needs: attest
+    needs:
+      - build
+      - attest
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment:
@@ -132,11 +205,24 @@ jobs:
           path: dist
 
       - name: Publish npm packages
-        run: ./scripts/publish-npm.sh "dist/npm/marimo-team-marimo-export-${GITHUB_REF_NAME#v}.tgz"
+        run: ./scripts/publish-npm.sh "dist/npm/marimo-team-marimo-export-$RELEASE_VERSION.tgz"
+        if: github.event_name == 'push'
+      - name: Verify previously published npm bytes
+        if: github.event_name == 'workflow_dispatch'
+        run: ./scripts/publish-npm.sh --verify-only
+          "dist/npm/marimo-team-marimo-export-$RELEASE_VERSION.tgz"
+    if: "!cancelled() && needs.build.result == 'success' && ((github.event_name == 'push' &&
+      needs.attest.result == 'success') || (github.event_name == 'workflow_dispatch' &&
+      needs.attest.result == 'skipped'))"
+    env:
+      RELEASE_VERSION: ${{ needs.build.outputs.version }}
+      RELEASE_TAG: ${{ needs.build.outputs.tag }}
 
   verify-npm:
     name: Verify npm packages
-    needs: publish-npm
+    needs:
+      - publish-npm
+      - build
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -162,10 +248,16 @@ jobs:
 
       - name: Verify public npm packages
         run: ./scripts/verify-npm.sh
+    env:
+      RELEASE_VERSION: ${{ needs.build.outputs.version }}
+      RELEASE_TAG: ${{ needs.build.outputs.tag }}
+    if: "!cancelled() && needs.publish-npm.result == 'success' && needs.build.result == 'success'"
 
   publish-pypi:
     name: Publish Python package
-    needs: verify-npm
+    needs:
+      - verify-npm
+      - build
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment:
@@ -190,15 +282,18 @@ jobs:
 
       - name: Publish Python package
         run: >-
-          uv publish
-          --check-url https://pypi.org/simple
-          --trusted-publishing always
-          dist/python/marimo_export-*.whl
-          dist/python/marimo_export-*.tar.gz
+          uv publish --check-url https://pypi.org/simple --trusted-publishing always
+          dist/python/marimo_export-*.whl dist/python/marimo_export-*.tar.gz
+    env:
+      RELEASE_VERSION: ${{ needs.build.outputs.version }}
+      RELEASE_TAG: ${{ needs.build.outputs.tag }}
+    if: "!cancelled() && needs.verify-npm.result == 'success' && needs.build.result == 'success'"
 
   verify-pypi:
     name: Verify Python package
-    needs: publish-pypi
+    needs:
+      - publish-pypi
+      - build
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -222,10 +317,14 @@ jobs:
 
       - name: Verify public Python package
         run: ./scripts/verify-pypi.sh
+    env:
+      RELEASE_VERSION: ${{ needs.build.outputs.version }}
+      RELEASE_TAG: ${{ needs.build.outputs.tag }}
+    if: "!cancelled() && needs.publish-pypi.result == 'success' && needs.build.result == 'success'"
 
   release-notes:
     name: Create GitHub release
-    needs: [verify-npm, verify-pypi]
+    needs: [verify-npm, verify-pypi, build]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -237,6 +336,12 @@ jobs:
         with:
           name: release-artifacts
           path: dist
+      - name: Download recovery receipt
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: release-recovery
+          path: recovery
 
       - name: Create GitHub release
         run: |
@@ -246,17 +351,65 @@ jobs:
             dist/python/*.whl
             dist/python/*.tar.gz
           )
-          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            gh release edit "$GITHUB_REF_NAME" \
-              --title "marimo-export $GITHUB_REF_NAME" \
+          if [[ "$RELEASE_EVENT" == workflow_dispatch ]]; then
+            artifacts+=(recovery/release-recovery.json)
+          fi
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release edit "$RELEASE_TAG" \
+              --title "marimo-export $RELEASE_TAG" \
               --verify-tag
-            gh release upload "$GITHUB_REF_NAME" "${artifacts[@]}" --clobber
+            gh release upload "$RELEASE_TAG" "${artifacts[@]}" --clobber
           else
-            gh release create "$GITHUB_REF_NAME" "${artifacts[@]}" \
+            gh release create "$RELEASE_TAG" "${artifacts[@]}" \
               --generate-notes \
-              --title "marimo-export $GITHUB_REF_NAME" \
+              --title "marimo-export $RELEASE_TAG" \
               --verify-tag
           fi
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
+          RELEASE_EVENT: ${{ github.event_name }}
+    env:
+      RELEASE_VERSION: ${{ needs.build.outputs.version }}
+      RELEASE_TAG: ${{ needs.build.outputs.tag }}
+    if:
+      "!cancelled() && needs.verify-npm.result == 'success' && needs.verify-pypi.result == 'success'
+      && needs.build.result == 'success'"
+  complete:
+    name: Release gate
+    if: always()
+    needs:
+      - build
+      - attest
+      - publish-npm
+      - verify-npm
+      - publish-pypi
+      - verify-pypi
+      - release-notes
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    steps:
+      - name: Require completed publication and verification
+        shell: bash
+        env:
+          BUILD: ${{ needs.build.result }}
+          ATTEST: ${{ needs.attest.result }}
+          EXPECTED_ATTEST: ${{ github.event_name == 'push' && 'success' || 'skipped' }}
+          PUBLISH_NPM: ${{ needs.publish-npm.result }}
+          VERIFY_NPM: ${{ needs.verify-npm.result }}
+          PUBLISH_PYPI: ${{ needs.publish-pypi.result }}
+          VERIFY_PYPI: ${{ needs.verify-pypi.result }}
+          RELEASE_NOTES: ${{ needs.release-notes.result }}
+        run: |-
+          for stage in BUILD PUBLISH_NPM VERIFY_NPM PUBLISH_PYPI VERIFY_PYPI RELEASE_NOTES; do
+            if [[ "${!stage}" != success ]]; then
+              printf '%s returned %s, expected success\n' "$stage" "${!stage}" >&2
+              exit 1
+            fi
+          done
+          if [[ "$ATTEST" != "$EXPECTED_ATTEST" ]]; then
+            printf 'Attestation returned %s, expected %s\n' "$ATTEST" "$EXPECTED_ATTEST" >&2
+            exit 1
+          fi
+run-name: ${{ github.event_name == 'workflow_dispatch' && format('Recover v{0} from run {1}',
+  inputs.version, inputs.source_run) || github.ref_name }}
