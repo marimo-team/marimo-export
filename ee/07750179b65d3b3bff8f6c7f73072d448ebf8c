@@ -1,0 +1,31 @@
+docs/reference/python/delivery-and-publications.md
+  s_6628195629b8dd::t_5f30029e2f126e 277-279,292-294,320-322
+development_docs/architecture/application-publication-and-delivery.md
+  s_6628195629b8dd::t_a7cfedb36102ed 152-153
+  s_6628195629b8dd::t_9cf1d8681a1342 151
+  s_6628195629b8dd::t_5f30029e2f126e 61-62,74,147-150
+packages/python/src/marimo_export/_publication.py
+  s_6628195629b8dd::t_f7742799086519 4,58-63,126-128,212,253,263
+packages/python/tests/test_publication.py
+  s_6628195629b8dd::t_f7742799086519 414,416
+  s_6628195629b8dd::t_f71fb33c5abec5 494,500
+  s_6628195629b8dd::t_55d5de26c2c045 290
+  s_6628195629b8dd::t_3bdfb50959a418 7,291-299,365-366,368
+  s_6628195629b8dd::t_87f73724b08a88 10,373-413,415,417-493,495-499,501-503
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "ee07750179b65d3b3bff8f6c7f73072d448ebf8c",
+  "prompts": {},
+  "sessions": {
+    "s_6628195629b8dd": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a07c52-9946-7fe2-adcb-3a256c68154f",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
