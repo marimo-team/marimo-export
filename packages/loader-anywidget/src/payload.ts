@@ -670,7 +670,7 @@ function parseSnapshotValue<Value>(value: Value): ModelValue {
   if (isBooleanValue(value) || isNumberValue(value) || isStringValue(value)) return value;
   if (Array.isArray(value)) return value.map(parseSnapshotValue);
   if (!isRecordValue(value)) throw new TypeError("AnyWidget payload must contain JSON values.");
-  const parsed: ModelState = {};
-  for (const [key, child] of Object.entries(value)) parsed[key] = parseSnapshotValue(child);
-  return parsed;
+  return Object.fromEntries(
+    Object.entries(value).map(([key, child]) => [key, parseSnapshotValue(child)]),
+  );
 }
