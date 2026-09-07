@@ -1,0 +1,23 @@
+packages/browser/tests/release-consumer.test.mjs
+  s_6628195629b8dd::t_6219986872a362 32-35
+  s_6628195629b8dd::t_d2844728f3f461 41-42,50-51
+  s_6628195629b8dd::t_1a3c6892efd785 10-12,36-40
+  s_6628195629b8dd::t_5951fba3d529ac 48
+  s_6628195629b8dd::t_b9cb8f57a601a4 43-47,49
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "598faee534d1a2fca27f550854a95b34939b0b58",
+  "prompts": {},
+  "sessions": {
+    "s_6628195629b8dd": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a07c52-9946-7fe2-adcb-3a256c68154f",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
