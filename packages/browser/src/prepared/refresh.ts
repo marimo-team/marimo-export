@@ -188,9 +188,10 @@ export class PreparedPublicationRefresh {
         signal,
       });
     }
-    publication = preservePreparedSelection(current, publication);
+    const latest = this.#state.snapshot().current;
+    publication = preservePreparedSelection(latest, publication);
     throwIfPreparedAborted(signal);
-    if (kind === "start" && current === undefined) {
+    if (kind === "start" && latest === undefined) {
       await this.#state.start(publication, signal);
     } else {
       await this.#state.replacePublication(publication, signal);
