@@ -1,0 +1,19 @@
+packages/browser/tests/replay-resources.test.ts
+  s_56e158cb000e90::t_d1c0d017276dcd 2,6,10,132-155
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "65dbeb73fc21572b8edfc9648c179c671e04cb47",
+  "prompts": {},
+  "sessions": {
+    "s_56e158cb000e90": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a07b45-7b01-7401-b27e-69a603864d00",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
