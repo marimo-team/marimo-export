@@ -1,0 +1,30 @@
+scripts/verify-pypi.sh
+  s_6628195629b8dd::t_8dab2f832e0c05 27-42
+packages/python/tests/test_release.py
+  s_6628195629b8dd::t_e2a35a0c02a474 423-426
+  s_6628195629b8dd::t_be51a358da7833 6,442-455
+  s_6628195629b8dd::t_113e212fb97726 415-419
+  s_6628195629b8dd::t_8dab2f832e0c05 315-349,351-355,357-383
+.github/workflows/publish.yml
+  s_6628195629b8dd::t_8dab2f832e0c05 10,245,275-277
+development_docs/releasing.md
+  s_6628195629b8dd::t_42040537a7ca47 192-193
+  s_6628195629b8dd::t_d1094da3e2ecac 203-209
+  s_6628195629b8dd::t_e66e721e37cd2f 210-211
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "cc19ed727a3855291c83a6c56a9c3490ec137e64",
+  "prompts": {},
+  "sessions": {
+    "s_6628195629b8dd": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a07c52-9946-7fe2-adcb-3a256c68154f",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
