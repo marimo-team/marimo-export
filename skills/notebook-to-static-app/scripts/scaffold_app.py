@@ -380,7 +380,7 @@ def _write_package_json(
             "vite-plus": "0.3.0",
         },
         "engines": {"node": ">=22.18.0"},
-        "packageManager": "pnpm@11.25.0",
+        "packageManager": "pnpm@12.3.4",
     }
     path.write_text(json.dumps(value, indent=2) + "\n", encoding="utf-8")
 
