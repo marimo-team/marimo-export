@@ -3,7 +3,7 @@ export {
   parsePreparedExportManifest,
   resolvePreparedPublication,
 } from "./manifest.js";
-export { fetchPreparedExportManifest } from "./manifest-fetch.js";
+export { fetchPreparedExportManifest, fetchPreparedManifestDocument } from "./manifest-fetch.js";
 export { PreparedStateController } from "./controller.js";
 export { PreparedPublicationRefresh } from "./refresh.js";
 export { preparedControlInputPatch, samePreparedInputs } from "./control.js";

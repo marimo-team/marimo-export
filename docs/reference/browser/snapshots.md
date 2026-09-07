@@ -41,6 +41,24 @@ browser reader verifies the asset. A parser failure reached through
 `ExportOutput.load()` becomes `NotebookExportError` code `decode_failed` with
 output context.
 
+## Compose replay resources
+
+```ts
+import { mergeMarimoReplayResources } from "@marimo-team/marimo-export";
+
+const resources = mergeMarimoReplayResources([snapshot]);
+```
+
+`mergeMarimoReplayResources(snapshots)` accepts rendered-output and complete-cell
+snapshots and returns frozen `MarimoReplayResources`. It validates resource
+ownership, combines files and UI values, and deduplicates identical shared model
+sequences. Every input snapshot's lifecycle order is preserved, including
+ordering between models and repeated messages within one sequence.
+
+Conflicting file contents, UI values, model sequences, or lifecycle ordering
+raise `TypeError` before rendering. The operation parses resource records and
+does not import widget modules or mutate the document.
+
 ## Rendered-output snapshot
 
 ```ts

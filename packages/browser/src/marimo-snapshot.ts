@@ -206,11 +206,14 @@ function parseCellOutput(value: JsonValue | undefined, path: string): MarimoCell
   });
 }
 
-function parseResources(
+export function parseResources(
   value: JsonValue | undefined,
   ownerCellId: string,
   projectionSha256: string,
 ): MarimoReplayResources {
+  if (!SHA256.test(projectionSha256)) {
+    throw new TypeError("Replay resources require a valid projection digest.");
+  }
   const resources = strictRecord(value, "resources", [
     "files",
     "functions",

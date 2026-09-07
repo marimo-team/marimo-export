@@ -58,6 +58,7 @@ const arbitraryAbort = (): AbortSignal => {
 class TestGraphPort implements PreparedWidgetGraphPort<GraphRecord, LiveModel> {
   readonly models = new Map<string, LiveModel>();
   readonly events: string[] = [];
+  readonly replayBatches: string[][] = [];
   readonly closeFailures = new Set<string>();
   readonly persistentCloseFailures = new Set<string>();
   readonly captureFailures = new Set<string>();
@@ -97,16 +98,19 @@ class TestGraphPort implements PreparedWidgetGraphPort<GraphRecord, LiveModel> {
     };
   }
 
-  async replay(value: GraphRecord, signal?: AbortSignal): Promise<void> {
-    signal?.throwIfAborted();
-    this.events.push(`replay:${value.id}:${value.revision}`);
-    if (this.replayFailures.delete(value.id) || value.failReplay) {
-      throw new Error(`Replay failed for ${value.id}`);
+  async replay(records: readonly GraphRecord[], signal?: AbortSignal): Promise<void> {
+    this.replayBatches.push(records.map((value) => value.id));
+    for (const value of records) {
+      signal?.throwIfAborted();
+      this.events.push(`replay:${value.id}:${value.revision}`);
+      if (this.replayFailures.delete(value.id) || value.failReplay) {
+        throw new Error(`Replay failed for ${value.id}`);
+      }
+      this.models.set(value.id, {
+        module: value.module,
+        state: structuredClone(value.state),
+      });
     }
-    this.models.set(value.id, {
-      module: value.module,
-      state: structuredClone(value.state),
-    });
   }
 
   restore(id: string, state: LiveModel): void {
@@ -152,6 +156,36 @@ const commit = async (
 };
 
 describe("prepared AnyWidget graph", () => {
+  test("replays additions, stable updates, and module replacements in one ordered batch", async () => {
+    const port = new TestGraphPort();
+    const runtime = new PreparedWidgetGraph(port);
+    await commit(
+      runtime,
+      graph([
+        record("stable", "first", { count: 1 }),
+        record("replacement", "first", { count: 2 }),
+      ]),
+    );
+    port.models.get("replacement")!.state.count = 9;
+    port.replayBatches.length = 0;
+
+    const replacement = await runtime.replace(
+      graph([
+        record("stable", "next", { count: 3 }),
+        record("addition", "next", { count: 4 }),
+        record("replacement", "next", { count: 5 }, { module: "module-b" }),
+      ]),
+    );
+
+    expect(port.replayBatches).toEqual([["stable", "addition", "replacement"]]);
+    expect(port.models.get("replacement")?.state).toEqual({ count: 9 });
+    await replacement.rollback();
+    expect(port.models.get("stable")?.state).toEqual({ count: 1 });
+    expect(port.models.has("addition")).toBe(false);
+    expect(port.models.get("replacement")).toEqual({ module: "module-a", state: { count: 9 } });
+    await runtime.dispose();
+  });
+
   test("returns the adopted graph when a replacement commits", async () => {
     const port = new TestGraphPort();
     const runtime = new PreparedWidgetGraph(port);
