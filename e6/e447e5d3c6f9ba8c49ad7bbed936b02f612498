@@ -1,0 +1,27 @@
+packages/loader-anywidget/tests/prepared-graph.test.ts
+  s_6628195629b8dd::t_43a0c56e12a637 238
+packages/browser/tests/prepared-controller.test.ts
+  s_6628195629b8dd::t_423be3eb44331f 97-105,115-118,129-135,137,139-141
+packages/loader-anywidget/tests/runtime.test.ts
+  s_6628195629b8dd::t_43a0c56e12a637 216,359
+packages/loader-anywidget/tests/module-cache.test.ts
+  s_6628195629b8dd::t_43a0c56e12a637 7
+packages/loader-anywidget/tests/payload.browser.test.ts
+  s_6628195629b8dd::t_43a0c56e12a637 3,8,10,24
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "e6e447e5d3c6f9ba8c49ad7bbed936b02f612498",
+  "prompts": {},
+  "sessions": {
+    "s_6628195629b8dd": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a07c52-9946-7fe2-adcb-3a256c68154f",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
