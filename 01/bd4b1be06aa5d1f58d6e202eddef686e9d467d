@@ -1,0 +1,20 @@
+examples/vite-vanilla/finance.py
+  s_6628195629b8dd::t_eeef50520bf3c6 79
+  s_6628195629b8dd::t_2b87459966f1bf 78
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "01bd4b1be06aa5d1f58d6e202eddef686e9d467d",
+  "prompts": {},
+  "sessions": {
+    "s_6628195629b8dd": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a07c52-9946-7fe2-adcb-3a256c68154f",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
