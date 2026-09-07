@@ -65,30 +65,47 @@ const summaryHost = required<HTMLPreElement>("#summary");
 const reportHost = required<HTMLPreElement>("#report");
 const status = required<HTMLParagraphElement>("#status");
 
-const show = async (name: "weekly" | "monthly"): Promise<void> => {
-  status.textContent = `Loading ${name}`;
-  const state = notebookExport.state(name);
-  const [summary, report] = await Promise.all([
-    state.output("summary").load(jsonLoader()),
-    state.output("report").load(marimoOutputLoader()),
-  ]);
-  if (report.output?.mimetype !== "text/markdown" || typeof report.output.data !== "string") {
-    throw new Error("The report output is not rendered Markdown");
-  }
+let pending: AbortController | undefined;
 
-  summaryHost.textContent = JSON.stringify(summary, null, 2);
-  const parsed = new DOMParser().parseFromString(report.output.data, "text/html");
-  reportHost.textContent = parsed.body.textContent?.trim() ?? "";
-  status.textContent = `${name} ready`;
-  for (const button of document.querySelectorAll<HTMLButtonElement>("[data-state]")) {
-    button.setAttribute("aria-pressed", String(button.dataset.state === name));
+const show = async (name: "weekly" | "monthly"): Promise<void> => {
+  pending?.abort();
+  const current = new AbortController();
+  pending = current;
+  status.textContent = `Loading ${name}`;
+
+  try {
+    const state = notebookExport.state(name);
+    const options = { signal: current.signal };
+    const [summary, report] = await Promise.all([
+      state.output("summary").load(jsonLoader(), options),
+      state.output("report").load(marimoOutputLoader(), options),
+    ]);
+    if (report.output?.mimetype !== "text/markdown" || typeof report.output.data !== "string") {
+      throw new Error("The report output is not rendered Markdown");
+    }
+    const parsed = new DOMParser().parseFromString(report.output.data, "text/html");
+
+    current.signal.throwIfAborted();
+    summaryHost.textContent = JSON.stringify(summary, null, 2);
+    reportHost.textContent = parsed.body.textContent?.trim() ?? "";
+    status.textContent = `${name} ready`;
+    for (const button of document.querySelectorAll<HTMLButtonElement>("[data-state]")) {
+      button.setAttribute("aria-pressed", String(button.dataset.state === name));
+    }
+  } catch (error) {
+    if (!current.signal.aborted) {
+      showError(error);
+      current.abort();
+    }
+  } finally {
+    if (pending === current) pending = undefined;
   }
 };
 
 for (const button of document.querySelectorAll<HTMLButtonElement>("[data-state]")) {
   button.addEventListener("click", () => {
     const name = button.dataset.state === "monthly" ? "monthly" : "weekly";
-    void show(name).catch(showError);
+    void show(name);
   });
 }
 
@@ -103,7 +120,9 @@ function showError(error: unknown): void {
   status.textContent = "The notebook export could not be read";
 }
 
-await show("weekly").catch(showError);
+window.addEventListener("pagehide", () => pending?.abort(), { once: true });
+
+await show("weekly");
 ```
 
 Start the application:
@@ -145,32 +164,15 @@ complete input vector. `state.resolve(patch)` applies a sparse root-input patch
 to the current vector and selects the matching exported state. Resolution runs
 no notebook Python.
 
-## Cancel a stale state transition
+## Keep the latest selection visible
 
-Give one `AbortController` ownership of the pending transition. Check its signal
-after loading and immediately before the visible commit:
+`show()` cancels the pending transition when another button is selected. Both
+outputs load under the same signal and commit together after the signal check.
+A failed load leaves the previous outputs visible and reports the error. A
+superseded load cannot replace the outputs, selected button, or status message.
 
-```ts
-let pending: AbortController | undefined;
-
-const selectState = async (name: string): Promise<void> => {
-  pending?.abort("superseded");
-  const current = new AbortController();
-  pending = current;
-
-  const state = notebookExport.state(name);
-  const value = await state.output("summary").load(jsonLoader(), {
-    signal: current.signal,
-  });
-
-  current.signal.throwIfAborted();
-  summaryHost.textContent = JSON.stringify(value, null, 2);
-};
-```
-
-An abort signal removes stale work's authority to commit. Some third-party
-decoders and browser module evaluations can finish after cancellation. Dispose
-any value they created when it settles.
+Some third-party decoders and browser module evaluations can finish after
+cancellation. Dispose any staged resources they created when that work settles.
 
 ## Mount an interactive output
 
