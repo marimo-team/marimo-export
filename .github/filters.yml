@@ -25,8 +25,6 @@ python_inputs: &python_inputs
   - "packages/python/src/**"
   - "packages/python/tests/**"
   - "plugin.json"
-  - "scripts/*.py"
-  - "scripts/*.sh"
   - "skills/notebook-to-static-app/**"
   - "examples/quickstart/*.py"
   - "examples/quickstart/*.yaml"
@@ -34,6 +32,7 @@ python_inputs: &python_inputs
   - "examples/vite-vanilla/*.toml"
   - "examples/vite-vanilla/*.yaml"
   - "tests/fixtures/**"
+  - "!packages/python/tests/test_release.py"
 
 frontend_inputs: &frontend_inputs
   - *ci_control
@@ -95,6 +94,7 @@ pages:
   - "packages/loader-*/**"
   - "examples/vite-vanilla/**"
   - "examples/quickstart/**"
+  - "!packages/python/tests/test_release.py"
 
 quality:
   - "**"
@@ -163,3 +163,4 @@ release_contracts:
   - package.json
   - packages/browser/package.json
   - packages/python/pyproject.toml
+  - packages/python/tests/conftest.py
