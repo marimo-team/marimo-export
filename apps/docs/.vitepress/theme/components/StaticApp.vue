@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { withBase } from "vitepress";
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 
 import { documentationExamples, type DocumentationExampleName } from "../../../example.ts";
 
@@ -106,6 +106,12 @@ const markLoaded = (): void => {
   });
   mutationObserver.observe(document.body, { childList: true, subtree: true });
 };
+
+onMounted(() => {
+  // A server-rendered iframe can finish loading before hydration attaches @load.
+  const document = frame.value?.contentDocument;
+  if (document?.readyState === "complete" && document.URL !== "about:blank") markLoaded();
+});
 
 onBeforeUnmount(() => {
   resizeObserver?.disconnect();
