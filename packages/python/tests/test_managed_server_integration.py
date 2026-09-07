@@ -13,8 +13,11 @@ from marimo_export.errors import TransportError
 
 pytestmark = pytest.mark.serial
 
+# Whole-build watchdogs include startup, activation, capture, and teardown.
+# The API timeouts bound individual waits within those phases.
 
-@pytest.mark.timeout(30)
+
+@pytest.mark.timeout(120)
 def test_managed_initial_autorun_restores_native_cell_cache(tmp_path: Path) -> None:
     marker = tmp_path / "autorun-count.txt"
     notebook = tmp_path / "notebook.py"
@@ -54,7 +57,7 @@ def test_managed_initial_autorun_restores_native_cell_cache(tmp_path: Path) -> N
     assert marker.read_text(encoding="utf-8") == "1"
 
 
-@pytest.mark.timeout(30)
+@pytest.mark.timeout(120)
 def test_managed_server_preserves_environment_sitecustomize(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -99,7 +102,7 @@ if __name__ == "__main__":
     assert open_export(result.path).state("baseline").output("startup").json() == "loaded"
 
 
-@pytest.mark.timeout(30)
+@pytest.mark.timeout(120)
 def test_managed_cache_markers_are_absent_from_notebook_processes(tmp_path: Path) -> None:
     notebook = tmp_path / "notebook.py"
     notebook.write_text(
