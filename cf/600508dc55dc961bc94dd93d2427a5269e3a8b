@@ -1,0 +1,19 @@
+apps/docs/.vitepress/theme/components/StaticApp.vue
+  s_6628195629b8dd::t_bc5ad500c4bfe5 3,110-114
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "cf600508dc55dc961bc94dd93d2427a5269e3a8b",
+  "prompts": {},
+  "sessions": {
+    "s_6628195629b8dd": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a07c52-9946-7fe2-adcb-3a256c68154f",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
