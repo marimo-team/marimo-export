@@ -31,6 +31,10 @@ tests and builds, packed npm consumers, and isolated wheel smoke. The Pages
 workflow checks documentation changes on pull requests and builds the site when
 its source or toolchain inputs change.
 
+Tests isolate the default export repository and Marimo cache signing key.
+Notebook processes within a test inherit the same key, keeping warm-cache
+checks independent of another process initializing its signing identity.
+
 ## Root gate
 
 ```bash
