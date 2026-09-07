@@ -33,7 +33,7 @@ catalog:
   vitepress-mermaid-renderer: 1.2.0
   mermaid: 11.17.2
 
-minimumReleaseAge: 1440
+minimumReleaseAge: 20160
 minimumReleaseAgeStrict: true
 minimumReleaseAgeExclude:
   - "@marimo-team/*"
@@ -53,3 +53,7 @@ peerDependencyRules:
 allowBuilds:
   esbuild: true
   sharp: true
+verifyDepsBeforeRun: install
+blockExoticSubdeps: true
+trustPolicy: no-downgrade
+onlyBuiltDependencies: []
