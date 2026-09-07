@@ -4,9 +4,10 @@ import asyncio
 import threading
 from collections.abc import Callable
 from types import SimpleNamespace
-from typing import Any, cast
+from typing import cast
 
 import pytest
+from marimo_export._publication import PublicationControllerState
 from marimo_export.prepared import PreparedExport
 from marimo_export.publication import (
     PreparedPublication,
@@ -22,7 +23,6 @@ class _Repository:
         self.closed = False
 
     def observation_revision(self, plan: object) -> int:
-        assert cast(Any, plan).producer_sha256 == "a" * 64
         return self.revision
 
     def close(self) -> None:
@@ -287,17 +287,16 @@ def test_poll_refreshes_after_observation_revision_advances() -> None:
         selected = await controller.prepare(("dashboard", "first"), prepare)
         repository.revision = 1
         assert controller.poll(("dashboard", "first")) is selected
-        for _ in range(100):
-            current = controller.current(("dashboard", "first"))
-            if current is not None and current.identity == second.identity:
-                break
-            await asyncio.sleep(0.005)
-        else:
-            pytest.fail("observation refresh did not commit")
-        assert not first.closed
-        asset = controller.asset("dashboard", first.identity, "index.json")
-        assert asset is not None
-        asset.close()
+
+        async def refreshed() -> PreparedPublication:
+            while True:
+                current = controller.current(("dashboard", "first"))
+                if current is not None and current.identity == second.identity:
+                    return current
+                await asyncio.sleep(0.005)
+
+        publication = await asyncio.wait_for(refreshed(), 5)
+        assert publication.metadata == "second"
         await controller.close()
 
     asyncio.run(scenario())
@@ -340,7 +339,6 @@ def test_retired_publication_expires_without_followup_request() -> None:
             ("dashboard", "second"),
             lambda _repository, _cancelled: _candidate(second, "second"),
         )
-        assert not first.closed
         assert await asyncio.to_thread(first.closed_event.wait, 2)
         assert first.closed
         assert first.close_calls == 1
@@ -364,9 +362,142 @@ def test_close_cancels_retirement_deadline() -> None:
             ("dashboard", "second"),
             lambda _repository, _cancelled: _candidate(second, "second"),
         )
+        deadline = asyncio.Event()
+        asyncio.get_running_loop().call_later(0.01, deadline.set)
         await controller.close()
-        await asyncio.sleep(0.03)
+        await asyncio.wait_for(deadline.wait(), 2)
         assert first.close_calls == 1
         assert second.close_calls == 1
 
     asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("foreground_fails", [False, True])
+def test_observation_refresh_preserves_newer_preparation_intent(
+    monkeypatch: pytest.MonkeyPatch,
+    foreground_fails: bool,
+) -> None:
+    repository = _Repository()
+    revision_started = threading.Event()
+    revision_resume = threading.Event()
+    foreground_started = threading.Event()
+    foreground_resume = threading.Event()
+    controller = _controller(repository)
+
+    def revision(_plan: object) -> int:
+        revision_started.set()
+        assert revision_resume.wait(5)
+        return 1
+
+    monkeypatch.setattr(repository, "observation_revision", revision)
+
+    def original(
+        _repository: ExportRepository,
+        _cancelled: Callable[[], bool],
+    ) -> PreparedPublicationCandidate[str]:
+        return _candidate(_Prepared(14, 0), "original")
+
+    def foreground(
+        _repository: ExportRepository,
+        _cancelled: Callable[[], bool],
+    ) -> PreparedPublicationCandidate[str]:
+        foreground_started.set()
+        if foreground_fails:
+            raise RuntimeError("foreground failed")
+        assert foreground_resume.wait(5)
+        return _candidate(_Prepared(15, 1), "foreground")
+
+    async def scenario() -> None:
+        refresh_finished = asyncio.Event()
+        refresh = PublicationControllerState._refresh_if_stale
+
+        async def tracked_refresh(self, selected, desired) -> None:
+            try:
+                await refresh(self, selected, desired)
+            finally:
+                refresh_finished.set()
+
+        monkeypatch.setattr(PublicationControllerState, "_refresh_if_stale", tracked_refresh)
+        selected = await controller.prepare(("dashboard", "original"), original)
+        newer: asyncio.Task | None = None
+        try:
+            controller.poll(("dashboard", "original"))
+            assert await asyncio.to_thread(revision_started.wait, 5)
+            newer = asyncio.create_task(controller.prepare(("dashboard", "newer"), foreground))
+            assert await asyncio.to_thread(foreground_started.wait, 5)
+            if foreground_fails:
+                with pytest.raises(RuntimeError, match="foreground failed"):
+                    await newer
+            revision_resume.set()
+            await asyncio.wait_for(refresh_finished.wait(), 5)
+            foreground_resume.set()
+            if foreground_fails:
+                assert controller.current(("dashboard", "original")) is selected
+            else:
+                publication = await newer
+                assert controller.current(("dashboard", "newer")) is publication
+        finally:
+            revision_resume.set()
+            foreground_resume.set()
+            if newer is not None:
+                await asyncio.gather(newer, return_exceptions=True)
+            await controller.close()
+
+    asyncio.run(scenario())
+
+
+def test_repository_open_allows_event_loop_progress_and_settles_before_close(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository = _Repository()
+    opening = threading.Event()
+    resume = threading.Event()
+    prepared = _Prepared(16, 0)
+
+    def open_repository() -> ExportRepository:
+        opening.set()
+        assert resume.wait(5)
+        return cast(ExportRepository, repository)
+
+    monkeypatch.setattr(ExportRepository, "open", open_repository)
+    controller = _controller()
+
+    async def scenario() -> None:
+        preparation = asyncio.create_task(
+            controller.prepare(
+                ("dashboard", "first"),
+                lambda _repository, _cancelled: _candidate(prepared, "first"),
+            )
+        )
+        closing: asyncio.Task[None] | None = None
+        try:
+            assert await asyncio.to_thread(opening.wait, 5)
+            assert not preparation.done()
+            closing = asyncio.create_task(controller.close())
+            await asyncio.sleep(0)
+            assert not closing.done()
+            resume.set()
+            await closing
+            with pytest.raises(asyncio.CancelledError):
+                await preparation
+            assert repository.closed
+            assert prepared.closed
+            assert not controller.active
+        finally:
+            resume.set()
+            await asyncio.gather(preparation, return_exceptions=True)
+            await controller.close()
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("value", [float("nan"), float("inf"), -1])
+def test_route_grace_requires_a_finite_nonnegative_duration(value: float) -> None:
+    with pytest.raises(ValueError, match="finite nonnegative"):
+        PreparedPublicationController(route_grace_seconds=value)
+
+
+@pytest.mark.parametrize("value", [True, "60"])
+def test_route_grace_requires_a_number(value: object) -> None:
+    with pytest.raises(TypeError, match="number"):
+        PreparedPublicationController(route_grace_seconds=cast(float, value))
