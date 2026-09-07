@@ -11,8 +11,9 @@ supports 3.10 through 3.14.
 
 GitHub Actions classifies changed files before starting the quality, Python,
 frontend, package, and documentation jobs. Each job runs when its owned inputs
-change. The `Required` job accepts successful and skipped jobs, and fails when
-change classification or an executed CI job fails.
+change. The `Required` job requires success for selected jobs and a skipped
+result for unselected jobs. Missing classification, failure, cancellation, or
+an unexpected skip fails the gate.
 
 The Python job runs the package contracts on:
 

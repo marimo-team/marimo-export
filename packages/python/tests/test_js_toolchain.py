@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any, cast
 
@@ -31,7 +32,36 @@ def test_pnpm_owns_the_workspace_node_runtime() -> None:
 
 
 def test_vite_setup_discovers_the_pnpm_runtime() -> None:
-    for name in ("ci.yml", "pages.yml", "publish.yml"):
+    action = cast(
+        dict[str, Any],
+        yaml.safe_load(ROOT.joinpath(".github/actions/setup-js/action.yml").read_text()),
+    )
+    setup = next(
+        step
+        for step in action["runs"]["steps"]
+        if str(step.get("uses", "")).startswith("voidzero-dev/setup-vp@")
+    )
+    assert re.fullmatch(r"voidzero-dev/setup-vp@[0-9a-f]{40}", setup["uses"])
+    inputs = setup["with"]
+    runtime = json.loads(ROOT.joinpath(inputs["node-version-file"]).read_text())
+    workspace = yaml.safe_load(ROOT.joinpath(inputs["version-file"]).read_text())
+    lock = yaml.safe_load(ROOT.joinpath(inputs["cache-dependency-path"]).read_text())
+    node_version = runtime["devEngines"]["runtime"]["version"]
+    vite_version = workspace["catalog"]["vite-plus"]
+    assert inputs.get("node-version", node_version) == node_version
+    assert (
+        inputs.get("version", vite_version) == lock["catalogs"]["default"]["vite-plus"]["version"]
+    )
+    assert re.fullmatch(r"\d+\.\d+\.\d+", vite_version)
+    assert yaml.safe_load(inputs["run-install"]) == [{"args": ["--frozen-lockfile"]}]
+
+
+def test_javascript_build_jobs_use_the_shared_workspace_setup() -> None:
+    for name, consumers in {
+        "ci.yml": ("quality", "test-frontend", "package"),
+        "pages.yml": ("documentation", "build"),
+        "publish.yml": ("build",),
+    }.items():
         workflow = cast(
             dict[str, Any],
             yaml.load(
@@ -40,13 +70,7 @@ def test_vite_setup_discovers_the_pnpm_runtime() -> None:
             ),
         )
         jobs = cast(dict[str, Any], workflow["jobs"])
-        setup_steps = [
-            step
-            for job in jobs.values()
-            for step in cast(list[dict[str, Any]], job["steps"])
-            if str(step.get("uses", "")).startswith("voidzero-dev/setup-vp@")
-        ]
-        assert setup_steps
-        for step in setup_steps:
-            inputs = cast(dict[str, Any], step.get("with", {}))
-            assert set(inputs) == {"version", "sfw", "cache", "run-install"}
+        for job_name in consumers:
+            assert any(
+                step.get("uses") == "./.github/actions/setup-js" for step in jobs[job_name]["steps"]
+            ), (name, job_name)

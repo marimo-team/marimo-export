@@ -1,0 +1,20 @@
+name: Set up JavaScript workspace
+description: Install the pinned Node.js toolchain and locked pnpm workspace.
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Vite+
+      uses: voidzero-dev/setup-vp@49c3e4e92c52e7f8392712a9267bbe71c5ab30e5 # v1.19.0
+      with:
+        node-version-file: package.json
+        version-file: pnpm-workspace.yaml
+        sfw: true
+        cache: true
+        cache-dependency-path: pnpm-lock.yaml
+        run-install: |
+          - args: ['--frozen-lockfile']
+
+    - name: Enable pnpm
+      shell: bash
+      run: corepack enable pnpm
