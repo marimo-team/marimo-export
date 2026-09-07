@@ -1,0 +1,19 @@
+.github/workflows/publish.yml
+  s_6628195629b8dd::t_d67f5b95247c5b 45,265,300
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "a4ab685a3c74e7b07d5d289aafe16cabb90b9d63",
+  "prompts": {},
+  "sessions": {
+    "s_6628195629b8dd": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a07c52-9946-7fe2-adcb-3a256c68154f",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
