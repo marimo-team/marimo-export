@@ -1,4 +1,5 @@
 import { parsePortableJson } from "@marimo-team/portable-json";
+import type { JsonValue } from "@marimo-team/portable-json";
 
 import { preparedAbortReason, throwIfPreparedAborted } from "./cancellation.js";
 import { PreparedExportError } from "./errors.js";
@@ -15,7 +16,13 @@ export interface PreparedManifestFetchOptions {
 export const fetchPreparedExportManifest = async (
   url: URL,
   options: PreparedManifestFetchOptions = {},
-): Promise<PreparedExportManifest> => {
+): Promise<PreparedExportManifest> =>
+  parsePreparedExportManifest(await fetchPreparedManifestDocument(url, options));
+
+export const fetchPreparedManifestDocument = async (
+  url: URL,
+  options: PreparedManifestFetchOptions = {},
+): Promise<JsonValue> => {
   throwIfPreparedAborted(options.signal);
   let response: Response;
   try {
@@ -49,7 +56,7 @@ export const fetchPreparedExportManifest = async (
   const bytes = await readManifestBytes(response, options.signal);
   try {
     const text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
-    return parsePreparedExportManifest(parsePortableJson(text));
+    return parsePortableJson(text);
   } catch (error) {
     if (error instanceof PreparedExportError) {
       throw error;

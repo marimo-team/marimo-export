@@ -18,10 +18,12 @@ const loaderProjects = [
     peers: [],
     source: `import {
   PreparedStateController,
+  fetchPreparedManifestDocument,
   parsePreparedExportManifest,
 } from "@marimo-team/marimo-export/prepared";
 document.querySelector("#app")!.textContent = typeof PreparedStateController;
 void parsePreparedExportManifest;
+void fetchPreparedManifestDocument;
 `,
   },
   {
@@ -68,8 +70,10 @@ document.querySelector("#app")!.textContent = marimoCellLoader().codec;
   {
     name: "marimo-output",
     peers: [],
-    source: `import { marimoOutputLoader } from "@marimo-team/marimo-export/loader/marimo-output";
+    source: `import { mergeMarimoReplayResources } from "@marimo-team/marimo-export";
+import { marimoOutputLoader } from "@marimo-team/marimo-export/loader/marimo-output";
 document.querySelector("#app")!.textContent = marimoOutputLoader().codec;
+void mergeMarimoReplayResources([]);
 `,
   },
   {

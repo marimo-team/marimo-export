@@ -117,6 +117,10 @@ the publication. A local selection survives replacement when the input names
 match and the replacement export resolves the complete current vector. The
 controller adopts the manifest state when that vector is unavailable.
 
+`fetchPreparedManifestDocument()` owns the bounded HTTP and portable JSON read
+for both export manifests and application envelopes. Applications validate their
+own envelope fields before supplying a prepared manifest to the controller.
+
 ## Loading crosses the integrity boundary
 
 `ExportOutput.load(loader, options)` requires one explicit loader whose codec
@@ -162,6 +166,18 @@ function map keyed by every projected UI object ID. `uiValues` carries the
 accepted frontend value for each registry-owned UI object after state updates.
 Model and UI object IDs are scoped by planned output so applications can merge
 several projection records before committing one presentation state.
+
+`mergeMarimoReplayResources()` validates and combines those records. Shared
+models must have equal complete lifecycle sequences. Ordering constraints from
+every snapshot preserve dependencies between models and repeated messages.
+Conflicting resources or replay order fail before the application stages DOM.
+
+Native Marimo rendering remains an application adapter. In Studio, live and
+Prepared presentation share one pinned frontend graph and its native stores,
+custom-element definitions, styles, and registries. Moving that adapter into a
+standalone package would also require a shared native frontend distribution and
+release contract. Export's reader and resource composition stay independent of
+that framework and registration lifecycle.
 
 ## A mount owns its resources
 
@@ -256,6 +272,11 @@ while preserving compatible browser-local model state.
 detection, live-state capture and merge, replay, restore, close, file-table
 replacement, and optional validation and preflight. The graph owns operation
 serialization, cancellation, rollback, and disposal around that port.
+
+Replay receives one batch of changed active records after module replacements
+close. The adapter preserves message sequence positions in those records and
+replays across model boundaries in that order. Rollback also batches previous
+replacement and removal records. Terminal removals remain commit-owned.
 
 The lifecycle is:
 

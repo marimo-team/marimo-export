@@ -387,7 +387,7 @@ interface PreparedWidgetGraphPort<Record, LiveState> {
   changesModule(previous: Record, next: Record): boolean;
   capture(id: string): LiveState;
   merge(record: Record, state: LiveState): Record;
-  replay(record: Record, signal?: AbortSignal): Promise<void>;
+  replay(records: readonly Record[], signal?: AbortSignal): Promise<void>;
   restore(id: string, state: LiveState): void | Promise<void>;
   close(id: string): Promise<void>;
   setFiles(files: Readonly<{ [path: string]: string }>): void;
@@ -421,6 +421,17 @@ class PreparedWidgetGraph<Record, LiveState> {
 }
 ```
 
+The port's `replay(records, signal)` receives one batch of changed active records
+in target snapshot order. Module replacements are closed first and their
+captured browser state is merged into that batch. A port with ordered lifecycle
+messages must retain their sequence positions in each record and replay the
+batch in message order. `same()` decides which records need replay. Records it
+considers unchanged retain their browser-local state.
+
+Rollback restores stable live states and replays previous replacement and
+removal records in one batch. A failed restoration requires a full remount.
+Models absent or inactive in the target remain alive until commit.
+
 Given `port`, `initialSnapshot`, and `nextSnapshot` from the application's model
 registry adapter, construct and settle a graph replacement. In this partial
 example, `commitApplicationView()` is the application's atomic DOM commit:
@@ -447,8 +458,8 @@ checkpoint owned by that graph. The graph must be idle.
 `replace()` compares IDs and records through the port and stages the union of
 the current and target file maps. It validates additions, stable updates, and
 module replacements, then preflights additions and module replacements. A
-staging failure restores the previous file map. The operation then replays
-additions, applies stable updates, and closes and replays module replacements.
+staging failure restores the previous file map. The operation then closes
+replaced modules and replays changed active records in one batch.
 `commit()` closes removals before it installs and adopts the exact target file
 map. If closing a removal fails, the target map remains uninstalled. Call
 `rollback()` to restore the previous committed graph. The returned

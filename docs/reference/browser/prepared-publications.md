@@ -121,6 +121,25 @@ length, and polling range. The later publication resolver checks that the input
 object is complete for the opened export. Invalid input raises
 `PreparedExportError` with code `manifest_invalid`.
 
+### `fetchPreparedManifestDocument(url, options?)`
+
+```ts
+function fetchPreparedManifestDocument(
+  url: URL,
+  options?: PreparedManifestFetchOptions,
+): Promise<JsonValue>;
+```
+
+Fetches a prepared manifest or application envelope as portable JSON. Requests
+use `cache: "no-store"` and `Accept: application/json`. The reader rejects bodies
+larger than 256 KiB, including streamed responses, and cancels the body on abort.
+Supply `fetch` for authentication and request policy. The application validates
+its envelope schema and selected view after this operation.
+
+Transport and size failures raise `PreparedExportError` with code
+`manifest_read_failed`. Invalid UTF-8 or portable JSON raises `manifest_invalid`.
+Cancellation raises an abort error.
+
 ### `fetchPreparedExportManifest(url, options?)`
 
 ```ts

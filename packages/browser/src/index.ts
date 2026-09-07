@@ -7,6 +7,7 @@ export {
 } from "./loader.js";
 export { openExport } from "./export.js";
 export { parseMarimoCellSnapshot, parseMarimoOutputSnapshot } from "./marimo-snapshot.js";
+export { mergeMarimoReplayResources } from "./replay-resources.js";
 export { isNotebookExportError, NotebookExportError } from "./types.js";
 
 export type {

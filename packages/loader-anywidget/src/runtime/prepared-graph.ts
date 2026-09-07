@@ -16,7 +16,7 @@ export interface PreparedWidgetGraphPort<Record, LiveState> {
   changesModule(previous: Record, next: Record): boolean;
   capture(id: string): LiveState;
   merge(record: Record, state: LiveState): Record;
-  replay(record: Record, signal?: AbortSignal): Promise<void>;
+  replay(records: readonly Record[], signal?: AbortSignal): Promise<void>;
   restore(id: string, state: LiveState): void | Promise<void>;
   close(id: string): Promise<void>;
   setFiles(files: Readonly<{ [path: string]: string }>): void;
@@ -361,15 +361,7 @@ export class PreparedWidgetGraph<Record, LiveState> {
     const rollback = () => this.#rollback(previous, changes, live, added, replaced, removed);
     let remount = false;
     try {
-      await eachSequential(changes.additions, async (record) => {
-        signal.throwIfAborted();
-        added.add(this.#port.id(record));
-        await this.#port.replay(record, signal);
-      });
-      await eachSequential(changes.stableUpdates, async (record) => {
-        signal.throwIfAborted();
-        await this.#port.replay(record, signal);
-      });
+      const replay = new Map<string, Record>();
       await eachSequential(changes.replacements, async (record) => {
         signal.throwIfAborted();
         const id = this.#port.id(record);
@@ -377,8 +369,20 @@ export class PreparedWidgetGraph<Record, LiveState> {
         replaced.add(id);
         remount = true;
         await this.#port.close(id);
-        await this.#port.replay(this.#port.merge(record, state), signal);
+        replay.set(id, this.#port.merge(record, state));
       });
+      changes.additions.forEach((record) => {
+        const id = this.#port.id(record);
+        added.add(id);
+        replay.set(id, record);
+      });
+      changes.stableUpdates.forEach((record) => replay.set(this.#port.id(record), record));
+      signal.throwIfAborted();
+      const records = [...next.records.keys()].flatMap((id) => {
+        const record = replay.get(id);
+        return record === undefined ? [] : [record];
+      });
+      if (records.length > 0) await this.#port.replay(records, signal);
       signal.throwIfAborted();
     } catch (error) {
       const failure = graphFailure(error);
@@ -440,8 +444,12 @@ export class PreparedWidgetGraph<Record, LiveState> {
     await eachSequential(live.stable, ([id, state]) =>
       attempt(errors, () => this.#port.restore(id, state)),
     );
-    await this.#replayPrevious(errors, previous, live.replacements, replaced);
-    await this.#replayPrevious(errors, previous, live.removals, removed);
+    await this.#replayPrevious(
+      errors,
+      previous,
+      new Map([...live.replacements, ...live.removals]),
+      new Set([...replaced, ...removed]),
+    );
     throwCleanup(errors, "Prepared AnyWidget graph rollback failed");
   }
 
@@ -451,13 +459,18 @@ export class PreparedWidgetGraph<Record, LiveState> {
     states: ReadonlyMap<string, LiveState>,
     ids: ReadonlySet<string>,
   ): Promise<void> {
-    await eachSequential(ids, async (id) => {
-      const record = previous.records.get(id);
+    await eachSequential(ids, (id) => attempt(errors, () => this.#port.close(id)));
+    const records: Record[] = [];
+    previous.records.forEach((record, id) => {
       const state = states.get(id);
-      if (record === undefined || state === undefined) return;
-      await attempt(errors, () => this.#port.close(id));
-      await attempt(errors, () => this.#port.replay(this.#port.merge(record, state)));
+      if (!ids.has(id) || state === undefined) return;
+      try {
+        records.push(this.#port.merge(record, state));
+      } catch (error) {
+        errors.push(graphFailure(error));
+      }
     });
+    if (records.length > 0) await attempt(errors, () => this.#port.replay(records));
   }
 
   #replacement(
