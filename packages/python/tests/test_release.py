@@ -340,9 +340,15 @@ fi
     )
     _write_command(commands / "node", "#!/bin/sh\nstage=consumer\n" + probe)
     _write_command(scripts / "publish-npm.sh", "#!/bin/sh\nstage=artifacts\n" + probe)
-    _write_command(commands / "sleep", "#!/bin/sh\nexit 0\n")
+    # Git Bash can put its commands ahead of PATH stubs. A function intercepts every wait.
     return subprocess.run(
-        [_bash(), str(ROOT / f"scripts/verify-{registry}.sh")],
+        [
+            _bash(),
+            "-c",
+            'sleep() { :; }; source "$1"',
+            "verify-registry",
+            (ROOT / f"scripts/verify-{registry}.sh").as_posix(),
+        ],
         cwd=root,
         env={
             **os.environ,
