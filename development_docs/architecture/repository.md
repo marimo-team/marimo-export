@@ -109,6 +109,11 @@ callers:
   reservations, staging, guarded commit, and revision-consistent observation
   reads for producer services.
 
+`ExportRepository` constructs both owners with their required dependencies.
+`ObservationRepository` receives the catalog and limits. `PreparationRepository`
+receives the observation, artifact, and lease owners. Both receive the
+repository's open-state check, so their operations share its close boundary.
+
 The repository uses Python's built-in `sqlite3`. Applications reach it through
 public marimo-export operations and carry no database schema or SQL.
 

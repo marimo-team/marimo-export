@@ -28,14 +28,27 @@ from marimo_export._repository.models import (
 from marimo_export.errors import ExecutionError
 
 if TYPE_CHECKING:
+    from marimo_export._repository.artifacts import ArtifactRepository
+    from marimo_export._repository.leases import LeaseManager
+    from marimo_export._repository.observations import ObservationRepository
     from marimo_export.repository import ExportRepository
 
 
 class PreparationRepository:
     """Private repository capabilities used while preparing exact exports."""
 
-    def __init__(self, repository: ExportRepository) -> None:
-        self._repository = repository
+    def __init__(
+        self,
+        *,
+        artifacts: ArtifactRepository,
+        leases: LeaseManager,
+        observations: ObservationRepository,
+        require_open: Callable[[], None],
+    ) -> None:
+        self._artifacts = artifacts
+        self._leases = leases
+        self._observations = observations
+        self._require_open = require_open
         self._active: ContextVar[PreparationReservation | None] = ContextVar(
             "marimo_export_preparation_reservation",
             default=None,
@@ -44,10 +57,10 @@ class PreparationRepository:
         self._claim_locks: dict[str, threading.Lock] = {}
 
     def observation_revision(self, producer_sha256: str) -> int:
-        return self._repository._observations.revision(producer_sha256)
+        return self._observations.revision(producer_sha256)
 
     def observation_snapshot(self, producer_sha256: str) -> ObservationSnapshot:
-        return self._repository._observations.snapshot(producer_sha256)
+        return self._observations.snapshot(producer_sha256)
 
     def observations(
         self,
@@ -55,7 +68,7 @@ class PreparationRepository:
         producer_sha256: str,
         inputs: tuple[str, ...],
     ) -> tuple[ObservedState, ...]:
-        return self._repository._observations.observations(
+        return self._observations.observations(
             producer_sha256=producer_sha256,
             inputs=inputs,
         )
@@ -67,7 +80,7 @@ class PreparationRepository:
         inputs: tuple[str, ...],
         through_revision: int | None = None,
     ) -> ObservedState | None:
-        return self._repository._observations.latest(
+        return self._observations.latest(
             producer_sha256=producer_sha256,
             inputs=inputs,
             through_revision=through_revision,
@@ -80,21 +93,21 @@ class PreparationRepository:
         output_plan_sha256: str,
         state_fingerprints: Sequence[str],
     ) -> Mapping[str, PreparedState]:
-        self._repository._require_open()
+        self._require_open()
         digest(producer_sha256, "producer_sha256")
         digest(output_plan_sha256, "output_plan_sha256")
         for fingerprint in state_fingerprints:
             digest(fingerprint, "state_fingerprints item")
-        return self._repository._artifacts.lookup_prepared_states(
+        return self._artifacts.lookup_prepared_states(
             producer_sha256=producer_sha256,
             output_plan_sha256=output_plan_sha256,
             state_fingerprints=state_fingerprints,
         )
 
     def current(self, identity: RepositoryIdentity) -> PreparedExportArtifact | None:
-        self._repository._require_open()
+        self._require_open()
         _identity(identity)
-        return self._repository._artifacts.current(identity)
+        return self._artifacts.current(identity)
 
     @contextmanager
     def reserve_preparation(
@@ -105,7 +118,7 @@ class PreparationRepository:
         poll_seconds: float = 0.05,
         timeout: float = 30.0,
     ) -> Iterator[PreparationReservation]:
-        self._repository._require_open()
+        self._require_open()
         _identity(identity)
         if poll_seconds <= 0:
             raise ValueError("poll_seconds must be positive")
@@ -145,7 +158,7 @@ class PreparationRepository:
                     )
                 remaining = deadline - time.monotonic()
                 try:
-                    fence = self._repository._leases.claim_reservation(
+                    fence = self._leases.claim_reservation(
                         identity,
                         timeout_seconds=min(poll_seconds, remaining),
                     )
@@ -154,7 +167,7 @@ class PreparationRepository:
                 if fence is None:
                     time.sleep(min(poll_seconds, max(0.0, deadline - time.monotonic())))
             reservation = PreparationReservation(
-                self._repository._leases,
+                self._leases,
                 identity,
                 fence,
                 timeout,
@@ -187,7 +200,7 @@ class PreparationRepository:
         output_plan_sha256: str,
         state_fingerprint: str,
     ) -> StagedPreparedState:
-        self._repository._require_open()
+        self._require_open()
         for value, label in (
             (producer_sha256, "producer_sha256"),
             (output_plan_sha256, "output_plan_sha256"),
@@ -202,9 +215,7 @@ class PreparationRepository:
             raise RuntimeError("The active reservation belongs to another producer or output plan")
         return StagedPreparedState(
             self,
-            self._repository._artifacts.new_staging(
-                timeout_seconds=reservation.operation_timeout_seconds
-            ),
+            self._artifacts.new_staging(timeout_seconds=reservation.operation_timeout_seconds),
             producer_sha256=producer_sha256,
             output_plan_sha256=output_plan_sha256,
             state_fingerprint=state_fingerprint,
@@ -212,16 +223,14 @@ class PreparationRepository:
         )
 
     def stage_export(self, identity: RepositoryIdentity) -> StagedExport:
-        self._repository._require_open()
+        self._require_open()
         _identity(identity)
         reservation = self._reservation()
         if reservation.identity_key != identity.key:
             raise RuntimeError("The active reservation belongs to another export identity")
         return StagedExport(
             self,
-            self._repository._artifacts.new_staging(
-                timeout_seconds=reservation.operation_timeout_seconds
-            ),
+            self._artifacts.new_staging(timeout_seconds=reservation.operation_timeout_seconds),
             identity,
             reservation,
         )
@@ -246,7 +255,7 @@ class PreparationRepository:
         metadata: Mapping[str, object],
         replacing_instance: str | None,
     ) -> PreparedState:
-        return self._repository._artifacts.commit_prepared_state(
+        return self._artifacts.commit_prepared_state(
             staged,
             metadata=metadata,
             replacing_instance=replacing_instance,
@@ -261,7 +270,7 @@ class PreparationRepository:
         replacing_instance: str | None,
         commit_guard: Callable[[], None] | None,
     ) -> PreparedExportArtifact:
-        return self._repository._artifacts.commit_export(
+        return self._artifacts.commit_export(
             staged,
             states=states,
             captured_observation_revision=captured_observation_revision,
@@ -270,7 +279,7 @@ class PreparationRepository:
         )
 
     def _discard_staging(self, path: Path) -> None:
-        self._repository._artifacts.discard_staging(path)
+        self._artifacts.discard_staging(path)
 
     def _reservation(self) -> PreparationReservation:
         reservation = self._active.get()
