@@ -179,13 +179,22 @@ async def sequential_cache_loader() -> AsyncIterator[None]:
 
 
 @contextmanager
-def managed_cache_compat(hooks: Any, parent_graph: Any | None = None) -> Iterator[None]:
+def managed_cache_compat(
+    hooks: Any,
+    parent_graph: Any | None = None,
+    *,
+    environment: str | None = None,
+) -> Iterator[None]:
     """Install cache behavior for one owned kernel lifespan."""
 
     from marimo_export._marimo.compat.cache.attempts import track_managed_parent_cache
     from marimo_export._marimo.compat.cache.barrier import add_cache_write_barrier
 
-    scope = nullcontext() if parent_graph is None else track_managed_parent_cache(parent_graph)
+    scope = (
+        nullcontext()
+        if parent_graph is None
+        else track_managed_parent_cache(parent_graph, environment=environment)
+    )
     with scope:
         handle = _PATCHES.open()
         try:

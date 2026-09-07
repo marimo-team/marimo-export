@@ -128,13 +128,17 @@ process handles remain private adapter values.
 | `export_artifacts.py`    | Convert captured state results into repository artifacts   |
 | `preparation_support.py` | Share cancellation, progress, cleanup, and reuse helpers   |
 | `write_export.py`        | Copy and verify a prepared export at a caller destination  |
-| `identity.py`            | Compute source, environment, and implementation identity   |
+| `identity.py`            | Compose notebook, environment, and implementation identity |
 | `plan_wire.py`           | Decode the bounded kernel planning response                |
 
 Services may import the private `PreparationRepository` capability. Observation
 workers may import the private `ObservationRepository` capability. These
 callers import neither SQLite modules, repository tables, filesystem artifact
 internals, nor private Marimo modules.
+
+`_environment.py` owns installed-distribution and local-source fingerprints.
+Producer identity and the private native-cache adapter share this dependency
+inventory without importing one another.
 
 ## Repository capabilities
 

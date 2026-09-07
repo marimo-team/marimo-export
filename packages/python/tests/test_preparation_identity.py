@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import cast
 
 import pytest
+from marimo_export import _environment as environment
 from marimo_export._repository.preparation import (
     PreparedExportArtifact,
 )
@@ -81,13 +82,50 @@ def test_kernel_plan_preserves_pathless_producer_facts_and_rejects_bad_digests(
 
 def test_hidden_managed_snapshot_does_not_change_local_environment_identity(tmp_path: Path) -> None:
     (tmp_path / "module.py").write_text("value = 1\n", encoding="utf-8")
-    before = identity_service._environment_identity(tmp_path)
+    before = environment.environment_identity(tmp_path)
     (tmp_path / ".module.marimo-export-snapshot.py").write_text(
         "value = 1\n",
         encoding="utf-8",
     )
 
-    assert identity_service._environment_identity(tmp_path) == before
+    assert environment.environment_identity(tmp_path) == before
+
+
+def test_native_environment_tracks_dependencies_separately_from_notebook_code(
+    tmp_path: Path,
+) -> None:
+    notebook = tmp_path / "notebook.py"
+    helper = tmp_path / "helper.py"
+    notebook.write_text("value = 1\n", encoding="utf-8")
+    helper.write_text("VALUE = 10\n", encoding="utf-8")
+    before = environment.environment_identity(notebook, exclude_source=True)
+
+    notebook.write_text("value = 2\n", encoding="utf-8")
+    assert environment.environment_identity(notebook, exclude_source=True) == before
+
+    helper.write_text("VALUE = 100\n", encoding="utf-8")
+    assert environment.environment_identity(notebook, exclude_source=True) != before
+
+
+def test_producer_tracks_helpers_beside_notebooks_in_hidden_directories(tmp_path: Path) -> None:
+    (tmp_path / "pyproject.toml").write_text("[project]\nname = 'analysis'\n", encoding="utf-8")
+    directory = tmp_path / ".notebooks"
+    directory.mkdir()
+    notebook = directory / "notebook.py"
+    _identity_notebook(notebook)
+    helper = directory / "helper.py"
+    helper.write_text("VALUE = 10\n", encoding="utf-8")
+    hidden = directory / ".cache"
+    hidden.mkdir()
+    ignored = hidden / "__init__.py"
+    ignored.write_text("VALUE = 1\n", encoding="utf-8")
+
+    before = identity_service.producer_identity(notebook)
+    ignored.write_text("VALUE = 2\n", encoding="utf-8")
+    assert identity_service.producer_identity(notebook).producer_sha256 == before.producer_sha256
+
+    helper.write_text("VALUE = 100\n", encoding="utf-8")
+    assert identity_service.producer_identity(notebook).producer_sha256 != before.producer_sha256
 
 
 def test_local_environment_identity_rejects_source_change_during_scan(
@@ -96,17 +134,17 @@ def test_local_environment_identity_rejects_source_change_during_scan(
 ) -> None:
     source = tmp_path / "module.py"
     source.write_text("value = 1\n", encoding="utf-8")
-    native = identity_service._stable_file_sha256
+    native = environment._stable_file_sha256
 
     def changed(path: Path) -> str:
         digest = native(path)
         path.write_text("value = 2\n", encoding="utf-8")
         return digest
 
-    monkeypatch.setattr(identity_service, "_stable_file_sha256", changed)
+    monkeypatch.setattr(environment, "_stable_file_sha256", changed)
 
     with pytest.raises(RuntimeError, match="changed"):
-        identity_service._local_source_record(tmp_path)
+        environment._local_source_record(tmp_path)
 
 
 def test_local_source_manifest_prunes_excluded_directories(
@@ -125,16 +163,16 @@ def test_local_source_manifest_prunes_excluded_directories(
     for directory in excluded:
         directory.mkdir(parents=True)
         (directory / "ignored.py").write_text("VALUE = 1\n", encoding="utf-8")
-    native_scandir = identity_service.os.scandir
+    native_scandir = environment.os.scandir
     visited: list[Path] = []
 
     def scandir(path):
         visited.append(Path(path).resolve())
         return native_scandir(path)
 
-    monkeypatch.setattr(identity_service.os, "scandir", scandir)
+    monkeypatch.setattr(environment.os, "scandir", scandir)
 
-    manifest = identity_service._local_source_manifest(tmp_path)
+    manifest = environment._local_source_manifest(tmp_path)
 
     assert tuple(item[0] for item in manifest) == ("package/module.py",)
     assert not any(
@@ -161,11 +199,11 @@ def test_local_source_record_tracks_imported_roots_and_sibling_modules(
     ignored = unrelated / "ignored.py"
     ignored.write_text("VALUE = 1\n", encoding="utf-8")
 
-    before = identity_service._local_source_record(notebook)
+    before = environment._local_source_record(notebook)
     ignored.write_text("VALUE = 2\n", encoding="utf-8")
-    after_ignored = identity_service._local_source_record(notebook)
+    after_ignored = environment._local_source_record(notebook)
     module.write_text("VALUE = 2\n", encoding="utf-8")
-    after_import = identity_service._local_source_record(notebook)
+    after_import = environment._local_source_record(notebook)
 
     assert set(before) == {
         "custom_exporter.py",
@@ -216,9 +254,9 @@ def test_local_source_record_tracks_imported_editable_project_root(
     notebook.write_text("import external_package\n", encoding="utf-8")
     monkeypatch.syspath_prepend(str(external))
 
-    before = identity_service._local_source_record(notebook)
+    before = environment._local_source_record(notebook)
     module.write_text("VALUE = 2\n", encoding="utf-8")
-    after = identity_service._local_source_record(notebook)
+    after = environment._local_source_record(notebook)
 
     assert any(name.endswith("external_package/__init__.py") for name in before)
     assert after != before

@@ -11,6 +11,7 @@ adapter.
 | --------------------------------------------- | --------------------- |
 | Reactive graph and topological execution      | marimo                |
 | Cell hash and cache key                       | marimo                |
+| Producer dependency input to native hashing   | marimo-export         |
 | Cache store selection and persistence         | marimo                |
 | Lazy value serialization and restoration      | marimo                |
 | Cache signing and verification                | marimo                |
@@ -158,6 +159,7 @@ unchanged.
 
 For an owned export graph, the adapter can:
 
+- add one frozen producer-dependency input to native cell hashing
 - record the effective hit or miss for authored and projection cells
 - run complete-cell owners and selected exporter leaves live when their output
   contract includes uncached side effects or session-bound resources
@@ -168,6 +170,33 @@ For an owned export graph, the adapter can:
 
 Graph scopes are registered and removed through context managers. Forced cells
 exist only inside one active scope.
+
+### Dependency identity enters native lookup
+
+`_environment.py` fingerprints installed distribution versions and discovered
+local Python dependencies. Native cache lookup excludes the authored notebook
+from that digest. Marimo hashes notebook cells and their reactive references
+individually, so an unrelated notebook edit preserves reusable computations.
+
+The managed parent freezes this dependency identity before its initial autorun.
+State children reuse that identity. A borrowed child freezes the identity from
+its runtime filename. The attempt adapter supplies the digest as a string
+reference in a temporary Python [abstract syntax tree](https://docs.python.org/3/library/ast.html)
+and lookup scope. Marimo derives the key and
+persists the result through its native loader. The executed cell and notebook
+globals retain their authored form.
+
+This input covers local modules whose `__version__` stays constant or is absent,
+including imports inside a cell body. Changing a helper source or installed
+distribution invalidates automatic cell-cache entries before they can populate
+a new prepared export. State vectors, output declarations, and notebook source remain outside
+the dependency digest, preserving native reuse across state combinations and
+output plans. Native entries created outside this scoped integration have a
+different key because they carry different dependency provenance.
+
+Explicit `mo.cache` and `mo.persistent_cache` calls retain their authored key and
+reference boundaries. Pass changing source or data revisions as referenced values
+or cached function arguments when they determine freshness.
 
 ## Cache activity counts executed child work
 
