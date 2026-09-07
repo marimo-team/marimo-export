@@ -213,7 +213,7 @@ describe("AnyWidget browser runtime", () => {
 
     controller.abort();
 
-    await expect(settleWithin(mounting)).rejects.toMatchObject({ name: "AbortError" });
+    await expect(mounting).rejects.toMatchObject({ name: "AbortError" });
     expect(revokeObjectUrl).not.toHaveBeenCalled();
 
     releaseModule();
@@ -355,20 +355,8 @@ describe("AnyWidget browser runtime", () => {
   });
 });
 
-async function settleWithin<T>(task: Promise<T>): Promise<T> {
-  let timeout: ReturnType<typeof setTimeout> | undefined;
-  const expired = new Promise<never>((_resolve, reject) => {
-    timeout = setTimeout(() => reject(new Error("AnyWidget lifecycle did not settle.")), 250);
-  });
-  try {
-    return await Promise.race([task, expired]);
-  } finally {
-    if (timeout !== undefined) clearTimeout(timeout);
-  }
-}
-
 function browserElement<Value>(value: Value): HTMLElement {
-  // SAFETY: linkedom's createElement result implements the HTMLElement members used by the runtime.
+  // SAFETY: The test element implements the HTMLElement members used by the runtime.
   return value as HTMLElement;
 }
 

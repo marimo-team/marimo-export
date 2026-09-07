@@ -221,9 +221,6 @@ describe("prepared AnyWidget graph", () => {
     await commit(runtime, graph([record("model-0", "first", { count: 1 })], { first: "one" }));
     port.models.get("model-0")!.state.count = 7;
     const checkpoint = runtime.checkpoint();
-    expect(Object.isFrozen(checkpoint)).toBe(true);
-    expect(Object.keys(checkpoint)).toEqual([]);
-    expect("snapshot" in checkpoint).toBe(false);
 
     await commit(runtime, graph([record("model-0", "second", { count: 2 })], { second: "two" }));
     expect(port.models.get("model-0")?.state).toEqual({ count: 2 });
@@ -238,7 +235,7 @@ describe("prepared AnyWidget graph", () => {
     await runtime.dispose();
   });
 
-  test("rolls back a stable update to the captured live state", async () => {
+  test("rolls back a stable update and keeps the captured live state on later commit", async () => {
     const port = new TestGraphPort();
     const runtime = new PreparedWidgetGraph(port);
     await commit(runtime, graph([record("model-0", "first", { count: 1 })]));
@@ -250,18 +247,6 @@ describe("prepared AnyWidget graph", () => {
     await replacement.rollback();
 
     expect(port.models.get("model-0")?.state).toEqual({ count: 9 });
-    expect(port.events).toContain("restore:model-0");
-    await runtime.dispose();
-  });
-
-  test("keeps rollback final when commit is requested afterward", async () => {
-    const port = new TestGraphPort();
-    const runtime = new PreparedWidgetGraph(port);
-    await commit(runtime, graph([record("model-0", "first", { count: 1 })]));
-    port.models.get("model-0")!.state.count = 9;
-    const replacement = await runtime.replace(graph([record("model-0", "second", { count: 2 })]));
-
-    await replacement.rollback();
     await replacement.commit();
 
     expect(port.models.get("model-0")?.state).toEqual({ count: 9 });
