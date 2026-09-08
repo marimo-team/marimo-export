@@ -60,6 +60,18 @@ The detached base URL cannot be mutated to redirect later asset requests. A
 fixed base query is copied to the index and every asset URL. Derived object
 paths cannot replace that query.
 
+## Related output loads share one lifetime
+
+`loadOutputs(state, loaders, options)` resolves every requested output name,
+starts the selected loaders, and returns a readonly record keyed by those names.
+It forwards the existing load options and uses one linked abort signal for the
+set. A failed load cancels sibling requests and preserves the primary error
+while their public promises settle.
+
+Loader implementations remain responsible for their asynchronous work.
+Applications own the visible commit after the selected values have loaded.
+Both export examples and Studio's presentation adapter compose this operation.
+
 ## The prepared subpath owns mutable selection
 
 `@marimo-team/marimo-export/prepared` connects one mutable manifest route to
@@ -172,12 +184,12 @@ models must have equal complete lifecycle sequences. Ordering constraints from
 every snapshot preserve dependencies between models and repeated messages.
 Conflicting resources or replay order fail before the application stages DOM.
 
-Native Marimo rendering remains an application adapter. In Studio, live and
-Prepared presentation share one pinned frontend graph and its native stores,
-custom-element definitions, styles, and registries. Moving that adapter into a
-standalone package would also require a shared native frontend distribution and
-release contract. Export's reader and resource composition stay independent of
-that framework and registration lifecycle.
+Native Marimo rendering remains an application adapter. The host owns the pinned
+frontend graph, stores, custom-element definitions, styles, and registries used
+by its live and Prepared presentation. Export's reader and resource composition
+return records for that adapter. The
+[Studio integration record](../proposals/studio-prepared-runtime.md) links one
+consumer's native frontend ownership.
 
 ## A mount owns its resources
 
@@ -262,44 +274,13 @@ Disposal releases those resources while a shared pending module import continues
 for other mounts. The exported widget has no connection to its former Python
 kernel.
 
-## PreparedWidgetGraph stages model-graph replacement
+## Native presentation hosts
 
-The AnyWidget loader facade also exposes `PreparedWidgetGraph`. An application
-uses it when several exported states should update one mounted model registry
-while preserving compatible browser-local model state.
-
-`PreparedWidgetGraphPort` supplies model identity, equality, module-change
-detection, live-state capture and merge, replay, restore, close, file-table
-replacement, and optional validation and preflight. The graph owns operation
-serialization, cancellation, rollback, and disposal around that port.
-
-Replay receives one batch of changed active records after module replacements
-close. The adapter preserves message sequence positions in those records and
-replays across model boundaries in that order. Rollback also batches previous
-replacement and removal records. Terminal removals remain commit-owned.
-
-The lifecycle is:
-
-1. `checkpoint()` captures current live state into an opaque return point.
-2. `replace(snapshot, signal)` stages the union of current and target files,
-   validates every changed active record, preflights additions and module
-   replacements, then applies additions, updates, and replacements.
-3. `replacement.commit()` closes removed models, installs the exact target file
-   table, and advances the current graph.
-4. `replacement.rollback()` closes additions, restores stable models, and
-   replays replaced or removed models with their captured live state.
-5. `dispose()` aborts active work, rolls back a pending replacement, closes every
-   active model, and clears the file table.
-
-A module change requires model teardown and replay. The returned replacement has
-`remount: true` so the application can rebuild views that refer to the replaced
-module. A failure after module teardown and any rollback failure raise
-`PreparedWidgetGraphReplacementError`, which requires a full remount.
-
-Only one replacement or unsettled staged replacement may exist at a time.
-Checkpoint and replacement calls require an idle graph. Teardown and replay run
-sequentially because registry identity makes their order observable.
+The native Marimo snapshot loaders return captured records and replay resources.
+Applications adapt them to their frontend registries and visible hosts. A host
+owns its model checkpoints, notification replay, UI values, and remount policy.
+The standalone AnyWidget loader owns the registry created for each of its mounts.
 
 Read the public [output loader reference](../../docs/reference/browser/loaders.md)
-for the example and [Product surfaces and distribution](agents-and-delivery.md)
+for decoder and mount contracts, and [Product surfaces and distribution](agents-and-delivery.md)
 for packaging and browser evidence.

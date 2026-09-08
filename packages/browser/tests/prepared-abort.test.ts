@@ -2,6 +2,7 @@ import { describe, expect, test, vi } from "vite-plus/test";
 
 import {
   fetchPreparedExportManifest,
+  isPreparedAbort,
   openPreparedPublication,
   PreparedPublicationRefresh,
   PreparedStateController,
@@ -63,12 +64,12 @@ describe("prepared abort normalization", () => {
     const fetch = vi.fn();
     const openExport = vi.fn();
 
-    await expect(
-      fetchPreparedExportManifest(new URL("https://example.test/current"), {
-        fetch,
-        signal: arbitraryAbort(),
-      }),
-    ).rejects.toMatchObject({ name: "AbortError" });
+    const fetching = fetchPreparedExportManifest(new URL("https://example.test/current"), {
+      fetch,
+      signal: arbitraryAbort(),
+    });
+    await expect(fetching).rejects.toMatchObject({ name: "AbortError" });
+    await expect(fetching).rejects.toSatisfy(isPreparedAbort);
     await expect(
       openPreparedPublication(publication.manifest, new URL("https://example.test/current"), {
         openExport,

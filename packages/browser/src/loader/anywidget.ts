@@ -8,10 +8,6 @@ import type {
 import { defineBlobAssetLoader } from "../loader.js";
 import type { BlobAssetLoader } from "../types.js";
 
-export {
-  PreparedWidgetGraph,
-  PreparedWidgetGraphReplacementError,
-} from "@marimo-export/internal-loader-anywidget";
 export type {
   AnyModel,
   AnyWidgetMountOptions,
@@ -19,10 +15,6 @@ export type {
   LoadedAnyWidget,
   ModelState,
   MountedAnyWidget,
-  PreparedWidgetGraphCheckpoint,
-  PreparedWidgetGraphPort,
-  PreparedWidgetGraphReplacement,
-  PreparedWidgetGraphSnapshot,
 } from "@marimo-export/internal-loader-anywidget";
 
 const MEDIA_TYPE = "application/vnd.marimo-export.anywidget.v1+json";

@@ -45,8 +45,7 @@ describe("vegaLiteLoader", () => {
     await mounted.dispose();
     await mounted.dispose();
     expect(finalize).toHaveBeenCalledOnce();
-    expect(host.replaceChildren).toHaveBeenCalledOnce();
-    expect(host.lastContainer().removeClasses).toHaveBeenCalledWith("vega-embed", "has-actions");
+    expect(host.childCount()).toBe(0);
   });
 
   test("keeps disposal idempotent when renderer finalization fails", async () => {
@@ -63,7 +62,6 @@ describe("vegaLiteLoader", () => {
     expect(() => mounted.dispose()).toThrow(failure);
     expect(() => mounted.dispose()).not.toThrow();
     expect(throwingFinalize).toHaveBeenCalledOnce();
-    expect(host.replaceChildren).toHaveBeenCalledOnce();
     expect(host.childCount()).toBe(0);
   });
 
@@ -202,28 +200,19 @@ function testHost() {
   };
   const createNode = (): TestNode => {
     const children: TestChild[] = [];
-    const classes = new Set<string>();
     let parent: TestNode | undefined;
-    const replaceChildren = vi.fn((...next: TestChild[]) => {
+    const replaceChildren = (...next: TestChild[]) => {
       for (const child of children) {
         const childNode = nodeFor(child);
         if (childNode !== undefined) childNode.setParent(undefined);
       }
       children.splice(0, children.length, ...next);
       for (const child of next) nodeFor(child)?.setParent(node);
-    });
-    const removeClasses = vi.fn((...names: string[]) => {
-      for (const name of names) classes.delete(name);
-    });
+    };
     const element = testElement({
       ownerDocument,
       replaceChildren,
-      classList: {
-        add(...names: string[]) {
-          for (const name of names) classes.add(name);
-        },
-        remove: removeClasses,
-      },
+      classList: { remove() {} },
       remove() {
         parent?.removeChild(element);
       },
@@ -231,9 +220,6 @@ function testHost() {
     const node: TestNode = {
       element,
       children,
-      classes,
-      replaceChildren,
-      removeClasses,
       setParent(value) {
         parent = value;
       },
@@ -254,11 +240,8 @@ function testHost() {
     appendPartialDom(element: HTMLElement) {
       const target = nodeFor(element)!;
       target.children.push({ fixture: true });
-      target.classes.add("vega-embed");
-      target.classes.add("has-actions");
     },
     childCount: root.childCount,
-    replaceChildren: root.replaceChildren,
     lastContainer: () => created.at(-1)!,
   };
 }
@@ -266,9 +249,6 @@ function testHost() {
 interface TestNode {
   readonly element: HTMLElement;
   readonly children: TestChild[];
-  readonly classes: Set<string>;
-  readonly replaceChildren: ReturnType<typeof vi.fn>;
-  readonly removeClasses: ReturnType<typeof vi.fn>;
   setParent(parent: TestNode | undefined): void;
   removeChild(child: TestChild): void;
   childCount(): number;

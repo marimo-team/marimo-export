@@ -1,5 +1,6 @@
 import {
   openExport,
+  loadOutputs,
   type ExportState,
   type JsonObject,
   type JsonValue,
@@ -68,10 +69,11 @@ async function renderState(
 ): Promise<void> {
   const { signal } = controller;
   try {
-    const [summaryValue, report] = await Promise.all([
-      state.output("summary").load(jsonLoader(), { signal }),
-      state.output("report").load(marimoOutputLoader(), { signal }),
-    ]);
+    const { summary: summaryValue, report } = await loadOutputs(
+      state,
+      { summary: jsonLoader(), report: marimoOutputLoader() },
+      { signal },
+    );
     signal.throwIfAborted();
     if (currentRevision !== revision) return;
     const summary = parseSummary(summaryValue);

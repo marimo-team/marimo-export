@@ -1,4 +1,4 @@
-import { imageLoader, openExport } from "@marimo-team/marimo-export";
+import { imageLoader, loadOutputs, openExport } from "@marimo-team/marimo-export";
 import type { MountedView, NotebookExport, ExportState } from "@marimo-team/marimo-export";
 import { anyWidgetLoader } from "@marimo-team/marimo-export/loader/anywidget";
 import { parquetRowsLoader } from "@marimo-team/marimo-export/loader/parquet";
@@ -167,15 +167,23 @@ async function renderView(
 ): Promise<void> {
   const { signal } = controller;
   try {
-    const [rowsValue, summary, chart, image, widget] = await Promise.all([
-      state.output("price_history").load(parquetRowsLoader(), { signal }),
-      state.output("market_summary").load(marketSummaryLoader(), { signal }),
-      state
-        .output("performance_chart")
-        .load(vegaLiteLoader({ actions: false, renderer: "svg" }), { signal }),
-      state.output("performance_snapshot").load(imageLoader(), { signal }),
-      state.output("market_explorer").load(anyWidgetLoader(), { signal }),
-    ]);
+    const {
+      price_history: rowsValue,
+      market_summary: summary,
+      performance_chart: chart,
+      performance_snapshot: image,
+      market_explorer: widget,
+    } = await loadOutputs(
+      state,
+      {
+        price_history: parquetRowsLoader(),
+        market_summary: marketSummaryLoader(),
+        performance_chart: vegaLiteLoader({ actions: false, renderer: "svg" }),
+        performance_snapshot: imageLoader(),
+        market_explorer: anyWidgetLoader(),
+      },
+      { signal },
+    );
     signal.throwIfAborted();
     if (nextRevision !== revision) return;
 

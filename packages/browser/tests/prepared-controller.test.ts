@@ -163,6 +163,67 @@ describe("prepared state controller", () => {
     expect(controller.snapshot().pendingInputs).toBeUndefined();
   });
 
+  it.each([
+    { successor: undefined, committed: [0], restored: [false], pending: { count: 2 } },
+    { successor: 0, committed: [0], restored: [false], pending: undefined },
+    { successor: 3, committed: [0, 3], restored: [], pending: undefined },
+  ])("serializes rejected selection before successor $successor", async (expected) => {
+    const notebookExport = preparedExportFixture({
+      inputs: [{ count: 0 }, { count: 1 }, { count: 3 }],
+    });
+    let enterFirst = () => {};
+    const firstStarted = new Promise<void>((resolve) => {
+      enterFirst = resolve;
+    });
+    let finishFirst = () => {};
+    const firstReady = new Promise<void>((resolve) => {
+      finishFirst = resolve;
+    });
+    let applying = false;
+    const committed: number[] = [];
+    const restoredDuringApply: boolean[] = [];
+    const controller = new PreparedStateController({
+      async apply(change, signal) {
+        applying = true;
+        try {
+          if (change.next.state.inputs.count === 1) {
+            enterFirst();
+            await firstReady;
+          }
+          signal.throwIfAborted();
+          committed.push(numberValue(change.next.state.inputs.count));
+        } finally {
+          applying = false;
+        }
+      },
+      restore() {
+        restoredDuringApply.push(applying);
+      },
+    });
+    await controller.start(preparedPublicationFixture(notebookExport, { count: 0 }));
+
+    const first = controller.updateInputs({ count: 1 });
+    await firstStarted;
+    const unavailable = controller.updateInputs({ count: 2 });
+    const successor =
+      expected.successor === undefined
+        ? undefined
+        : controller.updateInputs({ count: expected.successor });
+    const settling = Promise.allSettled([first, unavailable]);
+    finishFirst();
+    const results = await settling;
+    await successor;
+
+    expect(results.map((result) => result.status)).toEqual(["rejected", "rejected"]);
+    expect(committed).toEqual(expected.committed);
+    expect(restoredDuringApply).toEqual(expected.restored);
+    expect(controller.snapshot().current?.state.inputs).toEqual({
+      count: expected.successor ?? 0,
+    });
+    expect(controller.snapshot().pendingInputs).toEqual(expected.pending);
+    await controller.dispose();
+  });
+
   it("keeps an unavailable request pending for a refreshed publication", async () => {
     const firstExport = preparedExportFixture({ inputs: [{ count: 0 }] });
     const secondExport = preparedExportFixture({
@@ -184,6 +245,24 @@ describe("prepared state controller", () => {
     expect(controller.snapshot().current?.notebookExport).toBe(secondExport);
     expect(controller.snapshot().current?.state.inputs).toEqual({ count: 1 });
     expect(controller.snapshot().pendingInputs).toBeUndefined();
+  });
+
+  it("reports selection and restoration failures while retaining the committed state", async () => {
+    const notebookExport = preparedExportFixture({ inputs: [{ count: 0 }] });
+    const restoration = new Error("Controls could not be restored");
+    const controller = new PreparedStateController({
+      async apply() {},
+      restore() {
+        throw restoration;
+      },
+    });
+    await controller.start(preparedPublicationFixture(notebookExport, { count: 0 }));
+
+    await expect(controller.updateInputs({ count: 1 })).rejects.toMatchObject({
+      errors: [expect.objectContaining({ code: "state_unavailable" }), restoration],
+    });
+    expect(controller.snapshot().current?.state.inputs).toEqual({ count: 0 });
+    await controller.dispose();
   });
 
   it("drops pending inputs when a publication changes its input contract", async () => {

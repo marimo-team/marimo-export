@@ -78,8 +78,7 @@ export class PreparedStateController {
       if (!isPreparedStateUnavailable(error)) {
         this.#pendingInputs = undefined;
       }
-      await this.#transitions.restoreAfter(error);
-      throw error;
+      return this.#transitions.reject(error);
     }
     try {
       await this.#apply(next, "state", signal);
