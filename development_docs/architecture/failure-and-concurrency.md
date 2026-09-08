@@ -1,6 +1,6 @@
 # Failure and concurrency
 
-marimo-export coordinates six concurrency scopes. Each scope owns a commit
+marimo-export coordinates seven concurrency scopes. Each scope owns a commit
 decision and a cancellation or cleanup boundary. Their work can overlap, while
 their commit authority remains scoped to the current owner.
 
@@ -55,7 +55,7 @@ Read [Planning and preparation](preparation.md) for producer sequencing and
 | Rollback replacement failure                   | A recovery sibling can retain the previous or interrupted tree. Its path is currently carried in the exception message                        |
 | Parent-directory sync after installation       | The new destination is visible. The result contains `export_parent_sync_failed`                                                               |
 | Retired-directory cleanup after installation   | The new destination is visible. The result contains `retired_destination_cleanup_failed` and the retained path                                |
-| Python publication refresh                     | The last-good publication remains current. The background task currently exposes no error callback or status channel                          |
+| Python publication refresh                     | The last-good publication remains current. Application callbacks own reporting their background failures                                      |
 | Browser state application                      | The last committed browser publication remains current. The controller invokes the port's optional restoration hook after an ordinary failure |
 
 ## Lease granularity
@@ -94,8 +94,11 @@ receipt path.
 worker thread. The callback must poll the supplied cancellation predicate. A
 newer request records a desired-work token before starting work. Its callback
 can overlap the older callback until that older work observes cancellation. A
-stale candidate closes instead of replacing the current Python prepared
-publication.
+stale candidate closes while the current Python publication remains available.
+The controller checks ownership before and after awaiting application admission.
+Cancellation drains preparation and admission before their candidate is released.
+Polling evaluates an application refresh predicate in a worker thread, then
+rechecks the publication and desired-work token before starting a replacement.
 
 `PreparedStateController` gives each browser transition an `AbortController` and
 monotonic transition generation. A newer transition aborts active work before

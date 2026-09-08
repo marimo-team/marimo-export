@@ -39,9 +39,8 @@ packages.
 [Documentation](documentation.md) defines the public learning spine, route
 manifest, source owners, and rendered validation contract.
 
-Proposed integrations and upstream APIs live under
-[Proposals](proposals/README.md).
-They are design targets, not current architecture or validation requirements.
+[Design records](proposals/README.md) distinguish proposed upstream APIs from
+implemented consumer integrations and link to their current contract owners.
 
 ## Install the workspace
 
