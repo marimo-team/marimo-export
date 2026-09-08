@@ -149,7 +149,7 @@ def resolve_value_path(
     root: object,
     path: tuple[tuple[str, str | int], ...],
 ) -> object:
-    """Resolve one structural selector with Studio-compatible semantics."""
+    """Resolve attribute and item steps against a notebook value."""
 
     current = root
     for kind, key in path:

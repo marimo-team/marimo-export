@@ -8,11 +8,14 @@ from dataclasses import dataclass, field
 from time import monotonic
 from typing import Generic, TypeVar
 
+from marimo_export._diagnostics import record_cleanup_failure
 from marimo_export.prepared import PreparedAsset
 from marimo_export.publication import (
+    AdmitPublication,
     PreparedPublication,
     PreparedPublicationCandidate,
     PreparePublication,
+    RefreshPublication,
 )
 from marimo_export.repository import ExportRepository, RepositoryError
 
@@ -27,8 +30,15 @@ class _Work(Generic[KeyT, MetadataT]):
     route: Hashable
     token: int
     prepare: PreparePublication[MetadataT]
+    admit: AdmitPublication[MetadataT] | None
     cancelled: threading.Event = field(default_factory=threading.Event)
     task: asyncio.Task[PreparedPublication[KeyT, MetadataT]] | None = None
+    admission: asyncio.Future[None] | None = None
+
+    def cancel(self) -> None:
+        self.cancelled.set()
+        if self.admission is not None:
+            self.admission.cancel()
 
 
 @dataclass(frozen=True, slots=True)
@@ -37,6 +47,7 @@ class _OwnedPublication(Generic[KeyT, MetadataT]):
     group: Hashable
     route: Hashable
     prepare: PreparePublication[MetadataT]
+    admit: AdmitPublication[MetadataT] | None
     publication: PreparedPublication[KeyT, MetadataT]
 
 
@@ -97,15 +108,19 @@ class PublicationControllerState(Generic[KeyT, MetadataT]):
         self,
         key: KeyT,
         prepare: PreparePublication[MetadataT],
+        *,
+        admit: AdmitPublication[MetadataT] | None = None,
     ) -> PreparedPublication[KeyT, MetadataT]:
         if self._closed:
             raise RuntimeError("The prepared publication controller is closed")
-        work = self._start_work(key, prepare)
+        if admit is not None and not callable(admit):
+            raise TypeError("admit must be callable or None")
+        work = self._start_work(key, prepare, admit)
         assert work.task is not None
         try:
             return await asyncio.shield(work.task)
         except asyncio.CancelledError as primary:
-            work.cancelled.set()
+            work.cancel()
             await _settle_cancelled(work.task)
             raise primary
         finally:
@@ -116,7 +131,11 @@ class PublicationControllerState(Generic[KeyT, MetadataT]):
         owned = self._current.get(key)
         return None if owned is None else owned.publication
 
-    def poll(self, key: KeyT) -> PreparedPublication[KeyT, MetadataT] | None:
+    def poll(
+        self, key: KeyT, *, should_refresh: RefreshPublication[KeyT, MetadataT]
+    ) -> PreparedPublication[KeyT, MetadataT] | None:
+        if not callable(should_refresh):
+            raise TypeError("should_refresh must be callable")
         self._prune()
         owned = self._current.get(key)
         if owned is None:
@@ -124,7 +143,7 @@ class PublicationControllerState(Generic[KeyT, MetadataT]):
         pending = any(work.group == owned.group for work in self._work.values())
         if key not in self._refresh_tasks and not pending:
             task = asyncio.create_task(
-                self._refresh_if_stale(owned, self._desired.get(owned.group))
+                self._refresh_if_stale(owned, self._desired.get(owned.group), should_refresh)
             )
             self._refresh_tasks[key] = task
             task.add_done_callback(
@@ -161,7 +180,7 @@ class PublicationControllerState(Generic[KeyT, MetadataT]):
         group = self._group(key)
         for work in self._work.values():
             if work.group == group:
-                work.cancelled.set()
+                work.cancel()
         for current_key, owned in tuple(self._current.items()):
             if owned.group == group:
                 self._current.pop(current_key).publication._close()
@@ -184,13 +203,14 @@ class PublicationControllerState(Generic[KeyT, MetadataT]):
         self,
         key: KeyT,
         prepare: PreparePublication[MetadataT],
+        admit: AdmitPublication[MetadataT] | None,
     ) -> _Work[KeyT, MetadataT]:
         hash(key)
         group = self._group(key)
         route = self._route(key)
         for pending in self._work.values():
             if pending.group == group:
-                pending.cancelled.set()
+                pending.cancel()
         self._next_token += 1
         work = _Work(
             key=key,
@@ -198,6 +218,7 @@ class PublicationControllerState(Generic[KeyT, MetadataT]):
             route=route,
             token=self._next_token,
             prepare=prepare,
+            admit=admit,
         )
         self._desired[group] = work.token
         work.task = asyncio.create_task(self._produce(work))
@@ -214,11 +235,27 @@ class PublicationControllerState(Generic[KeyT, MetadataT]):
         if not isinstance(candidate, PreparedPublicationCandidate):
             raise TypeError("prepare must return a PreparedPublicationCandidate")
         publication = PreparedPublication._create(work.key, candidate)
+        try:
+            self._require_current(work)
+            if work.admit is not None:
+                work.admission = asyncio.ensure_future(work.admit(candidate))
+                try:
+                    await work.admission
+                finally:
+                    work.admission = None
+            self._require_current(work)
+            self._commit(work, publication)
+            return publication
+        except BaseException as error:
+            try:
+                publication._close()
+            except BaseException as cleanup:
+                record_cleanup_failure(error, "publication candidate cleanup", cleanup)
+            raise
+
+    def _require_current(self, work: _Work[KeyT, MetadataT]) -> None:
         if self._closed or work.cancelled.is_set() or self._desired.get(work.group) != work.token:
-            publication._close()
             raise asyncio.CancelledError
-        self._commit(work, publication)
-        return publication
 
     def _commit(
         self,
@@ -243,6 +280,7 @@ class PublicationControllerState(Generic[KeyT, MetadataT]):
             group=work.group,
             route=work.route,
             prepare=work.prepare,
+            admit=work.admit,
             publication=publication,
         )
         self._prune()
@@ -251,20 +289,22 @@ class PublicationControllerState(Generic[KeyT, MetadataT]):
         self,
         selected: _OwnedPublication[KeyT, MetadataT],
         desired: int | None,
+        should_refresh: RefreshPublication[KeyT, MetadataT],
     ) -> None:
         try:
-            revision = await asyncio.to_thread(
-                self._repository().observation_revision,
-                selected.publication.plan,
+            stale = await asyncio.to_thread(
+                should_refresh, self._repository(), selected.publication
             )
+            if not isinstance(stale, bool):
+                raise TypeError("should_refresh must return a bool")
             if (
                 self._closed
                 or self._current.get(selected.key) is not selected
                 or self._desired.get(selected.group) != desired
-                or revision <= selected.publication.plan.observation_revision
+                or not stale
             ):
                 return
-            await self.prepare(selected.key, selected.prepare)
+            await self.prepare(selected.key, selected.prepare, admit=selected.admit)
         except asyncio.CancelledError:
             return
         except Exception:
@@ -284,7 +324,7 @@ class PublicationControllerState(Generic[KeyT, MetadataT]):
         refreshes = tuple(self._refresh_tasks.values())
         work = tuple(self._work.values())
         for item in work:
-            item.cancelled.set()
+            item.cancel()
         await asyncio.gather(
             *refreshes,
             *(item.task for item in work if item.task is not None),

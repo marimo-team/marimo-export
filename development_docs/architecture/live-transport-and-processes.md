@@ -138,12 +138,19 @@ fails before state capture. The capture bridge records declared parent UI values
 before the state loop, verifies them after the loop, and the client verifies the
 parent document again after downloading assets.
 
-| Session operation   | Result                                                                       |
-| ------------------- | ---------------------------------------------------------------------------- |
-| `inspect()`         | Immutable notebook, definition, cell, capability, and implementation records |
-| `observe_inputs()`  | Portable live UI roots and typed control bindings                            |
-| `plan(spec=...)`    | Repository-aware `ExportPlan` without state execution                        |
-| `capture(spec=...)` | Leased `PreparedExport` prepared through the borrowed session                |
+| Session operation           | Result                                                                       |
+| --------------------------- | ---------------------------------------------------------------------------- |
+| `inspect()`                 | Immutable notebook, definition, cell, capability, and implementation records |
+| `observe_inputs()`          | Portable live UI roots and typed control bindings                            |
+| `observe_inputs(plan=plan)` | Complete current plan inputs and applicable control bindings                 |
+| `plan(spec=...)`            | Repository-aware `ExportPlan` without state execution                        |
+| `capture(spec=...)`         | Leased `PreparedExport` prepared through the borrowed session                |
+
+`observe_inputs(plan=plan)` validates the live document and producer against the
+plan before returning ordinary Python inputs and UI inputs. The bridge uses the
+same baseline normalization as planning. The client rejects an incomplete input
+vector. Applications choose how this observation contributes to an authored
+state space.
 
 The two capture entry points divide timeout ownership differently:
 

@@ -204,10 +204,15 @@ or cached function arguments when they determine freshness.
 a missing-state child run:
 
 - `authored_hits` and `authored_misses` count non-projection cell attempts.
-- `projection_hits` and `projection_misses` count transient output and snapshot
-  leaf attempts.
+- `projection_hits` and `projection_misses` count the requested output receipts
+  returned by the capture bridge.
 - A forced live run counts as an effective miss even when marimo initially found
   a stored entry.
+
+The private `CacheAttemptLog` tracks output and snapshot-token cells together.
+The bridge reports projection counts from output receipts, so its public counts
+exclude snapshot-token attempts. Keep that distinction when interpreting internal
+execution diagnostics.
 
 Exact prepared-export reuse and prepared-state reuse execute no child work and
 therefore add no cache activity. Zero counts can mean repository reuse. They do

@@ -159,8 +159,15 @@ async def report_publication():
         await controller.close()
 
 
+def observations_changed(repository, publication):
+    return (
+        repository.observation_revision(publication.plan)
+        > publication.plan.observation_revision
+    )
+
+
 def current_manifest(controller):
-    publication = controller.poll("sales")
+    publication = controller.poll("sales", should_refresh=observations_changed)
     if publication is None:
         raise RuntimeError("The sales publication is unavailable")
     return prepared_manifest_bytes(
@@ -186,8 +193,10 @@ routes:
 5. Call `controller.release("sales")` when the application route closes.
 6. Await `controller.close()` during server teardown.
 
-`poll()` returns the current Python prepared publication and can schedule an
-observation-driven refresh. A background refresh failure preserves the current
+`poll()` returns the current Python prepared publication and checks the supplied
+refresh predicate in a worker thread. This example checks repository observations.
+Applications can supply a predicate for their own source or data revision.
+A background refresh failure preserves the current
 publication and is not reported through a controller callback. Record
 preparation health in the application when operators must distinguish an
 unchanged publication from a failing refresh.

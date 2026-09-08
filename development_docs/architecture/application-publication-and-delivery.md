@@ -61,9 +61,12 @@ browser-side refresh, state transition, and mount disposal.
 `route_grace_seconds` must be a finite nonnegative number. Invalid numbers raise
 `ValueError`. Booleans and other types raise `TypeError`.
 
-`prepare(key, callback)` executes the synchronous callback in a worker thread.
+`prepare(key, callback, admit=...)` executes the synchronous callback in a worker thread.
 The callback receives the selected `ExportRepository` and a cancellation
 predicate, then returns `PreparedPublicationCandidate(prepared, metadata)`.
+The optional asynchronous admission callback checks application authority before
+the candidate can replace the current publication. Its candidate remains
+controller-owned.
 
 Preparation follows this order:
 
@@ -73,12 +76,16 @@ Preparation follows this order:
 3. Record a monotonically increasing desired-work token for that group.
 4. Acquire the repository and run the callback in a worker thread.
 5. Wrap the returned prepared export and metadata as `PreparedPublication`.
-6. Recheck controller state, callback cancellation, and the desired-work token.
-7. Close a stale candidate, or commit the candidate as current.
+6. Check controller state, cancellation, and the desired-work token.
+7. Await application admission when supplied.
+8. Recheck ownership, then commit the candidate as current. Close rejected or
+   superseded candidates while retaining the previous publication.
 
 Cancelling the coroutine sets the callback's cancellation signal and waits for
-the worker task to settle before returning `CancelledError`. A callback must
-cooperate with the predicate to stop expensive preparation promptly. A failed or
+the worker task to settle before returning `CancelledError`. Pending admission
+is cancelled and drained too. A preparation callback must cooperate with the
+predicate, and an admission callback must settle its child work when cancelled.
+A failed or
 cancelled replacement leaves the previous current publication unchanged.
 
 The controller exposes application metadata unchanged. It does not interpret
@@ -134,8 +141,8 @@ generations and contribute to `repository_limit_exceeded`.
 
 ## Polling, release, and close
 
-`current(key)` returns the exact current publication after pruning expired route
-grace. `poll(key)` returns that same publication immediately and schedules at
+`current(key)` returns the admitted publication after pruning expired route
+grace. `poll(key, should_refresh=predicate)` returns that publication immediately and schedules at
 most one refresh task for the key when its supersession group has no preparation
 in progress.
 
@@ -144,13 +151,17 @@ retired publication, or preparation task. `keys` returns each current,
 route-grace, and preparing application key once, preserving its first occurrence
 across those groups.
 
-The refresh task captures its group's desired-work token when scheduled and
-compares the repository observation revision with the revision captured in the
-publication plan. A newer revision calls the original prepare callback when the
-publication and desired-work token still match. New preparation and release
-supersede outstanding revision checks. Refresh cancellation and ordinary refresh
-errors preserve the last-good publication. The current Python controller swallows
-those background failures and exposes no error callback or status channel.
+The refresh task calls the application predicate in a worker thread with the
+borrowed repository and current publication. The predicate returns a boolean.
+Applications can compare observation revisions, file revisions, or other input
+authority recorded in their metadata.
+
+The task captures its group's desired-work token when scheduled. A true
+predicate result runs the retained preparation and admission callbacks when the
+publication and token still match. New preparation and release supersede
+outstanding checks. Refresh cancellation and ordinary failures preserve the
+last-good publication. Applications report background failures from their
+callbacks.
 
 `release(key)` acts on the key's complete supersession group. It signals pending
 work, closes current and retired publications in that group, clears the desired
@@ -158,7 +169,7 @@ token, and reschedules retirement for remaining groups. Detached
 `PreparedAsset` handles keep their own leases.
 
 `close()` is asynchronous and idempotent. It cancels the retirement timer,
-signals all preparation work, waits for preparation and refresh tasks, closes
+signals all preparation work, cancels pending admission, waits for preparation and refresh tasks, closes
 every current and retired publication, then closes the lazily owned repository.
 A supplied repository remains open. The first publication or owned-repository
 close failure is raised after the controller has attempted the remaining closes.

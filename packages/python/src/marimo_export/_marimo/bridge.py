@@ -6,6 +6,8 @@ from typing import cast
 
 from marimo_export._diagnostics import safe_diagnostic
 from marimo_export._execution import create_execution_plan
+from marimo_export._execution.plan import resolve_baseline_inputs
+from marimo_export._format import digest, identifier_name
 from marimo_export._identity import (
     ImplementationDriftError,
     require_implementation_stable,
@@ -27,6 +29,7 @@ from marimo_export.index import (
     ProducerProvenance,
     StateEntry,
 )
+from marimo_export.integration import KernelInputObservation
 from marimo_export.result import CacheSummary, StateRunTimings
 from marimo_export.spec import ExportSpec
 
@@ -106,9 +109,14 @@ async def _dispatch(
         _exact(params, set(), "inspect params")
         return await _inspect(adapters.kernel)
     if operation == "observe_inputs":
-        _exact(params, set(), "observe_inputs params")
+        _exact(params, {"plan"} if "plan" in params else set(), "observe_inputs params")
         implementation_sha256 = _require_stable_implementation()
-        result = cast(JsonObject, adapters.kernel.observe_inputs().to_value())
+        observation = (
+            adapters.kernel.observe_inputs()
+            if "plan" not in params
+            else await _observe_plan_inputs(params["plan"], adapters.kernel)
+        )
+        result = cast(JsonObject, observation.to_value())
         if _require_stable_implementation() != implementation_sha256:
             raise SessionError(
                 "marimo-export implementation changed during input observation",
@@ -128,6 +136,41 @@ async def _dispatch(
             raise SessionError("release ticket must be a string")
         return {"released": release(ticket)}
     raise SessionError(f"unsupported bridge operation: {operation}")
+
+
+async def _observe_plan_inputs(value: object, runtime: KernelRuntime) -> KernelInputObservation:
+    if not isinstance(value, dict):
+        raise TypeError("observation plan must be an object")
+    _exact(value, {"document_sha256", "producer_sha256", "inputs"}, "observation plan")
+    document = digest(value["document_sha256"], "observation plan document_sha256")
+    producer = digest(value["producer_sha256"], "observation plan producer_sha256")
+    names = value["inputs"]
+    if not isinstance(names, list):
+        raise TypeError("observation plan inputs must be a list")
+    inputs = tuple(identifier_name(name, "observation plan input") for name in names)
+    if inputs != tuple(sorted(set(inputs))):
+        raise ValueError("observation plan inputs must be sorted and unique")
+    runtime.require_capabilities()
+    baseline = await runtime.inspect_baseline()
+    identity = runtime_producer_identity(
+        document_sha256=baseline.document_sha256,
+        source=managed_runtime_source(runtime.runtime_path()),
+        filename=baseline.filename,
+    )
+    if identity.document_sha256 != document or identity.producer_sha256 != producer:
+        raise ExecutionError(
+            "the live producer no longer matches the observation plan",
+            code="parent_document_changed",
+        )
+    values = resolve_baseline_inputs(baseline, inputs)
+    bindings: dict[str, ControlBinding] = {}
+    for name in inputs:
+        for object_id, path in baseline.definitions[name].control_paths.items():
+            binding = ControlBinding(input=name, path=path)
+            previous = bindings.setdefault(object_id, binding)
+            if previous != binding:
+                raise ExecutionError(f"control {object_id!r} belongs to overlapping input roots")
+    return KernelInputObservation(values, bindings)
 
 
 async def _plan(spec: ExportSpec, runtime: KernelRuntime) -> JsonObject:

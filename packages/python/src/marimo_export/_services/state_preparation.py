@@ -102,8 +102,8 @@ def prepare_states(
                 progress,
                 ProgressEvent(
                     kind="state_started",
-                    completed=completed - 1,
-                    total=len(plan.missing_states),
+                    completed=len(plan.reusable_states) + completed - 1,
+                    total=len(plan.states),
                     state=state.aliases[0],
                 ),
             )
@@ -130,8 +130,8 @@ def prepare_states(
                 progress,
                 ProgressEvent(
                     kind="state_finished",
-                    completed=completed,
-                    total=len(plan.missing_states),
+                    completed=len(plan.reusable_states) + completed,
+                    total=len(plan.states),
                     state=state.aliases[0],
                     cache=current,
                     elapsed_seconds=result.capture_seconds,

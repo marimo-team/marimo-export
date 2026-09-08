@@ -354,7 +354,7 @@ def test_export_commits_only_the_observation_revision_used_by_its_plan(
     repository.close()
 
 
-def test_prepare_replans_progress_from_the_second_live_state_lookup(
+def test_prepare_replans_progress_when_reusable_states_disappear(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -403,8 +403,7 @@ def test_prepare_replans_progress_from_the_second_live_state_lookup(
     state_events = [event for event in events if event.kind == "state_finished"]
     assert plan_ready.completed == 0
     assert plan_ready.total == 2
-    assert len(state_events) == 2
-    assert all(event.completed <= event.total for event in state_events)
+    assert [(event.completed, event.total) for event in state_events] == [(1, 2), (2, 2)]
     assert producer.captured == ["baseline", "other"]
     prepared.close()
     repository.close()
