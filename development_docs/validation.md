@@ -97,7 +97,7 @@ Required behavioral cases:
 - changing the default reuses prepared states
 - cancellation leaves the prior generation current
 - a live producer change fails before publication
-- progress counts match the missing-state partition
+- state progress counts cover the complete normalized plan, including reused states
 - observation queue pressure preserves revision order
 - failed, interrupted, cancelled, and scratch runs record no vector
 - public observation methods derive producer and input scope from `ExportPlan`
@@ -173,7 +173,9 @@ uv run pytest -q \
 
 Cover URL normalization, HTTPS policy, header roles, redirect rejection,
 response bounds, no-retry uncertainty, source stability, process-tree cleanup,
-and secret redaction.
+and secret redaction. Plan-scoped input observation must return the complete
+ordinary and UI input vector, retain applicable control bindings, and reject
+a changed live producer.
 
 ## Application publication and delivery
 
@@ -186,7 +188,8 @@ uv run pytest -q \
   packages/python/tests/test_writer.py
 ```
 
-Cover supersession, last-good preservation, observation-driven polling, route
+Cover supersession, admission rejection and cancellation, last-good preservation,
+application-directed polling, route
 grace, detached response generation leases, nested export verification, directory identity,
 native exchange, rollback replacement, recovery paths, and warnings emitted
 after the new directory becomes visible.
@@ -209,13 +212,18 @@ pnpm --filter @marimo-team/marimo-export test:package
 Prepared browser evidence must cover strict manifest parsing, base URL and
 identity binding, default state, query and control updates, missing states,
 supersession, restoration, publication refresh, selection preservation,
-settlement, and idempotent disposal.
+settlement, and idempotent disposal. A rejected selection must cancel earlier
+loading and restore controls through the same serialized application queue.
+
+Output-set loading requires exact output-name resolution, inferred loader result
+types, sibling cancellation, and preservation of the primary load failure. Keep
+application binding and visible-commit tests in the consuming application.
 
 ## External consumer acceptance
 
 marimo-studio composes the public producer, publication, delivery, and browser
 APIs. Its [integration record](proposals/studio-prepared-runtime.md) identifies
-the inspected revision and cross-repository acceptance conditions.
+the composition boundaries and cross-repository acceptance conditions.
 
 An external acceptance run must install candidate wheel and npm artifacts into
 a pinned consumer checkout and record both revisions, the Marimo version, and
@@ -251,27 +259,27 @@ Check local links and fragments, navigation parity, local search, code block
 rendering, `llms.txt`, `llms-full.txt`, desktop layout, and narrow layout.
 VitePress build success alone does not prove these delivery properties.
 
-## Known validation gaps
+## Validation limits and implementation constraints
 
-The following statements describe current source behavior that lacks a focused
-boundary witness. They are not stronger supported guarantees:
+The following boundaries retain implementation constraints or incomplete
+acceptance coverage. Use them to choose additional evidence when changing the
+affected owner:
 
 - adding or removing a state-row key can change the inferred input-name set and
   invalidate every state fingerprint
 - exact prepared-export reuse can bypass exporter import and exporter-source
   checks when that source lies outside the discovered producer environment
-- clearing observations leaves the producer revision unchanged, so
-  observation-driven publication polling does not react to the deletion
+- clearing observations leaves the producer revision unchanged
 - public exact observation lookup and plan-time projection of stored supersets
   use different matching and revision semantics
 - repository admission can reject a candidate before an otherwise eligible
   historical artifact is explicitly pruned
-- prepared-state corruption can delete dependent generation rows before the
-  same recovery pass quarantines their directories
+- prepared-state corruption can delete dependent generation rows while their
+  directories await a later orphan-artifact recovery pass
 - a valid reservation has no focused negative test for a current-pointer change
   immediately before final publication
-- `route_grace_seconds` lacks finite-number and boolean validation
-- Python publication refresh failures have no callback or status channel
+- background refresh failures require reporting inside application callbacks
+  because the controller has no dedicated error callback or status channel
 - a scratchpad `done` event ends reading, so later events are not rejected
 - AnyWidget inner JSON parsing lacks duplicate-key, depth, and value bounds
 - strict BlobAsset MessagePack has thin malformed-token coverage

@@ -302,6 +302,47 @@ class ExecutionPlan:
             raise ValueError("execution plan default alias and fingerprint must select one state")
 
 
+def resolve_baseline_inputs(baseline: Baseline, input_names: tuple[str, ...]) -> JsonObject:
+    """Return complete portable values for the selected live inputs."""
+
+    missing = sorted(set(input_names) - set(baseline.definitions))
+    if missing:
+        raise SpecError(
+            f"notebook definitions are unavailable: {', '.join(missing)}",
+            code="spec_definition_missing",
+            details={"definitions": missing},
+        )
+    baseline_inputs: JsonObject = {}
+    for name in input_names:
+        definition = baseline.definitions[name]
+        if not definition.portable_input:
+            raise SpecError(
+                f"baseline input {name!r} is not portable",
+                code="spec_input_invalid",
+                details={"input": name, "python_type": definition.python_type},
+            )
+        if definition.kind == "ui":
+            if definition.sensitive:
+                raise SpecError(
+                    f"UI input {name!r} is sensitive",
+                    code="spec_input_sensitive",
+                    details={"input": name},
+                )
+            value = definition.frontend_value
+        else:
+            value = definition.value
+        try:
+            baseline_inputs[name] = portable_json_value(value, f"baseline input {name!r}")
+        except (TypeError, ValueError) as error:
+            raise SpecError(
+                f"baseline input {name!r} is not portable",
+                code="spec_input_invalid",
+                details={"input": name, "python_type": definition.python_type},
+            ) from error
+
+    return baseline_inputs
+
+
 def create_execution_plan(spec: ExportSpec, baseline: Baseline) -> ExecutionPlan:
     """Complete sparse rows and map ordinary inputs to their authored cells."""
 
@@ -333,33 +374,7 @@ def create_execution_plan(spec: ExportSpec, baseline: Baseline) -> ExecutionPlan
             details={"inputs": ambiguous_inputs},
         )
 
-    baseline_inputs: JsonObject = {}
-    for name in input_names:
-        definition = baseline.definitions[name]
-        if not definition.portable_input:
-            raise SpecError(
-                f"baseline input {name!r} is not portable",
-                code="spec_input_invalid",
-                details={"input": name, "python_type": definition.python_type},
-            )
-        if definition.kind == "ui":
-            if definition.sensitive:
-                raise SpecError(
-                    f"UI input {name!r} is sensitive",
-                    code="spec_input_sensitive",
-                    details={"input": name},
-                )
-            value = definition.frontend_value
-        else:
-            value = definition.value
-        try:
-            baseline_inputs[name] = portable_json_value(value, f"baseline input {name!r}")
-        except (TypeError, ValueError) as error:
-            raise SpecError(
-                f"baseline input {name!r} is not portable",
-                code="spec_input_invalid",
-                details={"input": name, "python_type": definition.python_type},
-            ) from error
+    baseline_inputs = resolve_baseline_inputs(baseline, input_names)
 
     wire_states = spec.to_value()["states"]
     assert isinstance(wire_states, dict)

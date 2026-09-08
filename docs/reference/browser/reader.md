@@ -231,6 +231,36 @@ decoders and browser module evaluations cannot stop after they begin. They can
 settle later while their result remains stale. [Output loaders](loaders)
 defines each loader's cancellation and cleanup behavior.
 
+## `loadOutputs(state, loaders, options?)`
+
+Load a named set of outputs with one cancellation signal. Each key names an
+output in `state`. Its loader determines the corresponding result type.
+
+```ts
+import { loadOutputs, scalarLoader } from "@marimo-team/marimo-export";
+import { jsonLoader } from "@marimo-team/marimo-export/loader/json";
+
+const { count, summary } = await loadOutputs(
+  state,
+  { count: scalarLoader(), summary: jsonLoader() },
+  { signal: abort.signal },
+);
+```
+
+The operation validates output names before starting requests, forwards
+`LoadOptions` to each output, and returns a readonly result record. Loads run
+concurrently. The first failure aborts sibling requests, then the operation
+settles their public load promises before rejecting. An additional non-abort
+failure produces an `AggregateError` with the first failure first. An empty
+selection returns an empty record, subject to the supplied abort signal.
+
+Each loader retains the cancellation behavior described above. Some decoder
+work may continue after its public load request has been canceled.
+
+A callable result for an output named `then` raises `decode_failed`, because
+JavaScript would invoke it when resolving the result record. Load that output
+individually with `state.output("then").load(loader)`.
+
 ## Verify the complete export
 
 ```ts

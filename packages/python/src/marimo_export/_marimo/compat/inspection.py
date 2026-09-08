@@ -317,6 +317,8 @@ def _blob_asset_codec(
 async def inspect_baseline() -> Baseline:
     """Read graph ownership and current values from the selected parent."""
 
+    from marimo._ast.compiler import compile_cell
+    from marimo._ast.names import is_internal_cell_name
     from marimo._code_mode import get_context
 
     async with get_context() as context:
@@ -325,26 +327,36 @@ async def inspect_baseline() -> Baseline:
         ui_definition_names = {
             name for name, definition in definitions.items() if definition.kind == "ui"
         }
-        from marimo._ast.names import is_internal_cell_name
-
-        cells = tuple(
-            CellDefinition(
-                id=canonical_cell_id(cell.id),
-                name=(None if not cell.name or is_internal_cell_name(cell.name) else cell.name),
-                code_sha256=hashlib.sha256(cell.code.encode("utf-8")).hexdigest(),
-                config=json_object(cell.config.asdict(), f"cell {cell.id!s} config"),
-                input_dependencies=_cell_ui_dependencies(
+        cells: list[CellDefinition] = []
+        for cell in context.cells:
+            if cell.id in graph.cells:
+                dependencies = _cell_ui_dependencies(
                     graph,
                     cell.id,
                     ui_definition_names,
                     include_own=True,
-                ),
+                )
+            else:
+                # Marimo renders literal Markdown during instantiation before
+                # registering executable cells in the dependency graph.
+                if compile_cell(cell.code, cell.id).markdown is None:
+                    raise ExecutionError(
+                        f"notebook cell {canonical_cell_id(cell.id)!r} is not initialized",
+                        code="parent_document_changed",
+                    )
+                dependencies = ()
+            cells.append(
+                CellDefinition(
+                    id=canonical_cell_id(cell.id),
+                    name=(None if not cell.name or is_internal_cell_name(cell.name) else cell.name),
+                    code_sha256=hashlib.sha256(cell.code.encode("utf-8")).hexdigest(),
+                    config=json_object(cell.config.asdict(), f"cell {cell.id!s} config"),
+                    input_dependencies=dependencies,
+                )
             )
-            for cell in context.cells
-        )
         return Baseline(
             definitions=definitions,
-            cells=cells,
+            cells=tuple(cells),
             document_sha256=_document_sha256(context.cells),
             filename=_portable_filename(context._kernel.app_metadata.filename),
         )

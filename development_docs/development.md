@@ -50,7 +50,8 @@ Workspace package exports resolve browser and portable JSON TypeScript source.
 `publishConfig.exports` maps packed packages to their built `dist` entry points.
 The pnpm `beforePacking` hook emits the public browser dependency set after
 Vite+ bundles its internal AnyWidget loader.
-Run `pnpm run build:browser` to pack portable JSON before the browser package.
+Run `pnpm run build:browser` to build the browser package and its workspace
+dependencies in dependency order.
 
 One loader, example, or docs application:
 

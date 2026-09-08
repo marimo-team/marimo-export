@@ -121,7 +121,7 @@ export class PreparedStateTransitions {
 
   async restoreAfter<Primary>(primary: Primary): Promise<void> {
     try {
-      await this.restore();
+      await this.#restoreCurrent();
     } catch (cleanup) {
       throw new AggregateError(
         [primary, cleanup],
@@ -130,7 +130,33 @@ export class PreparedStateTransitions {
     }
   }
 
-  async restore(): Promise<void> {
+  reject<Primary>(primary: Primary): Promise<never> {
+    const operation = this.#queueRestore(() => this.restoreAfter(primary)).then(() => {
+      throw primary;
+    });
+    this.#operation = operation;
+    return operation;
+  }
+
+  restore(): Promise<void> {
+    return this.#queueRestore(() => this.#restoreCurrent());
+  }
+
+  #queueRestore(restore: () => Promise<void>): Promise<void> {
+    this.cancel(new DOMException("Prepared state transition superseded", "AbortError"));
+    const generation = this.#generation;
+    const operation = this.#operation
+      .catch(() => {})
+      .then(async () => {
+        if (generation === this.#generation && !this.#closed) {
+          await restore();
+        }
+      });
+    this.#operation = operation;
+    return operation;
+  }
+
+  async #restoreCurrent(): Promise<void> {
     if (this.#current !== undefined) {
       await this.port.restore?.(this.#current);
     }

@@ -188,6 +188,12 @@ activity, state alias, and elapsed execution time when available. The CLI render
 the same records as human progress or JSONL. Applications can pass their own
 callback.
 
+`state_started` and `state_finished` count ready states across the complete
+normalized plan, including reused states. With two reusable states in a
+four-state plan, the first missing state starts at `completed=2, total=4`.
+These counts describe state preparation. Verification, writing, and application
+mounting have their own completion boundaries.
+
 `StagedDelivery.materialize()` forwards `write_finished` after nested export
 verification. `StagedDelivery.commit()` emits `delivery_verification_started`
 before validating the staged tree and `delivery_commit_started` immediately

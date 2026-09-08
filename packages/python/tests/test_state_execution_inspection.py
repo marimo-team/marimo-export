@@ -2,11 +2,109 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+from export_integration_support import native_session as _native_session
 from marimo_export import (
+    ExportRepository,
+    ExportSpec,
     OutputSpec,
+    open_export,
 )
+from marimo_export.errors import ExecutionError
 from marimo_export.index import ControlElementStep, ControlIndexStep, ControlKeyStep
 from marimo_export.inspection import inspect_notebook
+
+
+def _markdown_notebook(notebook: Path, title: str = "Prepared notebook") -> None:
+    notebook.write_text(
+        f"""
+import marimo
+
+app = marimo.App()
+
+
+@app.cell
+def controls():
+    import marimo as mo
+    scale = mo.ui.slider(1, 3, value=1)
+    return mo, scale
+
+
+@app.cell
+def introduction(mo):
+    mo.md({title!r})
+    return
+
+
+@app.cell
+def report(mo, scale):
+    answer = scale.value * 2
+    mo.md(f"Answer: {{answer}}")
+    return (answer,)
+
+
+if __name__ == "__main__":
+    app.run()
+""".lstrip(),
+        encoding="utf-8",
+    )
+
+
+def test_live_capture_preserves_statically_rendered_markdown_cells(tmp_path: Path) -> None:
+    notebook = tmp_path / "notebook.py"
+    _markdown_notebook(notebook)
+    original = notebook.read_bytes()
+    spec = ExportSpec(
+        default_state="one",
+        states={"one": {"scale": 1}, "three": {"scale": 3}},
+        outputs={
+            "introduction": OutputSpec.cell("introduction"),
+            "answer": OutputSpec.json("answer"),
+        },
+    )
+    with (
+        _native_session(notebook) as session,
+        ExportRepository.open(tmp_path / "repository") as repository,
+    ):
+        description = session.inspect()
+        assert {cell.name: cell.input_dependencies for cell in description.cells} == {
+            "controls": ("scale",),
+            "introduction": (),
+            "report": ("scale",),
+        }
+        with session.capture(spec=spec, repository=repository) as prepared:
+            assert prepared.plan.document_sha256 == description.document_sha256
+            prepared.write(tmp_path / "export")
+        assert session.observe_inputs().values == {"scale": 1}
+    exported = open_export(tmp_path / "export")
+    assert exported.state("one").output("answer").json() == 2
+    assert exported.state("three").output("answer").json() == 6
+    assert b"Prepared notebook" in exported.state("one").output("introduction").asset_bytes()
+    assert notebook.read_bytes() == original
+
+
+def test_live_document_identity_includes_statically_rendered_markdown(tmp_path: Path) -> None:
+    notebook = tmp_path / "notebook.py"
+    _markdown_notebook(notebook, "First title")
+    with _native_session(notebook) as session:
+        first = session.inspect().document_sha256
+    _markdown_notebook(notebook, "Second title")
+    with _native_session(notebook) as session:
+        second = session.inspect().document_sha256
+
+    assert first != second
+
+
+def test_live_inspection_rejects_uninitialized_executable_cells(tmp_path: Path) -> None:
+    notebook = tmp_path / "notebook.py"
+    _markdown_notebook(notebook)
+    with (
+        _native_session(notebook, auto_run=False) as session,
+        pytest.raises(ExecutionError, match="is not initialized") as raised,
+    ):
+        session.inspect()
+
+    assert raised.value.code == "parent_document_changed"
 
 
 def test_inspection_reports_every_control_in_a_composed_ui_tree(tmp_path: Path) -> None:
@@ -40,18 +138,10 @@ if __name__ == "__main__":
     description = inspect_notebook(notebook, timeout=30)
     definitions = {definition.name: definition for definition in description.definitions}
 
-    assert len(definitions["lower"].control_paths) == 1
-    assert len(definitions["upper"].control_paths) == 1
+    assert tuple(definitions["lower"].control_paths.values()) == ((),)
+    assert tuple(definitions["upper"].control_paths.values()) == ((),)
+    assert len({*definitions["lower"].control_paths, *definitions["upper"].control_paths}) == 2
     assert len(definitions["controls"].control_paths) == 3
-    children = {
-        *definitions["lower"].control_paths,
-        *definitions["upper"].control_paths,
-    }
-    controls = set(definitions["controls"].control_paths)
-    assert len(children) == 2
-    assert len(controls) == 3
-    assert set(definitions["lower"].control_paths.values()) == {()}
-    assert set(definitions["upper"].control_paths.values()) == {()}
     assert set(definitions["controls"].control_paths.values()) == {
         (),
         (ControlIndexStep(value=0),),

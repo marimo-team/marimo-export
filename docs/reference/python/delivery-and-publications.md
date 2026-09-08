@@ -258,6 +258,20 @@ It must return `PreparedPublicationCandidate(prepared=..., metadata=...)`.
 Closing the returned prepared handle remains the controller's responsibility
 after the candidate is accepted.
 
+`admit`, when supplied, is an asynchronous application callback with signature
+`Callable[[PreparedPublicationCandidate[MetadataT]], Awaitable[None]]`.
+`AdmitPublication[MetadataT]` names that contract. The controller awaits admission
+on its event loop before replacing the current publication. Admission may inspect
+the candidate during the callback. Its prepared handle remains controller-owned.
+Run blocking validation off the event loop and settle any child work before the
+callback exits, including cancellation paths. Raising an exception rejects and closes
+the candidate while retaining the previous publication. The callback remains
+attached to the preparation definition for background refreshes.
+
+Cancellation, release, newer preparation, and controller close cancel active
+admission. The controller rechecks ownership after admission, so a superseded
+candidate cannot commit even if the callback returns after cancellation.
+
 Cancelling the task awaiting `prepare()` sets the callback's cancellation
 predicate, waits for the worker-thread call to settle, and raises
 `asyncio.CancelledError` to the caller.
@@ -302,9 +316,9 @@ Methods and properties:
 ```python
 controller.active: bool
 controller.keys: tuple[KeyT, ...]
-await controller.prepare(key, prepare) -> PreparedPublication
+await controller.prepare(key, prepare, *, admit=None) -> PreparedPublication
 controller.current(key) -> PreparedPublication | None
-controller.poll(key) -> PreparedPublication | None
+controller.poll(key, *, should_refresh) -> PreparedPublication | None
 controller.asset(route, instance, relative) -> PreparedAsset | None
 controller.release(key) -> None
 await controller.close() -> None
@@ -315,14 +329,30 @@ grace state is retained. `keys` includes current, preparing, and retained keys.
 
 `current()` returns the exact current publication after expiring elapsed route
 grace entries. `poll()` returns the same current publication immediately and
-schedules one asynchronous revision check when no refresh is active. That check
-uses the last successful preparation callback only when the repository
-observation revision has advanced and the group's preparation intent is still
-current. A newer `prepare()` or `release()` supersedes an outstanding revision
-check. Refresh failure preserves the current
-publication and is not reported through a callback or status record. An
-application that needs refresh health must instrument its preparation callback
-or run a separate health check.
+runs `should_refresh(repository, publication)` in a worker thread when the group
+has no preparation or refresh in progress. The predicate returns a `bool`.
+`RefreshPublication[KeyT, MetadataT]` names its callable contract. It can compare
+an application revision, a source-file revision, or repository observations.
+
+A true result reruns the retained preparation and admission callbacks when the
+publication and preparation intent still match. A newer `prepare()` or
+`release()` supersedes an outstanding check. Predicate, preparation, and
+admission failures preserve the current publication. Applications that need
+background refresh health should instrument these callbacks. The predicate borrows
+the repository and publication for its duration. Controller close drains pending
+predicate work before closing an owned repository.
+
+For observation-driven refresh:
+
+```python
+def observations_changed(repository, publication):
+    return (
+        repository.observation_revision(publication.plan)
+        > publication.plan.observation_revision
+    )
+
+publication = controller.poll("report", should_refresh=observations_changed)
+```
 
 The controller and every call to `poll()` belong to one running `asyncio` event
 loop. Call `poll()` from an asynchronous handler on that loop. The preparation

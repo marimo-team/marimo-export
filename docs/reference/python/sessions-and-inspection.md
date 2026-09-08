@@ -126,7 +126,7 @@ Methods:
 
 ```python
 session.inspect() -> SessionDescription
-session.observe_inputs() -> KernelInputObservation
+session.observe_inputs(*, plan: ExportPlan | None = None) -> KernelInputObservation
 session.plan(
     *,
     spec: ExportSpec,
@@ -161,8 +161,21 @@ data. [Produce an export](produce#prepare) defines the shared coordination
 contract.
 
 `observe_inputs()` returns portable values for eligible live UI roots and typed
-control bindings. Use it to inspect current input state. Durable observation
-history uses the [repository observation APIs](repository-and-observations).
+control bindings. Pass `plan=plan` to observe every inferred plan input, including
+ordinary variables declared in state overrides:
+
+```python
+plan = session.plan(spec=spec, repository=repository)
+current = session.observe_inputs(plan=plan)
+repository.record_observation(plan, current.values)
+```
+
+Plan-scoped observation validates the live document and producer identities
+before returning its complete input vector and applicable control bindings.
+A changed source or producer raises `ExecutionError` with code
+`parent_document_changed`. Both forms leave the notebook state unchanged.
+Durable observation history uses the
+[repository observation APIs](repository-and-observations).
 
 ## Root `capture()`
 

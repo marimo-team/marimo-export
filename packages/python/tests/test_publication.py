@@ -106,6 +106,10 @@ def _controller(
     )
 
 
+def _observations_changed(repository: ExportRepository, publication: PreparedPublication) -> bool:
+    return repository.observation_revision(publication.plan) > publication.plan.observation_revision
+
+
 def test_publication_values_come_from_the_controller() -> None:
     with pytest.raises(TypeError, match="returned by PreparedPublicationController"):
         PreparedPublication()
@@ -270,38 +274,6 @@ def test_same_identity_replacement_retains_previous_route() -> None:
     asyncio.run(scenario())
 
 
-def test_poll_refreshes_after_observation_revision_advances() -> None:
-    repository = _Repository()
-    controller = _controller(repository)
-    first = _Prepared(6, 0)
-    second = _Prepared(7, 1)
-    candidates = iter((_candidate(first, "first"), _candidate(second, "second")))
-
-    def prepare(
-        _repository: ExportRepository,
-        _cancelled: Callable[[], bool],
-    ) -> PreparedPublicationCandidate[str]:
-        return next(candidates)
-
-    async def scenario() -> None:
-        selected = await controller.prepare(("dashboard", "first"), prepare)
-        repository.revision = 1
-        assert controller.poll(("dashboard", "first")) is selected
-
-        async def refreshed() -> PreparedPublication:
-            while True:
-                current = controller.current(("dashboard", "first"))
-                if current is not None and current.identity == second.identity:
-                    return current
-                await asyncio.sleep(0.005)
-
-        publication = await asyncio.wait_for(refreshed(), 5)
-        assert publication.metadata == "second"
-        await controller.close()
-
-    asyncio.run(scenario())
-
-
 def test_zero_route_grace_closes_replaced_publication() -> None:
     repository = _Repository()
     controller = _controller(repository, route_grace_seconds=0)
@@ -411,9 +383,9 @@ def test_observation_refresh_preserves_newer_preparation_intent(
         refresh_finished = asyncio.Event()
         refresh = PublicationControllerState._refresh_if_stale
 
-        async def tracked_refresh(self, selected, desired) -> None:
+        async def tracked_refresh(self, selected, desired, should_refresh) -> None:
             try:
-                await refresh(self, selected, desired)
+                await refresh(self, selected, desired, should_refresh)
             finally:
                 refresh_finished.set()
 
@@ -421,7 +393,7 @@ def test_observation_refresh_preserves_newer_preparation_intent(
         selected = await controller.prepare(("dashboard", "original"), original)
         newer: asyncio.Task | None = None
         try:
-            controller.poll(("dashboard", "original"))
+            controller.poll(("dashboard", "original"), should_refresh=_observations_changed)
             assert await asyncio.to_thread(revision_started.wait, 5)
             newer = asyncio.create_task(controller.prepare(("dashboard", "newer"), foreground))
             assert await asyncio.to_thread(foreground_started.wait, 5)
@@ -501,3 +473,142 @@ def test_route_grace_requires_a_finite_nonnegative_duration(value: float) -> Non
 def test_route_grace_requires_a_number(value: object) -> None:
     with pytest.raises(TypeError, match="number"):
         PreparedPublicationController(route_grace_seconds=cast(float, value))
+
+
+def test_rejected_application_admission_preserves_last_good_publication() -> None:
+    controller = _controller(_Repository())
+    first, rejected = _Prepared(20, 0), _Prepared(21, 0)
+
+    async def reject(_candidate: PreparedPublicationCandidate[str]) -> None:
+        raise ValueError("application revision changed")
+
+    async def scenario() -> None:
+        original = await controller.prepare(("report", "old"), lambda *_: _candidate(first, "old"))
+        try:
+            with pytest.raises(ValueError, match="application revision changed"):
+                await controller.prepare(
+                    ("report", "new"), lambda *_: _candidate(rejected, "new"), admit=reject
+                )
+            assert controller.current(("report", "old")) is original
+            assert not first.closed
+            assert rejected.closed
+        finally:
+            await controller.close()
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("action", ["release", "replace", "close", "cancel"])
+def test_waiting_admission_cannot_commit_after_application_supersession(action: str) -> None:
+    controller = _controller(_Repository())
+    waiting, replacement = _Prepared(22, 0), _Prepared(23, 0)
+
+    async def scenario() -> None:
+        entered, resume = asyncio.Event(), asyncio.Event()
+
+        async def admit(_candidate: PreparedPublicationCandidate[str]) -> None:
+            entered.set()
+            await resume.wait()
+
+        pending = asyncio.create_task(
+            controller.prepare(
+                ("report", "waiting"), lambda *_: _candidate(waiting, "waiting"), admit=admit
+            )
+        )
+        try:
+            await asyncio.wait_for(entered.wait(), 5)
+            if action == "release":
+                controller.release(("report", "waiting"))
+            elif action == "close":
+                await asyncio.wait_for(controller.close(), 5)
+            elif action == "cancel":
+                pending.cancel()
+            else:
+                await controller.prepare(
+                    ("report", "replacement"), lambda *_: _candidate(replacement, "replacement")
+                )
+            resume.set()
+            with pytest.raises(asyncio.CancelledError):
+                await pending
+            assert waiting.closed
+            assert controller.current(("report", "waiting")) is None
+            if action == "replace":
+                assert controller.current(("report", "replacement")) is not None
+        finally:
+            resume.set()
+            await asyncio.gather(pending, return_exceptions=True)
+            await controller.close()
+
+    asyncio.run(scenario())
+
+
+def test_application_file_revision_refreshes_with_retained_admission(tmp_path) -> None:
+    revision = tmp_path / "revision.txt"
+    revision.write_text("first")
+    controller = _controller(_Repository())
+    prepared = iter((_Prepared(24, 0), _Prepared(25, 0)))
+    owner_thread = threading.get_ident()
+
+    def prepare(*_args):
+        return _candidate(next(prepared), revision.read_text())
+
+    def stale(_repository, publication):
+        assert threading.get_ident() != owner_thread
+        return revision.read_text() != publication.metadata
+
+    async def scenario() -> None:
+        admitted = asyncio.Event()
+
+        async def admit(candidate):
+            if candidate.metadata == "second":
+                admitted.set()
+
+        try:
+            initial = await controller.prepare(("report", "main"), prepare, admit=admit)
+            revision.write_text("second")
+            assert controller.poll(("report", "main"), should_refresh=stale) is initial
+            await asyncio.wait_for(admitted.wait(), 5)
+
+            async def committed() -> None:
+                while True:
+                    current = controller.current(("report", "main"))
+                    if current is not None and current.metadata == "second":
+                        return
+                    await asyncio.sleep(0)
+
+            await asyncio.wait_for(committed(), 5)
+        finally:
+            await controller.close()
+
+    asyncio.run(scenario())
+
+
+def test_released_publication_supersedes_pending_refresh_predicate() -> None:
+    controller = _controller(_Repository())
+    started, resume = threading.Event(), threading.Event()
+    calls = 0
+
+    def prepare(*_args):
+        nonlocal calls
+        calls += 1
+        return _candidate(_Prepared(26, 0), "report")
+
+    def stale(_repository, _publication):
+        started.set()
+        assert resume.wait(5)
+        return True
+
+    async def scenario() -> None:
+        try:
+            await controller.prepare(("report", "main"), prepare)
+            controller.poll(("report", "main"), should_refresh=stale)
+            assert await asyncio.to_thread(started.wait, 5)
+            controller.release(("report", "main"))
+            resume.set()
+        finally:
+            resume.set()
+            await controller.close()
+        assert calls == 1
+        assert controller.current(("report", "main")) is None
+
+    asyncio.run(scenario())

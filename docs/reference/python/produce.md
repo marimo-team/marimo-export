@@ -498,17 +498,17 @@ uses `None` when a field does not apply.
 
 `ProgressKind` is the type alias for the nine supported `kind` strings.
 
-| Event                           | Fields and timing                                                                                                    |
-| ------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `inspection_started`            | Emitted before file inspection and for every live plan or capture. Exact prepared-export reuse omits it.             |
-| `plan_ready`                    | `completed` is the reusable-state count and `total` is the normalized-state count.                                   |
-| `prepared_reused`               | Emitted by `prepare()` and `capture()` for exact export reuse, with both counts equal to the normalized-state count. |
-| `state_started`                 | `state` is the primary alias. `completed` counts missing states already finished.                                    |
-| `state_finished`                | Advances `completed` and adds this state's cache activity and execution time.                                        |
-| `prepared_committed`            | Emitted after the complete export generation commits.                                                                |
-| `write_finished`                | Emitted after destination writing and verification, with write duration.                                             |
-| `delivery_verification_started` | Emitted before a staged application verifies its nested exports and outer tree.                                      |
-| `delivery_commit_started`       | Emitted after staged verification and the commit guard, before final revalidation and destination mutation.          |
+| Event                           | Fields and timing                                                                                                        |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `inspection_started`            | Emitted before file inspection and for every live plan or capture. Exact prepared-export reuse omits it.                 |
+| `plan_ready`                    | `completed` is the reusable-state count and `total` is the normalized-state count.                                       |
+| `prepared_reused`               | Emitted by `prepare()` and `capture()` for exact export reuse, with both counts equal to the normalized-state count.     |
+| `state_started`                 | `state` is the primary alias. `completed` includes reused and captured states. `total` counts all unique planned states. |
+| `state_finished`                | Advances the same complete-plan count and adds this state's cache activity and execution time.                           |
+| `prepared_committed`            | Emitted after the complete export generation commits.                                                                    |
+| `write_finished`                | Emitted after destination writing and verification, with write duration.                                                 |
+| `delivery_verification_started` | Emitted before a staged application verifies its nested exports and outer tree.                                          |
+| `delivery_commit_started`       | Emitted after staged verification and the commit guard, before final revalidation and destination mutation.              |
 
 An exact `prepare()` or `capture()` reuse path emits `plan_ready` and
 `prepared_reused` before a later write. An exact `plan()` reuse emits
@@ -536,12 +536,12 @@ CacheActivity(
 `CacheActivity` reports effective marimo computation-cache decisions for states
 that executed during this producer operation:
 
-| Field               | Count                                                                                  |
-| ------------------- | -------------------------------------------------------------------------------------- |
-| `authored_hits`     | Non-projection cell attempts restored from cache in executed state children            |
-| `authored_misses`   | Non-projection cell attempts executed in state children                                |
-| `projection_hits`   | Transient output or snapshot leaf attempts restored from cache                         |
-| `projection_misses` | Transient output or snapshot leaf attempts executed, including forced live output work |
+| Field               | Count                                                                       |
+| ------------------- | --------------------------------------------------------------------------- |
+| `authored_hits`     | Non-projection cell attempts restored from cache in executed state children |
+| `authored_misses`   | Non-projection cell attempts executed in state children                     |
+| `projection_hits`   | Requested output receipts restored from cache                               |
+| `projection_misses` | Requested output receipts produced live, including forced live output work  |
 
 The counters exclude exact prepared-export reuse and prepared-state reuse. An
 exact prepared-export reuse returns four zero counters. Zero therefore does not

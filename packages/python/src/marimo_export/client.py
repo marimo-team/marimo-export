@@ -72,15 +72,33 @@ class Session:
             raise _bridge_error(error) from error
         return _session_description(self._info, value)
 
-    def observe_inputs(self) -> KernelInputObservation:
-        """Return portable live input values and typed control bindings."""
+    def observe_inputs(self, *, plan: ExportPlan | None = None) -> KernelInputObservation:
+        """Observe UI roots, or the complete inputs of a matching export plan."""
 
+        from marimo_export.planning import ExportPlan
+
+        if plan is not None and not isinstance(plan, ExportPlan):
+            raise TypeError("plan must be an ExportPlan or None")
+        params = (
+            {}
+            if plan is None
+            else {
+                "plan": {
+                    "document_sha256": plan.document_sha256,
+                    "producer_sha256": plan.producer_sha256,
+                    "inputs": list(plan.inputs),
+                }
+            }
+        )
         self._client._require_open()
         try:
-            value = self._client._transport.invoke(self.id, "observe_inputs", {})
+            value = self._client._transport.invoke(self.id, "observe_inputs", params)
         except BridgeError as error:
             raise _bridge_error(error) from error
-        return _kernel_input_observation(value)
+        observation = _kernel_input_observation(value)
+        if plan is not None and set(observation.values) != set(plan.inputs):
+            raise SessionError("the kernel returned an incomplete plan input observation")
+        return observation
 
     def _plan(self, spec: ExportSpec) -> Mapping[str, object]:
         """Return normalized planning data without executing export states."""

@@ -26,6 +26,21 @@ Applications compose these capabilities through the public Python SDK and the
 browser `prepared` subpath. They own presentation documents, host bindings,
 authentication, route policy, visible commit, and deployment.
 
+An export capability has a contract in notebook inputs, `ExportPlan`,
+`PreparedExport`, `ExportState`, outputs, or export leases. Applications supply
+their publication keys, opaque metadata, admission checks, and refresh
+decisions. The export layer owns the cancellation, settlement, and lease
+transitions around those callbacks.
+
+Input observation can be scoped to a validated plan, so applications receive its
+complete current input vector together with applicable control bindings.
+Application policy chooses which observed vectors become prepared states and
+which revision changes request another preparation.
+
+Native frontend hosts own model registries, replay checkpoints, UI state, and
+remount decisions. The export browser API supplies verified snapshots, loaders,
+and requested-state transitions for those hosts to consume.
+
 The published marimo 0.24.0 package remains the execution dependency. Private
 integration code stays under `marimo_export._marimo.compat` behind
 package-owned records and protocols.
@@ -112,9 +127,11 @@ The browser dependency direction is:
 ```mermaid
 flowchart LR
     prepared["@marimo-team/marimo-export/prepared"] --> port[PreparedStatePort]
-    port --> renderer["Application renderer"]
+    renderer["Application renderer"] -. implements .-> port
     prepared --> reader["Browser export reader"]
-    reader --> loader["One loader facade"]
+    reader --> contracts["Output loader contracts"]
+    renderer --> loader["Selected loader facade"]
+    loader --> contracts
     loader --> runtime["One representation runtime"]
 ```
 
@@ -273,6 +290,6 @@ effects may remain.
 [Development](development.md) contains focused workflows. [Validation](validation.md)
 maps each changed boundary to required evidence.
 
-Future upstream APIs and external integrations live under
-[Proposals](proposals/README.md). They do not define current ownership until their
-acceptance conditions pass.
+[Design records](proposals/README.md) distinguish proposed upstream capabilities
+from implemented external integrations and link their current ownership and
+acceptance requirements.

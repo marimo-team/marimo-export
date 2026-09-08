@@ -5,17 +5,6 @@ import type { ModelShape, ModelState } from "./runtime/model.js";
 import { mountSnapshot } from "./runtime/registry.js";
 import type { AnyWidgetMountOptions } from "./runtime/registry.js";
 
-export {
-  PreparedWidgetGraph,
-  PreparedWidgetGraphReplacementError,
-} from "./runtime/prepared-graph.js";
-export type {
-  PreparedWidgetGraphCheckpoint,
-  PreparedWidgetGraphPort,
-  PreparedWidgetGraphReplacement,
-  PreparedWidgetGraphSnapshot,
-} from "./runtime/prepared-graph.js";
-
 export type AnyWidgetStateShape<State> = ModelShape<State>;
 
 export interface MountedAnyWidget<

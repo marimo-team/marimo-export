@@ -68,6 +68,7 @@ state requests use the application origin and that transitions open no kernel,
 WebSocket, or WebAssembly runtime. Runtime selector tests belong to the host
 application.
 
-External runtime integrations remain proposals until their owner repositories
-pass a recorded cross-repository acceptance gate. See
-[Proposals](../proposals/README.md).
+The [marimo-studio integration record](../proposals/studio-prepared-runtime.md)
+links an implemented host to its runtime ownership and acceptance requirements.
+[Design records](../proposals/README.md) identify proposed upstream capabilities
+separately.

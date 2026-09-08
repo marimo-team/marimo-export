@@ -6,7 +6,11 @@ import type {
   PreparedPublicationRefreshDependencies,
   PreparedStateChange,
 } from "../src/prepared/index.js";
-import { PreparedPublicationRefresh, PreparedStateController } from "../src/prepared/index.js";
+import {
+  PreparedPublicationRefresh,
+  PreparedStateController,
+  resolvePreparedPublication,
+} from "../src/prepared/index.js";
 import {
   preparedExportFixture,
   preparedManifestFixture,
@@ -25,7 +29,11 @@ const refreshHarness = (publications: readonly PreparedPublication[]) => {
       if (publication === undefined) {
         throw new Error("Fixture publication missing");
       }
-      return Object.freeze({ ...publication, manifest });
+      return resolvePreparedPublication(
+        manifest,
+        new URL("https://example.test/current"),
+        publication.notebookExport,
+      );
     },
   );
   const applied: PreparedStateChange[] = [];
@@ -41,16 +49,6 @@ const refreshHarness = (publications: readonly PreparedPublication[]) => {
 };
 
 describe("prepared publication refresh", () => {
-  it("opens the initial manifest and commits its selected state", async () => {
-    const notebookExport = preparedExportFixture({ inputs: [{ mode: "baseline" }] });
-    const publication = preparedPublicationFixture(notebookExport, { mode: "baseline" });
-    const harness = refreshHarness([publication]);
-
-    await harness.refresh.start();
-
-    expect(harness.state.snapshot().current?.state.inputs).toEqual({ mode: "baseline" });
-  });
-
   it("reuses an unchanged immutable export while applying updated manifest state", async () => {
     const notebookExport = preparedExportFixture({
       inputs: [{ mode: "baseline" }, { mode: "alternate" }],
@@ -60,6 +58,8 @@ describe("prepared publication refresh", () => {
     const harness = refreshHarness([baseline, alternate]);
 
     await harness.refresh.start();
+    expect(harness.state.snapshot().current?.state.inputs).toEqual({ mode: "baseline" });
+
     await harness.refresh.refresh();
 
     expect(harness.openPublication).toHaveBeenCalledOnce();
@@ -261,10 +261,15 @@ describe("prepared publication refresh", () => {
   it("aborts active refresh work and releases polling ownership", async () => {
     const notebookExport = preparedExportFixture({ inputs: [{ mode: "baseline" }] });
     const publication = preparedPublicationFixture(notebookExport, { mode: "baseline" });
+    let started = () => {};
+    const fetching = new Promise<void>((resolve) => {
+      started = resolve;
+    });
     let observedSignal: AbortSignal | undefined;
     const fetchManifest = vi.fn<PreparedPublicationRefreshDependencies["fetchManifest"]>(
       async (_url, options) => {
         observedSignal = options?.signal;
+        started();
         await new Promise<void>((_resolve, reject) => {
           options?.signal?.addEventListener("abort", () => reject(options.signal?.reason), {
             once: true,
@@ -282,7 +287,7 @@ describe("prepared publication refresh", () => {
     });
 
     const starting = refresh.start();
-    await vi.waitFor(() => expect(observedSignal).toBeDefined());
+    await fetching;
     await refresh.dispose();
 
     await expect(starting).rejects.toMatchObject({ name: "AbortError" });
@@ -308,5 +313,42 @@ describe("prepared publication refresh", () => {
     await refresh.refresh();
 
     expect(fetchManifest).toHaveBeenCalledOnce();
+  });
+
+  it("retains the committed publication when opening finishes after disposal", async () => {
+    const first = preparedPublicationFixture(
+      preparedExportFixture({ inputs: [{ mode: "baseline" }] }),
+      { mode: "baseline" },
+    );
+    const second = preparedPublicationFixture(
+      preparedExportFixture({ identity: "2".repeat(64), inputs: [{ mode: "replacement" }] }),
+      { mode: "replacement" },
+    );
+    const harness = refreshHarness([first, second]);
+    await harness.refresh.start();
+    let entered = () => {};
+    const opening = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    let finish = () => {};
+    const ready = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    harness.openPublication.mockImplementationOnce(async () => {
+      entered();
+      await ready;
+      return second;
+    });
+
+    const refreshing = harness.refresh.refresh();
+    const rejected = expect(refreshing).rejects.toMatchObject({ name: "AbortError" });
+    await opening;
+    const disposal = harness.refresh.dispose();
+    finish();
+    await Promise.all([rejected, disposal]);
+
+    expect(harness.applied).toHaveLength(1);
+    expect(harness.state.snapshot().current?.state.inputs).toEqual({ mode: "baseline" });
+    await harness.state.dispose();
   });
 });

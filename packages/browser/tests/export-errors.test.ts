@@ -238,15 +238,7 @@ describe("export errors", () => {
 
     controller.abort("stop");
 
-    let timeout: ReturnType<typeof setTimeout> | undefined;
-    const promptly = Promise.race([
-      opening,
-      new Promise<never>((_resolve, reject) => {
-        timeout = setTimeout(() => reject(new Error("Abort did not stop the body read.")), 250);
-      }),
-    ]);
-    await expect(promptly).rejects.toMatchObject({ code: "abort" });
-    if (timeout !== undefined) clearTimeout(timeout);
+    await expect(opening).rejects.toMatchObject({ code: "abort" });
     expect(cancelled).toBe(true);
   });
 

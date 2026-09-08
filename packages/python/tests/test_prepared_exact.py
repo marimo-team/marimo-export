@@ -14,7 +14,6 @@ from marimo_export._services.prepare_export import prepare
 from marimo_export.errors import ExecutionError, IntegrityError
 from marimo_export.planning import PlannedState
 from marimo_export.prepared import PreparedExport, _prepared_manifest
-from marimo_export.progress import CacheActivity
 from marimo_export.repository import (
     ExportRepository,
 )
@@ -28,50 +27,6 @@ from preparation_test_support import (
     _producer,
     _spec,
 )
-
-
-def test_exact_prepare_reuses_without_opening_a_notebook(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    spec = _spec()
-    preflight = _preflight(tmp_path / "notebook.py", spec)
-    repository = ExportRepository.open(tmp_path / "repository")
-    _install_export(repository, preflight.repository_identity, spec, preflight.producer)
-    monkeypatch.setattr(
-        "marimo_export._services.prepare_export.preflight_plan",
-        lambda *_args, **_kwargs: preflight,
-    )
-    monkeypatch.setattr(
-        "marimo_export._services.prepare_export.require_preflight_current",
-        lambda _preflight: None,
-    )
-    monkeypatch.setattr(
-        "marimo_export._services.prepare_export.open_notebook",
-        lambda *_args, **_kwargs: pytest.fail("exact reuse started a notebook"),
-    )
-    events = []
-
-    prepared = prepare(
-        spec=spec, source=tmp_path / "notebook.py", repository=repository, progress=events.append
-    )
-
-    assert prepared.reused
-    assert prepared.prepared_states == ()
-    assert prepared.reused_states == prepared.plan.state_fingerprints
-    assert [event.kind for event in events] == ["plan_ready", "prepared_reused"]
-    assert prepared.to_dict() == {
-        "identity": prepared.identity,
-        "path": str(prepared.path),
-        "reused": True,
-        "plan": prepared.plan.to_dict(),
-        "prepared_states": [],
-        "reused_states": list(prepared.reused_states),
-        "cache_activity": CacheActivity().to_dict(),
-    }
-    prepared.close()
-    assert repository.status().generations == 1
-    repository.close()
 
 
 @pytest.mark.parametrize("after_reservation", [False, True])
@@ -276,7 +231,17 @@ def test_partial_reuse_executes_only_the_missing_state_and_then_reuses_exactly(
         lambda *_args, **_kwargs: producer,
     )
 
-    prepared = prepare(spec=spec, source=tmp_path / "notebook.py", repository=repository)
+    events = []
+    prepared = prepare(
+        spec=spec, source=tmp_path / "notebook.py", repository=repository, progress=events.append
+    )
+    assert [(event.kind, event.completed, event.total) for event in events] == [
+        ("inspection_started", None, None),
+        ("plan_ready", 1, 2),
+        ("state_started", 1, 2),
+        ("state_finished", 2, 2),
+        ("prepared_committed", 2, 2),
+    ]
 
     other = state_fingerprint({"choice": "B"})
     baseline_fingerprint = state_fingerprint({"choice": "A"})
@@ -308,7 +273,28 @@ def test_partial_reuse_executes_only_the_missing_state_and_then_reuses_exactly(
         "marimo_export._services.prepare_export.open_notebook",
         lambda *_args, **_kwargs: pytest.fail("repeated prepare started a notebook"),
     )
-    repeated = prepare(spec=spec, source=tmp_path / "notebook.py", repository=repository)
-    assert repeated.reused
+    events.clear()
+    repeated = prepare(
+        spec=spec, source=tmp_path / "notebook.py", repository=repository, progress=events.append
+    )
+    assert [(event.kind, event.completed, event.total) for event in events] == [
+        ("plan_ready", 2, 2),
+        ("prepared_reused", 2, 2),
+    ]
+    assert repeated.to_dict() == {
+        "identity": repeated.identity,
+        "path": str(repeated.path),
+        "reused": True,
+        "plan": repeated.plan.to_dict(),
+        "prepared_states": [],
+        "reused_states": list(repeated.plan.state_fingerprints),
+        "cache_activity": {
+            "authored_hits": 0,
+            "authored_misses": 0,
+            "projection_hits": 0,
+            "projection_misses": 0,
+        },
+    }
     repeated.close()
+    assert repository.status().generations == 1
     repository.close()

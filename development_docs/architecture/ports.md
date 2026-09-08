@@ -220,7 +220,7 @@ The npm package exposes three layers:
 
 ```text
 @marimo-team/marimo-export
-  immutable export reader and loader contracts
+  immutable export reader, related output loading, and loader contracts
 
 @marimo-team/marimo-export/prepared
   prepared manifest, refresh, state controller, and state port
@@ -233,6 +233,11 @@ All three layers consume the value rules owned by
 [Portable JSON](portable-json.md). Read
 [Identities and protocols](identities-and-protocols.md) before changing a schema,
 codec, fingerprint, or manifest field.
+
+`loadOutputs()` composes explicitly selected loaders into one output-name-keyed
+result with a shared cancellation lifetime. Loader selection, binding adaptation,
+and visible commit belong to the application. Native frontend model registries
+and replay checkpoints also remain with the host that owns their lifecycle.
 
 The prepared controller receives a `PreparedStatePort`. An application owns
 how complete loaded output state is applied to its document. The controller

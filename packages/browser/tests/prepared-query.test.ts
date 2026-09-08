@@ -2,6 +2,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import {
   PreparedExportError,
+  isPreparedExportError,
   resolvePreparedQuerySelection,
   resolvePreparedQueryState,
 } from "../src/prepared/index.js";
@@ -35,9 +36,14 @@ describe("prepared query selection", () => {
   it("reports missing, repeated, and ambiguous query values", () => {
     const ordinary = preparedExportFixture({ inputs: [{ mode: "baseline" }] });
     const current = ordinary.resolve({ mode: "baseline" });
-    expect(() => resolvePreparedQueryState(ordinary, current, "?mode=missing")).toThrow(
-      expect.objectContaining({ code: "query_miss" }),
-    );
+    let missing: unknown;
+    try {
+      resolvePreparedQueryState(ordinary, current, "?mode=missing");
+    } catch (error) {
+      missing = error;
+    }
+    expect(isPreparedExportError(missing)).toBe(true);
+    expect(missing).toMatchObject({ code: "query_miss" });
     expect(() =>
       resolvePreparedQueryState(ordinary, current, "?mode=baseline&mode=baseline"),
     ).toThrow(PreparedExportError);

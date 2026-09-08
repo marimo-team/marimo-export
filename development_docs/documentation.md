@@ -16,7 +16,7 @@ validation, and release mechanics needed to keep that public contract true.
 | Reference                  | Look up exact public contracts                                      | `docs/reference/`                                                   |
 | Contributor entry          | Choose the code and validation owner                                | `development_docs/README.md`                                        |
 | Architecture               | Change an ownership or lifecycle boundary                           | `development_docs/architecture/`                                    |
-| Proposals                  | Review an unimplemented cross-repository or upstream design         | `development_docs/proposals/`                                       |
+| Design records             | Review proposed upstream capabilities and implemented integrations  | `development_docs/proposals/`                                       |
 | Development and validation | Run the workspace and prove a change                                | `development_docs/development.md`, `development_docs/validation.md` |
 | Release                    | Publish coordinated Python and npm packages                         | `development_docs/releasing.md`                                     |
 
@@ -85,9 +85,12 @@ reference contract. Update the route manifest in the same change.
 Author explanations and developed examples by hand. Derive or test exhaustive
 inventories from their source owners.
 
-Current architecture and proposals have different status. A proposal records its
-date, inspected revisions, owner repositories, and acceptance conditions. Move a
-proposal into `architecture/` only after those conditions pass.
+Current architecture records implemented ownership. Design records under
+`proposals/` state whether a capability is proposed or implemented, identify the
+owner repositories, and link the current contract. An implemented integration
+record routes contributors to each repository's architecture and acceptance
+requirements. A proposed capability records the inspected revisions and the
+conditions needed before adoption.
 
 ## Examples are product contracts
 

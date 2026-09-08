@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Hashable, Mapping
+from collections.abc import Awaitable, Callable, Hashable, Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Generic, TypeAlias, TypeVar
 
@@ -29,6 +29,8 @@ PreparePublication: TypeAlias = Callable[
     [ExportRepository, Callable[[], bool]],
     PreparedPublicationCandidate[MetadataT],
 ]
+
+AdmitPublication: TypeAlias = Callable[[PreparedPublicationCandidate[MetadataT]], Awaitable[None]]
 
 
 class PreparedPublication(Generic[KeyT, MetadataT]):
@@ -94,6 +96,11 @@ class PreparedPublication(Generic[KeyT, MetadataT]):
         self._prepared.close()
 
 
+RefreshPublication: TypeAlias = Callable[
+    [ExportRepository, PreparedPublication[KeyT, MetadataT]], bool
+]
+
+
 class PreparedPublicationController(Generic[KeyT, MetadataT]):
     """Retain and refresh last-good prepared exports for application-defined keys."""
 
@@ -132,20 +139,27 @@ class PreparedPublicationController(Generic[KeyT, MetadataT]):
         self,
         key: KeyT,
         prepare: PreparePublication[MetadataT],
+        *,
+        admit: AdmitPublication[MetadataT] | None = None,
     ) -> PreparedPublication[KeyT, MetadataT]:
         """Prepare and commit the last-good publication for ``key``."""
 
-        return await self._state.prepare(key, prepare)
+        return await self._state.prepare(key, prepare, admit=admit)
 
     def current(self, key: KeyT) -> PreparedPublication[KeyT, MetadataT] | None:
         """Return the current publication for one exact application key."""
 
         return self._state.current(key)
 
-    def poll(self, key: KeyT) -> PreparedPublication[KeyT, MetadataT] | None:
-        """Return the current publication and schedule observation-driven refresh."""
+    def poll(
+        self,
+        key: KeyT,
+        *,
+        should_refresh: RefreshPublication[KeyT, MetadataT],
+    ) -> PreparedPublication[KeyT, MetadataT] | None:
+        """Return the current publication and check application refresh policy."""
 
-        return self._state.poll(key)
+        return self._state.poll(key, should_refresh=should_refresh)
 
     def asset(
         self,
@@ -169,8 +183,10 @@ class PreparedPublicationController(Generic[KeyT, MetadataT]):
 
 
 __all__ = [
+    "AdmitPublication",
     "PreparePublication",
     "PreparedPublication",
     "PreparedPublicationCandidate",
     "PreparedPublicationController",
+    "RefreshPublication",
 ]

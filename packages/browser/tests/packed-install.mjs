@@ -14,6 +14,15 @@ const peerNames = Object.keys(manifest.peerDependencies);
 
 const loaderProjects = [
   {
+    name: "output-set",
+    peers: [],
+    source: `import { loadOutputs, openExport, scalarLoader } from "@marimo-team/marimo-export";
+const exported = await openExport("./export/");
+const outputs = await loadOutputs(exported.defaultState, { count: scalarLoader() });
+document.querySelector("#app")!.textContent = String(outputs.count);
+`,
+  },
+  {
     name: "prepared",
     peers: [],
     source: `import {
@@ -29,14 +38,8 @@ void fetchPreparedManifestDocument;
   {
     name: "anywidget",
     peers: ["@anywidget/types"],
-    source: `import {
-  anyWidgetLoader,
-  PreparedWidgetGraph,
-  type PreparedWidgetGraphPort,
-} from "@marimo-team/marimo-export/loader/anywidget";
-document.querySelector("#app")!.textContent = anyWidgetLoader().codec + typeof PreparedWidgetGraph;
-const port: PreparedWidgetGraphPort<unknown, unknown> | undefined = undefined;
-void port;
+    source: `import { anyWidgetLoader } from "@marimo-team/marimo-export/loader/anywidget";
+document.querySelector("#app")!.textContent = anyWidgetLoader().codec;
 `,
   },
   {
