@@ -81,10 +81,12 @@ def record_child_notifications(
         input_queue=queue.Queue(),
         redirect_console=True,
     )
+    stdout = ThreadSafeStdout(stream, forward_os_streams=False)
+    stderr = ThreadSafeStderr(stream, forward_os_streams=False)
     streams = KernelStreams(
         stream=stream,
-        stdout=ThreadSafeStdout(stream, forward_os_streams=False),
-        stderr=ThreadSafeStderr(stream, forward_os_streams=False),
+        stdout=stdout,
+        stderr=stderr,
         stdin=None,
     )
     context = child._runtime_context
@@ -116,6 +118,9 @@ def record_child_notifications(
                 ("recording context reset", reset_recording),
                 ("recording kernel stream restoration", restore_kernel_streams),
                 ("recording context stream restoration", restore_context_streams),
+                # TextIO closure flushes, so keep the writer available until both wrappers close.
+                ("recording stdout close", stdout.close),
+                ("recording stderr close", stderr.close),
                 ("recording stream stop", stream.stop),
             ),
             primary=primary,
