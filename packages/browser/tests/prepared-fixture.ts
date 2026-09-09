@@ -109,18 +109,6 @@ export const preparedPublicationFixture = (
     state: notebookExport.resolve(inputs),
   });
 
-export const manifestWire = (manifest: PreparedExportManifest): JsonObject => {
-  const wire = {
-    schema: manifest.schema,
-    instance: manifest.instance,
-    export_url: manifest.exportUrl,
-    inputs: manifest.inputs,
-    state_fingerprint: manifest.stateFingerprint,
-  } as const;
-  if (manifest.refreshIntervalMs === undefined) return Object.freeze(wire);
-  return Object.freeze({ ...wire, refresh_interval_ms: manifest.refreshIntervalMs });
-};
-
 const jsonKey = (value: JsonValue): string => {
   if (value === null || isJsonPrimitive(value)) {
     return JSON.stringify(value);

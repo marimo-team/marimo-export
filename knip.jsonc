@@ -1,0 +1,26 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema-jsonc.json",
+  "workspaces": {
+    ".": {
+      "entry": ["scripts/smoke_npm_packages.mjs"],
+      "includeEntryExports": true,
+      // The Python scaffolder copies this Vite application into generated projects.
+      "vite": {
+        "config": ["vite.config.ts", "skills/notebook-to-static-app/assets/app/vite.config.ts"],
+        "entry": ["skills/notebook-to-static-app/assets/app/src/main.ts"],
+      },
+    },
+    "packages/browser": {
+      // The Arrow facade loads this optional runtime peer through its loader workspace.
+      "ignoreDependencies": ["lz4js"],
+    },
+    "packages/loader-anywidget": {
+      // Browser lifecycle tests import independent copies through query-suffixed URLs.
+      "entry": ["src/runtime/module-cache.ts"],
+    },
+    "examples/*": {
+      // uv runs the Python notebook producer from package scripts.
+      "ignoreBinaries": ["uv"],
+    },
+  },
+}

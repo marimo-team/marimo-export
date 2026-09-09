@@ -2,7 +2,7 @@ import { defineBlobAssetLoader } from "@marimo-team/marimo-export";
 import { portableJsonObject } from "@marimo-team/portable-json";
 import type { JsonObject, JsonValue } from "@marimo-team/portable-json";
 
-export interface PeriodReturn {
+interface PeriodReturn {
   readonly return: number;
   readonly symbol: string;
 }

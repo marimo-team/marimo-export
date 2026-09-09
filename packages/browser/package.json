@@ -107,9 +107,11 @@
     "@uwdata/flechette": "catalog:",
     "hyparquet": "catalog:",
     "lz4js": "catalog:",
+    "picomatch": "catalog:",
     "typescript": "catalog:",
     "vega-embed": "catalog:",
-    "vite-plus": "catalog:"
+    "vite-plus": "catalog:",
+    "yaml": "catalog:"
   },
   "peerDependencies": {
     "@anywidget/types": "^0.4.0",

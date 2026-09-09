@@ -63,6 +63,20 @@ pnpm --filter @marimo-team/marimo-export-docs build
 
 Run `make format` before `make check`.
 
+Run `make knip` to check JavaScript and TypeScript files, exports, and dependencies
+with [Knip](https://knip.dev/). The command builds the browser package first so
+Knip can audit dependencies in its published TypeScript declarations.
+`make lint` and `make check` include this audit.
+`pnpm knip --workspace packages/browser` focuses the report on the browser package.
+
+`knip.jsonc` adds the Python scaffolder's Vite entries and the shell-invoked npm
+smoke script, plus the browser test module loaded through query-suffixed imports.
+Knip's bundled plugins discover the remaining workspace and framework entries.
+Package entry exports remain API boundaries for external consumers. The browser
+package's optional `lz4js` runtime peer is declared as an exception because its
+import belongs to the Arrow loader workspace. Stale configuration exceptions
+fail the audit.
+
 ## Change Python producer behavior
 
 Stable public records live in `spec.py`, `planning.py`, `prepared.py`,

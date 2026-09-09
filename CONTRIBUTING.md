@@ -28,8 +28,9 @@ asking for review:
 make check
 ```
 
-`make check` verifies formatting, lint, Python and TypeScript types, unit and
-integration tests, package builds, documentation, and isolated release
+`make check` verifies formatting, lint, unused JavaScript and TypeScript code and
+dependencies, Python and TypeScript types, unit and integration tests, package
+builds, documentation, and isolated release
 artifacts. [Validation](development_docs/validation.md) maps each product
 boundary to a smaller command.
 

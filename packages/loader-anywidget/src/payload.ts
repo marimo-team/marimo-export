@@ -6,9 +6,9 @@ import {
   isStringValue,
 } from "./runtime/value-types.js";
 
-export const ANYWIDGET_SCHEMA = "marimo-export.anywidget.v1";
+const ANYWIDGET_SCHEMA = "marimo-export.anywidget.v1";
 
-export type SnapshotState = ModelState;
+type SnapshotState = ModelState;
 
 export interface ParsedDataUrl {
   readonly body: string;
@@ -21,7 +21,7 @@ export interface EsmSpec {
   readonly hash: string;
 }
 
-export interface ModelSnapshot {
+interface ModelSnapshot {
   readonly id: string;
   readonly state: SnapshotState;
   readonly esmSpec: EsmSpec | undefined;

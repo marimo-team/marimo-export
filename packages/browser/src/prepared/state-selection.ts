@@ -32,7 +32,7 @@ export const selectPendingPublication = (
   }
 };
 
-export const samePreparedInputContract = (
+const samePreparedInputContract = (
   left: PreparedPublication,
   right: PreparedPublication,
 ): boolean => {
@@ -53,7 +53,7 @@ export const pendingInputsForPublication = (
 export const isPreparedStateUnavailable = <Value>(value: Value): boolean =>
   isNotebookExportError(value) && value.code === "state_unavailable";
 
-export const isPreparedStatePendingFailure = <Value>(value: Value): boolean => {
+const isPreparedStatePendingFailure = <Value>(value: Value): boolean => {
   if (!isNotebookExportError(value)) {
     return false;
   }

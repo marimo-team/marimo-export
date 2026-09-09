@@ -17,10 +17,6 @@ export function moduleUrl(source: string): string {
   return `data:text/javascript,${encodeURIComponent(source)}`;
 }
 
-export function base64ModuleUrl(source: string, marker = "base64"): string {
-  return `data:text/javascript;${marker},${btoa(source)}`;
-}
-
 export function notification(options: {
   readonly id: string;
   readonly state: ModelState;

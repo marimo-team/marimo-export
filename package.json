@@ -6,11 +6,13 @@
   "type": "module",
   "scripts": {
     "build:browser": "pnpm --filter @marimo-team/marimo-export... build",
-    "prepare": "vp config"
+    "prepare": "vp config",
+    "knip": "pnpm run build:browser && knip --treat-config-hints-as-errors"
   },
   "devDependencies": {
     "@oxlint/plugins": "catalog:",
     "@types/node": "catalog:",
+    "knip": "catalog:",
     "oxlint": "catalog:",
     "oxlint-tsgolint": "catalog:",
     "typescript": "catalog:",
