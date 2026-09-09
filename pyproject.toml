@@ -2,16 +2,16 @@
 members = ["examples/vite-vanilla", "packages/python"]
 
 [tool.uv]
-constraint-dependencies = ["pymdown-extensions==11.0.1"]
+constraint-dependencies = ["pymdown-extensions>=11.0.1"]
 
 [dependency-groups]
-dev = ["ruff>=0.15", "tomli==2.3.1; python_version < '3.11'", "ty>=0.0.39"]
+dev = ["ruff>=0.15", "tomli>=2.3.1; python_version < '3.11'", "ty>=0.0.39"]
 test = [
   "jsonschema>=4.23",
   "pytest>=9",
   "pytest-asyncio>=1.3",
   "pytest-timeout>=2.4",
-  "pytest-xdist==3.8.0",
+  "pytest-xdist>=3.8.0",
 ]
 
 [tool.pytest.ini_options]
