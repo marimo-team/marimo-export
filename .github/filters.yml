@@ -104,7 +104,6 @@ quality:
   - "!AGENTS.md"
   - "!CLAUDE.md"
   - "!LICENSE"
-  - "!apps/docs/**"
   - "!development_docs/**"
   - "!docs/**"
   - "!examples/**/*.md"

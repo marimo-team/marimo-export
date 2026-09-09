@@ -542,7 +542,7 @@ function opaqueNameArray(input: JsonValue | undefined, path: string): readonly s
   return Object.freeze(values);
 }
 
-export function opaqueInputName(input: JsonValue | undefined, path: string): string {
+function opaqueInputName(input: JsonValue | undefined, path: string): string {
   if (!isJsonString(input)) fail(`${path} must be a string`);
   unicodeScalar(input, path);
   if (input.length === 0 || encoder.encode(input).byteLength > MAX_EXPORT_NAME_BYTES) {

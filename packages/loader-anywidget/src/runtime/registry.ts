@@ -93,7 +93,7 @@ export async function mountSnapshot<
   }
 }
 
-export class StaticRegistry implements ModelResolver, WidgetResolver {
+class StaticRegistry implements ModelResolver, WidgetResolver {
   readonly #snapshot: AnyWidgetSnapshot;
   readonly #controller = new AbortController();
   readonly #runtimes = new Map<string, ViewRuntime>();

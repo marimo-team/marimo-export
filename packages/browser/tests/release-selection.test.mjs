@@ -1,11 +1,9 @@
 import { spawnSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
-import { createRequire } from "node:module";
 import { expect, it } from "vite-plus/test";
+import { parse } from "yaml";
+import picomatch from "picomatch";
 
-const require = createRequire(import.meta.resolve("vite-plus/package.json"));
-const { parse } = require("yaml");
-const picomatch = require("picomatch");
 const filters = parse(
   await readFile(new URL("../../../.github/filters.yml", import.meta.url), "utf8"),
 );
@@ -30,6 +28,13 @@ const selected = (path) =>
       },
     )(path);
   });
+
+it.each(["knip.jsonc", "apps/docs/navigation.ts"])(
+  "unused-code audit inputs select the quality gate: %s",
+  (path) => {
+    expect(selected(path)).toContain("quality");
+  },
+);
 
 it.each([
   ".github/workflows/publish.yml",

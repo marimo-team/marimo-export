@@ -123,7 +123,7 @@ export async function exportFixture(options: ExportFixtureOptions = {}): Promise
   return { index, indexBytes, assets, requests, fetch };
 }
 
-export function scalar(value: MutableJsonValue) {
+function scalar(value: MutableJsonValue) {
   return {
     codec: "marimo.scalar.v1",
     media_type: "application/vnd.marimo.scalar.v1+json",
@@ -145,7 +145,7 @@ function provenance() {
   return { python_type: "fixture.Value" } satisfies MutableJsonObject;
 }
 
-export async function digest(bytes: Uint8Array): Promise<string> {
+async function digest(bytes: Uint8Array): Promise<string> {
   const value = await crypto.subtle.digest("SHA-256", new Uint8Array(bytes));
   return [...new Uint8Array(value)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }

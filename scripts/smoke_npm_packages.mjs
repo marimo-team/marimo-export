@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { isAbsolute, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-export async function smokePackages(browserDependency, expectedVersion) {
+async function smokePackages(browserDependency, expectedVersion) {
   const browserSpec = await packageSpec(browserDependency);
   const temporaryRoot = await mkdtemp(resolve(tmpdir(), "marimo-export-npm-smoke-"));
   const pnpm = process.platform === "win32" ? "pnpm.cmd" : "pnpm";

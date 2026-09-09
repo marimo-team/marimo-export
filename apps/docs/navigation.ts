@@ -130,7 +130,7 @@ export const documentationSections = [
   { key: "reference", text: "Reference", items: referenceItems },
 ] satisfies readonly DocumentationSection[];
 
-export const flattenNavigationPages = (items: readonly NavigationItem[]): NavigationPage[] =>
+const flattenNavigationPages = (items: readonly NavigationItem[]): NavigationPage[] =>
   items.flatMap((item) => ("link" in item ? [item] : flattenNavigationPages(item.items)));
 
 export const documentationPages = documentationSections.flatMap((section) =>

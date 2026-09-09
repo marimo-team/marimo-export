@@ -2,7 +2,7 @@ SHELL := /bin/bash
 .SHELLFLAGS := -eu -o pipefail -c
 .DEFAULT_GOAL := help
 
-.PHONY: help bootstrap format lint typecheck test test-application build docs-examples docs-build docs-serve check package
+.PHONY: help bootstrap format lint knip typecheck test test-application build docs-examples docs-build docs-serve check package
 .PHONY: _anti-slop-check
 
 FORMAT_PATHS := \
@@ -20,6 +20,7 @@ FORMAT_PATHS := \
 	CONTRIBUTING.md \
 	README.md \
 	SECURITY.md \
+	knip.jsonc \
 	package.json \
 	plugin.json \
 	pnpm-workspace.yaml \
@@ -57,6 +58,10 @@ _anti-slop-check:
 lint: _anti-slop-check ## Check Python and TypeScript source.
 	$(VP) lint --deny-warnings $(LINT_PATHS)
 	uv run ruff check $(PYTHON_PATHS)
+	@$(MAKE) --no-print-directory knip
+
+knip: ## Check unused JavaScript and TypeScript files, exports, and dependencies.
+	pnpm knip
 
 typecheck: ## Type-check every Python and TypeScript package.
 	$(VP) run -r typecheck
