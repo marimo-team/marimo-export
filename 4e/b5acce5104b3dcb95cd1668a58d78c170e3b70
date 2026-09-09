@@ -1,0 +1,26 @@
+packages/python/src/marimo_export/_marimo/compat/projections.py
+  s_f87c5165483b87::t_a2c4d7defc0f9f 121
+  s_f87c5165483b87::t_069af36e7ff71d 84-85,88-89,122-123
+packages/python/tests/test_marimo_projection_recording.py
+  s_f87c5165483b87::t_2955ec754211bf 4,11-12,25-70,78-79,83-104,112-121,123-124,126-127
+  s_f87c5165483b87::t_bc1dba5e53f599 122,128-142,147,150-151,155
+  s_f87c5165483b87::t_a2c4d7defc0f9f 80-82,152-154
+  s_f87c5165483b87::t_069af36e7ff71d 279-283
+  s_f87c5165483b87::t_220b507e6cc14e 71-72,74-77,105-106,108-111
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "4eb5acce5104b3dcb95cd1668a58d78c170e3b70",
+  "prompts": {},
+  "sessions": {
+    "s_f87c5165483b87": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a08266-dea1-7122-b642-2b415adb8648",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
