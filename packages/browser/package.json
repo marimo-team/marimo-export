@@ -117,7 +117,7 @@
     "@anywidget/types": "^0.4.0",
     "@uwdata/flechette": "^2.5.0",
     "hyparquet": "^1.26.2",
-    "lz4js": "0.2.0",
+    "lz4js": "^0.2.0",
     "vega-embed": "^7.1.0"
   },
   "peerDependenciesMeta": {

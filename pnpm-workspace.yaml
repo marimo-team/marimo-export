@@ -18,11 +18,11 @@ catalog:
   "@uwdata/flechette": ^2.5.0
   "@vitest/browser-playwright": 4.1.11
   "@types/node": ^24.13.3
-  hyparquet: ^1.29.2
-  lz4js: 0.2.0
+  hyparquet: ^1.30.0
+  lz4js: ^0.2.0
   oxlint: 1.81.0
   oxlint-tsgolint: 7.0.2001
-  playwright: 1.62.1
+  playwright: 1.63.0
   portless: 0.15.6
   typescript: ^6.0.3
   vega-embed: ^7.2.0
@@ -30,7 +30,7 @@ catalog:
   vite-plus: 0.3.0
   vitepress: 2.0.0-alpha.20
   vue: ^3.5.42
-  vitepress-mermaid-renderer: 1.2.0
+  vitepress-mermaid-renderer: 1.2.1
   mermaid: 11.17.2
   knip: 6.34.0
   picomatch: 4.0.7
