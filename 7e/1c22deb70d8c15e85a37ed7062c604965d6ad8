@@ -1,0 +1,59 @@
+packages/python/src/marimo_export/_marimo/compat/release.json
+  s_67a870ff056688::t_4ab7aba2e86edb 2-3
+  s_67a870ff056688::t_7018463f170e67 13-15,17
+packages/python/pyproject.toml
+  s_67a870ff056688::t_4ab7aba2e86edb 18
+packages/python/tests/test_marimo_runtime_compat.py
+  s_67a870ff056688::t_d772dffcf9ebcf 198
+development_docs/architecture.md
+  s_67a870ff056688::t_4ab7aba2e86edb 44,90
+packages/python/tests/test_public_diagnostics.py
+  s_67a870ff056688::t_4ab7aba2e86edb 20-21,33,46
+development_docs/proposals/marimo-upstream-capabilities.md
+  s_67a870ff056688::t_4ab7aba2e86edb 12,14
+  s_67a870ff056688::t_279a61930fb9ef 6,9,217-218,222-223
+development_docs/architecture/execution-and-caching.md
+  s_67a870ff056688::t_0f510429d27f94 259,265-266
+  s_67a870ff056688::t_4ab7aba2e86edb 45,71,73-74,83,137
+  s_67a870ff056688::t_279a61930fb9ef 267
+packages/python/tests/test_cli_repository.py
+  s_67a870ff056688::t_4ab7aba2e86edb 170,172,174,197,199,201
+packages/python/tests/test_marimo_cache_host.py
+  s_67a870ff056688::t_d772dffcf9ebcf 98-99
+  s_67a870ff056688::t_49f18e157fe7fa 113
+  s_67a870ff056688::t_3e4897a3fe3099 85-86,88-92,105-112,114-128
+development_docs/development.md
+  s_67a870ff056688::t_4ab7aba2e86edb 156
+packages/python/src/marimo_export/_marimo/compat/cache/host.py
+  s_67a870ff056688::t_d772dffcf9ebcf 38,53,74,94,98,107,118
+development_docs/architecture/failure-and-concurrency.md
+  s_67a870ff056688::t_4ab7aba2e86edb 78
+scripts/smoke_python_package.py
+  s_67a870ff056688::t_4ab7aba2e86edb 20
+AGENTS.md
+  s_67a870ff056688::t_4ab7aba2e86edb 44
+packages/python/tests/test_marimo_cache_probe.py
+  s_67a870ff056688::t_4ab7aba2e86edb 18
+packages/python/tests/test_marimo_receipts.py
+  s_67a870ff056688::t_4ab7aba2e86edb 71,75,77,136
+packages/python/src/marimo_export/_marimo/compat/cache/probe.py
+  s_67a870ff056688::t_4ab7aba2e86edb 83
+packages/python/src/marimo_export/_marimo/compat/cache/receipts.py
+  s_67a870ff056688::t_4ab7aba2e86edb 81,83,85,123
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "7e1c22deb70d8c15e85a37ed7062c604965d6ad8",
+  "prompts": {},
+  "sessions": {
+    "s_67a870ff056688": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0921c-f237-77e0-89ab-922eb9ce3bf7",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
