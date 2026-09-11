@@ -78,11 +78,11 @@ def read_cached_return(
             details={"output": output},
         )
 
-    mode = attempt.loader._effective_mode()
+    verification = attempt.loader._effective_verification()
     try:
-        signer = attempt.loader._resolve_effective_signer(manifest, mode)
+        signer = attempt.loader._resolve_effective_signer(manifest, verification)
     except CacheSignatureError as error:
-        if mode == "strict":
+        if verification == "strict":
             raise
         raise OutputError(
             f"output {output!r} has an unverifiable native cache receipt",
@@ -120,7 +120,7 @@ def read_cached_return(
     try:
         _verify_signed_blob(reference, payload, manifest.meta.blob_hashes, signer)
     except CacheSignatureError as error:
-        if mode == "strict":
+        if verification == "strict":
             raise
         raise OutputError(
             f"output {output!r} has an unverifiable native return asset",

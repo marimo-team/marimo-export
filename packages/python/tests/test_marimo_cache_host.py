@@ -82,20 +82,50 @@ def test_cached_ui_detection_does_not_read_arbitrary_type_name_properties() -> N
         release()
 
 
-def test_polars_cache_uses_pickle_and_native_content_hashing() -> None:
+@pytest.mark.parametrize("as_series", [False, True])
+def test_polars_cache_uses_arrow_and_native_content_hashing(as_series: bool) -> None:
     import polars as pl
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+    from marimo._save.cache import Cache
+    from marimo._save.loaders.lazy import LazyLoader
+    from marimo._save.signing import CacheSigner
+    from marimo._save.stores.dict_store import DictStore
 
     original_loaders = {name: LAZY_STUB_LOOKUP.get(name) for name in (_DATAFRAME, _SERIES)}
     original_tensor_buffer = encode._contiguous_tensor_bytes
     release = keep_cached_cells_compatible()
     try:
-        assert LAZY_STUB_LOOKUP[_DATAFRAME] == "pickle"
-        assert LAZY_STUB_LOOKUP[_SERIES] == "pickle"
+        assert LAZY_STUB_LOOKUP[_DATAFRAME] == "arrow"
+        assert LAZY_STUB_LOOKUP[_SERIES] == "arrow"
         first = data_to_buffer(pl.DataFrame({"objectid": [1, 2]}))
         same = data_to_buffer(pl.DataFrame({"objectid": [1, 2]}))
         changed = data_to_buffer(pl.DataFrame({"objectid": [1, 3]}))
         assert first == same
         assert first != changed
+
+        frame = pl.DataFrame({"objectid": [1, 2]})
+        value = frame.to_series() if as_series else frame
+        cache = Cache(
+            hash="polars-roundtrip",
+            cache_type="Pure",
+            defs={"value": value},
+            stateful_refs=set(),
+            hit=False,
+            meta={"return": value},
+        )
+        loader = LazyLoader(
+            name="polars-roundtrip",
+            store=DictStore(),
+            signer=CacheSigner(private_key=Ed25519PrivateKey.generate()),
+            verification="strict",
+        )
+        assert loader.save_cache(cache)
+        loader.flush()
+        restored = loader.load_cache(cache.key)
+        assert restored is not None
+        assert type(restored.defs["value"]) is type(value)
+        assert restored.defs["value"].equals(value)
+        assert restored.meta["return"].equals(value)
     finally:
         release()
     assert {name: LAZY_STUB_LOOKUP.get(name) for name in (_DATAFRAME, _SERIES)} == (
@@ -193,33 +223,6 @@ def test_foreign_lifecycle_subclass_is_rejected_and_preserved() -> None:
         )
     finally:
         cast(Any, cached_lifecycle).CachedLifecycle = original_class
-
-
-def test_foreign_same_value_polars_write_is_rejected_and_preserved() -> None:
-    original_ui = CachedLifecycle._restored_ui_defs
-    original_tensor = encode._contiguous_tensor_bytes
-    original_loaders = {name: LAZY_STUB_LOOKUP.get(name) for name in (_DATAFRAME, _SERIES)}
-    release = keep_cached_cells_compatible()
-    foreign_pickle = "".join(("pick", "le"))
-    LAZY_STUB_LOOKUP[_DATAFRAME] = foreign_pickle
-
-    try:
-        with pytest.raises(CompatibilityError, match="another owner"):
-            release()
-
-        assert CachedLifecycle._restored_ui_defs is original_ui
-        assert encode._contiguous_tensor_bytes is original_tensor
-        assert LAZY_STUB_LOOKUP[_DATAFRAME] is foreign_pickle
-        assert LAZY_STUB_LOOKUP[_SERIES] == original_loaders[_SERIES]
-    finally:
-        original = original_loaders[_DATAFRAME]
-        if original is None:
-            LAZY_STUB_LOOKUP.pop(_DATAFRAME, None)
-        else:
-            LAZY_STUB_LOOKUP[_DATAFRAME] = original
-
-    retry = keep_cached_cells_compatible()
-    retry()
 
 
 def test_concurrent_host_cache_leases_share_one_patch() -> None:

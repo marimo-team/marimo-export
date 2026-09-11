@@ -75,7 +75,7 @@ a synchronous catalog heartbeat.
 
 ## Cache patch ownership
 
-The Marimo 0.24.0 adapter temporarily replaces process-global loader, lifecycle,
+The Marimo 0.24.2 adapter temporarily replaces process-global loader, lifecycle,
 and cache-attempt hooks. Equivalent leases share one installation. Borrowed child
 runs serialize while their patch lease is active. The final close restores each
 global still owned by marimo-export.

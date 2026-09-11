@@ -41,7 +41,7 @@ Run focused package commands while developing, then finish with `make check`.
    `ObservationRepository`. Reader, public repository, inspection, and
    diagnostic operations use their focused owners.
 5. Private `marimo._*` imports stay under `_marimo/compat`. The package pins
-   Marimo 0.24.0 and validates the exact supported cache sources before
+   Marimo 0.24.2 and validates the exact supported cache sources before
    installing a reversible adapter lease.
 6. `OwnedNotebook` owns a temporary notebook copy, loopback server, session,
    process groups, and cleanup. `prepare` uses one owned context when work is

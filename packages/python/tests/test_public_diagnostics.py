@@ -17,8 +17,8 @@ def test_marimo_compatibility_reports_the_pinned_adapter() -> None:
     assert result.name == "marimo"
     assert result.details == {
         "adapter": "private",
-        "release_commit": "854f7f2910b4bb4b6aebe650efc1f83ad40d9bef",
-        "version": "0.24.0",
+        "release_commit": "1c2a1be4528ea0560b04bdf0de412701d09238cc",
+        "version": "0.24.2",
     }
     assert result.to_dict()["details"] == result.details
 
@@ -30,7 +30,7 @@ def test_marimo_compatibility_translates_supported_failures(
         raise CompatibilityError(
             "release mismatch",
             code="marimo_incompatible",
-            details={"expected": "0.24.0", "observed": "other"},
+            details={"expected": "0.24.2", "observed": "other"},
         )
 
     monkeypatch.setattr(diagnostics, "_marimo_compatibility_details", fail)
@@ -43,7 +43,7 @@ def test_marimo_compatibility_translates_supported_failures(
         message="release mismatch",
         details={
             "code": "marimo_incompatible",
-            "error": {"expected": "0.24.0", "observed": "other"},
+            "error": {"expected": "0.24.2", "observed": "other"},
         },
     )
 
