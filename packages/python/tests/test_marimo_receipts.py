@@ -68,13 +68,13 @@ def test_native_receipt_uses_the_bytes_seen_by_the_snapshot() -> None:
         store = source
 
         @staticmethod
-        def _effective_mode() -> str:
+        def _effective_verification() -> str:
             return "off"
 
         @staticmethod
-        def _resolve_effective_signer(manifest: object, mode: str) -> None:
+        def _resolve_effective_signer(manifest: object, verification: str) -> None:
             del manifest
-            assert mode == "off"
+            assert verification == "off"
             return None
 
     loader = Loader()
@@ -133,7 +133,7 @@ def test_scalar_receipt_rejects_live_value_divergence_from_signed_manifest() -> 
         name="scalar-divergence",
         store=store,
         signer=signer,
-        mode="verify",
+        verification="on",
     )
 
     with pytest.raises(OutputError) as raised:
@@ -217,3 +217,56 @@ def test_native_cache_return_variants_map_to_one_descriptor_shape() -> None:
     assert arrow.payload == b"arrow"
     assert isinstance(blob.descriptor, BlobAssetDescriptor)
     assert blob.payload == b"envelope"
+
+
+@pytest.mark.parametrize("verification", ["on", "strict"])
+@pytest.mark.parametrize("tampered", ["manifest", "blob"])
+def test_native_receipt_rejects_tampering(verification: str, tampered: str) -> None:
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+    from marimo._save.loaders.lazy import _signable_bytes
+    from marimo._save.signing import CacheSignatureError
+
+    cache_key = "cell_cache/P_expected.jsonl"
+    reference = "cell_cache/expected/return.npy"
+    payload = b"signed array bytes"
+    signer = CacheSigner(private_key=Ed25519PrivateKey.generate())
+    manifest = Cache(
+        hash="expected",
+        cache_type=CacheType.PURE,
+        defs={},
+        stateful_refs=[],
+        meta=Meta(
+            version=1,
+            return_value=Item(reference=reference),
+            blob_hashes={reference: hashlib.sha256(payload).hexdigest()},
+            signer_public_key=signer.public_key_pem(),
+        ),
+    )
+    manifest.meta.signature = signer.sign(_signable_bytes(manifest))
+    store = DictStore()
+    loader = SequentialLazyLoader(
+        name="receipt-tampering",
+        store=store,
+        signer=signer,
+        verification=verification,
+    )
+    attempt = NativeCacheAttempt(loader=loader, manifest_key=cache_key, expected_hash="expected")
+    store.put(cache_key, msgspec.json.encode(manifest))
+    store.put(reference, payload)
+    result = read_cached_return(
+        attempt, output="array", value=object(), python_type="numpy.ndarray"
+    )
+    assert isinstance(result, NativeNumpyReturn)
+    assert result.payload == payload
+
+    if tampered == "manifest":
+        manifest.meta.blob_hashes[reference] = "0" * 64
+        store.put(cache_key, msgspec.json.encode(manifest))
+    else:
+        store.put(reference, b"tampered array bytes")
+
+    expected_error = CacheSignatureError if verification == "strict" else OutputError
+    with pytest.raises(expected_error) as raised:
+        read_cached_return(attempt, output="array", value=object(), python_type="numpy.ndarray")
+    if isinstance(raised.value, OutputError):
+        assert raised.value.code == "cache_receipt_missing"

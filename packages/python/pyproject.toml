@@ -15,7 +15,7 @@ dependencies = [
   "agent-plugins>=0.1.0",
   "cryptography>=50.0.1",
   "idna>=3.19",
-  "marimo==0.24.0",
+  "marimo==0.24.2",
   "msgspec>=0.20",
   "numpy>=1.23.5",
   "packaging>=26.3",

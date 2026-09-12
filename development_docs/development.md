@@ -153,7 +153,7 @@ identity, transaction, lease, fence, or cleanup path.
 
 ## Change the Marimo adapter
 
-The package pins `marimo==0.24.0`. `_marimo/compat/release.json` records the
+The package pins `marimo==0.24.2`. `_marimo/compat/release.json` records the
 release commit and source digests required by the cache adapter. Update the pin,
 release record, focused probe, adapter tests, and live build and capture evidence
 together.

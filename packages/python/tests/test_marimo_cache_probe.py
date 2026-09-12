@@ -15,7 +15,7 @@ from marimo_export.errors import CompatibilityError
 @pytest.mark.parametrize(
     ("owner", "attribute", "symbol"),
     (
-        (LazyLoader, "_effective_mode", "LazyLoader._effective_mode"),
+        (LazyLoader, "_effective_verification", "LazyLoader._effective_verification"),
         (
             LazyLoader,
             "_resolve_effective_signer",

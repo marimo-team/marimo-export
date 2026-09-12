@@ -41,7 +41,7 @@ Native frontend hosts own model registries, replay checkpoints, UI state, and
 remount decisions. The export browser API supplies verified snapshots, loaders,
 and requested-state transitions for those hosts to consume.
 
-The published marimo 0.24.0 package remains the execution dependency. Private
+The published marimo 0.24.2 package remains the execution dependency. Private
 integration code stays under `marimo_export._marimo.compat` behind
 package-owned records and protocols.
 
@@ -87,7 +87,7 @@ flowchart TB
     marimoPorts[Marimo capability ports]
     sqlite[Private SQLite and artifact adapters]
     compat[Private Marimo compatibility adapters]
-    host[Marimo 0.24.0]
+    host[Marimo 0.24.2]
 
     apps --> sdk
     sdk --> records

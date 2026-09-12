@@ -195,7 +195,7 @@ def test_sequential_loader_matches_native_cache_trust_precedence() -> None:
             name=f"parity-{loader_type.__name__}-{len(values)}-{len(hashes)}",
             store=store,
             signer=None,
-            mode="off",
+            verification="off",
         )
         try:
             return (

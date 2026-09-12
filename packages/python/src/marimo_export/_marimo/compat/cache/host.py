@@ -20,10 +20,6 @@ _POLARS_TYPES = (
 )
 
 
-class _OwnedLoader(str):
-    pass
-
-
 class _HostPatchCoordinator:
     def __init__(self) -> None:
         self._tokens: set[object] = set()
@@ -32,26 +28,19 @@ class _HostPatchCoordinator:
         self._patched_ui_check: Any = None
         self._original_tensor_buffer: Any = None
         self._patched_tensor_buffer: Any = None
-        self._original_polars_loaders: dict[str, str | None] = {}
-        self._polars_loader: _OwnedLoader | None = None
 
     def open(self) -> _CloseHandle:
         from marimo._save import encode
-        from marimo._save.stubs.lazy_stub import LAZY_STUB_LOOKUP
 
         token = object()
         with _PROCESS_PATCH_LOCK:
             if self._tokens:
-                self._require_installed(encode, LAZY_STUB_LOOKUP)
+                self._require_installed(encode)
             else:
                 _, lifecycle, _ = native_cache_contract()
                 self._lifecycle_owner = lifecycle
                 self._original_ui_check = lifecycle._restored_ui_defs
                 self._original_tensor_buffer = encode._contiguous_tensor_bytes
-                self._original_polars_loaders = {
-                    type_name: LAZY_STUB_LOOKUP.get(type_name) for type_name in _POLARS_TYPES
-                }
-                self._polars_loader = _OwnedLoader("pickle")
                 self._patched_ui_check = _ui_check(self._original_ui_check)
                 self._patched_tensor_buffer = _tensor_buffer(self._original_tensor_buffer)
                 installed: list[str] = []
@@ -60,11 +49,8 @@ class _HostPatchCoordinator:
                     installed.append("ui")
                     cast(Any, encode)._contiguous_tensor_bytes = self._patched_tensor_buffer
                     installed.append("tensor")
-                    installed.append("polars")
-                    for type_name in _POLARS_TYPES:
-                        LAZY_STUB_LOOKUP[type_name] = self._polars_loader
                 except BaseException:
-                    self._restore(installed, encode, LAZY_STUB_LOOKUP)
+                    self._restore(installed, encode)
                     self._clear()
                     raise
             self._tokens.add(token)
@@ -73,7 +59,6 @@ class _HostPatchCoordinator:
     def _release(self, token: object) -> None:
         import marimo._runtime.executor.lifecycles.cached as cached_lifecycle
         from marimo._save import encode
-        from marimo._save.stubs.lazy_stub import LAZY_STUB_LOOKUP
 
         with _PROCESS_PATCH_LOCK:
             if token not in self._tokens:
@@ -86,15 +71,7 @@ class _HostPatchCoordinator:
             owns_active_resolution = (
                 getattr(active_lifecycle, "_restored_ui_defs", None) is self._patched_ui_check
             )
-            owned_polars = {
-                name for name in _POLARS_TYPES if LAZY_STUB_LOOKUP.get(name) is self._polars_loader
-            }
-            conflict = not (
-                owns_ui
-                and owns_tensor
-                and owns_active_resolution
-                and len(owned_polars) == len(_POLARS_TYPES)
-            )
+            conflict = not (owns_ui and owns_tensor and owns_active_resolution)
             self._tokens.remove(token)
             if self._tokens:
                 if conflict:
@@ -104,12 +81,6 @@ class _HostPatchCoordinator:
                 self._lifecycle_owner._restored_ui_defs = staticmethod(self._original_ui_check)
             if owns_tensor:
                 encode._contiguous_tensor_bytes = self._original_tensor_buffer
-            for name in owned_polars:
-                original = self._original_polars_loaders[name]
-                if original is None:
-                    LAZY_STUB_LOOKUP.pop(name, None)
-                else:
-                    LAZY_STUB_LOOKUP[name] = original
             self._clear()
             if conflict:
                 _raise_conflict()
@@ -120,11 +91,11 @@ class _HostPatchCoordinator:
 
         with _PROCESS_PATCH_LOCK:
             if self._tokens:
-                self._require_installed(encode, LAZY_STUB_LOOKUP)
+                self._require_installed(encode)
                 return (
                     self._original_ui_check,
                     self._original_tensor_buffer,
-                    dict(self._original_polars_loaders),
+                    {name: LAZY_STUB_LOOKUP.get(name) for name in _POLARS_TYPES},
                 )
             _, lifecycle, _ = native_cache_contract()
             return (
@@ -133,7 +104,7 @@ class _HostPatchCoordinator:
                 {name: LAZY_STUB_LOOKUP.get(name) for name in _POLARS_TYPES},
             )
 
-    def _require_installed(self, encode: Any, loaders: dict[str, str]) -> None:
+    def _require_installed(self, encode: Any) -> None:
         import marimo._runtime.executor.lifecycles.cached as cached_lifecycle
 
         active_lifecycle = getattr(cached_lifecycle, "CachedLifecycle", None)
@@ -141,19 +112,10 @@ class _HostPatchCoordinator:
             getattr(self._lifecycle_owner, "_restored_ui_defs", None) is not self._patched_ui_check
             or getattr(active_lifecycle, "_restored_ui_defs", None) is not self._patched_ui_check
             or getattr(encode, "_contiguous_tensor_bytes", None) is not self._patched_tensor_buffer
-            or any(loaders.get(name) is not self._polars_loader for name in _POLARS_TYPES)
         ):
             _raise_conflict()
 
-    def _restore(self, installed: list[str], encode: Any, loaders: dict[str, str]) -> None:
-        if "polars" in installed:
-            for name, original in self._original_polars_loaders.items():
-                if loaders.get(name) is not self._polars_loader:
-                    continue
-                if original is None:
-                    loaders.pop(name, None)
-                else:
-                    loaders[name] = original
+    def _restore(self, installed: list[str], encode: Any) -> None:
         if "tensor" in installed:
             encode._contiguous_tensor_bytes = self._original_tensor_buffer
         if "ui" in installed:
@@ -165,8 +127,6 @@ class _HostPatchCoordinator:
         self._patched_ui_check = None
         self._original_tensor_buffer = None
         self._patched_tensor_buffer = None
-        self._original_polars_loaders = {}
-        self._polars_loader = None
 
 
 _HOST_PATCHES = _HostPatchCoordinator()

@@ -80,7 +80,7 @@ def require_cache_capabilities() -> None:
         "Cache.schema_source": cache_schema,
         "CacheSignatureError": cache_signature_error,
         "Item.schema_source": item_schema,
-        "LazyLoader._effective_mode": getattr(lazy_loader, "_effective_mode", None),
+        "LazyLoader._effective_verification": getattr(lazy_loader, "_effective_verification", None),
         "LazyLoader._read_blobs": getattr(lazy_loader, "_read_blobs", None),
         "LazyLoader._resolve_effective_signer": getattr(
             lazy_loader, "_resolve_effective_signer", None
