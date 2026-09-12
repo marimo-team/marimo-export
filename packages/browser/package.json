@@ -1,6 +1,6 @@
 {
   "name": "@marimo-team/marimo-export",
-  "version": "0.0.7",
+  "version": "0.0.8",
   "description": "Open and load verified marimo notebook exports in browser applications",
   "homepage": "https://marimo-team.github.io/marimo-export/",
   "bugs": {

@@ -4,7 +4,7 @@ build-backend = "agent_plugins.build.uv_build"
 
 [project]
 name = "marimo-export"
-version = "0.0.7"
+version = "0.0.8"
 description = "Prepare and read verified exports of selected marimo notebook outputs."
 readme = "README.md"
 license = "Apache-2.0"

@@ -979,7 +979,7 @@ wheels = [
 
 [[package]]
 name = "marimo-export"
-version = "0.0.7"
+version = "0.0.8"
 source = { editable = "packages/python" }
 dependencies = [
     { name = "agent-plugins" },
