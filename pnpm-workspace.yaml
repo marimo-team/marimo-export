@@ -36,7 +36,7 @@ catalog:
   picomatch: 4.0.7
   yaml: 2.9.0
 
-minimumReleaseAge: 1440
+minimumReleaseAge: 20160
 minimumReleaseAgeStrict: true
 minimumReleaseAgeExclude:
   - "@marimo-team/*"
@@ -59,3 +59,4 @@ allowBuilds:
 verifyDepsBeforeRun: install
 blockExoticSubdeps: true
 trustPolicy: no-downgrade
+onlyBuiltDependencies: []
