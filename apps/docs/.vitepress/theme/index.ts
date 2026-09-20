@@ -17,6 +17,8 @@ export default {
     const configureMermaid = (): void => {
       const renderer = createMermaidRenderer({
         flowchart: { htmlLabels: false, useMaxWidth: true },
+        layout: "dagre",
+        look: "classic",
         securityLevel: "strict",
         startOnLoad: false,
         theme: isDark.value ? "dark" : "neutral",
