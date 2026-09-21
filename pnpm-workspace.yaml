@@ -36,7 +36,7 @@ catalog:
   picomatch: 4.0.7
   yaml: 2.9.1
 
-minimumReleaseAge: 1440
+minimumReleaseAge: 20160
 minimumReleaseAgeStrict: true
 minimumReleaseAgeExclude:
   - "@marimo-team/*"
