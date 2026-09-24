@@ -1,0 +1,23 @@
+packages/browser/package.json
+  s_432a4138f9cc5b::t_d88ef9262e6d5d 3
+packages/python/pyproject.toml
+  s_432a4138f9cc5b::t_d88ef9262e6d5d 7
+uv.lock
+  ai_agent 1012
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "03cb53ea2d95b19b50db79e4ce3ea80df9b2ca6f",
+  "prompts": {},
+  "sessions": {
+    "s_432a4138f9cc5b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0d23b-c566-7ec2-843d-97488f82d093",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
