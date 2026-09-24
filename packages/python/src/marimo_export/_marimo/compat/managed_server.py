@@ -36,7 +36,7 @@ def _install_runtime_filename() -> None:
 
     native = SessionImpl.create
 
-    def create(cls: type, **kwargs: Any) -> Any:
+    async def create(cls: type, **kwargs: Any) -> Any:
         del cls
         metadata = kwargs.get("app_metadata")
         if (
@@ -47,7 +47,7 @@ def _install_runtime_filename() -> None:
                 metadata,
                 filename=source_path,
             )
-        return native(**kwargs)
+        return await native(**kwargs)
 
     cast(Any, SessionImpl).create = classmethod(create)
 

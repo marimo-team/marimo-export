@@ -42,7 +42,7 @@ WebAssembly delivery:
 - Cached WebAssembly exports carry native manifests and blobs so browser Python
   can derive the same keys and restore values.
 
-The pinned marimo 0.24.2 loader verifies the manifest and loads every resolvable
+The pinned marimo 0.25.0 loader verifies the manifest and loads every resolvable
 referenced definition and return value before skipping the cell body. Values
 whose required module is unavailable can remain as stubs and cause live
 recomputation when a consumer needs them.
@@ -68,10 +68,10 @@ the computation cache.
 
 ## Exact supported adapter
 
-The Python package pins `marimo==0.24.2`. `_marimo/compat/release.json` records:
+The Python package pins `marimo==0.25.0`. `_marimo/compat/release.json` records:
 
-- Marimo version 0.24.2
-- release commit `1c2a1be4528ea0560b04bdf0de412701d09238cc`
+- Marimo version 0.25.0
+- release commit `d9a60e77c286a4c63fb93eda2cdac186e77a1025`
 - source SHA-256 digests for the private cache functions adapted by the package
 
 `_marimo/compat/cache/probe.py` checks the installed distribution version,
@@ -80,7 +80,7 @@ restored UI check, Polars stub loaders, tensor encoder, and active runtime store
 shape before adapter construction. A mismatch raises `CompatibilityError` with
 code `marimo_incompatible`.
 
-This architecture targets the published Marimo 0.24.2 package as-is. Marimo
+This architecture targets the published Marimo 0.25.0 package as-is. Marimo
 integration changes remain inside marimo-export until a matching public Marimo
 capability is available.
 
@@ -134,7 +134,7 @@ roots imports neither cache modules nor private Marimo modules.
 
 ## Reversible process-global patch
 
-Marimo 0.24.2 exposes the required cache seams through process globals. The
+Marimo 0.25.0 exposes the required cache seams through process globals. The
 adapter temporarily owns:
 
 - `PERSISTENT_LOADERS["lazy"]`

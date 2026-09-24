@@ -1,6 +1,6 @@
 {
-  "version": "0.24.2",
-  "commit": "1c2a1be4528ea0560b04bdf0de412701d09238cc",
+  "version": "0.25.0",
+  "commit": "d9a60e77c286a4c63fb93eda2cdac186e77a1025",
   "cache_source_sha256": {
     "BlobAsset.schema_source": "ade24b0b25f4816aa296c3eda6623960f4a77c514c9124b5b6394f0c1ef3818a",
     "BlockHasher": "c0b088d5c51322419fc3dbc8a0ed0bf715348300c4568b0eecaf25b5eb2e6ce1",
