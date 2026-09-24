@@ -1,0 +1,33 @@
+development_docs/architecture/failure-and-concurrency.md
+  ai_agent 78
+packages/python/src/marimo_export/_marimo/compat/release.json
+  ai_agent 2-3
+packages/python/tests/test_cli_repository.py
+  ai_agent 170,172,174,197,199,201
+scripts/smoke_python_package.py
+  ai_agent 20
+uv.lock
+  ai_agent 980,1005,1007,1058
+AGENTS.md
+  ai_agent 44
+packages/python/src/marimo_export/_marimo/compat/managed_server.py
+  ai_agent 39,50
+packages/python/tests/test_public_diagnostics.py
+  ai_agent 20-21,33,46
+development_docs/development.md
+  ai_agent 156
+packages/python/pyproject.toml
+  ai_agent 18
+development_docs/architecture/execution-and-caching.md
+  ai_agent 45,71,73-74,83,137
+development_docs/architecture.md
+  ai_agent 44,90
+development_docs/proposals/marimo-upstream-capabilities.md
+  ai_agent 9,12,14
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "d9b96d60da6b718b9136df94a98d88e8ad19f23a",
+  "prompts": {}
+}
