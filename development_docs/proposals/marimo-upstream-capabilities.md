@@ -6,12 +6,12 @@
 | Date                             | 2026-09-11                                                                                            |
 | Owner repository                 | `marimo-team/marimo` for supported upstream APIs, `marimo-team/marimo-export` for adapter replacement |
 | Inspected marimo-export revision | `1c898c27376b6437d31739758c0363841a3bfd6e`                                                            |
-| Supported marimo release         | `0.24.2` at `1c2a1be4528ea0560b04bdf0de412701d09238cc`                                                |
+| Supported marimo release         | `0.25.0` at `d9a60e77c286a4c63fb93eda2cdac186e77a1025`                                                |
 
 This proposal records possible supported Marimo APIs that could replace private
-compatibility adapters. It does not describe APIs available in Marimo 0.24.2.
+compatibility adapters. It does not describe APIs available in Marimo 0.25.0.
 
-marimo-export targets the published Marimo 0.24.2 package through local ports
+marimo-export targets the published Marimo 0.25.0 package through local ports
 and private compatibility adapters. Each candidate on this page names a public
 Marimo capability that could replace one contained adapter while preserving the
 marimo-export service contract.

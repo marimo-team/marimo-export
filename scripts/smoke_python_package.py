@@ -17,7 +17,7 @@ if sys.version_info >= (3, 11):
 else:
     import tomli as tomllib
 
-_MARIMO_REQUIREMENT = "marimo==0.24.2"
+_MARIMO_REQUIREMENT = "marimo==0.25.0"
 _AGENT_PLUGINS_REQUIREMENT = "agent-plugins>=0.1.0"
 _AGENT_PLUGIN_FILES = {
     "plugin.json",

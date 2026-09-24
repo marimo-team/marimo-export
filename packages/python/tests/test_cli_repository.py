@@ -167,11 +167,11 @@ def test_doctor_reports_effective_repository_and_exact_marimo_check(
         lambda: CheckResult(
             name="marimo",
             status="pass",
-            message="Marimo 0.24.2 matches the supported adapter.",
+            message="Marimo 0.25.0 matches the supported adapter.",
             details={
-                "adapter": "private-marimo-0.24.2",
+                "adapter": "private-marimo-0.25.0",
                 "release_commit": "8" * 40,
-                "version": "0.24.2",
+                "version": "0.25.0",
             },
         ),
     )
@@ -194,11 +194,11 @@ def test_doctor_reports_effective_repository_and_exact_marimo_check(
     assert result["repository"]["path"] == str(repository.resolve())
     assert result["marimo"] == {
         "details": {
-            "adapter": "private-marimo-0.24.2",
+            "adapter": "private-marimo-0.25.0",
             "release_commit": "8" * 40,
-            "version": "0.24.2",
+            "version": "0.25.0",
         },
-        "message": "Marimo 0.24.2 matches the supported adapter.",
+        "message": "Marimo 0.25.0 matches the supported adapter.",
         "name": "marimo",
         "status": "pass",
     }
