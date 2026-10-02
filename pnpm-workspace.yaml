@@ -16,7 +16,7 @@ catalog:
   "@msgpack/msgpack": ^3.1.3
   "@oxlint/plugins": 1.83.0
   "@uwdata/flechette": ^2.5.0
-  "@vitest/browser-playwright": 4.1.11
+  "@vitest/browser-playwright": 5.0.1
   "@types/node": ^24.13.3
   hyparquet: ^1.30.0
   lz4js: ^0.2.0
@@ -40,6 +40,15 @@ minimumReleaseAge: 20160
 minimumReleaseAgeStrict: true
 minimumReleaseAgeExclude:
   - "@marimo-team/*"
+  - "@voidzero-dev/*"
+  - "@oxc-project/*"
+  - "@oxfmt/*"
+  - "@oxlint/*"
+  - "@oxlint-tsgolint/*"
+  - oxfmt
+  - oxlint
+  - oxlint-tsgolint
+  - vite-plus
 
 overrides:
   "@babel/parser": 7.29.8
