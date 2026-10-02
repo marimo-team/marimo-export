@@ -160,6 +160,10 @@ unchanged.
 For an owned export graph, the adapter can:
 
 - add one frozen producer-dependency input to native cell hashing
+- retry a failed native hash with a digest of the type and Arrow IPC stream of
+  each referenced PyArrow value, because Marimo's NumPy view rejects
+  object-typed columns such as strings. Cells whose native hash succeeds keep
+  their native keys.
 - record the effective hit or miss for authored and projection cells
 - run complete-cell owners and selected exporter leaves live when their output
   contract includes uncached side effects or session-bound resources

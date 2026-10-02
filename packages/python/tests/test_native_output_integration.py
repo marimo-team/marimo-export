@@ -11,6 +11,7 @@ from export_integration_support import build
 from marimo_export import ExportSpec, OutputSpec, open_export
 from marimo_export.descriptors import ArrowDescriptor, NumpyDescriptor
 from marimo_export.errors import OutputError
+from marimo_export.exporters import importable
 
 
 def _write_notebook(notebook: Path, counter: Path) -> None:
@@ -304,3 +305,107 @@ if __name__ == "__main__":
 
     assert raised.value.code == "output_execution_failed"
     assert not (tmp_path / "export").exists()
+
+
+def test_arrow_tables_with_string_columns_export_through_every_value_source(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    notebook = tmp_path / "notebook.py"
+    notebook.write_text(
+        """
+import marimo
+
+app = marimo.App()
+
+
+@app.cell
+def _():
+    import pyarrow as pa
+
+    flights = pa.table(
+        {
+            "carrier": ["AA", "DL"],
+            "origin": pa.array(["JFK", "LAX"]).dictionary_encode(),
+            "delay": [5, 25],
+        }
+    )
+    return (flights,)
+
+
+if __name__ == "__main__":
+    app.run()
+""".lstrip(),
+        encoding="utf-8",
+    )
+    (tmp_path / "flight_exports.py").write_text(
+        "def columns(value):\n    return value.column_names\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("PYTHONPATH", str(tmp_path))
+    spec = ExportSpec(
+        default_state="baseline",
+        states={"baseline": {}},
+        outputs={
+            "flights": OutputSpec.native("flights"),
+            "columns": OutputSpec.export("flights", importable("flight_exports:columns")),
+        },
+    )
+
+    result = build(notebook, spec=spec, output=tmp_path / "export", timeout=30)
+    warm = build(notebook, spec=spec, output=tmp_path / "warm", timeout=30)
+    state = open_export(result.path).state("baseline")
+
+    # Custom exporter outputs run for every prepared state, so only the native
+    # output can restore from the marimo cache.
+    assert (warm.cache_activity.projection_hits, warm.cache_activity.projection_misses) == (1, 1)
+
+    assert isinstance(state.output("flights").descriptor, ArrowDescriptor)
+    assert state.output("flights").descriptor.provenance.python_type == "pyarrow.lib.Table"
+    table = pa.ipc.open_stream(state.output("flights").asset_bytes()).read_all()
+    assert table.to_pylist() == [
+        {"carrier": "AA", "origin": "JFK", "delay": 5},
+        {"carrier": "DL", "origin": "LAX", "delay": 25},
+    ]
+    assert pa.types.is_dictionary(table.schema.field("origin").type)
+    assert state.output("columns").json() == ("carrier", "origin", "delay")
+
+
+def test_a_value_the_cell_cache_cannot_hash_names_its_exception(tmp_path: Path) -> None:
+    notebook = tmp_path / "notebook.py"
+    notebook.write_text(
+        """
+import marimo
+
+app = marimo.App()
+
+
+@app.cell
+def _():
+    import numpy as np
+
+    class Labels:
+        def __array__(self, dtype=None, copy=None):
+            return np.array(["alpha", "beta"], dtype=object)
+
+    labels = Labels()
+    return (labels,)
+
+
+if __name__ == "__main__":
+    app.run()
+""".lstrip(),
+        encoding="utf-8",
+    )
+    spec = ExportSpec(
+        default_state="baseline",
+        states={"baseline": {}},
+        outputs={"labels": OutputSpec.json("labels")},
+    )
+
+    with pytest.raises(OutputError) as raised:
+        build(notebook, spec=spec, output=tmp_path / "export", timeout=30)
+
+    assert raised.value.code == "output_execution_failed"
+    assert raised.value.details["exception_type"] == "TypeError"
+    assert str(raised.value).endswith("with TypeError")

@@ -22,6 +22,7 @@ from marimo_export._marimo.compat.inspection import _python_type
 from marimo_export._marimo.compat.projections import _NATIVE_ARROW_SCHEMA
 from marimo_export.descriptors import (
     ARROW_MEDIA_TYPE,
+    JSON_CODEC,
     JSON_MEDIA_TYPE,
     MARIMO_CELL_MEDIA_TYPE,
     MARIMO_OUTPUT_MEDIA_TYPE,
@@ -38,7 +39,13 @@ from marimo_export.descriptors import (
 )
 from marimo_export.errors import CodecError, OutputError
 from marimo_export.outputs import BlobAsset
-from marimo_export.spec import CellSource, JsonSource, NativeSource, RenderedOutputSource
+from marimo_export.spec import (
+    CellSource,
+    ExportSource,
+    JsonSource,
+    NativeSource,
+    RenderedOutputSource,
+)
 
 _BLOB_ASSET_PYTHON_TYPE = f"{BlobAsset.__module__}.{BlobAsset.__qualname__}"
 
@@ -156,7 +163,14 @@ def native_receipt(
                 payload=payload,
                 disposition=disposition,
             )
-        if isinstance(source, (JsonSource, NativeSource)) and cached.media_type == JSON_MEDIA_TYPE:
+        if cached.media_type == JSON_MEDIA_TYPE and (
+            isinstance(source, (JsonSource, NativeSource))
+            or (
+                isinstance(source, ExportSource)
+                and cached.metadata == {"schema": JSON_CODEC}
+                and cached.filename is None
+            )
+        ):
             try:
                 value = decode_json(data, f"output {output!r} JSON projection")
             except (TypeError, ValueError) as error:

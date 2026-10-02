@@ -167,7 +167,7 @@ Each output has one source kind:
 | -------------- | --------------------------------------------------------------------- | ---------------------------------------------- |
 | `kind: json`   | Canonical portable JSON                                               | Python, browser, agent, or custom client       |
 | `kind: native` | marimo scalar, JSON, NumPy, Arrow, or `BlobAsset` representation      | Typed Python or browser loader                 |
-| `kind: export` | `BlobAsset` returned by one declared exporter                         | Chart, table, media, or domain-specific loader |
+| `kind: export` | `BlobAsset` or canonical JSON returned by one declared exporter       | Chart, table, media, or domain-specific loader |
 | `kind: output` | Formatted marimo output and replay resources                          | marimo-aware browser application               |
 | `kind: cell`   | Cell identity, terminal output, console records, and replay resources | marimo-aware browser application or agent      |
 

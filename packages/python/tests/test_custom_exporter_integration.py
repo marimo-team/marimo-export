@@ -181,6 +181,54 @@ def test_capture_sideloads_an_importable_callable(
     assert notebook.read_bytes() == source
 
 
+def test_custom_exporter_returns_a_json_value(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    notebook = tmp_path / "notebook.py"
+    _write_notebook(notebook)
+    (tmp_path / "export_exports.py").write_text(
+        "def describe(value):\n    return {'answer': value, 'labels': ['forty', 'one']}\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("PYTHONPATH", str(tmp_path))
+    spec = ExportSpec(
+        default_state="baseline",
+        states={"baseline": {}},
+        outputs={"summary": OutputSpec.export("answer", importable("export_exports:describe"))},
+    )
+
+    _capture(notebook, spec, tmp_path / "export")
+    output = open_export(tmp_path / "export").state("baseline").output("summary")
+
+    assert output.descriptor.codec == "marimo.json.v1"
+    assert output.json() == {"answer": 41, "labels": ("forty", "one")}
+
+
+def test_custom_exporter_rejects_a_result_without_a_portable_form(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    notebook = tmp_path / "notebook.py"
+    _write_notebook(notebook)
+    (tmp_path / "export_exports.py").write_text(
+        "def describe(value):\n    return object()\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("PYTHONPATH", str(tmp_path))
+    spec = ExportSpec(
+        default_state="baseline",
+        states={"baseline": {}},
+        outputs={"summary": OutputSpec.export("answer", importable("export_exports:describe"))},
+    )
+
+    with pytest.raises(OutputError) as raised:
+        _capture(notebook, spec, tmp_path / "export")
+
+    assert raised.value.code == "output_execution_failed"
+    assert raised.value.details["exception_type"] == "TypeError"
+
+
 def test_custom_exporter_builds_are_deterministic_while_both_execute(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
