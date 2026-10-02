@@ -5,7 +5,6 @@ from contextlib import ExitStack
 from types import SimpleNamespace
 from typing import Any, cast
 
-import pyarrow as pa
 import pytest
 from marimo._runtime.dataflow import DirectedGraph
 from marimo._runtime.executor.lifecycles import Skip
@@ -236,6 +235,7 @@ def test_complete_lifecycle_reruns_unavailable_hits_in_managed_parent_scope(
 
 
 def test_arrow_hash_digests_distinguish_arrow_types_with_equal_rows() -> None:
+    pa = pytest.importorskip("pyarrow")
     rows = {"carrier": ["AA", "DL"]}
     digests = {
         _arrow_digest(pa.table(rows)),
