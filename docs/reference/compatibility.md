@@ -10,11 +10,11 @@ and one or more consumers. Check the boundary that matches your workflow.
 
 ## Python and marimo
 
-| Component     | Contract                                                                                                                    |
-| ------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| Python        | The package supports Python 3.10 through 3.14. Continuous integration runs on each supported version on Ubuntu and Windows. |
-| marimo        | The Python package metadata pins the exact supported marimo release.                                                        |
-| marimo-export | A live capture client and the selected kernel must load the same package version and implementation identity.               |
+| Component     | Contract                                                                                                                                                                                                                                    |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Python        | The supported range and classifiers are declared in the [package metadata](https://github.com/marimo-team/marimo-export/blob/main/packages/python/pyproject.toml). Continuous integration runs each declared version on Ubuntu and Windows. |
+| marimo        | The Python package metadata pins the exact supported marimo release.                                                                                                                                                                        |
+| marimo-export | A live capture client and the selected kernel must load the same package version and implementation identity.                                                                                                                               |
 
 Run the compatibility diagnostic in the producer environment:
 
@@ -39,14 +39,14 @@ optional `AbortSignal`, and
 
 Loading and mounting add representation-specific browser requirements:
 
-| Representation                                    | Peer range or browser capability                                                               |
-| ------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| JSON, scalar, text, HTML, NumPy, marimo snapshots | None beyond the browser package                                                                |
-| Image                                             | Document Object Model, Blob, and object URL APIs                                               |
-| Apache Arrow                                      | `@uwdata/flechette ^2.5.0` and `lz4js 0.2.0`                                                   |
-| Parquet                                           | `hyparquet ^1.26.2`                                                                            |
-| Vega-Lite                                         | `vega-embed ^7.1.0`                                                                            |
-| AnyWidget                                         | `@anywidget/types ^0.4.0` for types, plus embedded, data, HTTP, or HTTPS widget module support |
+| Representation                                    | Peer range or browser capability                                                                                                                                                                                         |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| JSON, scalar, text, HTML, NumPy, marimo snapshots | None beyond the browser package                                                                                                                                                                                          |
+| Image                                             | Document Object Model, Blob, and object URL APIs                                                                                                                                                                         |
+| Apache Arrow                                      | `@uwdata/flechette` and `lz4js`, using the versions in the [pnpm catalog](https://github.com/marimo-team/marimo-export/blob/main/pnpm-workspace.yaml)                                                                    |
+| Parquet                                           | `hyparquet`, using the version in the [pnpm catalog](https://github.com/marimo-team/marimo-export/blob/main/pnpm-workspace.yaml)                                                                                         |
+| Vega-Lite                                         | `vega-embed`, using the version in the [pnpm catalog](https://github.com/marimo-team/marimo-export/blob/main/pnpm-workspace.yaml)                                                                                        |
+| AnyWidget                                         | `@anywidget/types`, using the version in the [pnpm catalog](https://github.com/marimo-team/marimo-export/blob/main/pnpm-workspace.yaml), for TypeScript types, plus embedded, data, HTTP, or HTTPS widget module support |
 
 See [Output representations](representations) for install commands and
 loader contracts. Browser mounts, Blob URLs, canvas rendering, dynamic imports,

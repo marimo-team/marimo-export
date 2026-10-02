@@ -7,9 +7,10 @@ description: Choose the Python API for producing, reading, serving, or integrati
 
 The Python package prepares selected marimo notebook states, writes verified
 notebook exports, and reads the same files that browser applications consume.
-Python 3.10 through 3.14 is supported. Continuous integration tests each
-supported version, and the package metadata pins its exact supported marimo
-release.
+The supported Python range and classifiers are declared in the
+[package metadata](https://github.com/marimo-team/marimo-export/blob/main/packages/python/pyproject.toml). Continuous
+integration tests each supported version, and the package metadata pins its
+exact supported marimo release.
 See [Compatibility](compatibility) for the complete boundary.
 
 Install the base package to produce and read portable JSON, scalar, NumPy,

@@ -66,15 +66,15 @@ widget model and view lifecycle.
 
 Install the dependency used by each imported loader:
 
-| Loader                          | Dependency                                                                                                               | Role                                        |
-| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------- |
-| JSON, scalar, text, HTML, image | None                                                                                                                     | Browser-native values and DOM APIs          |
-| marimo output and marimo cell   | None                                                                                                                     | Inert replay records                        |
-| NumPy                           | None                                                                                                                     | Built-in NPY decoder                        |
-| Arrow                           | [`@uwdata/flechette ^2.5.0`](https://github.com/uwdata/flechette) and [`lz4js 0.2.0`](https://github.com/Benzinga/lz4js) | Arrow table API and LZ4 decompression       |
-| Parquet                         | [`hyparquet ^1.26.2`](https://github.com/hyparam/hyparquet)                                                              | Parquet row decoding                        |
-| Vega-Lite                       | [`vega-embed ^7.1.0`](https://github.com/vega/vega-embed)                                                                | Chart rendering and disposal                |
-| AnyWidget                       | [`@anywidget/types ^0.4.0`](https://github.com/manzt/anywidget)                                                          | TypeScript model, host, and lifecycle types |
+| Loader                          | Dependency                                                                                                                                                                                                        | Role                                        |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
+| JSON, scalar, text, HTML, image | None                                                                                                                                                                                                              | Browser-native values and DOM APIs          |
+| marimo output and marimo cell   | None                                                                                                                                                                                                              | Inert replay records                        |
+| NumPy                           | None                                                                                                                                                                                                              | Built-in NPY decoder                        |
+| Arrow                           | [`@uwdata/flechette`](https://github.com/uwdata/flechette) and [`lz4js`](https://github.com/Benzinga/lz4js), using the [pnpm catalog](https://github.com/marimo-team/marimo-export/blob/main/pnpm-workspace.yaml) | Arrow table API and LZ4 decompression       |
+| Parquet                         | [`hyparquet`](https://github.com/hyparam/hyparquet), using the [pnpm catalog](https://github.com/marimo-team/marimo-export/blob/main/pnpm-workspace.yaml)                                                         | Parquet row decoding                        |
+| Vega-Lite                       | [`vega-embed`](https://github.com/vega/vega-embed), using the [pnpm catalog](https://github.com/marimo-team/marimo-export/blob/main/pnpm-workspace.yaml)                                                          | Chart rendering and disposal                |
+| AnyWidget                       | [`@anywidget/types`](https://github.com/manzt/anywidget), using the [pnpm catalog](https://github.com/marimo-team/marimo-export/blob/main/pnpm-workspace.yaml)                                                    | TypeScript model, host, and lifecycle types |
 
 ```bash
 pnpm add @marimo-team/marimo-export hyparquet vega-embed

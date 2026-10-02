@@ -57,8 +57,8 @@ Configure the existing PyPI project to trust:
 - environment `pypi`
 
 Configure the npm package with the same owner, repository, and workflow plus
-environment `npm`. Allow `npm publish`. The publish job runs on Node 24 with
-`id-token: write` and publishes the verified pnpm-produced tarballs. npm uses
+environment `npm`. Allow `npm publish`. The publish job uses the Node version
+declared in the root `package.json` with `id-token: write` and publishes the verified pnpm-produced tarballs. npm uses
 the workflow's
 [OpenID Connect](https://openid.net/developers/how-connect-works/) identity and
 records provenance for each package.
