@@ -13,6 +13,7 @@ import tempfile
 from importlib.metadata import version as distribution_version
 from pathlib import Path
 
+import yaml
 from packaging.specifiers import InvalidSpecifier, SpecifierSet
 from packaging.version import InvalidVersion, Version
 
@@ -22,16 +23,16 @@ else:
     import tomli as tomllib
 
 LOADER_DEPENDENCIES = {
-    "anywidget": {"@anywidget/types": "0.4.0"},
-    "arrow": {"@uwdata/flechette": "2.5.0", "lz4js": "0.2.0"},
+    "anywidget": {"@anywidget/types": "^0.4.0"},
+    "arrow": {"@uwdata/flechette": "^2.5.0", "lz4js": "^0.2.0"},
     "html": {},
     "json": {},
     "marimo-cell": {},
     "marimo-output": {},
     "numpy": {},
-    "parquet": {"hyparquet": "1.29.2"},
+    "parquet": {"hyparquet": "^1.30.0"},
     "text": {},
-    "vegalite": {"vega-embed": "7.2.0"},
+    "vegalite": {"vega-embed": "^7.2.0"},
 }
 _SUPPORTED_PYTHON = SpecifierSet(">=3.10,<3.15")
 
@@ -62,6 +63,7 @@ def main() -> None:
     _require_empty_destination(output)
     export_root = _export_root(candidate_root, required=args.marimo_export_root is not None)
     package_version = distribution_version("marimo-export")
+    toolchain, loader_dependencies = _workspace_tooling(export_root)
 
     source_digest = hashlib.sha256(notebook.read_bytes()).hexdigest()
     metadata = _script_metadata(notebook)
@@ -125,6 +127,8 @@ def main() -> None:
             ),
             package_version=package_version,
             loaders=args.loader,
+            loader_dependencies=loader_dependencies,
+            toolchain=toolchain,
         )
         provenance = {
             "filename": notebook.name,
@@ -258,6 +262,32 @@ def _export_root(candidate: Path, *, required: bool) -> Path | None:
     return None
 
 
+def _workspace_tooling(root: Path | None) -> tuple[dict[str, str], dict[str, dict[str, str]]]:
+    if root is None:
+        return (
+            {
+                "typescript": "^6.0.0",
+                "vite-plus": "^1.0.0",
+            },
+            LOADER_DEPENDENCIES,
+        )
+    package = json.loads((root / "package.json").read_text(encoding="utf-8"))
+    workspace = yaml.safe_load((root / "pnpm-workspace.yaml").read_text(encoding="utf-8"))
+    catalog = workspace["catalog"]
+    runtime = package["devEngines"]["runtime"]["version"]
+    toolchain = {
+        "typescript": catalog["typescript"],
+        "vite-plus": catalog["vite-plus"],
+        "node-engine": f">={runtime}",
+        "package-manager": package["packageManager"],
+    }
+    loader_dependencies = {
+        loader: {name: catalog.get(name, spec) for name, spec in dependencies.items()}
+        for loader, dependencies in LOADER_DEPENDENCIES.items()
+    }
+    return toolchain, loader_dependencies
+
+
 def _pack_browser(root: Path, destination: Path) -> Path:
     subprocess.run(
         [
@@ -354,6 +384,8 @@ def _write_package_json(
     browser_package: Path | None,
     package_version: str,
     loaders: list[str],
+    loader_dependencies: dict[str, dict[str, str]],
+    toolchain: dict[str, str],
 ) -> None:
     dependencies = {
         "@marimo-team/marimo-export": (
@@ -361,7 +393,7 @@ def _write_package_json(
         ),
     }
     for loader in loaders:
-        dependencies.update(LOADER_DEPENDENCIES[loader])
+        dependencies.update(loader_dependencies[loader])
     value = {
         "name": f"marimo-static-{slug}",
         "version": "0.0.0",
@@ -376,12 +408,14 @@ def _write_package_json(
         },
         "dependencies": dict(sorted(dependencies.items())),
         "devDependencies": {
-            "typescript": "6.0.3",
-            "vite-plus": "0.3.0",
+            "typescript": toolchain["typescript"],
+            "vite-plus": toolchain["vite-plus"],
         },
-        "engines": {"node": ">=22.18.0"},
-        "packageManager": "pnpm@12.3.4",
     }
+    if "node-engine" in toolchain:
+        value["engines"] = {"node": toolchain["node-engine"]}
+    if "package-manager" in toolchain:
+        value["packageManager"] = toolchain["package-manager"]
     path.write_text(json.dumps(value, indent=2) + "\n", encoding="utf-8")
 
 

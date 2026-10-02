@@ -25,7 +25,7 @@ Run this example from a repository checkout with:
 | Requirement                                                  | Role                                                     |
 | ------------------------------------------------------------ | -------------------------------------------------------- |
 | [Git](https://git-scm.com/)                                  | Clones the repository                                    |
-| [Python 3.14](https://www.python.org/)                       | Runs the notebook and Python package                     |
+| Python version declared by `.python-version`                 | Runs the notebook and Python package                     |
 | [uv](https://docs.astral.sh/uv/)                             | Installs locked Python dependencies and runs the CLI     |
 | [Node.js](https://nodejs.org/)                               | Runs the version pinned by the workspace                 |
 | [pnpm](https://pnpm.io/)                                     | Installs dependencies and runs the example scripts       |

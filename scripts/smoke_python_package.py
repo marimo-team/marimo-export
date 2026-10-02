@@ -10,6 +10,7 @@ import tempfile
 from importlib import metadata
 from pathlib import Path
 
+from packaging.requirements import Requirement
 from packaging.specifiers import SpecifierSet
 
 if sys.version_info >= (3, 11):
@@ -17,8 +18,6 @@ if sys.version_info >= (3, 11):
 else:
     import tomli as tomllib
 
-_MARIMO_REQUIREMENT = "marimo==0.25.1"
-_AGENT_PLUGINS_REQUIREMENT = "agent-plugins>=0.1.0"
 _AGENT_PLUGIN_FILES = {
     "plugin.json",
     "skills/notebook-to-static-app/SKILL.md",
@@ -75,6 +74,7 @@ _FOCUSED_NAMES = {
 
 
 def main(expected_version: str | None = None) -> None:
+    source_requires_python, project_requirements = _source_project()
     package_version = metadata.version("marimo-export")
     if expected_version is not None and package_version != expected_version:
         raise RuntimeError(
@@ -82,12 +82,14 @@ def main(expected_version: str | None = None) -> None:
         )
     requirements = metadata.requires("marimo-export") or []
     requires_python = metadata.metadata("marimo-export")["Requires-Python"]
-    if SpecifierSet(requires_python) != SpecifierSet(">=3.10,<3.15"):
-        raise RuntimeError("marimo-export wheel must support Python >=3.10,<3.15")
-    if _MARIMO_REQUIREMENT not in requirements:
-        raise RuntimeError(f"marimo-export wheel must require {_MARIMO_REQUIREMENT}")
-    if _AGENT_PLUGINS_REQUIREMENT not in requirements:
-        raise RuntimeError(f"marimo-export wheel must require {_AGENT_PLUGINS_REQUIREMENT}")
+    if SpecifierSet(requires_python) != SpecifierSet(source_requires_python):
+        raise RuntimeError(
+            "marimo-export wheel must preserve the Python range from packages/python/pyproject.toml"
+        )
+    for name in ("marimo", "agent-plugins"):
+        requirement = project_requirements[name]
+        if requirement not in requirements:
+            raise RuntimeError(f"marimo-export wheel must require {requirement}")
 
     import marimo_export
 
@@ -164,7 +166,7 @@ def main(expected_version: str | None = None) -> None:
     if installed_plugin_files != _AGENT_PLUGIN_FILES:
         raise RuntimeError("marimo-export wheel contains an unexpected Agent Plugin file inventory")
     skill = export_agent.agent_skill()
-    _verify_installed_scaffold(skill.path, package_version)
+    _verify_installed_scaffold(skill.path, package_version, source_requires_python)
     _verify_installed_cli(package_version)
 
 
@@ -184,7 +186,29 @@ def _verify_installed_cli(package_version: str) -> None:
         raise RuntimeError(f"Unexpected marimo-export version output: {version.stdout.strip()}")
 
 
-def _verify_installed_scaffold(skill: Path, package_version: str) -> None:
+def _source_project() -> tuple[str, dict[str, str]]:
+    path = Path(__file__).resolve().parents[1] / "packages/python/pyproject.toml"
+    with path.open("rb") as stream:
+        project = tomllib.load(stream)["project"]
+    if not isinstance(project, dict):
+        raise RuntimeError(f"invalid Python project metadata in {path}")
+    dependencies = project.get("dependencies")
+    requires_python = project.get("requires-python")
+    if not isinstance(dependencies, list) or not all(
+        isinstance(requirement, str) for requirement in dependencies
+    ):
+        raise RuntimeError(f"invalid Python dependencies in {path}")
+    if not isinstance(requires_python, str):
+        raise RuntimeError(f"invalid Python range in {path}")
+    return (
+        requires_python,
+        {Requirement(requirement).name: requirement for requirement in dependencies},
+    )
+
+
+def _verify_installed_scaffold(
+    skill: Path, package_version: str, source_requires_python: str
+) -> None:
     script = skill / "scripts/scaffold_app.py"
     with tempfile.TemporaryDirectory() as temporary:
         root = Path(temporary)
@@ -215,7 +239,7 @@ def _verify_installed_scaffold(skill: Path, package_version: str) -> None:
             python = tomllib.load(stream)
         if python["project"]["dependencies"] != [f"marimo-export[all]=={package_version}"]:
             raise RuntimeError("installed scaffold must pin the matching Python package")
-        if python["project"]["requires-python"] != ">=3.10,<3.15":
+        if python["project"]["requires-python"] != source_requires_python:
             raise RuntimeError("installed scaffold must preserve the supported Python range")
         if (output / "vendor").exists():
             raise RuntimeError("installed scaffold must use registry package versions")

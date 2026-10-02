@@ -45,7 +45,6 @@ Create `report.py`:
 ```python
 import marimo
 
-__generated_with = "0.24.0"
 app = marimo.App()
 
 
