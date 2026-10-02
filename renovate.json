@@ -1,11 +1,13 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": ["local>marimo-team/.github:renovate-config"],
+  "minimumReleaseAge": "14 days",
+  "internalChecksFilter": "strict",
   "packageRules": [
     {
-      "description": "Match the browser provider to Vitest bundled by Vite+ 0.3.0.",
+      "description": "Match the browser provider to Vitest bundled by Vite+ 1.0.",
       "matchPackageNames": ["@vitest/browser-playwright"],
-      "allowedVersions": "4.1.11"
+      "allowedVersions": "5.0.1"
     },
     {
       "description": "agent-plugins requires tomli 2.3.1 on supported Python 3.10.",
