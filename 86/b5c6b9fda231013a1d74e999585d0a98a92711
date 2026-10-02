@@ -1,0 +1,20 @@
+pnpm-workspace.yaml
+  s_03ea7e224f36bc::t_9f5521885cff60 45
+  s_03ea7e224f36bc::t_ed690a9a5b5c07 17,23-24,35,50
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "86b5c6b9fda231013a1d74e999585d0a98a92711",
+  "prompts": {},
+  "sessions": {
+    "s_03ea7e224f36bc": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0fbdc-64f2-7d72-90ff-55f95b84e511",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
