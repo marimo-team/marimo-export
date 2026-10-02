@@ -14,7 +14,8 @@ marimo-export](../why) first.
 
 ## Install marimo-export
 
-Install [Python 3.10 through 3.14](https://www.python.org/downloads/) and
+Install a Python version accepted by the
+[package metadata](https://github.com/marimo-team/marimo-export/blob/main/packages/python/pyproject.toml), plus
 [uv](https://docs.astral.sh/uv/). Continuous integration tests each supported
 version. The package metadata pins its supported marimo release.
 
@@ -45,7 +46,6 @@ Create `report.py`:
 ```python
 import marimo
 
-__generated_with = "0.24.0"
 app = marimo.App()
 
 

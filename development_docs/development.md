@@ -1,11 +1,12 @@
 # Development
 
-The workspace pins Python 3.14 for local development with Node 24.14.1, pnpm
-12.3.4, uv, and [Vite+](https://viteplus.dev/guide), the unified TypeScript
-toolchain used for formatting, linting, type checks, tests, builds, packaging,
-and workspace tasks. The root `devEngines.runtime` lets pnpm install the exact
-Node runtime and records it in `pnpm-lock.yaml`. Package CI verifies Python 3.10
-through 3.14 on Ubuntu and Windows.
+The workspace uses the Python version from `.python-version` and the Node, pnpm,
+and [Vite+](https://viteplus.dev/guide) versions declared by `package.json` and
+`pnpm-workspace.yaml`. Vite+ is the unified TypeScript toolchain used for
+formatting, linting, type checks, tests, builds, packaging, and workspace tasks.
+The root `devEngines.runtime` lets pnpm install the declared Node runtime and
+records it in `pnpm-lock.yaml`. Package CI verifies every supported Python
+version on Ubuntu and Windows.
 
 ## Install the workspace
 
@@ -153,7 +154,8 @@ identity, transaction, lease, fence, or cleanup path.
 
 ## Change the Marimo adapter
 
-The package pins `marimo==0.25.0`. `_marimo/compat/release.json` records the
+The package pins its supported marimo release in
+`packages/python/pyproject.toml`. `_marimo/compat/release.json` records the
 release commit and source digests required by the cache adapter. Update the pin,
 release record, focused probe, adapter tests, and live build and capture evidence
 together.
@@ -263,8 +265,8 @@ exact contracts under `docs/reference/`. `apps/docs/navigation.ts` owns every
 route and feeds the site and LLM text bundles. Read
 [Documentation system](documentation.md) before adding or moving a page.
 
-VitePress 2.0.0-alpha.20 builds the site, local search, per-page Markdown,
-`llms.txt`, and `llms-full.txt`.
+The VitePress version in the pnpm catalog builds the site, local search,
+per-page Markdown, `llms.txt`, and `llms-full.txt`.
 
 Run:
 

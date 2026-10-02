@@ -1,20 +1,21 @@
 # Proposal: marimo upstream capabilities
 
-| Field                            | Value                                                                                                 |
-| -------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| Status                           | Proposed                                                                                              |
-| Date                             | 2026-09-11                                                                                            |
-| Owner repository                 | `marimo-team/marimo` for supported upstream APIs, `marimo-team/marimo-export` for adapter replacement |
-| Inspected marimo-export revision | `1c898c27376b6437d31739758c0363841a3bfd6e`                                                            |
-| Supported marimo release         | `0.25.0` at `d9a60e77c286a4c63fb93eda2cdac186e77a1025`                                                |
+| Field                            | Value                                                                                                                                                                          |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Status                           | Proposed                                                                                                                                                                       |
+| Date                             | 2026-09-11                                                                                                                                                                     |
+| Owner repository                 | `marimo-team/marimo` for supported upstream APIs, `marimo-team/marimo-export` for adapter replacement                                                                          |
+| Inspected marimo-export revision | `1c898c27376b6437d31739758c0363841a3bfd6e`                                                                                                                                     |
+| Supported marimo release         | Recorded in [`packages/python/pyproject.toml`](../../packages/python/pyproject.toml) and [`release.json`](../../packages/python/src/marimo_export/_marimo/compat/release.json) |
 
 This proposal records possible supported Marimo APIs that could replace private
-compatibility adapters. It does not describe APIs available in Marimo 0.25.0.
+compatibility adapters. It does not describe APIs available in future Marimo
+releases.
 
-marimo-export targets the published Marimo 0.25.0 package through local ports
-and private compatibility adapters. Each candidate on this page names a public
-Marimo capability that could replace one contained adapter while preserving the
-marimo-export service contract.
+marimo-export targets the published Marimo release recorded by its package and
+compatibility metadata through local ports and private compatibility adapters.
+Each candidate on this page names a public Marimo capability that could replace
+one contained adapter while preserving the marimo-export service contract.
 
 The migration rule is:
 

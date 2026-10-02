@@ -6,8 +6,8 @@ boundaries.
 
 ## Supported Python environments
 
-Local development uses Python 3.14 from `.python-version`. The Python package
-supports 3.10 through 3.14.
+Local development uses the Python version from `.python-version`. The package
+metadata and CI matrix define the supported Python range.
 
 GitHub Actions classifies changed files before starting the quality, Python,
 frontend, package, and documentation jobs. Each job runs when its owned inputs
@@ -15,16 +15,13 @@ change. The `Required` job requires success for selected jobs and a skipped
 result for unselected jobs. Missing classification, failure, cancellation, or
 an unexpected skip fails the gate.
 
-The Python job runs the package contracts on:
+The Python job runs the package contracts on every version in the matrix in
+`.github/workflows/ci.yml` on both Ubuntu and Windows.
 
-```text
-Ubuntu:  3.10, 3.11, 3.12, 3.13, 3.14
-Windows: 3.10, 3.11, 3.12, 3.13, 3.14
-```
-
-The `Release contracts` job tests publication tooling on Ubuntu with Python
-3.12. Release-script changes select that job and package verification. Changes
-to the shared Python test setup select both release and SDK suites.
+The `Release contracts` job tests publication tooling on Ubuntu with the Python
+version selected in `.github/workflows/ci.yml`. Release-script changes select
+that job and package verification. Changes to the shared Python test setup
+select both release and SDK suites.
 
 The Ubuntu jobs check formatting, lint, Python and TypeScript types, frontend
 tests and builds, packed npm consumers, and isolated wheel smoke. The Pages

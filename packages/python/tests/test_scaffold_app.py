@@ -10,6 +10,7 @@ from importlib.metadata import version as distribution_version
 from pathlib import Path
 
 import pytest
+import yaml
 
 if sys.version_info >= (3, 11):
     import tomllib
@@ -103,7 +104,15 @@ def test_scaffold_is_source_preserving_and_relocatable(tmp_path: Path) -> None:
     assert package["dependencies"]["@marimo-team/marimo-export"] == (
         "file:vendor/marimo-export.tgz"
     )
-    assert package["dependencies"]["hyparquet"] == "1.29.2"
+    workspace = yaml.safe_load((_REPOSITORY / "pnpm-workspace.yaml").read_text(encoding="utf-8"))
+    root_package = json.loads((_REPOSITORY / "package.json").read_text(encoding="utf-8"))
+    assert package["dependencies"]["hyparquet"] == workspace["catalog"]["hyparquet"]
+    assert package["devDependencies"] == {
+        "typescript": workspace["catalog"]["typescript"],
+        "vite-plus": workspace["catalog"]["vite-plus"],
+    }
+    assert package["engines"]["node"] == ">=" + root_package["devEngines"]["runtime"]["version"]
+    assert package["packageManager"] == root_package["packageManager"]
     project = tomllib.loads((output / "pyproject.toml").read_text(encoding="utf-8"))
     assert project["project"]["requires-python"] == "<3.15,>=3.10"
     assert project["tool"]["uv"]["sources"]["marimo-export"] == {
@@ -152,7 +161,7 @@ def test_installed_skill_scaffolds_with_matching_registry_packages(tmp_path: Pat
     package = json.loads((output / "package.json").read_text(encoding="utf-8"))
     assert package["dependencies"] == {
         "@marimo-team/marimo-export": package_version,
-        "hyparquet": "1.29.2",
+        "hyparquet": "^1.30.0",
     }
     project = tomllib.loads((output / "pyproject.toml").read_text(encoding="utf-8"))
     assert project["project"]["dependencies"] == [

@@ -15,8 +15,9 @@ agents read without a Python runtime or a copy of the notebook source.
 uv add marimo-export
 ```
 
-The package supports Python 3.10 through 3.14 and installs the marimo release
-pinned by its package metadata.
+The package supports the Python versions declared by its
+[package metadata](pyproject.toml) and installs the marimo release pinned
+there.
 
 Create `report.py`:
 
@@ -25,7 +26,6 @@ Create `report.py`:
 ```python
 import marimo
 
-__generated_with = "0.24.0"
 app = marimo.App()
 
 

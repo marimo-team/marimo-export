@@ -42,10 +42,10 @@ WebAssembly delivery:
 - Cached WebAssembly exports carry native manifests and blobs so browser Python
   can derive the same keys and restore values.
 
-The pinned marimo 0.25.0 loader verifies the manifest and loads every resolvable
-referenced definition and return value before skipping the cell body. Values
-whose required module is unavailable can remain as stubs and cause live
-recomputation when a consumer needs them.
+The loader for the supported marimo release verifies the manifest and loads
+every resolvable referenced definition and return value before skipping the cell
+body. Values whose required module is unavailable can remain as stubs and cause
+live recomputation when a consumer needs them.
 
 marimo-export preserves those upstream decisions. It adds graph-scoped execution
 policy needed to prepare an explicit state-output relation, flushes pending
@@ -68,10 +68,10 @@ the computation cache.
 
 ## Exact supported adapter
 
-The Python package pins `marimo==0.25.0`. `_marimo/compat/release.json` records:
+The Python package pins its supported marimo release in
+`packages/python/pyproject.toml`. `_marimo/compat/release.json` records:
 
-- Marimo version 0.25.0
-- release commit `d9a60e77c286a4c63fb93eda2cdac186e77a1025`
+- the pinned Marimo version and release commit
 - source SHA-256 digests for the private cache functions adapted by the package
 
 `_marimo/compat/cache/probe.py` checks the installed distribution version,
@@ -80,9 +80,9 @@ restored UI check, Polars stub loaders, tensor encoder, and active runtime store
 shape before adapter construction. A mismatch raises `CompatibilityError` with
 code `marimo_incompatible`.
 
-This architecture targets the published Marimo 0.25.0 package as-is. Marimo
-integration changes remain inside marimo-export until a matching public Marimo
-capability is available.
+This architecture targets the published release recorded by the compatibility
+metadata as-is. Marimo integration changes remain inside marimo-export until a
+matching public Marimo capability is available.
 
 Applications can inspect the boundary before loading a notebook:
 
@@ -134,8 +134,8 @@ roots imports neither cache modules nor private Marimo modules.
 
 ## Reversible process-global patch
 
-Marimo 0.25.0 exposes the required cache seams through process globals. The
-adapter temporarily owns:
+The supported Marimo release exposes the required cache seams through process
+globals. The adapter temporarily owns:
 
 - `PERSISTENT_LOADERS["lazy"]`
 - `CachedLifecycle`

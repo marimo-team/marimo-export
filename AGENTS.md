@@ -6,9 +6,9 @@ export for applications, agents, Python, and custom clients.
 
 ## Commands
 
-Use Python 3.14 for local development with Node 24.14.1, pnpm 12.3.4, uv,
-and Vite+. CI verifies the Python package on 3.10 through 3.14 on Ubuntu and
-Windows.
+Use the Python version from `.python-version` and the Node, pnpm, and Vite+
+versions declared by `package.json` and `pnpm-workspace.yaml`. CI verifies the
+Python package on every supported version on Ubuntu and Windows.
 
 | Task                | Command           | Expected result                                            |
 | ------------------- | ----------------- | ---------------------------------------------------------- |
@@ -41,8 +41,9 @@ Run focused package commands while developing, then finish with `make check`.
    `ObservationRepository`. Reader, public repository, inspection, and
    diagnostic operations use their focused owners.
 5. Private `marimo._*` imports stay under `_marimo/compat`. The package pins
-   Marimo 0.25.0 and validates the exact supported cache sources before
-   installing a reversible adapter lease.
+   its supported Marimo release in `packages/python/pyproject.toml` and
+   validates the exact cache sources recorded by the compatibility metadata
+   before installing a reversible adapter lease.
 6. `OwnedNotebook` owns a temporary notebook copy, loopback server, session,
    process groups, and cleanup. `prepare` uses one owned context when work is
    missing. `capture` borrows one active edit session.

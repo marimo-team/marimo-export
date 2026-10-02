@@ -28,16 +28,14 @@ def test_pnpm_owns_the_workspace_node_runtime() -> None:
         dict[str, Any],
         json.loads(ROOT.joinpath("package.json").read_text(encoding="utf-8")),
     )
-    assert manifest["devEngines"]["runtime"] == {
-        "name": "node",
-        "version": "24.14.1",
-        "onFail": "download",
-    }
+    runtime = manifest["devEngines"]["runtime"]
+    assert runtime["name"] == "node"
+    assert runtime["onFail"] == "download"
 
     lock = _project_lockfile(ROOT / "pnpm-lock.yaml")
     assert lock["importers"]["."]["devDependencies"]["node"] == {
-        "specifier": "runtime:24.14.1",
-        "version": "runtime:24.14.1",
+        "specifier": f"runtime:{runtime['version']}",
+        "version": f"runtime:{runtime['version']}",
     }
 
 
