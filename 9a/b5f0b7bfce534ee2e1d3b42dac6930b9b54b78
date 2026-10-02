@@ -1,0 +1,47 @@
+development_docs/architecture/failure-and-concurrency.md
+  s_03ea7e224f36bc::t_5e76c1889c1715 78-81
+development_docs/architecture/execution-and-caching.md
+  s_03ea7e224f36bc::t_5e76c1889c1715 45-48,71-72,74,83-85,137-138
+development_docs/documentation.md
+  s_03ea7e224f36bc::t_5e76c1889c1715 30-31
+packages/python/tests/test_js_toolchain.py
+  s_03ea7e224f36bc::t_9ebf9d03c227c9 31-33,37-38
+docs/guide/market-dashboard.md
+  s_03ea7e224f36bc::t_fb7b33a270f733 28
+development_docs/development.md
+  s_03ea7e224f36bc::t_2dc09a3cd518f3 3-9,157-158,268-269
+development_docs/proposals/marimo-upstream-capabilities.md
+  s_03ea7e224f36bc::t_9f18101e37ee77 9,12-13,15-18
+development_docs/validation.md
+  s_03ea7e224f36bc::t_9f18101e37ee77 9-10,18-19,21-24
+skills/notebook-to-static-app/scripts/scaffold_app.py
+  s_03ea7e224f36bc::t_210e4134550135 26-27,33,35,66,130-131,265-290,387-388,396,411-412,415-418
+AGENTS.md
+  s_03ea7e224f36bc::t_f3964e477630d1 9-11,44-46
+packages/python/tests/test_scaffold_app.py
+  s_03ea7e224f36bc::t_ff43a4d4c8b004 107,164
+  s_03ea7e224f36bc::t_9ebf9d03c227c9 13,109
+  s_03ea7e224f36bc::t_9f4b7c69d167bd 108,110-115
+scripts/smoke_python_package.py
+  s_03ea7e224f36bc::t_7ea76be7f482b4 169,209-211,242
+  s_03ea7e224f36bc::t_0543f3a6fce58c 13,86-92,190-202
+  s_03ea7e224f36bc::t_1466d9ca2135e5 77,85,189,203-206
+development_docs/architecture.md
+  s_03ea7e224f36bc::t_5e76c1889c1715 44-46,90
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "9ab5f0b7bfce534ee2e1d3b42dac6930b9b54b78",
+  "prompts": {},
+  "sessions": {
+    "s_03ea7e224f36bc": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0fbdc-64f2-7d72-90ff-55f95b84e511",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
