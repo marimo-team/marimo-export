@@ -26,8 +26,8 @@ catalog:
   portless: 0.15.6
   typescript: ^6.0.3
   vega-embed: ^7.2.0
-  vite: npm:@voidzero-dev/vite-plus-core@0.3.3
-  vite-plus: 0.3.3
+  vite: npm:@voidzero-dev/vite-plus-core@1.0.0
+  vite-plus: 1.0.0
   vitepress: 2.0.0-alpha.20
   vue: ^3.5.42
   vitepress-mermaid-renderer: 1.2.2
