@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ast
 import copy
+import hashlib
 import threading
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
@@ -132,17 +133,17 @@ def cache_attempt_wrapper(native: Callable[..., Cache]) -> Callable[..., Cache]:
     ) -> Cache:
         with _SCOPES_LOCK:
             scope = _SCOPES.get(id(graph))
+            tracked_graph = scope is not None and scope.graph is graph
             environment = scope.environment if scope is not None and scope.graph is graph else None
         if environment is not None:
             module, scope_values = _with_environment(module, scope_values, environment)
-        attempt = native(
-            module,
-            graph,
-            cell_id,
-            scope_values,
-            *args,
-            **kwargs,
-        )
+        try:
+            attempt = native(module, graph, cell_id, scope_values, *args, **kwargs)
+        except TypeError:
+            hashable = _with_arrow_digests(graph, cell_id, scope_values) if tracked_graph else None
+            if hashable is None:
+                raise
+            attempt = native(module, graph, cell_id, hashable, *args, **kwargs)
         with _SCOPES_LOCK:
             scope = _SCOPES.get(id(graph))
             if scope is None or scope.graph is not graph:
@@ -192,6 +193,61 @@ def _with_environment(
     # original AST and scope, so the dependency input creates no notebook name.
     lookup.body.append(reference)
     return ast.fix_missing_locations(lookup), {**scope, name: environment}
+
+
+def _with_arrow_digests(
+    graph: Any,
+    cell_id: Any,
+    scope: dict[str, Any],
+) -> dict[str, Any] | None:
+    # Marimo hashes Arrow data through NumPy, which cannot view object-typed
+    # columns such as strings as bytes. After that failure the native hasher
+    # receives a digest of each referenced Arrow value's type and IPC stream,
+    # and execution keeps the value. Cells whose native hash succeeds keep
+    # their native keys.
+    cell = graph.cells.get(cell_id)
+    if cell is None:
+        return None
+    digests = {
+        name: digest
+        for name in cell.refs
+        if name in scope and (digest := _arrow_digest(scope[name])) is not None
+    }
+    return {**scope, **digests} if digests else None
+
+
+def _arrow_digest(value: object) -> str | None:
+    if not type(value).__module__.startswith("pyarrow"):
+        return None
+    import pyarrow as pa
+
+    kind = type(value).__qualname__
+    if isinstance(value, (pa.Array, pa.ChunkedArray)):
+        value = pa.Table.from_arrays([value], names=["value"])
+    elif not isinstance(value, (pa.Table, pa.RecordBatch)):
+        return None
+    sink = _DigestSink()
+    with pa.ipc.new_stream(sink, value.schema) as writer:
+        writer.write(value)
+    return f"arrow-ipc-sha256:{kind}:{sink.digest.hexdigest()}"
+
+
+class _DigestSink:
+    """A write-only file that hashes the Arrow IPC stream written to it."""
+
+    def __init__(self) -> None:
+        self.digest = hashlib.sha256()
+        self.closed = False
+
+    def write(self, data: bytes) -> int:
+        self.digest.update(data)
+        return len(data)
+
+    def flush(self) -> None:
+        pass
+
+    def close(self) -> None:
+        self.closed = True
 
 
 def record_cache_miss(graph: Any, cell_id: Any) -> None:

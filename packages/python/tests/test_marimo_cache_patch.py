@@ -18,6 +18,7 @@ from marimo._save.hash import cache_attempt_from_hash
 from marimo._save.loaders import PERSISTENT_LOADERS
 from marimo._save.stubs.lazy_stub import UnhashableStub
 from marimo_export._marimo.compat.cache.attempts import (
+    _arrow_digest,
     cache_attempt_wrapper,
     track_managed_parent_cache,
     track_notebook_cache,
@@ -158,6 +159,21 @@ def test_complete_lifecycle_leaves_untracked_unavailable_hits_native(
     assert lifecycle._attempts["cell"] is attempt
 
 
+def test_complete_lifecycle_leaves_untracked_setup_failures_native(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    lifecycle = cast(Any, object.__new__(CompleteCachedLifecycle))
+    lifecycle._graph = object()
+
+    def fail(self: Any, cell: Any, glbls: Any) -> None:
+        raise TypeError("unhashable")
+
+    monkeypatch.setattr(CachedLifecycle, "setup", fail)
+
+    with pytest.raises(TypeError, match="unhashable"):
+        lifecycle.setup(SimpleNamespace(cell_id="cell"), {})
+
+
 def test_recreated_session_state_counts_as_an_authored_miss(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -216,3 +232,18 @@ def test_complete_lifecycle_reruns_unavailable_hits_in_managed_parent_scope(
 
     assert observed is None
     assert not lifecycle._attempts["cell"].hit
+
+
+def test_arrow_hash_digests_distinguish_arrow_types_with_equal_rows() -> None:
+    pa = pytest.importorskip("pyarrow")
+    rows = {"carrier": ["AA", "DL"]}
+    digests = {
+        _arrow_digest(pa.table(rows)),
+        _arrow_digest(pa.RecordBatch.from_pydict(rows)),
+        _arrow_digest(pa.array(rows["carrier"])),
+        _arrow_digest(pa.chunked_array([rows["carrier"]])),
+    }
+
+    assert len(digests) == 4
+    assert _arrow_digest(pa.table(rows)) == _arrow_digest(pa.table(dict(rows)))
+    assert _arrow_digest(rows) is None

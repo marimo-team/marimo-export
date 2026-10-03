@@ -50,6 +50,7 @@ _POLARS_TYPES = frozenset(
         "polars.series.series.Series",
     }
 )
+_PYARROW_TYPES = frozenset({"pyarrow.lib.RecordBatch", "pyarrow.lib.Table"})
 
 
 class _RecordingPipe:
@@ -220,16 +221,25 @@ def capture_native_value(
 
 def _native_arrow_value(value: object) -> object | None:
     python_type = f"{type(value).__module__}.{type(value).__qualname__}"
-    if python_type not in _POLARS_TYPES:
+    if python_type in _POLARS_TYPES:
+        frame = cast(Any, value).to_frame() if python_type.endswith(".Series") else value
+        buffer = BytesIO()
+        cast(Any, frame).write_ipc_stream(buffer, compression="uncompressed")
+        data = buffer.getvalue()
+    elif python_type in _PYARROW_TYPES:
+        import pyarrow as pa
+
+        sink = pa.BufferOutputStream()
+        with pa.ipc.new_stream(sink, cast(Any, value).schema) as writer:
+            writer.write(value)
+        data = sink.getvalue().to_pybytes()
+    else:
         return None
-    frame = cast(Any, value).to_frame() if python_type.endswith(".Series") else value
-    buffer = BytesIO()
-    cast(Any, frame).write_ipc_stream(buffer, compression="uncompressed")
 
     from marimo._save.stubs import BlobAsset
 
     return BlobAsset(
-        data=buffer.getvalue(),
+        data=data,
         media_type=ARROW_MEDIA_TYPE,
         metadata={
             "python_type": python_type,

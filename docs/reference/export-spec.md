@@ -184,7 +184,8 @@ exporter: altair.vegalite
 ```
 
 An export source passes the selected value to one declared exporter. The
-exporter returns a `BlobAsset` with bytes, media type, filename, and metadata.
+exporter returns a `BlobAsset` with bytes, media type, filename, and metadata,
+or a JSON value that the export stores as canonical `marimo.json.v1` JSON.
 
 ### Rendered-output source
 

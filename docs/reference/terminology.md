@@ -50,7 +50,7 @@ The concept pages introduce them through worked examples.
 | Output                   | One published name and representation available for every exported state.                                                                                                              |
 | Output source            | The `json`, `native`, `export`, `output`, or `cell` selection declared by an output spec.                                                                                              |
 | Selector                 | A path from one Python definition through supported attribute or item steps to a selected notebook result.                                                                             |
-| Exporter                 | A producer-side converter that returns a `BlobAsset` for one selected value.                                                                                                           |
+| Exporter                 | A producer-side converter that returns a `BlobAsset` or a JSON value for one selected value.                                                                                           |
 | Output plan              | The complete set of authored output declarations. Its identity changes when an output source, exporter, option, or declared dependency changes.                                        |
 | Output representation    | The codec and media type that define how one output is stored and decoded. One output name keeps the same representation across every state.                                           |
 | Codec                    | A versioned identifier for the native storage envelope, such as `marimo.json.v1` or `numpy.npy.v1`.                                                                                    |

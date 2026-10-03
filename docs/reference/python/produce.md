@@ -145,7 +145,7 @@ OutputSpec.cell(name: str | None = None, *, id: str | None = None) -> OutputSpec
 | ---------- | ---------------------------------------------------------------------------------------------- |
 | `json()`   | Canonical portable JSON selected from a notebook definition                                    |
 | `native()` | marimo cache representation for a scalar, JSON value, NumPy array, Arrow table, or `BlobAsset` |
-| `export()` | `BlobAsset` returned by an explicit exporter                                                   |
+| `export()` | `BlobAsset` or canonical JSON returned by an explicit exporter                                 |
 | `output()` | Formatted `marimo.output.v1` snapshot and replay resources                                     |
 | `cell()`   | Complete `marimo.cell.v1` snapshot selected by authored cell name or inspected runtime ID      |
 
@@ -222,7 +222,7 @@ modules, so restart it after changing custom exporter source.
 
 ### `BlobAsset`
 
-Custom exporters return `marimo_export.outputs.BlobAsset`:
+Custom exporters return `marimo_export.outputs.BlobAsset` or a JSON value:
 
 ```python
 from marimo_export.outputs import BlobAsset
@@ -252,6 +252,20 @@ copied, normalized, and exposed as recursively immutable portable JSON. Its
 canonical encoding is limited to 256 KiB. Supply `media_type` for a value that
 will enter a notebook export. Export production rejects a `BlobAsset` whose
 media type is absent or invalid.
+
+An exporter that returns a JSON value produces the canonical `marimo.json.v1`
+representation of `OutputSpec.json()`, and readers return it through
+`output.json()`:
+
+```python
+def summarize(value) -> dict[str, object]:
+    return {"rows": value.num_rows, "columns": value.column_names}
+```
+
+One output keeps one codec across states, so an exporter returns a `BlobAsset`
+for every state or a JSON value for every state. Any other result raises
+`OutputError` with code `output_execution_failed` and `exception_type`
+`TypeError`.
 
 ## `plan()`
 

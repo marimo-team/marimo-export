@@ -5,6 +5,7 @@ from __future__ import annotations
 import time
 from typing import Any
 
+from marimo._runtime.exceptions import MarimoRuntimeException
 from marimo._runtime.executor.lifecycles import Skip
 from marimo._runtime.executor.lifecycles.cached import CachedLifecycle
 
@@ -20,7 +21,15 @@ class CompleteCachedLifecycle(CachedLifecycle):
     """Rerun a hit when its restored values cannot serve the live session."""
 
     def setup(self, cell: Any, glbls: Any) -> Any:
-        decision = super().setup(cell, glbls)
+        try:
+            decision = super().setup(cell, glbls)
+        except Exception as error:
+            if not has_cache_scope(self._graph):
+                raise
+            # Marimo records an exception that escapes a lifecycle as an
+            # untyped error. A runtime exception keeps the exception on the
+            # cell, so export failures name its type.
+            raise MarimoRuntimeException from error
         if not has_cache_scope(self._graph):
             return decision
         if not isinstance(decision, Skip):
