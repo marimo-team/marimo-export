@@ -1,0 +1,52 @@
+docs/reference/python/values.md
+  s_035cf932dc9054::t_c975abfcaf7d09 11-12,17,30,34-35,40-41,68-87,89-93,98-119,134-137
+  s_6d6b7a22ba1c0b::t_274cba9c9ec24f 1-10,13-16,18-29,31-33,36-39,42-67,88,94-97,120-133
+docs/guide/choose-states.md
+  s_035cf932dc9054::t_c975abfcaf7d09 195-200
+development_docs/architecture/product-and-export.md
+  s_035cf932dc9054::t_c975abfcaf7d09 76-80,82-84,94-97
+docs/reference/export-spec.md
+  s_035cf932dc9054::t_c975abfcaf7d09 104-107,213-217,224-228,249-256
+docs/reference/representations.md
+  s_035cf932dc9054::t_c975abfcaf7d09 12-28,92
+docs/reference/python/produce.md
+  s_035cf932dc9054::t_c975abfcaf7d09 153-154,168,173,181-195,503-507
+docs/concepts/outputs-and-representations.md
+  s_035cf932dc9054::t_c975abfcaf7d09 67-69
+AGENTS.md
+  s_035cf932dc9054::t_c975abfcaf7d09 152
+docs/guide/troubleshooting.md
+  s_035cf932dc9054::t_c975abfcaf7d09 42
+apps/docs/navigation.ts
+  s_035cf932dc9054::t_c975abfcaf7d09 87
+skills/notebook-to-static-app/references/contracts.md
+  s_035cf932dc9054::t_c975abfcaf7d09 71
+docs/reference/browser/loaders.md
+  s_035cf932dc9054::t_c975abfcaf7d09 93-96
+docs/reference/python-api.md
+  s_035cf932dc9054::t_c975abfcaf7d09 25-30
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "f913db5c91d97a4ad203a33f2d9ba42287b2c01d",
+  "prompts": {},
+  "sessions": {
+    "s_035cf932dc9054": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a10fa5-7570-7a40-b455-a337e3be9787",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    },
+    "s_6d6b7a22ba1c0b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "94a97672-a59e-41eb-b588-1f809d416465",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": null
+    }
+  }
+}
