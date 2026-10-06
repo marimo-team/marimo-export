@@ -84,6 +84,7 @@ const referenceItems = [
       { text: "Python API", link: "/reference/python-api" },
       { text: "Produce an export from Python", link: "/reference/python/produce" },
       { text: "Read and verify exports from Python", link: "/reference/python/reader" },
+      { text: "Select and represent values", link: "/reference/python/values" },
       {
         text: "Sessions and inspection",
         link: "/reference/python/sessions-and-inspection",

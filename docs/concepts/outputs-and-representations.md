@@ -64,7 +64,9 @@ Each output records a codec and media type. Together they define its
 
 An exporter can convert a selected Python value into a `BlobAsset` with bytes,
 media type, optional filename, and portable metadata. Built-in exporters cover
-text, HTML, Parquet, Altair, PNG, AnyWidget, and versioned JSON assets.
+text, HTML, Parquet, Altair Vega-Lite, AnyWidget, and versioned JSON assets.
+The `media` exporter renders figures and charts in the formats a consumer
+accepts, such as PDF for a typeset report or SVG for a web page.
 
 ## Consumers load, then optionally mount
 

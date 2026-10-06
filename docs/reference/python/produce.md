@@ -150,7 +150,8 @@ OutputSpec.cell(name: str | None = None, *, id: str | None = None) -> OutputSpec
 | `cell()`   | Complete `marimo.cell.v1` snapshot selected by authored cell name or inspected runtime ID      |
 
 `cell()` requires exactly one of `name` or `id`. Selected-value factories parse
-the selector during construction. Invalid selectors and cell references raise
+the selector during construction with
+[`ValueSelector`](values#valueselector). Invalid selectors and cell references raise
 `SpecError` with a `spec_output_invalid` code.
 
 `OutputSpec.source` exposes the normalized source record for inspection. Its
@@ -164,18 +165,33 @@ Typed factories return immutable `ExporterSpec` values. Install the matching
 producer extra before preparing the export.
 
 ```python
-from marimo_export.exporters import altair, anywidget, blob, parquet
+from marimo_export.exporters import altair, anywidget, blob, media, parquet
 ```
 
 | Factory                                                                              | Defaults                                             | Producer extra |
 | ------------------------------------------------------------------------------------ | ---------------------------------------------------- | -------------- |
+| `media(accept, *, scale=1.0)`                                                        | Media types in preference order, positive scale      | Base package   |
 | `altair.vegalite()`                                                                  | No options                                           | `charts`       |
-| `altair.png(*, scale=1.0)`                                                           | Positive finite scale                                | `charts`       |
 | `anywidget.bundle()`                                                                 | No options                                           | `anywidget`    |
 | `parquet.table(*, compression="snappy", filename=None)`                              | `snappy`, `none`, `gzip`, `brotli`, `lz4`, or `zstd` | `parquet`      |
 | `blob.json(*, media_type="application/json", filename=None, metadata=None)`          | Canonical JSON bytes                                 | Base package   |
 | `blob.text(*, media_type="text/plain; charset=utf-8", filename=None, metadata=None)` | UTF-8 text                                           | Base package   |
 | `blob.html(*, filename=None, metadata=None)`                                         | UTF-8 HTML                                           | Base package   |
+
+`media()` renders the selected value in the first media type of `accept` that
+it supports, with the rules of
+[`represent()`](values#represent). It needs no extra for matplotlib figures and
+display methods. Altair charts need the `charts` extra. A PNG that it renders
+from a figure or chart records its display size as `width` and `height` in the
+`BlobAsset` metadata. One output keeps one media type across states, so give
+each state a value of the same kind. A state whose value supports none of the
+accepted types, or whose selector names an unavailable step, stops the build
+with `OutputError` (`output_execution_failed`). Its message gives the reason,
+and its details name the state, output, and selector.
+
+```python
+figure = OutputSpec.export("figure", media(["application/pdf", "image/svg+xml"]))
+```
 
 `marimo_export.exporters.parquet.Compression` is the type alias for the six
 accepted Parquet compression strings.
@@ -483,6 +499,12 @@ its capture protocol:
 | `CacheSummary` from `marimo_export.result`    | `hits`, `misses`                                                                                 | Validates cache counts carried by the capture bridge. Public producer results expose the classified `CacheActivity` record                                |
 | `StateRunTimings` from `marimo_export.result` | `states` and setup, dependency execution, UI update, output materialization, and cleanup seconds | Validates state-run timing data carried by the capture bridge. It is not returned by the high-level producer result                                       |
 | `PhaseTimings` from `marimo_export.result`    | total, capture, export write, state run, and optional server lifecycle seconds                   | Public construction record with no high-level producer return path                                                                                        |
+
+`marimo_export.limits` also exports the bounds of the export format:
+`MAX_NAME_BYTES` (255 UTF-8 bytes for a state or output name), `MAX_STATES`
+(10,000 states), `MAX_EXPORT_ASSET_BYTES` (64 MiB for one asset), and
+`MAX_EXPORT_CLOSURE_BYTES` (512 MiB for a complete export). A host that writes
+specs or checks exports can validate against the same values.
 
 These records validate nonnegative counts and finite nonnegative durations.
 `CaptureLimits` accepts positive safe integers no larger than the fixed producer

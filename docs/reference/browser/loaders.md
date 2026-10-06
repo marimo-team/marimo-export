@@ -90,7 +90,10 @@ window.addEventListener("pagehide", () => void mounted.dispose(), { once: true }
 
 `imageLoader()` creates a Blob and object URL during `mount()`, appends an
 `HTMLImageElement`, sets its `alt` text to the BlobAsset filename or an empty
-string, and returns an idempotent disposal handle. Disposal removes the image
+string, and returns an idempotent disposal handle. A positive integer `width`
+in the metadata sets the image element's width, so a PNG that the `media`
+exporter renders with `scale: 2` displays at its figure size and keeps its
+aspect ratio in a narrower container. Disposal removes the image
 and revokes the object URL. Aborting the mount signal performs the same cleanup.
 
 The mount resolves after inserting the image. It does not wait for image decode.
