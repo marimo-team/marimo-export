@@ -6,7 +6,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Literal
 
-from marimo_export._format import MAX_NAME_BYTES, MAX_PROVENANCE_BYTES, bounded_printable
+from marimo_export._format import bounded_printable
 from marimo_export._json import (
     JsonObject,
     JsonValue,
@@ -14,6 +14,7 @@ from marimo_export._json import (
     decode_json_object,
     json_object,
 )
+from marimo_export._limits import MAX_NAME_BYTES, MAX_PROVENANCE_BYTES
 from marimo_export.errors import CompatibilityError
 
 

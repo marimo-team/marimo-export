@@ -149,6 +149,7 @@ or another implementation of the export format.
 | Browser reader or loader contract              | `packages/browser`                                                             | TypeScript and cross-language tests                          |
 | Portable JSON contract                         | `packages/portable-json`, `_json.py`                                           | Cross-language fixtures and packed consumers                 |
 | One output representation                      | `packages/loader-*` and exporter runtime                                       | Peer dependency, malformed input, abort, and disposal tests  |
+| Value selection or media negotiation           | `values.py`                                                                    | Grammar, resolution, renderer, and standard-library tests    |
 | CLI or public Python API                       | `_cli`, package root, public records                                           | Human output, JSON, JSONL, exit, and wheel smoke             |
 | Application directory delivery                 | `delivery.py`, `_directory*`                                                   | Materialization, races, rollback, and Windows tests          |
 | External consumer integration                  | Public SDK and browser `prepared` subpath                                      | Consumer revision and cross-repository acceptance tests      |

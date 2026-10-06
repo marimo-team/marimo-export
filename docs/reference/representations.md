@@ -9,23 +9,23 @@ An output representation is the stored form of one published notebook result.
 It determines which applications, agents, Python tools, and browser clients can
 interpret that output.
 
-| Notebook result           | OutputSpec form or exporter        | Python access   | Browser loader         | Agent use                                  |
-| ------------------------- | ---------------------------------- | --------------- | ---------------------- | ------------------------------------------ |
-| JSON-compatible value     | `OutputSpec.json()`                | `json()`        | `jsonLoader()`         | Summaries, records, and arrays             |
-| Native scalar             | `OutputSpec.native()`              | `scalar()`      | `scalarLoader()`       | Metrics, labels, statuses, and identifiers |
-| Native NumPy array        | `OutputSpec.native()`              | `asset_bytes()` | `numpyLoader()`        | Numeric arrays with NPY tooling            |
-| Native Apache Arrow table | `OutputSpec.native()`              | `asset_bytes()` | `arrowTableLoader()`   | Columnar data with Arrow tooling           |
-| Native BlobAsset          | `OutputSpec.native()`              | `blob_asset()`  | Matching blob loader   | Media-typed application data               |
-| JSON BlobAsset            | `blob.json`                        | `blob_asset()`  | Matching blob loader   | Versioned JSON in a media-typed envelope   |
-| Rendered marimo output    | `OutputSpec.output()`              | `asset_bytes()` | `marimoOutputLoader()` | Inert output and replay records            |
-| Complete marimo cell      | `OutputSpec.cell()`                | `asset_bytes()` | `marimoCellLoader()`   | Output, console, and cell provenance       |
-| Text                      | `blob.text`                        | `blob_asset()`  | `textLoader()`         | Reports, labels, and source text           |
-| HTML                      | `blob.html`                        | `blob_asset()`  | `htmlLoader()`         | Authored document fragments                |
-| Table rows                | `parquet.table`                    | `blob_asset()`  | `parquetRowsLoader()`  | Tables, filtering, and aggregation         |
-| Altair chart              | `altair.vegalite`                  | `blob_asset()`  | `vegaLiteLoader()`     | Chart specification and companion view     |
-| Chart image               | `altair.png`                       | `blob_asset()`  | `imageLoader()`        | Visual companion                           |
-| AnyWidget                 | `anywidget.bundle`                 | `blob_asset()`  | `anyWidgetLoader()`    | Saved state and browser-local interaction  |
-| Custom value              | `OutputSpec.export()` and callable | `blob_asset()`  | Custom loader          | Depends on its media type and schema       |
+| Notebook result                     | OutputSpec form or exporter        | Python access   | Browser loader             | Agent use                                  |
+| ----------------------------------- | ---------------------------------- | --------------- | -------------------------- | ------------------------------------------ |
+| JSON-compatible value               | `OutputSpec.json()`                | `json()`        | `jsonLoader()`             | Summaries, records, and arrays             |
+| Native scalar                       | `OutputSpec.native()`              | `scalar()`      | `scalarLoader()`           | Metrics, labels, statuses, and identifiers |
+| Native NumPy array                  | `OutputSpec.native()`              | `asset_bytes()` | `numpyLoader()`            | Numeric arrays with NPY tooling            |
+| Native Apache Arrow table           | `OutputSpec.native()`              | `asset_bytes()` | `arrowTableLoader()`       | Columnar data with Arrow tooling           |
+| Native BlobAsset                    | `OutputSpec.native()`              | `blob_asset()`  | Matching blob loader       | Media-typed application data               |
+| JSON BlobAsset                      | `blob.json`                        | `blob_asset()`  | Matching blob loader       | Versioned JSON in a media-typed envelope   |
+| Rendered marimo output              | `OutputSpec.output()`              | `asset_bytes()` | `marimoOutputLoader()`     | Inert output and replay records            |
+| Complete marimo cell                | `OutputSpec.cell()`                | `asset_bytes()` | `marimoCellLoader()`       | Output, console, and cell provenance       |
+| Text                                | `blob.text`                        | `blob_asset()`  | `textLoader()`             | Reports, labels, and source text           |
+| HTML                                | `blob.html`                        | `blob_asset()`  | `htmlLoader()`             | Authored document fragments                |
+| Table rows                          | `parquet.table`                    | `blob_asset()`  | `parquetRowsLoader()`      | Tables, filtering, and aggregation         |
+| Altair chart                        | `altair.vegalite`                  | `blob_asset()`  | `vegaLiteLoader()`         | Chart specification and companion view     |
+| Figure, chart, or displayable value | `media` or `altair.png`            | `blob_asset()`  | `imageLoader()` for images | Visual companion in the requested format   |
+| AnyWidget                           | `anywidget.bundle`                 | `blob_asset()`  | `anyWidgetLoader()`        | Saved state and browser-local interaction  |
+| Custom value                        | `OutputSpec.export()` and callable | `blob_asset()`  | Custom loader              | Depends on its media type and schema       |
 
 The codec identifies the stable native envelope. A BlobAsset media type
 identifies the representation inside that envelope. Browser applications select
@@ -90,6 +90,7 @@ contract.
 | ------------------ | ------------------------------------ |
 | `altair.vegalite`  | None                                 |
 | `altair.png`       | `scale`                              |
+| `media`            | `accept`, `scale`                    |
 | `anywidget.bundle` | None                                 |
 | `parquet.table`    | `compression`, `filename`            |
 | `blob.json`        | `media_type`, `filename`, `metadata` |

@@ -19,6 +19,7 @@ from marimo_export._json import (
     portable_json_value,
     sha256_bytes,
 )
+from marimo_export._limits import MAX_CONTROL_ID_BYTES, MAX_NAME_BYTES
 from marimo_export.errors import SpecError
 from marimo_export.exporters._definitions import runtime_reference
 from marimo_export.exporters._spec import ExporterSpec
@@ -36,8 +37,6 @@ from marimo_export.spec import (
 
 if TYPE_CHECKING:
     from marimo_export.planning import ExportPlan as PublicExportPlan
-
-_MAX_RUNTIME_ID_BYTES = 1_024
 
 
 @dataclass(frozen=True, slots=True)
@@ -93,7 +92,7 @@ class Definition:
             if (
                 not isinstance(control_id, str)
                 or not control_id
-                or len(control_id.encode("utf-8")) > _MAX_RUNTIME_ID_BYTES
+                or len(control_id.encode("utf-8")) > MAX_CONTROL_ID_BYTES
             ):
                 raise ValueError("definition control IDs must be bounded non-empty strings")
             binding = ControlBinding(input=self.name, path=path)
@@ -106,7 +105,7 @@ class Definition:
             or any(
                 not isinstance(name, str)
                 or not name.isidentifier()
-                or len(name.encode("utf-8")) > _MAX_RUNTIME_ID_BYTES
+                or len(name.encode("utf-8")) > MAX_NAME_BYTES
                 for name in self.input_dependencies
             )
         ):
@@ -155,7 +154,7 @@ class CellDefinition:
             or any(
                 not isinstance(name, str)
                 or not name.isidentifier()
-                or len(name.encode("utf-8")) > _MAX_RUNTIME_ID_BYTES
+                or len(name.encode("utf-8")) > MAX_NAME_BYTES
                 for name in self.input_dependencies
             )
         ):
@@ -732,7 +731,15 @@ def output_cell_code(
         )
         return "\n".join(lines)
     selector = source.selector
-    path = tuple((step.kind, step.key) for step in selector.path)
+    # Name the root definition so marimo orders this cell after its producer.
+    selected = f"_marimo_export_select({selector.source!r}, {{{selector.root!r}: {selector.root}}})"
+    lines.extend(
+        [
+            "from marimo_export._marimo.compat.projections import "
+            "select_value as _marimo_export_select",
+            "",
+        ]
+    )
     if isinstance(source, JsonSource):
         if exporter_identity is not None or exporter_token is not None:
             raise ValueError("JSON outputs cannot have an exporter identity")
@@ -741,7 +748,7 @@ def output_cell_code(
                 "from marimo_export._marimo.compat.projections import "
                 "capture_json_value as _marimo_export_capture_json",
                 "",
-                f"_marimo_export_capture_json({selector.root}, {path!r})",
+                f"_marimo_export_capture_json({selected})",
             ]
         )
         return "\n".join(lines)
@@ -753,7 +760,7 @@ def output_cell_code(
                 "from marimo_export._marimo.compat.projections import "
                 "capture_native_value as _marimo_export_capture_native",
                 "",
-                f"_marimo_export_capture_native({selector.root}, {path!r})",
+                f"_marimo_export_capture_native({selected})",
             ]
         )
         return "\n".join(lines)
@@ -780,8 +787,7 @@ def output_cell_code(
             ]
         )
         call = (
-            f"_marimo_export_invoke_exporter({expected_token!r}, "
-            f"_marimo_export_resolve_value({selector.root}, {path!r}), "
+            f"_marimo_export_invoke_exporter({expected_token!r}, {selected}, "
             f"{_python_literal(planned_output.exporter.options)})"
         )
     else:
@@ -793,14 +799,9 @@ def output_cell_code(
                 "",
             ]
         )
-        call = (
-            f"_marimo_export_exporter(_marimo_export_resolve_value({selector.root}, "
-            f"{path!r}){_render_options(planned_output.exporter)})"
-        )
+        call = f"_marimo_export_exporter({selected}{_render_options(planned_output.exporter)})"
     lines.extend(
         [
-            "from marimo_export._marimo.compat.projections import "
-            "resolve_value_path as _marimo_export_resolve_value",
             "from marimo_export._marimo.blob import "
             "to_native_blob_asset as _marimo_export_native_blob_asset",
             "",

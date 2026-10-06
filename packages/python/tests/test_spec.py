@@ -11,7 +11,7 @@ import pytest
 from jsonschema import Draft202012Validator
 from marimo_export import ExportSpec, OutputSpec
 from marimo_export.errors import SpecError
-from marimo_export.exporters import altair, importable, parquet
+from marimo_export.exporters import altair, importable, media, parquet
 from marimo_export.spec import (
     SPEC_SCHEMA,
     CellSource,
@@ -171,7 +171,7 @@ def test_spec_rejects_invalid_root_contracts() -> None:
 def test_output_sources_and_exporters_are_validated_at_construction() -> None:
     assert not hasattr(OutputSpec, "value")
 
-    for source in ("", "a()", "a['key']", "x" * 2_049):
+    for source in ("", "a()", "a['key']", "a._cache", "x" * 4_097):
         with pytest.raises(SpecError) as raised:
             OutputSpec.json(source)
         assert raised.value.code == "spec_output_invalid"
@@ -343,8 +343,9 @@ outputs:
   chart:
     source: {kind: export, selector: chart}
     exporter:
-      name: altair.png
+      name: media
       options:
+        accept: [image/svg+xml, image/png]
         scale: 2
       dependencies: []
 """.lstrip(),
@@ -355,7 +356,7 @@ outputs:
 
     assert spec.default_state == "full"
     assert spec.states["compact"]["chart_width"] == 480
-    assert spec.outputs["chart"].exporter == altair.png(scale=2)
+    assert spec.outputs["chart"].exporter == media(["image/svg+xml", "image/png"], scale=2)
 
 
 def test_yaml_rejects_aliases(tmp_path: Path) -> None:

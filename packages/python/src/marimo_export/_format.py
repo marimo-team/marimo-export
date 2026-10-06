@@ -8,10 +8,8 @@ from collections.abc import Mapping, Sequence
 from pathlib import PurePosixPath, PureWindowsPath
 
 from marimo_export._json import JsonObject, json_object, json_string
+from marimo_export._limits import MAX_NAME_BYTES, MAX_PROVENANCE_BYTES
 
-MAX_NAME_BYTES = 255
-MAX_PROVENANCE_BYTES = 2_048
-MAX_CONTROL_ID_BYTES = 1_024
 SHA256 = re.compile(r"[0-9a-f]{64}")
 _EDGE_WHITESPACE = frozenset(
     "\u0009\u000a\u000b\u000c\u000d"
@@ -122,9 +120,6 @@ def digest(value: object, path: str) -> str:
 
 
 __all__ = [
-    "MAX_CONTROL_ID_BYTES",
-    "MAX_NAME_BYTES",
-    "MAX_PROVENANCE_BYTES",
     "bounded_printable",
     "digest",
     "edge_whitespace",

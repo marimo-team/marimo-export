@@ -73,9 +73,15 @@ capture Marimo-owned output records through the child recording stream and
 
 ## Selectors and exporters
 
-`ValueSelector` owns JSON, native, exporter, and rendered-output selection.
+`values.py` owns the selector grammar, its limits, value resolution, and media
+negotiation. It imports only the standard library because hosts load its source
+into processes without marimo-export, such as Pyodide workers. Keep package
+imports, marimo imports, and optional libraries out of its module scope.
+
 `spec.py` binds one parsed selector and optional exporter to each output name.
-The exact selector grammar, size limit, and public constructors live in the
+Generated output cells resolve the selector with `ValueSelector.resolve()` and
+name the root definition, so marimo orders each leaf after its producer. The
+exact grammar and public constructors live in the
 [ExportSpec reference](../../docs/reference/export-spec.md).
 
 `OutputSpec` binds one source to an optional `ExporterSpec`. Only an export
@@ -85,7 +91,10 @@ modules whose source contributes to exporter execution identity and output-cell
 cache keys.
 
 Built-in exporters own BlobAsset creation for JSON, text, HTML, Altair
-Vega-Lite, PNG, Parquet, and AnyWidget. Exporter execution loads optional
+Vega-Lite, negotiated media, Parquet, and AnyWidget. The `media` exporter wraps
+`values.represent()`, so a host that renders a live value and an export apply
+the same media rules. Their bytes match when both run the same library versions
+and the figure has the same style. Exporter execution loads optional
 distributions when their implementation needs them. The capture-scoped registry
 freezes the resolved callables and modules, invokes each callable as
 `exporter(value, **options)`, and verifies source stability before commit.

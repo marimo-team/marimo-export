@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from uuid import UUID
 
-_MAX_CELL_ID_BYTES = 1_024
+from marimo_export._limits import MAX_CELL_ID_BYTES
+
 _UUID_LENGTH = 36
 
 
@@ -12,7 +13,7 @@ def canonical_cell_id(value: object) -> str:
     """Remove Marimo's external UUIDv4 scope from one native cell ID."""
 
     cell_id = str(value)
-    if not cell_id or len(cell_id.encode("utf-8")) > _MAX_CELL_ID_BYTES:
+    if not cell_id or len(cell_id.encode("utf-8")) > MAX_CELL_ID_BYTES:
         raise ValueError("cell ID must be a bounded non-empty string")
     if len(cell_id) <= _UUID_LENGTH:
         return cell_id

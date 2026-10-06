@@ -192,12 +192,12 @@ The base Python package supports JSON, native, rendered-output, complete-cell,
 and `blob.*` export paths. Install the matching extra before using an exporter
 that depends on another Python distribution:
 
-| Exporter                          | Install command                     |
-| --------------------------------- | ----------------------------------- |
-| `altair.vegalite` or `altair.png` | `uv add "marimo-export[charts]"`    |
-| `parquet.table`                   | `uv add "marimo-export[parquet]"`   |
-| `anywidget.bundle`                | `uv add "marimo-export[anywidget]"` |
-| Every bundled exporter dependency | `uv add "marimo-export[all]"`       |
+| Exporter                                 | Install command                     |
+| ---------------------------------------- | ----------------------------------- |
+| `altair.vegalite`, or `media` for Altair | `uv add "marimo-export[charts]"`    |
+| `parquet.table`                          | `uv add "marimo-export[parquet]"`   |
+| `anywidget.bundle`                       | `uv add "marimo-export[anywidget]"` |
+| Every bundled exporter dependency        | `uv add "marimo-export[all]"`       |
 
 The extra belongs in the environment that runs `build` or hosts the session
 used by `capture`. A browser loader has its own npm peer dependencies.

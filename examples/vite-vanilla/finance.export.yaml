@@ -30,8 +30,9 @@ outputs:
   performance_snapshot:
     source: { kind: export, selector: performance }
     exporter:
-      name: altair.png
+      name: media
       options:
+        accept: [image/png]
         scale: 2
       dependencies: []
   price_history:

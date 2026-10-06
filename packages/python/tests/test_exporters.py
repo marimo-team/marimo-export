@@ -6,19 +6,33 @@ from typing import Any, cast
 
 import pytest
 from marimo_export.errors import SpecError
-from marimo_export.exporters import ExporterSpec, altair, anywidget, blob, importable, parquet
+from marimo_export.exporters import (
+    ExporterSpec,
+    altair,
+    anywidget,
+    blob,
+    importable,
+    media,
+    parquet,
+)
 from marimo_export.exporters._runtime import altair as altair_runtime
 from marimo_export.exporters._runtime import blob as blob_runtime
+from marimo_export.exporters._runtime import media as media_runtime
 from marimo_export.exporters._runtime import parquet as parquet_runtime
 from marimo_export.outputs import BlobAsset
 
 
 def test_builtin_and_importable_factories_construct_normalized_descriptors() -> None:
     assert altair.vegalite() == ExporterSpec("altair.vegalite")
+    assert media(["image/SVG+xml", "image/png"], scale=2).to_value() == {
+        "dependencies": [],
+        "name": "media",
+        "options": {"accept": ["image/svg+xml", "image/png"], "scale": 2.0},
+    }
     assert altair.png(scale=2).to_value() == {
         "dependencies": [],
         "name": "altair.png",
-        "options": {"scale": 2},
+        "options": {"scale": 2.0},
     }
     assert anywidget.bundle().to_value() == "anywidget.bundle"
     assert parquet.table(filename="prices.parquet").to_value() == {
@@ -78,6 +92,13 @@ def test_builtin_and_importable_factories_construct_normalized_descriptors() -> 
         ),
         lambda: ExporterSpec("altair.vegalite", dependencies=("acme.models",)),
         lambda: altair.png(scale=0),
+        lambda: media(["image/png"], scale=0),
+        lambda: media("image/png"),
+        lambda: media(cast(Any, 5)),
+        lambda: media(cast(Any, [5])),
+        lambda: media([]),
+        lambda: media(["image/*"]),
+        lambda: media(["image/png", "image/PNG"]),
         lambda: parquet.table(compression=cast(Any, "zip")),
     ],
 )
@@ -116,22 +137,54 @@ def test_blob_and_vegalite_runtime_exporters_return_public_blob_assets() -> None
     assert chart.metadata == {"schema_major": 6}
 
 
-def test_png_and_parquet_runtime_exporters_produce_complete_assets() -> None:
-    pyarrow = pytest.importorskip("pyarrow")
+def test_vegalite_and_media_exporters_read_every_row_of_a_chart() -> None:
+    altair_module = pytest.importorskip("altair")
+    pandas = pytest.importorskip("pandas")
     pytest.importorskip("vl_convert")
-    specification = {
-        "$schema": "https://vega.github.io/schema/vega-lite/v6.json",
-        "mark": "point",
-        "data": {"values": [{"x": 1, "y": 2}]},
-    }
+    # More rows than Altair embeds by default.
+    rows = pandas.DataFrame({"x": range(6_000), "y": [index % 7 for index in range(6_000)]})
+    chart = altair_module.Chart(rows).mark_point().encode(x="x:Q", y="y:Q")
+
+    specification = json.loads(altair_runtime.vegalite(chart).data)
+    image = media_runtime.media(chart, accept=["image/svg+xml"])
+
+    assert len(specification["datasets"][next(iter(specification["datasets"]))]) == 6_000
+    assert image.data.startswith(b"<svg")
+
+
+def test_vegalite_exporter_reads_altair_charts_and_specifications() -> None:
+    class Described:
+        def to_dict(self) -> dict[str, object]:
+            return {"$schema": "https://vega.github.io/schema/vega-lite/v6.json"}
+
+    with pytest.raises(TypeError, match="Altair chart or Vega-Lite mapping"):
+        altair_runtime.vegalite(Described())
+
+
+def test_media_and_parquet_runtime_exporters_produce_complete_assets() -> None:
+    pyarrow = pytest.importorskip("pyarrow")
+    altair_module = pytest.importorskip("altair")
+    pytest.importorskip("vl_convert")
+    chart = (
+        altair_module.Chart(altair_module.Data(values=[{"x": 1, "y": 2}]))
+        .mark_point()
+        .encode(x="x:Q", y="y:Q")
+    )
     source = pyarrow.table({"symbol": ["AAPL", "MSFT"], "value": [1.0, 2.0]})
 
-    image = altair_runtime.png(specification, scale=2)
+    image = media_runtime.media(chart, accept=["image/png"], scale=2)
+    chart_png = altair_runtime.png(chart, scale=2)
     table = parquet_runtime.table(source, filename="prices.parquet")
 
+    assert image.media_type == "image/png"
     assert image.data.startswith(b"\x89PNG\r\n\x1a\n")
-    assert image.data.endswith(b"\x00\x00\x00\x00IEND\xaeB`\x82")
-    assert image.metadata == {"scale": 2.0}
+    width, height = (
+        int.from_bytes(image.data[16:20], "big"),
+        int.from_bytes(image.data[20:24], "big"),
+    )
+    assert (width / 2, height / 2) == (image.metadata["width"], image.metadata["height"])
+    assert chart_png.data == image.data
+    assert chart_png.metadata == {"scale": 2.0, **image.metadata}
     assert table.data.startswith(b"PAR1")
     assert table.data.endswith(b"PAR1")
     assert table.filename == "prices.parquet"

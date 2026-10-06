@@ -15,6 +15,7 @@ from marimo_export._json import (
     decode_json,
     json_object,
 )
+from marimo_export._limits import MAX_CELL_ID_BYTES, MAX_CONTROL_ID_BYTES, MAX_NAME_BYTES
 from marimo_export.errors import SessionError, SpecError
 from marimo_export.index import ControlBinding, ControlPathStep
 from marimo_export.spec import (
@@ -84,7 +85,7 @@ class DefinitionDescription:
             if (
                 not isinstance(control_id, str)
                 or not control_id
-                or len(control_id.encode("utf-8")) > 1_024
+                or len(control_id.encode("utf-8")) > MAX_CONTROL_ID_BYTES
             ):
                 raise SessionError("definition control IDs must be bounded non-empty strings")
             try:
@@ -100,7 +101,7 @@ class DefinitionDescription:
             or any(
                 not isinstance(dependency, str)
                 or not dependency.isidentifier()
-                or len(dependency.encode("utf-8")) > 255
+                or len(dependency.encode("utf-8")) > MAX_NAME_BYTES
                 for dependency in input_dependencies
             )
         ):
@@ -189,10 +190,10 @@ class CellDescription:
         config: Mapping[str, JsonValue],
         input_dependencies: tuple[str, ...],
     ) -> None:
-        if not isinstance(id, str) or not id or len(id.encode("utf-8")) > 1_024:
+        if not isinstance(id, str) or not id or len(id.encode("utf-8")) > MAX_CELL_ID_BYTES:
             raise SessionError("cell id must be a bounded non-empty string")
         if name is not None and (
-            not isinstance(name, str) or not name or len(name.encode("utf-8")) > 255
+            not isinstance(name, str) or not name or len(name.encode("utf-8")) > MAX_NAME_BYTES
         ):
             raise SessionError("cell name must be a bounded non-empty string or null")
         object.__setattr__(self, "id", id)

@@ -101,9 +101,10 @@ whitespace or control characters and at most 255 UTF-8 bytes. State-row keys and
 exporter option names are non-keyword Python identifiers of at most 255 UTF-8
 bytes.
 
-A value selector contains at most 2,048 UTF-8 bytes. Its root and dot steps use
-ASCII identifier-shaped names. Brackets accept a nonnegative integer or a JSON
-string key. Selector parsing does not apply Python keyword rules.
+A value selector contains at most 4,096 UTF-8 bytes and 64 steps. Its root and
+dot steps use ASCII identifier-shaped names, and dot steps cannot start with
+`_`. Brackets accept a nonnegative integer up to 2\*\*53 - 1 or a JSON string
+key. Selector parsing does not apply Python keyword rules.
 
 ## Inferred inputs
 
@@ -209,19 +210,22 @@ terminal output, console records, outcome, and replay resources.
 JSON, native, export, and rendered-output selectors contain no whitespace
 outside a JSON-string item and accept:
 
-- one Python identifier root
-- attribute steps such as `.summary`
-- canonical nonnegative integer items such as `[0]` or `[10]`. Signs, leading
-  zeroes, and spaces are invalid
+- one ASCII identifier root
+- attribute steps such as `.summary`. Private names that start with `_` are
+  invalid
+- canonical nonnegative integer items such as `[0]` or `[10]`, up to
+  2\*\*53 - 1. Signs, leading zeroes, and spaces are invalid
 - JSON-string items such as `["total"]`
 
 Mapping keys take precedence over attributes. Every normalized state must
 produce every configured output. One output name retains one codec and media
 type across the relation.
 
-A selector contains at most 2,048 UTF-8 bytes. Invalid roots, attribute steps,
-indexes, quoted keys, or trailing content raise `SpecError` before notebook
-execution. A cell name or runtime ID contains at most 255 UTF-8 bytes.
+A selector contains at most 4,096 UTF-8 bytes and 64 steps. Invalid roots,
+attribute steps, indexes, quoted keys, or trailing content raise `SpecError`
+before notebook execution. A cell name or runtime ID contains at most 255 UTF-8
+bytes. [`ValueSelector`](python/values#valueselector) parses and resolves the
+same grammar for hosts that read live values.
 
 ## Exporter forms
 
@@ -239,6 +243,17 @@ exporter:
   options:
     compression: snappy
     filename: prices.parquet
+  dependencies: []
+```
+
+Media in the consumer's preferred format:
+
+```yaml
+exporter:
+  name: media
+  options:
+    accept: [application/pdf, image/svg+xml]
+    scale: 1
   dependencies: []
 ```
 

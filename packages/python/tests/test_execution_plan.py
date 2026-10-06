@@ -21,7 +21,7 @@ from marimo_export._execution import (
 from marimo_export._execution.plan import exporter_token_name
 from marimo_export._json import canonical_bytes, sha256_bytes
 from marimo_export.errors import SpecError
-from marimo_export.exporters import altair, importable
+from marimo_export.exporters import importable, media
 
 
 def _baseline() -> Baseline:
@@ -440,8 +440,8 @@ def test_exporter_output_cell_is_a_deterministic_marimo_leaf() -> None:
     code = output_cell_code(
         PlannedOutput(
             name="snapshot",
-            source=OutputSpec.export("performance", altair.png(scale=2)).source,
-            exporter=altair.png(scale=2),
+            source=OutputSpec.export("performance", media(["image/png"], scale=2)).source,
+            exporter=media(["image/png"], scale=2),
         ),
         "marimo_export_state_0123456789abcdef",
         implementation_identity="a" * 64,
@@ -468,26 +468,18 @@ def test_exporter_output_cell_is_a_deterministic_marimo_leaf() -> None:
     producer = tree.body[3]
     assert isinstance(producer, ast.Assign)
     assert ast.unparse(producer) == "_marimo_export_producer_identity = 'marimo:0.23.16'"
-    projection = tree.body[4]
-    assert isinstance(projection, ast.Assign)
-    identity = tree.body[5]
-    assert isinstance(identity, ast.Assign)
-    assert ast.unparse(identity) == (f"_marimo_export_exporter_identity = 'sha256:{'b' * 64}'")
-    imported = tree.body[6]
-    assert isinstance(imported, ast.ImportFrom)
-    assert imported.module == "marimo_export.exporters._runtime.altair"
-    resolver_import = tree.body[7]
-    assert isinstance(resolver_import, ast.ImportFrom)
-    assert resolver_import.module == "marimo_export._marimo.compat.projections"
-    blob_import = tree.body[8]
-    assert isinstance(blob_import, ast.ImportFrom)
-    assert blob_import.module == "marimo_export._marimo.blob"
-    call = tree.body[9]
-    assert isinstance(call, ast.Expr)
-    assert isinstance(call.value, ast.Call)
-    assert ast.unparse(call.value) == (
-        "_marimo_export_native_blob_asset("
-        "_marimo_export_exporter(_marimo_export_resolve_value(performance, ()), scale=2))"
+    statements = [ast.unparse(node) for node in tree.body]
+    assert f"_marimo_export_exporter_identity = 'sha256:{'b' * 64}'" in statements
+    imported = {node.module for node in tree.body if isinstance(node, ast.ImportFrom)}
+    assert {
+        "marimo_export._marimo.compat.projections",
+        "marimo_export.exporters._runtime.media",
+        "marimo_export._marimo.blob",
+    } <= imported
+    assert statements[-1] == (
+        "_marimo_export_native_blob_asset(_marimo_export_exporter("
+        "_marimo_export_select('performance', {'performance': performance}), "
+        "accept=['image/png'], scale=2.0))"
     )
 
 
@@ -535,7 +527,7 @@ def test_custom_exporter_output_cell_uses_an_explicit_importable_callable() -> N
     assert f"_marimo_export_exporter_identity = 'sha256:{'c' * 64}'" in code
     assert "marimo_export_exporter_" in code
     assert "to_native_blob_asset as _marimo_export_native_blob_asset" in code
-    assert "_marimo_export_resolve_value(result, ())" in code
+    assert "_marimo_export_select('result', {'result': result})" in code
     assert "{'columns': ['a', 'b'], 'config': {'compact': True}}" in code
 
 

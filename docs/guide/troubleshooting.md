@@ -39,7 +39,7 @@ Symptom: preparation reports `runtime_distribution_unavailable`.
 Install the extra owned by that producer representation:
 
 ```bash
-uv add "marimo-export[charts]"     # Altair and PNG
+uv add "marimo-export[charts]"     # Altair Vega-Lite and chart media
 uv add "marimo-export[parquet]"   # Parquet
 uv add "marimo-export[anywidget]" # AnyWidget
 ```

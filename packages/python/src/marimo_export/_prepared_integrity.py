@@ -13,6 +13,7 @@ from types import MappingProxyType
 from typing import Protocol
 
 from marimo_export._json import sha256_bytes
+from marimo_export._limits import MAX_INDEX_BYTES as _MAX_INDEX_BYTES
 from marimo_export._secure_io import read_export_index
 from marimo_export.descriptors import asset_path
 from marimo_export.errors import IntegrityError
@@ -20,7 +21,6 @@ from marimo_export.index import ExportIndex
 from marimo_export.reader import NotebookExport, open_export
 from marimo_export.repository import RepositoryError
 
-_MAX_INDEX_BYTES = 16 * 1024 * 1024
 _VERIFY_BUFFER_BYTES = 1024 * 1024
 
 

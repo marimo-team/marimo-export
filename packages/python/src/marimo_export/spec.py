@@ -35,9 +35,11 @@ from marimo_export._json import (
     decode_json_object,
     json_object,
 )
-from marimo_export._selector import ValueSelector
+from marimo_export._limits import MAX_NAME_BYTES, MAX_STATES
 from marimo_export.errors import SpecError
+from marimo_export.exporters._definitions import is_module_name
 from marimo_export.exporters._spec import ExporterSpec
+from marimo_export.values import SelectorError, ValueSelector
 from marimo_export.wire import FrozenJsonObject, FrozenJsonValue
 
 SPEC_SCHEMA = "marimo-export.spec.v2"
@@ -45,9 +47,7 @@ STATE_SPACE_SCHEMA = "marimo-export.states.v1"
 
 StrPath: TypeAlias = str | os.PathLike[str]
 
-_MAX_NAME_BYTES = 255
 _MAX_SPEC_BYTES = 16 * 1024 * 1024
-_MAX_STATE_SPACE_STATES = 10_000
 _MAX_YAML_DEPTH = 256
 _MAX_YAML_NODES = 100_000
 _MAX_VALIDATION_ERRORS = 8
@@ -76,8 +76,8 @@ def _validate_export_name(value: object) -> object:
         or any(ord(character) < 32 or ord(character) == 127 for character in value)
     ):
         raise ValueError("must be a non-empty name without surrounding whitespace or controls")
-    if len(value.encode("utf-8")) > _MAX_NAME_BYTES:
-        raise ValueError(f"must contain at most {_MAX_NAME_BYTES} UTF-8 bytes")
+    if len(value.encode("utf-8")) > MAX_NAME_BYTES:
+        raise ValueError(f"must contain at most {MAX_NAME_BYTES} UTF-8 bytes")
     return value
 
 
@@ -87,19 +87,21 @@ def _validate_identifier(value: object) -> object:
     if (
         not value.isidentifier()
         or keyword.iskeyword(value)
-        or len(value.encode("utf-8")) > _MAX_NAME_BYTES
+        or len(value.encode("utf-8")) > MAX_NAME_BYTES
     ):
-        raise ValueError("must be a non-keyword Python identifier of at most 255 UTF-8 bytes")
+        raise ValueError(
+            f"must be a non-keyword Python identifier of at most {MAX_NAME_BYTES} UTF-8 bytes"
+        )
     return value
 
 
 def _validate_module_name(value: object) -> object:
     if not isinstance(value, str):
         return value
-    if len(value.encode("utf-8")) > _MAX_NAME_BYTES or any(
-        not part.isidentifier() or keyword.iskeyword(part) for part in value.split(".")
-    ):
-        raise ValueError("must be an importable module name of at most 255 UTF-8 bytes")
+    if not is_module_name(value):
+        raise ValueError(
+            f"must be an importable module name of at most {MAX_NAME_BYTES} UTF-8 bytes"
+        )
     return value
 
 
@@ -381,7 +383,7 @@ class OutputSpec:
         """Select one canonical portable JSON value."""
 
         return cls(
-            source=JsonSource(kind="json", selector=ValueSelector.parse(selector)),
+            source=JsonSource(kind="json", selector=_selector(selector)),
         )
 
     @classmethod
@@ -389,7 +391,7 @@ class OutputSpec:
         """Select one cache-native scalar, JSON value, array, table, or blob."""
 
         return cls(
-            source=NativeSource(kind="native", selector=ValueSelector.parse(selector)),
+            source=NativeSource(kind="native", selector=_selector(selector)),
         )
 
     @classmethod
@@ -397,7 +399,7 @@ class OutputSpec:
         """Convert one selected value through an explicit exporter."""
 
         return cls(
-            source=ExportSource(kind="export", selector=ValueSelector.parse(selector)),
+            source=ExportSource(kind="export", selector=_selector(selector)),
             exporter=exporter,
         )
 
@@ -408,7 +410,7 @@ class OutputSpec:
         return cls(
             source=RenderedOutputSource(
                 kind="output",
-                selector=ValueSelector.parse(selector),
+                selector=_selector(selector),
             )
         )
 
@@ -506,9 +508,9 @@ class StateSpace:
                         code="spec_value_invalid",
                     )
                 size *= len(domain)
-                if size > _MAX_STATE_SPACE_STATES:
+                if size > MAX_STATES:
                     raise SpecError(
-                        f"state space exceeds {_MAX_STATE_SPACE_STATES} states",
+                        f"state space exceeds {MAX_STATES} states",
                         code="spec_value_invalid",
                     )
             for index, values in enumerate(itertools.product(*domains)):
@@ -524,9 +526,9 @@ class StateSpace:
                 "state space must declare states or a matrix",
                 code="spec_value_invalid",
             )
-        if len(expanded) > _MAX_STATE_SPACE_STATES:
+        if len(expanded) > MAX_STATES:
             raise SpecError(
-                f"state space exceeds {_MAX_STATE_SPACE_STATES} states",
+                f"state space exceeds {MAX_STATES} states",
                 code="spec_value_invalid",
             )
         if wire.default_state not in expanded:
@@ -842,9 +844,9 @@ def _validate_cell_value(value: object, by: object) -> None:
             "without surrounding whitespace",
             code="spec_output_invalid",
         )
-    if len(value.encode("utf-8")) > _MAX_NAME_BYTES:
+    if len(value.encode("utf-8")) > MAX_NAME_BYTES:
         raise SpecError(
-            f"invalid cell {by} {value!r}: must contain at most {_MAX_NAME_BYTES} UTF-8 bytes",
+            f"invalid cell {by} {value!r}: must contain at most {MAX_NAME_BYTES} UTF-8 bytes",
             code="spec_output_invalid",
         )
 
@@ -857,17 +859,24 @@ def _freeze(value: JsonValue) -> FrozenJsonValue:
     return value
 
 
+def _selector(source: str) -> ValueSelector:
+    try:
+        return ValueSelector(source)
+    except SelectorError as error:
+        raise SpecError(str(error), code="spec_output_invalid") from error
+
+
 def _source_from_wire(source: _OutputSourceWire) -> OutputSource:
     if isinstance(source, _JsonSourceWire):
-        return JsonSource(kind="json", selector=ValueSelector.parse(source.selector))
+        return JsonSource(kind="json", selector=_selector(source.selector))
     if isinstance(source, _NativeSourceWire):
-        return NativeSource(kind="native", selector=ValueSelector.parse(source.selector))
+        return NativeSource(kind="native", selector=_selector(source.selector))
     if isinstance(source, _ExportSourceWire):
-        return ExportSource(kind="export", selector=ValueSelector.parse(source.selector))
+        return ExportSource(kind="export", selector=_selector(source.selector))
     if isinstance(source, _RenderedOutputSourceWire):
         return RenderedOutputSource(
             kind="output",
-            selector=ValueSelector.parse(source.selector),
+            selector=_selector(source.selector),
         )
     return CellSource(kind="cell", by=source.by, value=source.value)
 

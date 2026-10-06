@@ -7,9 +7,6 @@ from dataclasses import dataclass, field
 from typing import Literal, TypeAlias, cast
 
 from marimo_export._format import (
-    MAX_PROVENANCE_BYTES as _MAX_PROVENANCE_BYTES,
-)
-from marimo_export._format import (
     bounded_printable as _bounded_printable,
 )
 from marimo_export._format import (
@@ -29,6 +26,7 @@ from marimo_export._json import (
     decode_json_object,
     portable_json_object,
 )
+from marimo_export._limits import MAX_PROVENANCE_BYTES as _MAX_PROVENANCE_BYTES
 from marimo_export._media_type import MAX_BLOB_METADATA_JSON_BYTES, validate_media_type
 from marimo_export._portable import validate_portable_basename
 from marimo_export.wire import FrozenJsonValue, _freeze_json, portable_json

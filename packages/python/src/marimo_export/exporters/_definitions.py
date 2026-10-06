@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import keyword
-import math
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import cast
 
 from marimo_export._json import JsonObject, JsonValue, portable_json_object
+from marimo_export._limits import MAX_NAME_BYTES
+from marimo_export.values import _scale, normalize_accept
 
 
 @dataclass(frozen=True, slots=True)
@@ -44,6 +45,11 @@ _BUILTINS = {
         module="marimo_export.exporters._runtime.blob",
         symbol="text",
     ),
+    "media": ExporterDefinition(
+        module="marimo_export.exporters._runtime.media",
+        symbol="media",
+        distributions=("altair", "matplotlib", "vl-convert-python"),
+    ),
     "parquet.table": ExporterDefinition(
         module="marimo_export.exporters._runtime.parquet",
         symbol="table",
@@ -52,7 +58,6 @@ _BUILTINS = {
 }
 _COMPRESSIONS = frozenset({"snappy", "none", "gzip", "brotli", "lz4", "zstd"})
 _MAX_CUSTOM_DEPENDENCIES = 256
-_MAX_MODULE_NAME_BYTES = 255
 
 
 def normalize_exporter(
@@ -91,15 +96,16 @@ def _normalize_builtin_options(name: str, options: JsonObject) -> JsonObject:
         return {}
     if name == "altair.png":
         _exact_options(name, options, {"scale"})
-        scale = options.get("scale", 1.0)
-        if (
-            isinstance(scale, bool)
-            or not isinstance(scale, (int, float))
-            or not math.isfinite(scale)
-            or scale <= 0
-        ):
-            raise TypeError("altair.png option 'scale' must be a positive finite number")
-        return {"scale": scale}
+        return {"scale": _scale(options.get("scale", 1.0))}
+    if name == "media":
+        _exact_options(name, options, {"accept", "scale"})
+        accept = options.get("accept")
+        if not isinstance(accept, list):
+            raise TypeError("media option 'accept' must be an array of media types")
+        return {
+            "accept": list(normalize_accept(cast(list[str], accept))),
+            "scale": _scale(options.get("scale", 1.0)),
+        }
     if name == "parquet.table":
         _exact_options(name, options, {"compression", "filename"})
         compression = options.get("compression", "snappy")
@@ -179,7 +185,7 @@ def _parse_import_reference(value: str) -> tuple[str, str]:
     if value.count(":") != 1:
         raise ValueError(f"unknown exporter {value!r}; custom exporters use 'module:symbol'")
     module, symbol = value.split(":", maxsplit=1)
-    if not _is_module_name(module) or not symbol.isidentifier() or keyword.iskeyword(symbol):
+    if not is_module_name(module) or not symbol.isidentifier() or keyword.iskeyword(symbol):
         raise ValueError(f"custom exporter {value!r} must name an importable symbol")
     return module, symbol
 
@@ -193,7 +199,7 @@ def _normalize_dependencies(value: object) -> tuple[str, ...]:
             f"custom exporter dependencies must contain at most {_MAX_CUSTOM_DEPENDENCIES} modules"
         )
     for dependency in dependencies:
-        if not isinstance(dependency, str) or not _is_module_name(dependency):
+        if not isinstance(dependency, str) or not is_module_name(dependency):
             raise ValueError(
                 f"custom exporter dependency {dependency!r} must name an importable module"
             )
@@ -202,10 +208,12 @@ def _normalize_dependencies(value: object) -> tuple[str, ...]:
     return cast(tuple[str, ...], dependencies)
 
 
-def _is_module_name(value: str) -> bool:
+def is_module_name(value: str) -> bool:
+    """Return whether ``value`` is a dotted module name within the name byte limit."""
+
     return (
         bool(value)
-        and len(value.encode("utf-8")) <= _MAX_MODULE_NAME_BYTES
+        and len(value.encode("utf-8")) <= MAX_NAME_BYTES
         and all(part.isidentifier() and not keyword.iskeyword(part) for part in value.split("."))
     )
 

@@ -68,7 +68,7 @@ after their responses finish.
 | Marimo cell     | `OutputSpec.cell()`            | `marimoCellLoader()`   |
 | DataFrame       | `parquet.table`                | `parquetRowsLoader()`  |
 | Altair chart    | `altair.vegalite`              | `vegaLiteLoader()`     |
-| PNG             | `altair.png`                   | `imageLoader()`        |
+| Figure image    | `media`                        | `imageLoader()`        |
 | AnyWidget       | `anywidget.bundle`             | `anyWidgetLoader()`    |
 | Custom value    | callable returning `BlobAsset` | custom loader          |
 

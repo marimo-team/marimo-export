@@ -1,10 +1,19 @@
-"""Resource limits for producer capture operations."""
+"""Bounds of the notebook export format and of producer capture operations.
+
+Names cover states and outputs. Selector bounds live with the selector grammar
+in ``marimo_export.values``.
+"""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 
-from marimo_export._limits import MAX_EXPORT_ASSET_BYTES, MAX_EXPORT_CLOSURE_BYTES
+from marimo_export._limits import (
+    MAX_EXPORT_ASSET_BYTES,
+    MAX_EXPORT_CLOSURE_BYTES,
+    MAX_NAME_BYTES,
+    MAX_STATES,
+)
 
 _MAX_SAFE_INTEGER = 2**53 - 1
 
@@ -41,4 +50,10 @@ def _capture_limits(value: object) -> CaptureLimits:
     return value
 
 
-__all__ = ["CaptureLimits"]
+__all__ = [
+    "MAX_EXPORT_ASSET_BYTES",
+    "MAX_EXPORT_CLOSURE_BYTES",
+    "MAX_NAME_BYTES",
+    "MAX_STATES",
+    "CaptureLimits",
+]
