@@ -12,7 +12,13 @@ import type {
   ScalarValue,
 } from "./types.js";
 import { NotebookExportError } from "./types.js";
-import { isBooleanValue, isCallableValue, isRecordValue, isStringValue } from "./value-types.js";
+import {
+  isBooleanValue,
+  isCallableValue,
+  isJsonNumber,
+  isRecordValue,
+  isStringValue,
+} from "./value-types.js";
 
 const CODECS = new Set<OutputCodec>([
   "marimo.scalar.v1",
@@ -139,6 +145,10 @@ export function imageLoader(): BlobAssetLoader<MountableValue> {
           image.src = url;
           image.alt = payload.filename ?? "";
           image.decoding = "async";
+          // The width alone sets the display size, so a narrower container
+          // scales the height with the image's aspect ratio.
+          const { width } = payload.metadata;
+          if (isJsonNumber(width) && Number.isInteger(width) && width >= 1) image.width = width;
           let disposed = false;
           const dispose = () => {
             if (disposed) return;
