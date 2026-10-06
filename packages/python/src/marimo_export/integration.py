@@ -9,11 +9,11 @@ from types import MappingProxyType
 from typing import cast
 
 from marimo_export._format import identifier_name
+from marimo_export._limits import MAX_CONTROL_ID_BYTES as _MAX_CONTROL_ID_BYTES
 from marimo_export.index import ControlBinding
 from marimo_export.wire import FrozenJsonValue, _freeze_json, portable_json
 
 _OWNED_SESSION_ENV = "MARIMO_EXPORT_OWNED_SESSION"
-_MAX_CONTROL_ID_BYTES = 1_024
 
 
 @dataclass(frozen=True, slots=True, init=False)

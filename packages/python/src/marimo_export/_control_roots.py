@@ -6,8 +6,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass, field
 
 from marimo_export._format import identifier_name
-
-_MAX_CONTROL_ID_BYTES = 1_024
+from marimo_export._limits import MAX_CONTROL_ID_BYTES as _MAX_CONTROL_ID_BYTES
 
 
 @dataclass(frozen=True, slots=True)

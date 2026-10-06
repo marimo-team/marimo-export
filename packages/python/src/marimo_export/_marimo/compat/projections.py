@@ -26,6 +26,7 @@ from marimo_export.descriptors import (
 )
 from marimo_export.errors import OutputError
 from marimo_export.spec import CellSource, RenderedOutputSource
+from marimo_export.values import ValueSelector
 
 if TYPE_CHECKING:
     from marimo_export._marimo.compat.child_run import StateChild
@@ -151,43 +152,24 @@ def _close_recording(
     raise error
 
 
-def resolve_value_path(
-    root: object,
-    path: tuple[tuple[str, str | int], ...],
-) -> object:
-    """Resolve attribute and item steps against a notebook value."""
+def select_value(selector: str, namespace: Mapping[str, object]) -> object:
+    """Resolve one output selector, reporting an unavailable step as an output error."""
 
-    current = root
-    for kind, key in path:
-        if kind == "attribute":
-            if not isinstance(key, str):
-                raise ValueError("attribute selector keys must be strings")
-            if isinstance(current, Mapping) and key in current:
-                current = cast(Mapping[object, object], current)[key]
-                continue
-            try:
-                current = getattr(current, key)
-            except AttributeError as error:
-                raise ValueError(f"attribute {key!r} is unavailable") from error
-            continue
-        if kind != "item":
-            raise ValueError(f"unknown selector step {kind!r}")
-        try:
-            current = cast(Any, current)[key]
-        except (IndexError, KeyError, TypeError) as error:
-            raise ValueError(f"item {key!r} is unavailable") from error
-    return current
+    try:
+        return ValueSelector(selector).resolve(namespace)
+    except LookupError as error:
+        raise OutputError(
+            f"selector {selector!r} is unavailable: {error}",
+            code="output_execution_failed",
+        ) from error
 
 
-def capture_json_value(
-    root: object,
-    path: tuple[tuple[str, str | int], ...],
-) -> object:
+def capture_json_value(value: object) -> object:
     """Return one canonical JSON value through Marimo's BlobAsset cache codec."""
 
     from marimo._save.stubs import BlobAsset
 
-    value = json_value(resolve_value_path(root, path), "JSON projection")
+    value = json_value(value, "JSON projection")
     return BlobAsset(
         data=canonical_bytes(value),
         media_type=JSON_MEDIA_TYPE,
@@ -195,13 +177,9 @@ def capture_json_value(
     )
 
 
-def capture_native_value(
-    root: object,
-    path: tuple[tuple[str, str | int], ...],
-) -> object:
+def capture_native_value(value: object) -> object:
     """Return one value through a supported native cache representation."""
 
-    value = resolve_value_path(root, path)
     if value is None or isinstance(value, (bool, str, int, float)):
         return value
     try:
@@ -249,8 +227,7 @@ def _native_arrow_value(value: object) -> object | None:
 
 
 def materialize_rendered_output(
-    root: object,
-    path: tuple[tuple[str, str | int], ...],
+    value: object,
     *,
     owner_cell_id: str | None,
     projection_identity: str,
@@ -260,7 +237,6 @@ def materialize_rendered_output(
     from marimo._messaging.cell_output import CellChannel, CellOutput
     from marimo._output.formatting import try_format
 
-    value = resolve_value_path(root, path)
     formatted = try_format(value)
     if formatted.exception is not None:
         formatted = try_format(value, include_opinionated=False)
@@ -311,10 +287,8 @@ def materialize_projection_token(
 
     source = planned_output.source
     if isinstance(source, RenderedOutputSource):
-        path = tuple((step.kind, step.key) for step in source.selector.path)
         child.runner.globals[snapshot_token_name(planned_output)] = materialize_rendered_output(
-            child.runner.globals[source.selector.root],
-            path,
+            select_value(source.selector.source, child.runner.globals),
             owner_cell_id=planned_output.owner_cell_id,
             projection_identity=planned_output_identity(planned_output),
         )
@@ -488,5 +462,4 @@ __all__ = [
     "materialize_projection_token",
     "materialize_rendered_output",
     "record_child_notifications",
-    "resolve_value_path",
 ]

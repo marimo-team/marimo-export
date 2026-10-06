@@ -1,6 +1,21 @@
-"""Producer and local-reader bounds for one notebook export."""
+"""Bounds of the notebook export format, shared by producers and readers."""
 
+MAX_NAME_BYTES = 255
+MAX_STATES = 10_000
+MAX_CONTROL_ID_BYTES = 1_024
+MAX_CELL_ID_BYTES = 1_024
+MAX_PROVENANCE_BYTES = 2_048
+MAX_INDEX_BYTES = 16 * 1024 * 1024
 MAX_EXPORT_ASSET_BYTES = 64 * 1024 * 1024
 MAX_EXPORT_CLOSURE_BYTES = 512 * 1024 * 1024
 
-__all__ = ["MAX_EXPORT_ASSET_BYTES", "MAX_EXPORT_CLOSURE_BYTES"]
+__all__ = [
+    "MAX_CELL_ID_BYTES",
+    "MAX_CONTROL_ID_BYTES",
+    "MAX_EXPORT_ASSET_BYTES",
+    "MAX_EXPORT_CLOSURE_BYTES",
+    "MAX_INDEX_BYTES",
+    "MAX_NAME_BYTES",
+    "MAX_PROVENANCE_BYTES",
+    "MAX_STATES",
+]

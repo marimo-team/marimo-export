@@ -9,10 +9,4 @@ def vegalite() -> ExporterSpec:
     return builtin("altair.vegalite")
 
 
-def png(*, scale: float = 1.0) -> ExporterSpec:
-    """Select a PNG rendering for an Altair chart."""
-
-    return builtin("altair.png", {"scale": scale})
-
-
-__all__ = ["png", "vegalite"]
+__all__ = ["vegalite"]

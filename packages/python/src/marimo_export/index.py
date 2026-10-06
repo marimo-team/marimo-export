@@ -6,12 +6,6 @@ from types import MappingProxyType
 from typing import Literal, TypeAlias, cast
 
 from marimo_export._format import (
-    MAX_CONTROL_ID_BYTES as _MAX_CONTROL_ID_BYTES,
-)
-from marimo_export._format import (
-    MAX_NAME_BYTES as _MAX_NAME_BYTES,
-)
-from marimo_export._format import (
     bounded_printable as _bounded_printable,
 )
 from marimo_export._format import (
@@ -44,6 +38,9 @@ from marimo_export._json import (
     json_string,
     portable_json_object,
 )
+from marimo_export._limits import MAX_CONTROL_ID_BYTES as _MAX_CONTROL_ID_BYTES
+from marimo_export._limits import MAX_INDEX_BYTES as _MAX_INDEX_BYTES
+from marimo_export._limits import MAX_NAME_BYTES as _MAX_NAME_BYTES
 from marimo_export._portable import validate_portable_basename
 from marimo_export.descriptors import (
     ARROW_CODEC,
@@ -68,7 +65,6 @@ from marimo_export.errors import NotebookExportError
 from marimo_export.wire import state_fingerprint
 
 EXPORT_SCHEMA = "marimo-export.export.v1"
-_MAX_INDEX_BYTES = 16 * 1024 * 1024
 _MAX_INDEX_VALUES = 2_000_000
 _MAX_SAFE_INTEGER = 2**53 - 1
 _MAX_CONTROL_PATH_STEPS = 256

@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from marimo_export._limits import MAX_EXPORT_ASSET_BYTES
+from marimo_export._limits import MAX_INDEX_BYTES as _MAX_INDEX_BYTES
 from marimo_export._secure_io import read_export_asset, read_export_index
 from marimo_export._writer import WriteResult, materialize_export, write_export
 from marimo_export.descriptors import OutputCodec, asset_path
@@ -23,8 +24,6 @@ from marimo_export.verification import verify_export
 
 if TYPE_CHECKING:
     from marimo_export.prepared import PreparedExport
-
-_MAX_INDEX_BYTES = 16 * 1024 * 1024
 
 
 class _ArtifactAssets(Mapping[tuple[OutputCodec, str], bytes]):

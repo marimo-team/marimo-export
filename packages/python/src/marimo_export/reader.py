@@ -19,6 +19,7 @@ from marimo_export._json import (
     sha256_bytes,
 )
 from marimo_export._limits import MAX_EXPORT_ASSET_BYTES, MAX_EXPORT_CLOSURE_BYTES
+from marimo_export._limits import MAX_INDEX_BYTES as _MAX_INDEX_BYTES
 from marimo_export._secure_io import (
     SecureReadError,
     SecureReadUnavailableError,
@@ -54,7 +55,6 @@ from marimo_export.outputs import BlobAsset
 from marimo_export.spec import FrozenJsonObject, FrozenJsonValue, StrPath
 from marimo_export.wire import state_fingerprint
 
-_MAX_INDEX_BYTES = 16 * 1024 * 1024
 _NPY_MAX_HEADER_BYTES = 1024 * 1024
 
 
