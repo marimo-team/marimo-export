@@ -103,6 +103,19 @@ def test_accept_rejects_a_bare_string() -> None:
         normalize_accept("image/png")
 
 
+def test_accept_stops_reading_past_the_media_type_limit() -> None:
+    read: list[str] = []
+
+    def endless() -> Any:
+        while True:
+            read.append(f"image/x-{len(read)}")
+            yield read[-1]
+
+    with pytest.raises(ValueError, match="1 to 32 media types"):
+        normalize_accept(endless())
+    assert len(read) == 33
+
+
 def _figure() -> Any:
     figure_module = pytest.importorskip("matplotlib.figure")
     figure = figure_module.Figure(figsize=(2, 1), dpi=100)
@@ -219,6 +232,32 @@ def test_display_methods_supply_other_values_and_their_display_size() -> None:
     assert represent(Methods(), ["image/png"]) == Representation("image/png", _PNG, 10, None)
     assert represent(Methods(), ["text/html"]).data == b"data:text/html,<b>total</b>"
     assert represent(Marimo(), ["image/png", "image/svg+xml"]).data == b"<svg/>"
+
+
+def test_mimebundle_methods_receive_include_and_exclude_only_when_they_take_them() -> None:
+    received: list[dict[str, object]] = []
+
+    class Plain:
+        def _repr_mimebundle_(self) -> dict[str, str]:
+            return {"image/svg+xml": "<svg/>"}
+
+    class Keywords:
+        def _repr_mimebundle_(self, **kwargs: object) -> dict[str, str]:
+            received.append(kwargs)
+            return {"image/svg+xml": "<svg/>"}
+
+    assert represent(Plain(), ["image/svg+xml"]).data == b"<svg/>"
+    assert represent(Keywords(), ["image/svg+xml"]).data == b"<svg/>"
+    assert received == [{"include": ["image/svg+xml"], "exclude": []}]
+
+
+@pytest.mark.parametrize(("data", "encoded"), [(0, b"0"), (False, b"false"), (2.5, b"2.5")])
+def test_json_display_data_can_be_a_scalar(data: object, encoded: bytes) -> None:
+    class Scalar:
+        def _repr_json_(self) -> object:
+            return data
+
+    assert represent(Scalar(), ["application/json"]) == Representation("application/json", encoded)
 
 
 @pytest.mark.parametrize(

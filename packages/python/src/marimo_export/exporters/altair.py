@@ -9,4 +9,14 @@ def vegalite() -> ExporterSpec:
     return builtin("altair.vegalite")
 
 
-__all__ = ["vegalite"]
+def png(*, scale: float = 1.0) -> ExporterSpec:
+    """Select a PNG rendering for an Altair chart.
+
+    ``scale`` multiplies the pixel density. The result matches
+    ``media(["image/png"], scale=scale)`` for a chart.
+    """
+
+    return builtin("altair.png", {"scale": scale})
+
+
+__all__ = ["png", "vegalite"]

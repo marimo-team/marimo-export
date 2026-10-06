@@ -22,12 +22,16 @@ uv add marimo-export
 
 Install a producer extra when an `ExportSpec` uses its exporter:
 
-| Exporter                        | Install                             |
-| ------------------------------- | ----------------------------------- |
-| Altair Vega-Lite or chart media | `uv add "marimo-export[charts]"`    |
-| AnyWidget                       | `uv add "marimo-export[anywidget]"` |
-| Parquet                         | `uv add "marimo-export[parquet]"`   |
-| Every built-in exporter         | `uv add "marimo-export[all]"`       |
+| Exporter                      | Install                             |
+| ----------------------------- | ----------------------------------- |
+| Altair Vega-Lite, PNG, or SVG | `uv add "marimo-export[charts]"`    |
+| AnyWidget                     | `uv add "marimo-export[anywidget]"` |
+| Parquet                       | `uv add "marimo-export[parquet]"`   |
+| Every built-in exporter       | `uv add "marimo-export[all]"`       |
+
+The `media` exporter needs the `charts` extra for Altair charts only. It
+renders matplotlib figures with the notebook's own matplotlib and other values
+with their display methods.
 
 ## Choose a Python path
 

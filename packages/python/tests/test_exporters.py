@@ -29,6 +29,11 @@ def test_builtin_and_importable_factories_construct_normalized_descriptors() -> 
         "name": "media",
         "options": {"accept": ["image/svg+xml", "image/png"], "scale": 2.0},
     }
+    assert altair.png(scale=2).to_value() == {
+        "dependencies": [],
+        "name": "altair.png",
+        "options": {"scale": 2.0},
+    }
     assert anywidget.bundle().to_value() == "anywidget.bundle"
     assert parquet.table(filename="prices.parquet").to_value() == {
         "dependencies": [],
@@ -86,8 +91,11 @@ def test_builtin_and_importable_factories_construct_normalized_descriptors() -> 
             dependencies=cast(Any, ["acme.models"]),
         ),
         lambda: ExporterSpec("altair.vegalite", dependencies=("acme.models",)),
+        lambda: altair.png(scale=0),
         lambda: media(["image/png"], scale=0),
         lambda: media("image/png"),
+        lambda: media(cast(Any, 5)),
+        lambda: media(cast(Any, [5])),
         lambda: media([]),
         lambda: media(["image/*"]),
         lambda: media(["image/png", "image/PNG"]),
@@ -165,6 +173,7 @@ def test_media_and_parquet_runtime_exporters_produce_complete_assets() -> None:
     source = pyarrow.table({"symbol": ["AAPL", "MSFT"], "value": [1.0, 2.0]})
 
     image = media_runtime.media(chart, accept=["image/png"], scale=2)
+    chart_png = altair_runtime.png(chart, scale=2)
     table = parquet_runtime.table(source, filename="prices.parquet")
 
     assert image.media_type == "image/png"
@@ -174,6 +183,8 @@ def test_media_and_parquet_runtime_exporters_produce_complete_assets() -> None:
         int.from_bytes(image.data[20:24], "big"),
     )
     assert (width / 2, height / 2) == (image.metadata["width"], image.metadata["height"])
+    assert chart_png.data == image.data
+    assert chart_png.metadata == {"scale": 2.0, **image.metadata}
     assert table.data.startswith(b"PAR1")
     assert table.data.endswith(b"PAR1")
     assert table.filename == "prices.parquet"

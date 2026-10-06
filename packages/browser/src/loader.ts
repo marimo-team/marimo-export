@@ -145,10 +145,12 @@ export function imageLoader(): BlobAssetLoader<MountableValue> {
           image.src = url;
           image.alt = payload.filename ?? "";
           image.decoding = "async";
-          // The width alone sets the display size, so a narrower container
-          // scales the height with the image's aspect ratio.
+          // The width sets the display size. A narrower container shrinks the
+          // image, and the height follows its aspect ratio.
           const { width } = payload.metadata;
           if (isJsonNumber(width) && Number.isInteger(width) && width >= 1) image.width = width;
+          image.style.maxWidth = "100%";
+          image.style.height = "auto";
           let disposed = false;
           const dispose = () => {
             if (disposed) return;

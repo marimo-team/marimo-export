@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import base64
 import binascii
+import inspect
 import io
 import json
 import math
@@ -204,8 +205,11 @@ def normalize_accept(accept: Iterable[str]) -> tuple[str, ...]:
 
     if isinstance(accept, str):
         raise TypeError("accept must be a sequence of media types, not a string")
+    limit = f"accept must list 1 to {MAX_ACCEPTED_MEDIA_TYPES} media types"
     accepted: list[str] = []
     for item in accept:
+        if len(accepted) == MAX_ACCEPTED_MEDIA_TYPES:
+            raise ValueError(limit)
         if not isinstance(item, str):
             raise TypeError("accepted media types must be strings")
         media_type = item.lower()
@@ -214,8 +218,8 @@ def normalize_accept(accept: Iterable[str]) -> tuple[str, ...]:
         if media_type in accepted:
             raise ValueError(f"{item!r} appears more than once")
         accepted.append(media_type)
-    if not accepted or len(accepted) > MAX_ACCEPTED_MEDIA_TYPES:
-        raise ValueError(f"accept must list 1 to {MAX_ACCEPTED_MEDIA_TYPES} media types")
+    if not accepted:
+        raise ValueError(limit)
     return tuple(accepted)
 
 
@@ -339,8 +343,14 @@ def _payload(media_type: str, data: object) -> bytes | None:
 
     if isinstance(data, (bytes, bytearray, memoryview)):
         return bytes(data) or None
-    if isinstance(data, (dict, list)) and media_type.endswith("json"):
-        return json.dumps(data, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    if media_type.endswith("json") and isinstance(data, (dict, list, bool, int, float)):
+        # IPython display data for a JSON media type is the decoded value. A
+        # string stays JSON text, as in marimo's ``_mime_()``.
+        try:
+            text = json.dumps(data, allow_nan=False, ensure_ascii=False, separators=(",", ":"))
+        except (TypeError, ValueError):
+            return None
+        return text.encode("utf-8")
     if not isinstance(data, str) or not data:
         return None
     data_url = f"data:{media_type};base64,"
@@ -363,11 +373,18 @@ def _bundle_source(value: object, accepted: tuple[str, ...], calls: _Calls) -> _
     if not callable(method):
         return None
 
+    # IPython passes include and exclude, and marimo calls the method without
+    # arguments. Pass them when the signature takes them or cannot be read.
+    arguments: dict[str, object] = {"include": list(accepted), "exclude": []}
+    try:
+        inspect.signature(method).bind(value, **arguments)
+    except TypeError:
+        arguments = {}
+    except ValueError:
+        pass
+
     def source(media_type: str) -> Representation | None:
-        result = calls(
-            "_repr_mimebundle_()",
-            lambda: method(value, include=list(accepted), exclude=[]),
-        )
+        result = calls("_repr_mimebundle_()", lambda: method(value, **arguments))
         bundle, metadata = _split(result)
         if not isinstance(bundle, Mapping):
             return None

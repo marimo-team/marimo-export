@@ -172,6 +172,7 @@ from marimo_export.exporters import altair, anywidget, blob, media, parquet
 | ------------------------------------------------------------------------------------ | ---------------------------------------------------- | -------------- |
 | `media(accept, *, scale=1.0)`                                                        | Media types in preference order, positive scale      | Base package   |
 | `altair.vegalite()`                                                                  | No options                                           | `charts`       |
+| `altair.png(*, scale=1.0)`                                                           | Positive finite scale                                | `charts`       |
 | `anywidget.bundle()`                                                                 | No options                                           | `anywidget`    |
 | `parquet.table(*, compression="snappy", filename=None)`                              | `snappy`, `none`, `gzip`, `brotli`, `lz4`, or `zstd` | `parquet`      |
 | `blob.json(*, media_type="application/json", filename=None, metadata=None)`          | Canonical JSON bytes                                 | Base package   |
@@ -188,6 +189,10 @@ each state a value of the same kind. A state whose value supports none of the
 accepted types, or whose selector names an unavailable step, stops the build
 with `OutputError` (`output_execution_failed`). Its message gives the reason,
 and its details name the state, output, and selector.
+
+`altair.png()` renders an Altair chart as a PNG, the same image that
+`media(["image/png"], scale=scale)` renders for a chart. Its `BlobAsset`
+metadata records `scale` beside `width` and `height`.
 
 ```python
 figure = OutputSpec.export("figure", media(["application/pdf", "image/svg+xml"]))

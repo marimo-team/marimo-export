@@ -4,8 +4,16 @@ from collections.abc import Mapping
 from typing import Any
 
 from marimo_export._json import canonical_bytes, json_object
+from marimo_export.errors import OutputError
+from marimo_export.exporters._optional import optional
 from marimo_export.outputs import BlobAsset
-from marimo_export.values import _VEGA_LITE_SCHEMA, _is_vega_lite, _vega_lite_specification
+from marimo_export.values import (
+    _VEGA_LITE_SCHEMA,
+    RepresentationError,
+    _is_vega_lite,
+    _vega_lite_specification,
+    represent,
+)
 
 
 def vegalite(chart: object) -> BlobAsset:
@@ -15,6 +23,23 @@ def vegalite(chart: object) -> BlobAsset:
         media_type=f"application/vnd.vegalite.v{major}+json",
         filename=None,
         metadata={"schema_major": major},
+    )
+
+
+def png(chart: object, *, scale: float = 1.0) -> BlobAsset:
+    specification, _ = _specification(chart)
+    optional("vl_convert", "charts")
+    try:
+        image = represent(specification, ["image/png"], scale=scale)
+    except RepresentationError as error:
+        raise OutputError(str(error), code="output_execution_failed") from error
+    size = {"width": image.width, "height": image.height}
+    return BlobAsset(
+        data=image.data,
+        media_type=image.media_type,
+        filename=None,
+        metadata={"scale": float(scale)}
+        | {name: pixels for name, pixels in size.items() if pixels is not None},
     )
 
 

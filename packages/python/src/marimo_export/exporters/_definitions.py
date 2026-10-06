@@ -18,6 +18,11 @@ class ExporterDefinition:
 
 
 _BUILTINS = {
+    "altair.png": ExporterDefinition(
+        module="marimo_export.exporters._runtime.altair",
+        symbol="png",
+        distributions=("altair", "vl-convert-python"),
+    ),
     "altair.vegalite": ExporterDefinition(
         module="marimo_export.exporters._runtime.altair",
         symbol="vegalite",
@@ -89,6 +94,9 @@ def _normalize_builtin_options(name: str, options: JsonObject) -> JsonObject:
     if name in {"altair.vegalite", "anywidget.bundle"}:
         _exact_options(name, options, set())
         return {}
+    if name == "altair.png":
+        _exact_options(name, options, {"scale"})
+        return {"scale": _scale(options.get("scale", 1.0))}
     if name == "media":
         _exact_options(name, options, {"accept", "scale"})
         accept = options.get("accept")

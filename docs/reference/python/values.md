@@ -87,6 +87,11 @@ display method that raises leaves its media types unavailable, and
 | Value with `_repr_*_()`                 | PNG, JPEG, SVG, PDF, HTML, Markdown, LaTeX, or JSON   |
 | Value with marimo's `_mime_()`          | The type it returns                                   |
 
+`represent()` passes IPython's `include` and `exclude` arguments to
+`_repr_mimebundle_()` when its signature takes them, and calls it without
+arguments otherwise, as marimo does. Data for a JSON media type can be any JSON
+value, such as an object, an array, a number, or a boolean.
+
 A matplotlib artist, such as an `Axes`, renders its whole figure. Matplotlib
 PDF and SVG output omits creation dates and uses constant SVG element IDs, so
 equal figures produce equal bytes. An Altair chart renders with all of its rows,
@@ -130,8 +135,9 @@ normalize_accept(accept: Iterable[str]) -> tuple[str, ...]
 
 Returns the accepted media types lowercased and in preference order. Each entry
 is a `type/subtype` media type without parameters or wildcards. A list holds 1
-to `MAX_ACCEPTED_MEDIA_TYPES` (32) unique entries. A bare string raises
-`TypeError`, and an empty, duplicate, or malformed entry raises `ValueError`.
+to `MAX_ACCEPTED_MEDIA_TYPES` (32) unique entries, and reading stops at the
+first entry past that limit. A bare string raises `TypeError`, and an empty,
+duplicate, or malformed entry raises `ValueError`.
 
 The [`media` exporter](produce#built-in-exporters) applies `represent()` to a
 selected value in every exported state.
