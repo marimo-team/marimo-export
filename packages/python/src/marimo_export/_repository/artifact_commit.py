@@ -29,6 +29,7 @@ from marimo_export._repository.handles import (
 from marimo_export._repository.models import (
     RepositoryError,
     RepositoryLimitError,
+    RetentionReserve,
     digest,
 )
 from marimo_export._repository.paths import export_path, prepared_state_path
@@ -42,7 +43,7 @@ def commit_prepared_state(
     *,
     metadata: Mapping[str, object],
     replacing_instance: str | None,
-    admit: Callable[[int], None],
+    admit: Callable[[RetentionReserve], None],
 ) -> PreparedState:
     if replacing_instance is not None:
         digest(replacing_instance, "replacing_instance")
@@ -55,7 +56,15 @@ def commit_prepared_state(
     )
     if manifest.closure.content_bytes > context.limits.prepared_state_bytes:
         raise RepositoryLimitError("One prepared state exceeds the repository byte limit.")
-    admit(manifest.closure.content_bytes)
+    metadata_json = canonical_bytes(manifest.metadata)
+    if len(metadata_json) > context.limits.metadata_bytes:
+        raise RepositoryLimitError("Prepared state metadata exceeds its byte limit.")
+    admit(
+        RetentionReserve(
+            metadata_bytes=len(metadata_json),
+            state_bytes=manifest.closure.content_bytes,
+        )
+    )
     state_key = state_key_for(
         staged._producer_sha256,
         staged._output_plan_sha256,
@@ -96,7 +105,7 @@ def commit_prepared_state(
             output_plan_sha256=staged._output_plan_sha256,
             state_fingerprint=staged._state_fingerprint,
             instance=manifest.instance,
-            metadata=canonical_bytes(manifest.metadata),
+            metadata=metadata_json,
             content_bytes=manifest.closure.content_bytes,
             replacing_instance=replacing_instance,
             owner=context.leases.owner,
@@ -134,7 +143,7 @@ def commit_export(
     states: Sequence[PreparedState],
     captured_observation_revision: int,
     replacing_instance: str | None,
-    admit: Callable[[int], None],
+    admit: Callable[[RetentionReserve], None],
     commit_guard: Callable[[], None] | None,
 ) -> PreparedExportArtifact:
     if not states:
@@ -157,7 +166,12 @@ def commit_export(
     )
     if len(metadata) > context.limits.metadata_bytes:
         raise RepositoryLimitError("Prepared export metadata exceeds its byte limit.")
-    admit(closure.content_bytes)
+    admit(
+        RetentionReserve(
+            metadata_bytes=len(metadata),
+            generation_bytes=closure.content_bytes,
+        )
+    )
     target = export_path(context.root, staged._identity, instance)
     context.catalog.check_generation_commit(
         identity=staged._identity,

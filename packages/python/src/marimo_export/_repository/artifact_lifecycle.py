@@ -24,7 +24,11 @@ from marimo_export._repository.files import (
     verify_prepared_state,
     walk_tree,
 )
-from marimo_export._repository.models import PruneResult, RepositoryIntegrityError
+from marimo_export._repository.models import (
+    PruneResult,
+    RepositoryIntegrityError,
+    RetentionReserve,
+)
 from marimo_export._repository.paths import (
     export_path,
     private_directory,
@@ -104,15 +108,11 @@ def retire_catalog_snapshots(
     _cleanup_retired(context)
 
 
-def admit(context: ArtifactContext, additional_bytes: int) -> None:
-    del additional_bytes
-    prune(context, dry_run=False)
-
-
-def prune(context: ArtifactContext, *, dry_run: bool) -> PruneResult:
+def prune(context: ArtifactContext, *, dry_run: bool, reserve: RetentionReserve) -> PruneResult:
     context.leases.flush_releases()
     candidates = context.catalog.prune_snapshot(
         limits=context.limits,
+        reserve=reserve,
         now_us=_now_us(),
         dry_run=dry_run,
     )
@@ -177,6 +177,7 @@ def prune(context: ArtifactContext, *, dry_run: bool) -> PruneResult:
             retired_states=retired_states,
             retired_generations=retired_generations,
             limits=context.limits,
+            reserve=reserve,
             now_us=_now_us(),
         )
     except BaseException:
@@ -559,7 +560,6 @@ def _digest_name(value: str) -> bool:
 
 
 __all__ = [
-    "admit",
     "discard_owned_staging",
     "new_staging",
     "prune",

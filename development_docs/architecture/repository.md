@@ -165,7 +165,7 @@ current instance.
 
 Prepared-state commit uses five ordered phases:
 
-1. Write `prepared-state.json` and enforce the per-state byte limit.
+1. Write `prepared-state.json` and enforce the per-state byte and metadata limits.
 2. Apply repository retention before checking the candidate commit.
 3. Use a short catalog transaction to validate the reservation, fence, and pointer.
 4. Install and completely verify the filesystem tree outside the catalog writer transaction.
@@ -256,16 +256,18 @@ SQLite catalog. Another process or later handle can apply another policy to the
 same repository. `prepared_state_bytes` and `generation_bytes` each enforce both
 a per-artifact maximum and an aggregate retained-content budget.
 
-Admission applies retention before a new artifact commits. The retention pass
-uses current repository contents and does not reserve room for the incoming
-artifact. The final transaction applies the candidate's metadata and content
-bytes as a hard cumulative check. A commit can therefore raise
-`repository_limit_exceeded` even when older unleased artifacts exist that a
-candidate-aware retention pass could evict.
+Admission applies retention before a new artifact commits. Retention reserves
+the candidate's metadata and content bytes, then keeps artifacts within the
+remaining `metadata_bytes`, `prepared_state_bytes`, and `generation_bytes`
+budgets. The final transaction applies the candidate's bytes as a hard
+cumulative check. It raises `repository_limit_exceeded` when leased artifacts
+leave no room, or when retired trees awaiting deletion fill `repository_bytes`.
 
-Retention chooses victims from least-recently-used unleased instances. It
-preserves active leases, the current generation for each identity admitted by
-`retained_identities`, and the prepared states required by retained generations.
+Retention keeps active leases and the current generation of an identity under
+preparation, even beyond the budgets. It then walks identities from the most
+recently touched, up to `retained_identities`, and keeps each current generation
+when it fits together with the prepared states it pins. Older generations and
+loose prepared states fill the remaining budgets in least-recently-used order.
 An older unleased identity can lose its current generation. The filesystem tree
 is first moved to a repository-owned quarantine name. The catalog then removes
 matching rows and accounts any tree awaiting deletion.

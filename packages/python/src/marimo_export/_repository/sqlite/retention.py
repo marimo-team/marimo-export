@@ -1,19 +1,63 @@
 from __future__ import annotations
 
 import sqlite3
-from collections import Counter
-from collections.abc import Mapping
-from dataclasses import dataclass
+from collections import Counter, defaultdict
+from collections.abc import Iterable, Mapping
+from dataclasses import dataclass, field
 
-from marimo_export._repository.models import RepositoryLimits
+from marimo_export._repository.models import RepositoryLimits, RetentionReserve
 from marimo_export._repository.sqlite import leases
 from marimo_export._repository.sqlite.records import (
     GenerationRow,
     StateRow,
     generation_row,
-    integer,
     state_row,
 )
+
+
+@dataclass(slots=True)
+class _Retained:
+    """Artifacts that retention keeps, and the bytes they leave unspent."""
+
+    metadata_bytes: int
+    state_bytes: int
+    generation_bytes: int
+    generations: set[tuple[str, str]] = field(default_factory=set)
+    states: set[tuple[str, str]] = field(default_factory=set)
+
+    def keep_generation(
+        self, row: GenerationRow, pinned: Iterable[StateRow], *, force: bool
+    ) -> bool:
+        if (row.identity_key, row.instance) in self.generations:
+            return True
+        return self._keep((row,), pinned, force=force)
+
+    def keep_state(self, row: StateRow, *, force: bool) -> bool:
+        return self._keep((), (row,), force=force)
+
+    def _keep(
+        self,
+        generations: tuple[GenerationRow, ...],
+        states: Iterable[StateRow],
+        *,
+        force: bool,
+    ) -> bool:
+        added = [row for row in states if (row.state_key, row.instance) not in self.states]
+        metadata = sum(row.metadata_bytes for row in (*generations, *added))
+        state_bytes = sum(row.content_bytes for row in added)
+        generation_bytes = sum(row.content_bytes for row in generations)
+        if not force and (
+            metadata > self.metadata_bytes
+            or state_bytes > self.state_bytes
+            or generation_bytes > self.generation_bytes
+        ):
+            return False
+        self.metadata_bytes -= metadata
+        self.state_bytes -= state_bytes
+        self.generation_bytes -= generation_bytes
+        self.generations.update((row.identity_key, row.instance) for row in generations)
+        self.states.update((row.state_key, row.instance) for row in added)
+        return True
 
 
 @dataclass(frozen=True, slots=True)
@@ -30,6 +74,7 @@ def retention_candidates(
     connection: sqlite3.Connection,
     *,
     limits: RepositoryLimits,
+    reserve: RetentionReserve,
     now_us: int,
     dry_run: bool,
 ) -> RetentionVictims:
@@ -40,23 +85,12 @@ def retention_candidates(
         (str(row[0]), str(row[1]), str(row[2]))
         for row in connection.execute("SELECT kind, artifact_key, instance FROM artifact_leases")
     }
-    kept_generations = _kept_generations(connection, generations, active, limits)
+    retained = _retained(connection, generations, states, active, limits, reserve)
     generation_victims = tuple(
-        record
-        for record, _accessed, _metadata_bytes in generations
-        if (record.identity_key, record.instance) not in kept_generations
-    )
-    kept_states = _kept_states(
-        connection,
-        states,
-        active,
-        kept_generations,
-        limits,
+        row for row in generations if (row.identity_key, row.instance) not in retained.generations
     )
     state_victims = tuple(
-        record
-        for record, _accessed, _metadata_bytes in states
-        if (record.state_key, record.instance) not in kept_states
+        row for row in states if (row.state_key, row.instance) not in retained.states
     )
     victims = RetentionVictims(state_victims, generation_victims)
     if not dry_run and not victims.states and not victims.generations:
@@ -71,11 +105,13 @@ def apply_retention(
     retired_states: Mapping[tuple[str, str], tuple[str, int]],
     retired_generations: Mapping[tuple[str, str], tuple[str, int]],
     limits: RepositoryLimits,
+    reserve: RetentionReserve,
     now_us: int,
 ) -> RetentionVictims:
     current = retention_candidates(
         connection,
         limits=limits,
+        reserve=reserve,
         now_us=now_us,
         dry_run=True,
     )
@@ -163,100 +199,81 @@ def apply_retention(
     return victims
 
 
-def _kept_generations(
+def _retained(
     connection: sqlite3.Connection,
-    rows: tuple[tuple[GenerationRow, int, int], ...],
+    generations: tuple[GenerationRow, ...],
+    states: tuple[StateRow, ...],
     active: set[tuple[str, str, str]],
     limits: RepositoryLimits,
-) -> set[tuple[str, str]]:
-    active_keys = {(key, instance) for kind, key, instance in active if kind == "generation"}
-    active_identities = {key for key, _instance in active_keys}
-    identity_rows = connection.execute(
+    reserve: RetentionReserve,
+) -> _Retained:
+    """Keep protected artifacts, then the most recent identities and states that fit.
+
+    Retention spends the metadata and per-kind content budgets that admission
+    checks, less the reserve for the incoming artifact. A generation is charged
+    together with the states it pins. Leased artifacts, and the current
+    generation of an identity under preparation, stay even when they exceed
+    the budget.
+    """
+    retained = _Retained(
+        limits.metadata_bytes - reserve.metadata_bytes,
+        limits.prepared_state_bytes - reserve.state_bytes,
+        limits.generation_bytes - reserve.generation_bytes,
+    )
+    generation_rows = {(row.identity_key, row.instance): row for row in generations}
+    state_rows = {(row.state_key, row.instance): row for row in states}
+    pinned: defaultdict[tuple[str, str], list[StateRow]] = defaultdict(list)
+    for row in connection.execute(
+        "SELECT identity_key, generation_instance, state_key, state_instance FROM generation_states"
+    ):
+        pinned[(str(row[0]), str(row[1]))].append(state_rows[(str(row[2]), str(row[3]))])
+
+    for kind, key, instance in active:
+        if kind == "generation" and (key, instance) in generation_rows:
+            generation = generation_rows[(key, instance)]
+            retained.keep_generation(generation, pinned[(key, instance)], force=True)
+        elif kind == "state" and (key, instance) in state_rows:
+            retained.keep_state(state_rows[(key, instance)], force=True)
+
+    preparing = {
+        str(row[0])
+        for row in connection.execute("SELECT identity_key FROM preparation_reservations")
+    }
+    kept_identities = {key for kind, key, _instance in active if kind == "generation"}
+    for row in connection.execute(
         """
         SELECT identity_key, current_instance
         FROM identities
         ORDER BY touched_at_us DESC, identity_key DESC
         """
-    ).fetchall()
-    kept_identities = set(active_identities)
-    for identity_key, _current in identity_rows:
-        if len(kept_identities) >= limits.retained_identities:
+    ).fetchall():
+        identity_key = str(row[0])
+        protected = identity_key in kept_identities or identity_key in preparing
+        if not protected and len(kept_identities) >= limits.retained_identities:
+            continue
+        current = (identity_key, str(row[1]))
+        if row[1] is None or retained.keep_generation(
+            generation_rows[current], pinned[current], force=protected
+        ):
+            kept_identities.add(identity_key)
+
+    per_identity = Counter(identity for identity, _instance in retained.generations)
+    for generation in generations:
+        key = (generation.identity_key, generation.instance)
+        if key in retained.generations or generation.identity_key not in kept_identities:
+            continue
+        if len(retained.generations) >= limits.retained_generations:
+            continue
+        if per_identity[generation.identity_key] >= limits.retained_generations_per_identity:
+            continue
+        if retained.keep_generation(generation, pinned[key], force=False):
+            per_identity[generation.identity_key] += 1
+
+    for state in states:
+        if len(retained.states) >= limits.retained_prepared_states:
             break
-        kept_identities.add(str(identity_key))
-    pinned = set(active_keys)
-    for identity_key, current in identity_rows:
-        if str(identity_key) in kept_identities and current is not None:
-            pinned.add((str(identity_key), str(current)))
-    pinned_bytes = sum(
-        record.content_bytes
-        for record, _accessed, _metadata in rows
-        if (record.identity_key, record.instance) in pinned
-    )
-    pinned_metadata = sum(
-        metadata
-        for record, _accessed, metadata in rows
-        if (record.identity_key, record.instance) in pinned
-    )
-    kept = set(pinned)
-    per_identity = Counter(identity for identity, _instance in kept)
-    used_bytes = pinned_bytes
-    used_metadata = pinned_metadata
-    for record, _accessed, metadata in rows:
-        key = (record.identity_key, record.instance)
-        if key in kept or record.identity_key not in kept_identities:
-            continue
-        if len(kept) >= limits.retained_generations:
-            continue
-        if per_identity[record.identity_key] >= limits.retained_generations_per_identity:
-            continue
-        if used_bytes + record.content_bytes > limits.generation_bytes:
-            continue
-        if used_metadata + metadata > limits.metadata_bytes:
-            continue
-        kept.add(key)
-        per_identity[record.identity_key] += 1
-        used_bytes += record.content_bytes
-        used_metadata += metadata
-    return kept
-
-
-def _kept_states(
-    connection: sqlite3.Connection,
-    rows: tuple[tuple[StateRow, int, int], ...],
-    active: set[tuple[str, str, str]],
-    kept_generations: set[tuple[str, str]],
-    limits: RepositoryLimits,
-) -> set[tuple[str, str]]:
-    pinned = {(key, instance) for kind, key, instance in active if kind == "state"}
-    if kept_generations:
-        clauses = " OR ".join(
-            "(identity_key = ? AND generation_instance = ?)" for _ in kept_generations
-        )
-        parameters = tuple(value for key in kept_generations for value in key)
-        pinned.update(
-            (str(row[0]), str(row[1]))
-            for row in connection.execute(
-                f"SELECT state_key, state_instance FROM generation_states WHERE {clauses}",
-                parameters,
-            )
-        )
-    used_bytes = sum(
-        record.content_bytes
-        for record, _accessed, _metadata in rows
-        if (record.state_key, record.instance) in pinned
-    )
-    kept = set(pinned)
-    for record, _accessed, _metadata in rows:
-        key = (record.state_key, record.instance)
-        if key in kept:
-            continue
-        if len(kept) >= limits.retained_prepared_states:
-            continue
-        if used_bytes + record.content_bytes > limits.prepared_state_bytes:
-            continue
-        kept.add(key)
-        used_bytes += record.content_bytes
-    return kept
+        retained.keep_state(state, force=False)
+    return retained
 
 
 def _prune_producers(
@@ -304,37 +321,32 @@ def _prune_producers(
     )
 
 
-def _generation_records(
-    connection: sqlite3.Connection,
-) -> tuple[tuple[GenerationRow, int, int], ...]:
+def _generation_records(connection: sqlite3.Connection) -> tuple[GenerationRow, ...]:
     rows = connection.execute(
         """
         SELECT i.identity_key, i.producer_sha256, i.output_plan_sha256,
                i.spec_sha256, g.instance, g.metadata_json, g.metadata_bytes,
-               g.captured_observation_revision, g.content_bytes,
-               g.accessed_at_us
+               g.captured_observation_revision, g.content_bytes
         FROM identities AS i
         JOIN generations AS g ON g.identity_key = i.identity_key
         ORDER BY g.accessed_at_us DESC, g.created_at_us DESC, g.instance DESC
         """
     ).fetchall()
-    return tuple((generation_row(row[:9]), integer(row[9]), integer(row[6])) for row in rows)
+    return tuple(generation_row(row) for row in rows)
 
 
-def _state_records(
-    connection: sqlite3.Connection,
-) -> tuple[tuple[StateRow, int, int], ...]:
+def _state_records(connection: sqlite3.Connection) -> tuple[StateRow, ...]:
     rows = connection.execute(
         """
         SELECT s.state_key, s.producer_sha256, s.output_plan_sha256,
                s.state_fingerprint, p.instance, p.metadata_json, p.metadata_bytes,
-               p.content_bytes, p.accessed_at_us
+               p.content_bytes
         FROM state_scopes AS s
         JOIN prepared_states AS p ON p.state_key = s.state_key
         ORDER BY p.accessed_at_us DESC, p.created_at_us DESC, p.instance DESC
         """
     ).fetchall()
-    return tuple((state_row(row[:8]), integer(row[8]), integer(row[6])) for row in rows)
+    return tuple(state_row(row) for row in rows)
 
 
 __all__ = ["RetentionVictims", "apply_retention", "retention_candidates"]

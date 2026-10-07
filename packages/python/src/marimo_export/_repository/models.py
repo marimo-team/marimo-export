@@ -209,6 +209,15 @@ def _project_state(
 
 
 @dataclass(frozen=True, slots=True)
+class RetentionReserve:
+    """Room that retention leaves free for an artifact about to be admitted."""
+
+    metadata_bytes: int = 0
+    state_bytes: int = 0
+    generation_bytes: int = 0
+
+
+@dataclass(frozen=True, slots=True)
 class RepositoryLimits:
     """Bounded storage and lifecycle policy for an export repository."""
 
@@ -391,6 +400,7 @@ __all__ = [
     "RepositoryReservationTimeoutError",
     "RepositoryStatus",
     "RepositoryUnavailableError",
+    "RetentionReserve",
     "SnapshotObservation",
     "digest",
     "positive_integer",

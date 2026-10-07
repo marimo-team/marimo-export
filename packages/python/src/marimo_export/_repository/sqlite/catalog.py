@@ -17,6 +17,7 @@ from marimo_export._repository.models import (
     RepositoryIdentity,
     RepositoryLimits,
     RepositoryUnavailableError,
+    RetentionReserve,
 )
 from marimo_export._repository.sqlite import (
     artifacts,
@@ -434,6 +435,7 @@ class SqliteCatalog:
         self,
         *,
         limits: RepositoryLimits,
+        reserve: RetentionReserve,
         now_us: int,
         dry_run: bool,
     ) -> RetentionVictims:
@@ -441,6 +443,7 @@ class SqliteCatalog:
             return retention.retention_candidates(
                 connection,
                 limits=limits,
+                reserve=reserve,
                 now_us=now_us,
                 dry_run=dry_run,
             )
@@ -452,6 +455,7 @@ class SqliteCatalog:
         retired_states: Mapping[tuple[str, str], tuple[str, int]],
         retired_generations: Mapping[tuple[str, str], tuple[str, int]],
         limits: RepositoryLimits,
+        reserve: RetentionReserve,
         now_us: int,
     ) -> RetentionVictims:
         with self.write() as connection:
@@ -461,6 +465,7 @@ class SqliteCatalog:
                 retired_states=retired_states,
                 retired_generations=retired_generations,
                 limits=limits,
+                reserve=reserve,
                 now_us=now_us,
             )
 
