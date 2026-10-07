@@ -6,7 +6,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from types import MappingProxyType
-from typing import TypeAlias, cast
+from typing import Literal, TypeAlias, cast
 
 from marimo_export._json import JsonObject, JsonValue, canonical_bytes, decode_json_object
 from marimo_export.errors import MarimoExportError
@@ -209,6 +209,18 @@ def _project_state(
 
 
 @dataclass(frozen=True, slots=True)
+class AdmissionCandidate:
+    """An artifact about to be admitted, which retention makes room for."""
+
+    kind: Literal["state", "generation"]
+    key: str
+    instance: str
+    replacing_instance: str | None
+    metadata_bytes: int
+    content_bytes: int
+
+
+@dataclass(frozen=True, slots=True)
 class RepositoryLimits:
     """Bounded storage and lifecycle policy for an export repository."""
 
@@ -376,6 +388,7 @@ def _freeze(value: JsonValue) -> JsonValue:
 
 __all__ = [
     "MAX_SQLITE_INTEGER",
+    "AdmissionCandidate",
     "ExportGenerationRecord",
     "ObservationSnapshot",
     "ObservedState",

@@ -165,7 +165,7 @@ current instance.
 
 Prepared-state commit uses five ordered phases:
 
-1. Write `prepared-state.json` and enforce the per-state byte limit.
+1. Write `prepared-state.json` and enforce the per-state byte and metadata limits.
 2. Apply repository retention before checking the candidate commit.
 3. Use a short catalog transaction to validate the reservation, fence, and pointer.
 4. Install and completely verify the filesystem tree outside the catalog writer transaction.
@@ -256,19 +256,30 @@ SQLite catalog. Another process or later handle can apply another policy to the
 same repository. `prepared_state_bytes` and `generation_bytes` each enforce both
 a per-artifact maximum and an aggregate retained-content budget.
 
-Admission applies retention before a new artifact commits. The retention pass
-uses current repository contents and does not reserve room for the incoming
-artifact. The final transaction applies the candidate's metadata and content
-bytes as a hard cumulative check. A commit can therefore raise
-`repository_limit_exceeded` even when older unleased artifacts exist that a
-candidate-aware retention pass could evict.
+Admission applies retention before a new artifact commits. Retention reserves
+the bytes that admission will charge the candidate: nothing when its instance
+is already indexed, and its bytes minus those of the instance it replaces
+otherwise. It keeps those matched and replaced rows, then keeps artifacts within
+the remaining `metadata_bytes`, `prepared_state_bytes`, and `generation_bytes`
+budgets. The final transaction applies the same charge as a hard cumulative
+check. It raises `repository_limit_exceeded` when protected artifacts leave no
+room, or when retired trees awaiting deletion fill `repository_bytes`.
 
-Retention chooses victims from least-recently-used unleased instances. It
-preserves active leases, the current generation for each identity admitted by
-`retained_identities`, and the prepared states required by retained generations.
-An older unleased identity can lose its current generation. The filesystem tree
-is first moved to a repository-owned quarantine name. The catalog then removes
-matching rows and accounts any tree awaiting deletion.
+Retention keeps artifacts in priority order:
+
+1. Active leases, and the current generation of an identity under preparation,
+   even beyond the budgets.
+2. The current generation of each remaining identity, walking from the most
+   recently touched, when it fits together with the prepared states it pins.
+   Protected identities take their `retained_identities` slots first.
+3. Older generations of kept identities, most recently accessed first.
+4. Loose prepared states, most recently accessed first.
+
+An older generation therefore takes budget before a more recent loose prepared
+state, and an older unleased identity can lose its current generation.
+
+Eviction first moves the filesystem tree to a repository-owned quarantine name.
+The catalog then removes matching rows and accounts any tree awaiting deletion.
 
 `repository.prune(dry_run=True)` reports eligible prepared states, generations,
 and bytes. A live prune returns counts and released bytes after rechecking the
