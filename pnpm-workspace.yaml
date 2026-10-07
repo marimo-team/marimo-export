@@ -51,7 +51,7 @@ minimumReleaseAgeExclude:
   - vite-plus
 
 overrides:
-  "@babel/parser": 7.29.9
+  "@babel/parser": 8.0.6
   lodash-es: 4.18.1
   nanoid: 3.3.19
   postcss: 8.5.28
