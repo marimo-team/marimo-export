@@ -5,7 +5,7 @@ from collections import Counter, defaultdict
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 
-from marimo_export._repository.models import RepositoryLimits, RetentionReserve
+from marimo_export._repository.models import AdmissionCandidate, RepositoryLimits
 from marimo_export._repository.sqlite import leases
 from marimo_export._repository.sqlite.records import (
     GenerationRow,
@@ -52,12 +52,15 @@ class _Retained:
             or generation_bytes > self.generation_bytes
         ):
             return False
-        self.metadata_bytes -= metadata
-        self.state_bytes -= state_bytes
-        self.generation_bytes -= generation_bytes
+        self.spend(metadata, state_bytes, generation_bytes)
         self.generations.update((row.identity_key, row.instance) for row in generations)
         self.states.update((row.state_key, row.instance) for row in added)
         return True
+
+    def spend(self, metadata: int, state_bytes: int, generation_bytes: int) -> None:
+        self.metadata_bytes -= metadata
+        self.state_bytes -= state_bytes
+        self.generation_bytes -= generation_bytes
 
 
 @dataclass(frozen=True, slots=True)
@@ -74,7 +77,7 @@ def retention_candidates(
     connection: sqlite3.Connection,
     *,
     limits: RepositoryLimits,
-    reserve: RetentionReserve,
+    candidate: AdmissionCandidate | None,
     now_us: int,
     dry_run: bool,
 ) -> RetentionVictims:
@@ -85,7 +88,7 @@ def retention_candidates(
         (str(row[0]), str(row[1]), str(row[2]))
         for row in connection.execute("SELECT kind, artifact_key, instance FROM artifact_leases")
     }
-    retained = _retained(connection, generations, states, active, limits, reserve)
+    retained = _retained(connection, generations, states, active, limits, candidate)
     generation_victims = tuple(
         row for row in generations if (row.identity_key, row.instance) not in retained.generations
     )
@@ -105,13 +108,13 @@ def apply_retention(
     retired_states: Mapping[tuple[str, str], tuple[str, int]],
     retired_generations: Mapping[tuple[str, str], tuple[str, int]],
     limits: RepositoryLimits,
-    reserve: RetentionReserve,
+    candidate: AdmissionCandidate | None,
     now_us: int,
 ) -> RetentionVictims:
     current = retention_candidates(
         connection,
         limits=limits,
-        reserve=reserve,
+        candidate=candidate,
         now_us=now_us,
         dry_run=True,
     )
@@ -205,20 +208,21 @@ def _retained(
     states: tuple[StateRow, ...],
     active: set[tuple[str, str, str]],
     limits: RepositoryLimits,
-    reserve: RetentionReserve,
+    candidate: AdmissionCandidate | None,
 ) -> _Retained:
     """Keep protected artifacts, then the most recent identities and states that fit.
 
     Retention spends the metadata and per-kind content budgets that admission
-    checks, less the reserve for the incoming artifact. A generation is charged
-    together with the states it pins. Leased artifacts, and the current
-    generation of an identity under preparation, stay even when they exceed
+    checks, less the bytes that admission will charge the candidate. A
+    generation is charged together with the states it pins. Leased artifacts,
+    the current generation of an identity under preparation, and the rows that
+    admission matches or credits for the candidate stay even when they exceed
     the budget.
     """
     retained = _Retained(
-        limits.metadata_bytes - reserve.metadata_bytes,
-        limits.prepared_state_bytes - reserve.state_bytes,
-        limits.generation_bytes - reserve.generation_bytes,
+        limits.metadata_bytes,
+        limits.prepared_state_bytes,
+        limits.generation_bytes,
     )
     generation_rows = {(row.identity_key, row.instance): row for row in generations}
     state_rows = {(row.state_key, row.instance): row for row in states}
@@ -228,6 +232,9 @@ def _retained(
     ):
         pinned[(str(row[0]), str(row[1]))].append(state_rows[(str(row[2]), str(row[3]))])
 
+    if candidate is not None:
+        _make_room(retained, candidate, generation_rows, state_rows, pinned)
+
     for kind, key, instance in active:
         if kind == "generation" and (key, instance) in generation_rows:
             generation = generation_rows[(key, instance)]
@@ -235,27 +242,33 @@ def _retained(
         elif kind == "state" and (key, instance) in state_rows:
             retained.keep_state(state_rows[(key, instance)], force=True)
 
+    identities = [
+        (str(row[0]), None if row[1] is None else str(row[1]))
+        for row in connection.execute(
+            """
+            SELECT identity_key, current_instance
+            FROM identities
+            ORDER BY touched_at_us DESC, identity_key DESC
+            """
+        )
+    ]
     preparing = {
         str(row[0])
         for row in connection.execute("SELECT identity_key FROM preparation_reservations")
     }
     kept_identities = {key for kind, key, _instance in active if kind == "generation"}
-    for row in connection.execute(
-        """
-        SELECT identity_key, current_instance
-        FROM identities
-        ORDER BY touched_at_us DESC, identity_key DESC
-        """
-    ).fetchall():
-        identity_key = str(row[0])
-        protected = identity_key in kept_identities or identity_key in preparing
-        if not protected and len(kept_identities) >= limits.retained_identities:
+    kept_identities.update(key for key, _current in identities if key in preparing)
+    for key, current in identities:
+        if key in kept_identities and current is not None:
+            generation = generation_rows[(key, current)]
+            retained.keep_generation(generation, pinned[(key, current)], force=True)
+    for key, current in identities:
+        if key in kept_identities or len(kept_identities) >= limits.retained_identities:
             continue
-        current = (identity_key, str(row[1]))
-        if row[1] is None or retained.keep_generation(
-            generation_rows[current], pinned[current], force=protected
+        if current is None or retained.keep_generation(
+            generation_rows[(key, current)], pinned[(key, current)], force=False
         ):
-            kept_identities.add(identity_key)
+            kept_identities.add(key)
 
     per_identity = Counter(identity for identity, _instance in retained.generations)
     for generation in generations:
@@ -274,6 +287,41 @@ def _retained(
             break
         retained.keep_state(state, force=False)
     return retained
+
+
+def _make_room(
+    retained: _Retained,
+    candidate: AdmissionCandidate,
+    generation_rows: Mapping[tuple[str, str], GenerationRow],
+    state_rows: Mapping[tuple[str, str], StateRow],
+    pinned: Mapping[tuple[str, str], list[StateRow]],
+) -> None:
+    """Reserve the bytes that admission will charge the candidate.
+
+    Admission charges nothing for an indexed instance, and credits the instance
+    it replaces. Retention keeps both rows so that arithmetic still holds.
+    """
+    rows: Mapping[tuple[str, str], GenerationRow | StateRow]
+    rows = generation_rows if candidate.kind == "generation" else state_rows
+    existing = rows.get((candidate.key, candidate.instance))
+    replaced = (
+        rows.get((candidate.key, candidate.replacing_instance))
+        if candidate.replacing_instance is not None
+        else None
+    )
+    for row in (existing, replaced):
+        if isinstance(row, GenerationRow):
+            retained.keep_generation(row, pinned[(row.identity_key, row.instance)], force=True)
+        elif row is not None:
+            retained.keep_state(row, force=True)
+    if existing is not None:
+        return
+    metadata = candidate.metadata_bytes - (replaced.metadata_bytes if replaced else 0)
+    content = candidate.content_bytes - (replaced.content_bytes if replaced else 0)
+    if candidate.kind == "generation":
+        retained.spend(metadata, 0, content)
+    else:
+        retained.spend(metadata, content, 0)
 
 
 def _prune_producers(

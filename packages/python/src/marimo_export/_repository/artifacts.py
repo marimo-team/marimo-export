@@ -15,11 +15,11 @@ from marimo_export._repository.handles import (
 )
 from marimo_export._repository.leases import LeaseManager
 from marimo_export._repository.models import (
+    AdmissionCandidate,
     PruneResult,
     RepositoryIdentity,
     RepositoryLimits,
     RepositoryReservationTimeoutError,
-    RetentionReserve,
 )
 from marimo_export._repository.sqlite.catalog import SqliteCatalog
 from marimo_export._repository.sqlite.maintenance import maintenance_lock
@@ -123,9 +123,7 @@ class ArtifactRepository:
 
     def prune(self, *, dry_run: bool = False) -> PruneResult:
         with self._maintenance():
-            return artifact_lifecycle.prune(
-                self._context, dry_run=dry_run, reserve=RetentionReserve()
-            )
+            return artifact_lifecycle.prune(self._context, dry_run=dry_run, candidate=None)
 
     def recover(self) -> None:
         with self._maintenance():
@@ -139,8 +137,8 @@ class ArtifactRepository:
         with self._maintenance():
             artifact_lifecycle.retire_catalog_snapshots(self._context, snapshots)
 
-    def _admit(self, reserve: RetentionReserve) -> None:
-        artifact_lifecycle.prune(self._context, dry_run=False, reserve=reserve)
+    def _admit(self, candidate: AdmissionCandidate) -> None:
+        artifact_lifecycle.prune(self._context, dry_run=False, candidate=candidate)
 
     @contextmanager
     def _maintenance(self, *, timeout_seconds: float = 10.0):
