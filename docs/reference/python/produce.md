@@ -156,7 +156,8 @@ the selector during construction with
 
 `json()` stores the [JSON form](values#json-data) of the selected value, so a
 pandas, Polars, or PyArrow table exports as a list of row objects and a date
-exports as ISO 8601 text.
+exports as ISO 8601 text. A selector that steps from `None`, such as
+`peak.label` while `peak` is `None`, exports `null`.
 
 `OutputSpec.source` exposes the normalized source record for inspection. Its
 concrete source-record classes are not public construction helpers. Construct an

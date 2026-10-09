@@ -52,8 +52,9 @@ well-formed Unicode. Other text raises `SelectorError`, a `ValueError`.
 
 `resolve()` reads the root from `namespace`, then applies each step. An
 attribute step reads a mapping key when the current value is a mapping that
-contains it, and the attribute otherwise. It raises `LookupError` when the root
-is undefined or a step is unavailable.
+contains it, and the attribute otherwise. A step from `None` selects `None`, so
+`peak.label` reads as missing while `peak` is `None`. It raises `LookupError`
+when the root is undefined or a step is unavailable.
 
 ## `represent()`
 

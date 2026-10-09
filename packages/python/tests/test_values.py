@@ -76,6 +76,13 @@ def test_selector_resolves_mapping_keys_before_attributes() -> None:
     assert ValueSelector("config.items").resolve(namespace) == "key wins"
 
 
+def test_selector_steps_from_none_select_none() -> None:
+    namespace = {"peak": None, "report": {"peak": None}}
+
+    assert ValueSelector("peak.label").resolve(namespace) is None
+    assert ValueSelector('report.peak["label"][0]').resolve(namespace) is None
+
+
 @pytest.mark.parametrize(
     ("source", "message"),
     [

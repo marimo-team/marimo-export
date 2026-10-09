@@ -83,14 +83,18 @@ class ValueSelector:
     def resolve(self, namespace: Mapping[str, object]) -> object:
         """Return the selected value from a namespace such as notebook globals.
 
-        Mapping keys take precedence over attributes. Raises ``LookupError``
-        when the root is undefined or a step is unavailable.
+        Mapping keys take precedence over attributes. A step from ``None``
+        selects ``None``, so ``peak.label`` reads as missing while ``peak`` is
+        ``None``. Raises ``LookupError`` when the root is undefined or a step is
+        unavailable.
         """
 
         if self.root not in namespace:
             raise LookupError(f"{self.root!r} is not defined")
         current = namespace[self.root]
         for kind, key in self.path:
+            if current is None:
+                return None
             if kind == "attribute" and isinstance(current, Mapping) and key in current:
                 current = cast(Mapping[object, object], current)[key]
             elif kind == "attribute":

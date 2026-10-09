@@ -121,7 +121,7 @@ if __name__ == "__main__":
     assert b"/MediaBox [ 0 0 250.38 83.46 ]" in state.output("figure").blob_asset().data
 
 
-def test_json_outputs_store_tables_and_dates(tmp_path: Path) -> None:
+def test_json_outputs_store_tables_dates_and_steps_from_none(tmp_path: Path) -> None:
     pytest.importorskip("polars")
     notebook = tmp_path / "notebook.py"
     notebook.write_text(
@@ -140,7 +140,8 @@ def _():
     days = pl.DataFrame(
         {"day": [datetime.date(2015, 2, 4), datetime.date(2015, 2, 5)], "rate": [0.5, None]}
     )
-    return (days,)
+    peak = None
+    return days, peak
 
 
 if __name__ == "__main__":
@@ -151,7 +152,10 @@ if __name__ == "__main__":
     spec = ExportSpec(
         default_state="base",
         states={"base": {}},
-        outputs={"days": OutputSpec.json("days")},
+        outputs={
+            "days": OutputSpec.json("days"),
+            "peak_label": OutputSpec.json("peak.label"),
+        },
     )
 
     result = build(notebook, spec=spec, output=tmp_path / "export", timeout=60)
@@ -161,6 +165,7 @@ if __name__ == "__main__":
         {"day": "2015-02-04", "rate": 0.5},
         {"day": "2015-02-05", "rate": None},
     )
+    assert state.output("peak_label").json() is None
 
 
 @pytest.mark.parametrize(
