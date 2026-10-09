@@ -350,7 +350,7 @@ def _write_pyproject(
     requirement = (
         "marimo-export[all]"
         if python_package is not None
-        else f"marimo-export[all]=={package_version}"
+        else _published_packages(package_version)[0]
     )
     requirements.append(requirement)
     rendered = [
@@ -389,7 +389,9 @@ def _write_package_json(
 ) -> None:
     dependencies = {
         "@marimo-team/marimo-export": (
-            f"file:{browser_package.as_posix()}" if browser_package is not None else package_version
+            f"file:{browser_package.as_posix()}"
+            if browser_package is not None
+            else _published_packages(package_version)[1]
         ),
     }
     for loader in loaders:
@@ -417,6 +419,18 @@ def _write_package_json(
     if "package-manager" in toolchain:
         value["packageManager"] = toolchain["package-manager"]
     path.write_text(json.dumps(value, indent=2) + "\n", encoding="utf-8")
+
+
+def _published_packages(version: str) -> tuple[str, str]:
+    if re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+\.dev[0-9]+", version):
+        downloads = "https://github.com/marimo-team/marimo-export/releases/download/preview"
+        wheel = f"{downloads}/marimo_export-{version}-py3-none-any.whl"
+        browser_version = version.replace(".dev", "-dev.")
+        return (
+            f"marimo-export[all] @ {wheel}",
+            f"{downloads}/marimo-team-marimo-export-{browser_version}.tgz",
+        )
+    return f"marimo-export[all]=={version}", version
 
 
 def _requirement_name(requirement: str) -> str:

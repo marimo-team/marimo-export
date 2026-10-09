@@ -5,6 +5,7 @@ root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$root"
 
 version="$(uv version --package marimo-export --short)"
+npm_version="$(node -p 'JSON.parse(require("fs").readFileSync("packages/browser/package.json", "utf8")).version')"
 python_dist="$root/dist/python"
 npm_dist="$root/dist/npm"
 
@@ -27,5 +28,5 @@ for wheel in "${wheels[@]}"; do
 done
 
 node scripts/smoke_npm_packages.mjs \
-	"$npm_dist/marimo-team-marimo-export-$version.tgz" \
-	"$version"
+	"$npm_dist/marimo-team-marimo-export-$npm_version.tgz" \
+	"$npm_version"

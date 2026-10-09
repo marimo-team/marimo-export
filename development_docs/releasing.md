@@ -5,6 +5,10 @@ One annotated `vX.Y.Z` tag publishes
 [`@marimo-team/marimo-export`](https://www.npmjs.com/package/@marimo-team/marimo-export)
 to npm from the same source commit.
 
+Validated `main` commits also publish coordinated Python and browser packages
+to the rolling [`preview` GitHub prerelease](https://github.com/marimo-team/marimo-export/releases/tag/preview).
+The preview channel uses GitHub download URLs for iteration and downstream CI.
+
 ```console
 make check
 ./scripts/release.sh --dry-run
@@ -39,6 +43,104 @@ pnpm --dir packages/browser pkg set "version=$VERSION"
 uv lock
 pnpm install --lockfile-only
 ```
+
+## Rolling previews
+
+`publish.yml` listens for completed push-event CI and GitHub Pages workflows on
+`main`. A preview starts only after both workflows pass for the exact source
+commit. Pull request runs and fork runs cannot publish. Completion notifications
+queue by commit, and the resolver skips builds whose publication is complete.
+
+The previous reachable final `vX.Y.Z` tag supplies the version base. Its next
+patch version and the number of commits since that tag produce Python
+`X.Y.(Z+1).devN` and npm `X.Y.(Z+1)-dev.N`. Suffixed and unrelated tags are
+excluded. The calculation uses the source commit's parent when selecting the
+base, so adding a release tag to that source commit later preserves its preview
+version. Previews sort below the next patch release.
+
+The build job checks out the validated commit, stamps its manifests and lock in
+the disposable checkout, and runs the same `make package` gate as tagged
+releases. Both Python wheels pass isolated installation checks, the direct and
+source-rebuilt wheel payloads match, and the browser tarball passes a fresh pnpm
+consumer install. The shared attestation job signs every published artifact.
+For previews, the signed SLSA predicate records the packaged commit in
+`buildDefinition.externalParameters.checkoutCommit` and a resolved dependency.
+It records the signing workflow commit separately, because `workflow_run` can
+start after `main` advances. Verify the signature with `gh attestation verify`
+and inspect that predicate when checking the preview's source; the certificate's
+source digest identifies the signing workflow commit.
+
+The `preview` job publishes these assets under one GitHub prerelease:
+
+- `marimo_export-X.Y.Z.devN-py3-none-any.whl`
+- `marimo_export-X.Y.Z.devN.tar.gz`
+- `marimo-team-marimo-export-X.Y.Z-dev.N.tgz`
+- `marimo-export-X.Y.Z.devN-SHA256SUMS`
+
+The notes show the newest build's source commit and exact installation commands.
+Use the URLs from those notes to install matching Python and browser packages:
+
+```console
+uv add "marimo-export @ WHEEL_URL"
+pnpm add "TARBALL_URL"
+```
+
+For an isolated CLI, run `uv tool install --force "marimo-export @ WHEEL_URL"`.
+Notebooks can declare the same direct Python dependency in inline script
+metadata. Downstream CI should pin both versioned URLs when testing a particular
+commit.
+An installed preview's application scaffold uses those matching wheel and
+tarball URLs, so generated applications can install the same build.
+
+Publication serializes uploads, notes, announcements, and pruning. The
+`preview` tag stays on the commit that created the release, so tag immutability
+rules remain compatible. Asset URLs and attestations identify each build.
+An older build completing later cannot replace the newest installation links.
+The release keeps the newest 30 builds with all three matching package assets
+uploaded. It removes all four assets when a build ages out, and removes
+abandoned partial builds older than that window. Pin a tagged release for
+longer-lived dependencies.
+
+Retries compare existing assets with the local verified bytes before reusing
+them. Empty GitHub `starter` assets left by a failed upload are removed before
+retrying. The merged pull request announcement precedes pruning, so a failed
+announcement preserves the older builds. The checksum manifest is uploaded
+after notes, announcement, and pruning succeed; it marks completed publication.
+A retry can finish interrupted publication without overwriting artifacts or duplicating
+the announcement. Rerun a failed preview publication with
+`gh run rerun RUN_ID --failed`. If a required upstream workflow failed, fix or
+rerun that workflow first; its successful completion retries preview readiness.
+An API failure fails the publication run so it can be retried; a pending or
+unsuccessful upstream check simply defers publication.
+
+Create a GitHub environment named `preview` with selected deployment branches
+and tags, allowing the `main` branch only. It needs no registry credentials.
+The preview job uses `contents: write` for release assets and `pull-requests:
+write` for the merged pull request's installation comment. Its queued
+concurrency group keeps up to GitHub's 100-run limit.
+
+### Preview provenance v1
+
+Preview attestations use the SLSA v1 predicate type
+`https://slsa.dev/provenance/v1` and this build type:
+
+```text
+https://github.com/marimo-team/marimo-export/blob/main/development_docs/releasing.md#preview-provenance-v1
+```
+
+This build type describes a GitHub Actions `workflow_run` publication after CI
+and GitHub Pages succeed for one `main` commit. The artifacts come from the
+build job's exact checkout, stamped with coordinated preview versions and
+verified by `make package`.
+
+`buildDefinition.externalParameters.workflow` names the signing repository,
+ref, and workflow path; `checkoutCommit` is the packaged source commit.
+`internalParameters.github` records the event, repository and owner IDs, and
+runner environment. `resolvedDependencies` contains two Git dependencies: the
+signing workflow ref with its commit digest, and the packaged source commit
+with its digest. Those commits can differ. `runDetails.builder.id` identifies
+the signing workflow and ref; `metadata.invocationId` identifies its run and
+attempt. The signed subjects bind this record to the artifact checksums.
 
 ## Registry trust
 
@@ -76,6 +178,11 @@ The release preflight checks that the `npm` and `pypi` environments exist.
 Required reviewers remain an optional repository policy. Apply a repository
 ruleset to `v*` tags when the release process needs maintainer approval before
 publication.
+
+If restricting the `npm` and `pypi` environments, allow both `v*` tags for
+ordinary publication and the `main` branch for the existing recovery workflow.
+The publication jobs accept the release channel only; preview versions go to
+GitHub Releases.
 
 ## Prepare the release commit
 

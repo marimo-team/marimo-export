@@ -3,10 +3,10 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import os
 import shutil
 import subprocess
 import sys
-from importlib.metadata import version as distribution_version
 from pathlib import Path
 
 import pytest
@@ -134,11 +134,36 @@ def test_scaffold_is_source_preserving_and_relocatable(tmp_path: Path) -> None:
     )
 
 
-def test_installed_skill_scaffolds_with_matching_registry_packages(tmp_path: Path) -> None:
+@pytest.mark.parametrize("package_version", ["0.1.4", "0.1.5.dev9"])
+def test_installed_skill_scaffolds_with_matching_published_packages(
+    tmp_path: Path, package_version: str
+) -> None:
     installed_skill = tmp_path / "marimo_export.agent-plugin/skills/notebook-to-static-app"
     shutil.copytree(_SKILL, installed_skill)
     notebook = _notebook(tmp_path / "analysis.py")
     output = tmp_path / "app"
+    metadata = tmp_path / f"marimo_export-{package_version}.dist-info"
+    metadata.mkdir()
+    metadata.joinpath("METADATA").write_text(
+        f"Metadata-Version: 2.1\nName: marimo-export\nVersion: {package_version}\n",
+        encoding="utf-8",
+    )
+    expected_python = f"marimo-export[all]=={package_version}"
+    expected_browser = package_version
+    if package_version == "0.1.5.dev9":
+        downloads = "https://github.com/marimo-team/marimo-export/releases/download/preview"
+        wheel = f"{downloads}/marimo_export-0.1.5.dev9-py3-none-any.whl"
+        expected_python = f"marimo-export[all] @ {wheel}"
+        expected_browser = f"{downloads}/marimo-team-marimo-export-0.1.5-dev.9.tgz"
+        metadata.joinpath("direct_url.json").write_text(
+            json.dumps({"url": wheel}), encoding="utf-8"
+        )
+        notebook.write_text(
+            notebook.read_text().replace(
+                '"polars==1.40.0"', f'"polars==1.40.0", "marimo-export @ {wheel}"'
+            ),
+            encoding="utf-8",
+        )
 
     subprocess.run(
         [
@@ -154,19 +179,19 @@ def test_installed_skill_scaffolds_with_matching_registry_packages(tmp_path: Pat
         check=True,
         capture_output=True,
         cwd=tmp_path,
+        env={**os.environ, "PYTHONPATH": str(tmp_path)},
         text=True,
     )
 
-    package_version = distribution_version("marimo-export")
     package = json.loads((output / "package.json").read_text(encoding="utf-8"))
     assert package["dependencies"] == {
-        "@marimo-team/marimo-export": package_version,
+        "@marimo-team/marimo-export": expected_browser,
         "hyparquet": "^1.30.0",
     }
     project = tomllib.loads((output / "pyproject.toml").read_text(encoding="utf-8"))
     assert project["project"]["dependencies"] == [
         "polars==1.40.0",
-        f"marimo-export[all]=={package_version}",
+        expected_python,
     ]
     assert "sources" not in project["tool"]["uv"]
     assert not (output / "vendor").exists()

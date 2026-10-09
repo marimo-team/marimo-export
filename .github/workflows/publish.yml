@@ -1,9 +1,15 @@
 name: Release
 
+# Tagged releases publish to registries. Validated main commits publish matching
+# Python and browser artifacts to the rolling preview GitHub prerelease.
 on:
   push:
     tags:
       - "v[0-9]*.[0-9]*.[0-9]*"
+  workflow_run:
+    workflows: [CI, GitHub Pages]
+    types: [completed]
+    branches: [main]
   workflow_dispatch:
     inputs:
       version:
@@ -16,15 +22,72 @@ on:
         type: string
 
 permissions:
+  actions: read
   contents: read
 
 concurrency:
-  group: publish
+  group: >-
+    ${{ github.event_name == 'workflow_run' &&
+    format('publish-preview-{0}', github.event.workflow_run.head_sha) || 'publish' }}
   cancel-in-progress: false
+  queue: max
 
 jobs:
+  resolve:
+    name: Resolve publication
+    if: >-
+      github.event_name == 'push' ||
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_run' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_repository.full_name == github.repository)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      channel: ${{ steps.identity.outputs.channel }}
+      commit: ${{ steps.identity.outputs.commit }}
+      version: ${{ steps.identity.outputs.version }}
+      publish: ${{ steps.identity.outputs.publish }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Resolve channel and preview readiness
+        id: identity
+        env:
+          GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
+          PUBLICATION_EVENT: ${{ github.event_name }}
+          PREVIEW_COMMIT: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          if [[ "$PUBLICATION_EVENT" != workflow_run ]]; then
+            printf 'channel=release\ncommit=%s\npublish=true\n' "$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          version="$(./scripts/preview-version.sh "$PREVIEW_COMMIT")"
+          printf 'channel=preview\ncommit=%s\nversion=%s\n' "$PREVIEW_COMMIT" "$version" >> "$GITHUB_OUTPUT"
+          readiness=0
+          ./scripts/require-preview-checks.sh "$PREVIEW_COMMIT" || readiness=$?
+          if [[ "$readiness" == 3 ]]; then
+            echo "::notice::The $version preview waits for CI and GitHub Pages for $PREVIEW_COMMIT."
+            echo 'publish=false' >> "$GITHUB_OUTPUT"
+          elif [[ "$readiness" != 0 ]]; then
+            exit "$readiness"
+          elif assets="$(gh release view preview --json assets --jq '.assets[] | select(.state == "uploaded" and .size > 0) | .name' 2>/dev/null)" &&
+            grep -qxF "marimo-export-$version-SHA256SUMS" <<<"$assets"; then
+            echo "::notice::marimo-export $version is already published as a preview."
+            echo 'publish=false' >> "$GITHUB_OUTPUT"
+          else
+            echo 'publish=true' >> "$GITHUB_OUTPUT"
+          fi
+
   build:
     name: Build and verify
+    needs: resolve
     permissions:
       actions: read
       contents: read
@@ -35,6 +98,7 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
         with:
+          ref: ${{ needs.resolve.outputs.commit }}
           fetch-depth: 0
           persist-credentials: false
 
@@ -43,7 +107,7 @@ jobs:
         with:
           enable-cache: true
           version: "0.12.22"
-        if: github.event_name == 'push'
+        if: github.event_name != 'workflow_dispatch'
 
       - name: Fetch current main
         run: git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
@@ -57,15 +121,23 @@ jobs:
 
       - name: Set up JavaScript workspace
         uses: ./.github/actions/setup-js
-        if: github.event_name == 'push'
+        if: github.event_name != 'workflow_dispatch'
+
+      - name: Set coordinated preview versions
+        if: needs.resolve.outputs.channel == 'preview'
+        env:
+          PREVIEW_VERSION: ${{ needs.resolve.outputs.version }}
+        run: |
+          uv version --package marimo-export --no-sync "$PREVIEW_VERSION"
+          pnpm --dir packages/browser pkg set "version=${PREVIEW_VERSION/.dev/-dev.}"
 
       - name: Install Python workspace
         run: uv sync --all-packages --all-extras --locked
-        if: github.event_name == 'push'
+        if: github.event_name != 'workflow_dispatch'
 
       - name: Build release artifacts
         run: make package
-        if: github.event_name == 'push'
+        if: github.event_name != 'workflow_dispatch'
       - name: Record release identity
         id: identity
         if: github.event_name == 'push'
@@ -120,15 +192,17 @@ jobs:
         with:
           name: release-artifacts
           path: |
-            dist/SHA256SUMS
+            dist/*SHA256SUMS
             dist/npm/*.tgz
             dist/python/*.whl
             dist/python/*.tar.gz
           retention-days: 90
           if-no-files-found: error
-    if: github.event_name == 'push' || github.ref == 'refs/heads/main'
+    if: needs.resolve.outputs.publish == 'true'
     outputs:
-      version: ${{ steps.recovery.outputs.version || steps.identity.outputs.version }}
+      channel: ${{ needs.resolve.outputs.channel }}
+      commit: ${{ needs.resolve.outputs.commit }}
+      version: ${{ steps.recovery.outputs.version || steps.identity.outputs.version || needs.resolve.outputs.version }}
       tag: ${{ steps.recovery.outputs.tag || steps.identity.outputs.tag }}
 
   attest:
@@ -143,21 +217,34 @@ jobs:
       contents: read
       id-token: write
     steps:
+      - name: Check out preview publication tooling
+        if: github.event_name == 'workflow_run'
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          persist-credentials: false
       - name: Download release artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: release-artifacts
           path: dist
 
+      - name: Record preview source provenance
+        if: github.event_name == 'workflow_run'
+        env:
+          PREVIEW_COMMIT: ${{ needs.build.outputs.commit }}
+        run: node scripts/preview-provenance.mjs "$PREVIEW_COMMIT" "$RUNNER_TEMP/preview-provenance.json"
+
       - name: Attest release artifacts
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
+          predicate-type: ${{ github.event_name == 'workflow_run' && 'https://slsa.dev/provenance/v1' || '' }}
+          predicate-path: ${{ github.event_name == 'workflow_run' && format('{0}/preview-provenance.json', runner.temp) || '' }}
           subject-path: |
-            dist/SHA256SUMS
+            dist/*SHA256SUMS
             dist/npm/*.tgz
             dist/python/*.whl
             dist/python/*.tar.gz
-    if: github.event_name == 'push'
+    if: github.event_name != 'workflow_dispatch'
 
   publish-npm:
     name: Publish npm packages
@@ -196,7 +283,8 @@ jobs:
 
       - name: Publish npm packages
         run: ./scripts/publish-npm.sh "dist/npm/marimo-team-marimo-export-$RELEASE_VERSION.tgz"
-    if: "!cancelled() && needs.build.result == 'success' && ((github.event_name == 'push' &&
+    if:
+      "!cancelled() && needs.build.outputs.channel == 'release' && needs.build.result == 'success' && ((github.event_name == 'push' &&
       needs.attest.result == 'success') || (github.event_name == 'workflow_dispatch' &&
       needs.attest.result == 'skipped'))"
     env:
@@ -272,7 +360,8 @@ jobs:
     env:
       RELEASE_VERSION: ${{ needs.build.outputs.version }}
       RELEASE_TAG: ${{ needs.build.outputs.tag }}
-    if: "!cancelled() && needs.build.result == 'success' && ((github.event_name == 'push' &&
+    if:
+      "!cancelled() && needs.build.outputs.channel == 'release' && needs.build.result == 'success' && ((github.event_name == 'push' &&
       needs.attest.result == 'success') || (github.event_name == 'workflow_dispatch' &&
       needs.attest.result == 'skipped'))"
 
@@ -364,7 +453,7 @@ jobs:
       && needs.build.result == 'success'"
   complete:
     name: Release gate
-    if: always()
+    if: always() && github.event_name != 'workflow_run'
     needs:
       - build
       - attest
@@ -398,5 +487,39 @@ jobs:
             printf 'Attestation returned %s, expected %s\n' "$ATTEST" "$EXPECTED_ATTEST" >&2
             exit 1
           fi
+  preview:
+    name: Publish preview
+    needs: [build, attest]
+    if: needs.build.outputs.channel == 'preview'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    concurrency:
+      group: publish-preview-release
+      cancel-in-progress: false
+      queue: max
+    environment:
+      name: preview
+      url: ${{ github.server_url }}/${{ github.repository }}/releases/tag/preview
+    permissions:
+      actions: read
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          persist-credentials: false
+      - name: Download release artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-artifacts
+          path: dist
+      - name: Publish preview packages
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PREVIEW_COMMIT: ${{ needs.build.outputs.commit }}
+        run: ./scripts/publish-preview.sh dist "$PREVIEW_COMMIT"
 run-name: ${{ github.event_name == 'workflow_dispatch' && format('Recover v{0} from run {1}',
-  inputs.version, inputs.source_run) || github.ref_name }}
+  inputs.version, inputs.source_run) || (github.event_name == 'workflow_run' && format('Preview {0}',
+  github.event.workflow_run.head_sha)) || github.ref_name }}

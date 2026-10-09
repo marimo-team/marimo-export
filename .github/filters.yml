@@ -33,6 +33,7 @@ python_inputs: &python_inputs
   - "examples/vite-vanilla/*.yaml"
   - "tests/fixtures/**"
   - "!packages/python/tests/test_release.py"
+  - "!packages/python/tests/test_preview_release.py"
 
 frontend_inputs: &frontend_inputs
   - *ci_control
@@ -59,6 +60,10 @@ frontend_inputs: &frontend_inputs
   - "tools/oxlint/**"
   - .github/workflows/publish.yml
   - scripts/recover-release.mjs
+  - scripts/preview-version.sh
+  - scripts/preview-provenance.mjs
+  - scripts/require-preview-checks.sh
+  - scripts/publish-preview.sh
   - scripts/smoke_npm_packages.mjs
   - scripts/verify-npm.sh
   - scripts/fixtures/npm-consumer/**
@@ -95,6 +100,7 @@ pages:
   - "examples/vite-vanilla/**"
   - "examples/quickstart/**"
   - "!packages/python/tests/test_release.py"
+  - "!packages/python/tests/test_preview_release.py"
 
 quality:
   - "**"
@@ -157,6 +163,7 @@ release_contracts:
   - .github/workflows/publish.yml
   - scripts/**
   - packages/python/tests/test_release.py
+  - packages/python/tests/test_preview_release.py
   - pyproject.toml
   - uv.lock
   - package.json
