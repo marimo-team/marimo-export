@@ -17,7 +17,9 @@ python "$SCAFFOLD_PATH" \
 ```
 
 From an installed release, the scaffold pins the generated Python and browser
-projects to that marimo-export version. From a marimo-export checkout, it builds
+projects to that marimo-export version. An installed preview uses the matching
+wheel and browser tarball URLs from the rolling GitHub prerelease. From a
+marimo-export checkout, it builds
 and vendors the current Python wheel and browser package. Pass
 `--marimo-export-root` to select a checkout explicitly, or pass
 `--python-package` and `--browser-package` to vendor existing artifacts.

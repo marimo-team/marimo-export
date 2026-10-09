@@ -233,16 +233,27 @@ def _verify_installed_scaffold(
         if completed.returncode != 0:
             raise RuntimeError(f"installed Agent Skill scaffold failed: {completed.stderr.strip()}")
         browser = json.loads((output / "package.json").read_text(encoding="utf-8"))
-        if browser["dependencies"]["@marimo-team/marimo-export"] != package_version:
+        expected_python = f"marimo-export[all]=={package_version}"
+        expected_browser = package_version
+        if ".dev" in package_version:
+            downloads = "https://github.com/marimo-team/marimo-export/releases/download/preview"
+            expected_python = (
+                f"marimo-export[all] @ {downloads}/marimo_export-{package_version}-py3-none-any.whl"
+            )
+            expected_browser = (
+                f"{downloads}/marimo-team-marimo-export-"
+                f"{package_version.replace('.dev', '-dev.')}.tgz"
+            )
+        if browser["dependencies"]["@marimo-team/marimo-export"] != expected_browser:
             raise RuntimeError("installed scaffold must pin the matching browser package")
         with (output / "pyproject.toml").open("rb") as stream:
             python = tomllib.load(stream)
-        if python["project"]["dependencies"] != [f"marimo-export[all]=={package_version}"]:
+        if python["project"]["dependencies"] != [expected_python]:
             raise RuntimeError("installed scaffold must pin the matching Python package")
         if python["project"]["requires-python"] != source_requires_python:
             raise RuntimeError("installed scaffold must preserve the supported Python range")
         if (output / "vendor").exists():
-            raise RuntimeError("installed scaffold must use registry package versions")
+            raise RuntimeError("installed scaffold must use published packages")
 
 
 if __name__ == "__main__":

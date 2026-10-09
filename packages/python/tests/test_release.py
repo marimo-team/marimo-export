@@ -408,6 +408,7 @@ def test_publish_workflow_coordinates_python_and_browser_distributions() -> None
     upload = _step(build, "Upload release artifacts")
     assert upload["with"]["path"].splitlines() == [
         "dist/SHA256SUMS",
+        "dist/marimo-export-*-SHA256SUMS",
         "dist/npm/*.tgz",
         "dist/python/*.whl",
         "dist/python/*.tar.gz",
@@ -435,7 +436,7 @@ def test_release_gate_requires_both_verified_registries(
 ) -> None:
     _, workflow = _workflow()
     gate = workflow["jobs"]["complete"]
-    assert gate["if"] == "always()"
+    assert gate["if"] == "always() && github.event_name != 'workflow_run'"
     assert set(gate["needs"]) == {
         "build",
         "attest",
@@ -524,11 +525,14 @@ def test_pypi_verification_matches_the_exact_local_artifacts(tmp_path: Path) -> 
         verify_release(tmp_path, version, metadata)
 
 
-def test_checksum_manifest_addresses_flat_github_release_assets(tmp_path: Path) -> None:
-    version = "0.1.0"
+@pytest.mark.parametrize("version", ["0.1.0", "0.1.1.dev9"])
+def test_checksum_manifest_addresses_flat_github_release_assets(
+    tmp_path: Path, version: str
+) -> None:
+    npm_version = version.replace(".dev", "-dev.")
     manifests = {
         "packages/python/pyproject.toml": f'[project]\nversion = "{version}"\n',
-        "packages/browser/package.json": f'{{"version":"{version}"}}\n',
+        "packages/browser/package.json": f'{{"version":"{npm_version}"}}\n',
     }
     for relative, contents in manifests.items():
         path = tmp_path / relative
@@ -538,7 +542,7 @@ def test_checksum_manifest_addresses_flat_github_release_assets(tmp_path: Path) 
     artifacts = {
         f"python/marimo_export-{version}-py3-none-any.whl": b"wheel",
         f"python/marimo_export-{version}.tar.gz": b"source",
-        f"npm/marimo-team-marimo-export-{version}.tgz": b"browser",
+        f"npm/marimo-team-marimo-export-{npm_version}.tgz": b"browser",
     }
     for relative, contents in artifacts.items():
         path = tmp_path / "dist" / relative
@@ -546,6 +550,9 @@ def test_checksum_manifest_addresses_flat_github_release_assets(tmp_path: Path) 
         path.write_bytes(contents)
 
     manifest = _checksum_writer()(tmp_path)
+    assert manifest.name == (
+        f"marimo-export-{version}-SHA256SUMS" if ".dev" in version else "SHA256SUMS"
+    )
     entries = [line.split("  ", 1) for line in manifest.read_text().splitlines()]
     assert {name: digest for digest, name in entries} == {
         Path(relative).name: sha256(contents).hexdigest()

@@ -112,6 +112,7 @@ jobs:
           --dist worksteal --max-worker-restart=0
           -m "not serial and not application"
           --ignore=packages/python/tests/test_release.py
+          --ignore=packages/python/tests/test_preview_release.py
           --durations=50 packages/python/tests
 
       - name: Run Python contracts on Windows
@@ -126,6 +127,7 @@ jobs:
           --python "${{ matrix.python-version }}"
           pytest -q -m "not application"
           --ignore=packages/python/tests/test_release.py
+          --ignore=packages/python/tests/test_preview_release.py
           --durations=50 packages/python/tests
 
       - name: Run lease timing contracts
@@ -230,6 +232,7 @@ jobs:
       - name: Test release source and publication evidence
         run: uv run --frozen --isolated --no-dev --group test --all-extras --python 3.12 pytest -q
           packages/python/tests/test_release.py
+          packages/python/tests/test_preview_release.py
 
   required:
     name: Required

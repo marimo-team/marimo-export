@@ -82,3 +82,20 @@ Portable JSON is a protocol and value contract within those public packages.
 Browser applications import its TypeScript types from
 `@marimo-team/marimo-export`. Python applications import conversion and
 canonical-encoding functions from `marimo_export.wire`.
+
+### Try a preview build
+
+The rolling [preview release](https://github.com/marimo-team/marimo-export/releases/tag/preview)
+contains packages from `main` commits that passed CI and documentation checks.
+Its notes include matching Python wheel and browser tarball URLs. Use those
+exact URLs in a project or downstream CI:
+
+```bash
+uv add "marimo-export @ WHEEL_URL"
+pnpm add "TARBALL_URL"
+```
+
+Python preview versions use `X.Y.Z.devN`; the matching browser package uses
+`X.Y.Z-dev.N`. A live capture client and its kernel must use the same preview.
+The release retains the newest 30 builds. Use registry releases for dependencies
+that must remain available beyond that window.

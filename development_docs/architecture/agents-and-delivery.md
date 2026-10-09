@@ -44,7 +44,8 @@ presentation. The skill owns the complete inspect, author, produce, verify,
 build, browser, and evidence workflow.
 
 An installed skill pins the generated Python and browser projects to its
-marimo-export release. A checkout build vendors the current Python wheel and
+marimo-export release, using registry versions for final releases and matching
+GitHub artifact URLs for rolling previews. A checkout build vendors the current Python wheel and
 npm tarball. Both paths intersect notebook metadata with the package's Python
 range and retain the notebook filename plus SHA-256 provenance.
 

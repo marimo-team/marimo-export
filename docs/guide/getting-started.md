@@ -31,6 +31,8 @@ uv add marimo-export
 The installation downloads packages from the Python package registry when they
 are absent from the local uv cache.
 
+To test unreleased changes, use a [preview build](../reference/compatibility#try-a-preview-build).
+
 Check the installation:
 
 ```bash

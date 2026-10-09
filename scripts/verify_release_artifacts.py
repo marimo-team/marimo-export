@@ -39,12 +39,11 @@ def _public_versions(root: Path) -> dict[str, str]:
 
 def _require_release_version(root: Path) -> str:
     versions = _public_versions(root)
-    unique = set(versions.values())
-    if len(unique) != 1:
+    version = versions["marimo-export"]
+    if versions["@marimo-team/marimo-export"] != version.replace(".dev", "-dev."):
         raise RuntimeError(f"public package versions must match: {versions}")
-    version = unique.pop()
-    if re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", version) is None:
-        raise RuntimeError(f"public package version must use final X.Y.Z form: {version}")
+    if re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+(?:\.dev[0-9]+)?", version) is None:
+        raise RuntimeError(f"public package version must use X.Y.Z or X.Y.Z.devN form: {version}")
     return version
 
 
@@ -214,7 +213,7 @@ def write_checksum_manifest(root: Path) -> Path:
             "release Python wheel",
         ),
         dist / "python" / f"marimo_export-{version}.tar.gz",
-        dist / "npm" / f"marimo-team-marimo-export-{version}.tgz",
+        dist / "npm" / f"marimo-team-marimo-export-{version.replace('.dev', '-dev.')}.tgz",
     ]
     missing = [path for path in artifacts if not path.is_file()]
     if missing:
@@ -223,7 +222,7 @@ def write_checksum_manifest(root: Path) -> Path:
         )
 
     lines = [f"{_sha256(path)}  {path.name}" for path in sorted(artifacts)]
-    manifest = dist / "SHA256SUMS"
+    manifest = dist / (f"marimo-export-{version}-SHA256SUMS" if ".dev" in version else "SHA256SUMS")
     manifest.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return manifest
 
@@ -244,7 +243,8 @@ def verify(root: Path) -> None:
         list(python_root.glob(f"marimo_export-{version}.tar.gz")),
         "Python source distribution",
     )
-    browser = npm_root / f"marimo-team-marimo-export-{version}.tgz"
+    npm_version = version.replace(".dev", "-dev.")
+    browser = npm_root / f"marimo-team-marimo-export-{npm_version}.tgz"
     if not browser.is_file():
         raise RuntimeError(f"release artifact is missing: {browser}")
 
@@ -256,7 +256,7 @@ def verify(root: Path) -> None:
     _verify_npm_tarball(
         browser,
         name="@marimo-team/marimo-export",
-        version=version,
+        version=npm_version,
         directory="packages/browser",
     )
     print(f"Verified coordinated marimo-export {version} release artifacts.")
@@ -273,7 +273,7 @@ def main() -> None:
     parser.add_argument(
         "--write-checksums",
         action="store_true",
-        help="write dist/SHA256SUMS after verifying the release artifacts",
+        help="write dist/SHA256SUMS (or a versioned preview manifest) after verification",
     )
     arguments = parser.parse_args()
     root = arguments.root.resolve()

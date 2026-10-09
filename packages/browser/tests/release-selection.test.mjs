@@ -39,6 +39,10 @@ it.each(["knip.jsonc", "apps/docs/navigation.ts"])(
 it.each([
   ".github/workflows/publish.yml",
   "scripts/recover-release.mjs",
+  "scripts/preview-version.sh",
+  "scripts/preview-provenance.mjs",
+  "scripts/require-preview-checks.sh",
+  "scripts/publish-preview.sh",
   "scripts/smoke_npm_packages.mjs",
   "scripts/fixtures/npm-consumer/pnpm-workspace.yaml",
 ])("release delivery changes select executable contracts and package verification: %s", (path) => {
@@ -46,6 +50,13 @@ it.each([
     new Set(["quality", "frontend_contracts", "distribution", "release_contracts"]),
   );
 });
+
+it.each(["test_release.py", "test_preview_release.py"])(
+  "publication tests select the focused release suite: %s",
+  (name) => {
+    expect(selected(`packages/python/tests/${name}`)).toEqual(["quality", "release_contracts"]);
+  },
+);
 
 it.each([".github/workflows/ci.yml", "uv.lock", "packages/python/src/marimo_export/cli.py"])(
   "Python execution and dependency changes retain Python validation: %s",
