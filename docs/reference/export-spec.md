@@ -258,8 +258,9 @@ exporter:
   dependencies: []
 ```
 
-`size` is optional. Its `width` and `height` are points, and a `null` height
-keeps a figure's aspect ratio.
+`size` is optional. Its `width` and `height` are points. A `null` height keeps
+a matplotlib figure's aspect ratio and a Vega-Lite chart's own height. Compound
+Vega-Lite charts keep their own sizes.
 
 Custom callable:
 

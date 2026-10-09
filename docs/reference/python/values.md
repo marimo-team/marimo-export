@@ -119,10 +119,10 @@ Size(width: float, height: float | None = None) -> Size
 A display size in points, 1/72 inch, such as the width of the column a
 document places a figure in. `represent()` draws a copy of a matplotlib figure
 at that size, so its text keeps the point size the notebook gave it, and leaves
-the notebook's figure unchanged. A figure with a layout engine, such as
-`layout="constrained"`, fits its labels inside the size exactly. A figure
-without one keeps the tight bounding box, which can differ from the size by its
-padding. Without a `height`, the figure keeps its aspect ratio.
+the notebook's figure unchanged. The copy keeps the figure's layout engine,
+such as `layout="constrained"`, or takes matplotlib's tight layout when the
+figure has none, so its labels fit inside the size and the page has exactly
+that size. Without a `height`, the figure keeps its aspect ratio.
 
 A single or layered Vega-Lite chart draws at the size with `autosize` set to
 `fit`, so its axes and legends fit inside the width. Without a `height`, the
@@ -137,27 +137,27 @@ inches). Other numbers raise `ValueError`, and other types raise `TypeError`.
 A value without its own JSON display method represents as `application/json`
 when it is data:
 
-| Value                                                | JSON                                               |
-| ---------------------------------------------------- | -------------------------------------------------- |
-| `None`, booleans, text, mappings with text keys      | The same value                                     |
-| Lists, tuples, and dataclass instances               | Arrays, and objects keyed by field name            |
-| Integers up to 2\*\*53 - 1, finite floats, `Decimal` | Numbers                                            |
-| NaN, and pandas and NumPy `NaT`                      | `null`                                             |
-| `date`, `datetime`, `time`                           | ISO 8601 text, such as `2015-02-04T09:41:00+01:00` |
-| `timedelta`                                          | Seconds                                            |
-| `Enum` member                                        | Its value                                          |
-| NumPy scalar or array                                | Its items, with datetimes read in microseconds     |
-| pandas, Polars, or PyArrow table                     | A list of row objects keyed by column name         |
-| pandas or Polars series, PyArrow array               | A list of its items                                |
+| Value                                                | JSON                                                 |
+| ---------------------------------------------------- | ---------------------------------------------------- |
+| `None`, booleans, text, mappings with text keys      | The same value                                       |
+| Lists, tuples, and dataclass instances               | Arrays, and objects keyed by field name              |
+| Integers up to 2\*\*53 - 1, finite floats, `Decimal` | Numbers, for a `Decimal` within the range of a float |
+| NaN, and pandas and NumPy `NaT`                      | `null`                                               |
+| `date`, `datetime`, `time`                           | ISO 8601 text, such as `2015-02-04T09:41:00+01:00`   |
+| `timedelta`                                          | Seconds                                              |
+| `Enum` member                                        | Its value                                            |
+| NumPy scalar or array                                | Its items, with datetimes read in microseconds       |
+| pandas, Polars, or PyArrow table with unique columns | A list of row objects keyed by column name           |
+| pandas or Polars series, PyArrow array               | A list of its items                                  |
 
-A datetime keeps its wall time and offset. A value whose JSON form holds more
-than `MAX_JSON_VALUES` (100,000) values raises `RepresentationTooLarge`, a
-`RepresentationError`, and a table fails that way before its rows are read, so
-filter or aggregate it in the notebook. Infinite numbers, larger integers,
-mappings with other keys, and other objects have no JSON form, and
-`RepresentationError` names the part that failed, such as `The item at
-["total"] is infinite.` [`OutputSpec.json()`](produce#outputspec) stores the
-same JSON form.
+A datetime keeps its wall time and offset. Each value and each object key counts
+toward `MAX_JSON_VALUES` (100,000), as in portable JSON. A larger JSON form
+raises `RepresentationTooLarge`, a `RepresentationError`, and a table or array
+fails that way before its items are read, so filter or aggregate it in the
+notebook. Infinite numbers, larger integers, mappings with other keys, and other
+objects have no JSON form, and `RepresentationError` names the part that failed,
+such as `The item at ["total"] is infinite.`
+[`OutputSpec.json()`](produce#outputspec) stores the same JSON form.
 
 ### `Representation`
 

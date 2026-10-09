@@ -189,9 +189,10 @@ it supports, with the rules of
 [`represent()`](values#represent). It needs no extra for matplotlib figures and
 display methods. Altair charts need the `charts` extra. A PNG that it renders
 from a figure or chart records its display size as `width` and `height` in the
-`BlobAsset` metadata. A [`Size`](values#size) draws a figure or chart at that
-size in points, such as the column width a document measured. One output keeps
-one media type across states, so give
+`BlobAsset` metadata. A [`Size`](values#size) draws a matplotlib figure or a
+single or layered Vega-Lite chart at that size in points, such as the column
+width a document measured. One output keeps one media type across states, so
+give
 each state a value of the same kind. A state whose value supports none of the
 accepted types, or whose selector names an unavailable step, stops the build
 with `OutputError` (`output_execution_failed`). Its message gives the reason,

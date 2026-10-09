@@ -28,6 +28,7 @@ import json
 import math
 import re
 import sys
+import warnings
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Literal, NamedTuple, TypeVar, cast
@@ -573,14 +574,17 @@ def _savefig(figure: Any, format: str, scale: float, size: Size | None) -> bytes
     sized = _resized(figure, size) if size is not None else None
     try:
         drawn = figure if sized is None else sized
-        with matplotlib.rc_context(_MATPLOTLIB_SETTINGS.get(format, {})):
+        with matplotlib.rc_context(_MATPLOTLIB_SETTINGS.get(format, {})), warnings.catch_warnings():
+            # A sized copy that tight layout cannot fully arrange, such as one
+            # with manually placed axes, keeps its own layout.
+            warnings.filterwarnings("ignore", "This figure includes Axes that are not compatible")
             drawn.savefig(
                 buffer,
                 format=format,
                 dpi=figure.dpi * scale,
-                # A layout engine fits the figure's text inside its requested
-                # size. Without one, the tight box keeps labels from clipping.
-                bbox_inches=None if sized is not None and _laid_out(sized) else "tight",
+                # A sized copy fits its text inside the requested canvas, so
+                # its page keeps that size.
+                bbox_inches=None if sized is not None else "tight",
                 metadata=_MATPLOTLIB_METADATA.get(format),
             )
     finally:
@@ -592,19 +596,21 @@ def _savefig(figure: Any, format: str, scale: float, size: Size | None) -> bytes
 
 
 def _resized(figure: Any, size: Size) -> Any:
-    """Return a copy of ``figure`` at ``size``, with fonts at their point sizes."""
+    """Return a copy of ``figure`` at ``size``, with fonts at their point sizes.
+
+    A copy without a layout engine takes matplotlib's tight layout, which fits
+    its labels inside the new size.
+    """
 
     width, height = figure.get_size_inches()
     sized = copy.deepcopy(figure)
+    if sized.get_layout_engine() is None:
+        sized.set_layout_engine("tight")
     inches = size.width / 72
     sized.set_size_inches(
         inches, size.height / 72 if size.height is not None else inches * height / width
     )
     return sized
-
-
-def _laid_out(figure: Any) -> bool:
-    return figure.get_layout_engine() is not None
 
 
 def _is_vega_lite(value: object) -> bool:
@@ -720,15 +726,14 @@ def _json_data(value: object, path: str, depth: int, count: list[int]) -> object
 
     Tables become lists of row objects, dates and times become ISO 8601 text,
     durations become seconds, and NaN and missing table cells become null.
+    Each value and each object key counts toward ``MAX_JSON_VALUES``, as in
+    portable JSON.
     """
 
     if depth > _MAX_JSON_DEPTH:
         raise ValueError(f"{_part(path)} nests deeper than {_MAX_JSON_DEPTH} levels")
-    count[0] += 1
-    if count[0] > MAX_JSON_VALUES:
-        raise _JsonLimit(
-            f"the value holds more than {MAX_JSON_VALUES:,} JSON values, so filter or aggregate it"
-        )
+    value = _plain(value, path, count)
+    _count(count, 1)
     if value is None or isinstance(value, (bool, str)):
         return value
     if isinstance(value, int):
@@ -740,7 +745,10 @@ def _json_data(value: object, path: str, depth: int, count: list[int]) -> object
         if math.isnan(number):
             return None
         if math.isinf(number):
-            raise ValueError(f"{_part(path)} is infinite")
+            finite = isinstance(value, decimal.Decimal) and value.is_finite()
+            raise ValueError(
+                f"{_part(path)} is {'beyond the range of a float' if finite else 'infinite'}"
+            )
         return number
     if _is_missing_time(value):
         return None
@@ -748,14 +756,13 @@ def _json_data(value: object, path: str, depth: int, count: list[int]) -> object
         return value.isoformat()
     if isinstance(value, datetime.timedelta):
         return value.total_seconds()
-    if isinstance(value, enum.Enum):
-        return _json_data(value.value, path, depth, count)
     if isinstance(value, Mapping):
         mapping = cast(Mapping[object, object], value)
         items: dict[str, object] = {}
         for key, item in mapping.items():
             if not isinstance(key, str):
                 raise ValueError(f"{_part(path)} has a key that is not text: {key!r}")
+            _count(count, 1)
             items[key] = _json_data(item, f"{path}[{json.dumps(key)}]", depth + 1, count)
         return items
     if isinstance(value, (list, tuple)):
@@ -764,21 +771,16 @@ def _json_data(value: object, path: str, depth: int, count: list[int]) -> object
             _json_data(item, f"{path}[{index}]", depth + 1, count)
             for index, item in enumerate(sequence)
         ]
-    if dataclasses.is_dataclass(value) and not isinstance(value, type):
-        return _json_data(
-            {item.name: getattr(value, item.name) for item in dataclasses.fields(value)},
-            path,
-            depth,
-            count,
-        )
-    rows = _library_data(value, count)
-    if rows is not _NOT_DATA:
-        return _json_data(rows, path, depth, count)
     name = f"{type(value).__module__}.{type(value).__qualname__}"
     raise ValueError(f"{_part(path)} is a {name}, which has no JSON form")
 
 
-_NOT_DATA = object()
+def _count(count: list[int], values: int) -> None:
+    count[0] += values
+    if count[0] > MAX_JSON_VALUES:
+        raise _JsonLimit(
+            f"the value holds more than {MAX_JSON_VALUES:,} JSON values, so filter or aggregate it"
+        )
 
 
 def _is_missing_time(value: object) -> bool:
@@ -786,9 +788,17 @@ def _is_missing_time(value: object) -> bool:
     return type(value).__name__ == "NaTType"
 
 
-def _library_data(value: object, count: list[int]) -> object:
-    """Return the rows of a table, or the items of an array or series."""
+def _plain(value: object, path: str, count: list[int]) -> object:
+    """Return a member's value, a dataclass's fields, or a library value's items.
 
+    Tables become lists of row objects, and arrays and series become lists.
+    The size checks run before a table or array is copied into Python objects.
+    """
+
+    if isinstance(value, enum.Enum):
+        return value.value
+    if dataclasses.is_dataclass(value) and not isinstance(value, type):
+        return {item.name: getattr(value, item.name) for item in dataclasses.fields(value)}
     numpy = sys.modules.get("numpy")
     if numpy is not None and isinstance(value, (numpy.generic, numpy.ndarray)):
         # NumPy turns nanosecond times into integers, so read them as
@@ -797,36 +807,62 @@ def _library_data(value: object, count: list[int]) -> object:
             value = value.astype("datetime64[us]")
         elif value.dtype.kind == "m":
             value = value.astype("timedelta64[us]")
-        return value.tolist() if isinstance(value, numpy.ndarray) else value.item()
+        if isinstance(value, numpy.ndarray):
+            _check_items(int(value.size), count)
+            return value.tolist()
+        return value.item()
     polars = sys.modules.get("polars")
     if polars is not None:
         if isinstance(value, polars.DataFrame):
             _check_table(value.height, value.width, count)
             return value.to_dicts()
         if isinstance(value, polars.Series):
+            _check_items(len(value), count)
             return value.to_list()
     pandas = sys.modules.get("pandas")
     if pandas is not None:
         if isinstance(value, pandas.DataFrame):
+            _check_columns(list(value.columns), path)
             rows, columns = value.shape
             _check_table(rows, columns, count)
             # Object columns keep missing values as None and NaN rather than
             # pandas' NA scalars, which are not JSON data.
             return value.astype(object).where(value.notna(), None).to_dict("records")
         if isinstance(value, pandas.Series):
+            _check_items(len(value), count)
             return value.astype(object).where(value.notna(), None).tolist()
     pyarrow = sys.modules.get("pyarrow")
     if pyarrow is not None:
         if isinstance(value, (pyarrow.Table, pyarrow.RecordBatch)):
+            _check_columns(value.column_names, path)
             _check_table(value.num_rows, value.num_columns, count)
             return value.to_pylist()
         if isinstance(value, (pyarrow.Array, pyarrow.ChunkedArray)):
+            _check_items(len(value), count)
             return value.to_pylist()
-    return _NOT_DATA
+    return value
+
+
+def _check_columns(columns: list[object], path: str) -> None:
+    # A row object holds one value per name, so a repeated name loses a column.
+    seen: set[object] = set()
+    for column in columns:
+        if column in seen:
+            raise ValueError(f"{_part(path)} is a table that repeats the column {column!r}")
+        seen.add(column)
+
+
+def _check_items(items: int, count: list[int]) -> None:
+    if count[0] + items + 1 > MAX_JSON_VALUES:
+        raise _JsonLimit(
+            f"the value's {items:,} items hold more than {MAX_JSON_VALUES:,} JSON values, so "
+            "filter or aggregate it"
+        )
 
 
 def _check_table(rows: int, columns: int, count: list[int]) -> None:
-    if count[0] + rows * (columns + 1) > MAX_JSON_VALUES:
+    # Each row is an object with a key and a value for each column.
+    if count[0] + rows * (2 * columns + 1) + 1 > MAX_JSON_VALUES:
         raise _JsonLimit(
             f"the table's {rows:,} rows of {columns:,} columns hold more than "
             f"{MAX_JSON_VALUES:,} JSON values, so filter or aggregate it"

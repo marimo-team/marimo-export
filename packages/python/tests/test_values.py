@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import datetime
+import decimal
 import json
 import subprocess
 import sys
@@ -191,6 +192,22 @@ def test_a_size_draws_a_laid_out_figure_at_that_size_and_keeps_the_original() ->
     assert _media_box(column.data) == pytest.approx((250.38, 250.38 / 3), abs=0.01)
     assert _media_box(framed.data) == pytest.approx((250.38, 120), abs=0.01)
     assert tuple(figure.get_size_inches()) == (6, 2)
+
+
+@pytest.mark.parametrize("colorbar", [False, True])
+def test_a_size_keeps_its_page_for_a_figure_without_a_layout_engine(colorbar: bool) -> None:
+    figure_module = pytest.importorskip("matplotlib.figure")
+    figure = figure_module.Figure(figsize=(4, 2))
+    axes = figure.subplots()
+    image = axes.imshow([[0, 1], [1, 0]])
+    axes.set_ylabel("Very long label (units)")
+    if colorbar:
+        figure.colorbar(image, ax=axes)
+
+    pdf = represent(figure, ["application/pdf"], size=Size(250.38, 120)).data
+
+    assert _media_box(pdf) == pytest.approx((250.38, 120), abs=0.01)
+    assert figure.get_layout_engine() is None
 
 
 def test_a_size_keeps_text_at_its_point_size() -> None:
@@ -389,6 +406,7 @@ def test_data_values_represent_as_json() -> None:
         ({1: "one"}, "The value has a key that is not text: 1."),
         ({"rows": [{"total": float("inf")}]}, 'The item at ["rows"][0]["total"] is infinite.'),
         (2**53, "The value is an integer beyond 2**53 - 1."),
+        (decimal.Decimal("1e400"), "The value is beyond the range of a float."),
     ],
 )
 def test_values_without_a_json_form_name_the_failing_part(value: object, reason: str) -> None:
@@ -396,6 +414,29 @@ def test_values_without_a_json_form_name_the_failing_part(value: object, reason:
         represent(value, ["application/json"])
 
     assert raised.value.reasons == (reason,)
+
+
+def test_tables_that_repeat_a_column_name_have_no_json_form() -> None:
+    pandas = pytest.importorskip("pandas")
+    pyarrow = pytest.importorskip("pyarrow")
+    repeated = "The value is a table that repeats the column 'x'."
+
+    for table in (
+        pandas.DataFrame([[1, 2]], columns=["x", "x"]),
+        pyarrow.table([[1], [2]], names=["x", "x"]),
+    ):
+        with pytest.raises(RepresentationError) as raised:
+            represent(table, ["application/json"])
+        assert raised.value.reasons == (repeated,)
+
+
+def test_json_values_count_object_keys_as_portable_json_does() -> None:
+    numpy = pytest.importorskip("numpy")
+
+    with pytest.raises(RepresentationTooLarge, match="more than 100,000 JSON values"):
+        represent({str(index): index for index in range(60_000)}, ["application/json"])
+    with pytest.raises(RepresentationTooLarge, match="100,001 items"):
+        represent(numpy.zeros(100_001), ["application/json"])
 
 
 def test_a_table_over_the_json_value_limit_fails_before_it_builds_rows() -> None:
