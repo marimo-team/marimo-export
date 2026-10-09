@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import datetime
 import decimal
+import io
 import json
 import subprocess
 import sys
@@ -208,6 +209,36 @@ def test_a_size_keeps_its_page_for_a_figure_without_a_layout_engine(colorbar: bo
 
     assert _media_box(pdf) == pytest.approx((250.38, 120), abs=0.01)
     assert figure.get_layout_engine() is None
+
+
+def test_a_size_fills_its_page_to_the_edges() -> None:
+    figure_module = pytest.importorskip("matplotlib.figure")
+    figure = figure_module.Figure(figsize=(6, 2), layout="constrained")
+    axes = figure.subplots()
+    axes.plot([1, 2])
+    axes.set_ylabel("Light (lux)")
+    sized = values._resized(figure, Size(250.38))
+    assert sized is not None
+
+    # The layout engine places the axes while the figure saves.
+    sized.savefig(io.BytesIO(), format="pdf")
+    ink = sized.get_tightbbox()
+
+    assert ink.x0 == pytest.approx(0, abs=0.01)
+    assert ink.x1 == pytest.approx(250.38 / 72, abs=0.01)
+
+
+def test_a_figure_python_cannot_copy_draws_at_its_own_size() -> None:
+    figure_module = pytest.importorskip("matplotlib.figure")
+    figure = figure_module.Figure(figsize=(3, 1))
+    figure.subplots().plot([1, 2])
+    # A generator stands in for state that deepcopy rejects.
+    figure.uncopyable = (index for index in range(2))
+
+    pdf = represent(figure, ["application/pdf"], size=Size(250.38)).data
+
+    assert pdf.startswith(b"%PDF-")
+    assert _media_box(pdf)[0] < 250
 
 
 def test_a_size_keeps_text_at_its_point_size() -> None:

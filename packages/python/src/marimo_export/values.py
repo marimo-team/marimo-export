@@ -595,17 +595,27 @@ def _savefig(figure: Any, format: str, scale: float, size: Size | None) -> bytes
     return buffer.getvalue()
 
 
-def _resized(figure: Any, size: Size) -> Any:
+def _resized(figure: Any, size: Size) -> Any | None:
     """Return a copy of ``figure`` at ``size``, with fonts at their point sizes.
 
-    A copy without a layout engine takes matplotlib's tight layout, which fits
-    its labels inside the new size.
+    The copy fits its labels inside the new size with its own layout engine,
+    or with matplotlib's tight layout when it has none, and without padding,
+    so its ink lines up with the text beside it on the page. Returns ``None``
+    when Python cannot copy the figure, such as in a Pyodide runtime whose
+    figures hold uncopyable counters, and the figure then draws at its own
+    size.
     """
 
     width, height = figure.get_size_inches()
-    sized = copy.deepcopy(figure)
-    if sized.get_layout_engine() is None:
-        sized.set_layout_engine("tight")
+    try:
+        sized = copy.deepcopy(figure)
+    except (TypeError, copy.Error, RecursionError):
+        return None
+    engine = sized.get_layout_engine()
+    if engine is None:
+        sized.set_layout_engine("tight", pad=0)
+    elif type(engine).__name__ == "ConstrainedLayoutEngine":
+        engine.set(w_pad=0, h_pad=0)
     inches = size.width / 72
     sized.set_size_inches(
         inches, size.height / 72 if size.height is not None else inches * height / width

@@ -121,8 +121,10 @@ document places a figure in. `represent()` draws a copy of a matplotlib figure
 at that size, so its text keeps the point size the notebook gave it, and leaves
 the notebook's figure unchanged. The copy keeps the figure's layout engine,
 such as `layout="constrained"`, or takes matplotlib's tight layout when the
-figure has none, so its labels fit inside the size and the page has exactly
-that size. Without a `height`, the figure keeps its aspect ratio.
+figure has none, without padding, so its labels fit inside the size, its ink
+reaches the page's edges, and the page has exactly that size. Without a `height`, the figure keeps its aspect ratio. A figure that
+Python cannot copy, such as one in a Pyodide runtime that holds an uncopyable
+counter, draws at its own size, and the consumer scales it.
 
 A single or layered Vega-Lite chart draws at the size with `autosize` set to
 `fit`, so its axes and legends fit inside the width. Without a `height`, the
