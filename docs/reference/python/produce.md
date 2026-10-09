@@ -143,7 +143,7 @@ OutputSpec.cell(name: str | None = None, *, id: str | None = None) -> OutputSpec
 
 | Factory    | Stored output                                                                                  |
 | ---------- | ---------------------------------------------------------------------------------------------- |
-| `json()`   | Canonical portable JSON selected from a notebook definition                                    |
+| `json()`   | Canonical portable JSON of a notebook definition, with tables as rows and dates as ISO 8601    |
 | `native()` | marimo cache representation for a scalar, JSON value, NumPy array, Arrow table, or `BlobAsset` |
 | `export()` | `BlobAsset` or canonical JSON returned by an explicit exporter                                 |
 | `output()` | Formatted `marimo.output.v1` snapshot and replay resources                                     |
@@ -153,6 +153,10 @@ OutputSpec.cell(name: str | None = None, *, id: str | None = None) -> OutputSpec
 the selector during construction with
 [`ValueSelector`](values#valueselector). Invalid selectors and cell references raise
 `SpecError` with a `spec_output_invalid` code.
+
+`json()` stores the [JSON form](values#json-data) of the selected value, so a
+pandas, Polars, or PyArrow table exports as a list of row objects and a date
+exports as ISO 8601 text.
 
 `OutputSpec.source` exposes the normalized source record for inspection. Its
 concrete source-record classes are not public construction helpers. Construct an

@@ -121,6 +121,48 @@ if __name__ == "__main__":
     assert b"/MediaBox [ 0 0 250.38 83.46 ]" in state.output("figure").blob_asset().data
 
 
+def test_json_outputs_store_tables_and_dates(tmp_path: Path) -> None:
+    pytest.importorskip("polars")
+    notebook = tmp_path / "notebook.py"
+    notebook.write_text(
+        """
+import marimo
+
+app = marimo.App()
+
+
+@app.cell
+def _():
+    import datetime
+
+    import polars as pl
+
+    days = pl.DataFrame(
+        {"day": [datetime.date(2015, 2, 4), datetime.date(2015, 2, 5)], "rate": [0.5, None]}
+    )
+    return (days,)
+
+
+if __name__ == "__main__":
+    app.run()
+""".lstrip(),
+        encoding="utf-8",
+    )
+    spec = ExportSpec(
+        default_state="base",
+        states={"base": {}},
+        outputs={"days": OutputSpec.json("days")},
+    )
+
+    result = build(notebook, spec=spec, output=tmp_path / "export", timeout=60)
+    state = open_export(result.path).state("base")
+
+    assert state.output("days").json() == (
+        {"day": "2015-02-04", "rate": 0.5},
+        {"day": "2015-02-05", "rate": None},
+    )
+
+
 @pytest.mark.parametrize(
     ("output", "message"),
     [

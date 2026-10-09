@@ -7,8 +7,8 @@ description: Parse value selectors, resolve them against notebook globals, and r
 
 `marimo_export.values` holds the selector grammar used by every selected-value
 output and the media negotiation behind the `media` exporter. Hosts that read
-live notebook values use the same functions, so a selector and a figure render
-the same way in a live kernel and in an export that has the same plotting
+live notebook values use the same functions, so a selector, a figure, and a
+table render the same way in a live kernel and in an export that has the same
 libraries.
 
 ```python
@@ -17,6 +17,8 @@ from marimo_export.values import Size, ValueSelector, represent
 figure = ValueSelector("report.figure").resolve(globals())
 pdf = represent(figure, ["application/pdf", "image/svg+xml"], size=Size(251.3))
 assert pdf.media_type == "application/pdf"
+
+rows = represent(ValueSelector("daily").resolve(globals()), ["application/json"])
 ```
 
 The module imports only the Python standard library. A host can load its source
@@ -68,7 +70,9 @@ represent(
 Returns a `Representation` for the first media type in `accept` that the value
 supports. Raises `RepresentationError`, a `ValueError`, when the value supports
 none of them. The message names the value's type, each display method that
-raised, and the package to install when a renderer is missing.
+raised, and the package to install when a renderer is missing. Its `reasons`
+attribute holds those sentences without the type, for a host that names the
+value its own way.
 
 Figures and charts use their library's renderer. A Vega-Lite specification is a
 mapping whose `$schema` is a `https://vega.github.io/schema/vega-lite/` URL.
@@ -86,6 +90,7 @@ display method that raises leaves its media types unavailable, and
 | Value with `_repr_mimebundle_()`        | The types in its bundle                                                  |
 | Value with `_repr_*_()`                 | PNG, JPEG, SVG, PDF, HTML, Markdown, LaTeX, or JSON                      |
 | Value with marimo's `_mime_()`          | The type it returns                                                      |
+| Data, such as a table, list, or date    | `application/json`, as described in [JSON data](#json-data)              |
 
 `represent()` passes IPython's `include` and `exclude` arguments to
 `_repr_mimebundle_()` when its signature takes them, and calls it without
@@ -125,6 +130,33 @@ ignore the size.
 
 Each length is a finite number from 1 to `MAX_SIZE_POINTS` (3,600, or 50
 inches). Other numbers raise `ValueError`, and other types raise `TypeError`.
+
+### JSON data
+
+A value without its own JSON display method represents as `application/json`
+when it is data:
+
+| Value                                                | JSON                                               |
+| ---------------------------------------------------- | -------------------------------------------------- |
+| `None`, booleans, text, mappings with text keys      | The same value                                     |
+| Lists, tuples, and dataclass instances               | Arrays, and objects keyed by field name            |
+| Integers up to 2\*\*53 - 1, finite floats, `Decimal` | Numbers                                            |
+| NaN, and pandas and NumPy `NaT`                      | `null`                                             |
+| `date`, `datetime`, `time`                           | ISO 8601 text, such as `2015-02-04T09:41:00+01:00` |
+| `timedelta`                                          | Seconds                                            |
+| `Enum` member                                        | Its value                                          |
+| NumPy scalar or array                                | Its items, with datetimes read in microseconds     |
+| pandas, Polars, or PyArrow table                     | A list of row objects keyed by column name         |
+| pandas or Polars series, PyArrow array               | A list of its items                                |
+
+A datetime keeps its wall time and offset. A value whose JSON form holds more
+than `MAX_JSON_VALUES` (100,000) values raises `RepresentationTooLarge`, a
+`RepresentationError`, and a table fails that way before its rows are read, so
+filter or aggregate it in the notebook. Infinite numbers, larger integers,
+mappings with other keys, and other objects have no JSON form, and
+`RepresentationError` names the part that failed, such as `The item at
+["total"] is infinite.` [`OutputSpec.json()`](produce#outputspec) stores the
+same JSON form.
 
 ### `Representation`
 

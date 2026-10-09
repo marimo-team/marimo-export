@@ -5,7 +5,8 @@ steps, such as ``report.rows[0]["total"]``. ``represent()`` converts a value to
 the first media type in ``accept`` that the value supports. A typeset document
 can accept PDF and SVG while a browser accepts PNG, and the notebook keeps its
 default output settings. A ``Size`` draws a figure or chart at the size a
-document places it.
+document places it, and data such as tables and dates represents as
+``application/json``.
 
 This module imports only the Python standard library. A host can load its
 source where marimo-export is not installed, such as a Pyodide worker.
@@ -17,13 +18,17 @@ from __future__ import annotations
 import base64
 import binascii
 import copy
+import dataclasses
+import datetime
+import decimal
+import enum
 import inspect
 import io
 import json
 import math
 import re
 import sys
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Literal, NamedTuple, TypeVar, cast
 
@@ -31,6 +36,10 @@ MAX_SELECTOR_BYTES = 4_096
 MAX_SELECTOR_STEPS = 64
 MAX_ACCEPTED_MEDIA_TYPES = 32
 MAX_SIZE_POINTS = 3_600
+MAX_JSON_VALUES = 100_000
+
+_MAX_JSON_DEPTH = 256
+_MAX_SAFE_INTEGER = 2**53 - 1
 
 _IDENTIFIER = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 _INDEX = re.compile(r"(?:0|[1-9][0-9]*)")
@@ -220,7 +229,23 @@ class Size:
 
 
 class RepresentationError(ValueError):
-    """A value supports none of the accepted media types."""
+    """A value supports none of the accepted media types.
+
+    ``reasons`` holds one sentence for each display method or conversion that
+    failed, such as ``The item at ["total"] is infinite.``
+    """
+
+    def __init__(self, message: str, reasons: Iterable[str] = ()) -> None:
+        super().__init__(message)
+        self.reasons = tuple(reasons)
+
+
+class RepresentationTooLarge(RepresentationError):
+    """A value is data whose JSON form holds more than ``MAX_JSON_VALUES`` values."""
+
+
+class _JsonLimit(ValueError):
+    pass
 
 
 def normalize_accept(accept: Iterable[str]) -> tuple[str, ...]:
@@ -262,7 +287,9 @@ def represent(
     Matplotlib figures and artists render as PDF, SVG, or PNG. Altair charts and
     Vega-Lite specifications render as PDF, SVG, or PNG with vl-convert-python.
     Other values use their ``_repr_mimebundle_()``, ``_repr_*_()``, or marimo
-    ``_mime_()`` display methods.
+    ``_mime_()`` display methods. Data without a JSON display method, such as
+    dictionaries, lists, numbers, dates, NumPy arrays, and pandas, Polars, or
+    PyArrow tables, represents as ``application/json``.
 
     ``scale`` multiplies the pixel density of the PNG images this function
     renders and keeps their display size. ``size`` draws a copy of a figure or
@@ -284,6 +311,7 @@ def represent(
         _bundle_source(value, accepted, calls),
         _method_source(value, calls),
         _mime_source(value, calls),
+        _data_source(value, calls),
     )
     for media_type in accepted:
         for source in sources:
@@ -292,7 +320,9 @@ def represent(
                 return representation
     name = f"{type(value).__module__}.{type(value).__qualname__}"
     detail = "".join(f" {reason}" for reason in calls.reasons)
-    raise RepresentationError(f"{name} has no representation as {', '.join(accepted)}.{detail}")
+    raise RepresentationError(
+        f"{name} has no representation as {', '.join(accepted)}.{detail}", calls.reasons
+    )
 
 
 def _scale(scale: object) -> float:
@@ -640,13 +670,174 @@ def _sized_vega_lite(specification: dict[str, Any], size: Size) -> dict[str, Any
     return sized
 
 
+def _data_source(value: object, calls: _Calls) -> _Source:
+    def source(media_type: str) -> Representation | None:
+        if media_type != "application/json":
+            return None
+        try:
+            data = _json_bytes(value)
+        except _JsonLimit as error:
+            reason = f"{str(error)[:1].upper()}{str(error)[1:]}."
+            raise RepresentationTooLarge(reason, (reason,)) from error
+        except ValueError as error:
+            reason = str(error)
+            calls.note(reason[:1].upper() + reason[1:])
+            return None
+        return Representation(media_type, data)
+
+    return source
+
+
+def _json_bytes(value: object) -> bytes:
+    return json.dumps(
+        _json_form(value),
+        allow_nan=False,
+        ensure_ascii=False,
+        separators=(",", ":"),
+    ).encode("utf-8")
+
+
+def _json_form(value: object) -> object:
+    """Return ``value`` as JSON data, or raise ``ValueError`` naming the part.
+
+    JSON outputs in exports and ``application/json`` representations share
+    this conversion.
+    """
+
+    return _json_data(value, "", 0, [0])
+
+
+def _part(path: str) -> str:
+    return f"the item at {path}" if path else "the value"
+
+
+def _json_data(value: object, path: str, depth: int, count: list[int]) -> object:
+    """Return ``value`` as JSON data, or raise ``ValueError`` naming the path.
+
+    Tables become lists of row objects, dates and times become ISO 8601 text,
+    durations become seconds, and NaN and missing table cells become null.
+    """
+
+    if depth > _MAX_JSON_DEPTH:
+        raise ValueError(f"{_part(path)} nests deeper than {_MAX_JSON_DEPTH} levels")
+    count[0] += 1
+    if count[0] > MAX_JSON_VALUES:
+        raise _JsonLimit(
+            f"the value holds more than {MAX_JSON_VALUES:,} JSON values, so filter or aggregate it"
+        )
+    if value is None or isinstance(value, (bool, str)):
+        return value
+    if isinstance(value, int):
+        if abs(value) > _MAX_SAFE_INTEGER:
+            raise ValueError(f"{_part(path)} is an integer beyond 2**53 - 1")
+        return value
+    if isinstance(value, (float, decimal.Decimal)):
+        number = float(value)
+        if math.isnan(number):
+            return None
+        if math.isinf(number):
+            raise ValueError(f"{_part(path)} is infinite")
+        return number
+    if _is_missing_time(value):
+        return None
+    if isinstance(value, (datetime.date, datetime.time)):
+        return value.isoformat()
+    if isinstance(value, datetime.timedelta):
+        return value.total_seconds()
+    if isinstance(value, enum.Enum):
+        return _json_data(value.value, path, depth, count)
+    if isinstance(value, Mapping):
+        mapping = cast(Mapping[object, object], value)
+        items: dict[str, object] = {}
+        for key, item in mapping.items():
+            if not isinstance(key, str):
+                raise ValueError(f"{_part(path)} has a key that is not text: {key!r}")
+            items[key] = _json_data(item, f"{path}[{json.dumps(key)}]", depth + 1, count)
+        return items
+    if isinstance(value, (list, tuple)):
+        sequence = cast(Sequence[object], value)
+        return [
+            _json_data(item, f"{path}[{index}]", depth + 1, count)
+            for index, item in enumerate(sequence)
+        ]
+    if dataclasses.is_dataclass(value) and not isinstance(value, type):
+        return _json_data(
+            {item.name: getattr(value, item.name) for item in dataclasses.fields(value)},
+            path,
+            depth,
+            count,
+        )
+    rows = _library_data(value, count)
+    if rows is not _NOT_DATA:
+        return _json_data(rows, path, depth, count)
+    name = f"{type(value).__module__}.{type(value).__qualname__}"
+    raise ValueError(f"{_part(path)} is a {name}, which has no JSON form")
+
+
+_NOT_DATA = object()
+
+
+def _is_missing_time(value: object) -> bool:
+    # pandas and NumPy spell a missing time as NaT, which subclasses datetime.
+    return type(value).__name__ == "NaTType"
+
+
+def _library_data(value: object, count: list[int]) -> object:
+    """Return the rows of a table, or the items of an array or series."""
+
+    numpy = sys.modules.get("numpy")
+    if numpy is not None and isinstance(value, (numpy.generic, numpy.ndarray)):
+        # NumPy turns nanosecond times into integers, so read them as
+        # microseconds, which Python's datetime holds.
+        if value.dtype.kind == "M":
+            value = value.astype("datetime64[us]")
+        elif value.dtype.kind == "m":
+            value = value.astype("timedelta64[us]")
+        return value.tolist() if isinstance(value, numpy.ndarray) else value.item()
+    polars = sys.modules.get("polars")
+    if polars is not None:
+        if isinstance(value, polars.DataFrame):
+            _check_table(value.height, value.width, count)
+            return value.to_dicts()
+        if isinstance(value, polars.Series):
+            return value.to_list()
+    pandas = sys.modules.get("pandas")
+    if pandas is not None:
+        if isinstance(value, pandas.DataFrame):
+            rows, columns = value.shape
+            _check_table(rows, columns, count)
+            # Object columns keep missing values as None and NaN rather than
+            # pandas' NA scalars, which are not JSON data.
+            return value.astype(object).where(value.notna(), None).to_dict("records")
+        if isinstance(value, pandas.Series):
+            return value.astype(object).where(value.notna(), None).tolist()
+    pyarrow = sys.modules.get("pyarrow")
+    if pyarrow is not None:
+        if isinstance(value, (pyarrow.Table, pyarrow.RecordBatch)):
+            _check_table(value.num_rows, value.num_columns, count)
+            return value.to_pylist()
+        if isinstance(value, (pyarrow.Array, pyarrow.ChunkedArray)):
+            return value.to_pylist()
+    return _NOT_DATA
+
+
+def _check_table(rows: int, columns: int, count: list[int]) -> None:
+    if count[0] + rows * (columns + 1) > MAX_JSON_VALUES:
+        raise _JsonLimit(
+            f"the table's {rows:,} rows of {columns:,} columns hold more than "
+            f"{MAX_JSON_VALUES:,} JSON values, so filter or aggregate it"
+        )
+
+
 __all__ = [
     "MAX_ACCEPTED_MEDIA_TYPES",
+    "MAX_JSON_VALUES",
     "MAX_SELECTOR_BYTES",
     "MAX_SELECTOR_STEPS",
     "MAX_SIZE_POINTS",
     "Representation",
     "RepresentationError",
+    "RepresentationTooLarge",
     "SelectorError",
     "SelectorStep",
     "Size",

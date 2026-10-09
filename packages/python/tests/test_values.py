@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import base64
+import datetime
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -11,6 +13,7 @@ from marimo_export import values
 from marimo_export.values import (
     Representation,
     RepresentationError,
+    RepresentationTooLarge,
     SelectorError,
     SelectorStep,
     Size,
@@ -311,6 +314,91 @@ def test_vega_lite_charts_render_as_pdf_with_embedded_fonts() -> None:
 
     assert pdf.startswith(b"%PDF-")
     assert b"/FontFile2" in pdf
+
+
+def _json(value: object) -> object:
+    representation = represent(value, ["application/json"])
+    assert representation.media_type == "application/json"
+    return json.loads(representation.data)
+
+
+def test_tables_represent_as_json_rows_with_iso_dates_and_null_cells() -> None:
+    polars = pytest.importorskip("polars")
+    pandas = pytest.importorskip("pandas")
+    pyarrow = pytest.importorskip("pyarrow")
+    day = datetime.date(2015, 2, 4)
+    reading = datetime.datetime(2015, 2, 4, 9, 41)
+    rows = [
+        {"day": "2015-02-04", "rate": 0.5, "read": "2015-02-04T09:41:00"},
+        {"day": None, "rate": None, "read": None},
+    ]
+
+    assert (
+        _json(polars.DataFrame({"day": [day, None], "rate": [0.5, None], "read": [reading, None]}))
+        == rows
+    )
+    assert (
+        _json(pyarrow.table({"day": [day, None], "rate": [0.5, None], "read": [reading, None]}))
+        == rows
+    )
+    assert _json(
+        pandas.DataFrame(
+            {"read": pandas.to_datetime(["2015-02-04 09:41", None]), "rate": [0.5, None]}
+        )
+    ) == [{"read": "2015-02-04T09:41:00", "rate": 0.5}, {"read": None, "rate": None}]
+
+
+def test_data_values_represent_as_json() -> None:
+    numpy = pytest.importorskip("numpy")
+    zone = datetime.timezone(datetime.timedelta(hours=1))
+
+    assert _json(
+        {
+            "peak": numpy.float32(0.5),
+            "count": numpy.int64(3),
+            "missing": float("nan"),
+            "nanoseconds": numpy.array(["2015-02-04T09:41:00.123456789"], dtype="datetime64[ns]"),
+            "local": datetime.datetime(2015, 2, 4, 9, 41, tzinfo=zone),
+            "time": datetime.time(9, 41),
+            "interval": datetime.timedelta(minutes=1),
+            "pair": (1, "two"),
+        }
+    ) == {
+        "peak": 0.5,
+        "count": 3,
+        "missing": None,
+        "nanoseconds": ["2015-02-04T09:41:00.123456"],
+        "local": "2015-02-04T09:41:00+01:00",
+        "time": "09:41:00",
+        "interval": 60.0,
+        "pair": [1, "two"],
+    }
+
+
+@pytest.mark.parametrize(
+    ("value", "reason"),
+    [
+        (object(), "The value is a builtins.object, which has no JSON form."),
+        ({1: "one"}, "The value has a key that is not text: 1."),
+        ({"rows": [{"total": float("inf")}]}, 'The item at ["rows"][0]["total"] is infinite.'),
+        (2**53, "The value is an integer beyond 2**53 - 1."),
+    ],
+)
+def test_values_without_a_json_form_name_the_failing_part(value: object, reason: str) -> None:
+    with pytest.raises(RepresentationError) as raised:
+        represent(value, ["application/json"])
+
+    assert raised.value.reasons == (reason,)
+
+
+def test_a_table_over_the_json_value_limit_fails_before_it_builds_rows() -> None:
+    polars = pytest.importorskip("polars")
+    table = polars.DataFrame({"x": range(60_000), "y": range(60_000)})
+
+    with pytest.raises(RepresentationTooLarge, match="60,000 rows of 2 columns"):
+        represent(table, ["application/json"])
+    with pytest.raises(RepresentationTooLarge, match="more than 100,000 JSON values"):
+        represent(list(range(100_001)), ["application/json"])
 
 
 def test_display_methods_supply_other_values_and_their_display_size() -> None:

@@ -11,7 +11,7 @@ interpret that output.
 
 | Notebook result                     | OutputSpec form or exporter        | Python access   | Browser loader             | Agent use                                  |
 | ----------------------------------- | ---------------------------------- | --------------- | -------------------------- | ------------------------------------------ |
-| JSON-compatible value               | `OutputSpec.json()`                | `json()`        | `jsonLoader()`             | Summaries, records, and arrays             |
+| JSON value, table rows, or dates    | `OutputSpec.json()`                | `json()`        | `jsonLoader()`             | Summaries, records, and arrays             |
 | Native scalar                       | `OutputSpec.native()`              | `scalar()`      | `scalarLoader()`           | Metrics, labels, statuses, and identifiers |
 | Native NumPy array                  | `OutputSpec.native()`              | `asset_bytes()` | `numpyLoader()`            | Numeric arrays with NPY tooling            |
 | Native Apache Arrow table           | `OutputSpec.native()`              | `asset_bytes()` | `arrowTableLoader()`       | Columnar data with Arrow tooling           |
