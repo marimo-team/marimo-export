@@ -63,11 +63,12 @@ the disposable checkout, and runs the same `make package` gate as tagged
 releases. Both Python wheels pass isolated installation checks, the direct and
 source-rebuilt wheel payloads match, and the browser tarball passes a fresh pnpm
 consumer install. The shared attestation job signs every published artifact.
-For previews, the signed SLSA predicate records the packaged commit in
+For previews, a signed custom predicate records the packaged commit in
 `buildDefinition.externalParameters.checkoutCommit` and a resolved dependency.
 It records the signing workflow commit separately, because `workflow_run` can
-start after `main` advances. Verify the signature with `gh attestation verify`
-and inspect that predicate when checking the preview's source; the certificate's
+start after `main` advances. Verify the signature with the predicate type and
+signing workflow from the release notes, then inspect that predicate when
+checking the preview's source; the certificate's
 source digest identifies the signing workflow commit.
 
 The `preview` job publishes these assets under one GitHub prerelease:
@@ -121,14 +122,18 @@ concurrency group keeps up to GitHub's 100-run limit.
 
 ### Preview provenance v1
 
-Preview attestations use the SLSA v1 predicate type
-`https://slsa.dev/provenance/v1` and this build type:
+Preview attestations use this custom predicate type:
 
 ```text
 https://github.com/marimo-team/marimo-export/blob/main/development_docs/releasing.md#preview-provenance-v1
 ```
 
-This build type describes a GitHub Actions `workflow_run` publication after CI
+GitHub's attestation API restricts build types under the standard SLSA predicate.
+The preview format uses its own predicate type so it can describe the validated
+checkout independently of the signing workflow. Tagged releases keep native
+SLSA provenance.
+
+This predicate describes a GitHub Actions `workflow_run` publication after CI
 and GitHub Pages succeed for one `main` commit. The artifacts come from the
 build job's exact checkout, stamped with coordinated preview versions and
 verified by `make package`.
@@ -141,6 +146,29 @@ signing workflow ref with its commit digest, and the packaged source commit
 with its digest. Those commits can differ. `runDetails.builder.id` identifies
 the signing workflow and ref; `metadata.invocationId` identifies its run and
 attempt. The signed subjects bind this record to the artifact checksums.
+
+Verify a downloaded preview with its custom type and publication workflow:
+
+```console
+gh attestation download WHEEL_FILE -R marimo-team/marimo-export
+gh attestation verify WHEEL_FILE -R marimo-team/marimo-export \
+  --bundle BUNDLE_FILE \
+  --predicate-type "https://github.com/marimo-team/marimo-export/blob/main/development_docs/releasing.md#preview-provenance-v1" \
+  --signer-workflow "marimo-team/marimo-export/.github/workflows/publish.yml"
+```
+
+Replace `BUNDLE_FILE` with the `.jsonl` filename printed by the download command.
+Download without a predicate filter: GitHub rejects this custom type as an API
+filter. Bundle verification enforces the predicate type locally, along with the
+artifact digest and signing identity.
+
+The CI `Preview provenance` job generates a probe using this same predicate,
+persists its attestation through GitHub, and verifies it from the hosted API.
+The download allows five attempts, two seconds apart, for read-back visibility.
+It checks the signed checkout commit and is part of the required gate when
+release contracts change. It runs on main pushes and pull requests from this
+repository; fork pull requests run the local contracts without signing access.
+Probe attestations name a test file and the CI workflow.
 
 ## Registry trust
 

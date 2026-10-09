@@ -17,6 +17,10 @@ from packaging.version import Version
 ROOT = Path(__file__).resolve().parents[3]
 COMMIT = "a" * 40
 DOWNLOADS = "https://github.com/marimo-team/marimo-export/releases/download/preview"
+PREVIEW_PREDICATE_TYPE = (
+    "https://github.com/marimo-team/marimo-export/blob/main/"
+    "development_docs/releasing.md#preview-provenance-v1"
+)
 
 
 def _git(root: Path, *arguments: str) -> str:
@@ -150,6 +154,7 @@ class _GitHub:
             f"#!{sys.executable}\n"
             + """import json, os, sys
 from base64 import b64decode, b64encode
+from hashlib import sha256
 from pathlib import Path
 state_path = Path(os.environ["FAKE_GITHUB"])
 state = json.loads(state_path.read_text())
@@ -166,6 +171,18 @@ if operation == "run list":
     assert args[args.index("--event") + 1] == "push"
     assert args[args.index("--limit") + 1] == "1"
     print(state["runs"][args[args.index("--workflow") + 1]], end="")
+elif operation == "attestation download":
+    assert "--predicate-type" not in args
+    if state.get("attestation_unavailable"):
+        sys.exit(1)
+    digest = sha256(Path(args[2]).read_bytes()).hexdigest()
+    Path(f"sha256:{digest}.jsonl").write_text(json.dumps(state["attestations"]))
+elif operation == "attestation verify":
+    assert args[args.index("--predicate-type") + 1] == os.environ["PREVIEW_PREDICATE_TYPE"]
+    assert args[args.index("--signer-workflow") + 1] == (
+        "marimo-team/marimo-export/.github/workflows/ci.yml"
+    )
+    print(Path(args[args.index("--bundle") + 1]).read_text())
 elif operation == "release view":
     if not state["exists"]:
         sys.exit(1)
@@ -228,6 +245,7 @@ state_path.write_text(json.dumps(state))
             "FAKE_GITHUB": str(self.state_path),
             "GH_REPO": "marimo-team/marimo-export",
             "GH_TOKEN": "test-token",
+            "PREVIEW_PREDICATE_TYPE": PREVIEW_PREDICATE_TYPE,
             "GITHUB_SERVER_URL": "https://github.com",
             "PATH": f"{self.commands}{os.pathsep}{os.environ['PATH']}",
         }
@@ -371,10 +389,18 @@ def test_readiness_api_failure_fails_publication_resolution(tmp_path: Path) -> N
     assert all(call[:2] != ["release", "view"] for call in github.state()["calls"])
 
 
+@pytest.mark.parametrize(
+    ("path", "ref", "event"),
+    [
+        ("publish.yml", "refs/heads/main", "workflow_run"),
+        ("ci.yml", "refs/pull/88/merge", "pull_request"),
+    ],
+)
 def test_preview_provenance_records_checkout_and_signing_workflow_separately(
-    tmp_path: Path,
+    tmp_path: Path, path: str, ref: str, event: str
 ) -> None:
     output = tmp_path / "predicate.json"
+    step_output = tmp_path / "step-output"
     workflow_commit = "b" * 40
     subprocess.run(
         ["node", str(ROOT / "scripts/preview-provenance.mjs"), COMMIT, str(output)],
@@ -382,12 +408,11 @@ def test_preview_provenance_records_checkout_and_signing_workflow_separately(
             **os.environ,
             "GITHUB_SERVER_URL": "https://github.com",
             "GITHUB_REPOSITORY": "marimo-team/marimo-export",
-            "GITHUB_WORKFLOW_REF": (
-                "marimo-team/marimo-export/.github/workflows/publish.yml@refs/heads/main"
-            ),
-            "GITHUB_REF": "refs/heads/main",
+            "GITHUB_WORKFLOW_REF": f"marimo-team/marimo-export/.github/workflows/{path}@{ref}",
+            "GITHUB_REF": ref,
             "GITHUB_SHA": workflow_commit,
-            "GITHUB_EVENT_NAME": "workflow_run",
+            "GITHUB_EVENT_NAME": event,
+            "GITHUB_OUTPUT": str(step_output),
             "GITHUB_REPOSITORY_ID": "123",
             "GITHUB_REPOSITORY_OWNER_ID": "456",
             "RUNNER_ENVIRONMENT": "github-hosted",
@@ -401,14 +426,13 @@ def test_preview_provenance_records_checkout_and_signing_workflow_separately(
     predicate = json.loads(output.read_text())
 
     definition = predicate["buildDefinition"]
-    assert definition["buildType"] == (
-        "https://github.com/marimo-team/marimo-export/blob/main/"
-        "development_docs/releasing.md#preview-provenance-v1"
-    )
+    assert step_output.read_text() == f"predicate_type={PREVIEW_PREDICATE_TYPE}\n"
+    assert definition["buildType"] == PREVIEW_PREDICATE_TYPE
+    assert definition["externalParameters"]["workflow"]["path"] == f".github/workflows/{path}"
     assert definition["externalParameters"]["checkoutCommit"] == COMMIT
     assert definition["resolvedDependencies"] == [
         {
-            "uri": "git+https://github.com/marimo-team/marimo-export@refs/heads/main",
+            "uri": f"git+https://github.com/marimo-team/marimo-export@{ref}",
             "digest": {"gitCommit": workflow_commit},
         },
         {
@@ -424,6 +448,68 @@ def test_preview_provenance_records_checkout_and_signing_workflow_separately(
     provenance = next(step for step in steps if step["name"] == "Record preview source provenance")
     assert provenance["env"]["PREVIEW_COMMIT"] == "${{ needs.build.outputs.commit }}"
     assert "predicate-path" in steps[-1]["with"]
+    assert steps[-1]["with"]["predicate-type"] == "${{ steps.provenance.outputs.predicate_type }}"
+    assert provenance["id"] == "provenance"
+    assert workflow["jobs"]["preview"]["steps"][-1]["env"]["PREVIEW_PREDICATE_TYPE"] == (
+        "${{ needs.attest.outputs.predicate_type }}"
+    )
+
+
+@pytest.mark.parametrize(
+    ("checkout_commit", "availability", "attempts"),
+    [
+        (COMMIT, "ready", 1),
+        ("b" * 40, "ready", 1),
+        (COMMIT, "delayed", 2),
+        (COMMIT, "unavailable", 5),
+    ],
+)
+def test_ci_probe_requires_the_attested_checkout_commit(
+    tmp_path: Path, checkout_commit: str, availability: str, attempts: int
+) -> None:
+    github = _GitHub(tmp_path)
+    state = github.state()
+    state["attestations"] = [
+        {
+            "verificationResult": {
+                "statement": {
+                    "predicate": {
+                        "buildDefinition": {
+                            "externalParameters": {"checkoutCommit": checkout_commit}
+                        }
+                    }
+                }
+            }
+        }
+    ]
+    if availability == "delayed":
+        state["fail"] = "attestation download"
+    state["attestation_unavailable"] = availability == "unavailable"
+    github.write(state)
+    (tmp_path / "preview-provenance-probe.txt").write_text("probe\n")
+    workflow = yaml.load((ROOT / ".github/workflows/ci.yml").read_text(), Loader=yaml.BaseLoader)
+    verify = workflow["jobs"]["preview-provenance"]["steps"][-1]
+
+    completed = subprocess.run(
+        ["bash", "-eu", "-o", "pipefail", "-c", "sleep() { :; };\n" + verify["run"]],
+        env={
+            **github.env(),
+            "GITHUB_SHA": COMMIT,
+            "GITHUB_REPOSITORY": "marimo-team/marimo-export",
+            "RUNNER_TEMP": str(tmp_path),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    expected = 0 if checkout_commit == COMMIT and availability != "unavailable" else 1
+    assert completed.returncode == expected, completed.stderr
+    calls = github.state()["calls"]
+    assert sum(call[:2] == ["attestation", "download"] for call in calls) == attempts
+    assert sum(call[:2] == ["attestation", "verify"] for call in calls) == (
+        0 if availability == "unavailable" else 1
+    )
 
 
 def test_preview_publishes_matching_packages_and_install_commands(tmp_path: Path) -> None:
@@ -438,7 +524,14 @@ def test_preview_publishes_matching_packages_and_install_commands(tmp_path: Path
     assert f"{DOWNLOADS}/marimo_export-0.1.5.dev9-py3-none-any.whl" in state["notes"]
     assert f"{DOWNLOADS}/marimo-team-marimo-export-0.1.5-dev.9.tgz" in state["notes"]
     assert "uv tool install --force" in state["notes"]
+    assert "gh attestation download" in state["notes"]
     assert "gh attestation verify" in state["notes"]
+    assert "--bundle BUNDLE_FILE" in state["notes"]
+    assert f'--predicate-type "{PREVIEW_PREDICATE_TYPE}"' in state["notes"]
+    assert (
+        '--signer-workflow "marimo-team/marimo-export/.github/workflows/publish.yml"'
+        in state["notes"]
+    )
     assert len(state["comments"]) == 1
     assert "uv pip install" in state["comments"][0]
     assert "pnpm add" in state["comments"][0]
