@@ -78,6 +78,33 @@ package's optional `lz4js` runtime peer is declared as an exception because its
 import belongs to the Arrow loader workspace. Stale configuration exceptions
 fail the audit.
 
+## Review dependency updates
+
+Renovate and pnpm both enforce a 14-day release cooldown. Review the actual
+manifest and lockfile changes against the current branch; a bot PR's summary
+may include versions that were superseded or could not be installed. Keep
+updates whose releases and required dependencies satisfy the cooldown, and
+leave newer versions for a later update. Keep compatibility constraints in
+`renovate.json` aligned with the workspace overrides. The Babel parser override
+stays on version 7 while the Vue 3.5 compiler packages require that major.
+
+The hosted Renovate bot skips the workspace's `.pnpmfile.mjs` hook. Its generated
+lockfile can therefore lose `pnpmfileChecksum`, even when dependency resolution
+succeeds. That hook also defines the browser package's published dependency set.
+Regenerate the lockfile locally with the declared pnpm version before merging
+an update that drops the checksum or changes manifests without a lockfile:
+
+```bash
+pnpm install --no-frozen-lockfile
+pnpm install --frozen-lockfile
+make check
+```
+
+Commit `pnpm-lock.yaml` with the accepted manifest changes. When updating pnpm
+itself, both `package.json` and the lockfile's package-manager dependency records
+must name the new version. An install rejected by `minimumReleaseAge` should
+wait for maturity; keep the cooldown and its existing exclusions intact.
+
 ## Change Python producer behavior
 
 Stable public records live in `spec.py`, `planning.py`, `prepared.py`,

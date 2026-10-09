@@ -5,6 +5,18 @@
   "internalChecksFilter": "strict",
   "packageRules": [
     {
+      "description": "Verify pnpm artifacts with the workspace packing hook before merging npm updates.",
+      "matchManagers": ["npm"],
+      "prBodyNotes": [
+        "This workspace uses a pnpm packing hook that hosted Renovate skips. If the lockfile drops `pnpmfileChecksum` or artifact generation fails, follow [the dependency update workflow](https://github.com/marimo-team/marimo-export/blob/main/development_docs/development.md#review-dependency-updates): regenerate with `pnpm install --no-frozen-lockfile`, verify `pnpm install --frozen-lockfile`, and run `make check`. Keep the 14-day release cooldown intact."
+      ]
+    },
+    {
+      "description": "Keep the parser override within the Babel 7 range required by Vue 3.5 compilers.",
+      "matchPackageNames": ["@babel/parser"],
+      "allowedVersions": "<8"
+    },
+    {
       "description": "Match the browser provider to Vitest bundled by Vite+ 1.0.",
       "matchPackageNames": ["@vitest/browser-playwright"],
       "allowedVersions": "5.0.1"
