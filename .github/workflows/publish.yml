@@ -192,8 +192,7 @@ jobs:
         with:
           name: release-artifacts
           path: |
-            dist/SHA256SUMS
-            dist/marimo-export-*-SHA256SUMS
+            dist/*SHA256SUMS
             dist/npm/*.tgz
             dist/python/*.whl
             dist/python/*.tar.gz
@@ -241,8 +240,7 @@ jobs:
           predicate-type: ${{ github.event_name == 'workflow_run' && 'https://slsa.dev/provenance/v1' || '' }}
           predicate-path: ${{ github.event_name == 'workflow_run' && format('{0}/preview-provenance.json', runner.temp) || '' }}
           subject-path: |
-            dist/SHA256SUMS
-            dist/marimo-export-*-SHA256SUMS
+            dist/*SHA256SUMS
             dist/npm/*.tgz
             dist/python/*.whl
             dist/python/*.tar.gz

@@ -407,8 +407,7 @@ def test_publish_workflow_coordinates_python_and_browser_distributions() -> None
     build = jobs["build"]
     upload = _step(build, "Upload release artifacts")
     assert upload["with"]["path"].splitlines() == [
-        "dist/SHA256SUMS",
-        "dist/marimo-export-*-SHA256SUMS",
+        "dist/*SHA256SUMS",
         "dist/npm/*.tgz",
         "dist/python/*.whl",
         "dist/python/*.tar.gz",
@@ -558,6 +557,16 @@ def test_checksum_manifest_addresses_flat_github_release_assets(
         Path(relative).name: sha256(contents).hexdigest()
         for relative, contents in artifacts.items()
     }
+    _, workflow = _workflow()
+    steps = (
+        (_step(workflow["jobs"]["build"], "Upload release artifacts"), "path"),
+        (_step(workflow["jobs"]["attest"], "Attest release artifacts"), "subject-path"),
+    )
+    for step, key in steps:
+        matches = {
+            path for pattern in step["with"][key].splitlines() for path in tmp_path.glob(pattern)
+        }
+        assert matches == {manifest, *(tmp_path / "dist" / name for name in artifacts)}
 
 
 def test_public_release_verifier_checks_the_complete_downloaded_package_set(

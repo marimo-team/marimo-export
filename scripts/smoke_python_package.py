@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import subprocess
 import sys
 import tempfile
@@ -235,7 +236,7 @@ def _verify_installed_scaffold(
         browser = json.loads((output / "package.json").read_text(encoding="utf-8"))
         expected_python = f"marimo-export[all]=={package_version}"
         expected_browser = package_version
-        if ".dev" in package_version:
+        if re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+\.dev[0-9]+", package_version):
             downloads = "https://github.com/marimo-team/marimo-export/releases/download/preview"
             expected_python = (
                 f"marimo-export[all] @ {downloads}/marimo_export-{package_version}-py3-none-any.whl"

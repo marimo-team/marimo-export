@@ -262,6 +262,8 @@ state_path.write_text(json.dumps(state))
         "",
         "in_progress\n\nhttps://example.test/run\n",
         "completed\nfailure\nhttps://example.test/run\n",
+        "completed\ncancelled\nhttps://example.test/run\n",
+        "completed\nskipped\nhttps://example.test/run\n",
     ],
 )
 def test_preview_waits_for_both_exact_commit_workflows(
