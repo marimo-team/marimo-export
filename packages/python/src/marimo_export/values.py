@@ -4,7 +4,8 @@ A ``ValueSelector`` names a notebook definition followed by attribute and item
 steps, such as ``report.rows[0]["total"]``. ``represent()`` converts a value to
 the first media type in ``accept`` that the value supports. A typeset document
 can accept PDF and SVG while a browser accepts PNG, and the notebook keeps its
-default output settings.
+default output settings. A ``Size`` draws a figure or chart at the size a
+document places it.
 
 This module imports only the Python standard library. A host can load its
 source where marimo-export is not installed, such as a Pyodide worker.
@@ -15,6 +16,7 @@ from __future__ import annotations
 
 import base64
 import binascii
+import copy
 import inspect
 import io
 import json
@@ -28,6 +30,7 @@ from typing import Any, Literal, NamedTuple, TypeVar, cast
 MAX_SELECTOR_BYTES = 4_096
 MAX_SELECTOR_STEPS = 64
 MAX_ACCEPTED_MEDIA_TYPES = 32
+MAX_SIZE_POINTS = 3_600
 
 _IDENTIFIER = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 _INDEX = re.compile(r"(?:0|[1-9][0-9]*)")
@@ -191,6 +194,31 @@ class Representation:
                 raise ValueError("representation width and height must be positive integers")
 
 
+@dataclass(frozen=True, slots=True)
+class Size:
+    """A display size in points, 1/72 inch, such as a column's width.
+
+    ``represent()`` draws a matplotlib figure or a Vega-Lite chart at this size,
+    so its text keeps its point size where a document places it. Without a
+    ``height``, a matplotlib figure keeps its aspect ratio and a chart keeps
+    its height. Each length is a finite number from 1 to ``MAX_SIZE_POINTS``
+    (50 inches), which bounds the pixels of a PNG drawn at that size.
+    """
+
+    width: float
+    height: float | None = None
+
+    def __post_init__(self) -> None:
+        for name in ("width", "height"):
+            length = getattr(self, name)
+            if length is None and name == "height":
+                continue
+            if isinstance(length, bool) or not isinstance(length, (int, float)):
+                raise TypeError(f"size {name} must be a number of points")
+            if not math.isfinite(length) or not 1 <= length <= MAX_SIZE_POINTS:
+                raise ValueError(f"size {name} must be from 1 to {MAX_SIZE_POINTS:,} points")
+
+
 class RepresentationError(ValueError):
     """A value supports none of the accepted media types."""
 
@@ -222,14 +250,24 @@ def normalize_accept(accept: Iterable[str]) -> tuple[str, ...]:
     return tuple(accepted)
 
 
-def represent(value: object, accept: Iterable[str], *, scale: float = 1.0) -> Representation:
+def represent(
+    value: object,
+    accept: Iterable[str],
+    *,
+    scale: float = 1.0,
+    size: Size | None = None,
+) -> Representation:
     """Represent ``value`` in the first accepted media type it supports.
 
     Matplotlib figures and artists render as PDF, SVG, or PNG. Altair charts and
-    Vega-Lite specifications render as PDF, SVG, or PNG with vl-convert-python. Other
-    values use their ``_repr_mimebundle_()``, ``_repr_*_()``, or marimo
-    ``_mime_()`` display methods. ``scale`` multiplies the pixel density of the
-    PNG images this function renders and keeps their display size.
+    Vega-Lite specifications render as PDF, SVG, or PNG with vl-convert-python.
+    Other values use their ``_repr_mimebundle_()``, ``_repr_*_()``, or marimo
+    ``_mime_()`` display methods.
+
+    ``scale`` multiplies the pixel density of the PNG images this function
+    renders and keeps their display size. ``size`` draws a copy of a figure or
+    chart at that size and leaves ``value`` unchanged. Display methods ignore
+    it.
 
     A display method that raises leaves its media types unavailable. Raises
     ``RepresentationError`` naming those failures when the value supports none
@@ -238,9 +276,11 @@ def represent(value: object, accept: Iterable[str], *, scale: float = 1.0) -> Re
 
     accepted = normalize_accept(accept)
     scale = _scale(scale)
+    if size is not None and not isinstance(size, Size):
+        raise TypeError("size must be a Size")
     calls = _Calls()
     sources = (
-        _library_source(value, scale, calls),
+        _library_source(value, scale, size, calls),
         _bundle_source(value, accepted, calls),
         _method_source(value, calls),
         _mime_source(value, calls),
@@ -458,12 +498,14 @@ _VEGA_LITE_SCHEMA = re.compile(
 )
 
 
-def _library_source(value: object, scale: float, calls: _Calls) -> _Source | None:
+def _library_source(
+    value: object, scale: float, size: Size | None, calls: _Calls
+) -> _Source | None:
     figure = _matplotlib_figure(value)
     if figure is not None:
-        return lambda media_type: _matplotlib(figure, media_type, scale, calls)
+        return lambda media_type: _matplotlib(figure, media_type, scale, size, calls)
     if _is_vega_lite(value):
-        return lambda media_type: _vega_lite(value, media_type, scale, calls)
+        return lambda media_type: _vega_lite(value, media_type, scale, size, calls)
     return None
 
 
@@ -480,27 +522,55 @@ def _matplotlib_figure(value: object) -> Any:
     return figure
 
 
-def _matplotlib(figure: Any, media_type: str, scale: float, calls: _Calls) -> Representation | None:
+def _matplotlib(
+    figure: Any, media_type: str, scale: float, size: Size | None, calls: _Calls
+) -> Representation | None:
     format = _MATPLOTLIB_FORMATS.get(media_type)
     if format is None:
         return None
-    data = calls(f"savefig(format={format!r})", lambda: _savefig(figure, format, scale))
+    data = calls(f"savefig(format={format!r})", lambda: _savefig(figure, format, scale, size))
     # marimo displays a figure at 100 CSS pixels per inch whatever its DPI.
     return _rendered(media_type, data, figure.dpi * scale / 100) if data else None
 
 
-def _savefig(figure: Any, format: str, scale: float) -> bytes:
+def _savefig(figure: Any, format: str, scale: float, size: Size | None) -> bytes:
     buffer = io.BytesIO()
     matplotlib = sys.modules["matplotlib"]
-    with matplotlib.rc_context(_MATPLOTLIB_SETTINGS.get(format, {})):
-        figure.savefig(
-            buffer,
-            format=format,
-            dpi=figure.dpi * scale,
-            bbox_inches="tight",
-            metadata=_MATPLOTLIB_METADATA.get(format),
-        )
+    sized = _resized(figure, size) if size is not None else None
+    try:
+        drawn = figure if sized is None else sized
+        with matplotlib.rc_context(_MATPLOTLIB_SETTINGS.get(format, {})):
+            drawn.savefig(
+                buffer,
+                format=format,
+                dpi=figure.dpi * scale,
+                # A layout engine fits the figure's text inside its requested
+                # size. Without one, the tight box keeps labels from clipping.
+                bbox_inches=None if sized is not None and _laid_out(sized) else "tight",
+                metadata=_MATPLOTLIB_METADATA.get(format),
+            )
+    finally:
+        pyplot = sys.modules.get("matplotlib.pyplot")
+        if sized is not None and pyplot is not None:
+            # Copying a pyplot figure registers the copy with pyplot.
+            pyplot.close(sized)
     return buffer.getvalue()
+
+
+def _resized(figure: Any, size: Size) -> Any:
+    """Return a copy of ``figure`` at ``size``, with fonts at their point sizes."""
+
+    width, height = figure.get_size_inches()
+    sized = copy.deepcopy(figure)
+    inches = size.width / 72
+    sized.set_size_inches(
+        inches, size.height / 72 if size.height is not None else inches * height / width
+    )
+    return sized
+
+
+def _laid_out(figure: Any) -> bool:
+    return figure.get_layout_engine() is not None
 
 
 def _is_vega_lite(value: object) -> bool:
@@ -516,7 +586,7 @@ def _is_vega_lite(value: object) -> bool:
 
 
 def _vega_lite(
-    value: object, media_type: str, scale: float, calls: _Calls
+    value: object, media_type: str, scale: float, size: Size | None, calls: _Calls
 ) -> Representation | None:
     if media_type not in {"application/pdf", "image/png", "image/svg+xml"}:
         return None
@@ -528,6 +598,8 @@ def _vega_lite(
     specification = calls("Vega-Lite specification", lambda: _vega_lite_specification(value))
     if specification is None:
         return None
+    if size is not None:
+        specification = _sized_vega_lite(specification, size)
     if media_type == "application/pdf":
         pdf = calls("vl-convert PDF", lambda: vl_convert.vegalite_to_pdf(specification))
         return Representation(media_type, pdf) if pdf else None
@@ -548,14 +620,36 @@ def _vega_lite_specification(value: object) -> dict[str, Any]:
         return cast(Any, value).to_dict()
 
 
+# Compound charts size each of their views, so a size applies to single and
+# layered views.
+_VEGA_LITE_COMPOUND = frozenset({"concat", "facet", "hconcat", "repeat", "vconcat"})
+
+
+def _sized_vega_lite(specification: dict[str, Any], size: Size) -> dict[str, Any]:
+    if not _VEGA_LITE_COMPOUND.isdisjoint(specification):
+        return specification
+    # vl-convert draws one Vega-Lite pixel as one point, and "fit" sizes the
+    # whole chart, with its axes and legends, to the given width.
+    sized = {
+        **specification,
+        "width": size.width,
+        "autosize": {"type": "fit", "contains": "padding"},
+    }
+    if size.height is not None:
+        sized["height"] = size.height
+    return sized
+
+
 __all__ = [
     "MAX_ACCEPTED_MEDIA_TYPES",
     "MAX_SELECTOR_BYTES",
     "MAX_SELECTOR_STEPS",
+    "MAX_SIZE_POINTS",
     "Representation",
     "RepresentationError",
     "SelectorError",
     "SelectorStep",
+    "Size",
     "ValueSelector",
     "normalize_accept",
     "represent",

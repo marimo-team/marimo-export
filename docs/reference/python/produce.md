@@ -170,7 +170,7 @@ from marimo_export.exporters import altair, anywidget, blob, media, parquet
 
 | Factory                                                                              | Defaults                                             | Producer extra |
 | ------------------------------------------------------------------------------------ | ---------------------------------------------------- | -------------- |
-| `media(accept, *, scale=1.0)`                                                        | Media types in preference order, positive scale      | Base package   |
+| `media(accept, *, scale=1.0, size=None)`                                             | Media types in preference order, positive scale      | Base package   |
 | `altair.vegalite()`                                                                  | No options                                           | `charts`       |
 | `altair.png(*, scale=1.0)`                                                           | Positive finite scale                                | `charts`       |
 | `anywidget.bundle()`                                                                 | No options                                           | `anywidget`    |
@@ -184,7 +184,9 @@ it supports, with the rules of
 [`represent()`](values#represent). It needs no extra for matplotlib figures and
 display methods. Altair charts need the `charts` extra. A PNG that it renders
 from a figure or chart records its display size as `width` and `height` in the
-`BlobAsset` metadata. One output keeps one media type across states, so give
+`BlobAsset` metadata. A [`Size`](values#size) draws a figure or chart at that
+size in points, such as the column width a document measured. One output keeps
+one media type across states, so give
 each state a value of the same kind. A state whose value supports none of the
 accepted types, or whose selector names an unavailable step, stops the build
 with `OutputError` (`output_execution_failed`). Its message gives the reason,
@@ -195,7 +197,10 @@ and its details name the state, output, and selector.
 metadata records `scale` beside `width` and `height`.
 
 ```python
+from marimo_export.values import Size
+
 figure = OutputSpec.export("figure", media(["application/pdf", "image/svg+xml"]))
+column_figure = OutputSpec.export("figure", media(["application/pdf"], size=Size(251.3)))
 ```
 
 `marimo_export.exporters.parquet.Compression` is the type alias for the six

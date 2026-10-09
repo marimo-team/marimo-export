@@ -90,7 +90,7 @@ contract.
 | ------------------ | ------------------------------------ |
 | `altair.vegalite`  | None                                 |
 | `altair.png`       | `scale`                              |
-| `media`            | `accept`, `scale`                    |
+| `media`            | `accept`, `scale`, `size`            |
 | `anywidget.bundle` | None                                 |
 | `parquet.table`    | `compression`, `filename`            |
 | `blob.json`        | `media_type`, `filename`, `metadata` |

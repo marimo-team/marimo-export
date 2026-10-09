@@ -4,7 +4,7 @@ import base64
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import pytest
 from marimo_export import values
@@ -13,6 +13,7 @@ from marimo_export.values import (
     RepresentationError,
     SelectorError,
     SelectorStep,
+    Size,
     ValueSelector,
     normalize_accept,
     represent,
@@ -159,6 +160,88 @@ def test_matplotlib_pdf_embeds_truetype_fonts() -> None:
 
     assert b"/FontFile2" in pdf
     assert b"/Type3" not in pdf
+
+
+def _media_box(pdf: bytes) -> tuple[float, float]:
+    import re
+
+    match = re.search(rb"/MediaBox \[ *0 0 ([0-9.]+) ([0-9.]+)", pdf)
+    assert match is not None
+    return float(match[1]), float(match[2])
+
+
+def test_a_size_draws_a_laid_out_figure_at_that_size_and_keeps_the_original() -> None:
+    figure_module = pytest.importorskip("matplotlib.figure")
+    figure = figure_module.Figure(figsize=(6, 2), layout="constrained")
+    figure.subplots().set_xlabel("Light (lux)")
+
+    column = represent(figure, ["application/pdf"], size=Size(250.38))
+    framed = represent(figure, ["application/pdf"], size=Size(250.38, 120))
+
+    assert _media_box(column.data) == pytest.approx((250.38, 250.38 / 3), abs=0.01)
+    assert _media_box(framed.data) == pytest.approx((250.38, 120), abs=0.01)
+    assert tuple(figure.get_size_inches()) == (6, 2)
+
+
+def test_a_size_keeps_text_at_its_point_size() -> None:
+    matplotlib = pytest.importorskip("matplotlib")
+    figure_module = pytest.importorskip("matplotlib.figure")
+    figure = figure_module.Figure(figsize=(6, 2), layout="constrained")
+    figure.subplots().set_xlabel("Light (lux)", fontsize=7)
+
+    # Uncompressed content streams show each text run's font size.
+    with matplotlib.rc_context({"pdf.compression": 0}):
+        pdf = represent(figure, ["application/pdf"], size=Size(180)).data
+
+    assert _media_box(pdf)[0] == pytest.approx(180, abs=0.01)
+    assert b" 7 Tf" in pdf
+
+
+def test_a_size_leaves_pyplot_with_the_figures_it_had() -> None:
+    pyplot = pytest.importorskip("matplotlib.pyplot")
+    figure, axes = pyplot.subplots(figsize=(4, 2))
+    axes.plot([1, 2, 3])
+    try:
+        before = pyplot.get_fignums()
+        represent(figure, ["application/pdf"], size=Size(200))
+        assert pyplot.get_fignums() == before
+    finally:
+        pyplot.close(figure)
+
+
+def test_a_size_draws_a_single_vega_lite_view_at_that_width() -> None:
+    pytest.importorskip("vl_convert")
+    specification = {
+        "$schema": "https://vega.github.io/schema/vega-lite/v6.json",
+        "data": {"values": [{"x": 1, "y": 2}, {"x": 2, "y": 3}]},
+        "mark": "line",
+        "encoding": {
+            "x": {"field": "x", "type": "quantitative"},
+            "y": {"field": "y", "type": "quantitative"},
+        },
+    }
+
+    pdf = represent(specification, ["application/pdf"], size=Size(250.38, 140))
+
+    assert _media_box(pdf.data) == pytest.approx((250.38, 140), abs=0.01)
+    assert "width" not in specification
+
+
+@pytest.mark.parametrize(
+    ("width", "height", "error"),
+    [
+        (0.5, None, ValueError),
+        (300, 3_601, ValueError),
+        (float("nan"), None, ValueError),
+        (True, None, TypeError),
+        ("3in", None, TypeError),
+    ],
+)
+def test_sizes_are_finite_point_lengths(
+    width: object, height: object, error: type[Exception]
+) -> None:
+    with pytest.raises(error, match="size"):
+        Size(cast(Any, width), cast(Any, height))
 
 
 def test_matplotlib_png_scale_adds_pixels_and_keeps_the_display_size() -> None:

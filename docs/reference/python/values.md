@@ -12,11 +12,10 @@ the same way in a live kernel and in an export that has the same plotting
 libraries.
 
 ```python
-from marimo_export.values import ValueSelector, represent
+from marimo_export.values import Size, ValueSelector, represent
 
-selector = ValueSelector("report.figure")
-figure = selector.resolve(globals())
-pdf = represent(figure, ["application/pdf", "image/svg+xml"])
+figure = ValueSelector("report.figure").resolve(globals())
+pdf = represent(figure, ["application/pdf", "image/svg+xml"], size=Size(251.3))
 assert pdf.media_type == "application/pdf"
 ```
 
@@ -62,6 +61,7 @@ represent(
     accept: Iterable[str],
     *,
     scale: float = 1.0,
+    size: Size | None = None,
 ) -> Representation
 ```
 
@@ -103,6 +103,28 @@ in varying order, so the PDF bytes of equal charts can differ.
 The notebook's own settings stay unchanged. A figure that marimo displays as a
 PNG can render as PDF for a typeset document and as SVG for a web page in the
 same session.
+
+### `Size`
+
+```python
+Size(width: float, height: float | None = None) -> Size
+```
+
+A display size in points, 1/72 inch, such as the width of the column a
+document places a figure in. `represent()` draws a copy of a matplotlib figure
+at that size, so its text keeps the point size the notebook gave it, and leaves
+the notebook's figure unchanged. A figure with a layout engine, such as
+`layout="constrained"`, fits its labels inside the size exactly. A figure
+without one keeps the tight bounding box, which can differ from the size by its
+padding. Without a `height`, the figure keeps its aspect ratio.
+
+A single or layered Vega-Lite chart draws at the size with `autosize` set to
+`fit`, so its axes and legends fit inside the width. Without a `height`, the
+chart keeps its own height. Compound charts and values drawn by display methods
+ignore the size.
+
+Each length is a finite number from 1 to `MAX_SIZE_POINTS` (3,600, or 50
+inches). Other numbers raise `ValueError`, and other types raise `TypeError`.
 
 ### `Representation`
 

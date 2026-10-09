@@ -254,8 +254,12 @@ exporter:
   options:
     accept: [application/pdf, image/svg+xml]
     scale: 1
+    size: { width: 251.3, height: null }
   dependencies: []
 ```
+
+`size` is optional. Its `width` and `height` are points, and a `null` height
+keeps a figure's aspect ratio.
 
 Custom callable:
 
