@@ -22,7 +22,6 @@ import math
 import re
 import sys
 from collections.abc import Callable, Iterable, Mapping
-from contextlib import nullcontext
 from dataclasses import dataclass, field
 from typing import Any, Literal, NamedTuple, TypeVar, cast
 
@@ -227,7 +226,7 @@ def represent(value: object, accept: Iterable[str], *, scale: float = 1.0) -> Re
     """Represent ``value`` in the first accepted media type it supports.
 
     Matplotlib figures and artists render as PDF, SVG, or PNG. Altair charts and
-    Vega-Lite specifications render as SVG or PNG with vl-convert-python. Other
+    Vega-Lite specifications render as PDF, SVG, or PNG with vl-convert-python. Other
     values use their ``_repr_mimebundle_()``, ``_repr_*_()``, or marimo
     ``_mime_()`` display methods. ``scale`` multiplies the pixel density of the
     PNG images this function renders and keeps their display size.
@@ -443,10 +442,15 @@ _MATPLOTLIB_FORMATS = {
     "image/svg+xml": "svg",
 }
 # Omit the dates matplotlib writes by default, and salt SVG element IDs with a
-# constant, so equal figures produce equal bytes.
+# constant, so equal figures produce equal bytes. PDF embeds TrueType fonts,
+# which print preflight checks accept and matplotlib's default Type 3 fonts fail.
 _MATPLOTLIB_METADATA: dict[str, dict[str, None]] = {
     "pdf": {"CreationDate": None},
     "svg": {"Date": None},
+}
+_MATPLOTLIB_SETTINGS: dict[str, dict[str, object]] = {
+    "pdf": {"pdf.fonttype": 42},
+    "svg": {"svg.hashsalt": "marimo-export"},
 }
 _VEGA_LITE_SCHEMA = re.compile(
     r"https://vega\.github\.io/schema/vega-lite/v(?P<major>[1-9][0-9]*)"
@@ -488,8 +492,7 @@ def _matplotlib(figure: Any, media_type: str, scale: float, calls: _Calls) -> Re
 def _savefig(figure: Any, format: str, scale: float) -> bytes:
     buffer = io.BytesIO()
     matplotlib = sys.modules["matplotlib"]
-    salted = format == "svg"
-    with matplotlib.rc_context({"svg.hashsalt": "marimo-export"}) if salted else nullcontext():
+    with matplotlib.rc_context(_MATPLOTLIB_SETTINGS.get(format, {})):
         figure.savefig(
             buffer,
             format=format,
@@ -515,16 +518,19 @@ def _is_vega_lite(value: object) -> bool:
 def _vega_lite(
     value: object, media_type: str, scale: float, calls: _Calls
 ) -> Representation | None:
-    if media_type not in {"image/png", "image/svg+xml"}:
+    if media_type not in {"application/pdf", "image/png", "image/svg+xml"}:
         return None
     try:
         import vl_convert
     except ImportError:
-        calls.note("Vega-Lite charts need vl-convert-python for SVG and PNG output")
+        calls.note("Vega-Lite charts need vl-convert-python for PDF, SVG, and PNG output")
         return None
     specification = calls("Vega-Lite specification", lambda: _vega_lite_specification(value))
     if specification is None:
         return None
+    if media_type == "application/pdf":
+        pdf = calls("vl-convert PDF", lambda: vl_convert.vegalite_to_pdf(specification))
+        return Representation(media_type, pdf) if pdf else None
     if media_type == "image/svg+xml":
         svg = calls("vl-convert SVG", lambda: vl_convert.vegalite_to_svg(specification))
         return Representation(media_type, svg.encode("utf-8")) if svg else None

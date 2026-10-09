@@ -151,6 +151,16 @@ def test_matplotlib_vector_formats_render_equal_figures_to_equal_bytes(
     assert rendered[0] == rendered[1]
 
 
+def test_matplotlib_pdf_embeds_truetype_fonts() -> None:
+    figure = _figure()
+    figure.axes[0].set_xlabel("Light (lux)")
+
+    pdf = represent(figure, ["application/pdf"]).data
+
+    assert b"/FontFile2" in pdf
+    assert b"/Type3" not in pdf
+
+
 def test_matplotlib_png_scale_adds_pixels_and_keeps_the_display_size() -> None:
     axes = _figure().axes[0]
 
@@ -196,13 +206,28 @@ def test_altair_charts_and_vega_lite_specifications_render_through_vl_convert() 
         "width": 120,
     }
 
-    svg = represent(chart, ["application/pdf", "image/svg+xml"])
+    svg = represent(chart, ["text/html", "image/svg+xml"])
     png = represent(specification, ["image/png"], scale=2)
 
     assert svg.media_type == "image/svg+xml" and svg.data.startswith(b"<svg")
     assert png.data.startswith(_PNG)
     width, height = _png_size(png.data)
     assert (width / 2, height / 2) == (png.width, png.height)
+
+
+def test_vega_lite_charts_render_as_pdf_with_embedded_fonts() -> None:
+    pytest.importorskip("vl_convert")
+    specification = {
+        "$schema": "https://vega.github.io/schema/vega-lite/v6.json",
+        "data": {"values": [{"x": 1, "y": 2}, {"x": 2, "y": 3}]},
+        "mark": "line",
+        "encoding": {"x": {"field": "x", "type": "quantitative", "title": "Light (lux)"}},
+    }
+
+    pdf = represent(specification, ["application/pdf"]).data
+
+    assert pdf.startswith(b"%PDF-")
+    assert b"/FontFile2" in pdf
 
 
 def test_display_methods_supply_other_values_and_their_display_size() -> None:

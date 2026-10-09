@@ -79,13 +79,13 @@ method, looked up on the value's type as Python looks up special methods. A
 display method that raises leaves its media types unavailable, and
 `represent()` tries the next accepted type.
 
-| Value                                   | Media types                                           |
-| --------------------------------------- | ----------------------------------------------------- |
-| Matplotlib figure or artist             | `application/pdf`, `image/svg+xml`, `image/png`       |
-| Altair chart or Vega-Lite specification | `image/svg+xml`, `image/png` with `vl-convert-python` |
-| Value with `_repr_mimebundle_()`        | The types in its bundle                               |
-| Value with `_repr_*_()`                 | PNG, JPEG, SVG, PDF, HTML, Markdown, LaTeX, or JSON   |
-| Value with marimo's `_mime_()`          | The type it returns                                   |
+| Value                                   | Media types                                                              |
+| --------------------------------------- | ------------------------------------------------------------------------ |
+| Matplotlib figure or artist             | `application/pdf`, `image/svg+xml`, `image/png`                          |
+| Altair chart or Vega-Lite specification | `application/pdf`, `image/svg+xml`, `image/png` with `vl-convert-python` |
+| Value with `_repr_mimebundle_()`        | The types in its bundle                                                  |
+| Value with `_repr_*_()`                 | PNG, JPEG, SVG, PDF, HTML, Markdown, LaTeX, or JSON                      |
+| Value with marimo's `_mime_()`          | The type it returns                                                      |
 
 `represent()` passes IPython's `include` and `exclude` arguments to
 `_repr_mimebundle_()` when its signature takes them, and calls it without
@@ -93,10 +93,12 @@ arguments otherwise, as marimo does. Data for a JSON media type can be any JSON
 value, such as an object, an array, a number, or a boolean.
 
 A matplotlib artist, such as an `Axes`, renders its whole figure. Matplotlib
-PDF and SVG output omits creation dates and uses constant SVG element IDs, so
-equal figures produce equal bytes. An Altair chart renders with all of its rows,
+PDF embeds TrueType fonts, which print preflight checks accept, and its PDF and
+SVG output omits creation dates and uses constant SVG element IDs, so equal
+figures produce equal bytes. An Altair chart renders with all of its rows,
 because the image carries no data. vl-convert-python draws charts with its
-bundled Vega-Lite release.
+bundled Vega-Lite release and embeds their fonts in PDF. It numbers those fonts
+in varying order, so the PDF bytes of equal charts can differ.
 
 The notebook's own settings stay unchanged. A figure that marimo displays as a
 PNG can render as PDF for a typeset document and as SVG for a web page in the
