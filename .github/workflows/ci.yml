@@ -233,11 +233,56 @@ jobs:
         run: uv run --frozen --isolated --no-dev --group test --all-extras --python 3.12 pytest -q
           packages/python/tests/test_release.py
           packages/python/tests/test_preview_release.py
+  preview-provenance:
+    name: Preview provenance
+    needs: [changes, release-contracts]
+    if: >-
+      needs.changes.outputs.release_contracts == 'true' &&
+      (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      attestations: write
+      artifact-metadata: write
+      id-token: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          persist-credentials: false
+      - name: Set up JavaScript workspace
+        uses: ./.github/actions/setup-js
+      - name: Create preview provenance probe
+        id: preview_provenance
+        run: |
+          printf 'Preview provenance API probe for %s\n' "$GITHUB_SHA" > "$RUNNER_TEMP/preview-provenance-probe.txt"
+          node scripts/preview-provenance.mjs "$GITHUB_SHA" "$RUNNER_TEMP/preview-provenance.json"
+      - name: Attest preview provenance probe
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          predicate-type: ${{ steps.preview_provenance.outputs.predicate_type }}
+          predicate-path: ${{ runner.temp }}/preview-provenance.json
+          subject-path: ${{ runner.temp }}/preview-provenance-probe.txt
+      - name: Verify stored preview provenance probe
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PREVIEW_PREDICATE_TYPE: ${{ steps.preview_provenance.outputs.predicate_type }}
+        run: |
+          gh attestation verify "$RUNNER_TEMP/preview-provenance-probe.txt" \
+            --repo "$GITHUB_REPOSITORY" \
+            --predicate-type "$PREVIEW_PREDICATE_TYPE" \
+            --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/ci.yml" \
+            --format=json > "$RUNNER_TEMP/preview-provenance-verified.json"
+          jq -e --arg commit "$GITHUB_SHA" \
+            'any(.[].verificationResult.statement.predicate; .buildDefinition.externalParameters.checkoutCommit == $commit)' \
+            "$RUNNER_TEMP/preview-provenance-verified.json"
 
   required:
     name: Required
     if: always()
-    needs: [changes, quality, test-python, test-frontend, package, release-contracts]
+    needs:
+      [changes, quality, test-python, test-frontend, package, release-contracts, preview-provenance]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -254,12 +299,16 @@ jobs:
           TEST_PYTHON_REQUIRED: ${{ needs.changes.outputs.python_contracts }}
           RELEASE_CONTRACTS: ${{ needs.release-contracts.result }}
           RELEASE_CONTRACTS_REQUIRED: ${{ needs.changes.outputs.release_contracts }}
+          PREVIEW_PROVENANCE: ${{ needs.preview-provenance.result }}
+          PREVIEW_PROVENANCE_REQUIRED: >-
+            ${{ needs.changes.outputs.release_contracts == 'true' &&
+            (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository) }}
         run: |
           if [ "$CHANGES" != success ]; then
             printf 'Change classification failed: %s\n' "$CHANGES" >&2
             exit 1
           fi
-          for stage in QUALITY TEST_PYTHON TEST_FRONTEND PACKAGE RELEASE_CONTRACTS; do
+          for stage in QUALITY TEST_PYTHON TEST_FRONTEND PACKAGE RELEASE_CONTRACTS PREVIEW_PROVENANCE; do
             required="${stage}_REQUIRED"
             case "${!required}" in
               true) expected=success ;;

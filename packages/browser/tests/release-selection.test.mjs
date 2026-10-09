@@ -134,6 +134,8 @@ it("the required gate enforces selected jobs and classified outcomes", async () 
     PACKAGE_REQUIRED: "true",
     RELEASE_CONTRACTS: "success",
     RELEASE_CONTRACTS_REQUIRED: "true",
+    PREVIEW_PROVENANCE: "success",
+    PREVIEW_PROVENANCE_REQUIRED: "true",
   };
   const execute = (changes) =>
     spawnSync("bash", ["-e", "-o", "pipefail", "-c", command], {
@@ -141,12 +143,20 @@ it("the required gate enforces selected jobs and classified outcomes", async () 
       env: { ...process.env, ...stages, ...changes },
     });
   expect(execute({}).status).toBe(0);
-  for (const stage of ["QUALITY", "TEST_PYTHON", "TEST_FRONTEND", "PACKAGE", "RELEASE_CONTRACTS"]) {
+  for (const stage of [
+    "QUALITY",
+    "TEST_PYTHON",
+    "TEST_FRONTEND",
+    "PACKAGE",
+    "RELEASE_CONTRACTS",
+    "PREVIEW_PROVENANCE",
+  ]) {
     expect(execute({ [stage]: "skipped" }).status, stage).not.toBe(0);
     expect(execute({ [stage]: "skipped", [`${stage}_REQUIRED`]: "false" }).status, stage).toBe(0);
-  }
-  for (const outcome of ["failure", "cancelled"]) {
-    expect(execute({ PACKAGE: outcome }).status, outcome).not.toBe(0);
+    expect(execute({ [`${stage}_REQUIRED`]: "false" }).status, stage).not.toBe(0);
+    for (const outcome of ["failure", "cancelled"]) {
+      expect(execute({ [stage]: outcome }).status, `${stage}: ${outcome}`).not.toBe(0);
+    }
   }
   expect(execute({ PACKAGE_REQUIRED: "" }).status).not.toBe(0);
   expect(execute({ CHANGES: "failure" }).status).not.toBe(0);

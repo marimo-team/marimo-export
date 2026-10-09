@@ -210,6 +210,8 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    outputs:
+      predicate_type: ${{ steps.provenance.outputs.predicate_type }}
     permissions:
       actions: read
       artifact-metadata: write
@@ -229,6 +231,7 @@ jobs:
           path: dist
 
       - name: Record preview source provenance
+        id: provenance
         if: github.event_name == 'workflow_run'
         env:
           PREVIEW_COMMIT: ${{ needs.build.outputs.commit }}
@@ -237,7 +240,7 @@ jobs:
       - name: Attest release artifacts
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
-          predicate-type: ${{ github.event_name == 'workflow_run' && 'https://slsa.dev/provenance/v1' || '' }}
+          predicate-type: ${{ steps.provenance.outputs.predicate_type }}
           predicate-path: ${{ github.event_name == 'workflow_run' && format('{0}/preview-provenance.json', runner.temp) || '' }}
           subject-path: |
             dist/*SHA256SUMS
@@ -519,6 +522,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           PREVIEW_COMMIT: ${{ needs.build.outputs.commit }}
+          PREVIEW_PREDICATE_TYPE: ${{ needs.attest.outputs.predicate_type }}
         run: ./scripts/publish-preview.sh dist "$PREVIEW_COMMIT"
 run-name: ${{ github.event_name == 'workflow_dispatch' && format('Recover v{0} from run {1}',
   inputs.version, inputs.source_run) || (github.event_name == 'workflow_run' && format('Preview {0}',

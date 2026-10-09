@@ -1,4 +1,4 @@
-import { writeFileSync } from "node:fs";
+import { appendFileSync, writeFileSync } from "node:fs";
 
 const [commit, output] = process.argv.slice(2);
 if (!/^[a-f0-9]{40}$/.test(commit ?? "") || !output) {
@@ -10,19 +10,22 @@ const required = (name) => {
   return value;
 };
 const server = required("GITHUB_SERVER_URL");
-const repository = `${server}/${required("GITHUB_REPOSITORY")}`;
+const repositorySlug = required("GITHUB_REPOSITORY");
+const repository = `${server}/${repositorySlug}`;
 const workflow = required("GITHUB_WORKFLOW_REF");
+const workflowPath = workflow.slice(repositorySlug.length + 1).split("@")[0];
 const ref = required("GITHUB_REF");
 const workflowCommit = required("GITHUB_SHA");
+const predicateType =
+  "https://github.com/marimo-team/marimo-export/blob/main/development_docs/releasing.md#preview-provenance-v1";
 
 // workflow_run signs from the current main workflow, which can differ from the
 // validated checkout. Record both dependencies and identify the artifact source.
 const predicate = {
   buildDefinition: {
-    buildType:
-      "https://github.com/marimo-team/marimo-export/blob/main/development_docs/releasing.md#preview-provenance-v1",
+    buildType: predicateType,
     externalParameters: {
-      workflow: { repository, ref, path: ".github/workflows/publish.yml" },
+      workflow: { repository, ref, path: workflowPath },
       checkoutCommit: commit,
     },
     internalParameters: {
@@ -46,3 +49,6 @@ const predicate = {
   },
 };
 writeFileSync(output, `${JSON.stringify(predicate, null, 2)}\n`);
+if (process.env.GITHUB_OUTPUT) {
+  appendFileSync(process.env.GITHUB_OUTPUT, `predicate_type=${predicateType}\n`);
+}
