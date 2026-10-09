@@ -143,7 +143,7 @@ OutputSpec.cell(name: str | None = None, *, id: str | None = None) -> OutputSpec
 
 | Factory    | Stored output                                                                                  |
 | ---------- | ---------------------------------------------------------------------------------------------- |
-| `json()`   | Canonical portable JSON selected from a notebook definition                                    |
+| `json()`   | Canonical portable JSON of a notebook definition, with tables as rows and dates as ISO 8601    |
 | `native()` | marimo cache representation for a scalar, JSON value, NumPy array, Arrow table, or `BlobAsset` |
 | `export()` | `BlobAsset` or canonical JSON returned by an explicit exporter                                 |
 | `output()` | Formatted `marimo.output.v1` snapshot and replay resources                                     |
@@ -153,6 +153,11 @@ OutputSpec.cell(name: str | None = None, *, id: str | None = None) -> OutputSpec
 the selector during construction with
 [`ValueSelector`](values#valueselector). Invalid selectors and cell references raise
 `SpecError` with a `spec_output_invalid` code.
+
+`json()` stores the [JSON form](values#json-data) of the selected value, so a
+pandas, Polars, or PyArrow table exports as a list of row objects and a date
+exports as ISO 8601 text. A selector that steps from `None`, such as
+`peak.label` while `peak` is `None`, exports `null`.
 
 `OutputSpec.source` exposes the normalized source record for inspection. Its
 concrete source-record classes are not public construction helpers. Construct an
@@ -170,7 +175,7 @@ from marimo_export.exporters import altair, anywidget, blob, media, parquet
 
 | Factory                                                                              | Defaults                                             | Producer extra |
 | ------------------------------------------------------------------------------------ | ---------------------------------------------------- | -------------- |
-| `media(accept, *, scale=1.0)`                                                        | Media types in preference order, positive scale      | Base package   |
+| `media(accept, *, scale=1.0, size=None)`                                             | Media types in preference order, positive scale      | Base package   |
 | `altair.vegalite()`                                                                  | No options                                           | `charts`       |
 | `altair.png(*, scale=1.0)`                                                           | Positive finite scale                                | `charts`       |
 | `anywidget.bundle()`                                                                 | No options                                           | `anywidget`    |
@@ -184,7 +189,10 @@ it supports, with the rules of
 [`represent()`](values#represent). It needs no extra for matplotlib figures and
 display methods. Altair charts need the `charts` extra. A PNG that it renders
 from a figure or chart records its display size as `width` and `height` in the
-`BlobAsset` metadata. One output keeps one media type across states, so give
+`BlobAsset` metadata. A [`Size`](values#size) draws a matplotlib figure or a
+single or layered Vega-Lite chart at that size in points, such as the column
+width a document measured. One output keeps one media type across states, so
+give
 each state a value of the same kind. A state whose value supports none of the
 accepted types, or whose selector names an unavailable step, stops the build
 with `OutputError` (`output_execution_failed`). Its message gives the reason,
@@ -195,7 +203,10 @@ and its details name the state, output, and selector.
 metadata records `scale` beside `width` and `height`.
 
 ```python
+from marimo_export.values import Size
+
 figure = OutputSpec.export("figure", media(["application/pdf", "image/svg+xml"]))
+column_figure = OutputSpec.export("figure", media(["application/pdf"], size=Size(251.3)))
 ```
 
 `marimo_export.exporters.parquet.Compression` is the type alias for the six

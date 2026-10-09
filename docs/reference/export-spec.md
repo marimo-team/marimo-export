@@ -254,8 +254,13 @@ exporter:
   options:
     accept: [application/pdf, image/svg+xml]
     scale: 1
+    size: { width: 251.3, height: null }
   dependencies: []
 ```
+
+`size` is optional. Its `width` and `height` are points. A `null` height keeps
+a matplotlib figure's aspect ratio and a Vega-Lite chart's own height. Compound
+Vega-Lite charts keep their own sizes.
 
 Custom callable:
 

@@ -26,7 +26,7 @@ from marimo_export.descriptors import (
 )
 from marimo_export.errors import OutputError
 from marimo_export.spec import CellSource, RenderedOutputSource
-from marimo_export.values import ValueSelector
+from marimo_export.values import ValueSelector, _json_form
 
 if TYPE_CHECKING:
     from marimo_export._marimo.compat.child_run import StateChild
@@ -169,7 +169,7 @@ def capture_json_value(value: object) -> object:
 
     from marimo._save.stubs import BlobAsset
 
-    value = json_value(value, "JSON projection")
+    value = json_value(_json_form(value), "JSON projection")
     return BlobAsset(
         data=canonical_bytes(value),
         media_type=JSON_MEDIA_TYPE,

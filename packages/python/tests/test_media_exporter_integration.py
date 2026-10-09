@@ -9,6 +9,7 @@ from export_integration_support import build
 from marimo_export import ExportSpec, OutputSpec, open_export
 from marimo_export.errors import OutputError
 from marimo_export.exporters import media
+from marimo_export.values import Size
 
 
 def test_media_outputs_render_the_accepted_format_with_notebook_defaults_unchanged(
@@ -80,6 +81,91 @@ if __name__ == "__main__":
         export.state("narrow").output("page_figure").blob_asset().data
         != export.state("wide").output("page_figure").blob_asset().data
     )
+
+
+def test_media_outputs_draw_figures_at_their_size(tmp_path: Path) -> None:
+    pytest.importorskip("matplotlib")
+    notebook = tmp_path / "notebook.py"
+    notebook.write_text(
+        """
+import marimo
+
+app = marimo.App()
+
+
+@app.cell
+def _():
+    from matplotlib.figure import Figure
+
+    figure = Figure(figsize=(6, 2), layout="constrained")
+    figure.subplots().plot([1, 3, 2])
+    return (figure,)
+
+
+if __name__ == "__main__":
+    app.run()
+""".lstrip(),
+        encoding="utf-8",
+    )
+    spec = ExportSpec(
+        default_state="base",
+        states={"base": {}},
+        outputs={
+            "figure": OutputSpec.export("figure", media(["application/pdf"], size=Size(250.38)))
+        },
+    )
+
+    result = build(notebook, spec=spec, output=tmp_path / "export", timeout=60)
+    state = open_export(result.path).state("base")
+
+    assert b"/MediaBox [ 0 0 250.38 83.46 ]" in state.output("figure").blob_asset().data
+
+
+def test_json_outputs_store_tables_dates_and_steps_from_none(tmp_path: Path) -> None:
+    pytest.importorskip("polars")
+    notebook = tmp_path / "notebook.py"
+    notebook.write_text(
+        """
+import marimo
+
+app = marimo.App()
+
+
+@app.cell
+def _():
+    import datetime
+
+    import polars as pl
+
+    days = pl.DataFrame(
+        {"day": [datetime.date(2015, 2, 4), datetime.date(2015, 2, 5)], "rate": [0.5, None]}
+    )
+    peak = None
+    return days, peak
+
+
+if __name__ == "__main__":
+    app.run()
+""".lstrip(),
+        encoding="utf-8",
+    )
+    spec = ExportSpec(
+        default_state="base",
+        states={"base": {}},
+        outputs={
+            "days": OutputSpec.json("days"),
+            "peak_label": OutputSpec.json("peak.label"),
+        },
+    )
+
+    result = build(notebook, spec=spec, output=tmp_path / "export", timeout=60)
+    state = open_export(result.path).state("base")
+
+    assert state.output("days").json() == (
+        {"day": "2015-02-04", "rate": 0.5},
+        {"day": "2015-02-05", "rate": None},
+    )
+    assert state.output("peak_label").json() is None
 
 
 @pytest.mark.parametrize(

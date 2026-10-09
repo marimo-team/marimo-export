@@ -4,7 +4,9 @@ A ``ValueSelector`` names a notebook definition followed by attribute and item
 steps, such as ``report.rows[0]["total"]``. ``represent()`` converts a value to
 the first media type in ``accept`` that the value supports. A typeset document
 can accept PDF and SVG while a browser accepts PNG, and the notebook keeps its
-default output settings.
+default output settings. A ``Size`` draws a figure or chart at the size a
+document places it, and data such as tables and dates represents as
+``application/json``.
 
 This module imports only the Python standard library. A host can load its
 source where marimo-export is not installed, such as a Pyodide worker.
@@ -15,20 +17,30 @@ from __future__ import annotations
 
 import base64
 import binascii
+import copy
+import dataclasses
+import datetime
+import decimal
+import enum
 import inspect
 import io
 import json
 import math
 import re
 import sys
-from collections.abc import Callable, Iterable, Mapping
-from contextlib import nullcontext
+import warnings
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Literal, NamedTuple, TypeVar, cast
 
 MAX_SELECTOR_BYTES = 4_096
 MAX_SELECTOR_STEPS = 64
 MAX_ACCEPTED_MEDIA_TYPES = 32
+MAX_SIZE_POINTS = 3_600
+MAX_JSON_VALUES = 100_000
+
+_MAX_JSON_DEPTH = 256
+_MAX_SAFE_INTEGER = 2**53 - 1
 
 _IDENTIFIER = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 _INDEX = re.compile(r"(?:0|[1-9][0-9]*)")
@@ -72,14 +84,18 @@ class ValueSelector:
     def resolve(self, namespace: Mapping[str, object]) -> object:
         """Return the selected value from a namespace such as notebook globals.
 
-        Mapping keys take precedence over attributes. Raises ``LookupError``
-        when the root is undefined or a step is unavailable.
+        Mapping keys take precedence over attributes. A step from ``None``
+        selects ``None``, so ``peak.label`` reads as missing while ``peak`` is
+        ``None``. Raises ``LookupError`` when the root is undefined or a step is
+        unavailable.
         """
 
         if self.root not in namespace:
             raise LookupError(f"{self.root!r} is not defined")
         current = namespace[self.root]
         for kind, key in self.path:
+            if current is None:
+                return None
             if kind == "attribute" and isinstance(current, Mapping) and key in current:
                 current = cast(Mapping[object, object], current)[key]
             elif kind == "attribute":
@@ -192,8 +208,49 @@ class Representation:
                 raise ValueError("representation width and height must be positive integers")
 
 
+@dataclass(frozen=True, slots=True)
+class Size:
+    """A display size in points, 1/72 inch, such as a column's width.
+
+    ``represent()`` draws a matplotlib figure or a Vega-Lite chart at this size,
+    so its text keeps its point size where a document places it. Without a
+    ``height``, a matplotlib figure keeps its aspect ratio and a chart keeps
+    its height. Each length is a finite number from 1 to ``MAX_SIZE_POINTS``
+    (50 inches), which bounds the pixels of a PNG drawn at that size.
+    """
+
+    width: float
+    height: float | None = None
+
+    def __post_init__(self) -> None:
+        for name in ("width", "height"):
+            length = getattr(self, name)
+            if length is None and name == "height":
+                continue
+            if isinstance(length, bool) or not isinstance(length, (int, float)):
+                raise TypeError(f"size {name} must be a number of points")
+            if not math.isfinite(length) or not 1 <= length <= MAX_SIZE_POINTS:
+                raise ValueError(f"size {name} must be from 1 to {MAX_SIZE_POINTS:,} points")
+
+
 class RepresentationError(ValueError):
-    """A value supports none of the accepted media types."""
+    """A value supports none of the accepted media types.
+
+    ``reasons`` holds one sentence for each display method or conversion that
+    failed, such as ``The item at ["total"] is infinite.``
+    """
+
+    def __init__(self, message: str, reasons: Iterable[str] = ()) -> None:
+        super().__init__(message)
+        self.reasons = tuple(reasons)
+
+
+class RepresentationTooLarge(RepresentationError):
+    """A value is data whose JSON form holds more than ``MAX_JSON_VALUES`` values."""
+
+
+class _JsonLimit(ValueError):
+    pass
 
 
 def normalize_accept(accept: Iterable[str]) -> tuple[str, ...]:
@@ -223,14 +280,26 @@ def normalize_accept(accept: Iterable[str]) -> tuple[str, ...]:
     return tuple(accepted)
 
 
-def represent(value: object, accept: Iterable[str], *, scale: float = 1.0) -> Representation:
+def represent(
+    value: object,
+    accept: Iterable[str],
+    *,
+    scale: float = 1.0,
+    size: Size | None = None,
+) -> Representation:
     """Represent ``value`` in the first accepted media type it supports.
 
     Matplotlib figures and artists render as PDF, SVG, or PNG. Altair charts and
-    Vega-Lite specifications render as SVG or PNG with vl-convert-python. Other
-    values use their ``_repr_mimebundle_()``, ``_repr_*_()``, or marimo
-    ``_mime_()`` display methods. ``scale`` multiplies the pixel density of the
-    PNG images this function renders and keeps their display size.
+    Vega-Lite specifications render as PDF, SVG, or PNG with vl-convert-python.
+    Other values use their ``_repr_mimebundle_()``, ``_repr_*_()``, or marimo
+    ``_mime_()`` display methods. Data without a JSON display method, such as
+    dictionaries, lists, numbers, dates, NumPy arrays, and pandas, Polars, or
+    PyArrow tables, represents as ``application/json``.
+
+    ``scale`` multiplies the pixel density of the PNG images this function
+    renders and keeps their display size. ``size`` draws a copy of a figure or
+    chart at that size and leaves ``value`` unchanged. Display methods ignore
+    it.
 
     A display method that raises leaves its media types unavailable. Raises
     ``RepresentationError`` naming those failures when the value supports none
@@ -239,12 +308,15 @@ def represent(value: object, accept: Iterable[str], *, scale: float = 1.0) -> Re
 
     accepted = normalize_accept(accept)
     scale = _scale(scale)
+    if size is not None and not isinstance(size, Size):
+        raise TypeError("size must be a Size")
     calls = _Calls()
     sources = (
-        _library_source(value, scale, calls),
+        _library_source(value, scale, size, calls),
         _bundle_source(value, accepted, calls),
         _method_source(value, calls),
         _mime_source(value, calls),
+        _data_source(value, calls),
     )
     for media_type in accepted:
         for source in sources:
@@ -253,7 +325,9 @@ def represent(value: object, accept: Iterable[str], *, scale: float = 1.0) -> Re
                 return representation
     name = f"{type(value).__module__}.{type(value).__qualname__}"
     detail = "".join(f" {reason}" for reason in calls.reasons)
-    raise RepresentationError(f"{name} has no representation as {', '.join(accepted)}.{detail}")
+    raise RepresentationError(
+        f"{name} has no representation as {', '.join(accepted)}.{detail}", calls.reasons
+    )
 
 
 def _scale(scale: object) -> float:
@@ -443,10 +517,15 @@ _MATPLOTLIB_FORMATS = {
     "image/svg+xml": "svg",
 }
 # Omit the dates matplotlib writes by default, and salt SVG element IDs with a
-# constant, so equal figures produce equal bytes.
+# constant, so equal figures produce equal bytes. PDF embeds TrueType fonts,
+# which print preflight checks accept and matplotlib's default Type 3 fonts fail.
 _MATPLOTLIB_METADATA: dict[str, dict[str, None]] = {
     "pdf": {"CreationDate": None},
     "svg": {"Date": None},
+}
+_MATPLOTLIB_SETTINGS: dict[str, dict[str, object]] = {
+    "pdf": {"pdf.fonttype": 42},
+    "svg": {"svg.hashsalt": "marimo-export"},
 }
 _VEGA_LITE_SCHEMA = re.compile(
     r"https://vega\.github\.io/schema/vega-lite/v(?P<major>[1-9][0-9]*)"
@@ -454,12 +533,14 @@ _VEGA_LITE_SCHEMA = re.compile(
 )
 
 
-def _library_source(value: object, scale: float, calls: _Calls) -> _Source | None:
+def _library_source(
+    value: object, scale: float, size: Size | None, calls: _Calls
+) -> _Source | None:
     figure = _matplotlib_figure(value)
     if figure is not None:
-        return lambda media_type: _matplotlib(figure, media_type, scale, calls)
+        return lambda media_type: _matplotlib(figure, media_type, scale, size, calls)
     if _is_vega_lite(value):
-        return lambda media_type: _vega_lite(value, media_type, scale, calls)
+        return lambda media_type: _vega_lite(value, media_type, scale, size, calls)
     return None
 
 
@@ -476,28 +557,70 @@ def _matplotlib_figure(value: object) -> Any:
     return figure
 
 
-def _matplotlib(figure: Any, media_type: str, scale: float, calls: _Calls) -> Representation | None:
+def _matplotlib(
+    figure: Any, media_type: str, scale: float, size: Size | None, calls: _Calls
+) -> Representation | None:
     format = _MATPLOTLIB_FORMATS.get(media_type)
     if format is None:
         return None
-    data = calls(f"savefig(format={format!r})", lambda: _savefig(figure, format, scale))
+    data = calls(f"savefig(format={format!r})", lambda: _savefig(figure, format, scale, size))
     # marimo displays a figure at 100 CSS pixels per inch whatever its DPI.
     return _rendered(media_type, data, figure.dpi * scale / 100) if data else None
 
 
-def _savefig(figure: Any, format: str, scale: float) -> bytes:
+def _savefig(figure: Any, format: str, scale: float, size: Size | None) -> bytes:
     buffer = io.BytesIO()
     matplotlib = sys.modules["matplotlib"]
-    salted = format == "svg"
-    with matplotlib.rc_context({"svg.hashsalt": "marimo-export"}) if salted else nullcontext():
-        figure.savefig(
-            buffer,
-            format=format,
-            dpi=figure.dpi * scale,
-            bbox_inches="tight",
-            metadata=_MATPLOTLIB_METADATA.get(format),
-        )
+    sized = _resized(figure, size) if size is not None else None
+    try:
+        drawn = figure if sized is None else sized
+        with matplotlib.rc_context(_MATPLOTLIB_SETTINGS.get(format, {})), warnings.catch_warnings():
+            # A sized copy that tight layout cannot fully arrange, such as one
+            # with manually placed axes, keeps its own layout.
+            warnings.filterwarnings("ignore", "This figure includes Axes that are not compatible")
+            drawn.savefig(
+                buffer,
+                format=format,
+                dpi=figure.dpi * scale,
+                # A sized copy fits its text inside the requested canvas, so
+                # its page keeps that size.
+                bbox_inches=None if sized is not None else "tight",
+                metadata=_MATPLOTLIB_METADATA.get(format),
+            )
+    finally:
+        pyplot = sys.modules.get("matplotlib.pyplot")
+        if sized is not None and pyplot is not None:
+            # Copying a pyplot figure registers the copy with pyplot.
+            pyplot.close(sized)
     return buffer.getvalue()
+
+
+def _resized(figure: Any, size: Size) -> Any | None:
+    """Return a copy of ``figure`` at ``size``, with fonts at their point sizes.
+
+    The copy fits its labels inside the new size with its own layout engine,
+    or with matplotlib's tight layout when it has none, and without padding,
+    so its ink lines up with the text beside it on the page. Returns ``None``
+    when Python cannot copy the figure, such as in a Pyodide runtime whose
+    figures hold uncopyable counters, and the figure then draws at its own
+    size.
+    """
+
+    width, height = figure.get_size_inches()
+    try:
+        sized = copy.deepcopy(figure)
+    except (TypeError, copy.Error, RecursionError):
+        return None
+    engine = sized.get_layout_engine()
+    if engine is None:
+        sized.set_layout_engine("tight", pad=0)
+    elif type(engine).__name__ == "ConstrainedLayoutEngine":
+        engine.set(w_pad=0, h_pad=0)
+    inches = size.width / 72
+    sized.set_size_inches(
+        inches, size.height / 72 if size.height is not None else inches * height / width
+    )
+    return sized
 
 
 def _is_vega_lite(value: object) -> bool:
@@ -513,18 +636,23 @@ def _is_vega_lite(value: object) -> bool:
 
 
 def _vega_lite(
-    value: object, media_type: str, scale: float, calls: _Calls
+    value: object, media_type: str, scale: float, size: Size | None, calls: _Calls
 ) -> Representation | None:
-    if media_type not in {"image/png", "image/svg+xml"}:
+    if media_type not in {"application/pdf", "image/png", "image/svg+xml"}:
         return None
     try:
         import vl_convert
     except ImportError:
-        calls.note("Vega-Lite charts need vl-convert-python for SVG and PNG output")
+        calls.note("Vega-Lite charts need vl-convert-python for PDF, SVG, and PNG output")
         return None
     specification = calls("Vega-Lite specification", lambda: _vega_lite_specification(value))
     if specification is None:
         return None
+    if size is not None:
+        specification = _sized_vega_lite(specification, size)
+    if media_type == "application/pdf":
+        pdf = calls("vl-convert PDF", lambda: vl_convert.vegalite_to_pdf(specification))
+        return Representation(media_type, pdf) if pdf else None
     if media_type == "image/svg+xml":
         svg = calls("vl-convert SVG", lambda: vl_convert.vegalite_to_svg(specification))
         return Representation(media_type, svg.encode("utf-8")) if svg else None
@@ -542,14 +670,227 @@ def _vega_lite_specification(value: object) -> dict[str, Any]:
         return cast(Any, value).to_dict()
 
 
+# Compound charts size each of their views, so a size applies to single and
+# layered views.
+_VEGA_LITE_COMPOUND = frozenset({"concat", "facet", "hconcat", "repeat", "vconcat"})
+
+
+def _sized_vega_lite(specification: dict[str, Any], size: Size) -> dict[str, Any]:
+    if not _VEGA_LITE_COMPOUND.isdisjoint(specification):
+        return specification
+    # vl-convert draws one Vega-Lite pixel as one point, and "fit" sizes the
+    # whole chart, with its axes and legends, to the given width.
+    sized = {
+        **specification,
+        "width": size.width,
+        "autosize": {"type": "fit", "contains": "padding"},
+    }
+    if size.height is not None:
+        sized["height"] = size.height
+    return sized
+
+
+def _data_source(value: object, calls: _Calls) -> _Source:
+    def source(media_type: str) -> Representation | None:
+        if media_type != "application/json":
+            return None
+        try:
+            data = _json_bytes(value)
+        except _JsonLimit as error:
+            reason = f"{str(error)[:1].upper()}{str(error)[1:]}."
+            raise RepresentationTooLarge(reason, (reason,)) from error
+        except ValueError as error:
+            reason = str(error)
+            calls.note(reason[:1].upper() + reason[1:])
+            return None
+        return Representation(media_type, data)
+
+    return source
+
+
+def _json_bytes(value: object) -> bytes:
+    return json.dumps(
+        _json_form(value),
+        allow_nan=False,
+        ensure_ascii=False,
+        separators=(",", ":"),
+    ).encode("utf-8")
+
+
+def _json_form(value: object) -> object:
+    """Return ``value`` as JSON data, or raise ``ValueError`` naming the part.
+
+    JSON outputs in exports and ``application/json`` representations share
+    this conversion.
+    """
+
+    return _json_data(value, "", 0, [0])
+
+
+def _part(path: str) -> str:
+    return f"the item at {path}" if path else "the value"
+
+
+def _json_data(value: object, path: str, depth: int, count: list[int]) -> object:
+    """Return ``value`` as JSON data, or raise ``ValueError`` naming the path.
+
+    Tables become lists of row objects, dates and times become ISO 8601 text,
+    durations become seconds, and NaN and missing table cells become null.
+    Each value and each object key counts toward ``MAX_JSON_VALUES``, as in
+    portable JSON.
+    """
+
+    if depth > _MAX_JSON_DEPTH:
+        raise ValueError(f"{_part(path)} nests deeper than {_MAX_JSON_DEPTH} levels")
+    value = _plain(value, path, count)
+    _count(count, 1)
+    if value is None or isinstance(value, (bool, str)):
+        return value
+    if isinstance(value, int):
+        if abs(value) > _MAX_SAFE_INTEGER:
+            raise ValueError(f"{_part(path)} is an integer beyond 2**53 - 1")
+        return value
+    if isinstance(value, (float, decimal.Decimal)):
+        number = float(value)
+        if math.isnan(number):
+            return None
+        if math.isinf(number):
+            finite = isinstance(value, decimal.Decimal) and value.is_finite()
+            raise ValueError(
+                f"{_part(path)} is {'beyond the range of a float' if finite else 'infinite'}"
+            )
+        return number
+    if _is_missing_time(value):
+        return None
+    if isinstance(value, (datetime.date, datetime.time)):
+        return value.isoformat()
+    if isinstance(value, datetime.timedelta):
+        return value.total_seconds()
+    if isinstance(value, Mapping):
+        mapping = cast(Mapping[object, object], value)
+        items: dict[str, object] = {}
+        for key, item in mapping.items():
+            if not isinstance(key, str):
+                raise ValueError(f"{_part(path)} has a key that is not text: {key!r}")
+            _count(count, 1)
+            items[key] = _json_data(item, f"{path}[{json.dumps(key)}]", depth + 1, count)
+        return items
+    if isinstance(value, (list, tuple)):
+        sequence = cast(Sequence[object], value)
+        return [
+            _json_data(item, f"{path}[{index}]", depth + 1, count)
+            for index, item in enumerate(sequence)
+        ]
+    name = f"{type(value).__module__}.{type(value).__qualname__}"
+    raise ValueError(f"{_part(path)} is a {name}, which has no JSON form")
+
+
+def _count(count: list[int], values: int) -> None:
+    count[0] += values
+    if count[0] > MAX_JSON_VALUES:
+        raise _JsonLimit(
+            f"the value holds more than {MAX_JSON_VALUES:,} JSON values, so filter or aggregate it"
+        )
+
+
+def _is_missing_time(value: object) -> bool:
+    # pandas and NumPy spell a missing time as NaT, which subclasses datetime.
+    return type(value).__name__ == "NaTType"
+
+
+def _plain(value: object, path: str, count: list[int]) -> object:
+    """Return a member's value, a dataclass's fields, or a library value's items.
+
+    Tables become lists of row objects, and arrays and series become lists.
+    The size checks run before a table or array is copied into Python objects.
+    """
+
+    if isinstance(value, enum.Enum):
+        return value.value
+    if dataclasses.is_dataclass(value) and not isinstance(value, type):
+        return {item.name: getattr(value, item.name) for item in dataclasses.fields(value)}
+    numpy = sys.modules.get("numpy")
+    if numpy is not None and isinstance(value, (numpy.generic, numpy.ndarray)):
+        # NumPy turns nanosecond times into integers, so read them as
+        # microseconds, which Python's datetime holds.
+        if value.dtype.kind == "M":
+            value = value.astype("datetime64[us]")
+        elif value.dtype.kind == "m":
+            value = value.astype("timedelta64[us]")
+        if isinstance(value, numpy.ndarray):
+            _check_items(int(value.size), count)
+            return value.tolist()
+        return value.item()
+    polars = sys.modules.get("polars")
+    if polars is not None:
+        if isinstance(value, polars.DataFrame):
+            _check_table(value.height, value.width, count)
+            return value.to_dicts()
+        if isinstance(value, polars.Series):
+            _check_items(len(value), count)
+            return value.to_list()
+    pandas = sys.modules.get("pandas")
+    if pandas is not None:
+        if isinstance(value, pandas.DataFrame):
+            _check_columns(list(value.columns), path)
+            rows, columns = value.shape
+            _check_table(rows, columns, count)
+            # Object columns keep missing values as None and NaN rather than
+            # pandas' NA scalars, which are not JSON data.
+            return value.astype(object).where(value.notna(), None).to_dict("records")
+        if isinstance(value, pandas.Series):
+            _check_items(len(value), count)
+            return value.astype(object).where(value.notna(), None).tolist()
+    pyarrow = sys.modules.get("pyarrow")
+    if pyarrow is not None:
+        if isinstance(value, (pyarrow.Table, pyarrow.RecordBatch)):
+            _check_columns(value.column_names, path)
+            _check_table(value.num_rows, value.num_columns, count)
+            return value.to_pylist()
+        if isinstance(value, (pyarrow.Array, pyarrow.ChunkedArray)):
+            _check_items(len(value), count)
+            return value.to_pylist()
+    return value
+
+
+def _check_columns(columns: list[object], path: str) -> None:
+    # A row object holds one value per name, so a repeated name loses a column.
+    seen: set[object] = set()
+    for column in columns:
+        if column in seen:
+            raise ValueError(f"{_part(path)} is a table that repeats the column {column!r}")
+        seen.add(column)
+
+
+def _check_items(items: int, count: list[int]) -> None:
+    if count[0] + items + 1 > MAX_JSON_VALUES:
+        raise _JsonLimit(
+            f"the value's {items:,} items hold more than {MAX_JSON_VALUES:,} JSON values, so "
+            "filter or aggregate it"
+        )
+
+
+def _check_table(rows: int, columns: int, count: list[int]) -> None:
+    # Each row is an object with a key and a value for each column.
+    if count[0] + rows * (2 * columns + 1) + 1 > MAX_JSON_VALUES:
+        raise _JsonLimit(
+            f"the table's {rows:,} rows of {columns:,} columns hold more than "
+            f"{MAX_JSON_VALUES:,} JSON values, so filter or aggregate it"
+        )
+
+
 __all__ = [
     "MAX_ACCEPTED_MEDIA_TYPES",
+    "MAX_JSON_VALUES",
     "MAX_SELECTOR_BYTES",
     "MAX_SELECTOR_STEPS",
+    "MAX_SIZE_POINTS",
     "Representation",
     "RepresentationError",
+    "RepresentationTooLarge",
     "SelectorError",
     "SelectorStep",
+    "Size",
     "ValueSelector",
     "normalize_accept",
     "represent",

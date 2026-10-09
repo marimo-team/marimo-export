@@ -20,6 +20,7 @@ from marimo_export.exporters._runtime import blob as blob_runtime
 from marimo_export.exporters._runtime import media as media_runtime
 from marimo_export.exporters._runtime import parquet as parquet_runtime
 from marimo_export.outputs import BlobAsset
+from marimo_export.values import Size
 
 
 def test_builtin_and_importable_factories_construct_normalized_descriptors() -> None:
@@ -28,6 +29,15 @@ def test_builtin_and_importable_factories_construct_normalized_descriptors() -> 
         "dependencies": [],
         "name": "media",
         "options": {"accept": ["image/svg+xml", "image/png"], "scale": 2.0},
+    }
+    assert media(["application/pdf"], size=Size(250.38)).to_value() == {
+        "dependencies": [],
+        "name": "media",
+        "options": {
+            "accept": ["application/pdf"],
+            "scale": 1.0,
+            "size": {"width": 250.38, "height": None},
+        },
     }
     assert altair.png(scale=2).to_value() == {
         "dependencies": [],
@@ -99,6 +109,16 @@ def test_builtin_and_importable_factories_construct_normalized_descriptors() -> 
         lambda: media([]),
         lambda: media(["image/*"]),
         lambda: media(["image/png", "image/PNG"]),
+        lambda: ExporterSpec(
+            "media", options={"accept": ["application/pdf"], "size": {"width": 0}}
+        ),
+        lambda: ExporterSpec(
+            "media", options={"accept": ["application/pdf"], "size": {"height": 120}}
+        ),
+        lambda: ExporterSpec(
+            "media",
+            options={"accept": ["application/pdf"], "size": {"width": 200, "depth": 3}},
+        ),
         lambda: parquet.table(compression=cast(Any, "zip")),
     ],
 )
@@ -150,6 +170,18 @@ def test_vegalite_and_media_exporters_read_every_row_of_a_chart() -> None:
 
     assert len(specification["datasets"][next(iter(specification["datasets"]))]) == 6_000
     assert image.data.startswith(b"<svg")
+
+
+def test_media_exporter_draws_a_figure_at_its_size_option() -> None:
+    figure_module = pytest.importorskip("matplotlib.figure")
+    figure = figure_module.Figure(figsize=(6, 2), layout="constrained")
+    figure.subplots().plot([1, 2, 3])
+
+    pdf = media_runtime.media(
+        figure, accept=["application/pdf"], size={"width": 200.0, "height": 90.0}
+    )
+
+    assert b"/MediaBox [ 0 0 200 90 ]" in pdf.data
 
 
 def test_vegalite_exporter_reads_altair_charts_and_specifications() -> None:

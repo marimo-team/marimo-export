@@ -7,17 +7,18 @@ description: Parse value selectors, resolve them against notebook globals, and r
 
 `marimo_export.values` holds the selector grammar used by every selected-value
 output and the media negotiation behind the `media` exporter. Hosts that read
-live notebook values use the same functions, so a selector and a figure render
-the same way in a live kernel and in an export that has the same plotting
+live notebook values use the same functions, so a selector, a figure, and a
+table render the same way in a live kernel and in an export that has the same
 libraries.
 
 ```python
-from marimo_export.values import ValueSelector, represent
+from marimo_export.values import Size, ValueSelector, represent
 
-selector = ValueSelector("report.figure")
-figure = selector.resolve(globals())
-pdf = represent(figure, ["application/pdf", "image/svg+xml"])
+figure = ValueSelector("report.figure").resolve(globals())
+pdf = represent(figure, ["application/pdf", "image/svg+xml"], size=Size(251.3))
 assert pdf.media_type == "application/pdf"
+
+rows = represent(ValueSelector("daily").resolve(globals()), ["application/json"])
 ```
 
 The module imports only the Python standard library. A host can load its source
@@ -51,8 +52,9 @@ well-formed Unicode. Other text raises `SelectorError`, a `ValueError`.
 
 `resolve()` reads the root from `namespace`, then applies each step. An
 attribute step reads a mapping key when the current value is a mapping that
-contains it, and the attribute otherwise. It raises `LookupError` when the root
-is undefined or a step is unavailable.
+contains it, and the attribute otherwise. A step from `None` selects `None`, so
+`peak.label` reads as missing while `peak` is `None`. It raises `LookupError`
+when the root is undefined or a step is unavailable.
 
 ## `represent()`
 
@@ -62,13 +64,16 @@ represent(
     accept: Iterable[str],
     *,
     scale: float = 1.0,
+    size: Size | None = None,
 ) -> Representation
 ```
 
 Returns a `Representation` for the first media type in `accept` that the value
 supports. Raises `RepresentationError`, a `ValueError`, when the value supports
 none of them. The message names the value's type, each display method that
-raised, and the package to install when a renderer is missing.
+raised, and the package to install when a renderer is missing. Its `reasons`
+attribute holds those sentences without the type, for a host that names the
+value its own way.
 
 Figures and charts use their library's renderer. A Vega-Lite specification is a
 mapping whose `$schema` is a `https://vega.github.io/schema/vega-lite/` URL.
@@ -79,13 +84,14 @@ method, looked up on the value's type as Python looks up special methods. A
 display method that raises leaves its media types unavailable, and
 `represent()` tries the next accepted type.
 
-| Value                                   | Media types                                           |
-| --------------------------------------- | ----------------------------------------------------- |
-| Matplotlib figure or artist             | `application/pdf`, `image/svg+xml`, `image/png`       |
-| Altair chart or Vega-Lite specification | `image/svg+xml`, `image/png` with `vl-convert-python` |
-| Value with `_repr_mimebundle_()`        | The types in its bundle                               |
-| Value with `_repr_*_()`                 | PNG, JPEG, SVG, PDF, HTML, Markdown, LaTeX, or JSON   |
-| Value with marimo's `_mime_()`          | The type it returns                                   |
+| Value                                   | Media types                                                              |
+| --------------------------------------- | ------------------------------------------------------------------------ |
+| Matplotlib figure or artist             | `application/pdf`, `image/svg+xml`, `image/png`                          |
+| Altair chart or Vega-Lite specification | `application/pdf`, `image/svg+xml`, `image/png` with `vl-convert-python` |
+| Value with `_repr_mimebundle_()`        | The types in its bundle                                                  |
+| Value with `_repr_*_()`                 | PNG, JPEG, SVG, PDF, HTML, Markdown, LaTeX, or JSON                      |
+| Value with marimo's `_mime_()`          | The type it returns                                                      |
+| Data, such as a table, list, or date    | `application/json`, as described in [JSON data](#json-data)              |
 
 `represent()` passes IPython's `include` and `exclude` arguments to
 `_repr_mimebundle_()` when its signature takes them, and calls it without
@@ -93,14 +99,67 @@ arguments otherwise, as marimo does. Data for a JSON media type can be any JSON
 value, such as an object, an array, a number, or a boolean.
 
 A matplotlib artist, such as an `Axes`, renders its whole figure. Matplotlib
-PDF and SVG output omits creation dates and uses constant SVG element IDs, so
-equal figures produce equal bytes. An Altair chart renders with all of its rows,
+PDF embeds TrueType fonts, which print preflight checks accept, and its PDF and
+SVG output omits creation dates and uses constant SVG element IDs, so equal
+figures produce equal bytes. An Altair chart renders with all of its rows,
 because the image carries no data. vl-convert-python draws charts with its
-bundled Vega-Lite release.
+bundled Vega-Lite release and embeds their fonts in PDF. It numbers those fonts
+in varying order, so the PDF bytes of equal charts can differ.
 
 The notebook's own settings stay unchanged. A figure that marimo displays as a
 PNG can render as PDF for a typeset document and as SVG for a web page in the
 same session.
+
+### `Size`
+
+```python
+Size(width: float, height: float | None = None) -> Size
+```
+
+A display size in points, 1/72 inch, such as the width of the column a
+document places a figure in. `represent()` draws a copy of a matplotlib figure
+at that size, so its text keeps the point size the notebook gave it, and leaves
+the notebook's figure unchanged. The copy keeps the figure's layout engine,
+such as `layout="constrained"`, or takes matplotlib's tight layout when the
+figure has none, without padding, so its labels fit inside the size, its ink
+reaches the page's edges, and the page has exactly that size. Without a `height`, the figure keeps its aspect ratio. A figure that
+Python cannot copy, such as one in a Pyodide runtime that holds an uncopyable
+counter, draws at its own size, and the consumer scales it.
+
+A single or layered Vega-Lite chart draws at the size with `autosize` set to
+`fit`, so its axes and legends fit inside the width. Without a `height`, the
+chart keeps its own height. Compound charts and values drawn by display methods
+ignore the size.
+
+Each length is a finite number from 1 to `MAX_SIZE_POINTS` (3,600, or 50
+inches). Other numbers raise `ValueError`, and other types raise `TypeError`.
+
+### JSON data
+
+A value without its own JSON display method represents as `application/json`
+when it is data:
+
+| Value                                                | JSON                                                 |
+| ---------------------------------------------------- | ---------------------------------------------------- |
+| `None`, booleans, text, mappings with text keys      | The same value                                       |
+| Lists, tuples, and dataclass instances               | Arrays, and objects keyed by field name              |
+| Integers up to 2\*\*53 - 1, finite floats, `Decimal` | Numbers, for a `Decimal` within the range of a float |
+| NaN, and pandas and NumPy `NaT`                      | `null`                                               |
+| `date`, `datetime`, `time`                           | ISO 8601 text, such as `2015-02-04T09:41:00+01:00`   |
+| `timedelta`                                          | Seconds                                              |
+| `Enum` member                                        | Its value                                            |
+| NumPy scalar or array                                | Its items, with datetimes read in microseconds       |
+| pandas, Polars, or PyArrow table with unique columns | A list of row objects keyed by column name           |
+| pandas or Polars series, PyArrow array               | A list of its items                                  |
+
+A datetime keeps its wall time and offset. Each value and each object key counts
+toward `MAX_JSON_VALUES` (100,000), as in portable JSON. A larger JSON form
+raises `RepresentationTooLarge`, a `RepresentationError`, and a table or array
+fails that way before its items are read, so filter or aggregate it in the
+notebook. Infinite numbers, larger integers, mappings with other keys, and other
+objects have no JSON form, and `RepresentationError` names the part that failed,
+such as `The item at ["total"] is infinite.`
+[`OutputSpec.json()`](produce#outputspec) stores the same JSON form.
 
 ### `Representation`
 

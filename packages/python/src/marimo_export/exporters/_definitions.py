@@ -7,7 +7,7 @@ from typing import cast
 
 from marimo_export._json import JsonObject, JsonValue, portable_json_object
 from marimo_export._limits import MAX_NAME_BYTES
-from marimo_export.values import _scale, normalize_accept
+from marimo_export.values import Size, _scale, normalize_accept
 
 
 @dataclass(frozen=True, slots=True)
@@ -90,6 +90,13 @@ def runtime_reference(name: str) -> ExporterDefinition:
     return ExporterDefinition(module=module, symbol=symbol)
 
 
+def _size_option(size: JsonValue) -> JsonObject:
+    if not isinstance(size, dict) or not set(size) <= {"width", "height"} or "width" not in size:
+        raise TypeError("media option 'size' must be an object with width and optional height")
+    checked = Size(cast(float, size["width"]), cast("float | None", size.get("height")))
+    return {"width": checked.width, "height": checked.height}
+
+
 def _normalize_builtin_options(name: str, options: JsonObject) -> JsonObject:
     if name in {"altair.vegalite", "anywidget.bundle"}:
         _exact_options(name, options, set())
@@ -98,14 +105,17 @@ def _normalize_builtin_options(name: str, options: JsonObject) -> JsonObject:
         _exact_options(name, options, {"scale"})
         return {"scale": _scale(options.get("scale", 1.0))}
     if name == "media":
-        _exact_options(name, options, {"accept", "scale"})
+        _exact_options(name, options, {"accept", "scale", "size"})
         accept = options.get("accept")
         if not isinstance(accept, list):
             raise TypeError("media option 'accept' must be an array of media types")
-        return {
+        normalized: JsonObject = {
             "accept": list(normalize_accept(cast(list[str], accept))),
             "scale": _scale(options.get("scale", 1.0)),
         }
+        if (size := options.get("size")) is not None:
+            normalized["size"] = _size_option(size)
+        return normalized
     if name == "parquet.table":
         _exact_options(name, options, {"compression", "filename"})
         compression = options.get("compression", "snappy")

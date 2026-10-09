@@ -1,18 +1,24 @@
 from __future__ import annotations
 
 import base64
+import datetime
+import decimal
+import io
+import json
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import pytest
 from marimo_export import values
 from marimo_export.values import (
     Representation,
     RepresentationError,
+    RepresentationTooLarge,
     SelectorError,
     SelectorStep,
+    Size,
     ValueSelector,
     normalize_accept,
     represent,
@@ -70,6 +76,13 @@ def test_selector_resolves_mapping_keys_before_attributes() -> None:
 
     assert ValueSelector('report.rows[0]["total"]').resolve(namespace) == 3
     assert ValueSelector("config.items").resolve(namespace) == "key wins"
+
+
+def test_selector_steps_from_none_select_none() -> None:
+    namespace = {"peak": None, "report": {"peak": None}}
+
+    assert ValueSelector("peak.label").resolve(namespace) is None
+    assert ValueSelector('report.peak["label"][0]').resolve(namespace) is None
 
 
 @pytest.mark.parametrize(
@@ -151,6 +164,144 @@ def test_matplotlib_vector_formats_render_equal_figures_to_equal_bytes(
     assert rendered[0] == rendered[1]
 
 
+def test_matplotlib_pdf_embeds_truetype_fonts() -> None:
+    figure = _figure()
+    figure.axes[0].set_xlabel("Light (lux)")
+
+    pdf = represent(figure, ["application/pdf"]).data
+
+    assert b"/FontFile2" in pdf
+    assert b"/Type3" not in pdf
+
+
+def _media_box(pdf: bytes) -> tuple[float, float]:
+    import re
+
+    match = re.search(rb"/MediaBox \[ *0 0 ([0-9.]+) ([0-9.]+)", pdf)
+    assert match is not None
+    return float(match[1]), float(match[2])
+
+
+def test_a_size_draws_a_laid_out_figure_at_that_size_and_keeps_the_original() -> None:
+    figure_module = pytest.importorskip("matplotlib.figure")
+    figure = figure_module.Figure(figsize=(6, 2), layout="constrained")
+    figure.subplots().set_xlabel("Light (lux)")
+
+    column = represent(figure, ["application/pdf"], size=Size(250.38))
+    framed = represent(figure, ["application/pdf"], size=Size(250.38, 120))
+
+    assert _media_box(column.data) == pytest.approx((250.38, 250.38 / 3), abs=0.01)
+    assert _media_box(framed.data) == pytest.approx((250.38, 120), abs=0.01)
+    assert tuple(figure.get_size_inches()) == (6, 2)
+
+
+@pytest.mark.parametrize("colorbar", [False, True])
+def test_a_size_keeps_its_page_for_a_figure_without_a_layout_engine(colorbar: bool) -> None:
+    figure_module = pytest.importorskip("matplotlib.figure")
+    figure = figure_module.Figure(figsize=(4, 2))
+    axes = figure.subplots()
+    image = axes.imshow([[0, 1], [1, 0]])
+    axes.set_ylabel("Very long label (units)")
+    if colorbar:
+        figure.colorbar(image, ax=axes)
+
+    pdf = represent(figure, ["application/pdf"], size=Size(250.38, 120)).data
+
+    assert _media_box(pdf) == pytest.approx((250.38, 120), abs=0.01)
+    assert figure.get_layout_engine() is None
+
+
+def test_a_size_fills_its_page_to_the_edges() -> None:
+    figure_module = pytest.importorskip("matplotlib.figure")
+    figure = figure_module.Figure(figsize=(6, 2), layout="constrained")
+    axes = figure.subplots()
+    axes.plot([1, 2])
+    axes.set_ylabel("Light (lux)")
+    sized = values._resized(figure, Size(250.38))
+    assert sized is not None
+
+    # The layout engine places the axes while the figure saves.
+    sized.savefig(io.BytesIO(), format="pdf")
+    ink = sized.get_tightbbox()
+
+    assert ink.x0 == pytest.approx(0, abs=0.01)
+    assert ink.x1 == pytest.approx(250.38 / 72, abs=0.01)
+
+
+def test_a_figure_python_cannot_copy_draws_at_its_own_size() -> None:
+    figure_module = pytest.importorskip("matplotlib.figure")
+    figure = figure_module.Figure(figsize=(3, 1))
+    figure.subplots().plot([1, 2])
+    # A generator stands in for state that deepcopy rejects.
+    figure.uncopyable = (index for index in range(2))
+
+    pdf = represent(figure, ["application/pdf"], size=Size(250.38)).data
+
+    assert pdf.startswith(b"%PDF-")
+    assert _media_box(pdf)[0] < 250
+
+
+def test_a_size_keeps_text_at_its_point_size() -> None:
+    matplotlib = pytest.importorskip("matplotlib")
+    figure_module = pytest.importorskip("matplotlib.figure")
+    figure = figure_module.Figure(figsize=(6, 2), layout="constrained")
+    figure.subplots().set_xlabel("Light (lux)", fontsize=7)
+
+    # Uncompressed content streams show each text run's font size.
+    with matplotlib.rc_context({"pdf.compression": 0}):
+        pdf = represent(figure, ["application/pdf"], size=Size(180)).data
+
+    assert _media_box(pdf)[0] == pytest.approx(180, abs=0.01)
+    assert b" 7 Tf" in pdf
+
+
+def test_a_size_leaves_pyplot_with_the_figures_it_had() -> None:
+    pyplot = pytest.importorskip("matplotlib.pyplot")
+    figure, axes = pyplot.subplots(figsize=(4, 2))
+    axes.plot([1, 2, 3])
+    try:
+        before = pyplot.get_fignums()
+        represent(figure, ["application/pdf"], size=Size(200))
+        assert pyplot.get_fignums() == before
+    finally:
+        pyplot.close(figure)
+
+
+def test_a_size_draws_a_single_vega_lite_view_at_that_width() -> None:
+    pytest.importorskip("vl_convert")
+    specification = {
+        "$schema": "https://vega.github.io/schema/vega-lite/v6.json",
+        "data": {"values": [{"x": 1, "y": 2}, {"x": 2, "y": 3}]},
+        "mark": "line",
+        "encoding": {
+            "x": {"field": "x", "type": "quantitative"},
+            "y": {"field": "y", "type": "quantitative"},
+        },
+    }
+
+    pdf = represent(specification, ["application/pdf"], size=Size(250.38, 140))
+
+    assert _media_box(pdf.data) == pytest.approx((250.38, 140), abs=0.01)
+    assert "width" not in specification
+
+
+@pytest.mark.parametrize(
+    ("width", "height", "error"),
+    [
+        (0.5, None, ValueError),
+        (300, 3_601, ValueError),
+        (float("nan"), None, ValueError),
+        (True, None, TypeError),
+        ("3in", None, TypeError),
+    ],
+)
+def test_sizes_are_finite_point_lengths(
+    width: object, height: object, error: type[Exception]
+) -> None:
+    with pytest.raises(error, match="size"):
+        Size(cast(Any, width), cast(Any, height))
+
+
 def test_matplotlib_png_scale_adds_pixels_and_keeps_the_display_size() -> None:
     axes = _figure().axes[0]
 
@@ -196,13 +347,137 @@ def test_altair_charts_and_vega_lite_specifications_render_through_vl_convert() 
         "width": 120,
     }
 
-    svg = represent(chart, ["application/pdf", "image/svg+xml"])
+    svg = represent(chart, ["text/html", "image/svg+xml"])
     png = represent(specification, ["image/png"], scale=2)
 
     assert svg.media_type == "image/svg+xml" and svg.data.startswith(b"<svg")
     assert png.data.startswith(_PNG)
     width, height = _png_size(png.data)
     assert (width / 2, height / 2) == (png.width, png.height)
+
+
+def test_vega_lite_charts_render_as_pdf_with_embedded_fonts() -> None:
+    pytest.importorskip("vl_convert")
+    specification = {
+        "$schema": "https://vega.github.io/schema/vega-lite/v6.json",
+        "data": {"values": [{"x": 1, "y": 2}, {"x": 2, "y": 3}]},
+        "mark": "line",
+        "encoding": {"x": {"field": "x", "type": "quantitative", "title": "Light (lux)"}},
+    }
+
+    pdf = represent(specification, ["application/pdf"]).data
+
+    assert pdf.startswith(b"%PDF-")
+    assert b"/FontFile2" in pdf
+
+
+def _json(value: object) -> object:
+    representation = represent(value, ["application/json"])
+    assert representation.media_type == "application/json"
+    return json.loads(representation.data)
+
+
+def test_tables_represent_as_json_rows_with_iso_dates_and_null_cells() -> None:
+    polars = pytest.importorskip("polars")
+    pandas = pytest.importorskip("pandas")
+    pyarrow = pytest.importorskip("pyarrow")
+    day = datetime.date(2015, 2, 4)
+    reading = datetime.datetime(2015, 2, 4, 9, 41)
+    rows = [
+        {"day": "2015-02-04", "rate": 0.5, "read": "2015-02-04T09:41:00"},
+        {"day": None, "rate": None, "read": None},
+    ]
+
+    assert (
+        _json(polars.DataFrame({"day": [day, None], "rate": [0.5, None], "read": [reading, None]}))
+        == rows
+    )
+    assert (
+        _json(pyarrow.table({"day": [day, None], "rate": [0.5, None], "read": [reading, None]}))
+        == rows
+    )
+    assert _json(
+        pandas.DataFrame(
+            {"read": pandas.to_datetime(["2015-02-04 09:41", None]), "rate": [0.5, None]}
+        )
+    ) == [{"read": "2015-02-04T09:41:00", "rate": 0.5}, {"read": None, "rate": None}]
+
+
+def test_data_values_represent_as_json() -> None:
+    numpy = pytest.importorskip("numpy")
+    zone = datetime.timezone(datetime.timedelta(hours=1))
+
+    assert _json(
+        {
+            "peak": numpy.float32(0.5),
+            "count": numpy.int64(3),
+            "missing": float("nan"),
+            "nanoseconds": numpy.array(["2015-02-04T09:41:00.123456789"], dtype="datetime64[ns]"),
+            "local": datetime.datetime(2015, 2, 4, 9, 41, tzinfo=zone),
+            "time": datetime.time(9, 41),
+            "interval": datetime.timedelta(minutes=1),
+            "pair": (1, "two"),
+        }
+    ) == {
+        "peak": 0.5,
+        "count": 3,
+        "missing": None,
+        "nanoseconds": ["2015-02-04T09:41:00.123456"],
+        "local": "2015-02-04T09:41:00+01:00",
+        "time": "09:41:00",
+        "interval": 60.0,
+        "pair": [1, "two"],
+    }
+
+
+@pytest.mark.parametrize(
+    ("value", "reason"),
+    [
+        (object(), "The value is a builtins.object, which has no JSON form."),
+        ({1: "one"}, "The value has a key that is not text: 1."),
+        ({"rows": [{"total": float("inf")}]}, 'The item at ["rows"][0]["total"] is infinite.'),
+        (2**53, "The value is an integer beyond 2**53 - 1."),
+        (decimal.Decimal("1e400"), "The value is beyond the range of a float."),
+    ],
+)
+def test_values_without_a_json_form_name_the_failing_part(value: object, reason: str) -> None:
+    with pytest.raises(RepresentationError) as raised:
+        represent(value, ["application/json"])
+
+    assert raised.value.reasons == (reason,)
+
+
+def test_tables_that_repeat_a_column_name_have_no_json_form() -> None:
+    pandas = pytest.importorskip("pandas")
+    pyarrow = pytest.importorskip("pyarrow")
+    repeated = "The value is a table that repeats the column 'x'."
+
+    for table in (
+        pandas.DataFrame([[1, 2]], columns=["x", "x"]),
+        pyarrow.table([[1], [2]], names=["x", "x"]),
+    ):
+        with pytest.raises(RepresentationError) as raised:
+            represent(table, ["application/json"])
+        assert raised.value.reasons == (repeated,)
+
+
+def test_json_values_count_object_keys_as_portable_json_does() -> None:
+    numpy = pytest.importorskip("numpy")
+
+    with pytest.raises(RepresentationTooLarge, match="more than 100,000 JSON values"):
+        represent({str(index): index for index in range(60_000)}, ["application/json"])
+    with pytest.raises(RepresentationTooLarge, match="100,001 items"):
+        represent(numpy.zeros(100_001), ["application/json"])
+
+
+def test_a_table_over_the_json_value_limit_fails_before_it_builds_rows() -> None:
+    polars = pytest.importorskip("polars")
+    table = polars.DataFrame({"x": range(60_000), "y": range(60_000)})
+
+    with pytest.raises(RepresentationTooLarge, match="60,000 rows of 2 columns"):
+        represent(table, ["application/json"])
+    with pytest.raises(RepresentationTooLarge, match="more than 100,000 JSON values"):
+        represent(list(range(100_001)), ["application/json"])
 
 
 def test_display_methods_supply_other_values_and_their_display_size() -> None:
