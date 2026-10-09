@@ -132,10 +132,12 @@ For a notebook with inline script metadata, declare \`marimo-export @ $wheel_url
 
 This release keeps the newest $retained matching package builds. Install from PyPI and npm for released versions. The preview tag stays on its original commit; the versioned assets and provenance identify each build.
 
-Verify the downloaded wheel's provenance:
+Download the wheel's attestation, then replace \`BUNDLE_FILE\` with the \`.jsonl\` filename printed by \`gh\`:
 
 \`\`\`console
+gh attestation download $(basename "${wheels[0]}") -R $GH_REPO
 gh attestation verify $(basename "${wheels[0]}") -R $GH_REPO \\
+  --bundle BUNDLE_FILE \\
   --predicate-type "$PREVIEW_PREDICATE_TYPE" \\
   --signer-workflow "$GH_REPO/.github/workflows/publish.yml"
 \`\`\`

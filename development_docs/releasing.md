@@ -150,13 +150,21 @@ attempt. The signed subjects bind this record to the artifact checksums.
 Verify a downloaded preview with its custom type and publication workflow:
 
 ```console
+gh attestation download WHEEL_FILE -R marimo-team/marimo-export
 gh attestation verify WHEEL_FILE -R marimo-team/marimo-export \
+  --bundle BUNDLE_FILE \
   --predicate-type "https://github.com/marimo-team/marimo-export/blob/main/development_docs/releasing.md#preview-provenance-v1" \
   --signer-workflow "marimo-team/marimo-export/.github/workflows/publish.yml"
 ```
 
+Replace `BUNDLE_FILE` with the `.jsonl` filename printed by the download command.
+Download without a predicate filter: GitHub rejects this custom type as an API
+filter. Bundle verification enforces the predicate type locally, along with the
+artifact digest and signing identity.
+
 The CI `Preview provenance` job generates a probe using this same predicate,
 persists its attestation through GitHub, and verifies it from the hosted API.
+The download allows five attempts, two seconds apart, for read-back visibility.
 It checks the signed checkout commit and is part of the required gate when
 release contracts change. It runs on main pushes and pull requests from this
 repository; fork pull requests run the local contracts without signing access.

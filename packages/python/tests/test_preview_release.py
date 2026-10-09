@@ -154,6 +154,7 @@ class _GitHub:
             f"#!{sys.executable}\n"
             + """import json, os, sys
 from base64 import b64decode, b64encode
+from hashlib import sha256
 from pathlib import Path
 state_path = Path(os.environ["FAKE_GITHUB"])
 state = json.loads(state_path.read_text())
@@ -170,12 +171,18 @@ if operation == "run list":
     assert args[args.index("--event") + 1] == "push"
     assert args[args.index("--limit") + 1] == "1"
     print(state["runs"][args[args.index("--workflow") + 1]], end="")
+elif operation == "attestation download":
+    assert "--predicate-type" not in args
+    if state.get("attestation_unavailable"):
+        sys.exit(1)
+    digest = sha256(Path(args[2]).read_bytes()).hexdigest()
+    Path(f"sha256:{digest}.jsonl").write_text(json.dumps(state["attestations"]))
 elif operation == "attestation verify":
     assert args[args.index("--predicate-type") + 1] == os.environ["PREVIEW_PREDICATE_TYPE"]
     assert args[args.index("--signer-workflow") + 1] == (
         "marimo-team/marimo-export/.github/workflows/ci.yml"
     )
-    print(json.dumps(state["attestations"]))
+    print(Path(args[args.index("--bundle") + 1]).read_text())
 elif operation == "release view":
     if not state["exists"]:
         sys.exit(1)
@@ -448,9 +455,17 @@ def test_preview_provenance_records_checkout_and_signing_workflow_separately(
     )
 
 
-@pytest.mark.parametrize("checkout_commit", [COMMIT, "b" * 40])
+@pytest.mark.parametrize(
+    ("checkout_commit", "availability", "attempts"),
+    [
+        (COMMIT, "ready", 1),
+        ("b" * 40, "ready", 1),
+        (COMMIT, "delayed", 2),
+        (COMMIT, "unavailable", 5),
+    ],
+)
 def test_ci_probe_requires_the_attested_checkout_commit(
-    tmp_path: Path, checkout_commit: str
+    tmp_path: Path, checkout_commit: str, availability: str, attempts: int
 ) -> None:
     github = _GitHub(tmp_path)
     state = github.state()
@@ -467,12 +482,16 @@ def test_ci_probe_requires_the_attested_checkout_commit(
             }
         }
     ]
+    if availability == "delayed":
+        state["fail"] = "attestation download"
+    state["attestation_unavailable"] = availability == "unavailable"
     github.write(state)
+    (tmp_path / "preview-provenance-probe.txt").write_text("probe\n")
     workflow = yaml.load((ROOT / ".github/workflows/ci.yml").read_text(), Loader=yaml.BaseLoader)
     verify = workflow["jobs"]["preview-provenance"]["steps"][-1]
 
     completed = subprocess.run(
-        ["bash", "-eu", "-o", "pipefail", "-c", verify["run"]],
+        ["bash", "-eu", "-o", "pipefail", "-c", "sleep() { :; };\n" + verify["run"]],
         env={
             **github.env(),
             "GITHUB_SHA": COMMIT,
@@ -484,7 +503,13 @@ def test_ci_probe_requires_the_attested_checkout_commit(
         check=False,
     )
 
-    assert completed.returncode == (0 if checkout_commit == COMMIT else 1), completed.stderr
+    expected = 0 if checkout_commit == COMMIT and availability != "unavailable" else 1
+    assert completed.returncode == expected, completed.stderr
+    calls = github.state()["calls"]
+    assert sum(call[:2] == ["attestation", "download"] for call in calls) == attempts
+    assert sum(call[:2] == ["attestation", "verify"] for call in calls) == (
+        0 if availability == "unavailable" else 1
+    )
 
 
 def test_preview_publishes_matching_packages_and_install_commands(tmp_path: Path) -> None:
@@ -499,7 +524,9 @@ def test_preview_publishes_matching_packages_and_install_commands(tmp_path: Path
     assert f"{DOWNLOADS}/marimo_export-0.1.5.dev9-py3-none-any.whl" in state["notes"]
     assert f"{DOWNLOADS}/marimo-team-marimo-export-0.1.5-dev.9.tgz" in state["notes"]
     assert "uv tool install --force" in state["notes"]
+    assert "gh attestation download" in state["notes"]
     assert "gh attestation verify" in state["notes"]
+    assert "--bundle BUNDLE_FILE" in state["notes"]
     assert f'--predicate-type "{PREVIEW_PREDICATE_TYPE}"' in state["notes"]
     assert (
         '--signer-workflow "marimo-team/marimo-export/.github/workflows/publish.yml"'

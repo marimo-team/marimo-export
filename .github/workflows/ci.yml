@@ -269,8 +269,21 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           PREVIEW_PREDICATE_TYPE: ${{ steps.preview_provenance.outputs.predicate_type }}
         run: |
-          gh attestation verify "$RUNNER_TEMP/preview-provenance-probe.txt" \
+          cd "$RUNNER_TEMP"
+          for attempt in 1 2 3 4 5; do
+            if gh attestation download preview-provenance-probe.txt --repo "$GITHUB_REPOSITORY"; then
+              break
+            fi
+            if [ "$attempt" = 5 ]; then
+              exit 1
+            fi
+            printf 'Attestation download attempt %s failed; retrying in 2s\n' "$attempt" >&2
+            sleep 2
+          done
+          digest="$(sha256sum preview-provenance-probe.txt)"
+          gh attestation verify preview-provenance-probe.txt \
             --repo "$GITHUB_REPOSITORY" \
+            --bundle "sha256:${digest%% *}.jsonl" \
             --predicate-type "$PREVIEW_PREDICATE_TYPE" \
             --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/ci.yml" \
             --format=json > "$RUNNER_TEMP/preview-provenance-verified.json"
