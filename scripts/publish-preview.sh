@@ -87,12 +87,14 @@ package_names() {
 		"marimo-team-marimo-export-${1/.dev/-dev.}.tgz"
 }
 # Discover interrupted builds too, so old orphan assets cannot accumulate.
+# macOS and GNU version sorts disagree on devN; numeric keys keep newest-first
+# ordering identical on every platform.
 versions="$(sed -nE \
 	-e 's/^marimo_export-([0-9]+\.[0-9]+\.[0-9]+\.dev[0-9]+)-(py3-none-any\.whl)$/\1/p' \
 	-e 's/^marimo_export-([0-9]+\.[0-9]+\.[0-9]+\.dev[0-9]+)\.tar\.gz$/\1/p' \
 	-e 's/^marimo-export-([0-9]+\.[0-9]+\.[0-9]+\.dev[0-9]+)-SHA256SUMS$/\1/p' \
 	-e 's/^marimo-team-marimo-export-([0-9]+\.[0-9]+\.[0-9]+)-dev\.([0-9]+)\.tgz$/\1.dev\2/p' \
-	<<<"$listing" | sort -ruV)"
+	<<<"$listing" | sort -t. -u -k1,1nr -k2,2nr -k3,3nr -k4.4,4nr)"
 builds="$(while IFS= read -r candidate; do
 	available=true
 	while IFS= read -r name; do
