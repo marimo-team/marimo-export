@@ -368,6 +368,8 @@ class _HTMLResourceCloser(HTMLParser):
     def _attribute(self, tag: str, name: str, value: str) -> str:
         if tag == "marimo-json-output" and name == "data-json-data":
             return _close_component_json(value, self._resolver)
+        if tag.startswith("marimo-") and name.startswith("data-"):
+            return _close_plugin_argument(tag, name, value, self._resolver)
         if tag == "iframe" and name == "srcdoc":
             return self._resolver.close_html(value)
         if name == "style":
@@ -400,6 +402,41 @@ def _close_component_json(value: str, resolver: _ResourceResolver) -> str:
         ) from error
     rewritten = _close_component_value(decoded, resolver)
     return canonical_bytes(json_value(rewritten, "Marimo component resource data")).decode("utf-8")
+
+
+def _close_plugin_argument(
+    tag: str,
+    name: str,
+    value: str,
+    resolver: _ResourceResolver,
+) -> str:
+    """Close file URLs that a marimo plugin receives as JSON arguments."""
+    if not resolver.contains_known(value):
+        return value
+    unclosed = OutputError(
+        f"snapshot attribute {tag}.{name} contains an unclosed local file",
+        code="output_execution_failed",
+    )
+    try:
+        decoded = msgspec.json.decode(value)
+    except msgspec.DecodeError as error:
+        raise unclosed from error
+    rewritten = canonical_bytes(
+        json_value(_close_plugin_value(decoded, resolver), "Marimo plugin argument")
+    ).decode("utf-8")
+    if resolver.contains_known(rewritten):
+        raise unclosed
+    return rewritten
+
+
+def _close_plugin_value(value: object, resolver: _ResourceResolver) -> object:
+    if isinstance(value, str):
+        return resolver.close_url(value) if resolver.is_known(value) else value
+    if isinstance(value, list):
+        return [_close_plugin_value(item, resolver) for item in value]
+    if isinstance(value, dict):
+        return {str(key): _close_plugin_value(item, resolver) for key, item in value.items()}
+    return value
 
 
 def _close_component_value(value: object, resolver: _ResourceResolver) -> object:

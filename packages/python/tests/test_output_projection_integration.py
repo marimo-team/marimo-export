@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import html
 import json
 import re
 from html.parser import HTMLParser
@@ -643,6 +644,79 @@ if __name__ == "__main__":
     import base64
 
     assert base64.b64decode(encoded) == b"download payload"
+
+
+def test_rendered_output_closes_virtual_file_plugin_arguments(tmp_path: Path) -> None:
+    notebook = tmp_path / "notebook.py"
+    notebook.write_text(
+        """
+import marimo
+
+app = marimo.App()
+
+
+@app.cell
+def _():
+    import marimo as mo
+    editor = mo.ui.data_editor({"name": ["Ada", "Grace"], "value": [1, 2]})
+    return (editor,)
+
+
+if __name__ == "__main__":
+    app.run()
+""".lstrip(),
+        encoding="utf-8",
+    )
+
+    result = build(
+        notebook,
+        spec=ExportSpec(
+            default_state="baseline",
+            states={"baseline": {}},
+            outputs={"editor": OutputSpec.output("editor")},
+        ),
+        output=tmp_path / "export",
+        timeout=30,
+    )
+    snapshot = cast(
+        dict[str, Any],
+        decode_json_object(
+            open_export(result.path).state("baseline").output("editor").asset_bytes(),
+            "editor snapshot",
+        ),
+    )
+
+    class EditorData(HTMLParser):
+        value: str | None = None
+
+        def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+            if tag == "marimo-data-editor":
+                self.value = dict(attrs).get("data-data")
+
+    parser = EditorData()
+    parser.feed(snapshot["output"]["data"])
+    data_url = json.loads(cast(str, parser.value))
+    assert data_url.startswith("data:text/csv;base64,")
+    import base64
+
+    rows = base64.b64decode(data_url.removeprefix("data:text/csv;base64,"))
+    assert rows.decode("utf-8").splitlines() == ["name,value", "Ada,1", "Grace,2"]
+
+
+def test_plugin_argument_that_embeds_a_local_file_fails_closed(tmp_path: Path) -> None:
+    from marimo_export._marimo.compat.file_closure import close_output_files
+
+    context = SimpleNamespace(
+        filename=str(tmp_path / "notebook.py"),
+        parent=None,
+        virtual_file_registry=SimpleNamespace(has=lambda _filename: True),
+    )
+    recording = SimpleNamespace(child=SimpleNamespace(_runtime_context=context))
+    label = json.dumps('<img src="./@file/7-chip.png">')
+    html_source = f'<marimo-button data-label="{html.escape(label)}"></marimo-button>'
+
+    with pytest.raises(OutputError, match="unclosed local file"):
+        close_output_files(cast(Any, recording), html_source, "text/html")
 
 
 def test_rendered_output_rejects_oversized_virtual_media(tmp_path: Path) -> None:

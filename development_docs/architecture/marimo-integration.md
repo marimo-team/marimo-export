@@ -196,9 +196,13 @@ capture adapter extracts buffers for output representations.
 
 Rendered-output and complete-cell projections close referenced virtual and
 notebook `public/` files in resource-bearing HTML attributes, `srcset`, CSS
-URLs, mime bundles, and nested component HTML. Each referenced file is bounded
-to 10 MiB. Public files must retain one filesystem revision across the bounded
-read. Any known local file in an unrecognized attribute fails capture.
+URLs, mime bundles, nested component HTML, and marimo plugin arguments. A
+plugin argument is a JSON `data-*` attribute on a `marimo-*` element, such as
+the CSV URL that `mo.ui.data_editor` passes as `data-data`. Capture replaces a
+string value that is exactly a file URL with a data URL. Each referenced file
+is bounded to 10 MiB. Public files must retain one filesystem revision across
+the bounded read. Any known local file that remains in an attribute, including
+one embedded in a longer plugin argument, fails capture.
 AnyWidget replay resources begin at model IDs referenced by structured widget
 fields, then follow serializer-owned child references.
 
