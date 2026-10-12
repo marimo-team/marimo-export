@@ -411,8 +411,6 @@ def _close_plugin_argument(
     resolver: _ResourceResolver,
 ) -> str:
     """Close file URLs that a marimo plugin receives as JSON arguments."""
-    if not resolver.contains_known(value):
-        return value
     unclosed = OutputError(
         f"snapshot attribute {tag}.{name} contains an unclosed local file",
         code="output_execution_failed",
@@ -420,22 +418,34 @@ def _close_plugin_argument(
     try:
         decoded = msgspec.json.decode(value)
     except msgspec.DecodeError as error:
-        raise unclosed from error
-    rewritten = canonical_bytes(
-        json_value(_close_plugin_value(decoded, resolver), "Marimo plugin argument")
-    ).decode("utf-8")
-    if resolver.contains_known(rewritten):
-        raise unclosed
-    return rewritten
+        if resolver.contains_known(value):
+            raise unclosed from error
+        return value
+    closed = _close_plugin_value(decoded, resolver, unclosed)
+    if closed == decoded:
+        return value
+    return canonical_bytes(json_value(closed, "Marimo plugin argument")).decode("utf-8")
 
 
-def _close_plugin_value(value: object, resolver: _ResourceResolver) -> object:
+def _close_plugin_value(
+    value: object,
+    resolver: _ResourceResolver,
+    unclosed: OutputError,
+) -> object:
+    # Check decoded input strings: JSON escapes can hide a file URL from the
+    # raw attribute text, and a closed data URL's Base64 can contain "public/".
     if isinstance(value, str):
-        return resolver.close_url(value) if resolver.is_known(value) else value
+        if resolver.is_known(value):
+            return resolver.close_url(value)
+        if resolver.contains_known(value):
+            raise unclosed
+        return value
     if isinstance(value, list):
-        return [_close_plugin_value(item, resolver) for item in value]
+        return [_close_plugin_value(item, resolver, unclosed) for item in value]
     if isinstance(value, dict):
-        return {str(key): _close_plugin_value(item, resolver) for key, item in value.items()}
+        return {
+            str(key): _close_plugin_value(item, resolver, unclosed) for key, item in value.items()
+        }
     return value
 
 

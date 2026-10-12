@@ -719,6 +719,50 @@ def test_plugin_argument_that_embeds_a_local_file_fails_closed(tmp_path: Path) -
         close_output_files(cast(Any, recording), html_source, "text/html")
 
 
+@pytest.mark.parametrize(
+    "argument",
+    (
+        '"public/payload.bin"',
+        '"public\\/payload.bin"',
+    ),
+)
+def test_plugin_argument_closes_public_file_as_a_data_url(
+    tmp_path: Path,
+    argument: str,
+) -> None:
+    import base64
+
+    from marimo_export._marimo.compat.file_closure import close_output_files
+
+    public = tmp_path / "public"
+    public.mkdir()
+    # The Base64 payload of these bytes begins with "public/".
+    payload = base64.b64decode("public/abcde")
+    public.joinpath("payload.bin").write_bytes(payload)
+    context = SimpleNamespace(
+        filename=str(tmp_path / "notebook.py"),
+        parent=None,
+        virtual_file_registry=SimpleNamespace(has=lambda _filename: False),
+    )
+    recording = SimpleNamespace(child=SimpleNamespace(_runtime_context=context))
+    html_source = f'<marimo-data-editor data-data="{html.escape(argument)}"></marimo-data-editor>'
+
+    closed = close_output_files(cast(Any, recording), html_source, "text/html")
+
+    class EditorData(HTMLParser):
+        value: str | None = None
+
+        def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+            if tag == "marimo-data-editor":
+                self.value = dict(attrs).get("data-data")
+
+    parser = EditorData()
+    parser.feed(cast(str, closed))
+    assert json.loads(cast(str, parser.value)) == (
+        "data:application/octet-stream;base64,public/abcde"
+    )
+
+
 def test_rendered_output_rejects_oversized_virtual_media(tmp_path: Path) -> None:
     notebook = tmp_path / "notebook.py"
     notebook.write_text(
