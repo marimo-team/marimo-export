@@ -301,7 +301,7 @@ def test_delayed_success_after_deadline_does_not_revive_reservation(
     root = tmp_path / "repository"
     limits = RepositoryLimits(
         lease_ttl_seconds=2.0,
-        lease_heartbeat_seconds=1.5,
+        lease_heartbeat_seconds=0.1,
     )
     identity = _identity("delayed-reservation-renewal")
     repository = ExportRepository.open(root, limits=limits)

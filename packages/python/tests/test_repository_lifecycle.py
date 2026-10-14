@@ -496,7 +496,7 @@ def test_delayed_success_after_deadline_does_not_revive_artifact_lease(
     identity = _identity("delayed-artifact-renewal")
     limits = RepositoryLimits(
         lease_ttl_seconds=2.0,
-        lease_heartbeat_seconds=1.5,
+        lease_heartbeat_seconds=0.1,
     )
     repository = ExportRepository.open(tmp_path / "repository", limits=limits)
     state = _state(repository, identity, 1)
@@ -609,7 +609,7 @@ def test_delayed_success_after_deadline_does_not_revive_staging_lease(
 ) -> None:
     limits = RepositoryLimits(
         lease_ttl_seconds=2.0,
-        lease_heartbeat_seconds=1.5,
+        lease_heartbeat_seconds=0.1,
     )
     repository = ExportRepository.open(tmp_path / "repository", limits=limits)
     staged = repository._artifacts.new_staging()
