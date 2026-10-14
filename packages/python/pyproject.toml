@@ -1,5 +1,5 @@
 [build-system]
-requires = ["agent-plugins>=0.1.0", "uv_build>=0.11.28,<0.13.0"]
+requires = ["agent-plugins>=0.1.0", "uv_build>=0.11.28,<0.14.0"]
 build-backend = "agent_plugins.build.uv_build"
 
 [project]
