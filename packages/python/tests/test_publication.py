@@ -225,13 +225,79 @@ def test_replaced_publication_retains_route_and_independent_asset_lease() -> Non
             lambda _repository, _cancelled: _candidate(second, "second"),
         )
         assert not first.closed
-        asset = controller.asset("dashboard", first.identity, "index.json")
+        asset = await controller.asset("dashboard", first.identity, "index.json")
         assert asset is not None
         controller.release(("dashboard", "second"))
         assert first.closed
         assert second.closed
         assert not cast(_Asset, asset).closed
         asset.close()
+        await controller.close()
+
+    asyncio.run(scenario())
+
+
+class _BlockingPrepared(_Prepared):
+    def __init__(self, instance: int) -> None:
+        super().__init__(instance, 0)
+        self.borrowing = threading.Event()
+        self.release = threading.Event()
+
+    def asset(self, relative: str) -> _Asset:
+        self.borrowing.set()
+        if not self.release.wait(timeout=5):
+            raise RuntimeError("The test did not release asset borrowing")
+        return super().asset(relative)
+
+
+def test_asset_borrowing_keeps_the_event_loop_responsive() -> None:
+    controller = _controller(_Repository())
+    prepared = _BlockingPrepared(4)
+
+    async def scenario() -> None:
+        await controller.prepare(
+            ("dashboard", "first"),
+            lambda _repository, _cancelled: _candidate(prepared, "first"),
+        )
+        borrowing = asyncio.create_task(
+            controller.asset("dashboard", prepared.identity, "index.json")
+        )
+        assert await asyncio.to_thread(prepared.borrowing.wait, 5)
+        heartbeat = asyncio.Event()
+        asyncio.get_running_loop().call_soon(heartbeat.set)
+        await asyncio.wait_for(heartbeat.wait(), timeout=1)
+        prepared.release.set()
+        asset = await asyncio.wait_for(borrowing, timeout=5)
+        assert asset is not None
+        asset.close()
+        await controller.close()
+
+    asyncio.run(scenario())
+
+
+def test_cancelled_asset_borrowing_closes_the_borrowed_asset() -> None:
+    controller = _controller(_Repository())
+    prepared = _BlockingPrepared(4)
+
+    async def scenario() -> None:
+        await controller.prepare(
+            ("dashboard", "first"),
+            lambda _repository, _cancelled: _candidate(prepared, "first"),
+        )
+        borrowing = asyncio.create_task(
+            controller.asset("dashboard", prepared.identity, "index.json")
+        )
+        assert await asyncio.to_thread(prepared.borrowing.wait, 5)
+        borrowing.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await borrowing
+        prepared.release.set()
+        for _ in range(100):
+            if prepared.assets and prepared.assets[0].closed:
+                break
+            await asyncio.sleep(0.01)
+        assert len(prepared.assets) == 1
+        assert prepared.assets[0].closed
         await controller.close()
 
     asyncio.run(scenario())
@@ -260,8 +326,8 @@ def test_same_identity_replacement_retains_previous_route() -> None:
             lambda _repository, _cancelled: _candidate(second, "second"),
         )
         assert not first.closed
-        old_asset = controller.asset("old-route", first.identity, "index.json")
-        new_asset = controller.asset("new-route", second.identity, "index.json")
+        old_asset = await controller.asset("old-route", first.identity, "index.json")
+        new_asset = await controller.asset("new-route", second.identity, "index.json")
         assert old_asset is not None
         assert new_asset is not None
         old_asset.close()
@@ -290,7 +356,7 @@ def test_zero_route_grace_closes_replaced_publication() -> None:
             lambda _repository, _cancelled: _candidate(second, "second"),
         )
         assert first.closed
-        assert controller.asset("dashboard", first.identity, "index.json") is None
+        assert await controller.asset("dashboard", first.identity, "index.json") is None
         await controller.close()
 
     asyncio.run(scenario())

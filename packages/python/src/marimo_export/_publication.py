@@ -151,7 +151,7 @@ class PublicationControllerState(Generic[KeyT, MetadataT]):
             )
         return owned.publication
 
-    def asset(
+    async def asset(
         self,
         route: Hashable,
         instance: str,
@@ -171,7 +171,7 @@ class PublicationControllerState(Generic[KeyT, MetadataT]):
         )
         for publication in candidates:
             try:
-                return publication._asset(relative)
+                return await _borrow_asset(publication, relative)
             except RepositoryError:
                 continue
         return None
@@ -436,6 +436,26 @@ async def _settle_cancelled(
             task.result()
         except BaseException:
             return
+
+
+async def _borrow_asset(
+    publication: PreparedPublication[KeyT, MetadataT],
+    relative: str,
+) -> PreparedAsset:
+    # Borrowing hashes the complete file, so it runs in a worker. The shield
+    # keeps the worker's asset reachable when the caller is cancelled, and the
+    # callback closes it once the worker finishes.
+    borrowing = asyncio.ensure_future(asyncio.to_thread(publication._asset, relative))
+    try:
+        return await asyncio.shield(borrowing)
+    except asyncio.CancelledError:
+        borrowing.add_done_callback(_close_abandoned_asset)
+        raise
+
+
+def _close_abandoned_asset(borrowing: asyncio.Future[PreparedAsset]) -> None:
+    if not borrowing.cancelled() and borrowing.exception() is None:
+        borrowing.result().close()
 
 
 __all__ = ["PublicationControllerState"]

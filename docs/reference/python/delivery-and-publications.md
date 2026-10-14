@@ -319,7 +319,7 @@ controller.keys: tuple[KeyT, ...]
 await controller.prepare(key, prepare, *, admit=None) -> PreparedPublication
 controller.current(key) -> PreparedPublication | None
 controller.poll(key, *, should_refresh) -> PreparedPublication | None
-controller.asset(route, instance, relative) -> PreparedAsset | None
+await controller.asset(route, instance, relative) -> PreparedAsset | None
 controller.release(key) -> None
 await controller.close() -> None
 ```
@@ -364,6 +364,11 @@ and returns a `PreparedAsset` with file-scoped access backed by an independently
 owned generation lease. It returns `None` when no live publication matches. One
 open asset protects the complete export generation from retention. Close the
 asset after its response finishes.
+
+`asset()` is asynchronous because borrowing verifies the complete file. The
+verification runs in a worker thread, so a large asset leaves the event loop
+free for other requests. When the caller is cancelled during verification, the
+controller closes the borrowed asset as soon as the worker finishes.
 
 `PreparedAsset.path` verifies the selected file before returning its filesystem
 path. The server owns the later open and any filesystem race. Prefer

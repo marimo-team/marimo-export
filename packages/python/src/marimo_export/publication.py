@@ -161,7 +161,7 @@ class PreparedPublicationController(Generic[KeyT, MetadataT]):
 
         return self._state.poll(key, should_refresh=should_refresh)
 
-    def asset(
+    async def asset(
         self,
         route: Hashable,
         instance: str,
@@ -169,7 +169,7 @@ class PreparedPublicationController(Generic[KeyT, MetadataT]):
     ) -> PreparedAsset | None:
         """Borrow an independently leased file from a current or retained generation."""
 
-        return self._state.asset(route, instance, relative)
+        return await self._state.asset(route, instance, relative)
 
     def release(self, key: KeyT) -> None:
         """Cancel and release every publication in ``key``'s supersession group."""

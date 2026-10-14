@@ -186,8 +186,8 @@ routes:
 
 1. Call `current_manifest(controller)` for every mutable `current` response and
    send it with revalidation or `no-store` caching.
-2. Call `controller.asset("sales", instance, relative)` for an immutable instance
-   request and return `404` when it yields `None`.
+2. Await `controller.asset("sales", instance, relative)` for an immutable
+   instance request and return `404` when it yields `None`.
 3. Keep the returned `PreparedAsset` open until the HTTP response finishes.
 4. Send immutable cache headers for instance files.
 5. Call `controller.release("sales")` when the application route closes.
