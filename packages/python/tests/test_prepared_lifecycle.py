@@ -4,12 +4,14 @@ import os
 import stat
 from hashlib import sha256
 from pathlib import Path
-from threading import Thread
+from threading import Event, Thread
 from types import SimpleNamespace
 
+import marimo_export.prepared as prepared_module
 import msgspec
 import pytest
 from marimo_export._json import JsonObject
+from marimo_export._prepared_integrity import ClosureMember
 from marimo_export._repository.preparation import (
     RepositoryIdentity,
     preparation_repository,
@@ -30,6 +32,7 @@ from marimo_export.index import (
     StateEntry,
 )
 from marimo_export.planning import output_plan_sha256
+from marimo_export.prepared import PreparedAsset
 from marimo_export.repository import (
     ExportRepository,
     RepositoryError,
@@ -132,6 +135,54 @@ def test_prepared_asset_outlives_parent_and_blocks_prune_until_close(
     repository.prune()
     assert repository.status().generations == 1
     second_artifact.close()
+    repository.close()
+
+
+def test_closing_a_prepared_export_does_not_wait_for_asset_verification(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    spec = _spec(states={"baseline": {"choice": "A"}})
+    preflight = _preflight(tmp_path / "notebook.py", spec)
+    repository = ExportRepository.open(tmp_path / "repository")
+    _install_export(repository, preflight.repository_identity, spec, preflight.producer)
+    monkeypatch.setattr(
+        "marimo_export._services.prepare_export.preflight_plan",
+        lambda *_args, **_kwargs: preflight,
+    )
+    monkeypatch.setattr(
+        "marimo_export._services.prepare_export.require_preflight_current",
+        lambda _preflight: None,
+    )
+    prepared = prepare(spec=spec, source=tmp_path / "notebook.py", repository=repository)
+    expected = (prepared.path / "index.json").read_bytes()
+    verifying = Event()
+    release = Event()
+    native_verify = prepared_module.verify_member
+
+    def slow_verify(path: Path, relative: str, member: ClosureMember) -> None:
+        verifying.set()
+        if not release.wait(timeout=5):
+            raise RuntimeError("The test did not release asset verification")
+        native_verify(path, relative, member)
+
+    monkeypatch.setattr(prepared_module, "verify_member", slow_verify)
+    borrowed: list[PreparedAsset] = []
+    borrowing = Thread(target=lambda: borrowed.append(prepared.asset("index.json")))
+    borrowing.start()
+    try:
+        assert verifying.wait(timeout=5)
+        closing = Thread(target=prepared.close)
+        closing.start()
+        closing.join(timeout=2)
+        assert not closing.is_alive()
+    finally:
+        release.set()
+        borrowing.join(timeout=5)
+
+    assert len(borrowed) == 1
+    with borrowed[0] as asset:
+        assert asset.read_bytes() == expected
     repository.close()
 
 

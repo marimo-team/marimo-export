@@ -314,9 +314,10 @@ class PreparedExport:
             if member is None:
                 raise RepositoryError("The requested prepared export asset is unavailable.")
             path = self._asset_path(relative)
-            verify_member(path, relative, member)
             lease = self._artifact.detach()
-            return PreparedAsset._create(path, lease, relative, member)
+        # The detached lease keeps the file alive, so verification runs without
+        # holding the export lock that close() needs.
+        return PreparedAsset._create(path, lease, relative, member)
 
     def manifest(
         self,
