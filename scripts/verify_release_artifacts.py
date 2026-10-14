@@ -73,7 +73,7 @@ def _verify_wheel(path: Path, version: str) -> None:
             raise RuntimeError(f"{path.name} contains unexpected Python package metadata")
         if metadata["Description-Content-Type"] != "text/markdown":
             raise RuntimeError(f"{path.name} must publish its README as Markdown")
-        if "# marimo-export" not in metadata.get_payload():
+        if "uv add marimo-export" not in metadata.get_payload():
             raise RuntimeError(f"{path.name} contains an unexpected package README")
         entry_points = _single(
             [
@@ -109,7 +109,7 @@ def _verify_sdist(path: Path, version: str) -> None:
             f"README.md in {path.name}",
         )
         readme_stream = archive.extractfile(readme)
-        if readme_stream is None or b"# marimo-export" not in readme_stream.read():
+        if readme_stream is None or b"uv add marimo-export" not in readme_stream.read():
             raise RuntimeError(f"{path.name} contains an unexpected package README")
 
 
@@ -192,7 +192,10 @@ def _verify_npm_tarball(
         if readme_member is None:
             raise RuntimeError(f"{path.name} has no README.md")
         readme_stream = archive.extractfile(readme_member)
-        if readme_stream is None or b"# @marimo-team/marimo-export" not in readme_stream.read():
+        if (
+            readme_stream is None
+            or b"pnpm add @marimo-team/marimo-export" not in readme_stream.read()
+        ):
             raise RuntimeError(f"{path.name} contains an unexpected package README")
 
 

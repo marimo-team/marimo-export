@@ -1,12 +1,41 @@
-# @marimo-team/marimo-export
+<p align="center">
+  <a href="https://marimo-team.github.io/marimo-export/">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://marimo-team.github.io/marimo-export/brand/marimo-export-lockup-stacked-dark.svg">
+      <img alt="marimo-export" src="https://marimo-team.github.io/marimo-export/brand/marimo-export-lockup-stacked-light.svg" width="300">
+    </picture>
+  </a>
+</p>
+
+<p align="center">
+  <strong>Prepare notebook results. Share them anywhere.</strong>
+</p>
+
+<p align="center">
+  <a href="https://marimo-team.github.io/marimo-export/"><strong>Documentation</strong></a> ·
+  <a href="https://marimo-team.github.io/marimo-export/guide/browser-applications"><strong>Browser applications</strong></a> ·
+  <a href="https://marimo-team.github.io/marimo-export/reference/browser-api"><strong>Browser API</strong></a> ·
+  <a href="https://marimo-team.github.io/marimo-export/reference/representations"><strong>Output representations</strong></a>
+</p>
+
+<p align="center">
+  <a href="https://www.npmjs.com/package/@marimo-team/marimo-export"><img alt="npm" src="https://img.shields.io/npm/v/%40marimo-team%2Fmarimo-export.svg?label=npm"></a>
+  <a href="https://github.com/marimo-team/marimo-export/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/marimo-team/marimo-export/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="https://github.com/marimo-team/marimo-export/blob/main/LICENSE"><img alt="Apache License 2.0" src="https://img.shields.io/badge/license-Apache--2.0-6c6f78.svg"></a>
+</p>
 
 `@marimo-team/marimo-export` opens **notebook exports** in browser applications,
-resolves exported states, and loads named outputs. Select the states and outputs
-to publish from a [marimo](https://marimo.io/) notebook. marimo-export writes a
-portable, verified notebook export that browser applications and agents read
-without a Python runtime or a copy of the notebook source.
+resolves exported states, and loads named outputs. A notebook export holds the
+selected states and outputs of a [marimo](https://marimo.io/) reactive Python
+notebook as static, verified files. Applications read it without a Python
+runtime or a copy of the notebook source.
 
-[pnpm](https://pnpm.io/) adds the package to a TypeScript project:
+The [`marimo-export`](https://pypi.org/project/marimo-export/) Python package
+builds the export. This package reads it.
+
+## Install
+
+Add the package to a TypeScript project with [pnpm](https://pnpm.io/):
 
 ```bash
 pnpm add @marimo-team/marimo-export
@@ -18,7 +47,7 @@ verifying an export require browser `fetch`, `URL`, `TextEncoder`, `TextDecoder`
 Serve the application over HTTPS or from a browser-recognized local development
 origin so Web Crypto is available.
 
-## Open one immutable export
+## Open an export
 
 Assume the application serves the quickstart notebook export at
 `/exports/report/` and its document contains `<pre id="summary"></pre>`:
@@ -119,13 +148,15 @@ the last committed publication after a failed transition. Implement the port's
 optional `restore()` method when the application also needs to restore its DOM
 or other application-owned state.
 
-## Apply the browser trust boundary
+## Browser trust boundary
 
 HTML loaders return verified source text without inserting it into the document.
 Mounting charts, widgets, or custom interactive values grants the mounted code
 the page's authority. Apply the application's rendering policy,
 [Content Security Policy](https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP), and origin rules before
 mounting executable output.
+
+## Learn more
 
 - [Browser applications](https://marimo-team.github.io/marimo-export/guide/browser-applications)
 - [Browser API](https://marimo-team.github.io/marimo-export/reference/browser-api)
