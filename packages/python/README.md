@@ -1,23 +1,63 @@
-# marimo-export
+<p align="center">
+  <a href="https://marimo-team.github.io/marimo-export/">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://marimo-team.github.io/marimo-export/brand/marimo-export-lockup-stacked-dark.svg">
+      <img alt="marimo-export" src="https://marimo-team.github.io/marimo-export/brand/marimo-export-lockup-stacked-light.svg" width="300">
+    </picture>
+  </a>
+</p>
 
-The `marimo-export` Python package plans and prepares selected
-[marimo](https://marimo.io/) notebook states, publishes named outputs as a
-**notebook export**, and opens and verifies that export from Python. It can
-prepare from a saved notebook or a named live session.
+<p align="center">
+  <strong>Prepare notebook results. Share them anywhere.</strong>
+</p>
 
-Select the states and outputs to publish from a marimo notebook. marimo-export
-writes a portable, verified notebook export that browser applications and
-agents read without a Python runtime or a copy of the notebook source.
+<p align="center">
+  <a href="https://marimo-team.github.io/marimo-export/"><strong>Documentation</strong></a> ·
+  <a href="https://marimo-team.github.io/marimo-export/guide/getting-started"><strong>Getting started</strong></a> ·
+  <a href="https://marimo-team.github.io/marimo-export/reference/python-api"><strong>Python API</strong></a> ·
+  <a href="https://marimo-team.github.io/marimo-export/reference/cli"><strong>CLI</strong></a>
+</p>
 
-[uv](https://docs.astral.sh/uv/) adds the package to a Python project:
+<p align="center">
+  <a href="https://pypi.org/project/marimo-export/"><img alt="PyPI" src="https://img.shields.io/pypi/v/marimo-export.svg"></a>
+  <a href="https://pypi.org/project/marimo-export/"><img alt="Supported Python versions" src="https://img.shields.io/pypi/pyversions/marimo-export.svg"></a>
+  <a href="https://github.com/marimo-team/marimo-export/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/marimo-team/marimo-export/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="https://github.com/marimo-team/marimo-export/blob/main/LICENSE"><img alt="Apache License 2.0" src="https://img.shields.io/badge/license-Apache--2.0-6c6f78.svg"></a>
+</p>
+
+The `marimo-export` Python package precomputes selected input combinations from a
+[marimo](https://marimo.io/) reactive Python notebook and publishes named outputs
+as a **notebook export**. Applications and agents read its static files without
+running Python or receiving the notebook source.
+
+- **Choose the results.** Publish named data, tables, charts, rendered cells,
+  and interactive widgets for a finite set of states.
+- **Reuse the computation.** Reuse prepared states across exports and marimo's
+  native cell cache when a new state needs to run.
+- **Verify what you read.** Open and verify an export from Python, or read it in
+  the browser with
+  [`@marimo-team/marimo-export`](https://www.npmjs.com/package/@marimo-team/marimo-export).
+
+## Install
+
+Add the package to a Python project with [uv](https://docs.astral.sh/uv/):
 
 ```bash
 uv add marimo-export
 ```
 
-The package supports the Python versions declared by its
-[package metadata](pyproject.toml) and installs the marimo release pinned
-there.
+The package installs the marimo release it pins. Add the optional exporter
+families selected by your `ExportSpec`:
+
+```bash
+uv add "marimo-export[charts,parquet,anywidget]"
+```
+
+The base package supports JSON, native marimo values, and custom exporter
+callables. `charts` adds Altair and PNG charts, `parquet` adds Parquet tables,
+and `anywidget` adds AnyWidget bundles. `all` installs every family.
+
+## Quickstart
 
 Create `report.py`:
 
@@ -79,7 +119,7 @@ outputs:
     source: { kind: output, selector: report }
 ```
 
-## Run the CLI
+### Build with the CLI
 
 ```bash
 mkdir -p dist
@@ -92,7 +132,7 @@ uv run marimo-export verify dist/report
 `build` prepares missing states, writes the export, verifies every declared
 asset, and closes the notebook process it started.
 
-## Build from Python
+### Build from Python
 
 ```python
 from pathlib import Path
@@ -109,28 +149,6 @@ print(result.path)
 A matching later call with a new destination can reuse the prepared export
 before notebook startup. Pass `replace=True` to replace an existing complete
 destination.
-
-## Use from marimo code mode
-
-Marimo discovers the installed agent module through its capability registry:
-
-```python
-import marimo._code_mode as cm
-import marimo_export.agent as export_agent
-
-print(cm.capabilities()["marimo-export"])
-help(export_agent)
-```
-
-`help(export_agent)` shows the public Python workflow and the installed path to
-the version-matched
-[Agent Skill](https://agentskills.io/specification). Code can inspect the same
-resources directly:
-
-```python
-skill = export_agent.agent_skill()
-print(skill.body)
-```
 
 ## Read the export
 
@@ -183,23 +201,32 @@ Use `marimo-export inspect SERVER` to find session IDs. The selected session
 remains active after capture. The live notebook environment and the client must
 load the same marimo-export implementation and exporter dependencies.
 
-## Install output exporters
+## Use from marimo code mode
 
-Install the optional families selected by your `ExportSpec`:
+marimo discovers the installed agent module through its capability registry:
 
-```bash
-uv add "marimo-export[charts,parquet,anywidget]"
+```python
+import marimo._code_mode as cm
+import marimo_export.agent as export_agent
+
+print(cm.capabilities()["marimo-export"])
+help(export_agent)
 ```
 
-The base package supports JSON, native marimo values, and custom exporter
-callables. The optional families add Altair and PNG charts, Parquet tables, and
-AnyWidget bundles.
+`help(export_agent)` shows the public Python workflow and the installed path to
+the version-matched [Agent Skill](https://agentskills.io/specification). Code
+can inspect the same resources directly:
 
-## Learn the complete API
+```python
+skill = export_agent.agent_skill()
+print(skill.body)
+```
+
+## Learn more
 
 - [Getting started](https://marimo-team.github.io/marimo-export/guide/getting-started)
-- [Python API](https://marimo-team.github.io/marimo-export/reference/python-api)
 - [Choose states and outputs](https://marimo-team.github.io/marimo-export/guide/choose-states)
+- [Python API](https://marimo-team.github.io/marimo-export/reference/python-api)
 - [CLI reference](https://marimo-team.github.io/marimo-export/reference/cli)
 - [Agents and automation](https://marimo-team.github.io/marimo-export/guide/agents-and-automation)
 
