@@ -19,6 +19,8 @@ from pathlib import Path
 from typing import BinaryIO, Protocol, cast
 from urllib.parse import urlencode
 
+import psutil
+
 from marimo_export._diagnostics import record_cleanup_failure, safe_diagnostic
 from marimo_export._json import JsonObject, json_object
 from marimo_export._remote.sse import SSEError, SSEParser
@@ -522,52 +524,28 @@ class ManagedServer:
             return set()
         groups = {process.pid}
         try:
-            listed = subprocess.run(
-                ["ps", "-axo", "pid=,ppid=,pgid="],
-                capture_output=True,
-                check=False,
-                text=True,
-                timeout=min(self.timeout, 2.0),
-            )
-        except (OSError, subprocess.TimeoutExpired) as error:
+            descendants = psutil.Process(process.pid).children(recursive=True)
+        except psutil.NoSuchProcess:
+            descendants = []
+        except psutil.Error as error:
             raise TransportError(
                 "the managed marimo process tree could not be inspected",
                 code="server_shutdown_failed",
             ) from error
-        if listed.returncode != 0:
-            raise TransportError(
-                "the managed marimo process tree could not be inspected",
-                code="server_shutdown_failed",
-                details={"return_code": listed.returncode},
-            )
-        children: dict[int, list[tuple[int, int]]] = {}
-        for line in listed.stdout.splitlines():
-            if not line.strip():
-                continue
-            parts = line.split()
-            if len(parts) != 3:
-                raise TransportError(
-                    "the managed marimo process tree report was invalid",
-                    code="server_shutdown_failed",
-                )
+        for descendant in descendants:
             try:
-                pid, parent_pid, group_id = map(int, parts)
-            except ValueError as error:
+                group_id = os.getpgid(descendant.pid)
+            except ProcessLookupError:
+                continue
+            except OSError as error:
                 raise TransportError(
-                    "the managed marimo process tree report was invalid",
+                    "the managed marimo process tree could not be inspected",
                     code="server_shutdown_failed",
                 ) from error
-            children.setdefault(parent_pid, []).append((pid, group_id))
-        pending = [process.pid]
-        descendants = {process.pid}
-        while pending:
-            parent_pid = pending.pop()
-            for child_pid, group_id in children.get(parent_pid, ()):
-                if child_pid in descendants:
-                    continue
-                descendants.add(child_pid)
+            # A descendant that exited after the snapshot may have handed its
+            # PID to an unrelated process. is_running() compares creation times.
+            if descendant.is_running():
                 groups.add(group_id)
-                pending.append(child_pid)
         groups.discard(os.getpgrp())
         return groups
 
@@ -631,28 +609,21 @@ class ManagedServer:
         if not candidates:
             return set()
         try:
-            listed = subprocess.run(
-                ["ps", "-axo", "pgid=,stat="],
-                capture_output=True,
-                check=False,
-                text=True,
-                timeout=2.0,
-            )
-        except (OSError, subprocess.TimeoutExpired):
-            return candidates
-        if listed.returncode != 0:
+            pids = psutil.pids()
+        except (OSError, psutil.Error):
             return candidates
         live: set[int] = set()
-        for line in listed.stdout.splitlines():
-            parts = line.split()
-            if len(parts) != 2:
-                continue
+        for pid in pids:
             try:
-                group_id = int(parts[0])
-            except ValueError:
+                group_id = os.getpgid(pid)
+                if group_id in candidates and (
+                    psutil.Process(pid).status() != psutil.STATUS_ZOMBIE
+                ):
+                    live.add(group_id)
+            except (ProcessLookupError, psutil.NoSuchProcess):
                 continue
-            if group_id in candidates and not parts[1].startswith("Z"):
-                live.add(group_id)
+            except (OSError, psutil.Error):
+                return candidates
         return live
 
     @staticmethod
