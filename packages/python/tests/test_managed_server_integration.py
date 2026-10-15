@@ -253,3 +253,75 @@ def test_managed_shutdown_stops_notebook_child_process(tmp_path: Path) -> None:
         if pid:
             with suppress(ProcessLookupError):
                 os.kill(pid, 9)
+
+
+@pytest.mark.timeout(30)
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX process group contract")
+def test_managed_shutdown_stops_child_session_while_ps_stalls(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    # A loaded runner can take seconds to start `ps`. Shutdown must still find
+    # and stop descendants that left the kernel's process group.
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    stalled_ps = fake_bin / "ps"
+    stalled_ps.write_text("#!/bin/sh\nsleep 5\nexit 1\n", encoding="utf-8")
+    stalled_ps.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{fake_bin}{os.pathsep}{os.environ['PATH']}")
+    heartbeat = tmp_path / "heartbeat.txt"
+    child_pid = tmp_path / "child-pid.txt"
+    notebook = tmp_path / "notebook.py"
+    child_code = (
+        "from pathlib import Path\n"
+        "import signal\n"
+        "import time\n"
+        "signal.signal(signal.SIGTERM, signal.SIG_IGN)\n"
+        f"heartbeat = Path({str(heartbeat)!r})\n"
+        "while True:\n"
+        "    with heartbeat.open('a', encoding='utf-8') as stream:\n"
+        "        stream.write('1')\n"
+        "    time.sleep(0.05)\n"
+    )
+    notebook.write_text(
+        "import marimo\n"
+        "\n"
+        "app = marimo.App()\n"
+        "\n"
+        "@app.cell\n"
+        "def _():\n"
+        "    from pathlib import Path\n"
+        "    import subprocess\n"
+        "    import sys\n"
+        "    child = subprocess.Popen(\n"
+        f"        [sys.executable, '-c', {child_code!r}],\n"
+        "        start_new_session=True,\n"
+        "    )\n"
+        f"    Path({str(child_pid)!r}).write_text(str(child.pid))\n"
+        "    return (child,)\n"
+        "\n"
+        'if __name__ == "__main__":\n'
+        "    app.run()\n",
+        encoding="utf-8",
+    )
+
+    server = ManagedServer(notebook, timeout=10)
+    pid = 0
+    try:
+        server.activate()
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline and (not heartbeat.exists() or not heartbeat.read_text()):
+            time.sleep(0.05)
+        pid = int(child_pid.read_text(encoding="utf-8"))
+        assert os.getpgid(pid) == pid
+    finally:
+        server.stop()
+
+    stopped_at = heartbeat.read_text(encoding="utf-8")
+    time.sleep(0.2)
+    try:
+        assert heartbeat.read_text(encoding="utf-8") == stopped_at
+    finally:
+        if pid:
+            with suppress(ProcessLookupError):
+                os.kill(pid, 9)

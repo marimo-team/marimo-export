@@ -19,6 +19,7 @@ dependencies = [
   "msgspec>=0.20",
   "numpy>=1.23.5",
   "packaging>=22",
+  "psutil>=5.9; sys_platform != 'android' and sys_platform != 'emscripten'",
   "pydantic>=2.5",
   "PyYAML>=6.0.1",
   "typing-extensions>=4.6",
