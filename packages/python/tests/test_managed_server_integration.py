@@ -261,14 +261,11 @@ def test_managed_shutdown_stops_child_session_while_ps_stalls(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    # A loaded runner can take seconds to start `ps`. Shutdown must still find
-    # and stop descendants that left the kernel's process group.
     fake_bin = tmp_path / "bin"
     fake_bin.mkdir()
     stalled_ps = fake_bin / "ps"
     stalled_ps.write_text("#!/bin/sh\nsleep 5\nexit 1\n", encoding="utf-8")
     stalled_ps.chmod(0o755)
-    monkeypatch.setenv("PATH", f"{fake_bin}{os.pathsep}{os.environ['PATH']}")
     heartbeat = tmp_path / "heartbeat.txt"
     child_pid = tmp_path / "child-pid.txt"
     notebook = tmp_path / "notebook.py"
@@ -314,6 +311,9 @@ def test_managed_shutdown_stops_child_session_while_ps_stalls(
             time.sleep(0.05)
         pid = int(child_pid.read_text(encoding="utf-8"))
         assert os.getpgid(pid) == pid
+        # A loaded runner can take seconds to start `ps`. Shutdown must still
+        # find and stop descendants that left the kernel's process group.
+        monkeypatch.setenv("PATH", f"{fake_bin}{os.pathsep}{os.environ['PATH']}")
     finally:
         server.stop()
 

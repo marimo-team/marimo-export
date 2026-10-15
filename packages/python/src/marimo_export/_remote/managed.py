@@ -534,7 +534,7 @@ class ManagedServer:
             ) from error
         for descendant in descendants:
             try:
-                groups.add(os.getpgid(descendant.pid))
+                group_id = os.getpgid(descendant.pid)
             except ProcessLookupError:
                 continue
             except OSError as error:
@@ -542,6 +542,10 @@ class ManagedServer:
                     "the managed marimo process tree could not be inspected",
                     code="server_shutdown_failed",
                 ) from error
+            # A descendant that exited after the snapshot may have handed its
+            # PID to an unrelated process. is_running() compares creation times.
+            if descendant.is_running():
+                groups.add(group_id)
         groups.discard(os.getpgrp())
         return groups
 
