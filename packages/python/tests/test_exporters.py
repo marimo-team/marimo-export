@@ -39,6 +39,18 @@ def test_builtin_and_importable_factories_construct_normalized_descriptors() -> 
             "size": {"width": 250.38, "height": None},
         },
     }
+    assert media(["application/pdf"], size=Size(height=120)).to_value() == {
+        "dependencies": [],
+        "name": "media",
+        "options": {
+            "accept": ["application/pdf"],
+            "scale": 1.0,
+            "size": {"width": None, "height": 120},
+        },
+    }
+    assert ExporterSpec(
+        "media", options={"accept": ["application/pdf"], "size": {"height": 120}}
+    ) == media(["application/pdf"], size=Size(height=120))
     assert altair.png(scale=2).to_value() == {
         "dependencies": [],
         "name": "altair.png",
@@ -112,9 +124,7 @@ def test_builtin_and_importable_factories_construct_normalized_descriptors() -> 
         lambda: ExporterSpec(
             "media", options={"accept": ["application/pdf"], "size": {"width": 0}}
         ),
-        lambda: ExporterSpec(
-            "media", options={"accept": ["application/pdf"], "size": {"height": 120}}
-        ),
+        lambda: ExporterSpec("media", options={"accept": ["application/pdf"], "size": {}}),
         lambda: ExporterSpec(
             "media",
             options={"accept": ["application/pdf"], "size": {"width": 200, "depth": 3}},

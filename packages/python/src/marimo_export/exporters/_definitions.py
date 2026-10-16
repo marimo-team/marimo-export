@@ -91,9 +91,11 @@ def runtime_reference(name: str) -> ExporterDefinition:
 
 
 def _size_option(size: JsonValue) -> JsonObject:
-    if not isinstance(size, dict) or not set(size) <= {"width", "height"} or "width" not in size:
-        raise TypeError("media option 'size' must be an object with width and optional height")
-    checked = Size(cast(float, size["width"]), cast("float | None", size.get("height")))
+    if not isinstance(size, dict) or not set(size) <= {"width", "height"}:
+        raise TypeError("media option 'size' must be an object with a width, a height, or both")
+    checked = Size(
+        cast("float | None", size.get("width")), cast("float | None", size.get("height"))
+    )
     return {"width": checked.width, "height": checked.height}
 
 

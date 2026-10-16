@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
-from typing import cast
 
 from marimo_export.errors import OutputError
 from marimo_export.outputs import BlobAsset
@@ -15,7 +14,7 @@ def media(
     scale: float = 1.0,
     size: Mapping[str, float | None] | None = None,
 ) -> BlobAsset:
-    drawn = Size(cast(float, size["width"]), size.get("height")) if size is not None else None
+    drawn = Size(size.get("width"), size.get("height")) if size is not None else None
     try:
         representation = represent(value, accept, scale=scale, size=drawn)
     except RepresentationError as error:
