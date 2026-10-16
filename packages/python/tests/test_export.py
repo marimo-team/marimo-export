@@ -32,6 +32,8 @@ from marimo_export.index import (
     ControlElementStep,
     ControlIndexStep,
     ControlKeyStep,
+    ControlOptions,
+    ControlRange,
     ExportIndex,
     NotebookProvenance,
     ProducerProvenance,
@@ -360,6 +362,68 @@ def test_export_rejects_malformed_control_binding_wire_steps() -> None:
                 "input": "symbols_selector",
                 "path": [step],
             }
+        }
+        with pytest.raises(NotebookExportError):
+            ExportIndex.from_value(wire)
+
+
+def test_control_binding_domains_round_trip_through_the_index() -> None:
+    bindings = {
+        "cell-selector-0": ControlBinding(
+            input="symbols_selector",
+            path=(),
+            domain=ControlOptions((["AAPL"], ["MSFT"])),
+        ),
+        "cell-width-0": ControlBinding(
+            input="chart_width",
+            path=(),
+            domain=ControlRange(start=0, stop=1, step=0.1),
+        ),
+    }
+    index = replace(_index(), control_bindings=bindings)
+
+    decoded = ExportIndex.from_bytes(index.to_bytes())
+
+    assert decoded.control_bindings == bindings
+    assert index.to_value()["control_bindings"] == {
+        "cell-selector-0": {
+            "input": "symbols_selector",
+            "path": [],
+            "domain": {"kind": "options", "values": [["AAPL"], ["MSFT"]]},
+        },
+        "cell-width-0": {
+            "input": "chart_width",
+            "path": [],
+            "domain": {"kind": "range", "start": 0, "stop": 1, "step": 0.1},
+        },
+    }
+    selector = decoded.control_bindings["cell-selector-0"].domain
+    assert isinstance(selector, ControlOptions)
+    assert ("MSFT",) in selector.values
+
+
+def test_control_domains_reject_values_no_control_can_send() -> None:
+    with pytest.raises(ValueError, match="positive"):
+        ControlRange(start=0, stop=1, step=0)
+    with pytest.raises(ValueError, match="must not exceed"):
+        ControlRange(start=2, stop=1, step=1)
+    with pytest.raises(ValueError, match="finite"):
+        ControlRange(start=0, stop=float("inf"), step=1)
+    with pytest.raises(ValueError, match="1 to 4096"):
+        ControlOptions(())
+    with pytest.raises(ValueError, match="1 to 4096"):
+        ControlOptions(tuple(range(4_097)))
+
+    for domain in (
+        {"kind": "range", "start": 0, "stop": 1},
+        {"kind": "range", "start": 0, "stop": 1, "step": -1},
+        {"kind": "options", "values": []},
+        {"kind": "options", "values": ["a"], "extra": True},
+        {"kind": "steps", "values": [1]},
+    ):
+        wire = _index().to_value()
+        wire["control_bindings"] = {
+            "cell-selector-0": {"input": "symbols_selector", "path": [], "domain": domain}
         }
         with pytest.raises(NotebookExportError):
             ExportIndex.from_value(wire)

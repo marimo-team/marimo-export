@@ -28,6 +28,7 @@ from marimo_export.index import (
     NotebookProvenance,
     StateEntry,
     _control_binding,
+    _merge_control_binding,
 )
 from marimo_export.planning import ExportPlan, PlannedState
 from marimo_export.spec import ExportSpec
@@ -170,13 +171,18 @@ def _prepared_records(
         )
         for object_id, value in control_values.items():
             binding = _control_binding(value, object_id)
-            previous = bindings.setdefault(object_id, binding)
-            if previous != binding:
+            previous = bindings.get(object_id)
+            if previous is None:
+                bindings[object_id] = binding
+                continue
+            merged = _merge_control_binding(previous, binding)
+            if merged is None:
                 raise ExecutionError(
                     f"UI object {object_id!r} changes input ownership across prepared states",
                     code="control_input_conflict",
                     details={"object_id": object_id},
                 )
+            bindings[object_id] = merged
     return entries, bindings
 
 

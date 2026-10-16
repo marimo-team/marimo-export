@@ -140,20 +140,53 @@ output name, and descriptor for every relation entry.
 
 ### Index component records
 
-| Record               | Fields or signature                                                               |
-| -------------------- | --------------------------------------------------------------------------------- |
-| `NotebookProvenance` | `filename: str \| None`, `document_sha256: str`                                   |
-| `ProducerProvenance` | `marimo: str`, `marimo_export: str`, `implementation_sha256: str`                 |
-| `StateEntry`         | `StateEntry(*, inputs, outputs)`, immutable `outputs`, detached `inputs` property |
-| `ControlBinding`     | `input: str`, `path: tuple[ControlPathStep, ...]`                                 |
-| `ControlIndexStep`   | `value: int`, fixed `kind="index"`                                                |
-| `ControlKeyStep`     | `value: str`, fixed `kind="key"`                                                  |
-| `ControlElementStep` | Fixed `kind="element"`                                                            |
+| Record               | Fields or signature                                                                            |
+| -------------------- | ---------------------------------------------------------------------------------------------- |
+| `NotebookProvenance` | `filename: str \| None`, `document_sha256: str`                                                |
+| `ProducerProvenance` | `marimo: str`, `marimo_export: str`, `implementation_sha256: str`                              |
+| `StateEntry`         | `StateEntry(*, inputs, outputs)`, immutable `outputs`, detached `inputs` property              |
+| `ControlBinding`     | `input: str`, `path: tuple[ControlPathStep, ...]`, `domain: ControlDomain \| None = None`      |
+| `ControlIndexStep`   | `value: int`, fixed `kind="index"`                                                             |
+| `ControlKeyStep`     | `value: str`, fixed `kind="key"`                                                               |
+| `ControlElementStep` | Fixed `kind="element"`                                                                         |
+| `ControlRange`       | `start`, `stop`, `step` as `int \| float`, fixed `kind="range"`                                |
+| `ControlOptions`     | `ControlOptions(values)`, frozen `values: tuple[FrozenJsonValue, ...]`, fixed `kind="options"` |
 
 Every record exposes `to_value()`. `ControlPathStep` is the union of the three
 step records. An empty path binds a root control. An `index` step selects a
 sequence child, a `key` step selects a mapping child, and an `element` step
 passes through a wrapper or form element.
+
+`ControlDomain` is the union of `ControlRange` and `ControlOptions`. A binding's
+`domain` lists the frontend values its control can send, in the form a state
+row uses. `ControlRange` covers `start + k * step` for each `k` that stays
+within `stop`. `ControlOptions.values` holds 1 to 4096 values, with arrays
+frozen as tuples to match `ExportState.inputs`. `domain` is `None` when the
+export records no domain for the control. The
+[export format](../export-format#index-schema) maps each marimo control to its
+domain.
+
+List the root slider values that no prepared state covers. `prepared` is the
+`PreparedExport` returned by `prepare()`:
+
+```python
+import math
+
+from marimo_export.index import ControlRange
+
+export = prepared.open()
+for binding in export.control_bindings.values():
+    domain = binding.domain
+    if binding.path or not isinstance(domain, ControlRange):
+        continue
+    count = math.floor((domain.stop - domain.start) / domain.step + 1e-9)
+    reachable = {round(domain.start + k * domain.step, 9) for k in range(count + 1)}
+    covered = {round(state.inputs[binding.input], 9) for state in export.states()}
+    print(binding.input, sorted(reachable - covered))
+```
+
+For `threshold = mo.ui.slider(0, 1, step=0.1)` prepared at `0`, `0.5`, and
+`1`, the loop prints `threshold [0.1, 0.2, 0.3, 0.4, 0.6, 0.7, 0.8, 0.9]`.
 
 ## Output descriptor records
 

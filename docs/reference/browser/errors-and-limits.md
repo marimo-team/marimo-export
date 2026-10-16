@@ -161,6 +161,7 @@ expand what a standard producer writes.
 | Export input, output, version, and filename text | 255 UTF-8 bytes, with field-specific character rules |
 | Control object ID                                |                                    1,024 UTF-8 bytes |
 | Control path                                     |                                            256 steps |
+| Control domain options                           |                                         4,096 values |
 | Descriptor provenance text                       |                                    2,048 UTF-8 bytes |
 | BlobAsset metadata                               |                            256 KiB of canonical JSON |
 | BlobAsset MessagePack nesting                    |                                           256 levels |

@@ -8,7 +8,7 @@ from typing import Literal, cast
 import pytest
 from marimo_export._json import JsonObject, canonical_bytes, json_value
 from marimo_export.errors import IntegrityError, NotebookExportError
-from marimo_export.index import ExportIndex
+from marimo_export.index import ControlBinding, ControlOptions, ExportIndex
 from marimo_export.reader import _validate_snapshot
 from marimo_export.wire import state_fingerprint
 
@@ -75,7 +75,13 @@ def test_scalar_export_fixture_matches_python_v1_reader() -> None:
     assert index.aliases["two"] in index.states
     assert index.default_state == index.aliases["one"]
     assert index.spec_sha256 == "d" * 64
-    assert index.control_bindings == {}
+    assert index.control_bindings == {
+        "choice-control": ControlBinding(
+            input="choice",
+            path=(),
+            domain=ControlOptions(("A", "B")),
+        )
+    }
 
 
 def test_projection_records_match_python_snapshot_contracts() -> None:

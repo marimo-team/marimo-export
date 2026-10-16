@@ -120,17 +120,17 @@ interface ProducerProvenance {
 }
 ```
 
-| Property          | Value                                                             |
-| ----------------- | ----------------------------------------------------------------- |
-| `base`            | Detached normalized export URL, including its fixed query         |
-| `identity`        | Lowercase SHA-256 of the exact canonical `index.json` bytes       |
-| `specSha256`      | Identity of the canonical ExportSpec that selected the relation   |
-| `defaultState`    | Exported state named by the index default fingerprint             |
-| `notebook`        | Optional source filename and document SHA-256                     |
-| `producer`        | marimo version, marimo-export version, and implementation SHA-256 |
-| `inputNames`      | Ordered root input names                                          |
-| `controlBindings` | Projection-scoped UI object IDs mapped to an input and typed path |
-| `outputNames`     | Ordered output names present in every exported state              |
+| Property          | Value                                                                               |
+| ----------------- | ----------------------------------------------------------------------------------- |
+| `base`            | Detached normalized export URL, including its fixed query                           |
+| `identity`        | Lowercase SHA-256 of the exact canonical `index.json` bytes                         |
+| `specSha256`      | Identity of the canonical ExportSpec that selected the relation                     |
+| `defaultState`    | Exported state named by the index default fingerprint                               |
+| `notebook`        | Optional source filename and document SHA-256                                       |
+| `producer`        | marimo version, marimo-export version, and implementation SHA-256                   |
+| `inputNames`      | Ordered root input names                                                            |
+| `controlBindings` | Projection-scoped UI object IDs mapped to an input, typed path, and optional domain |
+| `outputNames`     | Ordered output names present in every exported state                                |
 
 `states()` returns states in fingerprint order. Reader objects, arrays, state
 inputs, descriptors, and portable JSON values are frozen. `base` is returned as
@@ -311,15 +311,36 @@ interface ControlElementStep {
 
 type ControlPathStep = ControlIndexStep | ControlKeyStep | ControlElementStep;
 
+interface ControlRange {
+  readonly kind: "range";
+  readonly start: number;
+  readonly stop: number;
+  readonly step: number;
+}
+
+interface ControlOptions {
+  readonly kind: "options";
+  readonly values: readonly JsonValue[];
+}
+
+type ControlDomain = ControlRange | ControlOptions;
+
 interface ControlBinding {
   readonly input: string;
   readonly path: readonly ControlPathStep[];
+  readonly domain?: ControlDomain;
 }
 ```
 
 An empty path binds a root input. `index` selects a sequence or numeric mapping
 member. `key` selects a string mapping member. `element` marks a wrapper or form
 child whose frontend event remains application-owned.
+
+`domain` lists the frontend values the bound control can send. A `range` covers
+`start + k * step` for each `k` that stays within `stop`. An `options` domain
+lists each value. The property is absent when the export records no domain for
+the control. The [export format](../export-format#index-schema) maps each
+marimo control to its domain.
 
 ### Output descriptors
 

@@ -549,7 +549,7 @@ def _control_binding_mapping(
 ) -> Mapping[str, ControlBinding]:
     from marimo._plugins.ui._core.ui_element import UIElement
 
-    from marimo_export._marimo.compat.inspection import _control_tree_entries
+    from marimo_export._marimo.compat.inspection import _binding_domain, _control_tree_entries
 
     result: dict[str, ControlBinding] = {}
     for input_name in sorted(state.ui_updates):
@@ -561,7 +561,11 @@ def _control_binding_mapping(
                 details={"state": state.primary_alias, "input": input_name},
             )
         for element, path in _control_tree_entries(root):
-            binding = ControlBinding(input=input_name, path=path)
+            binding = ControlBinding(
+                input=input_name,
+                path=path,
+                domain=_binding_domain(element),
+            )
             for object_id in sorted(ui_scopes.get(str(element._id), ())):
                 previous = result.setdefault(object_id, binding)
                 if previous != binding:
