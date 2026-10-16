@@ -213,19 +213,22 @@ class Size:
     """A display size in points, 1/72 inch, such as a column's width.
 
     ``represent()`` draws a matplotlib figure or a Vega-Lite chart at this size,
-    so its text keeps its point size where a document places it. Without a
-    ``height``, a matplotlib figure keeps its aspect ratio and a chart keeps
-    its height. Each length is a finite number from 1 to ``MAX_SIZE_POINTS``
-    (50 inches), which bounds the pixels of a PNG drawn at that size.
+    so its text keeps its point size where a document places it. Give a
+    ``width``, a ``height``, or both. With one of them, a matplotlib figure keeps
+    its aspect ratio and a chart keeps its own length in the other direction.
+    Each length is a finite number from 1 to ``MAX_SIZE_POINTS`` (50 inches),
+    which bounds the pixels of a PNG drawn at that size.
     """
 
-    width: float
+    width: float | None = None
     height: float | None = None
 
     def __post_init__(self) -> None:
+        if self.width is None and self.height is None:
+            raise TypeError("size needs a width, a height, or both")
         for name in ("width", "height"):
             length = getattr(self, name)
-            if length is None and name == "height":
+            if length is None:
                 continue
             if isinstance(length, bool) or not isinstance(length, (int, float)):
                 raise TypeError(f"size {name} must be a number of points")
@@ -616,10 +619,14 @@ def _resized(figure: Any, size: Size) -> Any | None:
         sized.set_layout_engine("tight", pad=0)
     elif type(engine).__name__ == "ConstrainedLayoutEngine":
         engine.set(w_pad=0, h_pad=0)
-    inches = size.width / 72
-    sized.set_size_inches(
-        inches, size.height / 72 if size.height is not None else inches * height / width
-    )
+    if size.width is None:
+        tall = cast(float, size.height) / 72
+        sized.set_size_inches(tall * width / height, tall)
+    else:
+        wide = size.width / 72
+        sized.set_size_inches(
+            wide, size.height / 72 if size.height is not None else wide * height / width
+        )
     return sized
 
 
@@ -679,12 +686,10 @@ def _sized_vega_lite(specification: dict[str, Any], size: Size) -> dict[str, Any
     if not _VEGA_LITE_COMPOUND.isdisjoint(specification):
         return specification
     # vl-convert draws one Vega-Lite pixel as one point, and "fit" sizes the
-    # whole chart, with its axes and legends, to the given width.
-    sized = {
-        **specification,
-        "width": size.width,
-        "autosize": {"type": "fit", "contains": "padding"},
-    }
+    # whole chart, with its axes and legends, to the given lengths.
+    sized = {**specification, "autosize": {"type": "fit", "contains": "padding"}}
+    if size.width is not None:
+        sized["width"] = size.width
     if size.height is not None:
         sized["height"] = size.height
     return sized

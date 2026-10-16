@@ -195,6 +195,20 @@ def test_a_size_draws_a_laid_out_figure_at_that_size_and_keeps_the_original() ->
     assert tuple(figure.get_size_inches()) == (6, 2)
 
 
+def test_a_height_draws_a_figure_at_that_height_and_keeps_its_aspect_ratio() -> None:
+    figure_module = pytest.importorskip("matplotlib.figure")
+    figure = figure_module.Figure(figsize=(6, 2), layout="constrained")
+    figure.subplots().set_xlabel("Light (lux)")
+
+    pdf = represent(figure, ["application/pdf"], size=Size(height=120)).data
+    png = represent(figure, ["image/png"], size=Size(height=144))
+
+    assert _media_box(pdf) == pytest.approx((360, 120), abs=0.01)
+    # marimo displays 72 points as 100 CSS pixels.
+    assert (png.width, png.height) == (600, 200)
+    assert tuple(figure.get_size_inches()) == (6, 2)
+
+
 @pytest.mark.parametrize("colorbar", [False, True])
 def test_a_size_keeps_its_page_for_a_figure_without_a_layout_engine(colorbar: bool) -> None:
     figure_module = pytest.importorskip("matplotlib.figure")
@@ -285,10 +299,31 @@ def test_a_size_draws_a_single_vega_lite_view_at_that_width() -> None:
     assert "width" not in specification
 
 
+def test_a_height_draws_a_single_vega_lite_view_at_that_height_and_keeps_its_width() -> None:
+    pytest.importorskip("vl_convert")
+    specification = {
+        "$schema": "https://vega.github.io/schema/vega-lite/v6.json",
+        "data": {"values": [{"x": 1, "y": 2}, {"x": 2, "y": 3}]},
+        "mark": "line",
+        "encoding": {
+            "x": {"field": "x", "type": "quantitative"},
+            "y": {"field": "y", "type": "quantitative"},
+        },
+        "width": 200,
+    }
+
+    pdf = represent(specification, ["application/pdf"], size=Size(height=140))
+
+    assert _media_box(pdf.data) == pytest.approx((200, 140), abs=0.01)
+    assert "height" not in specification
+
+
 @pytest.mark.parametrize(
     ("width", "height", "error"),
     [
+        (None, None, TypeError),
         (0.5, None, ValueError),
+        (None, 0.5, ValueError),
         (300, 3_601, ValueError),
         (float("nan"), None, ValueError),
         (True, None, TypeError),

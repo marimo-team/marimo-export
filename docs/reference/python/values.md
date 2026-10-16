@@ -113,26 +113,30 @@ same session.
 ### `Size`
 
 ```python
-Size(width: float, height: float | None = None) -> Size
+Size(width: float | None = None, height: float | None = None) -> Size
 ```
 
-A display size in points, 1/72 inch, such as the width of the column a
-document places a figure in. `represent()` draws a copy of a matplotlib figure
-at that size, so its text keeps the point size the notebook gave it, and leaves
-the notebook's figure unchanged. The copy keeps the figure's layout engine,
-such as `layout="constrained"`, or takes matplotlib's tight layout when the
-figure has none, without padding, so its labels fit inside the size, its ink
-reaches the page's edges, and the page has exactly that size. Without a `height`, the figure keeps its aspect ratio. A figure that
-Python cannot copy, such as one in a Pyodide runtime that holds an uncopyable
-counter, draws at its own size, and the consumer scales it.
+A display size in points, 1/72 inch, such as the width of the column a document
+places a figure in or the height a slide row gives an image. Give a `width`, a
+`height`, or both. `Size(251.3)` sets the width, and `Size(height=113.4)` sets
+the height to 4 cm. `represent()` draws a copy of a matplotlib figure at that
+size, so its text keeps the point size the notebook gave it, and leaves the
+notebook's figure unchanged. The copy keeps the figure's layout engine, such as
+`layout="constrained"`, or takes matplotlib's tight layout when the figure has
+none, without padding, so its labels fit inside the size, its ink reaches the
+page's edges, and the page has exactly that size. With only a `width` or only a
+`height`, the figure keeps its aspect ratio. A figure that Python cannot copy,
+such as one in a Pyodide runtime that holds an uncopyable counter, draws at its
+own size, and the consumer scales it.
 
 A single or layered Vega-Lite chart draws at the size with `autosize` set to
-`fit`, so its axes and legends fit inside the width. Without a `height`, the
-chart keeps its own height. Compound charts and values drawn by display methods
-ignore the size.
+`fit`, so its axes and legends fit inside the size. With only a `width`, the
+chart keeps its own height, and with only a `height`, it keeps its own width.
+Compound charts and values drawn by display methods ignore the size.
 
 Each length is a finite number from 1 to `MAX_SIZE_POINTS` (3,600, or 50
 inches). Other numbers raise `ValueError`, and other types raise `TypeError`.
+A `Size` without a width or a height raises `TypeError`.
 
 ### JSON data
 
