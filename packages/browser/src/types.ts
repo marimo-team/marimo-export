@@ -111,9 +111,24 @@ export interface ControlElementStep {
 
 export type ControlPathStep = ControlIndexStep | ControlKeyStep | ControlElementStep;
 
+export interface ControlRange {
+  readonly kind: "range";
+  readonly start: number;
+  readonly stop: number;
+  readonly step: number;
+}
+
+export interface ControlOptions {
+  readonly kind: "options";
+  readonly values: readonly JsonValue[];
+}
+
+export type ControlDomain = ControlRange | ControlOptions;
+
 export interface ControlBinding {
   readonly input: string;
   readonly path: readonly ControlPathStep[];
+  readonly domain?: ControlDomain;
 }
 
 export interface Provenance {

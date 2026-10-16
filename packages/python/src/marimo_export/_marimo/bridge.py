@@ -28,6 +28,7 @@ from marimo_export.index import (
     NotebookProvenance,
     ProducerProvenance,
     StateEntry,
+    _merge_control_binding,
 )
 from marimo_export.integration import KernelInputObservation
 from marimo_export.result import CacheSummary, StateRunTimings
@@ -415,8 +416,12 @@ def _merge_control_bindings(
     state_mapping: Mapping[str, ControlBinding],
 ) -> None:
     for object_id, binding in state_mapping.items():
-        previous = target.setdefault(object_id, binding)
-        if previous != binding:
+        previous = target.get(object_id)
+        if previous is None:
+            target[object_id] = binding
+            continue
+        merged = _merge_control_binding(previous, binding)
+        if merged is None:
             raise ExecutionError(
                 f"UI object {object_id!r} changes input ownership across states",
                 code="control_input_conflict",
@@ -425,6 +430,7 @@ def _merge_control_bindings(
                     "inputs": sorted({previous.input, binding.input}),
                 },
             )
+        target[object_id] = merged
 
 
 def _decode_request(request_json: str) -> JsonObject:

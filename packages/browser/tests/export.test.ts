@@ -474,6 +474,64 @@ describe("canonical export validation", () => {
     }
   });
 
+  test("reads the values a bound control can send", async () => {
+    const fixture = await exportFixture({
+      indexTransform(index) {
+        index.control_bindings = {
+          "cell-symbol-0": {
+            domain: { kind: "options", values: [["AAPL"], ["MSFT"]] },
+            input: "symbol",
+            path: [],
+          },
+          "cell-width-0": {
+            domain: { kind: "range", start: 0, step: 0.1, stop: 1 },
+            input: "width",
+            path: [],
+          },
+        };
+      },
+    });
+    const notebookExport = await openExport("https://example.test/stocks", {
+      fetch: fixture.fetch,
+    });
+
+    expect(notebookExport.controlBindings["cell-symbol-0"]!.domain).toEqual({
+      kind: "options",
+      values: [["AAPL"], ["MSFT"]],
+    });
+    expect(notebookExport.controlBindings["cell-width-0"]!.domain).toEqual({
+      kind: "range",
+      start: 0,
+      stop: 1,
+      step: 0.1,
+    });
+  });
+
+  test("rejects control domains that no control can send", async () => {
+    for (const domain of [
+      { kind: "range", start: 0, stop: 1 },
+      { kind: "range", start: 0, step: -1, stop: 1 },
+      { kind: "range", start: 2, step: 1, stop: 1 },
+      { kind: "options", values: [] },
+      { kind: "options", extra: true, values: ["AAPL"] },
+      { kind: "steps", values: [1] },
+    ]) {
+      // Validation cases intentionally execute in order.
+      // oxlint-disable-next-line no-await-in-loop
+      const fixture = await exportFixture({
+        indexTransform(index) {
+          index.control_bindings = {
+            "cell-symbol-0": { domain, input: "symbol", path: [] },
+          };
+        },
+      });
+      // oxlint-disable-next-line no-await-in-loop
+      await expect(
+        openExport("https://example.test/stocks", { fetch: fixture.fetch }),
+      ).rejects.toMatchObject({ code: "export_invalid" });
+    }
+  });
+
   test("requires the producer implementation identity", async () => {
     const fixture = await exportFixture({
       indexTransform(index) {

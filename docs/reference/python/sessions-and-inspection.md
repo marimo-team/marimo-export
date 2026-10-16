@@ -316,8 +316,8 @@ the complete mutable wire shape.
   AnyWidget trait patch.
 - `control_paths` maps projection-scoped control IDs to typed paths inside this
   root input.
-- `domain` contains portable control hints such as options, minimum, maximum,
-  step, or debounce behavior. It describes the observed control and does not
+- `domain` contains portable control hints such as options, start, stop, steps,
+  step, min, max, or debounce behavior. It describes the observed control and does not
   replace producer-side validation.
 
 ### `CellDescription`

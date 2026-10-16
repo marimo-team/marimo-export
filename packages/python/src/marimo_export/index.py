@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, field
 from types import MappingProxyType
@@ -37,8 +38,10 @@ from marimo_export._json import (
     json_object,
     json_string,
     portable_json_object,
+    portable_json_value,
 )
 from marimo_export._limits import MAX_CONTROL_ID_BYTES as _MAX_CONTROL_ID_BYTES
+from marimo_export._limits import MAX_CONTROL_OPTIONS as _MAX_CONTROL_OPTIONS
 from marimo_export._limits import MAX_INDEX_BYTES as _MAX_INDEX_BYTES
 from marimo_export._limits import MAX_NAME_BYTES as _MAX_NAME_BYTES
 from marimo_export._portable import validate_portable_basename
@@ -62,7 +65,7 @@ from marimo_export.descriptors import (
     _descriptor_asset_facts,
 )
 from marimo_export.errors import NotebookExportError
-from marimo_export.wire import state_fingerprint
+from marimo_export.wire import FrozenJsonValue, _freeze_json, state_fingerprint
 
 EXPORT_SCHEMA = "marimo-export.export.v1"
 _MAX_INDEX_VALUES = 2_000_000
@@ -159,9 +162,62 @@ ControlPathStep: TypeAlias = ControlIndexStep | ControlKeyStep | ControlElementS
 
 
 @dataclass(frozen=True, slots=True)
+class ControlRange:
+    """Frontend numbers from ``start`` through ``stop`` in increments of ``step``."""
+
+    start: int | float
+    stop: int | float
+    step: int | float
+    kind: Literal["range"] = field(default="range", init=False)
+
+    def __post_init__(self) -> None:
+        for name in ("start", "stop", "step"):
+            value = getattr(self, name)
+            # Integers are exact, so portable_json_value checks their range.
+            if (
+                not isinstance(value, (int, float))
+                or isinstance(value, bool)
+                or (isinstance(value, float) and not math.isfinite(value))
+            ):
+                raise ValueError(f"control range {name} must be a finite number")
+            object.__setattr__(self, name, portable_json_value(value, f"control range {name}"))
+        if self.step <= 0:
+            raise ValueError("control range step must be positive")
+        if self.start > self.stop:
+            raise ValueError("control range start must not exceed stop")
+
+    def to_value(self) -> JsonObject:
+        return {"kind": self.kind, "start": self.start, "stop": self.stop, "step": self.step}
+
+
+@dataclass(frozen=True, slots=True, init=False)
+class ControlOptions:
+    """Every frontend value a choice control can send."""
+
+    values: tuple[FrozenJsonValue, ...]
+    kind: Literal["options"] = field(default="options", init=False)
+
+    def __init__(self, values: tuple[JsonValue, ...]) -> None:
+        if not isinstance(values, tuple) or not 0 < len(values) <= _MAX_CONTROL_OPTIONS:
+            raise ValueError(
+                f"control options must be a tuple of 1 to {_MAX_CONTROL_OPTIONS} values"
+            )
+        parsed = portable_json_value(list(values), "control options")
+        object.__setattr__(self, "values", cast(tuple[FrozenJsonValue, ...], _freeze_json(parsed)))
+        object.__setattr__(self, "kind", "options")
+
+    def to_value(self) -> JsonObject:
+        return {"kind": self.kind, "values": portable_json_value(self.values, "control options")}
+
+
+ControlDomain: TypeAlias = ControlRange | ControlOptions
+
+
+@dataclass(frozen=True, slots=True)
 class ControlBinding:
     input: str
     path: tuple[ControlPathStep, ...]
+    domain: ControlDomain | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "input", _opaque_name(self.input, "control binding input"))
@@ -174,12 +230,17 @@ class ControlBinding:
             for step in self.path
         ):
             raise TypeError("control binding path contains an invalid step")
+        if self.domain is not None and not isinstance(self.domain, (ControlRange, ControlOptions)):
+            raise TypeError("control binding domain must be ControlRange, ControlOptions, or None")
 
     def to_value(self) -> JsonObject:
-        return {
+        value: JsonObject = {
             "input": self.input,
             "path": [step.to_value() for step in self.path],
         }
+        if self.domain is not None:
+            value["domain"] = self.domain.to_value()
+        return value
 
 
 @dataclass(frozen=True, slots=True, init=False)
@@ -487,7 +548,11 @@ class ExportIndex:
 def _control_binding(value: object, object_id: str) -> ControlBinding:
     path = f"export.control_bindings[{object_id!r}]"
     item = _object(value, path)
-    _exact_fields(item, {"input", "path"}, path)
+    _exact_fields(
+        item,
+        {"input", "path", "domain"} if "domain" in item else {"input", "path"},
+        path,
+    )
     steps = item["path"]
     if not isinstance(steps, list) or len(steps) > _MAX_CONTROL_PATH_STEPS:
         raise ValueError(f"{path}.path must be an array of at most {_MAX_CONTROL_PATH_STEPS} steps")
@@ -496,7 +561,41 @@ def _control_binding(value: object, object_id: str) -> ControlBinding:
         path=tuple(
             _control_path_step(step, f"{path}.path[{index}]") for index, step in enumerate(steps)
         ),
+        domain=_control_domain(item["domain"], f"{path}.domain") if "domain" in item else None,
     )
+
+
+def _merge_control_binding(
+    previous: ControlBinding,
+    binding: ControlBinding,
+) -> ControlBinding | None:
+    """Combine one control's bindings from two states, or return None on an input conflict."""
+
+    if (previous.input, previous.path) != (binding.input, binding.path):
+        return None
+    if previous.domain == binding.domain:
+        return previous
+    # A domain that differs between states describes no single reachable set.
+    return ControlBinding(input=previous.input, path=previous.path)
+
+
+def _control_domain(value: object, path: str) -> ControlDomain:
+    item = _object(value, path)
+    kind = item.get("kind")
+    if kind == "range":
+        _exact_fields(item, {"kind", "start", "stop", "step"}, path)
+        return ControlRange(
+            start=cast(float, item["start"]),
+            stop=cast(float, item["stop"]),
+            step=cast(float, item["step"]),
+        )
+    if kind == "options":
+        _exact_fields(item, {"kind", "values"}, path)
+        values = item["values"]
+        if not isinstance(values, list):
+            raise ValueError(f"{path}.values must be an array")
+        return ControlOptions(tuple(values))
+    raise ValueError(f"{path}.kind must be range or options")
 
 
 def _control_path_step(value: object, path: str) -> ControlPathStep:
@@ -557,10 +656,13 @@ def _state(value: object, fingerprint: str) -> StateEntry:
 __all__ = [
     "EXPORT_SCHEMA",
     "ControlBinding",
+    "ControlDomain",
     "ControlElementStep",
     "ControlIndexStep",
     "ControlKeyStep",
+    "ControlOptions",
     "ControlPathStep",
+    "ControlRange",
     "ExportIndex",
     "NotebookProvenance",
     "ProducerProvenance",

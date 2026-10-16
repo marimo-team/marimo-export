@@ -7,6 +7,7 @@ import type {
   AssetDescriptor,
   BlobAssetDescriptor,
   ControlBinding,
+  ControlDomain,
   JsonDescriptor,
   NotebookProvenance,
   NumpyDescriptor,
@@ -28,6 +29,7 @@ const MAX_SAFE_INTEGER = Number.MAX_SAFE_INTEGER;
 const MAX_EXPORT_NAME_BYTES = 255;
 const MAX_CONTROL_ID_BYTES = 1_024;
 const MAX_CONTROL_PATH_STEPS = 256;
+const MAX_CONTROL_OPTIONS = 4_096;
 const MAX_PROVENANCE_BYTES = 2_048;
 const MAX_ASSET_SIZE = 2_147_483_647;
 const MAX_METADATA_BYTES = 256 * 1024;
@@ -197,23 +199,61 @@ function parseProducer(input: JsonValue | undefined): ProducerProvenance {
   });
 }
 
+interface MutableControlBinding {
+  input: string;
+  path: ControlBinding["path"];
+  domain?: ControlDomain;
+}
+
 function parseControlBinding(
   input: JsonValue | undefined,
   path: string,
   inputNames: ReadonlySet<string>,
 ): ControlBinding {
-  const value = strictRecord(input, path, ["input", "path"]);
+  const value = record(input, path);
+  exactFields(
+    value,
+    Object.hasOwn(value, "domain") ? ["domain", "input", "path"] : ["input", "path"],
+    path,
+  );
   const inputName = opaqueInputName(value.input, `${path}.input`);
   if (!inputNames.has(inputName)) fail(`${path}.input must name a declared input`);
   if (!Array.isArray(value.path) || value.path.length > MAX_CONTROL_PATH_STEPS) {
     fail(`${path}.path must be an array of at most ${MAX_CONTROL_PATH_STEPS} steps`);
   }
-  return Object.freeze({
+  const binding: MutableControlBinding = {
     input: inputName,
     path: Object.freeze(
       value.path.map((step, index) => parseControlPathStep(step, `${path}.path[${index}]`)),
     ),
-  });
+  };
+  if (Object.hasOwn(value, "domain")) {
+    binding.domain = parseControlDomain(value.domain, `${path}.domain`);
+  }
+  return Object.freeze(binding);
+}
+
+function parseControlDomain(input: JsonValue | undefined, path: string): ControlDomain {
+  const value = record(input, path);
+  if (value.kind === "range") {
+    exactFields(value, ["kind", "start", "step", "stop"], path);
+    const { start, step, stop } = value;
+    if (!isJsonNumber(start) || !isJsonNumber(stop) || !isJsonNumber(step)) {
+      fail(`${path} start, stop, and step must be numbers`);
+    }
+    if (step <= 0) fail(`${path}.step must be positive`);
+    if (start > stop) fail(`${path}.start must not exceed stop`);
+    return Object.freeze({ kind: "range", start, stop, step });
+  }
+  if (value.kind === "options") {
+    exactFields(value, ["kind", "values"], path);
+    const values = value.values;
+    if (!Array.isArray(values) || values.length === 0 || values.length > MAX_CONTROL_OPTIONS) {
+      fail(`${path}.values must be an array of 1 to ${MAX_CONTROL_OPTIONS} values`);
+    }
+    return Object.freeze({ kind: "options", values });
+  }
+  fail(`${path}.kind must be range or options`);
 }
 
 function parseControlPathStep(

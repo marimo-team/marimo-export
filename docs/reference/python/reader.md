@@ -68,7 +68,9 @@ export.producer: ProducerProvenance
 
 `default_state` resolves the fingerprint selected by the authored
 `default_state` alias. `control_bindings` maps projection-scoped UI object IDs to
-root input names and typed paths.
+root input names, typed paths, and the
+[control domain](format-records-and-errors#index-component-records) when the
+export records one.
 
 Selection methods:
 

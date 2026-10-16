@@ -23,10 +23,13 @@ from marimo_export._json import (
 from marimo_export._marimo.capabilities import MarimoCapabilities
 from marimo_export.errors import CompatibilityError, ExecutionError
 from marimo_export.index import (
+    ControlDomain,
     ControlElementStep,
     ControlIndexStep,
     ControlKeyStep,
+    ControlOptions,
     ControlPathStep,
+    ControlRange,
 )
 
 _CAPABILITIES = (
@@ -704,7 +707,17 @@ def _control_domain(value: Any) -> JsonObject:
     if not isinstance(args, Mapping):
         return {}
     result: JsonObject = {}
-    for name in ("debounce", "full_width", "max", "min", "options", "step"):
+    for name in (
+        "debounce",
+        "full_width",
+        "max",
+        "min",
+        "options",
+        "start",
+        "step",
+        "steps",
+        "stop",
+    ):
         if name not in args:
             continue
         try:
@@ -712,6 +725,39 @@ def _control_domain(value: Any) -> JsonObject:
         except (TypeError, ValueError):
             continue
     return result
+
+
+def _binding_domain(value: Any) -> ControlDomain | None:
+    from marimo import ui
+
+    args = getattr(value, "_component_args", None)
+    if not isinstance(args, Mapping):
+        return None
+    try:
+        if isinstance(value, ui.slider):
+            # The frontend slider steps by 1 when `step` is unset. A slider built
+            # from `steps` sends step indexes, and its arguments hold that range.
+            step = args["step"]
+            return ControlRange(
+                start=args["start"],
+                stop=args["stop"],
+                step=1 if step is None else step,
+            )
+        if isinstance(value, ui.number):
+            # Without a step the number field accepts any typed value.
+            if args["start"] is None or args["stop"] is None or args["step"] is None:
+                return None
+            return ControlRange(start=args["start"], stop=args["stop"], step=args["step"])
+        if isinstance(value, ui.dropdown):
+            choices = [[option] for option in args["options"]]
+            return ControlOptions(tuple([[], *choices] if args["allow-select-none"] else choices))
+        if isinstance(value, ui.radio):
+            return ControlOptions(tuple(args["options"]))
+        if isinstance(value, (ui.checkbox, ui.switch)):
+            return ControlOptions((False, True))
+    except (KeyError, TypeError, ValueError):
+        return None
+    return None
 
 
 __all__ = [

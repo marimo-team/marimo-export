@@ -65,6 +65,40 @@ an `element` step. Multiple scoped IDs may carry the same binding when one
 source control appears in several projections. Consumers use these records
 directly and do not parse projection-scoped object IDs.
 
+A binding may also carry a `domain` with the frontend values its control can
+send, in the same form a state row uses:
+
+```json
+{
+  "input": "threshold",
+  "path": [],
+  "domain": { "kind": "range", "start": 0, "stop": 1, "step": 0.1 }
+}
+```
+
+| Domain kind | Exact fields                    | Frontend values                                                         |
+| ----------- | ------------------------------- | ----------------------------------------------------------------------- |
+| `range`     | `kind`, `start`, `stop`, `step` | `start + k * step` for each integer `k >= 0` up to and including `stop` |
+| `options`   | `kind`, `values`                | Each item of `values`, 1 to 4096 items                                  |
+
+The producer records these domains:
+
+| Control                                     | Domain                                                                                             |
+| ------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `mo.ui.slider`                              | `range` from the slider's `start`, `stop`, and `step`, or step `1`                                 |
+| `mo.ui.slider` built from `steps`           | `range` over step indexes from `0` to the last index                                               |
+| `mo.ui.number` with `start`, `stop`, `step` | `range` from those arguments                                                                       |
+| `mo.ui.dropdown`                            | `options` with one-item arrays such as `["north"]`, and `[]` when the dropdown allows no selection |
+| `mo.ui.radio`                               | `options` with the option strings                                                                  |
+| `mo.ui.checkbox`, `mo.ui.switch`            | `options` with `false` and `true`                                                                  |
+
+Other controls carry no `domain`. A control whose domain differs between
+prepared states also carries no `domain`, because no single set describes it.
+
+A browser control change that resolves to no prepared state keeps the current
+display. Compare each domain with the prepared state inputs at the binding's
+path to find control values that have no prepared state.
+
 ## State entries
 
 Each state key is the lowercase SHA-256 over canonical JSON for its `inputs`.
@@ -316,6 +350,7 @@ the lowercase SHA-256 of the exact canonical `index.json` bytes.
 | Canonical `index.json`                          |   16 MiB and 2,000,000 JSON values |
 | Input, output, alias, and producer version name |                    255 UTF-8 bytes |
 | Control binding path                            |                    256 typed steps |
+| Control domain options                          |                       4,096 values |
 | Media type                                      |        1,024 printable ASCII bytes |
 | BlobAsset metadata                              | 256 KiB of canonical portable JSON |
 | Browser BlobAsset MessagePack nesting           |                         256 levels |

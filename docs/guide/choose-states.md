@@ -56,7 +56,7 @@ The quickstart reports this definition. The excerpt omits unrelated fields:
   "sensitive": false,
   "input_dependencies": [],
   "control_paths": { "Hbol-0": [] },
-  "domain": { "debounce": false, "step": null }
+  "domain": { "debounce": false, "start": 1, "step": null, "steps": [], "stop": 30 }
 }
 ```
 
@@ -72,7 +72,7 @@ The inspection fields answer different authoring questions:
 | `kind`               | `ui` for a marimo control or `ordinary` for a Python definition                              |
 | `input_mode`         | `value` replaces the complete frontend value, while `patch` applies an AnyWidget trait patch |
 | `value`              | Current frontend JSON shape when `value_available` is `true`                                 |
-| `domain`             | Available control hints such as options, minimum, maximum, or step                           |
+| `domain`             | Available control hints such as options, start, stop, step, or steps                         |
 | `input_dependencies` | Other input roots that affect this definition                                                |
 | `control_paths`      | Runtime IDs mapped to paths inside a composed control                                        |
 | `portable_input`     | Whether the definition can enter a state vector                                              |

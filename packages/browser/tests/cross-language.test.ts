@@ -63,7 +63,13 @@ describe("Python and TypeScript protocol fixtures", () => {
     expect(notebookExport.state("one").aliases).toEqual(["one"]);
     expect(notebookExport.specSha256).toBe("d".repeat(64));
     expect(notebookExport.defaultState).toBe(notebookExport.state("one"));
-    expect(notebookExport.controlBindings).toEqual({});
+    expect(notebookExport.controlBindings).toEqual({
+      "choice-control": {
+        input: "choice",
+        path: [],
+        domain: { kind: "options", values: ["A", "B"] },
+      },
+    });
     await expect(notebookExport.state("one").output("answer").load(scalarLoader())).resolves.toBe(
       42,
     );
