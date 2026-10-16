@@ -76,10 +76,10 @@ send, in the same form a state row uses:
 }
 ```
 
-| Domain kind | Exact fields                    | Frontend values                                          |
-| ----------- | ------------------------------- | -------------------------------------------------------- |
-| `range`     | `kind`, `start`, `stop`, `step` | `start + k * step` for each `k` that stays within `stop` |
-| `options`   | `kind`, `values`                | Each item of `values`, 1 to 4096 items                   |
+| Domain kind | Exact fields                    | Frontend values                                                         |
+| ----------- | ------------------------------- | ----------------------------------------------------------------------- |
+| `range`     | `kind`, `start`, `stop`, `step` | `start + k * step` for each integer `k >= 0` up to and including `stop` |
+| `options`   | `kind`, `values`                | Each item of `values`, 1 to 4096 items                                  |
 
 The producer records these domains:
 

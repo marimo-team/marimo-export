@@ -173,10 +173,11 @@ class ControlRange:
     def __post_init__(self) -> None:
         for name in ("start", "stop", "step"):
             value = getattr(self, name)
+            # Integers are exact, so portable_json_value checks their range.
             if (
                 not isinstance(value, (int, float))
                 or isinstance(value, bool)
-                or not math.isfinite(value)
+                or (isinstance(value, float) and not math.isfinite(value))
             ):
                 raise ValueError(f"control range {name} must be a finite number")
             object.__setattr__(self, name, portable_json_value(value, f"control range {name}"))

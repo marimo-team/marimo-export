@@ -317,7 +317,7 @@ the complete mutable wire shape.
 - `control_paths` maps projection-scoped control IDs to typed paths inside this
   root input.
 - `domain` contains portable control hints such as options, start, stop, steps,
-  step, or debounce behavior. It describes the observed control and does not
+  step, min, max, or debounce behavior. It describes the observed control and does not
   replace producer-side validation.
 
 ### `CellDescription`

@@ -409,6 +409,8 @@ def test_control_domains_reject_values_no_control_can_send() -> None:
         ControlRange(start=2, stop=1, step=1)
     with pytest.raises(ValueError, match="finite"):
         ControlRange(start=0, stop=float("inf"), step=1)
+    with pytest.raises(ValueError, match="control range stop"):
+        ControlRange(start=0, stop=10**400, step=1)
     with pytest.raises(ValueError, match="1 to 4096"):
         ControlOptions(())
     with pytest.raises(ValueError, match="1 to 4096"):

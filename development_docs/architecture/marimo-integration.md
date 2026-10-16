@@ -220,8 +220,9 @@ scoped input-control IDs with their root ExportSpec input and typed semantic
 path. Repeated projections may use distinct scoped IDs with the same binding.
 State execution adds the control's frontend domain from its component
 arguments through the compat inspection adapter. Bridge merging and export
-assembly keep a domain when every state reports the same one and clear it
-otherwise. Input or path disagreement fails with `control_input_conflict`.
+assembly keep a domain when every state that reports the control reports the
+same one, and clear it when two states disagree. A state that omits the control
+leaves its domain unchanged. Input or path disagreement fails with `control_input_conflict`.
 
 Static replay function namespaces are empty. A form registration named
 `validate` is removed when its component declares `should-validate=false`.

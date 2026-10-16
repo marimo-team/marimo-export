@@ -159,15 +159,16 @@ passes through a wrapper or form element.
 
 `ControlDomain` is the union of `ControlRange` and `ControlOptions`. A binding's
 `domain` lists the frontend values its control can send, in the form a state
-row uses. `ControlRange` covers `start + k * step` for each `k` that stays
-within `stop`. `ControlOptions.values` holds 1 to 4096 values, with arrays
+row uses. `ControlRange` covers `start + k * step` for each integer `k >= 0`
+whose value is at most `stop`. `ControlOptions.values` holds 1 to 4096 values, with arrays
 frozen as tuples to match `ExportState.inputs`. `domain` is `None` when the
 export records no domain for the control. The
 [export format](../export-format#index-schema) maps each marimo control to its
 domain.
 
-List the root slider values that no prepared state covers. `prepared` is the
-`PreparedExport` returned by `prepare()`:
+List the values of root range controls, such as sliders and bounded numbers,
+that no prepared state covers. `prepared` is the `PreparedExport` returned by
+`prepare()`:
 
 ```python
 import math
@@ -179,10 +180,15 @@ for binding in export.control_bindings.values():
     domain = binding.domain
     if binding.path or not isinstance(domain, ControlRange):
         continue
-    count = math.floor((domain.stop - domain.start) / domain.step + 1e-9)
-    reachable = {round(domain.start + k * domain.step, 9) for k in range(count + 1)}
-    covered = {round(state.inputs[binding.input], 9) for state in export.states()}
-    print(binding.input, sorted(reachable - covered))
+    # Compare step indexes, so the tolerance scales with the step.
+    count = math.floor((domain.stop - domain.start) / domain.step + 1e-6)
+    covered = set()
+    for state in export.states():
+        index = (state.inputs[binding.input] - domain.start) / domain.step
+        if abs(index - round(index)) < 1e-6:
+            covered.add(round(index))
+    missing = [domain.start + k * domain.step for k in range(count + 1) if k not in covered]
+    print(binding.input, [float(f"{value:.15g}") for value in missing])
 ```
 
 For `threshold = mo.ui.slider(0, 1, step=0.1)` prepared at `0`, `0.5`, and
