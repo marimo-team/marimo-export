@@ -30,19 +30,42 @@ pydocstyle = { convention = "numpy" }
 select = ["E", "F", "I", "UP", "B", "SIM", "RUF", "TID251"]
 
 [tool.ruff.lint.flake8-tidy-imports.banned-api]
+"marimo._ai" = { msg = "Private marimo imports belong in marimo_export._marimo.compat" }
 "marimo._ast" = { msg = "Private marimo imports belong in marimo_export._marimo.compat" }
 "marimo._cli" = { msg = "Private marimo imports belong in marimo_export._marimo.compat" }
 "marimo._code_mode" = { msg = "Private marimo imports belong in marimo_export._marimo.compat" }
 "marimo._config" = { msg = "Private marimo imports belong in marimo_export._marimo.compat" }
+"marimo._convert" = { msg = "Private marimo imports belong in marimo_export._marimo.compat" }
+"marimo._data" = { msg = "Private marimo imports belong in marimo_export._marimo.compat" }
+"marimo._dependencies" = { msg = "Private marimo imports belong in marimo_export._marimo.compat" }
 "marimo._entrypoints" = { msg = "Private marimo imports belong in marimo_export._marimo.compat" }
+"marimo._environments" = { msg = "Private marimo imports belong in marimo_export._marimo.compat" }
+"marimo._export" = { msg = "Private marimo imports belong in marimo_export._marimo.compat" }
+"marimo._internal" = { msg = "Private marimo imports belong in marimo_export._marimo.compat" }
+"marimo._ipc" = { msg = "Private marimo imports belong in marimo_export._marimo.compat" }
+"marimo._islands" = { msg = "Private marimo imports belong in marimo_export._marimo.compat" }
+"marimo._lint" = { msg = "Private marimo imports belong in marimo_export._marimo.compat" }
+"marimo._loggers" = { msg = "Private marimo imports belong in marimo_export._marimo.compat" }
+"marimo._mcp" = { msg = "Private marimo imports belong in marimo_export._marimo.compat" }
 "marimo._messaging" = { msg = "Private marimo imports belong in marimo_export._marimo.compat" }
+"marimo._metadata" = { msg = "Private marimo imports belong in marimo_export._marimo.compat" }
+"marimo._output" = { msg = "Private marimo imports belong in marimo_export._marimo.compat" }
 "marimo._plugins" = { msg = "Private marimo imports belong in marimo_export._marimo.compat" }
+"marimo._pyodide" = { msg = "Private marimo imports belong in marimo_export._marimo.compat" }
 "marimo._runtime" = { msg = "Private marimo imports belong in marimo_export._marimo.compat" }
 "marimo._save" = { msg = "Private marimo imports belong in marimo_export._marimo.compat" }
 "marimo._schemas" = { msg = "Private marimo imports belong in marimo_export._marimo.compat" }
+"marimo._secrets" = { msg = "Private marimo imports belong in marimo_export._marimo.compat" }
+"marimo._server" = { msg = "Private marimo imports belong in marimo_export._marimo.compat" }
 "marimo._session" = { msg = "Private marimo imports belong in marimo_export._marimo.compat" }
+"marimo._snippets" = { msg = "Private marimo imports belong in marimo_export._marimo.compat" }
+"marimo._sql" = { msg = "Private marimo imports belong in marimo_export._marimo.compat" }
+"marimo._templates" = { msg = "Private marimo imports belong in marimo_export._marimo.compat" }
+"marimo._tracer" = { msg = "Private marimo imports belong in marimo_export._marimo.compat" }
+"marimo._tutorials" = { msg = "Private marimo imports belong in marimo_export._marimo.compat" }
 "marimo._types" = { msg = "Private marimo imports belong in marimo_export._marimo.compat" }
 "marimo._utils" = { msg = "Private marimo imports belong in marimo_export._marimo.compat" }
+"marimo._version" = { msg = "Private marimo imports belong in marimo_export._marimo.compat" }
 "marimo_export._marimo.compat" = { msg = "Construct private adapters in marimo_export._marimo composition roots" }
 
 [tool.ruff.lint.per-file-ignores]
