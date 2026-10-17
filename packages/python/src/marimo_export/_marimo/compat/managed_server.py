@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-from collections.abc import Callable
 from pathlib import Path
 from typing import Any, cast
 
@@ -9,18 +8,6 @@ import msgspec
 
 _MANAGED_SOURCE_ENV = "MARIMO_EXPORT_MANAGED_SOURCE"
 _MANAGED_SNAPSHOT_ENV = "MARIMO_EXPORT_MANAGED_SNAPSHOT"
-
-
-def _cache_enabled_script_config(
-    native: Callable[..., Any],
-    manager: Any,
-    *,
-    hide_secrets: bool = True,
-) -> Any:
-    config = native(manager, hide_secrets=hide_secrets)
-    runtime = dict(config.get("runtime", {}))
-    runtime["cache_cells"] = True
-    return {**config, "runtime": runtime}
 
 
 def _install_runtime_filename() -> None:
@@ -53,24 +40,8 @@ def _install_runtime_filename() -> None:
 
 
 def main() -> None:
-    """Run marimo edit with native cell caching enabled for the owned session."""
+    """Run marimo edit with the authored notebook as the runtime filename."""
 
-    from marimo._config.manager import ScriptConfigManager
-
-    native = ScriptConfigManager.get_config
-
-    def get_config(
-        manager: Any,
-        *,
-        hide_secrets: bool = True,
-    ) -> Any:
-        return _cache_enabled_script_config(
-            native,
-            manager,
-            hide_secrets=hide_secrets,
-        )
-
-    cast(Any, ScriptConfigManager).get_config = get_config
     _install_runtime_filename()
 
     from marimo._cli.cli import main as marimo_main

@@ -26,8 +26,9 @@ adapter.
 marimo's [caching API](https://docs.marimo.io/api/caching/) defines the
 author-facing `mo.cache`, `mo.lru_cache`, and `mo.persistent_cache` APIs plus the
 notebook-wide automatic cell cache. marimo-export integrates with the automatic
-cell-cache path. Managed parents and state-child graphs set `cache_cells`, while
-borrowed parent sessions retain their application-owned policy.
+cell-cache path. Managed parents set `cache_cells` in the script metadata of
+their sibling notebook copy. State-child graphs set it in their runtime
+configuration. Borrowed parent sessions retain their application-owned policy.
 
 The SciPy 2026 article [Content-Addressed Caching for Reactive
 Notebooks](https://dmadisetti.github.io/scipy_proceedings_2026/) supplies the

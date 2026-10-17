@@ -4,12 +4,16 @@ from __future__ import annotations
 
 import math
 import os
+import re
 import tempfile
 import time
-from collections.abc import Mapping
+from collections.abc import Mapping, MutableMapping
 from dataclasses import replace
 from pathlib import Path
-from typing import TYPE_CHECKING, BinaryIO
+from typing import TYPE_CHECKING, Any, BinaryIO
+
+import tomlkit
+from tomlkit.exceptions import TOMLKitError
 
 from marimo_export._diagnostics import record_cleanup_failure
 from marimo_export._notebook import (
@@ -30,6 +34,13 @@ from marimo_export.spec import ExportSpec, StrPath
 
 if TYPE_CHECKING:
     from marimo_export.limits import CaptureLimits
+
+# PEP 723 reference expression as marimo reads it: CRLF lines are accepted and
+# a block closes at its first `# ///` line.
+_SCRIPT_METADATA = re.compile(
+    r"(?m)^# /// (?P<type>[a-zA-Z0-9-]+)\r?$\n"
+    r"(?P<content>(^#(?! ///\r?$)(| .*)\r?$\n)+)^# ///(?=\r?$)"
+)
 
 
 class OwnedNotebook:
@@ -262,6 +273,8 @@ def _copy_notebook(
                     "revision_changed": source_revision != expected_revision,
                 },
             )
+        if notebook.suffix == ".py":
+            source = _cache_enabled_source(source)
         descriptor, filename = tempfile.mkstemp(
             prefix=f".{notebook.stem}.marimo-export-",
             suffix=notebook.suffix,
@@ -304,6 +317,72 @@ def _copy_notebook(
             code="server_start_failed",
             details=details,
         ) from error
+
+
+def _cache_enabled_source(source: bytes) -> bytes:
+    """Set `[tool.marimo.runtime] cache_cells = true` in the PEP 723 script block.
+
+    Script metadata outranks user and project configuration, so marimo enables
+    its cell cache for the managed copy. Other metadata keeps its content.
+    """
+
+    try:
+        script = source.decode("utf-8")
+    except UnicodeDecodeError as error:
+        raise ExecutionError(
+            "the notebook source is not UTF-8 text",
+            code="notebook_invalid",
+        ) from error
+    blocks = [match for match in _SCRIPT_METADATA.finditer(script) if match["type"] == "script"]
+    if len(blocks) > 1:
+        raise ExecutionError(
+            "the notebook has more than one script metadata block",
+            code="notebook_invalid",
+        )
+    block = blocks[0] if blocks else None
+    content = (
+        ""
+        if block is None
+        else "".join(
+            line[2:] if line.startswith("# ") else line[1:]
+            for line in block["content"].splitlines(keepends=True)
+        ).replace("\r\n", "\n")
+    )
+    try:
+        metadata = tomlkit.parse(content)
+        table: MutableMapping[str, Any] = metadata
+        for key in ("tool", "marimo", "runtime"):
+            child = table.setdefault(key, tomlkit.table(is_super_table=key != "runtime"))
+            if not isinstance(child, MutableMapping):
+                raise ExecutionError(
+                    "the notebook script metadata must use tables for tool.marimo.runtime",
+                    code="notebook_invalid",
+                )
+            table = child
+        table["cache_cells"] = True
+        toml = tomlkit.dumps(metadata)
+    except TOMLKitError as error:
+        raise ExecutionError(
+            "the notebook script metadata is not valid TOML",
+            code="notebook_invalid",
+            details={"exception_type": type(error).__name__},
+        ) from error
+    newline = "\r\n" if "\r\n" in script else "\n"
+    header = newline.join(
+        [
+            "# /// script",
+            *(f"# {line}" if line else "#" for line in toml.rstrip("\n").split("\n")),
+            "# ///",
+        ]
+    )
+    if block is not None:
+        updated = script[: block.start()] + header + script[block.end() :]
+    elif script.startswith("#!"):
+        shebang, separator, rest = script.partition("\n")
+        updated = f"{shebang}{separator or newline}{header}{newline}{rest}"
+    else:
+        updated = f"{header}{newline}{script}"
+    return updated.encode("utf-8")
 
 
 def _timeout(value: object) -> float:
