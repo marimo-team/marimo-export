@@ -36,7 +36,13 @@ missed and the preparation reservation is held. The owned path then follows this
 order:
 
 1. Read one revision-stable source byte snapshot.
-2. Create a private sibling notebook copy with the same suffix.
+2. Create a private sibling notebook copy with the same suffix. A Python copy
+   sets `[tool.marimo.runtime] cache_cells = true` in its
+   [PEP 723](https://peps.python.org/pep-0723/) script metadata block, which
+   marimo ranks above user and project configuration. The rest of the block
+   keeps its content. A block with invalid TOML, a non-table
+   `tool.marimo.runtime`, or a second script block fails with
+   `notebook_invalid`.
 3. Recheck the authored source revision and SHA-256.
 4. Start `ManagedServer` with the sibling copy as its executable notebook and the
    authored path as its runtime filename.

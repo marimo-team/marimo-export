@@ -22,6 +22,7 @@ dependencies = [
   "psutil>=5.9; sys_platform != 'android' and sys_platform != 'emscripten'",
   "pydantic>=2.5",
   "PyYAML>=6.0.1",
+  "tomlkit>=0.12",
   "typing-extensions>=4.6",
 ]
 keywords = ["cache", "export", "marimo", "notebook"]

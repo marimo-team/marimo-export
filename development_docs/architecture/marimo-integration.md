@@ -39,7 +39,7 @@ flowchart LR
 | Snapshot file closure      | Virtual and notebook public file inlining               | `compat/file_closure.py`           |
 | AnyWidget capture          | One live widget graph as canonical bytes                | `compat/anywidget.py`              |
 | Transfer                   | Temporary virtual files described by verified receipts  | `compat/transfer.py`               |
-| Managed process            | Server configuration and kernel lifespan                | managed server and kernel adapters |
+| Managed process            | Runtime filename and kernel lifespan                    | managed server and kernel adapters |
 
 `_marimo/capabilities.py` owns cross-kernel records and protocols.
 `_marimo/composition.py` constructs execution adapters.

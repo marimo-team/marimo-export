@@ -10,6 +10,7 @@ import pytest
 from marimo_export import ExportSpec, OutputSpec, build, open_export
 from marimo_export._remote.managed import ManagedServer
 from marimo_export.errors import TransportError
+from marimo_export.producer import open_notebook
 
 pytestmark = pytest.mark.serial
 
@@ -18,7 +19,7 @@ pytestmark = pytest.mark.serial
 
 
 @pytest.mark.timeout(120)
-def test_managed_initial_autorun_restores_native_cell_cache(tmp_path: Path) -> None:
+def test_owned_initial_autorun_restores_native_cell_cache(tmp_path: Path) -> None:
     marker = tmp_path / "autorun-count.txt"
     notebook = tmp_path / "notebook.py"
     notebook.write_text(
@@ -44,17 +45,18 @@ def test_managed_initial_autorun_restores_native_cell_cache(tmp_path: Path) -> N
         encoding="utf-8",
     )
 
+    authored = notebook.read_bytes()
+
     for _ in range(2):
-        server = ManagedServer(notebook, timeout=10)
-        try:
+        with open_notebook(notebook, timeout=10) as producer:
+            server = producer._server
+            assert server is not None
             assert server._process is not None
             assert server._process.stdin is not None
             assert server._process.stdin.closed
-            server.activate()
-        finally:
-            server.stop()
 
     assert marker.read_text(encoding="utf-8") == "1"
+    assert notebook.read_bytes() == authored
 
 
 @pytest.mark.timeout(120)
