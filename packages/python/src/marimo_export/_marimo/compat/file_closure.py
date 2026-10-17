@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import base64
 import html
 import os
 import re
@@ -13,7 +12,7 @@ from typing import TYPE_CHECKING, Any, cast
 import msgspec
 
 from marimo_export._json import JsonValue, canonical_bytes, json_value
-from marimo_export._media_type import media_type_for_filename
+from marimo_export._media_type import data_url
 from marimo_export.errors import OutputError
 
 if TYPE_CHECKING:
@@ -159,13 +158,13 @@ class _ResourceResolver:
         if cached is not None:
             return cached
         if self._is_virtual_file_url(candidate):
-            data_url = self._close_virtual(candidate)
+            closed = self._close_virtual(candidate)
         elif self._public_file_pattern.fullmatch(candidate):
-            data_url = self._close_public(candidate)
+            closed = self._close_public(candidate)
         else:
             return value
-        self._closed[candidate] = data_url
-        return data_url
+        self._closed[candidate] = closed
+        return closed
 
     def close_srcset(self, value: str) -> str:
         candidates: list[str] = []
@@ -238,7 +237,7 @@ class _ResourceResolver:
                 f"virtual file {url!r} changed while it was closed",
                 code="output_execution_failed",
             )
-        return _data_url(filename, data)
+        return data_url(filename, data)
 
     def _close_public(self, url: str) -> str:
         match = self._public_file_pattern.fullmatch(url)
@@ -286,7 +285,7 @@ class _ResourceResolver:
                 f"public file {url!r} changed while it was closed",
                 code="output_execution_failed",
             )
-        return _data_url(resolved.name, data)
+        return data_url(resolved.name, data)
 
 
 class _HTMLResourceCloser(HTMLParser):
@@ -460,12 +459,6 @@ def _close_component_value(value: object, resolver: _ResourceResolver) -> object
     if isinstance(value, dict):
         return {str(key): _close_component_value(item, resolver) for key, item in value.items()}
     return value
-
-
-def _data_url(filename: str, data: bytes) -> str:
-    media_type = media_type_for_filename(filename, default="application/octet-stream")
-    payload = base64.b64encode(data).decode("ascii")
-    return f"data:{media_type};base64,{payload}"
 
 
 def _file_revision(details: os.stat_result) -> tuple[int, ...]:

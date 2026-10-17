@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import base64
 import hashlib
 import json
 import re
@@ -22,12 +21,10 @@ from marimo._plugins.ui._impl.from_anywidget import (
 from marimo._plugins.ui._impl.from_anywidget import get_anywidget_model_id
 from marimo._runtime.virtual_file import read_virtual_file
 from marimo._types.ids import WidgetModelId
-from marimo._utils.code import hash_code
-from marimo._utils.data_uri import build_data_url
 
 from marimo_export._diagnostics import safe_diagnostic
 from marimo_export._json import json_value
-from marimo_export._media_type import media_type_for_filename
+from marimo_export._media_type import data_url
 from marimo_export.errors import OutputError
 
 from .anywidget_assets import portable_css, validate_embedded_esm
@@ -271,16 +268,13 @@ def _canonical_esm_spec(
         source = contents.decode("utf-8")
     except UnicodeDecodeError as error:
         raise OutputError("AnyWidget ESM must contain UTF-8 JavaScript") from error
-    if hash_code(source) != spec.hash:
+    # EsmSpec.from_esm keys the spec by the MD5 hex digest of the UTF-8 source.
+    if hashlib.md5(contents, usedforsecurity=False).hexdigest() != spec.hash:
         raise OutputError("AnyWidget ESM contents do not match marimo's model code hash")
     validate_embedded_esm(source)
     digest = hashlib.sha256(contents).hexdigest()
     url = f"./@file/{len(contents)}-anywidget-{digest}.js"
-    media_type = media_type_for_filename(url, default="text/javascript")
-    files[url.removeprefix(".")] = build_data_url(
-        media_type,
-        base64.b64encode(contents),
-    )
+    files[url.removeprefix(".")] = data_url(url, contents)
     return EsmSpec(url=url, hash=spec.hash)
 
 

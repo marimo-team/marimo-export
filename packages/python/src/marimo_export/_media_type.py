@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import mimetypes
 import re
 from pathlib import PurePath
@@ -50,6 +51,13 @@ def media_type_for_filename(filename: str, *, default: str) -> str:
     if known is not None:
         return known
     return mimetypes.guess_type(filename)[0] or default
+
+
+def data_url(filename: str, data: bytes) -> str:
+    """Return a base64 data URL typed by the filename."""
+
+    media_type = media_type_for_filename(filename, default="application/octet-stream")
+    return f"data:{media_type};base64,{base64.b64encode(data).decode('ascii')}"
 
 
 def validate_media_type(value: object, label: str) -> str:
@@ -131,6 +139,7 @@ __all__ = [
     "MAX_BLOB_METADATA_JSON_BYTES",
     "MAX_MEDIA_TYPE_ASCII_BYTES",
     "MEDIA_TYPE_SCHEMA_PATTERN",
+    "data_url",
     "media_type_for_filename",
     "validate_media_type",
 ]

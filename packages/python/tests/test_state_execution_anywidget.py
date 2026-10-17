@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import base64
+import hashlib
 import json
 from pathlib import Path
 
@@ -187,6 +189,54 @@ if __name__ == "__main__":
 
     assert b'"buffer_paths":[["binary"]]' in payload
     assert b'"buffers":["AQID"]' in payload
+
+
+def test_anywidget_bundle_embeds_inline_esm_under_its_marimo_hash(tmp_path: Path) -> None:
+    esm = "// café\nexport default { render() {} }"
+    notebook = tmp_path / "notebook.py"
+    notebook.write_text(
+        f"""
+import marimo
+
+app = marimo.App()
+
+
+@app.cell
+def _():
+    import anywidget
+    import marimo as mo
+
+    class Widget(anywidget.AnyWidget):
+        _esm = {esm!r}
+
+    widget = mo.ui.anywidget(Widget())
+    return (widget,)
+
+
+if __name__ == "__main__":
+    app.run()
+""".lstrip(),
+        encoding="utf-8",
+    )
+    result = build(
+        notebook,
+        spec=ExportSpec(
+            default_state="baseline",
+            states={"baseline": {}},
+            outputs={"widget": OutputSpec.export("widget", anywidget_exporter.bundle())},
+        ),
+        output=tmp_path / "export",
+        timeout=30,
+    )
+    payload = json.loads(
+        open_export(result.path).state("baseline").output("widget").blob_asset().data
+    )
+    esm_spec = payload["modelNotifications"][0]["message"]["esm_spec"]
+
+    assert esm_spec["hash"] == hashlib.md5(esm.encode("utf-8"), usedforsecurity=False).hexdigest()
+    assert payload["files"][esm_spec["url"].removeprefix(".")] == (
+        f"data:text/javascript;base64,{base64.b64encode(esm.encode('utf-8')).decode('ascii')}"
+    )
 
 
 def test_anywidget_bundle_refreshes_live_model_state_across_owned_captures(

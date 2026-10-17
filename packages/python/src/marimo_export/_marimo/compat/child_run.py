@@ -47,7 +47,7 @@ class StopProvenance:
         self._graph = None if graph is None else weakref.ref(graph)
 
     def record_cell(self, cell: Any, context: Any, result: Any) -> None:
-        from marimo._runtime.control_flow import MarimoStopError
+        from marimo import MarimoStopError
 
         self.remember_graph(context.graph)
         cell_id = cell.cell_id
@@ -59,7 +59,7 @@ class StopProvenance:
             descendants.discard(cell_id)
 
     def record_finish(self, context: Any) -> None:
-        from marimo._runtime.control_flow import MarimoStopError
+        from marimo import MarimoStopError
 
         self.remember_graph(context.graph)
         cancellation_roots = set(context.cancelled_cells)

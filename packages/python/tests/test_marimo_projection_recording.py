@@ -174,9 +174,8 @@ def test_attached_marimo_exposes_live_capture_capabilities() -> None:
 
 
 def test_stop_provenance_tracks_exact_descendants_and_latest_result() -> None:
-    from marimo._runtime.control_flow import MarimoStopError
+    from marimo import MarimoStopError
     from marimo._runtime.runner.hook_context import CancelledCells
-    from marimo._types.ids import CellId_t
 
     provenance = StopProvenance()
     stopped = MarimoStopError("waiting")
