@@ -320,11 +320,8 @@ def materialize_complete_cell(
 ) -> bytes:
     """Materialize one terminal cell snapshot from the current child recording."""
 
-    from marimo._types.ids import CellId_t
-    from marimo._utils.lists import as_list
-
     recording = _recording()
-    runtime_id = CellId_t(recording.cell_ids.get(cell_id, cell_id))
+    runtime_id = recording.cell_ids.get(cell_id, cell_id)
     notification = recording.view.cell_notifications.get(runtime_id)
     if notification is None:
         raise OutputError(
@@ -345,7 +342,9 @@ def materialize_complete_cell(
     terminal_output = (
         None if cell is not None and _ends_with_semicolon(cell.code) else notification.output
     )
-    console = tuple(as_list(notification.console))
+    console = notification.console
+    if not isinstance(console, list):
+        console = [] if console is None else [console]
     outputs = tuple(item for item in (terminal_output, *console) if item is not None)
     from marimo_export._marimo.compat.output_data import cell_output_value
     from marimo_export._marimo.compat.replay import resources

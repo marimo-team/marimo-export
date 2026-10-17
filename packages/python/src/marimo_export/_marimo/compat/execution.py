@@ -147,7 +147,6 @@ def _plan_state_run(
     plan: ExecutionPlan,
 ) -> _StateRunPlan:
     from marimo._runtime.dataflow import prune_cells_for_overrides, transitive_closure
-    from marimo._types.ids import CellId_t
 
     graph = child.runner._kernel.graph
     overrides = {plan.state_name: state.fingerprint}
@@ -164,8 +163,8 @@ def _plan_state_run(
         for cell_id in execution_order
         if cell_id not in output_cells and not child.internal.graph.is_disabled(cell_id)
     )
-    complete_cell_owners: set[CellId_t] = set()
-    output_owners: dict[str, CellId_t] = {}
+    complete_cell_owners: set[Any] = set()
+    output_owners: dict[str, Any] = {}
     for output, planned_output in plan.planned_outputs.items():
         owner_cell_id = planned_output.owner_cell_id
         runtime_id = child.cell_ids.get(owner_cell_id) if owner_cell_id is not None else None
@@ -174,10 +173,9 @@ def _plan_state_run(
                 f"output {output!r} has no authored owner cell",
                 code="output_execution_failed",
             )
-        runtime_cell_id = CellId_t(runtime_id)
-        output_owners[output] = runtime_cell_id
+        output_owners[output] = runtime_id
         if isinstance(planned_output.source, CellSource):
-            complete_cell_owners.add(runtime_cell_id)
+            complete_cell_owners.add(runtime_id)
     ui_input_cells = frozenset(
         cell_id for name in state.ui_updates for cell_id in graph.get_defining_cells(name)
     )
