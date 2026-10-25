@@ -91,6 +91,7 @@ def require_cache_capabilities() -> None:
         "encode._contiguous_tensor_bytes": tensor_buffer,
         "from_item": getattr(lazy_module, "from_item", None),
         "flush_active_caches": flush_active_caches,
+        "hash_module": getattr(hash_module, "hash_module", None),
     }
     drift = [
         name

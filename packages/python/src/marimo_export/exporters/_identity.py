@@ -1,4 +1,4 @@
-"""Freeze custom exporter implementations for one kernel process."""
+"""Freeze custom exporter implementations for one attached kernel."""
 
 from __future__ import annotations
 
@@ -11,23 +11,18 @@ import threading
 import weakref
 from _thread import LockType
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from types import ModuleType
-from typing import Any
+from types import CodeType, ModuleType
+from typing import TYPE_CHECKING, Any
 
 from marimo_export._json import JsonObject, JsonValue, canonical_bytes
 from marimo_export.errors import OutputError
 
+if TYPE_CHECKING:
+    from marimo_export._marimo.capabilities import ExporterRuntime
+
 ExporterKey = tuple[str, tuple[str, ...]]
-
-
-@dataclass(frozen=True, slots=True)
-class ExporterIdentity:
-    """Cache identity and frozen source modules for one exporter selection."""
-
-    cache: str
-    modules: tuple[str, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -44,16 +39,13 @@ class _ExporterSnapshot:
 
 @dataclass(slots=True)
 class _IdentityState:
-    lock: LockType
-    modules: dict[str, _ModuleSnapshot]
-    exporters: dict[ExporterKey, _ExporterSnapshot]
-
-
-_GLOBAL_STATE = _IdentityState(threading.Lock(), {}, {})
-_STATE_ATTRIBUTE = "_marimo_export_exporter_identity_state"
+    lock: LockType = field(default_factory=threading.Lock)
+    modules: dict[str, _ModuleSnapshot] = field(default_factory=dict)
+    exporters: dict[ExporterKey, _ExporterSnapshot] = field(default_factory=dict)
 
 
 def freeze_exporter_identity(
+    runtime: ExporterRuntime,
     *,
     output: str,
     key: ExporterKey,
@@ -62,11 +54,11 @@ def freeze_exporter_identity(
     modules: Mapping[str, ModuleType],
     distributions: tuple[str, ...],
     package_distributions: Mapping[str, list[str]],
-) -> ExporterIdentity:
+) -> str:
     """Freeze loaded sources and return their deterministic cache identity."""
 
     current = {name: _module_record(name, dependency) for name, dependency in modules.items()}
-    state = _identity_state()
+    state = runtime.kernel_state(_IdentityState)
     with state.lock:
         for name, dependency in modules.items():
             previous = state.modules.get(name)
@@ -83,7 +75,7 @@ def freeze_exporter_identity(
             "name": key[0],
             "dependencies": list(key[1]),
             "modules": {name: current[name] for name in sorted(current)},
-            "callable": _callable_identity(value),
+            "callable": _callable_identity(runtime, value),
         }
         versions = _distribution_versions(
             modules,
@@ -97,10 +89,11 @@ def freeze_exporter_identity(
         if previous_exporter is not None and previous_exporter.module() is not module:
             raise _source_changed(output, key[0], module.__name__)
         state.exporters[key] = _ExporterSnapshot(module=weakref.ref(module), cache=cache)
-    return ExporterIdentity(cache=cache, modules=tuple(sorted(modules)))
+    return cache
 
 
 def verify_exporter_sources(
+    runtime: ExporterRuntime,
     *,
     output: str,
     key: ExporterKey,
@@ -108,7 +101,7 @@ def verify_exporter_sources(
 ) -> None:
     """Reject source edits made after the exporter was frozen."""
 
-    state = _identity_state()
+    state = runtime.kernel_state(_IdentityState)
     current = {name: _module_record(name, module) for name, module in modules.items()}
     with state.lock:
         for name, module in modules.items():
@@ -121,9 +114,7 @@ def verify_exporter_sources(
                 raise _source_changed(output, key[0], name)
 
 
-def module_origin(module: ModuleType) -> Path | None:
-    """Return the resolved file backing a loaded module."""
-
+def _module_origin(module: ModuleType) -> Path | None:
     origin = getattr(getattr(module, "__spec__", None), "origin", None)
     if not isinstance(origin, str) or origin in {"built-in", "frozen"}:
         origin = getattr(module, "__file__", None)
@@ -137,7 +128,7 @@ def module_origin(module: ModuleType) -> Path | None:
 
 
 def _module_record(name: str, module: ModuleType) -> JsonObject:
-    origin = module_origin(module)
+    origin = _module_origin(module)
     if origin is None:
         return {"name": name, "kind": "namespace"}
     return {
@@ -167,15 +158,13 @@ def _revision(value: Any) -> tuple[int, int, int, int, int]:
     )
 
 
-def _callable_identity(value: Any) -> JsonObject:
+def _callable_identity(runtime: ExporterRuntime, value: Any) -> JsonObject:
     result: JsonObject = {
         "type": f"{type(value).__module__}.{type(value).__qualname__}",
     }
     code = _callable_code(value)
     if code is not None:
-        from marimo._save.hash import hash_module
-
-        result["code_sha256"] = hash_module(code).hex()
+        result["code_sha256"] = runtime.code_sha256(code)
     defaults = getattr(value, "__defaults__", None)
     if defaults:
         result["defaults"] = _exporter_value_identity(defaults, "exporter defaults")
@@ -191,7 +180,7 @@ def _callable_identity(value: Any) -> JsonObject:
     return result
 
 
-def _callable_code(value: Any) -> Any | None:
+def _callable_code(value: Any) -> CodeType | None:
     if inspect.ismethod(value):
         value = value.__func__
     if inspect.isfunction(value):
@@ -290,25 +279,4 @@ def _source_changed(output: str, exporter: str, module: str) -> OutputError:
     )
 
 
-def _identity_state() -> _IdentityState:
-    try:
-        from marimo._runtime.context import get_context
-
-        owner = get_context().app_kernel_runner_registry
-    except Exception:
-        return _GLOBAL_STATE
-    state = getattr(owner, _STATE_ATTRIBUTE, None)
-    if isinstance(state, _IdentityState):
-        return state
-    created = _IdentityState(threading.Lock(), {}, {})
-    setattr(owner, _STATE_ATTRIBUTE, created)
-    return created
-
-
-__all__ = [
-    "ExporterIdentity",
-    "ExporterKey",
-    "freeze_exporter_identity",
-    "module_origin",
-    "verify_exporter_sources",
-]
+__all__ = ["ExporterKey", "freeze_exporter_identity", "verify_exporter_sources"]

@@ -2,7 +2,7 @@
 
 from marimo_export._marimo.compat.cache.barrier import flush_native_caches
 from marimo_export._marimo.compat.execution import execute_state
-from marimo_export._marimo.compat.exporters import prepared_exporters
+from marimo_export._marimo.compat.exporters import code_sha256, kernel_globals, kernel_state
 from marimo_export._marimo.compat.inspection import (
     declared_ui_values,
     inspect_baseline,
@@ -31,7 +31,9 @@ class PrivateKernelRuntime:
     inspect_baseline = staticmethod(inspect_baseline)
     observe_inputs = staticmethod(observe_inputs)
     declared_ui_values = staticmethod(declared_ui_values)
-    prepared_exporters = staticmethod(prepared_exporters)
+    kernel_globals = staticmethod(kernel_globals)
+    kernel_state = staticmethod(kernel_state)
+    code_sha256 = staticmethod(code_sha256)
     flush_native_caches = staticmethod(flush_native_caches)
     execute_state = staticmethod(execute_state)
 

@@ -1,27 +1,31 @@
 from __future__ import annotations
 
 import asyncio
+import gc
+import hashlib
 import importlib
 import sys
 import threading
+import weakref
+from collections.abc import Mapping
 from pathlib import Path
-from types import ModuleType, SimpleNamespace
-from typing import cast
+from types import CodeType, ModuleType, SimpleNamespace
+from typing import TypeVar, cast
 
-import marimo_export._marimo.compat.exporters as exporter_compat
 import pytest
 from marimo_export import OutputSpec
 from marimo_export._execution import ExecutionPlan, NormalizedState, PlannedOutput
 from marimo_export._execution.plan import exporter_token_name
-from marimo_export._marimo.compat.exporters import (
-    invoke_prepared_exporter,
-    preflight_exporters,
-    prepared_exporters,
-)
+from marimo_export._marimo.compat.exporters import kernel_state
 from marimo_export._marimo.compat.inspection import _notebook_cell
+from marimo_export._marimo.compat.kernel import PrivateKernelRuntime
 from marimo_export._notebook import cells_document_sha256
 from marimo_export.errors import OutputError
 from marimo_export.exporters import importable
+from marimo_export.exporters._prepare import invoke_prepared_exporter, prepared_exporters
+
+_RUNTIME = PrivateKernelRuntime()
+_T = TypeVar("_T")
 
 
 def _custom_exporter_plan(
@@ -136,7 +140,7 @@ def test_prepared_exporters_keeps_normal_imports_stable_during_background_activi
     def import_in_background() -> None:
         imported.append(importlib.import_module(background_name))
 
-    with prepared_exporters(_custom_exporter_plan(module_name)):
+    with prepared_exporters(_RUNTIME, _custom_exporter_plan(module_name)):
         original_module = sys.modules[module_name]
         original_package = sys.modules[package_name]
         worker = threading.Thread(target=import_in_background)
@@ -146,7 +150,7 @@ def test_prepared_exporters_keeps_normal_imports_stable_during_background_activi
         assert sys.modules[package_name] is original_package
         assert sys.modules[module_name] is original_module
 
-    with prepared_exporters(_custom_exporter_plan(module_name)):
+    with prepared_exporters(_RUNTIME, _custom_exporter_plan(module_name)):
         assert sys.modules[package_name] is original_package
         assert sys.modules[module_name] is original_module
 
@@ -170,7 +174,7 @@ def test_prepared_exporter_registry_clears_after_cancellation(
 
     with (
         pytest.raises(KeyboardInterrupt, match="cancelled"),
-        prepared_exporters(plan),
+        prepared_exporters(_RUNTIME, plan),
     ):
         assert invoke_prepared_exporter(token, 2, {}) == 3
         raise KeyboardInterrupt("cancelled")
@@ -201,7 +205,7 @@ async def test_prepared_exporter_registries_are_capture_scoped(
 
     async def invoke(position: int) -> tuple[str, int]:
         nonlocal entered
-        with prepared_exporters(plans[position]):
+        with prepared_exporters(_RUNTIME, plans[position]):
             entered += 1
             if entered == 2:
                 ready.set()
@@ -239,7 +243,9 @@ def test_prepared_exporters_preserves_preloaded_declared_modules(
     monkeypatch.syspath_prepend(str(tmp_path))
     installed = importlib.import_module(installed_name)
 
-    with prepared_exporters(_custom_exporter_plan(exporter_name, dependencies=(installed_name,))):
+    with prepared_exporters(
+        _RUNTIME, _custom_exporter_plan(exporter_name, dependencies=(installed_name,))
+    ):
         assert sys.modules[installed_name] is installed
 
     assert sys.modules[installed_name] is installed
@@ -264,7 +270,7 @@ def test_prepared_exporters_requires_restart_after_declared_source_changes(
     monkeypatch.syspath_prepend(str(tmp_path))
     plan = _custom_exporter_plan(exporter_name, dependencies=(config_name,))
 
-    with prepared_exporters(plan) as first_identities:
+    with prepared_exporters(_RUNTIME, plan) as first_identities:
         original_exporter = sys.modules[exporter_name]
         original_package = sys.modules[package_name]
         original_config = sys.modules[config_name]
@@ -273,7 +279,7 @@ def test_prepared_exporters_requires_restart_after_declared_source_changes(
         assert sys.modules[config_name] is original_config
 
     config_source.write_text("CONFIG = 'other'\n", encoding="utf-8")
-    with pytest.raises(OutputError) as raised, prepared_exporters(plan):
+    with pytest.raises(OutputError) as raised, prepared_exporters(_RUNTIME, plan):
         pass
 
     assert raised.value.code == "exporter_source_changed"
@@ -288,7 +294,7 @@ def test_prepared_exporters_requires_restart_after_declared_source_changes(
     assert sys.modules[exporter_name] is original_exporter
 
 
-def test_exporter_preflight_reports_normal_import_failure(
+def test_prepared_exporters_reports_normal_import_failure(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -304,7 +310,7 @@ def test_exporter_preflight_reports_normal_import_failure(
 
     with (
         pytest.raises(OutputError) as raised,
-        prepared_exporters(_custom_exporter_plan(exporter_name)),
+        prepared_exporters(_RUNTIME, _custom_exporter_plan(exporter_name)),
     ):
         pass
 
@@ -313,7 +319,7 @@ def test_exporter_preflight_reports_normal_import_failure(
     assert exporter_name not in sys.modules
 
 
-def test_prepared_exporters_uses_code_loaded_before_first_preflight(
+def test_prepared_exporters_uses_code_loaded_before_first_preparation(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -331,9 +337,9 @@ def test_prepared_exporters_uses_code_loaded_before_first_preflight(
     )
     plan = _custom_exporter_plan(module_name)
 
-    with prepared_exporters(plan) as first:
+    with prepared_exporters(_RUNTIME, plan) as first:
         assert loaded.encode(None) == ("loaded-v1", None)
-    with prepared_exporters(plan) as second:
+    with prepared_exporters(_RUNTIME, plan) as second:
         assert sys.modules[module_name] is loaded
 
     assert first == second
@@ -350,14 +356,17 @@ def test_exporter_identity_failures_are_output_errors(
     )
     monkeypatch.syspath_prepend(str(tmp_path))
 
-    def fail(*args: object, **kwargs: object) -> object:
-        del args, kwargs
-        raise ValueError("dependency graph failed")
+    class FailingDigestRuntime(PrivateKernelRuntime):
+        @staticmethod
+        def code_sha256(code: CodeType) -> str:
+            del code
+            raise ValueError("code digest failed")
 
-    monkeypatch.setattr(exporter_compat, "freeze_exporter_identity", fail)
-
-    with pytest.raises(OutputError) as raised:
-        preflight_exporters(_custom_exporter_plan(module_name))
+    with (
+        pytest.raises(OutputError) as raised,
+        prepared_exporters(FailingDigestRuntime(), _custom_exporter_plan(module_name)),
+    ):
+        pass
 
     assert raised.value.code == "exporter_identity_failed"
     assert raised.value.details == {
@@ -367,7 +376,7 @@ def test_exporter_identity_failures_are_output_errors(
     }
 
 
-def test_exporter_preflight_rejects_non_callable_symbols(
+def test_prepared_exporters_rejects_non_callable_symbols(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -375,8 +384,11 @@ def test_exporter_preflight_rejects_non_callable_symbols(
     (tmp_path / f"{module_name}.py").write_text("encode = 42\n", encoding="utf-8")
     monkeypatch.syspath_prepend(str(tmp_path))
 
-    with pytest.raises(OutputError) as raised:
-        preflight_exporters(_custom_exporter_plan(module_name))
+    with (
+        pytest.raises(OutputError) as raised,
+        prepared_exporters(_RUNTIME, _custom_exporter_plan(module_name)),
+    ):
+        pass
 
     assert raised.value.code == "exporter_invalid"
     assert str(raised.value) == (
@@ -384,7 +396,7 @@ def test_exporter_preflight_rejects_non_callable_symbols(
     )
 
 
-def test_exporter_preflight_keys_identity_by_declared_modules(
+def test_prepared_exporters_keys_identity_by_declared_modules(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -399,11 +411,112 @@ def test_exporter_preflight_keys_identity_by_declared_modules(
     (tmp_path / f"{second_dependency}.py").write_text("value = 2\n", encoding="utf-8")
     monkeypatch.syspath_prepend(str(tmp_path))
 
-    first = preflight_exporters(
-        _custom_exporter_plan(module_name, dependencies=(first_dependency,))
-    )["summary"]
-    second = preflight_exporters(
-        _custom_exporter_plan(module_name, dependencies=(second_dependency,))
-    )["summary"]
+    with (
+        prepared_exporters(
+            _RUNTIME, _custom_exporter_plan(module_name, dependencies=(first_dependency,))
+        ) as first,
+        prepared_exporters(
+            _RUNTIME, _custom_exporter_plan(module_name, dependencies=(second_dependency,))
+        ) as second,
+    ):
+        assert first["summary"].identity != second["summary"].identity
 
-    assert first != second
+
+# The callable digest covers CPython bytecode, which changes between minor versions.
+_PINNED_EXPORTER_IDENTITIES = {
+    (3, 10): "3cc5ef17f292120e88968990127b02798e93ade32bcd9a2753be56cecff3e2c4",
+    (3, 11): "5a568436b05764c4f9f8639744ef35541a65f1d4f8e2ef26621fc33f4ba1cef5",
+    (3, 12): "5a568436b05764c4f9f8639744ef35541a65f1d4f8e2ef26621fc33f4ba1cef5",
+    (3, 13): "a15da161edbb04093d6d113f0e5c36954a7fbcbc940c452ad59793815e090a5f",
+    (3, 14): "08a2deb60425103fe6208dde16121ec29a29db502d4428d26a7db5e2ad3688bf",
+}
+
+
+def test_exporter_identity_is_pinned_for_a_fixture_exporter(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    helper_name = "marimo_export_test_pinned_helper"
+    exporter_name = "marimo_export_test_pinned_exporter"
+    (tmp_path / f"{helper_name}.py").write_bytes(b"SCALE = 2\n")
+    (tmp_path / f"{exporter_name}.py").write_bytes(
+        f"from {helper_name} import SCALE\n\n"
+        "def encode(value, offset=1, *, scale=SCALE):\n"
+        "    return {'value': value + offset, 'scale': scale}\n\n"
+        "encode.label = 'pinned'\n".encode()
+    )
+    monkeypatch.syspath_prepend(str(tmp_path))
+
+    with prepared_exporters(
+        _RUNTIME, _custom_exporter_plan(exporter_name, dependencies=(helper_name,))
+    ) as prepared:
+        identity = prepared["summary"].identity
+
+    expected = _PINNED_EXPORTER_IDENTITIES.get(sys.version_info[:2])
+    if expected is None:
+        pytest.fail(f"pin the fixture exporter identity for Python {sys.version_info[:2]}")
+    assert identity == expected
+
+
+class _KernelRuntime:
+    def __init__(self, namespace: Mapping[str, object]) -> None:
+        self.namespace = namespace
+        self.states: dict[type, object] = {}
+
+    def kernel_globals(self) -> Mapping[str, object]:
+        return self.namespace
+
+    def kernel_state(self, state_type: type[_T]) -> _T:
+        state = self.states.setdefault(state_type, state_type())
+        assert isinstance(state, state_type)
+        return state
+
+    def code_sha256(self, code: CodeType) -> str:
+        return hashlib.sha256(code.co_code).hexdigest()
+
+
+def test_prepared_exporters_resolve_modules_from_the_kernel_namespace() -> None:
+    module_name = "marimo_export_test_kernel_namespace_exporter"
+    module = ModuleType(module_name)
+    exec("def encode(value):\n    return value * 2\n", module.__dict__)
+    assert module_name not in sys.modules
+    plan = _custom_exporter_plan(module_name)
+    exporter = plan.planned_outputs["summary"].exporter
+    assert exporter is not None
+
+    with prepared_exporters(_KernelRuntime({"alias": module}), plan) as prepared:
+        assert invoke_prepared_exporter(exporter_token_name(exporter), 21, {}) == 42
+
+    assert len(prepared["summary"].identity) == 64
+    assert module_name not in sys.modules
+
+
+def test_kernel_state_is_scoped_to_one_kernel(monkeypatch: pytest.MonkeyPatch) -> None:
+    import marimo._runtime.context as runtime_context
+
+    class Registry:
+        pass
+
+    class State:
+        pass
+
+    kernel_registry = Registry()
+    context: object = SimpleNamespace(app_kernel_runner_registry=kernel_registry)
+    monkeypatch.setattr(runtime_context, "safe_get_context", lambda: context)
+    state = kernel_state(State)
+
+    # marimo gives an embedded app context its parent kernel's registry.
+    context = SimpleNamespace(app_kernel_runner_registry=kernel_registry)
+    assert kernel_state(State) is state
+
+    context = SimpleNamespace(app_kernel_runner_registry=Registry())
+    assert kernel_state(State) is not state
+
+    context = None
+    assert kernel_state(State) is kernel_state(State)
+    assert kernel_state(State) is not state
+
+    released = weakref.ref(state)
+    del state, kernel_registry
+    gc.collect()
+    assert released() is None

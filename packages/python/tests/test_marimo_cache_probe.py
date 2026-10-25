@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any, cast
 
+import marimo._save.hash as hash_module
 import marimo._save.loaders.lazy as lazy_module
 import marimo._save.stubs as stubs_module
 import marimo._save.stubs.lazy_stub as schema_module
@@ -118,6 +119,16 @@ def test_receipt_signature_error_identity_drift_is_classified(
 
     assert raised.value.code == "marimo_incompatible"
     assert "CacheSignatureError" in _symbols(raised.value)
+
+
+def test_exporter_code_hasher_drift_is_classified(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(hash_module, "hash_module", lambda code: b"")
+
+    with pytest.raises(CompatibilityError) as raised:
+        require_cache_capabilities()
+
+    assert raised.value.code == "marimo_incompatible"
+    assert "hash_module" in _symbols(raised.value)
 
 
 def _symbols(error: CompatibilityError) -> list[str]:

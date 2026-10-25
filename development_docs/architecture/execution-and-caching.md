@@ -74,6 +74,8 @@ The Python package pins its supported marimo release in
 
 - the pinned Marimo version and release commit
 - source SHA-256 digests for the private cache functions adapted by the package
+  and for `hash_module`, which digests exporter callable code for exporter
+  identities
 
 `_marimo/compat/cache/probe.py` checks the installed distribution version,
 required cryptography support, private function sources, lazy-loader registry,
