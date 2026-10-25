@@ -13,6 +13,7 @@ import inspect
 import os
 import re
 import sys
+import threading
 import warnings
 from collections.abc import Iterable, Iterator, Mapping
 from dataclasses import dataclass
@@ -71,6 +72,12 @@ class _Scope:
     revisions: tuple[tuple[Path, _Revision], ...]
 
 
+# `importlib.invalidate_caches()` deletes entries from `sys.path_importer_cache`
+# without a lock, so two identities computed on different threads can raise
+# `KeyError` for the same missing path entry.
+_IMPORT_CACHE_LOCK = threading.Lock()
+
+
 def environment_identity(source: Path | None) -> str:
     """Hash the distributions and local modules that one notebook can import.
 
@@ -81,11 +88,12 @@ def environment_identity(source: Path | None) -> str:
     """
 
     try:
-        importlib.invalidate_caches()
-        scope = _scope(source)
-        importlib.invalidate_caches()
-        if not _unchanged(scope):
-            raise RuntimeError("runtime dependencies changed while identity was computed")
+        with _IMPORT_CACHE_LOCK:
+            importlib.invalidate_caches()
+            scope = _scope(source)
+            importlib.invalidate_caches()
+            if not _unchanged(scope):
+                raise RuntimeError("runtime dependencies changed while identity was computed")
     except OSError as error:
         raise RuntimeError("local runtime sources could not be inspected") from error
     return sha256_bytes(
