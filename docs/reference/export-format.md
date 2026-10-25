@@ -358,6 +358,10 @@ the lowercase SHA-256 of the exact canonical `index.json` bytes.
 | Python producer or local-reader asset           |                             64 MiB |
 | Python export closure                           |     512 MiB including `index.json` |
 
+Every JSON value and every object key in `index.json` counts toward its
+2,000,000-value limit. Python producers fail with `export_invalid` before they
+write a larger index, and Python and browser readers reject one.
+
 The [browser errors and limits](browser/errors-and-limits) reference lists
 browser defaults and caller overrides.
 

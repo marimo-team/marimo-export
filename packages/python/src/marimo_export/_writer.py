@@ -181,6 +181,7 @@ def _materialize_export(
         raise ValueError("materialization destination must be an absolute path")
     if not destination.is_dir() or any(destination.iterdir()):
         raise ValueError("materialization destination must be an empty directory")
+    index_bytes = index.to_bytes()
     asset_directory = destination / "assets"
     asset_directory.mkdir(mode=0o700)
     total = 0
@@ -205,7 +206,6 @@ def _materialize_export(
         _write_file(destination / relative, payload)
         total += len(payload)
 
-    index_bytes = index.to_bytes()
     _write_file(destination / "index.json", index_bytes)
     _sync_directory(asset_directory)
     _sync_directory(destination)

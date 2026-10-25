@@ -6,9 +6,10 @@ from typing import cast
 import pytest
 from marimo_export import ExportSpec, OutputSpec
 from marimo_export import client as client_module
-from marimo_export._remote import SessionInfo
+from marimo_export._remote import BridgeError, SessionInfo
 from marimo_export.client import Client, Session
-from marimo_export.errors import SessionError
+from marimo_export.errors import NotebookExportError, SessionError
+from marimo_export.limits import CaptureLimits
 
 
 def _spec() -> ExportSpec:
@@ -38,9 +39,27 @@ class _Transport:
         raise AssertionError((session_id, url, maximum_bytes))
 
 
-def _client(monkeypatch: pytest.MonkeyPatch, sessions: tuple[SessionInfo, ...]) -> Client:
+class _OverLimitIndexTransport(_Transport):
+    def invoke(
+        self,
+        session_id: str,
+        operation: str,
+        params: Mapping[str, object],
+    ) -> dict[str, object]:
+        raise BridgeError(
+            "export_invalid",
+            "export index holds 3 JSON values, more than the 2-value limit",
+            details={"index_values": 3, "max_index_values": 2},
+        )
+
+
+def _client(
+    monkeypatch: pytest.MonkeyPatch,
+    sessions: tuple[SessionInfo, ...],
+    transport: type[_Transport] = _Transport,
+) -> Client:
     monkeypatch.setattr(
-        client_module, "HttpKernelTransport", lambda *_args, **_kwargs: _Transport(sessions)
+        client_module, "HttpKernelTransport", lambda *_args, **_kwargs: transport(sessions)
     )
     return Client("http://127.0.0.1:2718")
 
@@ -145,3 +164,18 @@ def test_root_capture_delegates_to_shared_service(monkeypatch: pytest.MonkeyPatc
     kwargs = cast(dict[str, object], seen[1])
     assert kwargs["session"] == "session-1"
     assert "output" not in kwargs
+
+
+def test_session_capture_raises_export_invalid_for_an_index_over_the_kernel_limit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    sessions = (SessionInfo(id="session", filename="notebook.py", path="/notebook.py"),)
+
+    with (
+        _client(monkeypatch, sessions, _OverLimitIndexTransport) as client,
+        pytest.raises(NotebookExportError) as raised,
+    ):
+        client.session()._capture(_spec(), CaptureLimits())
+
+    assert raised.value.code == "export_invalid"
+    assert raised.value.details == {"index_values": 3, "max_index_values": 2}

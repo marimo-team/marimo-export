@@ -10,10 +10,12 @@ import {
   scalarLoader,
 } from "../src/index.js";
 import { canonicalJson } from "../src/schema.js";
-import type { MutableJsonValue } from "./fixture.js";
-import { exportFixture, mutableObject } from "./fixture.js";
+import { isRecordValue } from "../src/value-types.js";
+import type { MutableJsonObject, MutableJsonValue } from "./fixture.js";
+import { exportFixture, mutableArray, mutableObject } from "./fixture.js";
 import canonicalCases from "../../../tests/fixtures/canonical-json/cases.json" with { type: "json" };
 import httpModuleUrlCases from "../../../tests/fixtures/export/http-module-urls.json" with { type: "json" };
+import indexLimits from "../../../tests/fixtures/export/index-limits.json" with { type: "json" };
 import inputNameCases from "../../../tests/fixtures/export/input-names.json" with { type: "json" };
 import malformedProjectionRecords from "../../../tests/fixtures/export/malformed-projection-records.json" with { type: "json" };
 import projectionRecords from "../../../tests/fixtures/export/projection-records.json" with { type: "json" };
@@ -78,6 +80,22 @@ describe("Python and TypeScript protocol fixtures", () => {
     );
   });
 
+  test("opens an index at the shared value limit and rejects one more value", async () => {
+    const atLimit = await paddedExportFixture(indexLimits.max_index_values);
+    const overLimit = await paddedExportFixture(indexLimits.max_index_values + 1);
+
+    const opened = await openExport("https://example.test/stocks", { fetch: atLimit.fetch });
+    expect(opened.states()).toHaveLength(2);
+    await expect(
+      openExport("https://example.test/stocks", { fetch: overLimit.fetch }),
+    ).rejects.toMatchObject({
+      code: "export_invalid",
+      cause: expect.objectContaining({
+        message: expect.stringContaining("maximum value count"),
+      }),
+    });
+  });
+
   test("decodes the Python projection record fixtures", () => {
     const output = parseMarimoOutputSnapshot(
       new TextEncoder().encode(canonicalJson(projectionRecords.output)),
@@ -131,6 +149,60 @@ describe("Python and TypeScript protocol fixtures", () => {
     },
   );
 });
+
+const PAD_OUTPUTS = 11;
+const PAD_VALUES = 99_000;
+
+// Fill JSON outputs with zeros until the index holds exactly `values` JSON
+// values. One JSON output value stays below the 100,000-value portable limit.
+async function paddedExportFixture(values: number) {
+  return exportFixture({
+    indexTransform(index) {
+      const outputs = mutableArray(index.outputs, "index.outputs");
+      const pads: MutableJsonValue[][] = [];
+      for (let position = 0; position < PAD_OUTPUTS; position += 1) {
+        outputs.push(`pad_${position}`);
+      }
+      for (const state of Object.values(mutableObject(index.states, "index.states"))) {
+        const stateOutputs = mutableObject(mutableObject(state, "state").outputs, "outputs");
+        for (let position = 0; position < PAD_OUTPUTS; position += 1) {
+          const pad: MutableJsonValue[] = [];
+          pads.push(pad);
+          stateOutputs[`pad_${position}`] = jsonDescriptor(pad);
+        }
+      }
+      let missing = values - jsonValueCount(index);
+      for (const pad of pads) {
+        const added = Math.min(missing, PAD_VALUES);
+        pad.push(...Array.from({ length: added }, () => 0));
+        missing -= added;
+      }
+      if (missing !== 0) throw new Error("Padded fixture cannot reach the requested value count.");
+    },
+  });
+}
+
+function jsonDescriptor(value: MutableJsonValue): MutableJsonObject {
+  return {
+    codec: "marimo.json.v1",
+    media_type: "application/vnd.marimo.json.v1+json",
+    provenance: { python_type: "builtins.list" },
+    value,
+  };
+}
+
+function jsonValueCount(value: MutableJsonValue): number {
+  if (Array.isArray(value)) {
+    return value.reduce<number>((count, item) => count + jsonValueCount(item), 1);
+  }
+  if (isRecordValue(value)) {
+    return Object.values(value).reduce<number>(
+      (count, item) => count + 1 + jsonValueCount(item),
+      1,
+    );
+  }
+  return 1;
+}
 
 interface ProjectionMutation {
   readonly name: string;

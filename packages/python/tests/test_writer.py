@@ -5,9 +5,10 @@ from pathlib import Path
 
 import marimo_export._directory as directory_module
 import marimo_export._writer as writer_module
+import marimo_export.index as index_module
 import pytest
 from marimo_export import open_export
-from marimo_export._json import sha256_bytes
+from marimo_export._json import JsonValue, sha256_bytes
 from marimo_export._writer import materialize_export, write_export
 from marimo_export.descriptors import (
     AssetRef,
@@ -79,6 +80,116 @@ def test_writer_stages_verifies_and_commits_a_export(tmp_path: Path) -> None:
     assert result.warnings == ()
     assert open_export(target).verify().assets == 1
     assert next(target.joinpath("assets").iterdir()).read_bytes() == next(iter(assets.values()))
+
+
+def _wide_index(*, states: int, outputs: int) -> ExportIndex:
+    names = tuple(f"output_{position}" for position in range(outputs))
+    entries: dict[str, StateEntry] = {}
+    for position in range(states):
+        inputs = {"state": position}
+        entries[state_fingerprint(inputs)] = StateEntry(
+            inputs=inputs,
+            outputs={
+                name: ScalarDescriptor(
+                    value=position,
+                    provenance=Provenance(python_type="builtins.int"),
+                )
+                for name in names
+            },
+        )
+    return ExportIndex(
+        spec_sha256="d" * 64,
+        default_state=state_fingerprint({"state": 0}),
+        notebook=NotebookProvenance(filename="notebook.py", document_sha256="a" * 64),
+        producer=ProducerProvenance(
+            marimo="0.23.15",
+            marimo_export="1.0.0",
+            implementation_sha256="c" * 64,
+        ),
+        inputs=("state",),
+        control_bindings={},
+        outputs=names,
+        aliases={},
+        states=entries,
+    )
+
+
+def _json_values(value: JsonValue) -> int:
+    if isinstance(value, dict):
+        return 1 + sum(1 + _json_values(item) for item in value.values())
+    if isinstance(value, list):
+        return 1 + sum(_json_values(item) for item in value)
+    return 1
+
+
+def test_writer_and_reader_accept_an_index_of_120_states_and_100_outputs(
+    tmp_path: Path,
+) -> None:
+    index = _wide_index(states=120, outputs=100)
+    target = tmp_path / "export"
+    assert _json_values(index.to_value()) > 100_000
+
+    write_export(index, {}, target, replace=False)
+
+    opened = open_export(target)
+    assert len(opened.states()) == 120
+    assert len(opened.output_names) == 100
+    assert opened.resolve({"state": 119}).output("output_99").scalar() == 119
+
+
+def test_writer_accepts_an_index_at_the_value_limit_and_rejects_one_more_value(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    index = _wide_index(states=2, outputs=2)
+    values = _json_values(index.to_value())
+    monkeypatch.setattr(index_module, "_MAX_INDEX_VALUES", values)
+    write_export(index, {}, tmp_path / "at-limit", replace=False)
+
+    monkeypatch.setattr(index_module, "_MAX_INDEX_VALUES", values - 1)
+    target = tmp_path / "over-limit"
+    with pytest.raises(NotebookExportError) as raised:
+        write_export(index, {}, target, replace=False)
+
+    assert raised.value.code == "export_invalid"
+    assert raised.value.details == {"index_values": values, "max_index_values": values - 1}
+    assert not target.exists()
+
+
+def test_writer_rejects_an_index_over_the_byte_limit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    index = _wide_index(states=2, outputs=2)
+    size = len(index.to_bytes())
+    monkeypatch.setattr(index_module, "_MAX_INDEX_BYTES", size - 1)
+    target = tmp_path / "export"
+
+    with pytest.raises(NotebookExportError) as raised:
+        write_export(index, {}, target, replace=False)
+
+    assert raised.value.code == "export_invalid"
+    assert raised.value.details == {"index_bytes": size, "max_index_bytes": size - 1}
+    assert not target.exists()
+
+
+def test_reader_rejects_an_index_over_the_value_limit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    index = _wide_index(states=2, outputs=2)
+    target = tmp_path / "export"
+    write_export(index, {}, target, replace=False)
+    monkeypatch.setattr(
+        index_module,
+        "_MAX_INDEX_VALUES",
+        _json_values(index.to_value()) - 1,
+    )
+
+    with pytest.raises(NotebookExportError) as raised:
+        open_export(target)
+
+    assert raised.value.code == "export_invalid"
 
 
 def test_writer_materializes_into_an_owned_empty_directory(tmp_path: Path) -> None:

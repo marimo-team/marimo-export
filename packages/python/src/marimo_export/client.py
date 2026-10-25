@@ -28,6 +28,7 @@ from marimo_export.errors import (
     ExecutionError,
     IntegrityError,
     SessionError,
+    TransportError,
 )
 from marimo_export.index import ExportIndex
 from marimo_export.inspection import SessionDescription
@@ -186,8 +187,12 @@ class Session:
                 },
                 "capture response",
             )
-            index = ExportIndex.from_value(response.get("index"))
-            transfer = _transfer(transfer_value, index, limits)
+            index_text = response.get("index")
+            if not isinstance(index_text, str):
+                raise TransportError("capture response index must be JSON text")
+            index_bytes = index_text.encode("utf-8")
+            index = ExportIndex.from_bytes(index_bytes)
+            transfer = _transfer(transfer_value, index, len(index_bytes), limits)
             assets: dict[tuple[OutputCodec, str], bytes] = {}
             for item in transfer.assets:
                 data = self._client._transport.download_asset(

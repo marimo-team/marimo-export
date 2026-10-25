@@ -22,6 +22,8 @@ import type {
 import { isNotebookExportError, NotebookExportError } from "./types.js";
 import { isJsonBoolean, isJsonNumber, isJsonString, isRecordValue } from "./value-types.js";
 
+export const INDEX_MAX_VALUES = 2_000_000;
+
 const encoder = new TextEncoder();
 const SHA256 = /^[0-9a-f]{64}$/u;
 const BIGINT = /^(?:0|-[1-9][0-9]*|[1-9][0-9]*)$/u;
@@ -59,7 +61,7 @@ export interface ParsedExportIndex {
 
 export function parseExportIndex<Input>(input: Input): ParsedExportIndex {
   try {
-    const root = strictRecord(portableJsonObject(input, "export"), "export", [
+    const root = strictRecord(portableJsonObject(input, "export", INDEX_MAX_VALUES), "export", [
       "aliases",
       "control_bindings",
       "default_state",

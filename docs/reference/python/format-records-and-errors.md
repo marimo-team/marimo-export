@@ -129,10 +129,14 @@ index.assets() -> tuple[tuple[OutputCodec, AssetRef], ...]
 index.descriptor_entries() -> Iterator[tuple[str, str, OutputDescriptor]]
 ```
 
-`to_bytes()` returns canonical JSON and rejects an index larger than 16 MiB.
-`from_value()` validates the exact object shape. `from_bytes()` also requires
-exact canonical bytes and limits the parsed value count. Format failures raise
-`NotebookExportError` with `export_invalid` or `export_noncanonical`.
+`to_bytes()` returns canonical JSON. An index larger than 16 MiB or 2,000,000
+JSON values raises `NotebookExportError` with `export_invalid`. Its `details`
+report `index_bytes` and `max_index_bytes`, or `index_values` and
+`max_index_values`. Every JSON value and every object key counts once.
+`from_value()` validates the exact object shape within the same value limit.
+`from_bytes()` applies that value limit while it parses and also requires exact
+canonical bytes. Format failures raise `NotebookExportError` with
+`export_invalid` or `export_noncanonical`.
 
 `assets()` deduplicates by `(codec, SHA-256)` and rejects conflicting descriptor
 facts for a reused identity. `descriptor_entries()` yields state fingerprint,

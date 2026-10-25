@@ -24,15 +24,16 @@ console.log(Object.isFrozen(inputs)); // true
 ```
 
 ```ts
-portableJsonValue(input: unknown, path?: string): JsonValue
-portableJsonObject(input: unknown, path?: string): JsonObject
+portableJsonValue(input: unknown, path?: string, maximumValues?: number): JsonValue
+portableJsonObject(input: unknown, path?: string, maximumValues?: number): JsonObject
 ```
 
 Both functions return detached values. Arrays and objects are recursively frozen.
 The conversion enforces these cross-language rules:
 
 - nesting depth is at most `256`
-- one conversion contains at most `100000` values, including object keys
+- one conversion contains at most `maximumValues` values, including object keys,
+  and `maximumValues` defaults to `100000`
 - numbers are finite and integers stay within JavaScript's safe range
 - strings and object keys contain Unicode scalar values
 - arrays are dense
