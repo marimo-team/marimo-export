@@ -6,6 +6,7 @@ import type {
   OutputCodec,
   OutputLoader,
 } from "./types.js";
+import { unavailableOutputError } from "./loader.js";
 import { isNotebookExportError, NotebookExportError } from "./types.js";
 import { isCallableValue } from "./value-types.js";
 
@@ -31,6 +32,9 @@ export async function loadOutputs<const Loaders extends Readonly<Record<string, 
       output: state.output(name),
       loader,
     }));
+    for (const { output } of outputs) {
+      if (output.unavailable !== null) throw unavailableOutputError(output);
+    }
     const results = await Promise.allSettled(
       outputs.map(async ({ name, output, loader }) => {
         try {

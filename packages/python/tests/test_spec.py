@@ -280,6 +280,64 @@ def test_read_only_requires_a_rendered_output_or_cell_source() -> None:
     assert raised.value.code == "spec_output_invalid"
 
 
+def test_optional_outputs_normalize_to_one_wire_contract() -> None:
+    value = _value()
+    value["outputs"]["chart"]["optional"] = True
+    value["outputs"]["summary"]["optional"] = False
+    spec = ExportSpec.from_value(value)
+    programmatic = ExportSpec(
+        default_state="baseline",
+        states=cast(dict[str, Any], value["states"]),
+        outputs={
+            "prices": OutputSpec.export("df", parquet.table(filename="prices.parquet")),
+            "chart": OutputSpec.export("symbols_chart", altair.vegalite(), optional=True),
+            "summary": OutputSpec.json("summary"),
+            "table": OutputSpec.native("table"),
+        },
+    )
+
+    assert spec == programmatic
+    assert spec.outputs["chart"].optional is True
+    assert spec.outputs["summary"].optional is False
+    outputs = cast(dict[str, Any], spec.to_value()["outputs"])
+    assert outputs["chart"]["optional"] is True
+    assert "optional" not in outputs["summary"]
+    assert ExportSpec.from_value(_value()).to_value() != spec.to_value()
+    Draft202012Validator(ExportSpec.json_schema()).validate(value)
+
+    value["outputs"]["chart"]["optional"] = "yes"
+    with pytest.raises(SpecError):
+        ExportSpec.from_value(value)
+    with pytest.raises(TypeError, match="optional must be a bool"):
+        OutputSpec(source=OutputSpec.json("summary").source, optional=cast(Any, 1))
+
+
+def test_read_only_and_optional_compose_in_the_wire_value_and_plan_identity() -> None:
+    def spec(output: OutputSpec) -> ExportSpec:
+        return ExportSpec(default_state="baseline", states={"baseline": {}}, outputs={"t": output})
+
+    both = spec(OutputSpec.output("table", read_only=True, optional=True))
+    variants = {
+        "plain": spec(OutputSpec.output("table")),
+        "read_only": spec(OutputSpec.output("table", read_only=True)),
+        "optional": spec(OutputSpec.output("table", optional=True)),
+        "both": both,
+    }
+
+    assert cast(dict[str, Any], both.to_value()["outputs"])["t"] == {
+        "source": {"kind": "output", "selector": "table"},
+        "read_only": True,
+        "optional": True,
+    }
+    assert ExportSpec.from_value(both.to_value()) == both
+    assert len({output_plan_sha256(value) for value in variants.values()}) == 4
+    explicit = variants["plain"].to_value()
+    cast(dict[str, Any], explicit["outputs"])["t"].update(read_only=False, optional=False)
+    assert output_plan_sha256(ExportSpec.from_value(explicit)) == output_plan_sha256(
+        variants["plain"]
+    )
+
+
 def test_programmatic_constructor_rejects_ambiguous_shorthands() -> None:
     with pytest.raises(TypeError):
         cast(Any, ExportSpec)(

@@ -12,7 +12,10 @@ export interface PreparedStateChange {
 }
 
 export interface PreparedStatePort {
-  /** Load every required output, then publish the complete state atomically. */
+  /**
+   * Load every required output, then publish the complete state atomically.
+   * Stage a placeholder for an optional output whose `unavailable` is set.
+   */
   apply(change: PreparedStateChange, signal: AbortSignal): Promise<void>;
   /** Restore the last committed state after a rejected application request. */
   restore?(publication: PreparedPublication): void | Promise<void>;

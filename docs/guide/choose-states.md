@@ -7,7 +7,9 @@ description: Inspect a notebook, declare sparse states, and publish the represen
 
 An `ExportSpec` selects a finite state-output relation from one notebook. Each
 named state becomes a complete input assignment, and each output publishes one
-selected notebook result in every state.
+selected notebook result in every state. An
+[optional output](../reference/export-spec#optional-outputs) can record an
+unavailable output in a state that has no value for it.
 
 The deterministic quickstart declares two states, one JSON output, and one
 rendered report output:

@@ -4,6 +4,7 @@ import math
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
+from types import MappingProxyType
 from typing import Literal
 
 from marimo_export._format import (
@@ -174,7 +175,11 @@ class ExportWarning:
 
 @dataclass(frozen=True, slots=True)
 class ExportResult:
-    """Verified write facts and preparation work for one notebook export."""
+    """Verified write facts and preparation work for one notebook export.
+
+    ``unavailable`` maps each optional output that has no value in some states
+    to the number of those states.
+    """
 
     path: Path
     identity: str
@@ -189,6 +194,7 @@ class ExportResult:
     verification: VerificationResult
     warnings: tuple[ExportWarning, ...] = ()
     elapsed_seconds: float = 0.0
+    unavailable: Mapping[str, int] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if not isinstance(self.path, Path) or not self.path.is_absolute():
@@ -231,6 +237,25 @@ class ExportResult:
         if any(not isinstance(warning, ExportWarning) for warning in self.warnings):
             raise TypeError("warnings must contain ExportWarning values")
         _validate_seconds(self.elapsed_seconds, "elapsed_seconds")
+        if not isinstance(self.unavailable, Mapping) or any(
+            name not in self.plan.outputs
+            or not isinstance(count, int)
+            or isinstance(count, bool)
+            or not 1 <= count <= len(self.plan.states)
+            for name, count in self.unavailable.items()
+        ):
+            raise ValueError("export result unavailable must count states per planned output")
+        object.__setattr__(
+            self,
+            "unavailable",
+            MappingProxyType(
+                {
+                    name: self.unavailable[name]
+                    for name in self.plan.outputs
+                    if name in self.unavailable
+                }
+            ),
+        )
 
     def to_dict(self) -> JsonObject:
         return {
@@ -247,6 +272,7 @@ class ExportResult:
             "verification": self.verification.to_dict(),
             "warnings": [warning.to_dict() for warning in self.warnings],
             "elapsed_seconds": self.elapsed_seconds,
+            "unavailable": dict(self.unavailable),
         }
 
 

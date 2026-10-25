@@ -2,6 +2,7 @@ import { encode } from "@msgpack/msgpack";
 import type { JsonPrimitive } from "@marimo-team/portable-json";
 
 import { canonicalJson } from "../src/schema.js";
+import type { AvailableExportOutput, ExportOutput } from "../src/types.js";
 
 const encoder = new TextEncoder();
 
@@ -27,6 +28,11 @@ export interface ExportFixtureOptions {
   readonly basePath?: string;
   readonly inputs?: readonly [string, string];
   readonly indexTransform?: (index: MutableJsonObject) => void;
+}
+
+export function availableOutput(output: ExportOutput): AvailableExportOutput {
+  if (output.unavailable !== null) throw new Error(`Output ${output.name} is unavailable.`);
+  return output;
 }
 
 export async function exportFixture(options: ExportFixtureOptions = {}): Promise<Fixture> {

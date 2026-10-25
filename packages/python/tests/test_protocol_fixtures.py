@@ -5,12 +5,14 @@ import json
 from pathlib import Path
 from typing import Literal, cast
 
+import marimo_export.index as index_module
 import pytest
-from marimo_export._json import JsonObject, canonical_bytes, json_value
+from marimo_export._json import JsonObject, canonical_bytes, json_value, json_value_count
 from marimo_export._snapshot import validate_snapshot
-from marimo_export.errors import IntegrityError, NotebookExportError
+from marimo_export.descriptors import UnavailableOutput
+from marimo_export.errors import IntegrityError, NotebookExportError, OutputUnavailableError
 from marimo_export.index import ControlBinding, ControlOptions, ExportIndex
-from marimo_export.reader import _validate_snapshot
+from marimo_export.reader import _validate_snapshot, open_export
 from marimo_export.wire import state_fingerprint
 
 FIXTURES = Path(__file__).resolve().parents[3] / "tests" / "fixtures"
@@ -83,6 +85,80 @@ def test_scalar_export_fixture_matches_python_v1_reader() -> None:
             domain=ControlOptions(("A", "B")),
         )
     }
+
+
+def test_unavailable_output_fixture_reads_as_a_typed_unavailable_entry(tmp_path: Path) -> None:
+    (tmp_path / "index.json").write_bytes(
+        (FIXTURES / "export" / "unavailable-output-index.json").read_bytes().removesuffix(b"\n")
+    )
+    export = open_export(tmp_path)
+    available = export.state("one").output("label")
+    unavailable = export.state("two").output("label")
+
+    assert available.unavailable is None
+    assert available.json() == {"choice": "A", "label": "First"}
+    assert unavailable.unavailable == UnavailableOutput(
+        reason="representation_unavailable",
+        message="builtins.str has no representation as image/png.",
+    )
+    assert export.state("two").output("answer").scalar() == 9007199254740992
+    with pytest.raises(OutputUnavailableError) as raised:
+        unavailable.json()
+    assert raised.value.code == "output_unavailable"
+    assert raised.value.details == {
+        "output": "label",
+        "fingerprint": export.state("two").fingerprint,
+        "reason": "representation_unavailable",
+    }
+    with pytest.raises(OutputUnavailableError):
+        _ = unavailable.media_type
+    assert export.verify().assets == 0
+
+
+def test_unavailable_outputs_count_against_the_index_value_limit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    data = (FIXTURES / "export" / "unavailable-output-index.json").read_bytes().removesuffix(b"\n")
+    index = ExportIndex.from_bytes(data)
+    values = json_value_count(index.to_value())
+
+    monkeypatch.setattr(index_module, "_MAX_INDEX_VALUES", values)
+    assert index.to_bytes() == data
+    monkeypatch.setattr(index_module, "_MAX_INDEX_VALUES", values - 1)
+    with pytest.raises(NotebookExportError) as raised:
+        index.to_bytes()
+    assert raised.value.details == {"index_values": values, "max_index_values": values - 1}
+    with pytest.raises(NotebookExportError):
+        ExportIndex.from_bytes(data)
+
+
+@pytest.mark.parametrize(
+    "case",
+    json.loads(
+        (FIXTURES / "export" / "unavailable-output-entries.json").read_text(encoding="utf-8")
+    ),
+    ids=lambda case: case["name"],
+)
+def test_unavailable_output_entries_match_the_durable_policy(case: JsonObject) -> None:
+    wire = cast(
+        JsonObject,
+        json.loads(
+            (FIXTURES / "export" / "unavailable-output-index.json").read_text(encoding="utf-8")
+        ),
+    )
+    states = cast(JsonObject, wire["states"])
+    aliases = cast(JsonObject, wire["aliases"])
+    outputs = cast(JsonObject, cast(JsonObject, states[cast(str, aliases["two"])])["outputs"])
+    outputs["label"] = case["entry"]
+
+    if case["valid"]:
+        index = ExportIndex.from_value(wire)
+        entry = index.states[cast(str, aliases["two"])].outputs["label"]
+        assert entry.to_value() == case["entry"]
+        return
+    with pytest.raises(NotebookExportError) as raised:
+        ExportIndex.from_value(wire)
+    assert raised.value.code == "export_invalid"
 
 
 def test_projection_records_match_python_snapshot_contracts() -> None:

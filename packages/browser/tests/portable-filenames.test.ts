@@ -2,7 +2,7 @@ import { describe, expect, test } from "vite-plus/test";
 
 import { openExport } from "../src/index.js";
 import type { MutableJsonObject } from "./fixture.js";
-import { exportFixture, mutableObject } from "./fixture.js";
+import { availableOutput, exportFixture, mutableObject } from "./fixture.js";
 import filenameFixture from "../../../tests/fixtures/export/portable-filenames.json" with { type: "json" };
 
 type FilenameSurface = "blob" | "notebook";
@@ -29,7 +29,7 @@ describe("portable filename policy", () => {
       if (surface === "notebook") {
         expect(exported.notebook.filename).toBe(value);
       } else {
-        expect(exported.state("alpha").output("view").descriptor).toMatchObject({
+        expect(availableOutput(exported.state("alpha").output("view")).descriptor).toMatchObject({
           filename: value,
         });
       }

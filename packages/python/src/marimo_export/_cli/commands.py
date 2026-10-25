@@ -14,6 +14,7 @@ import marimo_export.inspection as inspection
 import marimo_export.sessions as sessions
 from marimo_export.progress import ProgressEvent
 from marimo_export.repository import PruneResult, RepositoryStatus
+from marimo_export.result import ExportResult
 
 from .arguments import package_version
 from .errors import EXIT_PLANNING
@@ -26,6 +27,16 @@ class CommandResult:
     warnings: tuple[str, ...] = ()
     ok: bool = True
     exit_code: int = 0
+
+
+def _result_warnings(result: ExportResult) -> tuple[str, ...]:
+    states = len(result.plan.states)
+    unavailable = tuple(
+        f"optional output {name!r} is unavailable in every state"
+        for name, count in result.unavailable.items()
+        if count == states
+    )
+    return (*(warning.message for warning in result.warnings), *unavailable)
 
 
 def run(
@@ -56,11 +67,7 @@ def run(
                 replace=arguments.replace,
                 progress=progress,
             )
-        return CommandResult(
-            "build",
-            result.to_dict(),
-            tuple(warning.message for warning in result.warnings),
-        )
+        return CommandResult("build", result.to_dict(), _result_warnings(result))
 
     if arguments.command == "capture":
         delivery.preflight_export_destination(
@@ -83,11 +90,7 @@ def run(
                 replace=arguments.replace,
                 progress=progress,
             )
-        return CommandResult(
-            "capture",
-            result.to_dict(),
-            tuple(warning.message for warning in result.warnings),
-        )
+        return CommandResult("capture", result.to_dict(), _result_warnings(result))
 
     if arguments.command == "inspect":
         return _inspect(arguments)

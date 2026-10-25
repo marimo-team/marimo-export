@@ -12,6 +12,7 @@ import pytest
 from export_integration_support import build
 from marimo_export import ExportSpec, OutputSpec, open_export
 from marimo_export._json import decode_json_object
+from marimo_export.descriptors import UnavailableOutput
 from marimo_export.errors import OutputError
 
 
@@ -403,6 +404,70 @@ def test_read_only_outputs_record_unavailable_table_functions(tmp_path: Path) ->
     for warning in warnings.values():
         assert warning.code == "output_read_only"
         assert "search" in cast(list[str], warning.details["functions"])
+
+
+def test_an_optional_read_only_table_is_unavailable_where_the_notebook_omits_it(
+    tmp_path: Path,
+) -> None:
+    notebook = tmp_path / "notebook.py"
+    notebook.write_text(
+        """
+import marimo
+
+app = marimo.App()
+
+
+@app.cell
+def _():
+    import marimo as mo
+    import polars as pl
+
+    rows = 3
+    return mo, pl, rows
+
+
+@app.cell
+def _(mo, pl, rows):
+    frame = pl.DataFrame({"city": [f"City {index}" for index in range(rows)]})
+    report = {"table": mo.ui.table(frame, page_size=10)} if rows else {}
+    return (report,)
+
+
+if __name__ == "__main__":
+    app.run()
+""".lstrip(),
+        encoding="utf-8",
+    )
+    table = OutputSpec.output('report["table"]', read_only=True, optional=True)
+
+    # The empty state's fingerprint sorts first, so the read-only warning scan
+    # meets the unavailable output before the table snapshot.
+    result = build(
+        notebook,
+        spec=ExportSpec(
+            default_state="cities",
+            states={"cities": {}, "empty": {"rows": 0}},
+            outputs={"table": table},
+        ),
+        output=tmp_path / "export",
+        timeout=30,
+    )
+    export = open_export(result.path)
+    snapshot = cast(
+        dict[str, Any],
+        decode_json_object(export.state("cities").output("table").asset_bytes(), "snapshot"),
+    )
+
+    assert "City 2" in html.unescape(snapshot["output"]["data"])
+    assert export.state("empty").output("table").unavailable == UnavailableOutput(
+        reason="value_missing",
+        message="selector 'report[\"table\"]' is unavailable: item 'table' is unavailable",
+    )
+    assert result.unavailable == {"table": 1}
+    [warning] = result.warnings
+    assert warning.code == "output_read_only"
+    assert warning.details["output"] == "table"
+    assert "search" in cast(list[str], warning.details["functions"])
 
 
 @pytest.mark.parametrize("selector", ["table", "frame"])

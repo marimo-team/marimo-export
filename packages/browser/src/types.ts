@@ -16,6 +16,7 @@ const NOTEBOOK_EXPORT_ERROR_CODES = [
   "loader_unavailable",
   "output_not_found",
   "output_representation_changed",
+  "output_unavailable",
   "export_invalid",
   "export_noncanonical",
   "read_failed",
@@ -200,6 +201,21 @@ export type OutputDescriptor =
   | ArrowDescriptor
   | BlobAssetDescriptor;
 
+export type UnavailableReason = "representation_unavailable" | "stopped" | "value_missing";
+
+/**
+ * Why an optional output has no value in one state.
+ *
+ * `representation_unavailable` means the exporter found none of its accepted
+ * representations, `value_missing` means the selector names an attribute or
+ * item the value lacks, and `stopped` means a cell in the output's dependency
+ * closure called `mo.stop`.
+ */
+export interface UnavailableOutput {
+  readonly reason: UnavailableReason;
+  readonly message: string;
+}
+
 export interface MediaType {
   readonly raw: string;
   readonly essence: string;
@@ -314,14 +330,26 @@ export interface ExportState {
   resolve(patch: JsonObject): ExportState;
 }
 
-export interface ExportOutput {
+interface ExportOutputBase {
   readonly state: ExportState;
   readonly name: string;
+  /** Load the output. Rejects with `output_unavailable` when the output has no value. */
+  load<C extends OutputCodec, T>(loader: OutputLoader<C, T>, options?: LoadOptions): Promise<T>;
+}
+
+export interface AvailableExportOutput extends ExportOutputBase {
+  readonly unavailable: null;
   readonly codec: OutputCodec;
   readonly mediaType: MediaType;
   readonly descriptor: OutputDescriptor;
-  load<C extends OutputCodec, T>(loader: OutputLoader<C, T>, options?: LoadOptions): Promise<T>;
 }
+
+export interface UnavailableExportOutput extends ExportOutputBase {
+  readonly unavailable: UnavailableOutput;
+}
+
+/** One output in one state. Check `unavailable` before reading representation facts. */
+export type ExportOutput = AvailableExportOutput | UnavailableExportOutput;
 
 export interface MountedView {
   dispose(): void | Promise<void>;

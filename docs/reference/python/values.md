@@ -73,7 +73,10 @@ supports. Raises `RepresentationError`, a `ValueError`, when the value supports
 none of them. The message names the value's type, each display method that
 raised, and the package to install when a renderer is missing. Its `reasons`
 attribute holds those sentences without the type, for a host that names the
-value its own way.
+value its own way. When a missing renderer package, such as vl-convert-python,
+left an accepted type out of reach, the error is `RepresentationDependencyError`.
+When a display method or renderer raised, it is `RepresentationRenderError`.
+Both are `RepresentationError` subclasses.
 
 Figures and charts use their library's renderer. A Vega-Lite specification is a
 mapping whose `$schema` is a `https://vega.github.io/schema/vega-lite/` URL.

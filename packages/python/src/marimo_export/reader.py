@@ -34,14 +34,17 @@ from marimo_export.descriptors import (
     MarimoOutputDescriptor,
     NumpyDescriptor,
     OutputDescriptor,
+    OutputEntry,
     ScalarDescriptor,
     ScalarValue,
+    UnavailableOutput,
     asset_path,
 )
 from marimo_export.errors import (
     ExportUnavailableError,
     IntegrityError,
     NotebookExportError,
+    OutputUnavailableError,
     StateUnavailableError,
 )
 from marimo_export.index import (
@@ -309,69 +312,90 @@ class ExportState(_Immutable):
 
 
 class ExportOutput(_Immutable):
-    __slots__ = ("_descriptor", "_state", "name")
+    __slots__ = ("_entry", "_state", "name")
 
     def __init__(
         self,
         state: ExportState,
         name: str,
-        descriptor: OutputDescriptor,
+        entry: OutputEntry,
     ) -> None:
         self._state = state
         self.name = name
-        self._descriptor = descriptor
+        self._entry = entry
 
     @property
     def state(self) -> ExportState:
         return self._state
 
     @property
+    def unavailable(self) -> UnavailableOutput | None:
+        """Return why an optional output has no value in this state, or None."""
+
+        return self._entry if isinstance(self._entry, UnavailableOutput) else None
+
+    @property
     def codec(self) -> str:
-        return self._descriptor.codec
+        return self.descriptor.codec
 
     @property
     def media_type(self) -> str:
-        return self._descriptor.media_type
+        return self.descriptor.media_type
 
     @property
     def descriptor(self) -> OutputDescriptor:
-        return self._descriptor
+        """Return the output descriptor. Raises ``OutputUnavailableError`` when unavailable."""
+
+        if isinstance(self._entry, UnavailableOutput):
+            raise OutputUnavailableError(
+                f"output {self.name!r} is unavailable in this state: {self._entry.message}",
+                details={
+                    "output": self.name,
+                    "fingerprint": self._state.fingerprint,
+                    "reason": self._entry.reason,
+                },
+            )
+        return self._entry
 
     def scalar(self) -> ScalarValue:
-        if not isinstance(self._descriptor, ScalarDescriptor):
+        descriptor = self.descriptor
+        if not isinstance(descriptor, ScalarDescriptor):
             raise NotebookExportError(
                 f"output {self.name!r} does not use the scalar codec",
                 code="codec_invalid",
             )
-        return self._descriptor.value
+        return descriptor.value
 
     def json(self) -> FrozenJsonValue:
         """Return one immutable JSON projection value."""
 
-        if not isinstance(self._descriptor, JsonDescriptor):
+        descriptor = self.descriptor
+        if not isinstance(descriptor, JsonDescriptor):
             raise NotebookExportError(
                 f"output {self.name!r} does not use the JSON codec",
                 code="codec_invalid",
             )
-        return cast(FrozenJsonValue, self._descriptor.value)
+        return cast(FrozenJsonValue, descriptor.value)
 
     def asset_bytes(self) -> bytes:
-        if isinstance(self._descriptor, (ScalarDescriptor, JsonDescriptor)):
+        descriptor = self.descriptor
+        if isinstance(descriptor, (ScalarDescriptor, JsonDescriptor)):
             raise NotebookExportError(
                 f"output {self.name!r} has no asset bytes",
                 code="codec_invalid",
             )
-        data = _read_asset(self.state.notebook_export.path, self._descriptor)
-        _validate_asset(self._descriptor, data)
+        data = _read_asset(self.state.notebook_export.path, descriptor)
+        _validate_asset(descriptor, data)
         return data
 
     def blob_asset(self) -> BlobAsset:
-        if not isinstance(self._descriptor, BlobAssetDescriptor):
+        descriptor = self.descriptor
+        if not isinstance(descriptor, BlobAssetDescriptor):
             raise NotebookExportError(
                 f"output {self.name!r} does not use the BlobAsset codec",
                 code="codec_invalid",
             )
-        envelope = _validated_blob(self._descriptor, self.asset_bytes())
+        envelope = _validated_blob(descriptor, self.asset_bytes())
         return BlobAsset(
             data=envelope.data,
             media_type=envelope.media_type,

@@ -232,6 +232,7 @@ class _OutputWire(_WireModel):
     source: _OutputSourceWire
     exporter: _UnicodeStringWire | _ExporterWire | None = None
     read_only: bool = False
+    optional: bool = False
 
     @model_validator(mode="after")
     def _exporter_matches_source(self) -> _OutputWire:
@@ -348,11 +349,17 @@ OutputSource: TypeAlias = (
 
 @dataclass(frozen=True, slots=True)
 class OutputSpec:
-    """Select a value, rendered output, or complete cell."""
+    """Select a value, rendered output, or complete cell.
+
+    An ``optional`` output records an unavailable entry in a state where its
+    selector names a missing attribute or item, its exporter finds no accepted
+    representation, or a cell in its dependency closure calls ``mo.stop``.
+    """
 
     source: OutputSource
     exporter: ExporterSpec | None = None
     read_only: bool = False
+    optional: bool = False
 
     def __post_init__(self) -> None:
         if not isinstance(
@@ -374,6 +381,8 @@ class OutputSpec:
             _validate_cell_value(self.source.value, self.source.by)
         if self.exporter is not None and not isinstance(self.exporter, ExporterSpec):
             raise TypeError("exporter must be an ExporterSpec or None")
+        if not isinstance(self.optional, bool):
+            raise TypeError("optional must be a boolean")
         if (self.exporter is not None) != isinstance(self.source, ExportSource):
             raise SpecError(
                 "export sources require exactly one exporter",
@@ -388,32 +397,47 @@ class OutputSpec:
             )
 
     @classmethod
-    def json(cls, selector: str) -> OutputSpec:
+    def json(cls, selector: str, *, optional: bool = False) -> OutputSpec:
         """Select one canonical portable JSON value."""
 
         return cls(
             source=JsonSource(kind="json", selector=_selector(selector)),
+            optional=optional,
         )
 
     @classmethod
-    def native(cls, selector: str) -> OutputSpec:
+    def native(cls, selector: str, *, optional: bool = False) -> OutputSpec:
         """Select one cache-native scalar, JSON value, array, table, or blob."""
 
         return cls(
             source=NativeSource(kind="native", selector=_selector(selector)),
+            optional=optional,
         )
 
     @classmethod
-    def export(cls, selector: str, exporter: ExporterSpec) -> OutputSpec:
+    def export(
+        cls,
+        selector: str,
+        exporter: ExporterSpec,
+        *,
+        optional: bool = False,
+    ) -> OutputSpec:
         """Convert one selected value through an explicit exporter."""
 
         return cls(
             source=ExportSource(kind="export", selector=_selector(selector)),
             exporter=exporter,
+            optional=optional,
         )
 
     @classmethod
-    def output(cls, selector: str, *, read_only: bool = False) -> OutputSpec:
+    def output(
+        cls,
+        selector: str,
+        *,
+        read_only: bool = False,
+        optional: bool = False,
+    ) -> OutputSpec:
         """Format a selected value through Marimo's output registry.
 
         Set ``read_only`` to export tables whose interactions call Python
@@ -426,6 +450,7 @@ class OutputSpec:
                 selector=_selector(selector),
             ),
             read_only=read_only,
+            optional=optional,
         )
 
     @classmethod
@@ -435,6 +460,7 @@ class OutputSpec:
         *,
         id: str | None = None,
         read_only: bool = False,
+        optional: bool = False,
     ) -> OutputSpec:
         """Select one complete native cell by name or runtime ID.
 
@@ -447,7 +473,11 @@ class OutputSpec:
         value = name if name is not None else id
         assert value is not None
         _validate_cell_value(value, by)
-        return cls(source=CellSource(kind="cell", by=by, value=value), read_only=read_only)
+        return cls(
+            source=CellSource(kind="cell", by=by, value=value),
+            read_only=read_only,
+            optional=optional,
+        )
 
 
 def _state_mapping_value(
@@ -754,6 +784,7 @@ class ExportSpec:
                 source=_source_from_wire(output.source),
                 exporter=exporter,
                 read_only=output.read_only,
+                optional=output.optional,
             )
             parsed_outputs[name] = parsed
             outputs[name] = _output_to_value(parsed)
@@ -903,6 +934,8 @@ def _output_to_value(output: OutputSpec) -> JsonObject:
         value["exporter"] = output.exporter.to_value()
     if output.read_only:
         value["read_only"] = True
+    if output.optional:
+        value["optional"] = True
     return value
 
 

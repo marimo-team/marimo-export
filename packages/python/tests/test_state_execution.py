@@ -18,6 +18,7 @@ from marimo_export import (
     open_export,
 )
 from marimo_export._remote.managed import ManagedServer
+from marimo_export.descriptors import UnavailableOutput
 from marimo_export.errors import ExecutionError, SpecError
 from marimo_export.exporters import importable
 from marimo_export.inspection import inspect_notebook
@@ -155,6 +156,78 @@ if __name__ == "__main__":
         "status": "stopped",
     }
     assert not output.exists()
+
+
+@pytest.mark.parametrize("mode", ("build", "capture"))
+def test_optional_outputs_record_stopped_and_missing_values_per_state(
+    tmp_path: Path,
+    mode: str,
+) -> None:
+    notebook = tmp_path / "notebook.py"
+    notebook.write_text(
+        """
+import marimo
+
+app = marimo.App()
+
+
+@app.cell
+def base():
+    import marimo as mo
+    gate = 0
+    return gate, mo
+
+
+@app.cell
+def guard(gate, mo):
+    mo.stop(gate == 1, mo.md("waiting"))
+    token = gate
+    return (token,)
+
+
+@app.cell
+def answer(token):
+    result = token + 42
+    report = {"total": result} if token == 0 else {}
+    return report, result
+
+
+if __name__ == "__main__":
+    app.run()
+""".lstrip(),
+        encoding="utf-8",
+    )
+    cells = {cell.name: cell.id for cell in inspect_notebook(notebook, timeout=30).cells}
+    output = tmp_path / f"{mode}-export"
+
+    _prepare_with_mode(
+        mode,
+        notebook,
+        ExportSpec(
+            default_state="open",
+            states={"open": {"gate": 0}, "partial": {"gate": 2}, "blocked": {"gate": 1}},
+            outputs={
+                "answer": OutputSpec.json("result", optional=True),
+                "total": OutputSpec.json('report["total"]', optional=True),
+                "gate": OutputSpec.json("gate"),
+            },
+        ),
+        output,
+    )
+
+    export = open_export(output)
+    assert export.state("open").output("total").json() == 42
+    assert export.state("partial").output("answer").json() == 44
+    assert export.state("partial").output("total").unavailable == UnavailableOutput(
+        reason="value_missing",
+        message="selector 'report[\"total\"]' is unavailable: item 'total' is unavailable",
+    )
+    for name in ("answer", "total"):
+        assert export.state("blocked").output(name).unavailable == UnavailableOutput(
+            reason="stopped",
+            message=f"cell {cells['guard']!r} stopped execution",
+        )
+    assert export.state("blocked").output("gate").json() == 1
 
 
 def test_ordinary_input_state_is_isolated_across_states_and_captures(

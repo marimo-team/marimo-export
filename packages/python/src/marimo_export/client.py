@@ -208,7 +208,7 @@ class Session:
             output_cache = _cache_summary(
                 response.get("output_cache"),
                 "output cache",
-                expected=len(index.states) * len(index.outputs),
+                expected=sum(1 for _ in index.descriptor_entries()),
             )
             notebook_cache = _cache_summary(
                 response.get("notebook_cache"),

@@ -25,6 +25,7 @@ describe("export errors", () => {
       "loader_unavailable",
       "output_not_found",
       "output_representation_changed",
+      "output_unavailable",
       "export_invalid",
       "export_noncanonical",
       "read_failed",

@@ -20,9 +20,15 @@ from marimo_export._execution.plan import (
     snapshot_token_code,
 )
 from marimo_export._json import JsonObject, JsonValue
-from marimo_export._marimo.capabilities import PreparedExporter
+from marimo_export._marimo.capabilities import PreparedExporter, UnavailableOutputError
 from marimo_export.errors import ExecutionError, MarimoExportError, OutputError
 from marimo_export.spec import CellSource, RenderedOutputSource
+from marimo_export.values import (
+    RepresentationDependencyError,
+    RepresentationError,
+    RepresentationRenderError,
+    RepresentationTooLarge,
+)
 
 if TYPE_CHECKING:
     from marimo_export._marimo.compat.projections import ProjectionRecording
@@ -459,6 +465,21 @@ def raise_child_errors(
         if isinstance(error, MarimoExportError):
             error._merge_details(details)
             raise error
+        if output is not None and isinstance(error, RepresentationError):
+            details["exception_type"] = type(error).__name__
+            # A value limit, a missing renderer, and a raising display call are
+            # not facts about the value, so even optional outputs fail.
+            if isinstance(
+                error,
+                (RepresentationTooLarge, RepresentationDependencyError, RepresentationRenderError),
+            ):
+                raise OutputError(str(error), details=details) from error
+            raise UnavailableOutputError(
+                str(error),
+                reason="representation_unavailable",
+                reason_message=str(error),
+                details=details,
+            ) from error
         error_type = type(error).__name__ if error is not None else str(cell.run_result_status)
         details["exception_type"] = error_type
         failure_type = OutputError if output is not None else ExecutionError
@@ -511,10 +532,11 @@ def _raise_stopped_output(
 ) -> None:
     owner_id = source_cell_ids.get(owner_cell, str(owner_cell))
     stopping_id = source_cell_ids.get(stopping_cell, str(stopping_cell))
-    raise OutputError(
+    raise UnavailableOutputError(
         f"state {state_name!r} output {output!r} is unavailable because "
         f"cell {stopping_id!r} stopped execution",
-        code="output_execution_failed",
+        reason="stopped",
+        reason_message=f"cell {stopping_id!r} stopped execution",
         details={
             "state": state_name,
             "output": output,

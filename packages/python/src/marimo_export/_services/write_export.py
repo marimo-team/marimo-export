@@ -19,6 +19,7 @@ from marimo_export.descriptors import (
     MarimoCellDescriptor,
     MarimoOutputDescriptor,
     OutputCodec,
+    UnavailableOutput,
     asset_path,
 )
 from marimo_export.errors import IntegrityError, MarimoExportError, NotebookExportError
@@ -80,6 +81,7 @@ def write_prepared_export(
     return _export_result(
         prepared,
         written,
+        index,
         read_only_warnings,
         started=started,
         progress=progress,
@@ -110,6 +112,7 @@ def materialize_prepared_export(
         return _export_result(
             prepared,
             written,
+            index,
             read_only_warnings,
             started=started,
             progress=progress,
@@ -145,6 +148,8 @@ def _read_only_warnings(
         snapshots: set[str] = set()
         for state in index.states.values():
             descriptor = state.outputs[name]
+            if isinstance(descriptor, UnavailableOutput):
+                continue
             if not isinstance(descriptor, (MarimoOutputDescriptor, MarimoCellDescriptor)):
                 break
             if descriptor.asset.sha256 in snapshots:
@@ -182,6 +187,7 @@ def _read_only_warnings(
 def _export_result(
     prepared: PreparedExport,
     written: WriteResult,
+    index: ExportIndex,
     read_only_warnings: tuple[ExportWarning, ...],
     *,
     started: float,
@@ -203,6 +209,7 @@ def _export_result(
         verification=verification,
         warnings=(*read_only_warnings, *written.warnings),
         elapsed_seconds=time.monotonic() - started,
+        unavailable=_unavailable_counts(index),
     )
     if progress is not None:
         progress(
@@ -214,6 +221,15 @@ def _export_result(
             )
         )
     return result
+
+
+def _unavailable_counts(index: ExportIndex) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for state in index.states.values():
+        for name, entry in state.outputs.items():
+            if isinstance(entry, UnavailableOutput):
+                counts[name] = counts.get(name, 0) + 1
+    return counts
 
 
 __all__ = ["materialize_prepared_export", "write_prepared_export"]

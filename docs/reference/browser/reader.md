@@ -197,15 +197,47 @@ interface LoadOptions {
   readonly maxBytes?: number;
 }
 
-interface ExportOutput {
+interface AvailableExportOutput {
   readonly state: ExportState;
   readonly name: string;
+  readonly unavailable: null;
   readonly codec: OutputCodec;
   readonly mediaType: MediaType;
   readonly descriptor: OutputDescriptor;
   load<C extends OutputCodec, T>(loader: OutputLoader<C, T>, options?: LoadOptions): Promise<T>;
 }
+
+interface UnavailableExportOutput {
+  readonly state: ExportState;
+  readonly name: string;
+  readonly unavailable: UnavailableOutput;
+  load<C extends OutputCodec, T>(loader: OutputLoader<C, T>, options?: LoadOptions): Promise<T>;
+}
+
+type ExportOutput = AvailableExportOutput | UnavailableExportOutput;
+
+interface UnavailableOutput {
+  readonly reason: "representation_unavailable" | "stopped" | "value_missing";
+  readonly message: string;
+}
 ```
+
+An [optional output](../export-spec#optional-outputs) can be unavailable in a
+state. Narrow on `unavailable` before reading representation facts:
+
+```ts
+const chart = state.output("chart");
+if (chart.unavailable === null) {
+  console.log(chart.mediaType.essence); // image/png
+} else {
+  console.log(chart.unavailable.reason); // representation_unavailable
+}
+```
+
+For an unavailable output, `load()` rejects and `resolveOutputLoader()` throws
+with `output_unavailable` before any request or decode. The error details contain
+`output`, `fingerprint`, and `reason`. `loadOutputs()` rejects with the same error
+when one requested output is unavailable.
 
 `load()` requires one explicit loader. It checks the loader codec and media-type
 predicate before reading bytes. Inline scalar and JSON values require no asset

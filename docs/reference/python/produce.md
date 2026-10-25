@@ -134,15 +134,20 @@ values, matrix expansion, selector syntax, and the YAML and JSON shapes.
 Use the factory that matches the stored representation:
 
 ```python
-OutputSpec.json(selector: str) -> OutputSpec
-OutputSpec.native(selector: str) -> OutputSpec
-OutputSpec.export(selector: str, exporter: ExporterSpec) -> OutputSpec
-OutputSpec.output(selector: str, *, read_only: bool = False) -> OutputSpec
+OutputSpec.json(selector: str, *, optional: bool = False) -> OutputSpec
+OutputSpec.native(selector: str, *, optional: bool = False) -> OutputSpec
+OutputSpec.export(
+    selector: str, exporter: ExporterSpec, *, optional: bool = False
+) -> OutputSpec
+OutputSpec.output(
+    selector: str, *, read_only: bool = False, optional: bool = False
+) -> OutputSpec
 OutputSpec.cell(
     name: str | None = None,
     *,
     id: str | None = None,
     read_only: bool = False,
+    optional: bool = False,
 ) -> OutputSpec
 ```
 
@@ -167,6 +172,16 @@ the selector during construction with
 pandas, Polars, or PyArrow table exports as a list of row objects and a date
 exports as ISO 8601 text. A selector that steps from `None`, such as
 `peak.label` while `peak` is `None`, exports `null`.
+
+`optional=True` lets the output be unavailable in a state where its selector
+names a missing attribute or item, its exporter raises a plain
+`RepresentationError`, or a cell in its dependency closure calls `mo.stop`. The
+`RepresentationRenderError`, `RepresentationDependencyError`, and
+`RepresentationTooLarge` subclasses still fail the build. The export records the reason
+in that state, and readers expose it as
+[`ExportOutput.unavailable`](reader#exportoutput). A required output fails with
+`output_execution_failed` under the same conditions. `OutputSpec.optional`
+holds the flag.
 
 `OutputSpec.source` exposes the normalized source record for inspection. Its
 concrete source-record classes are not public construction helpers. Construct an
@@ -202,10 +217,12 @@ from a figure or chart records its display size as `width` and `height` in the
 single or layered Vega-Lite chart at that size in points, such as the column
 width a document measured or the height at which it places an image. One output
 keeps one media type across states, so give each state a value of the same kind.
-A state whose value supports none of the accepted types, or whose selector names
-an unavailable step, stops the build with `OutputError`
+For a required output, a state whose value supports none of the accepted types,
+or whose selector names an unavailable step, stops the build with `OutputError`
 (`output_execution_failed`). Its message gives the reason, and its details name
-the state, output, and selector.
+the state, output, and selector. An
+[optional output](../export-spec#optional-outputs) records that state as
+unavailable.
 
 `altair.png()` renders an Altair chart as a PNG, the same image that
 `media(["image/png"], scale=scale)` renders for a chart. Its `BlobAsset`
@@ -639,23 +656,28 @@ new application directory becomes visible.
 
 `build()` and `PreparedExport.write()` return immutable `ExportResult` records:
 
-| Field             | Type or meaning                                 |
-| ----------------- | ----------------------------------------------- |
-| `path`            | Absolute committed destination                  |
-| `identity`        | SHA-256 of exact canonical `index.json` bytes   |
-| `plan`            | Resolved `ExportPlan`                           |
-| `reused`          | Exact prepared-export reuse                     |
-| `prepared_states` | Fingerprints prepared by this operation         |
-| `reused_states`   | Fingerprints reused by this operation           |
-| `cache_activity`  | `CacheActivity` observed for work that ran      |
-| `assets`          | Unique asset count                              |
-| `asset_bytes`     | Bytes across unique assets                      |
-| `index_bytes`     | Canonical index byte count                      |
-| `verification`    | `VerificationResult` for the committed export   |
-| `warnings`        | `ExportWarning` values for the committed export |
-| `elapsed_seconds` | Write duration                                  |
+| Field             | Type or meaning                                                      |
+| ----------------- | -------------------------------------------------------------------- |
+| `path`            | Absolute committed destination                                       |
+| `identity`        | SHA-256 of exact canonical `index.json` bytes                        |
+| `plan`            | Resolved `ExportPlan`                                                |
+| `reused`          | Exact prepared-export reuse                                          |
+| `prepared_states` | Fingerprints prepared by this operation                              |
+| `reused_states`   | Fingerprints reused by this operation                                |
+| `cache_activity`  | `CacheActivity` observed for work that ran                           |
+| `assets`          | Unique asset count                                                   |
+| `asset_bytes`     | Bytes across unique assets                                           |
+| `index_bytes`     | Canonical index byte count                                           |
+| `verification`    | `VerificationResult` for the committed export                        |
+| `warnings`        | `ExportWarning` values for the committed export                      |
+| `elapsed_seconds` | Write duration                                                       |
+| `unavailable`     | Optional output names mapped to the number of states without a value |
 
 `result.to_dict()` returns the same nested shape used by CLI JSON output.
+
+The CLI prints each `unavailable` count in its human summary and warns when an
+optional output is unavailable in every state, which usually points to a
+selector typo or a stop condition that always holds.
 
 An `ExportWarning` contains `code`, `message`, detached mutable portable
 `details`, and `to_dict()`:

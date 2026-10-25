@@ -157,8 +157,13 @@ value.
 ## Output specs
 
 Each output contains `source`. An export source also contains `exporter`.
-A rendered-output or complete-cell source may set
-[`read_only: true`](#read-only-tables).
+
+| Field       | Contract                                                                                                   |
+| ----------- | ---------------------------------------------------------------------------------------------------------- |
+| `source`    | One source object from the following sections                                                              |
+| `exporter`  | Required for an export source and invalid for other source kinds                                           |
+| `read_only` | Boolean, default `false`. Valid for `output` and `cell` sources. See [Read-only tables](#read-only-tables) |
+| `optional`  | Boolean, default `false`. Valid for every source. See [Optional outputs](#optional-outputs)                |
 
 ### JSON source
 
@@ -246,14 +251,63 @@ outside a JSON-string item and accept:
 - JSON-string items such as `["total"]`
 
 Mapping keys take precedence over attributes. Every normalized state must
-produce every configured output. One output name retains one codec and media
-type across the relation.
+produce every required output. One output name retains one codec and media type
+across the states where it is available.
 
 A selector contains at most 4,096 UTF-8 bytes and 64 steps. Invalid roots,
 attribute steps, indexes, quoted keys, or trailing content raise `SpecError`
 before notebook execution. A cell name or runtime ID contains at most 255 UTF-8
 bytes. [`ValueSelector`](python/values#valueselector) parses and resolves the
 same grammar for hosts that read live values.
+
+### Optional outputs
+
+```yaml
+chart:
+  source: { kind: export, selector: chart }
+  exporter:
+    name: media
+    options: { accept: [image/png] }
+    dependencies: []
+  optional: true
+```
+
+An optional output may be unavailable in a state. The export records the
+reason in that state's entry in place of a descriptor:
+
+| Reason                       | Condition                                                                |
+| ---------------------------- | ------------------------------------------------------------------------ |
+| `representation_unavailable` | The exporter raised `marimo_export.values.RepresentationError`           |
+| `value_missing`              | The selector names an attribute or item the selected value lacks         |
+| `stopped`                    | A cell in the output's dependency closure called `mo.stop` in that state |
+
+The built-in `media` exporter raises `RepresentationError` when no renderer or
+display method applies to the value for any accepted media type, such as text
+selected for `image/png`, or when the value's JSON form contains a part JSON
+cannot hold. A custom exporter can raise it for the same condition. Three
+subclasses still fail the producer operation:
+
+| Subclass                        | Condition                                               |
+| ------------------------------- | ------------------------------------------------------- |
+| `RepresentationRenderError`     | A display method or renderer such as vl-convert raised  |
+| `RepresentationDependencyError` | A renderer package such as vl-convert-python is missing |
+| `RepresentationTooLarge`        | The value's JSON form holds more than 100,000 values    |
+
+Every other failure fails the operation too, including `altair.png` on a value
+that is not a chart.
+A required output fails with code `output_execution_failed` under each of these
+conditions.
+
+`ExportResult.unavailable` counts the states where each optional output has no
+value, and the CLI warns when an optional output is unavailable in every state.
+A selector typo or a stop condition that always holds shows up there.
+
+An output may set both flags. An optional read-only table records its first
+view in states that produce it and an unavailable output in the others.
+Normalization writes `read_only: true` and `optional: true` and drops either
+flag when it is `false`, so a spec that omits both keeps its identity. Changing
+either flag changes the output-plan identity, so prepared states are prepared
+again under the new plan.
 
 ## Exporter forms
 
@@ -329,7 +383,7 @@ invalid. YAML permits at most 256 container levels and 100,000 composed nodes.
 
 ```python
 from marimo_export import ExportSpec, OutputSpec
-from marimo_export.exporters import altair, parquet
+from marimo_export.exporters import altair, media, parquet
 
 spec = ExportSpec(
     default_state="baseline",
@@ -344,6 +398,11 @@ spec = ExportSpec(
         "summary_cell": OutputSpec.cell("summary_cell"),
         "sales": OutputSpec.output("sales", read_only=True),
         "chart": OutputSpec.export("performance", altair.vegalite()),
+        "chart_image": OutputSpec.export(
+            "performance",
+            media(["image/png"]),
+            optional=True,
+        ),
         "prices": OutputSpec.export(
             "selected_prices",
             parquet.table(filename="prices.parquet"),

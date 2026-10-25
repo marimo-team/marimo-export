@@ -158,7 +158,8 @@ or another implementation of the export format.
 
 ## Core invariants
 
-- Every output runs through one transient marimo leaf for every state.
+- Every output runs through one transient marimo leaf for every state, unless
+  an optional output is already known to be unavailable in that state.
 - State vectors are complete and fingerprinted before execution.
 - The ExportSpec names an explicit default state. Authoring observations remain
   repository history until an application places them in an explicit spec.
@@ -173,8 +174,10 @@ or another implementation of the export format.
 - The client and attached kernel use the same marimo-export version and source
   identity.
 - One failed state, output, transfer, or verification fails the complete
-  producer operation. Cleanup preserves the primary error. Post-commit parent
-  sync and retired-destination cleanup failures return typed warnings.
+  producer operation. An optional output records an unavailable output for a
+  missing value, missing representation, or stopped closure instead. Cleanup
+  preserves the primary error. Post-commit parent sync and retired-destination
+  cleanup failures return typed warnings.
 - Preparation reservations carry monotonically increasing fencing tokens.
   Publication compares the current pointer and reservation owner before commit.
 - Active artifact, staging, and preparation leases renew until their owner

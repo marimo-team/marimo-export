@@ -18,7 +18,12 @@ from marimo_export._json import (
     JsonValue,
     json_equal,
 )
-from marimo_export._marimo.capabilities import NativeReceipt, PreparedExporter, StateExecution
+from marimo_export._marimo.capabilities import (
+    NativeReceipt,
+    PreparedExporter,
+    StateExecution,
+    unavailable_output,
+)
 from marimo_export._marimo.compat.cache.attempts import (
     CacheAttemptLog,
     force_cache_misses,
@@ -35,6 +40,7 @@ from marimo_export._marimo.compat.child_run import (
 from marimo_export._marimo.compat.inspection import _ui_baseline_value
 from marimo_export._marimo.compat.projections import materialize_projection_token
 from marimo_export._marimo.compat.receipts import collect_output_receipts
+from marimo_export.descriptors import UnavailableOutput
 from marimo_export.errors import ExecutionError, OutputError
 from marimo_export.index import ControlBinding
 from marimo_export.result import StateRunTimings
@@ -64,6 +70,7 @@ class _InputPhase:
 @dataclass(frozen=True, slots=True)
 class _OutputPhase:
     receipts: tuple[NativeReceipt, ...]
+    unavailable: Mapping[str, UnavailableOutput]
     control_bindings: Mapping[str, ControlBinding]
     seconds: float
 
@@ -123,6 +130,7 @@ async def execute_state(
         raise RuntimeError("state run produced no output receipts")
     return StateExecution(
         receipts=output_phase.receipts,
+        unavailable=output_phase.unavailable,
         control_bindings=output_phase.control_bindings,
         cache=notebook_cache.activity(),
         timings=StateRunTimings(
@@ -322,9 +330,9 @@ async def _execute_outputs(
     started = time.monotonic()
     runner = child.runner
     graph = runner._kernel.graph
+    unavailable: dict[str, UnavailableOutput] = {}
     for output in plan.outputs:
         planned_output = plan.planned_outputs[output]
-        details = _output_error_details(state.primary_alias, planned_output)
         try:
             raise_stopped_output(
                 state_name=state.primary_alias,
@@ -336,38 +344,52 @@ async def _execute_outputs(
             )
             materialize_projection_token(child, planned_output)
         except OutputError as error:
-            error._merge_details(details)
-            raise
+            entry = unavailable_output(planned_output, error)
+            if entry is None:
+                error._merge_details(_output_error_details(state.primary_alias, planned_output))
+                raise
+            unavailable[output] = entry
     control_bindings = _control_binding_mapping(
         state,
         runner.globals,
         child.recording.ui_scopes,
     )
-    with force_cache_misses(graph, _forced_cells(run_plan, run_plan.output_cells)):
-        await run_state_child(runner, set(run_plan.output_cells))
-    for output, cell_id in child.output_cell_ids.items():
-        raise_child_errors(
-            runner,
-            {cell_id},
-            state.primary_alias,
-            output=output,
-            output_details=_output_error_details(
+    output_cell_ids = {
+        output: cell_id
+        for output, cell_id in child.output_cell_ids.items()
+        if output not in unavailable
+    }
+    output_cells = frozenset(output_cell_ids.values())
+    with force_cache_misses(graph, _forced_cells(run_plan, output_cells)):
+        await run_state_child(runner, set(output_cells))
+    for output, cell_id in output_cell_ids.items():
+        planned_output = plan.planned_outputs[output]
+        try:
+            raise_child_errors(
+                runner,
+                {cell_id},
                 state.primary_alias,
-                plan.planned_outputs[output],
-            ),
-            stop_provenance=child.stop_provenance,
-            source_cell_ids=child.source_cell_ids,
-        )
+                output=output,
+                output_details=_output_error_details(state.primary_alias, planned_output),
+                stop_provenance=child.stop_provenance,
+                source_cell_ids=child.source_cell_ids,
+            )
+        except OutputError as error:
+            entry = unavailable_output(planned_output, error)
+            if entry is None:
+                raise
+            unavailable[output] = entry
     receipts = collect_output_receipts(
         child=child,
         state_name=state.primary_alias,
-        outputs=plan.outputs,
+        outputs=tuple(output for output in plan.outputs if output not in unavailable),
         planned_outputs=plan.planned_outputs,
         output_cell_ids=child.output_cell_ids,
         cache=cache,
     )
     return _OutputPhase(
         receipts=receipts,
+        unavailable=MappingProxyType(unavailable),
         control_bindings=control_bindings,
         seconds=time.monotonic() - started,
     )

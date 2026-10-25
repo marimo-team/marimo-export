@@ -658,6 +658,7 @@ def test_export_result_reports_verified_write_and_preparation_facts(tmp_path: Pa
             }
         ],
         "elapsed_seconds": 2.0,
+        "unavailable": {},
     }
 
     with pytest.raises(ValueError, match="cover the export plan"):

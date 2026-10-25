@@ -27,6 +27,7 @@ from marimo_export._json import (
     portable_json_object,
 )
 from marimo_export._limits import MAX_PROVENANCE_BYTES as _MAX_PROVENANCE_BYTES
+from marimo_export._limits import MAX_UNAVAILABLE_MESSAGE_BYTES as _MAX_UNAVAILABLE_MESSAGE_BYTES
 from marimo_export._media_type import MAX_BLOB_METADATA_JSON_BYTES, validate_media_type
 from marimo_export._portable import validate_portable_basename
 from marimo_export.wire import FrozenJsonValue, _freeze_json, portable_json
@@ -55,6 +56,7 @@ OutputCodec: TypeAlias = Literal[
     "marimo.blob-asset.msgpack.v1",
 ]
 ScalarValue: TypeAlias = bool | str | int | float | None
+UnavailableReason: TypeAlias = Literal["representation_unavailable", "stopped", "value_missing"]
 ScalarWireValue: TypeAlias = JsonValue
 
 _ASSET_EXTENSIONS: dict[str, str] = {
@@ -68,6 +70,7 @@ _MAX_ASSET_SIZE = 2_147_483_647
 _MAX_SAFE_INTEGER = 2**53 - 1
 _BIGINT = re.compile(r"(?:0|-[1-9][0-9]*|[1-9][0-9]*)")
 _SPECIAL_FLOATS = frozenset({"nan", "infinity", "-infinity", "negative-zero"})
+_UNAVAILABLE_REASONS = frozenset({"representation_unavailable", "stopped", "value_missing"})
 _CODECS = frozenset(
     {
         SCALAR_CODEC,
@@ -317,11 +320,52 @@ AssetDescriptor: TypeAlias = (
 )
 
 
+@dataclass(frozen=True, slots=True)
+class UnavailableOutput:
+    """An optional output that has no value in one state.
+
+    ``reason`` is ``representation_unavailable`` when the exporter found none of
+    its accepted representations, ``value_missing`` when the selector names an
+    attribute or item the value lacks, and ``stopped`` when a cell in the
+    output's dependency closure called ``mo.stop``.
+    """
+
+    reason: UnavailableReason
+    message: str
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.reason, str) or self.reason not in _UNAVAILABLE_REASONS:
+            raise ValueError(
+                f"unavailable output reason must be one of {sorted(_UNAVAILABLE_REASONS)!r}"
+            )
+        _bounded_printable(self.message, "unavailable.message", _MAX_UNAVAILABLE_MESSAGE_BYTES)
+
+    def to_value(self) -> JsonObject:
+        return {"unavailable": {"message": self.message, "reason": self.reason}}
+
+
+OutputEntry: TypeAlias = OutputDescriptor | UnavailableOutput
+
+
 def asset_path(codec: OutputCodec, digest: str) -> str:
     if codec not in _ASSET_EXTENSIONS:
         raise ValueError(f"codec {codec!r} has no asset path")
     validated = _digest(digest, "asset digest")
     return f"assets/{validated}.{_ASSET_EXTENSIONS[codec]}"
+
+
+def _output_entry(value: object, output_name: str) -> OutputEntry:
+    path = f"output {output_name!r}"
+    item = _object(value, path)
+    if "unavailable" not in item:
+        return _descriptor(item, output_name)
+    _exact_fields(item, {"unavailable"}, path)
+    reason = _object(item["unavailable"], f"{path}.unavailable")
+    _exact_fields(reason, {"message", "reason"}, f"{path}.unavailable")
+    return UnavailableOutput(
+        reason=cast(UnavailableReason, reason["reason"]),
+        message=cast(str, reason["message"]),
+    )
 
 
 def _descriptor(value: object, output_name: str) -> OutputDescriptor:
@@ -516,8 +560,11 @@ __all__ = [
     "NumpyDescriptor",
     "OutputCodec",
     "OutputDescriptor",
+    "OutputEntry",
     "Provenance",
     "ScalarDescriptor",
     "ScalarValue",
+    "UnavailableOutput",
+    "UnavailableReason",
     "asset_path",
 ]
