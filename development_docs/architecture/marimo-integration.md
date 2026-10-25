@@ -27,8 +27,7 @@ flowchart LR
 | Saved inspection           | `NotebookCell` rows for one saved notebook              | `compat/inspection.py`             |
 | Run observation            | `KernelRun` delivered by `subscribe_run_finished`       | `compat/observations.py`           |
 | Kernel inspection          | `MarimoCapabilities`, `Baseline`, definition records    | `compat/inspection.py`             |
-| Exporter preparation       | Importable callables and deterministic identities       | `compat/exporters.py`              |
-| Exporter source identity   | Frozen loaded modules and restart-required drift        | `compat/exporter_identity.py`      |
+| Exporter kernel reads      | Kernel globals, per-kernel state, and code digests      | `compat/exporters.py`              |
 | State orchestration        | `NormalizedState`, `ExecutionPlan`, `StateExecution`    | `compat/execution.py`              |
 | Child-run lifecycle        | Cache activity, execution, cleanup, and error status    | `compat/child_run.py`              |
 | Native receipt decoding    | Stable cache bytes and export descriptors               | `compat/receipts.py`               |
@@ -59,6 +58,23 @@ every other `marimo._*` import.
 `_marimo/composition.py` constructs execution adapters.
 `_marimo/anywidget.py` and `_marimo/blob.py` own narrow representation
 bindings. `_marimo/entrypoints.py` selects the managed kernel lifespan.
+
+## Exporter preparation
+
+`exporters/_prepare.py` resolves each selected exporter callable and its
+declared dependency modules. `exporters/_identity.py` freezes their loaded
+sources, computes the exporter identity, and raises `exporter_source_changed`
+when a frozen source changes before the kernel restarts. Both read marimo
+through the `ExporterRuntime` port that `compat/exporters.py` implements:
+
+| Call                         | Result                                                                |
+| ---------------------------- | --------------------------------------------------------------------- |
+| `kernel_globals()`           | The attached kernel's global namespace, used to find notebook imports |
+| `kernel_state(key, factory)` | One value per attached kernel, held in a weak mapping owned by compat |
+| `code_sha256(code)`          | marimo's `hash_module` digest of a callable's code object             |
+
+`release.json` pins the `hash_module` source, so a marimo change to code
+hashing fails the capability probe before it can change an exporter identity.
 
 ## Inspection and control roots
 

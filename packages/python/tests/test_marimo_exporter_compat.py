@@ -5,23 +5,21 @@ import importlib
 import sys
 import threading
 from pathlib import Path
-from types import ModuleType, SimpleNamespace
+from types import CodeType, ModuleType, SimpleNamespace
 from typing import cast
 
-import marimo_export._marimo.compat.exporters as exporter_compat
 import pytest
 from marimo_export import OutputSpec
 from marimo_export._execution import ExecutionPlan, NormalizedState, PlannedOutput
 from marimo_export._execution.plan import exporter_token_name
-from marimo_export._marimo.compat.exporters import (
-    invoke_prepared_exporter,
-    preflight_exporters,
-    prepared_exporters,
-)
 from marimo_export._marimo.compat.inspection import _notebook_cell
+from marimo_export._marimo.compat.kernel import PrivateKernelRuntime
 from marimo_export._notebook import cells_document_sha256
 from marimo_export.errors import OutputError
 from marimo_export.exporters import importable
+from marimo_export.exporters._prepare import invoke_prepared_exporter, prepared_exporters
+
+_RUNTIME = PrivateKernelRuntime()
 
 
 def _custom_exporter_plan(
@@ -136,7 +134,7 @@ def test_prepared_exporters_keeps_normal_imports_stable_during_background_activi
     def import_in_background() -> None:
         imported.append(importlib.import_module(background_name))
 
-    with prepared_exporters(_custom_exporter_plan(module_name)):
+    with prepared_exporters(_RUNTIME, _custom_exporter_plan(module_name)):
         original_module = sys.modules[module_name]
         original_package = sys.modules[package_name]
         worker = threading.Thread(target=import_in_background)
@@ -146,7 +144,7 @@ def test_prepared_exporters_keeps_normal_imports_stable_during_background_activi
         assert sys.modules[package_name] is original_package
         assert sys.modules[module_name] is original_module
 
-    with prepared_exporters(_custom_exporter_plan(module_name)):
+    with prepared_exporters(_RUNTIME, _custom_exporter_plan(module_name)):
         assert sys.modules[package_name] is original_package
         assert sys.modules[module_name] is original_module
 
@@ -170,7 +168,7 @@ def test_prepared_exporter_registry_clears_after_cancellation(
 
     with (
         pytest.raises(KeyboardInterrupt, match="cancelled"),
-        prepared_exporters(plan),
+        prepared_exporters(_RUNTIME, plan),
     ):
         assert invoke_prepared_exporter(token, 2, {}) == 3
         raise KeyboardInterrupt("cancelled")
@@ -201,7 +199,7 @@ async def test_prepared_exporter_registries_are_capture_scoped(
 
     async def invoke(position: int) -> tuple[str, int]:
         nonlocal entered
-        with prepared_exporters(plans[position]):
+        with prepared_exporters(_RUNTIME, plans[position]):
             entered += 1
             if entered == 2:
                 ready.set()
@@ -239,7 +237,9 @@ def test_prepared_exporters_preserves_preloaded_declared_modules(
     monkeypatch.syspath_prepend(str(tmp_path))
     installed = importlib.import_module(installed_name)
 
-    with prepared_exporters(_custom_exporter_plan(exporter_name, dependencies=(installed_name,))):
+    with prepared_exporters(
+        _RUNTIME, _custom_exporter_plan(exporter_name, dependencies=(installed_name,))
+    ):
         assert sys.modules[installed_name] is installed
 
     assert sys.modules[installed_name] is installed
@@ -264,7 +264,7 @@ def test_prepared_exporters_requires_restart_after_declared_source_changes(
     monkeypatch.syspath_prepend(str(tmp_path))
     plan = _custom_exporter_plan(exporter_name, dependencies=(config_name,))
 
-    with prepared_exporters(plan) as first_identities:
+    with prepared_exporters(_RUNTIME, plan) as first_identities:
         original_exporter = sys.modules[exporter_name]
         original_package = sys.modules[package_name]
         original_config = sys.modules[config_name]
@@ -273,7 +273,7 @@ def test_prepared_exporters_requires_restart_after_declared_source_changes(
         assert sys.modules[config_name] is original_config
 
     config_source.write_text("CONFIG = 'other'\n", encoding="utf-8")
-    with pytest.raises(OutputError) as raised, prepared_exporters(plan):
+    with pytest.raises(OutputError) as raised, prepared_exporters(_RUNTIME, plan):
         pass
 
     assert raised.value.code == "exporter_source_changed"
@@ -288,7 +288,7 @@ def test_prepared_exporters_requires_restart_after_declared_source_changes(
     assert sys.modules[exporter_name] is original_exporter
 
 
-def test_exporter_preflight_reports_normal_import_failure(
+def test_prepared_exporters_reports_normal_import_failure(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -304,7 +304,7 @@ def test_exporter_preflight_reports_normal_import_failure(
 
     with (
         pytest.raises(OutputError) as raised,
-        prepared_exporters(_custom_exporter_plan(exporter_name)),
+        prepared_exporters(_RUNTIME, _custom_exporter_plan(exporter_name)),
     ):
         pass
 
@@ -331,9 +331,9 @@ def test_prepared_exporters_uses_code_loaded_before_first_preflight(
     )
     plan = _custom_exporter_plan(module_name)
 
-    with prepared_exporters(plan) as first:
+    with prepared_exporters(_RUNTIME, plan) as first:
         assert loaded.encode(None) == ("loaded-v1", None)
-    with prepared_exporters(plan) as second:
+    with prepared_exporters(_RUNTIME, plan) as second:
         assert sys.modules[module_name] is loaded
 
     assert first == second
@@ -350,14 +350,17 @@ def test_exporter_identity_failures_are_output_errors(
     )
     monkeypatch.syspath_prepend(str(tmp_path))
 
-    def fail(*args: object, **kwargs: object) -> object:
-        del args, kwargs
-        raise ValueError("dependency graph failed")
+    class FailingDigestRuntime(PrivateKernelRuntime):
+        @staticmethod
+        def code_sha256(code: CodeType) -> str:
+            del code
+            raise ValueError("code digest failed")
 
-    monkeypatch.setattr(exporter_compat, "freeze_exporter_identity", fail)
-
-    with pytest.raises(OutputError) as raised:
-        preflight_exporters(_custom_exporter_plan(module_name))
+    with (
+        pytest.raises(OutputError) as raised,
+        prepared_exporters(FailingDigestRuntime(), _custom_exporter_plan(module_name)),
+    ):
+        pass
 
     assert raised.value.code == "exporter_identity_failed"
     assert raised.value.details == {
@@ -367,7 +370,7 @@ def test_exporter_identity_failures_are_output_errors(
     }
 
 
-def test_exporter_preflight_rejects_non_callable_symbols(
+def test_prepared_exporters_rejects_non_callable_symbols(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -375,8 +378,11 @@ def test_exporter_preflight_rejects_non_callable_symbols(
     (tmp_path / f"{module_name}.py").write_text("encode = 42\n", encoding="utf-8")
     monkeypatch.syspath_prepend(str(tmp_path))
 
-    with pytest.raises(OutputError) as raised:
-        preflight_exporters(_custom_exporter_plan(module_name))
+    with (
+        pytest.raises(OutputError) as raised,
+        prepared_exporters(_RUNTIME, _custom_exporter_plan(module_name)),
+    ):
+        pass
 
     assert raised.value.code == "exporter_invalid"
     assert str(raised.value) == (
@@ -384,7 +390,7 @@ def test_exporter_preflight_rejects_non_callable_symbols(
     )
 
 
-def test_exporter_preflight_keys_identity_by_declared_modules(
+def test_prepared_exporters_keys_identity_by_declared_modules(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -399,14 +405,15 @@ def test_exporter_preflight_keys_identity_by_declared_modules(
     (tmp_path / f"{second_dependency}.py").write_text("value = 2\n", encoding="utf-8")
     monkeypatch.syspath_prepend(str(tmp_path))
 
-    first = preflight_exporters(
-        _custom_exporter_plan(module_name, dependencies=(first_dependency,))
-    )["summary"]
-    second = preflight_exporters(
-        _custom_exporter_plan(module_name, dependencies=(second_dependency,))
-    )["summary"]
-
-    assert first != second
+    with (
+        prepared_exporters(
+            _RUNTIME, _custom_exporter_plan(module_name, dependencies=(first_dependency,))
+        ) as first,
+        prepared_exporters(
+            _RUNTIME, _custom_exporter_plan(module_name, dependencies=(second_dependency,))
+        ) as second,
+    ):
+        assert first["summary"].identity != second["summary"].identity
 
 
 # The callable digest covers CPython bytecode, which changes between minor versions.
@@ -435,7 +442,7 @@ def test_exporter_identity_is_pinned_for_a_fixture_exporter(
     monkeypatch.syspath_prepend(str(tmp_path))
 
     with prepared_exporters(
-        _custom_exporter_plan(exporter_name, dependencies=(helper_name,))
+        _RUNTIME, _custom_exporter_plan(exporter_name, dependencies=(helper_name,))
     ) as prepared:
         identity = prepared["summary"].identity
 

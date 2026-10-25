@@ -809,7 +809,7 @@ def output_cell_code(
             raise ValueError("custom exporter token does not match its specification")
         lines.extend(
             [
-                "from marimo_export._marimo.compat.exporters import "
+                "from marimo_export.exporters._prepare import "
                 "invoke_prepared_exporter as _marimo_export_invoke_exporter",
                 "",
             ]

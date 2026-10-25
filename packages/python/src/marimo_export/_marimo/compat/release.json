@@ -18,7 +18,8 @@
     "cache_attempt_from_hash": "4a1b9421f70703337b2b0874997de0a3022dec99c3a7ed15b140c0e4ccb4f576",
     "encode._contiguous_tensor_bytes": "b5af49d65687b2ee6b1469ebe46299cb0f975d2f3135962108cbe1b7255f4642",
     "flush_active_caches": "43a9a8956d21ab9adea51be5daaae66db07e17572dd7d138a53ef9695abe3a7c",
-    "from_item": "7a14447ebb9f4a8957580fe3eb16ec2108aefb7f086ae739d020de8a4f3ae7c8"
+    "from_item": "7a14447ebb9f4a8957580fe3eb16ec2108aefb7f086ae739d020de8a4f3ae7c8",
+    "hash_module": "9c9e8e1ad3a00c180a3957d0846f644ae415fa94ffab927aca5140c9363082dd"
   },
   "receipt_schema_fields": {
     "BlobAsset": ["data", "media_type", "filename", "metadata"],

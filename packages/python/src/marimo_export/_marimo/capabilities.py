@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
-from contextlib import AbstractContextManager
 from dataclasses import dataclass, field
-from types import MappingProxyType
-from typing import Literal, Protocol
+from types import CodeType, MappingProxyType
+from typing import Literal, Protocol, TypeVar
 
 from marimo_export._diagnostics import safe_diagnostic
 from marimo_export._execution.plan import Baseline, ExecutionPlan, NormalizedState, PlannedOutput
@@ -26,6 +25,8 @@ from marimo_export.index import ControlBinding
 from marimo_export.integration import KernelInputObservation
 from marimo_export.progress import CacheActivity
 from marimo_export.result import StateRunTimings
+
+_T = TypeVar("_T")
 
 
 @dataclass(frozen=True, slots=True)
@@ -239,7 +240,17 @@ class CachedStateExecutor(Protocol):
     ) -> StateExecution: ...
 
 
-class KernelRuntime(CachedStateExecutor, Protocol):
+class ExporterRuntime(Protocol):
+    """Read the attached kernel for exporter preparation."""
+
+    def kernel_globals(self) -> Mapping[str, object]: ...
+
+    def kernel_state(self, key: str, factory: Callable[[], _T]) -> _T: ...
+
+    def code_sha256(self, code: CodeType) -> str: ...
+
+
+class KernelRuntime(CachedStateExecutor, ExporterRuntime, Protocol):
     """Inspect and execute one attached marimo kernel."""
 
     def require_capabilities(self) -> MarimoCapabilities: ...
@@ -253,12 +264,6 @@ class KernelRuntime(CachedStateExecutor, Protocol):
     def observe_inputs(self) -> KernelInputObservation: ...
 
     async def declared_ui_values(self, names: tuple[str, ...]) -> JsonObject: ...
-
-    def prepared_exporters(
-        self,
-        plan: ExecutionPlan,
-        baseline: Baseline,
-    ) -> AbstractContextManager[Mapping[str, PreparedExporter]]: ...
 
     def flush_native_caches(self) -> None: ...
 
@@ -282,6 +287,7 @@ class KernelAdapters:
 __all__ = [
     "CacheActivity",
     "CachedStateExecutor",
+    "ExporterRuntime",
     "KernelAdapters",
     "KernelCell",
     "KernelRun",

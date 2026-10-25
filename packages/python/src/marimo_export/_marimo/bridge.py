@@ -23,6 +23,7 @@ from marimo_export.errors import (
     MarimoExportError,
     SessionError,
 )
+from marimo_export.exporters._prepare import prepared_exporters
 from marimo_export.index import (
     ControlBinding,
     ExportIndex,
@@ -288,7 +289,7 @@ async def _capture(spec: ExportSpec, adapters: KernelAdapters) -> JsonObject:
     ui_update_seconds = 0.0
     output_materialization_seconds = 0.0
     state_cleanup_seconds = 0.0
-    with runtime.prepared_exporters(plan, baseline) as exporter_identities:
+    with prepared_exporters(runtime, plan, baseline) as exporter_identities:
         runtime.flush_native_caches()
         primary: BaseException | None = None
         try:
