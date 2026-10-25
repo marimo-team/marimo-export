@@ -152,9 +152,6 @@ function requestView(name: string): void {
   const controller = new AbortController();
   active = controller;
   setBusy(name, true);
-  const url = new URL(location.href);
-  url.search = formatPreparedQuery(state, url.search);
-  history.replaceState(history.state, "", url);
   transition = transition.then(
     () => renderView(name, state, copy, nextRevision, controller),
     () => renderView(name, state, copy, nextRevision, controller),
@@ -227,6 +224,8 @@ async function renderView(
         return;
       }
 
+      const url = new URL(location.href);
+      url.search = formatPreparedQuery(state, url.search);
       signal.removeEventListener("abort", abortStagedMounts);
       const previous = mounted;
       const chartId = chartHost.id;
@@ -247,6 +246,7 @@ async function renderView(
       stagingArea.remove();
       mounted = { controller: mountController, views: nextViews };
       committed = true;
+      history.replaceState(history.state, "", url);
       renderMarketView(rows, summary, copy);
       setBusy(alias, false);
       errorPanel.hidden = true;
