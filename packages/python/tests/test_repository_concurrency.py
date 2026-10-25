@@ -10,24 +10,32 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from hashlib import sha256
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import marimo_export._repository.sqlite.maintenance as maintenance_module
 import pytest
 from marimo_export._repository.artifacts import ArtifactRepository
-from marimo_export._repository.models import RepositoryBusyError
+from marimo_export._repository.models import AdmissionCandidate, RepositoryBusyError
 from marimo_export._repository.observations import observation_repository
 from marimo_export._repository.preparation import (
     RepositoryIdentity,
+    RepositoryWait,
     preparation_repository,
 )
+from marimo_export._services.capture_export import capture_session
 from marimo_export.errors import ExecutionError
+from marimo_export.progress import ProgressEvent
 from marimo_export.repository import (
     ExportRepository,
     RepositoryLimitError,
     RepositoryLimits,
 )
+from marimo_export.result import CacheSummary
+from marimo_export.spec import ExportSpec
 from marimo_export.wire import state_fingerprint
+from preparation_test_support import _BorrowedSession, _index, _plan_wire, _producer, _spec
+from repository_test_support import _WAIT
 
 pytestmark = pytest.mark.serial
 
@@ -81,7 +89,8 @@ def test_open_defers_recovery_owned_by_another_process(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    def busy(_repository: ArtifactRepository) -> None:
+    def busy(_repository: ArtifactRepository, *, wait: RepositoryWait) -> None:
+        del wait
         raise RepositoryBusyError("maintenance owned by another process")
 
     monkeypatch.setattr(ArtifactRepository, "recover", busy)
@@ -121,7 +130,7 @@ def test_active_staging_survives_another_repository_recovery(tmp_path: Path) -> 
     with ExportRepository.open(root) as owner:
         preparation = preparation_repository(owner)
         identity = RepositoryIdentity(producer, output_plan, _digest("spec"))
-        with preparation.reserve_preparation(identity):
+        with preparation.reserve_preparation(identity, wait=_WAIT):
             staged = preparation.stage_prepared_state(
                 producer_sha256=producer,
                 output_plan_sha256=output_plan,
@@ -199,7 +208,7 @@ def test_concurrent_artifact_admission_cannot_overbook_repository_bytes(
         )
         preparation = preparation_repository(repository)
         with (
-            preparation.reserve_preparation(identity),
+            preparation.reserve_preparation(identity, wait=_WAIT),
             preparation.stage_prepared_state(
                 producer_sha256=identity.producer_sha256,
                 output_plan_sha256=identity.output_plan_sha256,
@@ -237,14 +246,18 @@ def test_crashed_staging_and_reservation_expire_together(tmp_path: Path) -> None
 import os
 import sys
 from pathlib import Path
-from marimo_export._repository.preparation import RepositoryIdentity, preparation_repository
+from marimo_export._repository.preparation import (
+    RepositoryIdentity,
+    RepositoryWait,
+    preparation_repository,
+)
 from marimo_export.repository import ExportRepository, RepositoryLimits
 
 limits = RepositoryLimits(lease_ttl_seconds=30.0, lease_heartbeat_seconds=0.1)
 identity = RepositoryIdentity(sys.argv[2], sys.argv[3], sys.argv[4])
 repository = ExportRepository.open(sys.argv[1], limits=limits)
 preparation = preparation_repository(repository)
-with preparation.reserve_preparation(identity):
+with preparation.reserve_preparation(identity, wait=RepositoryWait(30.0)):
     staged = preparation.stage_prepared_state(
         producer_sha256=identity.producer_sha256,
         output_plan_sha256=identity.output_plan_sha256,
@@ -271,7 +284,7 @@ with preparation.reserve_preparation(identity):
         preparation = preparation_repository(repository)
         with (
             pytest.raises(ExecutionError, match="cancelled") as raised,
-            preparation.reserve_preparation(identity, cancelled=lambda: True),
+            preparation.reserve_preparation(identity, cancelled=lambda: True, wait=_WAIT),
         ):
             raise AssertionError("crashed reservation has not expired")
         assert raised.value.code == "preparation_cancelled"
@@ -287,7 +300,7 @@ with preparation.reserve_preparation(identity):
         assert not staged_path.exists()
     with (
         ExportRepository.open(root, limits=limits) as repository,
-        preparation_repository(repository).reserve_preparation(identity),
+        preparation_repository(repository).reserve_preparation(identity, wait=_WAIT),
     ):
         pass
 
@@ -306,7 +319,11 @@ import sys
 import time
 from pathlib import Path
 from marimo_export._repository.models import RepositoryBusyError
-from marimo_export._repository.preparation import RepositoryIdentity, preparation_repository
+from marimo_export._repository.preparation import (
+    RepositoryIdentity,
+    RepositoryWait,
+    preparation_repository,
+)
 from marimo_export.repository import ExportRepository, RepositoryLimits
 
 root = Path(sys.argv[1])
@@ -316,7 +333,7 @@ limits = RepositoryLimits(lease_ttl_seconds=10.0, lease_heartbeat_seconds=0.1)
 identity = RepositoryIdentity(sys.argv[2], sys.argv[3], sys.argv[4])
 repository = ExportRepository.open(root, limits=limits)
 preparation = preparation_repository(repository)
-context = preparation.reserve_preparation(identity)
+context = preparation.reserve_preparation(identity, wait=RepositoryWait(30.0))
 reservation = context.__enter__()
 staged_state = preparation.stage_prepared_state(
     producer_sha256=identity.producer_sha256,
@@ -403,7 +420,7 @@ os._exit(0)
         time.sleep(0.05)
     with ExportRepository.open(root, limits=limits) as repository:
         assert all(not path.exists() for path in paths)
-        with preparation_repository(repository).reserve_preparation(identity) as winner:
+        with preparation_repository(repository).reserve_preparation(identity, wait=_WAIT) as winner:
             assert winner.fence > initial["fence"]
         assert repository.status().prepared_states == 0
         assert repository.status().generations == 0
@@ -431,7 +448,7 @@ def test_different_specs_adopt_one_identical_shared_state(tmp_path: Path) -> Non
         inputs = {"value": 1}
         preparation = preparation_repository(repository)
         with (
-            preparation.reserve_preparation(identity),
+            preparation.reserve_preparation(identity, wait=_WAIT),
             preparation.stage_prepared_state(
                 producer_sha256=producer,
                 output_plan_sha256=output_plan,
@@ -466,14 +483,14 @@ def test_same_repository_serializes_same_identity_reservations(tmp_path: Path) -
     second_entered = threading.Event()
 
     def first_operation() -> None:
-        with preparation.reserve_preparation(identity, timeout=10):
+        with preparation.reserve_preparation(identity, wait=RepositoryWait(timeout_seconds=10)):
             first_entered.set()
             assert release_first.wait(timeout=10)
 
     def second_operation() -> None:
         assert first_entered.wait(timeout=10)
         second_started.set()
-        with preparation.reserve_preparation(identity, timeout=10):
+        with preparation.reserve_preparation(identity, wait=RepositoryWait(timeout_seconds=10)):
             second_entered.set()
 
     first_thread = threading.Thread(target=first_operation)
@@ -505,13 +522,13 @@ def test_same_repository_reservation_wait_cancellation_is_public_error(
             with preparation.reserve_preparation(
                 identity,
                 cancelled=lambda: True,
-                timeout=10,
+                wait=RepositoryWait(timeout_seconds=10),
             ):
                 raise AssertionError("cancelled reservation must not be acquired")
         except BaseException as error:
             failures.append(error)
 
-    with preparation.reserve_preparation(identity):
+    with preparation.reserve_preparation(identity, wait=_WAIT):
         waiting = threading.Thread(target=wait_for_reservation)
         waiting.start()
         waiting.join(timeout=10)
@@ -664,3 +681,165 @@ def test_maintenance_connection_waits_for_peer_handle_on_windows(
             assert opening.result(timeout=10) == ("singleton",)
     finally:
         peer.close()
+
+
+def _hold_first_admission(
+    monkeypatch: pytest.MonkeyPatch,
+    repository: ExportRepository,
+    *,
+    holding: threading.Event,
+    release: threading.Event,
+) -> None:
+    """Keep the maintenance lock held inside this repository's first commit admission."""
+
+    native_admit = repository._artifacts._admit
+
+    def admit(candidate: AdmissionCandidate) -> None:
+        if not holding.is_set():
+            holding.set()
+            assert release.wait(timeout=30)
+        native_admit(candidate)
+
+    monkeypatch.setattr(repository._artifacts, "_admit", admit)
+
+
+def _borrowed(spec: ExportSpec, producer) -> _BorrowedSession:
+    return _BorrowedSession(
+        _plan_wire(spec, producer),
+        SimpleNamespace(
+            index=_index(spec, producer),
+            assets={},
+            output_cache=CacheSummary(hits=0, misses=1),
+            notebook_cache=CacheSummary(hits=0, misses=1),
+            capture_seconds=0.01,
+        ),
+    )
+
+
+def test_capture_waits_for_another_export_commit_on_the_same_repository(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = tmp_path / "repository"
+    producer = _producer(tmp_path / "notebook.py")
+    first_spec = _spec(states={"baseline": {"choice": "A"}})
+    second_spec = _spec(states={"baseline": {"choice": "B"}})
+    holding = threading.Event()
+    release = threading.Event()
+    waiting = threading.Event()
+    events: list[ProgressEvent] = []
+
+    def progress(event: ProgressEvent) -> None:
+        events.append(event)
+        if event.kind == "repository_wait_started":
+            waiting.set()
+
+    first = ExportRepository.open(root)
+    second = ExportRepository.open(root)
+    _hold_first_admission(monkeypatch, first, holding=holding, release=release)
+    try:
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            holder = executor.submit(
+                capture_session,
+                _borrowed(first_spec, producer),
+                spec=first_spec,
+                repository=first,
+            )
+            assert holding.wait(timeout=10)
+            waiter = executor.submit(
+                capture_session,
+                _borrowed(second_spec, producer),
+                spec=second_spec,
+                repository=second,
+                progress=progress,
+            )
+            try:
+                assert waiting.wait(timeout=5)
+                assert not waiter.done()
+            finally:
+                release.set()
+            with holder.result(timeout=30) as held, waiter.result(timeout=30) as waited:
+                assert held.plan.spec_sha256 != waited.plan.spec_sha256
+        kinds = [event.kind for event in events]
+        assert kinds.index("repository_wait_started") < kinds.index("plan_ready")
+        assert kinds[-1] == "prepared_committed"
+        assert second.status().generations == 2
+    finally:
+        release.set()
+        first.close()
+        second.close()
+
+
+def test_capture_raises_busy_when_the_lock_outlives_its_timeout(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = tmp_path / "repository"
+    producer = _producer(tmp_path / "notebook.py")
+    first_spec = _spec(states={"baseline": {"choice": "A"}})
+    second_spec = _spec(states={"baseline": {"choice": "B"}})
+    holding = threading.Event()
+    release = threading.Event()
+    events: list[ProgressEvent] = []
+    first = ExportRepository.open(root)
+    second = ExportRepository.open(root)
+    _hold_first_admission(monkeypatch, first, holding=holding, release=release)
+    try:
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            holder = executor.submit(
+                capture_session,
+                _borrowed(first_spec, producer),
+                spec=first_spec,
+                repository=first,
+            )
+            try:
+                assert holding.wait(timeout=10)
+                started = time.monotonic()
+                with pytest.raises(RepositoryBusyError) as raised:
+                    capture_session(
+                        _borrowed(second_spec, producer),
+                        spec=second_spec,
+                        repository=second,
+                        timeout=0.5,
+                        progress=events.append,
+                    )
+                elapsed = time.monotonic() - started
+            finally:
+                release.set()
+            holder.result(timeout=30).close()
+        assert raised.value.code == "repository_busy"
+        assert elapsed < 5
+        assert [event.kind for event in events] == [
+            "inspection_started",
+            "repository_wait_started",
+        ]
+    finally:
+        release.set()
+        first.close()
+        second.close()
+
+
+def test_prune_raises_busy_when_the_lock_outlives_its_timeout(tmp_path: Path) -> None:
+    root = tmp_path / "repository"
+    with (
+        ExportRepository.open(root) as repository,
+        maintenance_module.maintenance_lock(root, _WAIT),
+    ):
+        started = time.monotonic()
+        with pytest.raises(RepositoryBusyError) as raised:
+            repository.prune(dry_run=True, timeout=0.2)
+        assert time.monotonic() - started < 5
+    assert raised.value.code == "repository_busy"
+
+
+@pytest.mark.parametrize(("timeout", "error"), [(True, TypeError), (0, ValueError)])
+def test_prune_rejects_invalid_timeout(
+    tmp_path: Path,
+    timeout: float,
+    error: type[Exception],
+) -> None:
+    with (
+        ExportRepository.open(tmp_path / "repository") as repository,
+        pytest.raises(error, match="timeout"),
+    ):
+        repository.prune(timeout=timeout)

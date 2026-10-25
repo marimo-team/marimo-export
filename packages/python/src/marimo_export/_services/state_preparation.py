@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 from typing import Protocol
 
-from marimo_export._repository.preparation import PreparationRepository
+from marimo_export._repository.preparation import PreparationRepository, RepositoryWait
 from marimo_export._services.export_artifacts import (
     assemble_export,
     commit_captured_state,
@@ -61,6 +61,7 @@ def prepare_states(
     plan: ExportPlan,
     producer: ProducerIdentity,
     preparation: PreparationRepository,
+    wait: RepositoryWait,
     repository: ExportRepository,
     owns_repository: bool,
     capture_state: Callable[[ExportSpec], CapturedState],
@@ -76,6 +77,7 @@ def prepare_states(
             producer_sha256=plan.producer_sha256,
             output_plan_sha256=plan.output_plan_sha256,
             state_fingerprints=plan.state_fingerprints,
+            wait=wait,
         )
     )
     plan = replace_reuse_partition(plan, tuple(sorted(states)))

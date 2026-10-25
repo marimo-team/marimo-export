@@ -152,6 +152,7 @@ class Session:
             self,
             spec=spec,
             repository=repository,
+            timeout=self._client._timeout,
             progress=progress,
         )
 
@@ -256,7 +257,7 @@ class Session:
 class Client:
     """Authenticated client for borrowed marimo edit sessions."""
 
-    __slots__ = ("_closed", "_transport")
+    __slots__ = ("_closed", "_timeout", "_transport")
 
     def __init__(
         self,
@@ -266,7 +267,7 @@ class Client:
         server_token: str | None = None,
         timeout: float = 30.0,
     ) -> None:
-        _timeout(timeout)
+        self._timeout = _timeout(timeout)
         explicit_access = access_token
         explicit_server = server_token
         if explicit_access is None:
@@ -277,7 +278,7 @@ class Client:
             server,
             access_token=explicit_access,
             server_token=explicit_server,
-            timeout=float(timeout),
+            timeout=self._timeout,
         )
         self._closed = False
 

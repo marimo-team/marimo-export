@@ -17,6 +17,7 @@ from marimo_export.repository import (
 )
 from marimo_export.wire import state_fingerprint
 from repository_test_support import (
+    _WAIT,
     _export,
     _identity,
     _state,
@@ -38,7 +39,7 @@ def test_interrupted_generation_swap_restores_verified_backup(tmp_path: Path) ->
         backup = target.parent / f".{instance}-incomplete-1"
         os.replace(target, backup)
         repository._recover()
-        recovered = preparation_repository(repository).current(identity)
+        recovered = preparation_repository(repository).current(identity, wait=_WAIT)
         assert recovered is not None
         assert recovered.asset("index.json") is not None
         assert not backup.exists()
@@ -69,7 +70,7 @@ def test_same_instance_advances_coverage_without_regression(tmp_path: Path) -> N
         )
         assert second.instance == first.instance
         assert second.captured_observation_revision == 2
-        current = preparation_repository(repository).current(identity)
+        current = preparation_repository(repository).current(identity, wait=_WAIT)
         assert current is not None
         assert current.captured_observation_revision == 2
         first.close()
@@ -84,7 +85,7 @@ def test_future_observation_coverage_is_rejected_atomically(tmp_path: Path) -> N
         state = _state(repository, identity, 1)
         with pytest.raises(ValueError, match="exceeds producer revision"):
             _export(repository, identity, state, "future", revision=1)
-        assert preparation_repository(repository).current(identity) is None
+        assert preparation_repository(repository).current(identity, wait=_WAIT) is None
         state.close()
 
 
@@ -169,9 +170,10 @@ def test_replacement_overcommit_preserves_old_handle_then_returns_to_quota(
             producer_sha256=identity.producer_sha256,
             output_plan_sha256=identity.output_plan_sha256,
             state_fingerprints=(fingerprint,),
+            wait=_WAIT,
         )
         state = states[fingerprint]
-        old = preparation.current(identity)
+        old = preparation.current(identity, wait=_WAIT)
         assert old is not None
         old_path = old.path
         replacement = _export(
@@ -216,7 +218,11 @@ import sys
 import time
 from hashlib import sha256
 from pathlib import Path
-from marimo_export._repository.preparation import RepositoryIdentity, preparation_repository
+from marimo_export._repository.preparation import (
+    RepositoryIdentity,
+    RepositoryWait,
+    preparation_repository,
+)
 from marimo_export.repository import ExportRepository, RepositoryLimits
 
 def verify(path):
@@ -231,7 +237,7 @@ limits = RepositoryLimits(
     lease_heartbeat_seconds=0.1,
 )
 repository = ExportRepository.open(sys.argv[1], limits=limits)
-handle = preparation_repository(repository).current(identity)
+handle = preparation_repository(repository).current(identity, wait=RepositoryWait(30.0))
 if handle is None:
     raise RuntimeError("generation missing")
 Path(sys.argv[5]).write_text("ready", encoding="utf-8")

@@ -48,7 +48,8 @@ def test_exact_prepare_closes_artifact_when_preflight_guard_fails(
     storage = preparation_repository(repository)
     lookups = 0
 
-    def current(_identity):
+    def current(_identity, *, wait):
+        del wait
         nonlocal lookups
         lookups += 1
         if after_reservation and lookups == 1:
@@ -95,7 +96,7 @@ def test_exact_prepare_closes_artifact_when_plan_resolution_fails(
     def fail_plan(*_args: object) -> None:
         raise IntegrityError("prepared export plan could not be resolved")
 
-    monkeypatch.setattr(storage, "current", lambda _identity: artifact)
+    monkeypatch.setattr(storage, "current", lambda _identity, *, wait: artifact)
     monkeypatch.setattr(
         "marimo_export._services.prepare_export.preflight_plan",
         lambda *_args, **_kwargs: preflight,
@@ -192,7 +193,7 @@ def test_repository_prepared_closes_artifact_when_handle_creation_fails(
     monkeypatch.setattr(
         type(repository._artifacts),
         "current",
-        lambda _artifacts, _identity: artifact,
+        lambda _artifacts, _identity, *, wait: artifact,
     )
     monkeypatch.setattr(
         "marimo_export.repository._artifact_matches_plan",

@@ -12,6 +12,7 @@ from uuid import uuid4
 from marimo_export._repository.models import (
     RepositoryBusyError,
     RepositoryUnavailableError,
+    RepositoryWait,
 )
 from marimo_export._repository.paths import sync_directory
 
@@ -21,33 +22,48 @@ class _InvalidMaintenanceSchema(RuntimeError):
 
 
 @contextmanager
-def maintenance_lock(root: Path, *, timeout_seconds: float = 10.0) -> Iterator[None]:
+def maintenance_lock(root: Path, wait: RepositoryWait) -> Iterator[None]:
     """Serialize artifact filesystem mutations without blocking catalog heartbeats."""
 
     path = root / "maintenance.sqlite3"
-    connection = _connect(path, timeout_seconds=timeout_seconds)
-    begun = False
+    deadline = time.monotonic() + wait.timeout_seconds
     try:
         try:
-            connection.execute("BEGIN IMMEDIATE")
-        except sqlite3.OperationalError as error:
-            if any(term in str(error).lower() for term in ("locked", "busy")):
-                raise RepositoryBusyError(
-                    "The export repository maintenance lock remained busy."
-                ) from error
-            raise RepositoryUnavailableError(
-                "The export repository maintenance lock is unavailable."
-            ) from error
-        begun = True
-        yield
-        connection.commit()
-        begun = False
-    finally:
-        if begun:
+            connection = _begin(path, timeout_seconds=0)
+        except RepositoryBusyError:
+            if wait.timeout_seconds <= 0:
+                raise
+            wait.started("another operation holds the repository maintenance lock")
+            connection = _begin(path, timeout_seconds=deadline - time.monotonic())
+        try:
+            yield
+            connection.commit()
+        except BaseException:
             connection.rollback()
-        connection.close()
+            raise
+        finally:
+            connection.close()
+    finally:
         if os.name != "nt" and path.is_file() and not path.is_symlink():
             os.chmod(path, 0o600)
+
+
+def _begin(path: Path, *, timeout_seconds: float) -> sqlite3.Connection:
+    connection = _connect(path, timeout_seconds=timeout_seconds)
+    try:
+        connection.execute("BEGIN IMMEDIATE")
+    except BaseException as error:
+        connection.close()
+        if not isinstance(error, sqlite3.OperationalError):
+            raise
+        if any(term in str(error).lower() for term in ("locked", "busy")):
+            raise RepositoryBusyError(
+                "The export repository maintenance lock remained busy."
+            ) from error
+        raise RepositoryUnavailableError(
+            "The export repository maintenance lock is unavailable."
+        ) from error
+    return connection
 
 
 def _connect(path: Path, *, timeout_seconds: float) -> sqlite3.Connection:
@@ -85,16 +101,9 @@ def _connect(path: Path, *, timeout_seconds: float) -> sqlite3.Connection:
         except sqlite3.DatabaseError as error:
             connection.close()
             after = _lock_stat(path)
-            if before is None or after is None or not os.path.samestat(before, after):
-                remaining = deadline - time.monotonic()
-                if remaining <= 0:
-                    raise RepositoryUnavailableError(
-                        "The export repository maintenance lock is unavailable."
-                    ) from error
-                time.sleep(min(0.01, remaining))
-                continue
             message = str(error).lower()
-            if any(term in message for term in ("locked", "busy")):
+            replaced = before is None or after is None or not os.path.samestat(before, after)
+            if replaced or any(term in message for term in ("locked", "busy")):
                 remaining = deadline - time.monotonic()
                 if remaining <= 0:
                     raise RepositoryBusyError(

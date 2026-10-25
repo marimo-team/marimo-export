@@ -92,7 +92,7 @@ def commit_prepared_state(
         reservation_fence=staged._reservation.fence,
         reservation_spec_sha256=staged._reservation.identity.spec_sha256,
         now_us=_now_us(),
-        timeout_seconds=staged._reservation.operation_timeout_seconds,
+        timeout_seconds=staged._reservation.wait.timeout_seconds,
     )
     expiry = context.leases.expiry()
     target_preexisting = target.exists() or target.is_symlink()
@@ -120,7 +120,7 @@ def commit_prepared_state(
             reservation_identity_key=staged._reservation.identity_key,
             reservation_fence=staged._reservation.fence,
             reservation_spec_sha256=staged._reservation.identity.spec_sha256,
-            timeout_seconds=staged._reservation.operation_timeout_seconds,
+            timeout_seconds=staged._reservation.wait.timeout_seconds,
         )
     except BaseException as error:
         if not target_preexisting:
@@ -189,7 +189,7 @@ def commit_export(
         reservation_identity_key=staged._reservation.identity_key,
         reservation_fence=staged._reservation.fence,
         now_us=_now_us(),
-        timeout_seconds=staged._reservation.operation_timeout_seconds,
+        timeout_seconds=staged._reservation.wait.timeout_seconds,
     )
     if commit_guard is not None:
         commit_guard()
@@ -217,7 +217,7 @@ def commit_export(
             reservation_owner=staged._reservation.owner,
             reservation_identity_key=staged._reservation.identity_key,
             reservation_fence=staged._reservation.fence,
-            timeout_seconds=staged._reservation.operation_timeout_seconds,
+            timeout_seconds=staged._reservation.wait.timeout_seconds,
         )
     except BaseException as error:
         if not target_preexisting:

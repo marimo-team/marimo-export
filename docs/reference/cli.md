@@ -174,13 +174,13 @@ returns exit code `4`.
 
 ## Common options
 
-| Option              | Contract                                                                              |
-| ------------------- | ------------------------------------------------------------------------------------- |
-| `--spec FILE`       | Strict JSON or YAML ExportSpec                                                        |
-| `--repository DIR`  | Export repository for one command                                                     |
-| `--timeout SECONDS` | Positive finite startup, inactivity, or preparation-reservation timeout, default `30` |
-| `--json`            | One terminal JSON success or failure object                                           |
-| `--jsonl`           | Progress records followed by one terminal JSON Lines record                           |
+| Option              | Contract                                                                                                |
+| ------------------- | ------------------------------------------------------------------------------------------------------- |
+| `--spec FILE`       | Strict JSON or YAML ExportSpec                                                                          |
+| `--repository DIR`  | Export repository for one command                                                                       |
+| `--timeout SECONDS` | Positive finite startup, inactivity, preparation-reservation, and repository-lock timeout, default `30` |
+| `--json`            | One terminal JSON success or failure object                                                             |
+| `--jsonl`           | Progress records followed by one terminal JSON Lines record                                             |
 
 Repository precedence is:
 

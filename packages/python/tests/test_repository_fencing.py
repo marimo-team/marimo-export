@@ -17,6 +17,7 @@ from marimo_export._repository.models import (
 from marimo_export._repository.observations import observation_repository
 from marimo_export._repository.preparation import (
     RepositoryIdentity,
+    RepositoryWait,
     preparation_repository,
 )
 from marimo_export.repository import (
@@ -26,6 +27,7 @@ from marimo_export.repository import (
 )
 from marimo_export.wire import state_fingerprint
 from repository_test_support import (
+    _WAIT,
     _digest,
     _export,
     _identity,
@@ -43,7 +45,7 @@ def test_stale_reservation_fence_cannot_replace_new_owner_state(tmp_path: Path) 
     second = ExportRepository.open(root)
     first_preparation = preparation_repository(first)
     second_preparation = preparation_repository(second)
-    first_context = first_preparation.reserve_preparation(identity)
+    first_context = first_preparation.reserve_preparation(identity, wait=_WAIT)
     first_reservation = first_context.__enter__()
     first_staged = first_preparation.stage_prepared_state(
         producer_sha256=identity.producer_sha256,
@@ -67,7 +69,7 @@ def test_stale_reservation_fence_cannot_replace_new_owner_state(tmp_path: Path) 
     finally:
         connection.close()
 
-    with second_preparation.reserve_preparation(identity) as second_reservation:
+    with second_preparation.reserve_preparation(identity, wait=_WAIT) as second_reservation:
         assert second_reservation.fence > first_reservation.fence
         with second_preparation.stage_prepared_state(
             producer_sha256=identity.producer_sha256,
@@ -82,6 +84,7 @@ def test_stale_reservation_fence_cannot_replace_new_owner_state(tmp_path: Path) 
         producer_sha256=identity.producer_sha256,
         output_plan_sha256=identity.output_plan_sha256,
         state_fingerprints=(state_fingerprint({"value": 1}),),
+        wait=_WAIT,
     )
     assert reused[state_fingerprint({"value": 1})].instance == winner.instance
     for handle in reused.values():
@@ -98,7 +101,7 @@ def test_reservation_binds_staged_state_to_producer_and_output_plan(
     identity = _identity("binding")
     with ExportRepository.open(tmp_path / "repository") as repository:
         preparation = preparation_repository(repository)
-        with preparation.reserve_preparation(identity):
+        with preparation.reserve_preparation(identity, wait=_WAIT):
             with pytest.raises(RuntimeError, match="another producer or output plan"):
                 preparation.stage_prepared_state(
                     producer_sha256=_digest("wrong-producer"),
@@ -128,14 +131,14 @@ def test_reservation_timeout_is_bounded_and_typed(tmp_path: Path) -> None:
     with (
         ExportRepository.open(root) as first,
         ExportRepository.open(root) as second,
-        preparation_repository(first).reserve_preparation(identity),
+        preparation_repository(first).reserve_preparation(identity, wait=_WAIT),
     ):
         started = time.monotonic()
         with (
             pytest.raises(RepositoryReservationTimeoutError),
             preparation_repository(second).reserve_preparation(
                 identity,
-                timeout=0.1,
+                wait=RepositoryWait(timeout_seconds=0.1),
                 poll_seconds=0.01,
             ),
         ):
@@ -155,7 +158,7 @@ def test_catalog_lock_respects_reservation_acquisition_timeout(tmp_path: Path) -
                 pytest.raises(RepositoryReservationTimeoutError),
                 preparation_repository(repository).reserve_preparation(
                     identity,
-                    timeout=0.1,
+                    wait=RepositoryWait(timeout_seconds=0.1),
                     poll_seconds=0.01,
                 ),
             ):
@@ -172,7 +175,9 @@ def test_acquisition_timeout_does_not_expire_owned_reservation(tmp_path: Path) -
     fingerprint = _digest("long-preparation-state")
     with ExportRepository.open(root) as repository:
         preparation = preparation_repository(repository)
-        with preparation.reserve_preparation(identity, timeout=0.05) as reservation:
+        with preparation.reserve_preparation(
+            identity, wait=RepositoryWait(timeout_seconds=0.05)
+        ) as reservation:
             time.sleep(0.1)
             assert reservation.alive
             with preparation.stage_prepared_state(
@@ -195,7 +200,7 @@ def test_lost_reservation_renewal_poison_stops_next_stage(tmp_path: Path) -> Non
     identity = _identity("lost-renewal")
     with ExportRepository.open(root, limits=limits) as repository:
         preparation = preparation_repository(repository)
-        with preparation.reserve_preparation(identity) as reservation:
+        with preparation.reserve_preparation(identity, wait=_WAIT) as reservation:
             connection = sqlite3.connect(root / "catalog.sqlite3")
             try:
                 connection.execute(
@@ -236,7 +241,7 @@ def test_busy_renewal_expires_reservation_and_staging_fail_closed(
     preparation = preparation_repository(repository)
     native_renew = repository._catalog.renew_lifecycle
     attempted = threading.Event()
-    with preparation.reserve_preparation(identity) as reservation:
+    with preparation.reserve_preparation(identity, wait=_WAIT) as reservation:
         staged_state = preparation.stage_prepared_state(
             producer_sha256=identity.producer_sha256,
             output_plan_sha256=identity.output_plan_sha256,
@@ -312,7 +317,7 @@ def test_delayed_success_after_deadline_does_not_revive_reservation(
     entered = threading.Event()
     proceed = threading.Event()
     blocked = False
-    with preparation.reserve_preparation(identity) as reservation:
+    with preparation.reserve_preparation(identity, wait=_WAIT) as reservation:
         staged_state = preparation.stage_prepared_state(
             producer_sha256=identity.producer_sha256,
             output_plan_sha256=identity.output_plan_sha256,
@@ -438,7 +443,7 @@ def test_stale_heartbeat_cannot_shorten_fresh_staging_or_reservation(
     entered = threading.Event()
     proceed = threading.Event()
     requested: list[int] = []
-    with preparation.reserve_preparation(identity) as reservation:
+    with preparation.reserve_preparation(identity, wait=_WAIT) as reservation:
         staged = preparation.stage_prepared_state(
             producer_sha256=identity.producer_sha256,
             output_plan_sha256=identity.output_plan_sha256,
@@ -566,6 +571,7 @@ def test_prepared_state_manifest_identity_is_bound_to_catalog_row(tmp_path: Path
             producer_sha256=identity.producer_sha256,
             output_plan_sha256=identity.output_plan_sha256,
             state_fingerprints=(fingerprint,),
+            wait=_WAIT,
         )
         assert prepared == {}
         assert not new_path.exists()
@@ -581,7 +587,7 @@ def test_stale_reservation_fence_cannot_replace_new_owner_generation(
     state = _state(first, identity, 1)
     first_preparation = preparation_repository(first)
     second_preparation = preparation_repository(second)
-    first_context = first_preparation.reserve_preparation(identity)
+    first_context = first_preparation.reserve_preparation(identity, wait=_WAIT)
     first_reservation = first_context.__enter__()
     first_staged = first_preparation.stage_export(identity)
     _write_index(first_staged.path, identity, state.state_fingerprint, 1, "first")
@@ -601,14 +607,14 @@ def test_stale_reservation_fence_cannot_replace_new_owner_generation(
     finally:
         connection.close()
 
-    with second_preparation.reserve_preparation(identity) as second_reservation:
+    with second_preparation.reserve_preparation(identity, wait=_WAIT) as second_reservation:
         assert second_reservation.fence > first_reservation.fence
         with second_preparation.stage_export(identity) as staged:
             _write_index(staged.path, identity, state.state_fingerprint, 1, "second")
             winner = staged.commit(states=(state,), captured_observation_revision=0)
     with pytest.raises(RepositoryFenceError, match="stale"):
         first_staged.commit(states=(state,), captured_observation_revision=0)
-    current = second_preparation.current(identity)
+    current = second_preparation.current(identity, wait=_WAIT)
     assert current is not None
     assert current.instance == winner.instance
     current.close()
@@ -648,8 +654,8 @@ def test_recovery_isolates_corrupt_generation_row_and_preserves_healthy_row(
         finally:
             connection.close()
         repository._recover()
-        assert preparation_repository(repository).current(corrupt_identity) is None
-        healthy = preparation_repository(repository).current(healthy_identity)
+        assert preparation_repository(repository).current(corrupt_identity, wait=_WAIT) is None
+        healthy = preparation_repository(repository).current(healthy_identity, wait=_WAIT)
         assert healthy is not None
         assert healthy.asset("index.json") is not None
         assert not corrupt_path.exists()
@@ -709,7 +715,7 @@ def test_recovery_drops_malformed_relation_keys_and_preserves_healthy_rows(
         repository._recover()
         preparation = preparation_repository(repository)
         for identity in (producer_identity, state_identity, export_identity):
-            assert preparation.current(identity) is None
+            assert preparation.current(identity, wait=_WAIT) is None
         for identity in (producer_identity, state_identity):
             assert not artifacts[identity][0].exists()
             assert not artifacts[identity][1].exists()
@@ -719,10 +725,11 @@ def test_recovery_drops_malformed_relation_keys_and_preserves_healthy_rows(
             producer_sha256=export_identity.producer_sha256,
             output_plan_sha256=export_identity.output_plan_sha256,
             state_fingerprints=(state_fingerprint({"value": 3}),),
+            wait=_WAIT,
         )
         assert tuple(reusable) == (state_fingerprint({"value": 3}),)
         reusable[state_fingerprint({"value": 3})].close()
-        healthy = preparation.current(healthy_identity)
+        healthy = preparation.current(healthy_identity, wait=_WAIT)
         assert healthy is not None
         assert healthy.asset("index.json") is not None
         assert artifacts[healthy_identity][0].is_dir()

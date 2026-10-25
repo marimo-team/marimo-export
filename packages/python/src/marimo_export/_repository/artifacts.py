@@ -19,7 +19,7 @@ from marimo_export._repository.models import (
     PruneResult,
     RepositoryIdentity,
     RepositoryLimits,
-    RepositoryReservationTimeoutError,
+    RepositoryWait,
 )
 from marimo_export._repository.sqlite.catalog import SqliteCatalog
 from marimo_export._repository.sqlite.maintenance import maintenance_lock
@@ -44,8 +44,9 @@ class ArtifactRepository:
         producer_sha256: str,
         output_plan_sha256: str,
         state_fingerprints: Sequence[str],
+        wait: RepositoryWait,
     ) -> Mapping[str, PreparedState]:
-        with self._maintenance():
+        with self._maintenance(wait):
             result, corrupt = artifact_access.lookup_prepared_states(
                 self._context,
                 producer_sha256=producer_sha256,
@@ -56,20 +57,14 @@ class ArtifactRepository:
                 artifact_lifecycle.recover(self._context)
             return result
 
-    def current(self, identity: RepositoryIdentity) -> PreparedExportArtifact | None:
-        with self._maintenance():
-            result, corrupt = artifact_access.current(self._context, identity)
-            if corrupt:
-                artifact_lifecycle.recover(self._context)
-            return result
-
-    def generation(
+    def current(
         self,
         identity: RepositoryIdentity,
-        instance: str,
+        *,
+        wait: RepositoryWait,
     ) -> PreparedExportArtifact | None:
-        with self._maintenance():
-            result, corrupt = artifact_access.generation(self._context, identity, instance)
+        with self._maintenance(wait):
+            result, corrupt = artifact_access.current(self._context, identity)
             if corrupt:
                 artifact_lifecycle.recover(self._context)
             return result
@@ -81,7 +76,7 @@ class ArtifactRepository:
         metadata: Mapping[str, object],
         replacing_instance: str | None,
     ) -> PreparedState:
-        with self._maintenance(timeout_seconds=staged._reservation.operation_timeout_seconds):
+        with self._maintenance(staged._reservation.wait):
             return artifact_commit.commit_prepared_state(
                 self._context,
                 staged,
@@ -99,7 +94,7 @@ class ArtifactRepository:
         replacing_instance: str | None,
         commit_guard: Callable[[], None] | None,
     ) -> PreparedExportArtifact:
-        with self._maintenance(timeout_seconds=staged._reservation.operation_timeout_seconds):
+        with self._maintenance(staged._reservation.wait):
             return artifact_commit.commit_export(
                 self._context,
                 staged,
@@ -110,38 +105,43 @@ class ArtifactRepository:
                 commit_guard=commit_guard,
             )
 
-    def new_staging(self, *, timeout_seconds: float = 10.0) -> Path:
-        with self._maintenance(timeout_seconds=timeout_seconds):
+    def new_staging(self, *, wait: RepositoryWait) -> Path:
+        with self._maintenance(wait):
             return artifact_lifecycle.new_staging(
                 self._context,
-                timeout_seconds=timeout_seconds,
+                timeout_seconds=wait.timeout_seconds,
             )
 
-    def discard_staging(self, path: Path) -> None:
-        with self._maintenance():
+    def discard_staging(self, path: Path, *, wait: RepositoryWait) -> None:
+        with self._maintenance(wait):
             artifact_lifecycle.discard_owned_staging(self._context, path)
 
-    def prune(self, *, dry_run: bool = False) -> PruneResult:
-        with self._maintenance():
+    def prune(self, *, dry_run: bool, wait: RepositoryWait) -> PruneResult:
+        with self._maintenance(wait):
             return artifact_lifecycle.prune(self._context, dry_run=dry_run, candidate=None)
 
-    def recover(self) -> None:
-        with self._maintenance():
+    def recover(self, *, wait: RepositoryWait) -> None:
+        with self._maintenance(wait):
             artifact_lifecycle.recover(self._context)
 
-    def retire_unindexed_artifacts(self) -> None:
-        with self._maintenance():
+    def retire_unindexed_artifacts(self, *, wait: RepositoryWait) -> None:
+        with self._maintenance(wait):
             artifact_lifecycle.retire_unindexed_artifacts(self._context)
 
-    def retire_catalog_snapshots(self, snapshots: tuple[Path, ...]) -> None:
-        with self._maintenance():
+    def retire_catalog_snapshots(
+        self,
+        snapshots: tuple[Path, ...],
+        *,
+        wait: RepositoryWait,
+    ) -> None:
+        with self._maintenance(wait):
             artifact_lifecycle.retire_catalog_snapshots(self._context, snapshots)
 
     def _admit(self, candidate: AdmissionCandidate) -> None:
         artifact_lifecycle.prune(self._context, dry_run=False, candidate=candidate)
 
     @contextmanager
-    def _maintenance(self, *, timeout_seconds: float = 10.0):
+    def _maintenance(self, wait: RepositoryWait):
         depth = getattr(self._local, "depth", 0)
         if depth:
             self._local.depth = depth + 1
@@ -150,9 +150,7 @@ class ArtifactRepository:
             finally:
                 self._local.depth = depth
             return
-        if timeout_seconds <= 0:
-            raise RepositoryReservationTimeoutError("The export preparation reservation timed out.")
-        with maintenance_lock(self._context.root, timeout_seconds=timeout_seconds):
+        with maintenance_lock(self._context.root, wait):
             self._local.depth = 1
             try:
                 yield

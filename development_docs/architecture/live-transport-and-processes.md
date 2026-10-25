@@ -165,8 +165,8 @@ The two capture entry points divide timeout ownership differently:
 | `capture(server, timeout=T)`                                   | `T`                    | `T`                                |
 | `connect(server, timeout=A)` then `session.capture(timeout=B)` | `A`                    | `B`                                |
 
-`Session.plan()` uses the parent client's HTTP timeout and acquires no
-preparation reservation.
+`Session.plan()` uses the parent client's timeout for HTTP and repository lock
+waits and acquires no preparation reservation.
 
 ## Server address and credential policy
 
@@ -280,6 +280,7 @@ blocking boundary:
 | Scratchpad execution                | Deadline resets after each response chunk         |
 | Session registry or asset download  | Absolute deadline for that bounded response       |
 | Reservation acquisition             | Bounded by the preparation timeout                |
+| Repository maintenance lock         | Fresh bound of the preparation timeout per wait   |
 | Managed process stop                | Soft wait, forced wait, and final bounded reaping |
 | Windows temporary-directory cleanup | Retries filesystem errors until the stop timeout  |
 

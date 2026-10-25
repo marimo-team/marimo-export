@@ -111,10 +111,13 @@ uv run marimo-export repository status --json
 uv run marimo-export repository prune --dry-run --json
 ```
 
-`repository_busy` usually means another healthy process holds a filesystem
-maintenance lock. `repository_reservation_timeout` means preparation could not
-acquire its exact-identity reservation within the configured timeout. Retry
-after the owning operation completes.
+`repository_busy` means another operation held the repository maintenance lock
+for longer than the configured `--timeout` or `timeout`. A preceding
+`repository_wait_started` progress event marks when the wait began.
+`repository_reservation_timeout` means preparation could not acquire its
+exact-identity reservation within the same timeout. Retry after the owning
+operation completes, or raise the timeout when another export on the same
+repository routinely runs longer.
 
 `repository_fence_stale` means a newer owner has commit authority. Discard the
 stale result and run `plan` or `prepare` again. A lost artifact lease or confirmed

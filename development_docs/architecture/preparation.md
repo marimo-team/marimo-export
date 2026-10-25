@@ -210,10 +210,11 @@ missing state, and before generation assembly. Cancellation releases the
 reservation, closes state handles, removes staging, and preserves the current
 generation.
 
-Reservation acquisition is bounded. File and borrowed-session preparation use
-their public `timeout` for reservation acquisition and individual repository
-operations. Expiry raises a repository failure with code
-`repository_reservation_timeout`.
+Reservation acquisition is bounded. File and borrowed-session preparation build
+one `RepositoryWait` from their public `timeout` and progress callback. It
+bounds reservation acquisition and each repository lock wait, and it reports
+each wait as `repository_wait_started`. Expiry raises a repository failure with
+code `repository_reservation_timeout`.
 
 After acquisition, the service combines caller cancellation with reservation
 liveness. A lost or reclaimed reservation stops later state work and the fenced

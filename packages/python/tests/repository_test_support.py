@@ -5,6 +5,7 @@ from pathlib import Path
 
 from marimo_export._repository.preparation import (
     RepositoryIdentity,
+    RepositoryWait,
     preparation_repository,
 )
 from marimo_export.descriptors import Provenance, ScalarDescriptor
@@ -18,6 +19,8 @@ from marimo_export.repository import (
     ExportRepository,
 )
 from marimo_export.wire import state_fingerprint
+
+_WAIT = RepositoryWait(timeout_seconds=30.0)
 
 
 def _digest(value: str) -> str:
@@ -35,7 +38,7 @@ def _export(
 ):
     preparation = preparation_repository(repository)
     with (
-        preparation.reserve_preparation(identity),
+        preparation.reserve_preparation(identity, wait=_WAIT),
         preparation.stage_export(identity) as staged,
     ):
         _write_index(
@@ -64,7 +67,7 @@ def _state(repository: ExportRepository, identity: RepositoryIdentity, value: in
     fingerprint = state_fingerprint({"value": value})
     preparation = preparation_repository(repository)
     with (
-        preparation.reserve_preparation(identity),
+        preparation.reserve_preparation(identity, wait=_WAIT),
         preparation.stage_prepared_state(
             producer_sha256=identity.producer_sha256,
             output_plan_sha256=identity.output_plan_sha256,

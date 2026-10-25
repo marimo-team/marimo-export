@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import math
 import re
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from types import MappingProxyType
@@ -70,6 +70,19 @@ def positive_integer(value: object, label: str) -> int:
     if value > MAX_SQLITE_INTEGER:
         raise ValueError(f"{label} exceeds SQLite's integer range")
     return value
+
+
+@dataclass(frozen=True, slots=True)
+class RepositoryWait:
+    """How long one repository operation waits for a busy lock or reservation.
+
+    Each acquisition first tries once without waiting. When the lock or
+    reservation is held elsewhere, it calls ``started`` once with the reason and
+    then waits up to ``timeout_seconds``. A zero timeout tries once.
+    """
+
+    timeout_seconds: float
+    started: Callable[[str], None] = lambda _reason: None
 
 
 @dataclass(frozen=True, slots=True)
@@ -404,6 +417,7 @@ __all__ = [
     "RepositoryReservationTimeoutError",
     "RepositoryStatus",
     "RepositoryUnavailableError",
+    "RepositoryWait",
     "SnapshotObservation",
     "digest",
     "positive_integer",

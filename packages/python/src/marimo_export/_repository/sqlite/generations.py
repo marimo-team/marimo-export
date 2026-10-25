@@ -219,33 +219,6 @@ def current(
     return row
 
 
-def by_instance(
-    connection: sqlite3.Connection,
-    identity: RepositoryIdentity,
-    instance: str,
-    *,
-    owner: str,
-    expires_at_us: int,
-    now_us: int,
-) -> GenerationRow | None:
-    raw_rows = rows(
-        connection,
-        "WHERE i.identity_key = ? AND g.instance = ?",
-        (identity.key, instance),
-    )
-    if not raw_rows:
-        return None
-    row = generation_row(raw_rows[0])
-    _touch(connection, row.identity_key, row.instance, now_us)
-    leases.acquire_artifacts(
-        connection,
-        owner,
-        (("generation", row.identity_key, row.instance),),
-        expires_at_us,
-    )
-    return row
-
-
 def all_rows(connection: sqlite3.Connection) -> tuple[GenerationRow, ...]:
     return tuple(generation_row(row) for row in rows(connection))
 
@@ -315,7 +288,6 @@ def _touch(
 
 __all__ = [
     "all_rows",
-    "by_instance",
     "check_commit",
     "commit",
     "current",

@@ -53,6 +53,7 @@ from preparation_test_support import (
     _spec,
     _spec_sha256,
 )
+from repository_test_support import _WAIT
 
 
 def test_implicit_repository_lives_until_prepared_export_close(
@@ -291,7 +292,7 @@ def test_prepared_asset_rejects_declared_payload_drift(
     )
     repository = ExportRepository.open(tmp_path / "repository")
     storage = preparation_repository(repository)
-    with storage.reserve_preparation(preflight.repository_identity):
+    with storage.reserve_preparation(preflight.repository_identity, wait=_WAIT):
         with storage.stage_prepared_state(
             producer_sha256=preflight.producer.producer_sha256,
             output_plan_sha256=preflight.repository_identity.output_plan_sha256,
@@ -373,7 +374,9 @@ def test_cancellation_preserves_previously_committed_artifacts(
             cancelled=lambda: True,
         )
 
-    current = preparation_repository(repository).current(first_preflight.repository_identity)
+    current = preparation_repository(repository).current(
+        first_preflight.repository_identity, wait=_WAIT
+    )
     assert current is not None
     current.close()
     repository.close()
@@ -411,11 +414,12 @@ def test_cancellation_after_state_execution_skips_state_and_generation_commit(
         )
 
     storage = preparation_repository(repository)
-    assert storage.current(preflight.repository_identity) is None
+    assert storage.current(preflight.repository_identity, wait=_WAIT) is None
     prepared_states = storage.lookup_prepared_states(
         producer_sha256=preflight.producer.producer_sha256,
         output_plan_sha256=preflight.repository_identity.output_plan_sha256,
         state_fingerprints=(state_fingerprint({"choice": "A"}),),
+        wait=_WAIT,
     )
     assert prepared_states == {}
     repository.close()
@@ -452,7 +456,10 @@ def test_live_sparse_baseline_change_replaces_nonmatching_exact_artifact(tmp_pat
         states={old_fingerprint: _entry(old_inputs)},
     )
     storage = preparation_repository(repository)
-    with storage.reserve_preparation(identity), storage.stage_export(identity) as staged:
+    with (
+        storage.reserve_preparation(identity, wait=_WAIT),
+        storage.stage_export(identity) as staged,
+    ):
         (staged.path / "index.json").write_bytes(old_index.to_bytes())
         old_artifact = staged.commit(states=(old_state,), captured_observation_revision=0)
     old_instance = old_artifact.instance
@@ -513,7 +520,7 @@ def test_live_sparse_baseline_change_replaces_nonmatching_exact_artifact(tmp_pat
     assert prepared.reused is False
     assert prepared.open().default_state.inputs == {"choice": "B"}
     assert session.capture_calls == 1
-    current = preparation_repository(repository).current(identity)
+    current = preparation_repository(repository).current(identity, wait=_WAIT)
     assert current is not None
     assert current.instance != old_instance
     current.close()

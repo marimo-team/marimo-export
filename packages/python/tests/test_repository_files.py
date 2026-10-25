@@ -15,6 +15,7 @@ from marimo_export._diagnostics import cleanup_failures
 from marimo_export._repository.files import atomic_install
 from marimo_export._repository.paths import export_path
 from marimo_export._repository.preparation import (
+    RepositoryWait,
     preparation_repository,
 )
 from marimo_export.repository import (
@@ -23,6 +24,7 @@ from marimo_export.repository import (
 )
 from marimo_export.wire import state_fingerprint
 from repository_test_support import (
+    _WAIT,
     _export,
     _identity,
     _state,
@@ -161,7 +163,7 @@ def test_state_commit_preserves_primary_and_records_staging_cleanup_failure(
     repository = ExportRepository.open(tmp_path / "repository")
     preparation = preparation_repository(repository)
     native_discard = repository._artifacts.discard_staging
-    with preparation.reserve_preparation(identity):
+    with preparation.reserve_preparation(identity, wait=_WAIT):
         staged = preparation.stage_prepared_state(
             producer_sha256=identity.producer_sha256,
             output_plan_sha256=identity.output_plan_sha256,
@@ -171,7 +173,8 @@ def test_state_commit_preserves_primary_and_records_staging_cleanup_failure(
         def reject(*_args: object, **_kwargs: object):
             raise ValueError("commit failed")
 
-        def reject_cleanup(_path: Path) -> None:
+        def reject_cleanup(_path: Path, *, wait: RepositoryWait) -> None:
+            del wait
             raise PermissionError("cleanup unavailable")
 
         monkeypatch.setattr(repository._artifacts, "commit_prepared_state", reject)
@@ -182,7 +185,7 @@ def test_state_commit_preserves_primary_and_records_staging_cleanup_failure(
             "prepared state staging cleanup also failed: PermissionError",
         )
         monkeypatch.setattr(repository._artifacts, "discard_staging", native_discard)
-        native_discard(staged.path)
+        native_discard(staged.path, wait=_WAIT)
     repository.close()
 
 
@@ -236,7 +239,7 @@ def test_committed_export_survives_staging_cleanup_failure(
         monkeypatch.setattr(repository._artifacts, "discard_staging", fail_cleanup)
         export = _export(repository, identity, state, "committed")
         assert export.asset("index.json") is not None
-        current = preparation_repository(repository).current(identity)
+        current = preparation_repository(repository).current(identity, wait=_WAIT)
         assert current is not None
         assert current.instance == export.instance
         current.close()

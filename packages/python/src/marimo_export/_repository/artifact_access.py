@@ -64,23 +64,6 @@ def current(
     return handle, row is not None and handle is None
 
 
-def generation(
-    context: ArtifactContext,
-    identity: RepositoryIdentity,
-    instance: str,
-) -> tuple[PreparedExportArtifact | None, bool]:
-    expiry = context.leases.expiry()
-    row = context.catalog.generation(
-        identity,
-        instance,
-        owner=context.leases.owner,
-        expires_at_us=expiry,
-        now_us=_now_us(),
-    )
-    handle = open_generation(context, row, expiry)
-    return handle, row is not None and handle is None
-
-
 def open_state(
     context: ArtifactContext,
     row: StateRow,
@@ -233,7 +216,6 @@ def _now_us() -> int:
 
 __all__ = [
     "current",
-    "generation",
     "generation_handle",
     "generation_state_fingerprints",
     "lookup_prepared_states",

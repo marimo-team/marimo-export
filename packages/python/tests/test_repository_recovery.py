@@ -32,6 +32,7 @@ from marimo_export.repository import (
 )
 from marimo_export.wire import state_fingerprint
 from repository_test_support import (
+    _WAIT,
     _digest,
     _export,
     _identity,
@@ -166,7 +167,7 @@ def test_corrupt_generation_metadata_is_removed_with_files(tmp_path: Path) -> No
             connection.commit()
         finally:
             connection.close()
-        assert preparation_repository(repository).current(identity) is None
+        assert preparation_repository(repository).current(identity, wait=_WAIT) is None
         assert repository.status().generations == 0
         assert not path.exists()
 
@@ -195,7 +196,7 @@ def test_failed_corrupt_artifact_removal_remains_accounted(
 
         monkeypatch.setattr(files_module.shutil, "rmtree", fail_retired)
         with pytest.raises(PermissionError, match="corrupt artifact"):
-            preparation_repository(repository).current(identity)
+            preparation_repository(repository).current(identity, wait=_WAIT)
         accounted = repository.status().content_bytes
         assert accounted >= retired_bytes
         assert tuple(root.rglob("*-quarantine-*"))
@@ -241,7 +242,7 @@ def test_symlinked_prepared_state_member_is_rejected(tmp_path: Path) -> None:
     identity = _identity("symlink")
     with ExportRepository.open(tmp_path / "repository") as repository:
         preparation = preparation_repository(repository)
-        with preparation.reserve_preparation(identity):
+        with preparation.reserve_preparation(identity, wait=_WAIT):
             staged = preparation.stage_prepared_state(
                 producer_sha256=identity.producer_sha256,
                 output_plan_sha256=identity.output_plan_sha256,
@@ -295,7 +296,7 @@ def test_default_verifier_requires_exact_spec_and_state_membership(tmp_path: Pat
         state = _state(repository, identity, 1)
         preparation = preparation_repository(repository)
         with (
-            preparation.reserve_preparation(identity),
+            preparation.reserve_preparation(identity, wait=_WAIT),
             preparation.stage_export(identity) as staged,
         ):
             (staged.path / "index.json").write_bytes(index.to_bytes())
@@ -367,7 +368,7 @@ def test_transient_export_read_failure_preserves_catalog_and_files(
 
         monkeypatch.setattr(reader_module, "read_export_index", fail_read)
         with pytest.raises(ExportUnavailableError):
-            preparation_repository(repository).current(identity)
+            preparation_repository(repository).current(identity, wait=_WAIT)
         assert repository.status().generations == 1
         assert path.is_dir()
 
@@ -408,7 +409,7 @@ def test_transient_export_root_failure_preserves_catalog_and_files(
 
         monkeypatch.setattr(Path, operation, fail)
         with pytest.raises(ExportUnavailableError):
-            preparation_repository(repository).current(identity)
+            preparation_repository(repository).current(identity, wait=_WAIT)
         assert repository.status().generations == 1
         assert path.is_dir()
 
@@ -425,7 +426,7 @@ def test_transient_asset_directory_failure_preserves_catalog_and_files(
         state = _state(repository, identity, 1)
         preparation = preparation_repository(repository)
         with (
-            preparation.reserve_preparation(identity),
+            preparation.reserve_preparation(identity, wait=_WAIT),
             preparation.stage_export(identity) as staged,
         ):
             _write_index(staged.path, identity, state.state_fingerprint, 1, "stable")
@@ -444,7 +445,7 @@ def test_transient_asset_directory_failure_preserves_catalog_and_files(
 
         monkeypatch.setattr(Path, operation, fail)
         with pytest.raises(ExportUnavailableError):
-            preparation.current(identity)
+            preparation.current(identity, wait=_WAIT)
         assert repository.status().generations == 1
         assert path.is_dir()
 
@@ -459,7 +460,7 @@ def test_unreadable_nested_prepared_state_preserves_catalog_and_files(
     with ExportRepository.open(root) as repository:
         preparation = preparation_repository(repository)
         with (
-            preparation.reserve_preparation(identity),
+            preparation.reserve_preparation(identity, wait=_WAIT),
             preparation.stage_prepared_state(
                 producer_sha256=identity.producer_sha256,
                 output_plan_sha256=identity.output_plan_sha256,
@@ -480,6 +481,7 @@ def test_unreadable_nested_prepared_state_preserves_catalog_and_files(
                     producer_sha256=identity.producer_sha256,
                     output_plan_sha256=identity.output_plan_sha256,
                     state_fingerprints=(fingerprint,),
+                    wait=_WAIT,
                 )
             assert repository.status().prepared_states == 1
             assert path.is_dir()
@@ -498,7 +500,7 @@ def test_unreadable_nested_export_tree_preserves_catalog_and_files(
         state = _state(repository, identity, 1)
         preparation = preparation_repository(repository)
         with (
-            preparation.reserve_preparation(identity),
+            preparation.reserve_preparation(identity, wait=_WAIT),
             preparation.stage_export(identity) as staged,
         ):
             _write_index(staged.path, identity, state.state_fingerprint, 1, "stable")
@@ -512,7 +514,7 @@ def test_unreadable_nested_export_tree_preserves_catalog_and_files(
         os.chmod(nested, 0)
         try:
             with pytest.raises(ExportUnavailableError):
-                preparation.current(identity)
+                preparation.current(identity, wait=_WAIT)
             assert repository.status().generations == 1
             assert path.is_dir()
         finally:

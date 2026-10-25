@@ -317,9 +317,10 @@ are reusable or missing. An exact prepared export avoids notebook startup.
 Otherwise, planning runs the notebook's initial autorun to inspect its baseline
 and dependencies.
 
-`timeout` must be a positive finite number. It bounds managed server startup and
-transport inactivity. A caller-supplied repository stays caller-owned. A
-repository opened by `plan()` closes before the call returns.
+`timeout` must be a positive finite number. It bounds managed server startup,
+transport inactivity, and each repository lock wait. A caller-supplied repository
+stays caller-owned. A repository opened by `plan()` closes before the call
+returns.
 
 ### `ExportPlan`
 
@@ -399,6 +400,12 @@ deadline. When the active operation commits first, the waiter rechecks the
 repository and can return that exact generation without starting another
 notebook. Reservation timeout raises the public `RepositoryBusyError` base with
 code `repository_reservation_timeout`.
+
+Operations on one repository also share its maintenance lock for lookups,
+staging, and commits, whatever their identity. Each lock wait is bounded by the
+same `timeout`. A holder that outlasts it raises `RepositoryBusyError` with code
+`repository_busy`. Both kinds of wait emit one `repository_wait_started` event
+when they start.
 
 Each reservation carries a monotonically increasing fencing token. Loss of the
 reservation removes commit authority. A later state or generation commit then
@@ -542,28 +549,32 @@ prepared_committed
 write_finished
 delivery_verification_started
 delivery_commit_started
+repository_wait_started
 ```
 
 Each event contains `kind` and optional `completed`, `total`, `state`, `cache`,
 `elapsed_seconds`, and `message` fields. `to_dict()` includes every field and
 uses `None` when a field does not apply.
 
-`ProgressKind` is the type alias for the nine supported `kind` strings.
+`ProgressKind` is the type alias for the ten supported `kind` strings.
 
-| Event                           | Fields and timing                                                                                                        |
-| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `inspection_started`            | Emitted before file inspection and for every live plan or capture. Exact prepared-export reuse omits it.                 |
-| `plan_ready`                    | `completed` is the reusable-state count and `total` is the normalized-state count.                                       |
-| `prepared_reused`               | Emitted by `prepare()` and `capture()` for exact export reuse, with both counts equal to the normalized-state count.     |
-| `state_started`                 | `state` is the primary alias. `completed` includes reused and captured states. `total` counts all unique planned states. |
-| `state_finished`                | Advances the same complete-plan count and adds this state's cache activity and execution time.                           |
-| `prepared_committed`            | Emitted after the complete export generation commits.                                                                    |
-| `write_finished`                | Emitted after destination writing and verification, with write duration.                                                 |
-| `delivery_verification_started` | Emitted before a staged application verifies its nested exports and outer tree.                                          |
-| `delivery_commit_started`       | Emitted after staged verification and the commit guard, before final revalidation and destination mutation.              |
+| Event                           | Fields and timing                                                                                                                                |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `inspection_started`            | Emitted before file inspection and for every live plan or capture. Exact prepared-export reuse omits it.                                         |
+| `plan_ready`                    | `completed` is the reusable-state count and `total` is the normalized-state count.                                                               |
+| `prepared_reused`               | Emitted by `prepare()` and `capture()` for exact export reuse, with both counts equal to the normalized-state count.                             |
+| `state_started`                 | `state` is the primary alias. `completed` includes reused and captured states. `total` counts all unique planned states.                         |
+| `state_finished`                | Advances the same complete-plan count and adds this state's cache activity and execution time.                                                   |
+| `prepared_committed`            | Emitted after the complete export generation commits.                                                                                            |
+| `write_finished`                | Emitted after destination writing and verification, with write duration.                                                                         |
+| `delivery_verification_started` | Emitted before a staged application verifies its nested exports and outer tree.                                                                  |
+| `delivery_commit_started`       | Emitted after staged verification and the commit guard, before final revalidation and destination mutation.                                      |
+| `repository_wait_started`       | Emitted once each time a repository operation finds the maintenance lock or the export's preparation reservation held. `message` says which one. |
 
-An exact `prepare()` or `capture()` reuse path emits `plan_ready` and
-`prepared_reused` before a later write. An exact `plan()` reuse emits
+`repository_wait_started` can precede any repository operation in a producer
+call, so it can appear between any two events. An exact `prepare()` or
+`capture()` reuse path emits `plan_ready` and `prepared_reused` before a later
+write. An exact `plan()` reuse emits
 `plan_ready`. A path with missing work emits state events and
 `prepared_committed`.
 

@@ -31,6 +31,7 @@ from marimo_export.repository import (
     RepositoryLimits,
 )
 from marimo_export.wire import state_fingerprint
+from repository_test_support import _WAIT
 
 pytestmark = pytest.mark.serial
 
@@ -51,7 +52,7 @@ def _state(repository: ExportRepository, identity: RepositoryIdentity, value: in
     fingerprint = state_fingerprint({"value": value})
     preparation = preparation_repository(repository)
     with (
-        preparation.reserve_preparation(identity),
+        preparation.reserve_preparation(identity, wait=_WAIT),
         preparation.stage_prepared_state(
             producer_sha256=identity.producer_sha256,
             output_plan_sha256=identity.output_plan_sha256,
@@ -65,7 +66,7 @@ def _state(repository: ExportRepository, identity: RepositoryIdentity, value: in
 def _export(repository: ExportRepository, identity: RepositoryIdentity, state, value: int):
     preparation = preparation_repository(repository)
     with (
-        preparation.reserve_preparation(identity),
+        preparation.reserve_preparation(identity, wait=_WAIT),
         preparation.stage_export(identity) as staged,
     ):
         _write_index(staged.path, identity, state.state_fingerprint, value)
@@ -134,8 +135,8 @@ def test_active_leases_protect_artifacts_then_lru_prunes_them(tmp_path: Path) ->
         second_state.close()
         repository.prune()
         preparation = preparation_repository(repository)
-        assert preparation.current(first_identity) is None
-        kept = preparation.current(second_identity)
+        assert preparation.current(first_identity, wait=_WAIT) is None
+        kept = preparation.current(second_identity, wait=_WAIT)
         assert kept is not None
         kept.close()
 
@@ -161,7 +162,7 @@ def test_staging_acquisition_waits_within_operation_timeout(
 
         def create_staging() -> None:
             try:
-                staged.append(repository._artifacts.new_staging(timeout_seconds=10))
+                staged.append(repository._artifacts.new_staging(wait=_WAIT))
             except BaseException as error:
                 errors.append(error)
             finally:
@@ -179,7 +180,7 @@ def test_staging_acquisition_waits_within_operation_timeout(
         assert finished.wait(timeout=10)
         worker.join()
         assert not errors
-        repository._artifacts.discard_staging(staged.pop())
+        repository._artifacts.discard_staging(staged.pop(), wait=_WAIT)
 
 
 def test_reservation_is_exclusive_across_repository_process_owners(tmp_path: Path) -> None:
@@ -190,16 +191,17 @@ def test_reservation_is_exclusive_across_repository_process_owners(tmp_path: Pat
         ExportRepository.open(root) as second,
     ):
         with (
-            preparation_repository(first).reserve_preparation(identity),
+            preparation_repository(first).reserve_preparation(identity, wait=_WAIT),
             pytest.raises(ExecutionError, match="cancelled") as raised,
             preparation_repository(second).reserve_preparation(
                 identity,
                 cancelled=lambda: True,
+                wait=_WAIT,
             ),
         ):
             raise AssertionError("reservation must remain exclusive")
         assert raised.value.code == "preparation_cancelled"
-        with preparation_repository(second).reserve_preparation(identity):
+        with preparation_repository(second).reserve_preparation(identity, wait=_WAIT):
             pass
 
 
@@ -214,7 +216,7 @@ def test_corrupt_generation_is_quarantined_and_removed(tmp_path: Path) -> None:
         state.close()
         files_module.make_tree_writable(index.parent)
         index.write_text("corrupt", encoding="utf-8")
-        assert preparation_repository(repository).current(identity) is None
+        assert preparation_repository(repository).current(identity, wait=_WAIT) is None
         assert repository.status().generations == 0
 
 
@@ -250,7 +252,7 @@ def test_failed_verification_discards_staging_without_catalog_rows(
         state = _state(repository, identity, 1)
         preparation = preparation_repository(repository)
         with (
-            preparation.reserve_preparation(identity),
+            preparation.reserve_preparation(identity, wait=_WAIT),
             preparation.stage_export(identity) as staged,
         ):
             staging = staged.path
@@ -306,7 +308,7 @@ def test_staging_lease_releases_only_after_confirmed_removal(
     identity = _identity("staging")
     owner = ExportRepository.open(root)
     preparation = preparation_repository(owner)
-    reservation = preparation.reserve_preparation(identity)
+    reservation = preparation.reserve_preparation(identity, wait=_WAIT)
     reservation.__enter__()
     staged = preparation.stage_prepared_state(
         producer_sha256=identity.producer_sha256,
@@ -343,7 +345,7 @@ def test_close_is_bounded_when_catalog_release_is_blocked(tmp_path: Path) -> Non
     )
     identity = _identity("blocked-close")
     repository = ExportRepository.open(root, limits=limits)
-    reservation = preparation_repository(repository).reserve_preparation(identity)
+    reservation = preparation_repository(repository).reserve_preparation(identity, wait=_WAIT)
     reservation.__enter__()
     staged = preparation_repository(repository).stage_prepared_state(
         producer_sha256=identity.producer_sha256,
@@ -468,6 +470,7 @@ def test_repeated_busy_renewal_expires_artifact_handle_fail_closed(
         producer_sha256=identity.producer_sha256,
         output_plan_sha256=identity.output_plan_sha256,
         state_fingerprints=(fingerprint,),
+        wait=_WAIT,
     )[fingerprint]
     attempted = threading.Event()
 
@@ -559,6 +562,7 @@ def test_stale_artifact_heartbeat_cannot_shorten_fresh_reacquisition(
         producer_sha256=identity.producer_sha256,
         output_plan_sha256=identity.output_plan_sha256,
         state_fingerprints=(state.state_fingerprint,),
+        wait=_WAIT,
     )[state.state_fingerprint]
     connection = sqlite3.connect(repository.path / "catalog.sqlite3")
     try:
@@ -612,7 +616,7 @@ def test_delayed_success_after_deadline_does_not_revive_staging_lease(
         lease_heartbeat_seconds=0.1,
     )
     repository = ExportRepository.open(tmp_path / "repository", limits=limits)
-    staged = repository._artifacts.new_staging()
+    staged = repository._artifacts.new_staging(wait=_WAIT)
     relative = staged.relative_to(repository.path).as_posix()
     native_renew = repository._catalog.renew_lifecycle
     entered = threading.Event()
@@ -641,7 +645,7 @@ def test_delayed_success_after_deadline_does_not_revive_staging_lease(
     assert relative not in repository._leases._staging
     assert relative not in repository._leases._confirmed_staging_deadline
     monkeypatch.setattr(repository._catalog, "renew_lifecycle", native_renew)
-    repository._artifacts.discard_staging(staged)
+    repository._artifacts.discard_staging(staged, wait=_WAIT)
     repository.close()
 
 
@@ -696,6 +700,7 @@ def test_generation_membership_pins_prepared_state(tmp_path: Path) -> None:
             producer_sha256=first_identity.producer_sha256,
             output_plan_sha256=first_identity.output_plan_sha256,
             state_fingerprints=(fingerprint,),
+            wait=_WAIT,
         )
         assert fingerprint in reused
         reused[fingerprint].close()
@@ -755,7 +760,7 @@ def test_commit_returns_after_linearization_when_deferred_prune_would_fail(
         monkeypatch.setattr(repository._artifacts, "prune", fail_prune)
         export = _export(repository, identity, state, 1)
         assert export.asset("index.json") is not None
-        current = preparation_repository(repository).current(identity)
+        current = preparation_repository(repository).current(identity, wait=_WAIT)
         assert current is not None
         current.close()
         export.close()

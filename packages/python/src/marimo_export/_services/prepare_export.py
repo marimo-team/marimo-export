@@ -7,6 +7,7 @@ from collections.abc import Callable
 from marimo_export._diagnostics import record_cleanup_failure
 from marimo_export._repository.preparation import (
     PreparationRepository,
+    RepositoryWait,
     preparation_repository,
 )
 from marimo_export._services.plan_export import (
@@ -14,6 +15,7 @@ from marimo_export._services.plan_export import (
     ProgressCallback,
     plan_with_producer,
     preflight_plan,
+    repository_wait,
     require_preflight_current,
 )
 from marimo_export._services.preparation_support import (
@@ -45,7 +47,7 @@ def prepare(
         raise TypeError("spec must be an ExportSpec")
     if cancelled is not None and not callable(cancelled):
         raise TypeError("cancelled must be callable or None")
-    duration = _timeout(timeout)
+    wait = repository_wait(_timeout(timeout), progress)
     owns_repository = repository is None
     selected = ExportRepository.open() if repository is None else repository
     preparation = preparation_repository(selected)
@@ -53,7 +55,7 @@ def prepare(
     try:
         preflight = preflight_plan(source, spec)
         require_not_cancelled(cancelled)
-        exact = preparation.current(preflight.repository_identity)
+        exact = preparation.current(preflight.repository_identity, wait=wait)
         if exact is not None:
             prepared = exact_prepared(
                 exact,
@@ -69,12 +71,12 @@ def prepare(
             return prepared
         with preparation.reserve_preparation(
             preflight.repository_identity,
+            wait=wait,
             cancelled=cancelled,
-            timeout=duration,
         ):
             reservation_cancelled = preparation.cancellation(cancelled)
             require_not_cancelled(reservation_cancelled)
-            exact = preparation.current(preflight.repository_identity)
+            exact = preparation.current(preflight.repository_identity, wait=wait)
             if exact is not None:
                 prepared = exact_prepared(
                     exact,
@@ -94,7 +96,7 @@ def prepare(
                 preparation,
                 selected,
                 owns_repository=owns_repository,
-                timeout=duration,
+                wait=wait,
                 progress=progress,
                 cancelled=reservation_cancelled,
             )
@@ -112,7 +114,7 @@ def _prepare_reserved(
     repository: ExportRepository,
     *,
     owns_repository: bool,
-    timeout: float,
+    wait: RepositoryWait,
     progress: ProgressCallback | None,
     cancelled: Callable[[], bool] | None,
 ) -> PreparedExport:
@@ -122,8 +124,8 @@ def _prepare_reserved(
     emit(progress, ProgressEvent(kind="inspection_started"))
     prepared: PreparedExport | None = None
     try:
-        with open_notebook(source, timeout=timeout) as producer:
-            plan = plan_with_producer(producer, spec, preflight.producer, preparation)
+        with open_notebook(source, timeout=wait.timeout_seconds) as producer:
+            plan = plan_with_producer(producer, spec, preflight.producer, preparation, wait)
             require_not_cancelled(cancelled)
 
             def require_producer_current() -> None:
@@ -135,6 +137,7 @@ def _prepare_reserved(
                 plan=plan,
                 producer=preflight.producer,
                 preparation=preparation,
+                wait=wait,
                 repository=repository,
                 owns_repository=owns_repository,
                 capture_state=lambda state_spec: producer._capture_data(
