@@ -32,12 +32,17 @@ Tests isolate the default export repository and Marimo cache signing key.
 Notebook processes within a test inherit the same key, keeping warm-cache
 checks independent of another process initializing its signing identity.
 
-Tests that start or borrow a marimo notebook pass `NOTEBOOK_TIMEOUT` from
-`packages/python/tests/export_integration_support.py` as the operation timeout.
-Each managed wait resets on session activity, so the value bounds the longest
-silent phase. Kernel readiness and instantiation each finish in under a
-second locally. Instantiation has exceeded 30 s on a loaded CI runner, so the
-constant allows 120 s. Tests of timeout behavior keep their own short values, and a
+Tests pass `NOTEBOOK_TIMEOUT` from
+`packages/python/tests/export_integration_support.py` to each call that starts a
+marimo notebook or opens a `Client` to one. A borrowed `Session` inherits the
+`Client` timeout for notebook requests. `Session.capture(timeout=...)` bounds
+repository waits.
+The session-stream waits for kernel readiness, kernel instantiation, and the
+initial notebook run restart their deadline on each session event, so the value
+bounds the longest silent phase. Server readiness uses one fixed deadline. Kernel
+readiness and instantiation each finish in under a second locally.
+Instantiation has exceeded 30 s on a loaded CI runner, so the constant allows
+120 s. Tests of timeout behavior keep their own short values, and a
 `pytest.mark.timeout` watchdog on a notebook test stays above
 `NOTEBOOK_TIMEOUT`.
 

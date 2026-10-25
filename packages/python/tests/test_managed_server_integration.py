@@ -157,10 +157,15 @@ if __name__ == "__main__":
     assert open_export(result.path).state("baseline").output("visibility").json() == "None:None"
 
 
-# Each hold runs in marimo's spawned kernel process until the test releases it.
+# Each hold runs in marimo's spawned kernel process until the test releases it,
+# with the session wait budget for that phase. A released kernel that never
+# connected exits so the server can answer the shutdown request.
 _KERNEL_HOLDS = {
-    "kernel readiness": "hold()\n",
+    "kernel readiness": (5.0, "hold()\nos._exit(0)\n"),
     "kernel instantiation": (
+        # The kernel must connect within this budget before its lifespan holds.
+        15.0,
+        # The marimo-export entry point resolves `kernel_lifespan` on each call.
         "from contextlib import asynccontextmanager\n"
         "from marimo_export._marimo.compat import managed_kernel\n"
         "lifespan = managed_kernel.kernel_lifespan\n"
@@ -171,7 +176,7 @@ _KERNEL_HOLDS = {
         "    async with lifespan(value):\n"
         "        yield\n"
         "\n"
-        "managed_kernel.kernel_lifespan = held_lifespan\n"
+        "managed_kernel.kernel_lifespan = held_lifespan\n",
     ),
 }
 
@@ -183,9 +188,10 @@ def test_managed_activation_names_the_kernel_phase_that_timed_out(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    budget, held = _KERNEL_HOLDS[phase]
     release = tmp_path / "release"
-    hold = textwrap.indent(_KERNEL_HOLDS[phase], "    ")
     (tmp_path / "sitecustomize.py").write_text(
+        "import os\n"
         "import sys\n"
         "import time\n"
         "from pathlib import Path\n"
@@ -195,7 +201,7 @@ def test_managed_activation_names_the_kernel_phase_that_timed_out(
         "        time.sleep(0.05)\n"
         "\n"
         "if sys.argv[-1:] == ['--multiprocessing-fork']:\n"
-        f"{hold}",
+        f"{textwrap.indent(held, '    ')}",
         encoding="utf-8",
     )
     monkeypatch.setenv("PYTHONPATH", str(tmp_path))
@@ -204,12 +210,13 @@ def test_managed_activation_names_the_kernel_phase_that_timed_out(
 
     server = ManagedServer(notebook, timeout=NOTEBOOK_TIMEOUT)
     try:
-        # Server startup keeps the full budget. The session waits get a short one.
-        server.timeout = 5
+        # Server startup and shutdown keep the full budget.
+        server.timeout = budget
         with pytest.raises(TransportError) as raised:
             server.activate()
         assert str(raised.value) == f"the managed marimo {phase} timed out"
     finally:
+        server.timeout = NOTEBOOK_TIMEOUT
         release.touch()
         server.stop()
 
@@ -299,6 +306,8 @@ def test_managed_shutdown_stops_notebook_child_process(tmp_path: Path) -> None:
     pid = 0
     try:
         server.activate()
+        # Shutdown keeps a short bound for its SIGTERM grace period.
+        server.timeout = 10
         deadline = time.monotonic() + 5
         while time.monotonic() < deadline and (not heartbeat.exists() or not heartbeat.read_text()):
             time.sleep(0.05)
@@ -368,6 +377,8 @@ def test_managed_shutdown_stops_child_session_while_ps_stalls(
     pid = 0
     try:
         server.activate()
+        # Shutdown keeps a short bound for its SIGTERM grace period.
+        server.timeout = 10
         deadline = time.monotonic() + 5
         while time.monotonic() < deadline and (not heartbeat.exists() or not heartbeat.read_text()):
             time.sleep(0.05)

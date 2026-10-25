@@ -33,7 +33,9 @@ def native_session(notebook: Path, *, auto_run: bool = True) -> Iterator[Session
             "/api/kernel/instantiate",
             {"objectIds": [], "values": [], "autoRun": auto_run},
         )
-        stream.wait_for_completed_run(completed, "kernel instantiation")
+        stream.wait_for_completed_run(
+            completed, "initial notebook run" if auto_run else "kernel instantiation"
+        )
         with Client(
             server.base_url, access_token=server.access_token, timeout=NOTEBOOK_TIMEOUT
         ) as client:

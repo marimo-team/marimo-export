@@ -16,7 +16,7 @@ from collections.abc import Callable, Mapping
 from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
-from typing import BinaryIO, Protocol, cast
+from typing import BinaryIO, Literal, Protocol, cast
 from urllib.parse import urlencode
 
 import psutil
@@ -39,6 +39,8 @@ _KERNEL_LIFESPAN_ALLOWLIST_ENV = "MARIMO_KERNEL_LIFESPAN_ALLOWLIST"
 _KERNEL_LIFESPAN_DENYLIST_ENV = "MARIMO_KERNEL_LIFESPAN_DENYLIST"
 _KERNEL_LIFESPAN_NAME = "marimo-export"
 _MARIMO_ANCESTOR_PID_ENV = "MARIMO_ANCESTOR_PID"
+
+_SessionPhase = Literal["kernel readiness", "kernel instantiation", "initial notebook run"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -723,7 +725,7 @@ class _SessionStream:
     def wait_for_kernel(self) -> None:
         self._wait(lambda: self._kernel_ready, "kernel readiness")
 
-    def wait_for_completed_run(self, after: int, label: str) -> None:
+    def wait_for_completed_run(self, after: int, label: _SessionPhase) -> None:
         self._wait(lambda: self._completed_runs > after, label)
         with self._condition:
             active = {
@@ -755,14 +757,15 @@ class _SessionStream:
                 code="server_shutdown_failed",
             )
 
-    def _wait(self, predicate: Callable[[], bool], label: str) -> None:
+    def _wait(self, predicate: Callable[[], bool], label: _SessionPhase) -> None:
         deadline = time.monotonic() + self._timeout
         with self._condition:
             activity_generation = self._activity_generation
             while not predicate():
                 if self._failure is not None:
-                    # The stream read timeout fires first while the server
-                    # sends nothing, such as before the kernel connects.
+                    # The stream read timeout can fire before the wait deadline
+                    # while the server sends nothing, such as before the kernel
+                    # connects or between marimo's 20 s keep-alives.
                     outcome = (
                         "timed out" if isinstance(self._failure, TimeoutError) else "stream failed"
                     )
