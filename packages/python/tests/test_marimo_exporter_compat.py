@@ -407,3 +407,36 @@ def test_exporter_preflight_keys_identity_by_declared_modules(
     )["summary"]
 
     assert first != second
+
+
+# The callable digest covers CPython bytecode, which changes between minor versions.
+_PINNED_EXPORTER_IDENTITIES = {
+    (3, 10): "3cc5ef17f292120e88968990127b02798e93ade32bcd9a2753be56cecff3e2c4",
+    (3, 11): "5a568436b05764c4f9f8639744ef35541a65f1d4f8e2ef26621fc33f4ba1cef5",
+    (3, 12): "5a568436b05764c4f9f8639744ef35541a65f1d4f8e2ef26621fc33f4ba1cef5",
+    (3, 13): "a15da161edbb04093d6d113f0e5c36954a7fbcbc940c452ad59793815e090a5f",
+    (3, 14): "08a2deb60425103fe6208dde16121ec29a29db502d4428d26a7db5e2ad3688bf",
+}
+
+
+def test_exporter_identity_is_pinned_for_a_fixture_exporter(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    helper_name = "marimo_export_test_pinned_helper"
+    exporter_name = "marimo_export_test_pinned_exporter"
+    (tmp_path / f"{helper_name}.py").write_bytes(b"SCALE = 2\n")
+    (tmp_path / f"{exporter_name}.py").write_bytes(
+        f"from {helper_name} import SCALE\n\n"
+        "def encode(value, offset=1, *, scale=SCALE):\n"
+        "    return {'value': value + offset, 'scale': scale}\n\n"
+        "encode.label = 'pinned'\n".encode()
+    )
+    monkeypatch.syspath_prepend(str(tmp_path))
+
+    with prepared_exporters(
+        _custom_exporter_plan(exporter_name, dependencies=(helper_name,))
+    ) as prepared:
+        identity = prepared["summary"].identity
+
+    assert identity == _PINNED_EXPORTER_IDENTITIES[sys.version_info[:2]]
