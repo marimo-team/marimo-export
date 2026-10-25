@@ -6,6 +6,7 @@ from pathlib import Path
 
 import marimo_export._marimo.composition as composition
 import pytest
+from marimo_export._marimo.capabilities import NotebookCell
 from marimo_export._notebook import document_sha256
 from marimo_export.errors import ExecutionError
 from marimo_export.inspection import inspect_notebook
@@ -126,12 +127,12 @@ def test_document_digest_rejects_a_source_change_during_inspection(
 ) -> None:
     notebook = _notebook(tmp_path / "notebook.py")
 
-    def change_source(path: Path, source: bytes) -> str:
+    def change_source(path: Path, source: bytes) -> tuple[NotebookCell, ...]:
         del source
         path.write_text(path.read_text() + "\n# changed\n", encoding="utf-8")
-        return "a" * 64
+        return ()
 
-    monkeypatch.setattr(composition, "notebook_document_sha256", change_source)
+    monkeypatch.setattr(composition, "saved_cells", change_source)
 
     with pytest.raises(ExecutionError) as raised:
         document_sha256(notebook)
@@ -146,17 +147,17 @@ def test_document_digest_rejects_change_and_restore_during_parse(
     notebook = _notebook(tmp_path / "notebook.py")
     original_source = notebook.read_bytes()
     changed_source = _notebook(tmp_path / "changed.py", first_value=99).read_bytes()
-    native_document_sha256 = composition.notebook_document_sha256
+    native_saved_cells = composition.saved_cells
 
-    def change_and_restore(path: Path, source: bytes) -> str:
+    def change_and_restore(path: Path, source: bytes) -> tuple[NotebookCell, ...]:
         assert source == original_source
         path.write_bytes(changed_source)
         try:
-            return native_document_sha256(path, source)
+            return native_saved_cells(path, source)
         finally:
             path.write_bytes(original_source)
 
-    monkeypatch.setattr(composition, "notebook_document_sha256", change_and_restore)
+    monkeypatch.setattr(composition, "saved_cells", change_and_restore)
 
     with pytest.raises(ExecutionError) as raised:
         document_sha256(notebook)

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import shutil
+import sys
+import threading
 from collections.abc import Iterable
 from pathlib import Path
 
@@ -393,3 +395,38 @@ def test_dependency_change_during_identity_scan_is_rejected(
 
     with pytest.raises(RuntimeError, match="changed while identity was computed"):
         producer_identity(notebook)
+
+
+def test_concurrent_identities_agree_while_import_caches_reset(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    notebook = _notebook(tmp_path / "report.py", "helper")
+    (tmp_path / "helper.py").write_text("VALUE = 1\n", encoding="utf-8")
+    # Missing path entries leave `None` finders that every import cache reset deletes.
+    missing = [str(tmp_path / f"missing-{index}.zip") for index in range(200)]
+    monkeypatch.setattr(sys, "path", [*sys.path, *missing])
+    expected = environment.environment_identity(notebook)
+    results: list[str] = []
+    errors: list[BaseException] = []
+
+    def compute() -> None:
+        for _ in range(5):
+            try:
+                results.append(environment.environment_identity(notebook))
+            except BaseException as error:
+                errors.append(error)
+
+    interval = sys.getswitchinterval()
+    sys.setswitchinterval(1e-6)
+    try:
+        threads = [threading.Thread(target=compute) for _ in range(4)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(timeout=60)
+    finally:
+        sys.setswitchinterval(interval)
+
+    assert errors == []
+    assert results == [expected] * 20

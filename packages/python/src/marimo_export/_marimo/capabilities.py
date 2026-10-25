@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from types import MappingProxyType
@@ -29,6 +29,53 @@ class MarimoCapabilities:
 
     version: str
     names: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class NotebookCell:
+    """One authored cell of a marimo notebook document.
+
+    `id` is canonical. `name` is `None` when marimo generated the cell name.
+    """
+
+    id: str
+    code: str
+    name: str | None
+    config: JsonObject
+
+
+@dataclass(frozen=True, slots=True)
+class KernelCell:
+    """One cell registered in a live kernel graph, with a canonical `id`."""
+
+    id: str
+    code: str
+    config: JsonObject
+
+
+RunOutcome = Literal["completed", "interrupted", "failed"]
+
+
+@dataclass(frozen=True, slots=True)
+class KernelRun:
+    """Facts about one finished pass of the kernel's cell runner.
+
+    One UI update or cell run can take several passes when cells set
+    `mo.state`. `outcome` is `interrupted` when the user interrupted the pass,
+    `failed` when a cell raised, including `mo.stop`, and `completed`
+    otherwise. `scratch` marks a scratchpad run. `filename` is the notebook
+    path the kernel reports after the pass.
+
+    `read_cells()` lists the kernel graph in registration order, and
+    `read_inputs()` observes the portable UI inputs. Call both inside the
+    subscription callback, before the kernel starts its next pass.
+    """
+
+    outcome: RunOutcome
+    scratch: bool
+    filename: str | None
+    read_cells: Callable[[], tuple[KernelCell, ...]]
+    read_inputs: Callable[[], KernelInputObservation]
 
 
 @dataclass(frozen=True, slots=True)
@@ -187,6 +234,8 @@ __all__ = [
     "CacheActivity",
     "CachedStateExecutor",
     "KernelAdapters",
+    "KernelCell",
+    "KernelRun",
     "KernelRuntime",
     "MarimoCapabilities",
     "NativeArrowReturn",
@@ -195,7 +244,9 @@ __all__ = [
     "NativeNumpyReturn",
     "NativeReceipt",
     "NativeScalarReturn",
+    "NotebookCell",
     "PreparedExporter",
+    "RunOutcome",
     "StateExecution",
     "TransferRuntime",
 ]

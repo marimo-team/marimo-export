@@ -31,18 +31,18 @@ serialization, signing, restoration, graph execution, and session lifecycle.
 
 ## Candidate map
 
-| Candidate                       | Current adapter                                     | Stable marimo-export boundary        |
-| ------------------------------- | --------------------------------------------------- | ------------------------------------ |
-| Cached child execution          | cache patch, child runner, execution adapter        | `CachedStateExecutor`                |
-| Final cache disposition         | graph-scoped attempt wrapper                        | `CacheActivity`                      |
-| Forced live execution           | graph-scoped hit replacement                        | executor policy for selected cells   |
-| Sequential lazy deserialization | `SequentialLazyLoader`                              | verified native return               |
-| Native cache write barrier      | `flush_active_caches` adapter                       | executor run boundary                |
-| Verified cached return          | private manifest, store, signing, and codec adapter | `NativeCacheReturn`                  |
-| Complete cached UI restoration  | `CompleteCachedLifecycle`                           | state execution success              |
-| Interactive host cache restore  | UI, Polars, and tensor host patch                   | `keep_cached_cells_compatible()`     |
-| Successful-run observation hook | private final runner hook                           | `ObservedInputs` and ledger callback |
-| Canonical rendered snapshots    | output hooks, `SessionView`, and UI registries      | output receipt and replay records    |
+| Candidate                       | Current adapter                                     | Stable marimo-export boundary          |
+| ------------------------------- | --------------------------------------------------- | -------------------------------------- |
+| Cached child execution          | cache patch, child runner, execution adapter        | `CachedStateExecutor`                  |
+| Final cache disposition         | graph-scoped attempt wrapper                        | `CacheActivity`                        |
+| Forced live execution           | graph-scoped hit replacement                        | executor policy for selected cells     |
+| Sequential lazy deserialization | `SequentialLazyLoader`                              | verified native return                 |
+| Native cache write barrier      | `flush_active_caches` adapter                       | executor run boundary                  |
+| Verified cached return          | private manifest, store, signing, and codec adapter | `NativeCacheReturn`                    |
+| Complete cached UI restoration  | `CompleteCachedLifecycle`                           | state execution success                |
+| Interactive host cache restore  | UI, Polars, and tensor host patch                   | `keep_cached_cells_compatible()`       |
+| Successful-run observation hook | private final runner hook                           | `KernelRun` and `NotebookCell` records |
+| Canonical rendered snapshots    | output hooks, `SessionView`, and UI registries      | output receipt and replay records      |
 
 ## Cached child execution
 
@@ -240,15 +240,46 @@ execution, interruption, cancellation, and exceptions.
 
 ### Current implementation
 
-`_marimo/compat/observations.py` installs one final runner callback and
-multiplexes ledger registrations. It validates the live cell signature against
-the saved source before resolving producer identity.
+`_marimo/compat/observations.py` implements the run subscription. It registers
+one final runner callback per kernel and multiplexes subscriptions behind it,
+because marimo hooks can be added but never removed.
+`_marimo/compat/inspection.py` implements the saved-notebook parser.
+
+```python
+# _marimo/compat/observations.py
+subscribe_run_finished(context, callback: Callable[[KernelRun], None]) -> release
+kernel_filename(context) -> str | None
+
+# _marimo/compat/inspection.py
+saved_cells(notebook, source) -> tuple[NotebookCell, ...]
+```
+
+`KernelRun` in `_marimo/capabilities.py` describes one pass of the cell runner.
+It carries the outcome (`completed`, `interrupted`, or `failed`, where `failed`
+includes `mo.stop`), a scratch flag, the filename the kernel reports,
+`read_cells()` for the kernel graph as `KernelCell` rows, and `read_inputs()` for
+the portable UI inputs. `saved_cells` parses a saved notebook into
+`NotebookCell` rows for both the document digest and observation matching.
+
+`_observations/runs.py` records completed non-scratch passes whose filename
+resolves to the ledger source. `_observations/source.py` compares a cell
+signature of the live graph with the saved cells and resolves producer identity
+on the ledger worker.
 
 ### Upstream shape
 
-A supported run-finished subscription could provide the final graph, outcome,
-and source identity. marimo-export would keep portable input inspection,
-saved-source binding, queueing, revisions, and repository persistence.
+A supported run-finished subscription that returns a release handle would
+replace the compat implementation of `subscribe_run_finished` and its
+multiplexer. The composition-root function keeps its signature.
+It needs to report the outcome, scratch flag, notebook filename, graph cells,
+and a way to read UI inputs while the final state is stable. `_observations`
+would keep consuming `KernelRun` for its success filter, source binding,
+saved-cell matching, queueing, revisions, and repository persistence.
+
+marimo reports completed runs per command cycle with a run ID, and one cycle
+can contain several runner passes when cells set `mo.state`. A cycle-level
+subscription would record a cycle's final state only, so the adapter needs to
+choose one granularity and keep `failed` covering `mo.stop`.
 
 ## Canonical rendered snapshots
 

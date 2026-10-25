@@ -10,8 +10,8 @@ from marimo_export._json import JsonObject
 from marimo_export._marimo.capabilities import KernelAdapters, KernelRuntime
 
 if TYPE_CHECKING:
+    from marimo_export._marimo.capabilities import KernelRun, NotebookCell
     from marimo_export.integration import KernelInputObservation
-    from marimo_export.observations import ObservationLedger
 
 
 def create_kernel_runtime() -> KernelRuntime:
@@ -52,12 +52,12 @@ def create_kernel_adapters() -> KernelAdapters:
     )
 
 
-def notebook_document_sha256(notebook: Path, source: bytes) -> str:
-    """Read one saved notebook through the supported Marimo adapter."""
+def saved_cells(notebook: Path, source: bytes) -> tuple[NotebookCell, ...]:
+    """Parse one saved notebook's cells through the supported Marimo adapter."""
 
-    from marimo_export._marimo.compat.inspection import document_sha256_from_source
+    from marimo_export._marimo.compat.inspection import saved_cells as parse
 
-    return document_sha256_from_source(notebook, source)
+    return parse(notebook, source)
 
 
 def observe_kernel_inputs(kernel: object) -> KernelInputObservation:
@@ -68,15 +68,23 @@ def observe_kernel_inputs(kernel: object) -> KernelInputObservation:
     return observe(kernel)
 
 
-def install_observation_ledger(
+def subscribe_run_finished(
     context: object,
-    ledger: ObservationLedger,
+    callback: Callable[[KernelRun], None],
 ) -> Callable[[], None]:
-    """Attach an observation ledger through the supported private adapter."""
+    """Deliver the context's finished kernel runs through the supported adapter."""
 
-    from marimo_export._marimo.compat.observations import install_observation_ledger as install
+    from marimo_export._marimo.compat.observations import subscribe_run_finished as subscribe
 
-    return install(context, ledger)
+    return subscribe(context, callback)
+
+
+def kernel_filename(context: object) -> str | None:
+    """Return the notebook path reported by the context's kernel."""
+
+    from marimo_export._marimo.compat.observations import kernel_filename as filename
+
+    return filename(context)
 
 
 def keep_cached_cells_compatible() -> Callable[[], None]:
@@ -90,9 +98,10 @@ def keep_cached_cells_compatible() -> Callable[[], None]:
 __all__ = [
     "create_kernel_adapters",
     "create_kernel_runtime",
-    "install_observation_ledger",
     "keep_cached_cells_compatible",
+    "kernel_filename",
     "marimo_compatibility_details",
-    "notebook_document_sha256",
     "observe_kernel_inputs",
+    "saved_cells",
+    "subscribe_run_finished",
 ]

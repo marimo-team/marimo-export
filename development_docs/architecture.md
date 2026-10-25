@@ -200,7 +200,7 @@ for integrity, staging, mounts, and disposal.
 | `planning.py`, `_execution`        | Public plan records, baseline, normalization, transient cells     |
 | `_services`                        | Plan, prepare, capture, artifact assembly, durable write          |
 | `_build.py`                        | Destination preflight and prepare-write composition               |
-| `observations.py`, `_observations` | Public observation records, queue, worker, source binding         |
+| `observations.py`, `_observations` | Observation records, queue, worker, run filter, source binding    |
 | `repository.py`                    | Public repository facade, status, pruning, lifecycle              |
 | `_repository/preparation.py`       | Private service-facing repository capability                      |
 | `_repository/observations.py`      | Private raw observation persistence for ledger and preparation    |

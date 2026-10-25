@@ -259,6 +259,27 @@ def test_private_adapter_imports_use_composition_roots() -> None:
     assert violations == []
 
 
+def test_compatibility_adapters_import_no_producer_or_observation_policy() -> None:
+    compat = Path(__file__).parents[1] / "src" / "marimo_export" / "_marimo" / "compat"
+    forbidden = (
+        "marimo_export._observations",
+        "marimo_export._repository",
+        "marimo_export._services",
+        "marimo_export.observations",
+        "marimo_export.repository",
+    )
+    violations: list[str] = []
+    for source in compat.rglob("*.py"):
+        tree = ast.parse(source.read_text(encoding="utf-8"), filename=str(source))
+        for node in ast.walk(tree):
+            violations.extend(
+                f"{source.relative_to(compat).as_posix()}:{getattr(node, 'lineno', 0)}: {module}"
+                for module in _imported_modules(node)
+                if module.startswith(forbidden)
+            )
+    assert violations == []
+
+
 def test_compatibility_adapter_module_graph_imports_cleanly() -> None:
     script = """
 import importlib

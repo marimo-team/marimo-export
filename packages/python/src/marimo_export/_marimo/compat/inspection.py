@@ -15,12 +15,12 @@ from marimo_export._execution.plan import Baseline, CellDefinition, Definition
 from marimo_export._json import (
     JsonObject,
     JsonValue,
-    canonical_bytes,
     json_object,
     json_value,
     portable_json_value,
 )
-from marimo_export._marimo.capabilities import MarimoCapabilities
+from marimo_export._marimo.capabilities import MarimoCapabilities, NotebookCell
+from marimo_export._notebook import cells_document_sha256
 from marimo_export.errors import CompatibilityError, ExecutionError
 from marimo_export.index import (
     ControlDomain,
@@ -143,8 +143,8 @@ def install_parent_stop_provenance(context: object) -> Callable[[], None]:
     return release
 
 
-def document_sha256_from_source(notebook: Path, source: bytes) -> str:
-    """Return a saved notebook's canonical cell-record digest."""
+def saved_cells(notebook: Path, source: bytes) -> tuple[NotebookCell, ...]:
+    """Return a saved notebook's cells as marimo loads them."""
 
     from marimo._ast.load import load_notebook_ir
     from marimo._ast.parse import NonMarimoPythonScriptError, is_non_marimo_python_script
@@ -187,7 +187,7 @@ def document_sha256_from_source(notebook: Path, source: bytes) -> str:
             "the installed Marimo runtime cannot inspect saved notebook cells",
             code="marimo_incompatible",
         )
-    return _document_sha256(cells)
+    return tuple(_notebook_cell(cell) for cell in cells)
 
 
 def require_capabilities() -> MarimoCapabilities:
@@ -354,7 +354,7 @@ async def inspect_baseline() -> Baseline:
         return Baseline(
             definitions=definitions,
             cells=tuple(cells),
-            document_sha256=_document_sha256(context.cells),
+            document_sha256=cells_document_sha256(_notebook_cell(cell) for cell in context.cells),
             filename=_portable_filename(context._kernel.app_metadata.filename),
         )
 
@@ -565,19 +565,15 @@ async def declared_ui_values(names: tuple[str, ...]) -> JsonObject:
     return result
 
 
-def _document_sha256(cells: Any) -> str:
+def _notebook_cell(cell: Any) -> NotebookCell:
     from marimo._ast.names import is_internal_cell_name
 
-    value = [
-        {
-            "id": canonical_cell_id(cell.id),
-            "code": cell.code.rstrip(),
-            "name": (None if not cell.name or is_internal_cell_name(cell.name) else cell.name),
-            "config": json_object(cell.config.asdict(), f"cell {cell.id!s} config"),
-        }
-        for cell in cells
-    ]
-    return hashlib.sha256(canonical_bytes(value)).hexdigest()
+    return NotebookCell(
+        id=canonical_cell_id(cell.id),
+        code=cell.code,
+        name=None if not cell.name or is_internal_cell_name(cell.name) else cell.name,
+        config=json_object(cell.config.asdict(), f"cell {cell.id!s} config"),
+    )
 
 
 def _portable_filename(value: object) -> str | None:
@@ -756,11 +752,11 @@ def _binding_domain(value: Any) -> ControlDomain | None:
 
 __all__ = [
     "declared_ui_values",
-    "document_sha256_from_source",
     "inspect_baseline",
     "install_parent_stop_provenance",
     "observe_kernel_inputs",
     "require_capabilities",
     "runtime_path",
+    "saved_cells",
     "validate_parent_state",
 ]
