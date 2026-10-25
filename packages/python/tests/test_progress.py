@@ -45,9 +45,9 @@ def test_progress_event_rejects_inconsistent_counts() -> None:
 
 @pytest.mark.parametrize(
     "kind",
-    ("delivery_verification_started", "delivery_commit_started"),
+    ("delivery_verification_started", "delivery_commit_started", "repository_wait_started"),
 )
-def test_progress_event_accepts_delivery_kinds(kind: str) -> None:
+def test_progress_event_accepts_delivery_and_repository_kinds(kind: str) -> None:
     assert ProgressEvent(kind=cast(ProgressKind, kind)).kind == kind
 
 

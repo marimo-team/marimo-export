@@ -34,13 +34,21 @@ class PlanPreflight:
     repository_identity: RepositoryIdentity
 
 
-def repository_wait(timeout: float, progress: ProgressCallback | None) -> RepositoryWait:
+def repository_wait(
+    timeout: float,
+    progress: ProgressCallback | None,
+    cancelled: Callable[[], bool] | None = None,
+) -> RepositoryWait:
     """Bound repository waits by the operation timeout and report each wait."""
 
     def started(reason: str) -> None:
         _emit(progress, ProgressEvent(kind="repository_wait_started", message=reason))
 
-    return RepositoryWait(timeout_seconds=timeout, started=started)
+    return RepositoryWait(
+        timeout_seconds=timeout,
+        started=started,
+        cancelled=cancelled or (lambda: False),
+    )
 
 
 def preflight_plan(source: StrPath, spec: ExportSpec) -> PlanPreflight:

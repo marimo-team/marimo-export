@@ -58,7 +58,7 @@ def parser() -> ArgumentParser:
     plan.add_argument("notebook", metavar="NOTEBOOK", help="marimo Python notebook")
     _add_spec(plan)
     _add_repository(plan)
-    _add_timeout(plan, "notebook inspection timeout")
+    _add_timeout(plan, "notebook inspection and repository wait timeout")
     _add_machine_output(plan, jsonl=False)
 
     build = commands.add_parser(
@@ -70,7 +70,7 @@ def parser() -> ArgumentParser:
     _add_spec(build)
     _add_output(build)
     _add_repository(build)
-    _add_timeout(build, "server readiness and inactivity timeout")
+    _add_timeout(build, "server readiness, inactivity, and repository wait timeout")
     _add_machine_output(build, jsonl=True)
 
     capture = commands.add_parser(
@@ -90,7 +90,7 @@ def parser() -> ArgumentParser:
     _add_spec(capture)
     _add_output(capture)
     _add_repository(capture)
-    _add_timeout(capture, "connection and inactivity timeout")
+    _add_timeout(capture, "connection, inactivity, and repository wait timeout")
     _add_machine_output(capture, jsonl=True)
 
     inspect = commands.add_parser(
@@ -153,6 +153,7 @@ def parser() -> ArgumentParser:
         help="report removable artifacts without deleting them",
     )
     _add_repository(repository_prune)
+    _add_timeout(repository_prune, "repository maintenance lock timeout")
     _add_machine_output(repository_prune, jsonl=False)
 
     doctor = commands.add_parser(

@@ -391,8 +391,9 @@ with prepare("report.py", spec=spec) as prepared:
 When `repository` is absent, `PreparedExport` owns the repository until the
 handle closes. A supplied repository stays caller-owned. `cancelled` is checked
 between bounded preparation phases and while waiting for a preparation
-reservation. Cancellation raises an execution error with code
-`preparation_cancelled` and preserves the previous committed generation.
+reservation or the repository maintenance lock. Cancellation raises an execution
+error with code `preparation_cancelled` and preserves the previous committed
+generation.
 
 Preparation operations for the same repository identity are serialized across
 threads and processes. A waiter uses `timeout` as the reservation-acquisition
@@ -558,18 +559,18 @@ uses `None` when a field does not apply.
 
 `ProgressKind` is the type alias for the ten supported `kind` strings.
 
-| Event                           | Fields and timing                                                                                                                                |
-| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `inspection_started`            | Emitted before file inspection and for every live plan or capture. Exact prepared-export reuse omits it.                                         |
-| `plan_ready`                    | `completed` is the reusable-state count and `total` is the normalized-state count.                                                               |
-| `prepared_reused`               | Emitted by `prepare()` and `capture()` for exact export reuse, with both counts equal to the normalized-state count.                             |
-| `state_started`                 | `state` is the primary alias. `completed` includes reused and captured states. `total` counts all unique planned states.                         |
-| `state_finished`                | Advances the same complete-plan count and adds this state's cache activity and execution time.                                                   |
-| `prepared_committed`            | Emitted after the complete export generation commits.                                                                                            |
-| `write_finished`                | Emitted after destination writing and verification, with write duration.                                                                         |
-| `delivery_verification_started` | Emitted before a staged application verifies its nested exports and outer tree.                                                                  |
-| `delivery_commit_started`       | Emitted after staged verification and the commit guard, before final revalidation and destination mutation.                                      |
-| `repository_wait_started`       | Emitted once each time a repository operation finds the maintenance lock or the export's preparation reservation held. `message` says which one. |
+| Event                           | Fields and timing                                                                                                                                                                           |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `inspection_started`            | Emitted before file inspection and for every live plan or capture. Exact prepared-export reuse omits it.                                                                                    |
+| `plan_ready`                    | `completed` is the reusable-state count and `total` is the normalized-state count.                                                                                                          |
+| `prepared_reused`               | Emitted by `prepare()` and `capture()` for exact export reuse, with both counts equal to the normalized-state count.                                                                        |
+| `state_started`                 | `state` is the primary alias. `completed` includes reused and captured states. `total` counts all unique planned states.                                                                    |
+| `state_finished`                | Advances the same complete-plan count and adds this state's cache activity and execution time.                                                                                              |
+| `prepared_committed`            | Emitted after the complete export generation commits.                                                                                                                                       |
+| `write_finished`                | Emitted after destination writing and verification, with write duration.                                                                                                                    |
+| `delivery_verification_started` | Emitted before a staged application verifies its nested exports and outer tree.                                                                                                             |
+| `delivery_commit_started`       | Emitted after staged verification and the commit guard, before final revalidation and destination mutation.                                                                                 |
+| `repository_wait_started`       | Emitted once each time a repository operation finds the maintenance lock or the export's preparation reservation held. `message` is human-readable text naming the lock or the reservation. |
 
 `repository_wait_started` can precede any repository operation in a producer
 call, so it can appear between any two events. An exact `prepare()` or

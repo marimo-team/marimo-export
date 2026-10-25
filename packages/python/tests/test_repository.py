@@ -14,6 +14,7 @@ from marimo_export._repository.preparation import (
     RepositoryIdentity,
     preparation_repository,
 )
+from marimo_export._repository.sqlite.maintenance import maintenance_lock
 from marimo_export.descriptors import Provenance, ScalarDescriptor
 from marimo_export.index import (
     ExportIndex,
@@ -24,6 +25,7 @@ from marimo_export.index import (
 from marimo_export.planning import ExportPlan, PlannedState, export_plan_identity
 from marimo_export.repository import (
     ExportRepository,
+    RepositoryBusyError,
     RepositoryLimits,
 )
 from marimo_export.wire import state_fingerprint
@@ -257,6 +259,10 @@ def test_prepared_compares_the_complete_resolved_relation(tmp_path: Path) -> Non
         assert prepared is not None
         assert prepared.plan.exact_reuse
         prepared.close()
+        with maintenance_lock(repository.path, _WAIT), pytest.raises(RepositoryBusyError):
+            repository.prepared(plan, timeout=0.2)
+        with pytest.raises(ValueError, match="timeout"):
+            repository.prepared(plan, timeout=0)
         changed_inputs = {"neighbors": 4}
         changed_fingerprint = state_fingerprint(changed_inputs)
         changed = ExportPlan(

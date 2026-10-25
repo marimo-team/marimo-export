@@ -112,6 +112,7 @@ def test_session_plan_delegates_without_capturing(monkeypatch: pytest.MonkeyPatc
     assert seen[0] is session
     kwargs = cast(dict[str, object], seen[1])
     assert kwargs["spec"] == _spec()
+    assert kwargs["timeout"] == 30.0
 
 
 def test_root_capture_requires_an_explicit_session() -> None:

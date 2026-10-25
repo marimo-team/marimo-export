@@ -111,9 +111,9 @@ uv run marimo-export repository status --json
 uv run marimo-export repository prune --dry-run --json
 ```
 
-`repository_busy` means another operation held the repository maintenance lock
-for longer than the configured `--timeout` or `timeout`. A preceding
-`repository_wait_started` progress event marks when the wait began.
+`repository_busy` usually means another operation held the repository
+maintenance lock for longer than the configured `--timeout` or `timeout`. A
+preceding `repository_wait_started` progress event marks when the wait began.
 `repository_reservation_timeout` means preparation could not acquire its
 exact-identity reservation within the same timeout. Retry after the owning
 operation completes, or raise the timeout when another export on the same

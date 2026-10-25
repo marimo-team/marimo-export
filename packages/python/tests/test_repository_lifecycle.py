@@ -15,6 +15,7 @@ from marimo_export._repository.artifact_context import ArtifactContext
 from marimo_export._repository.observations import observation_repository
 from marimo_export._repository.preparation import (
     RepositoryIdentity,
+    RepositoryWait,
     preparation_repository,
 )
 from marimo_export.descriptors import Provenance, ScalarDescriptor
@@ -195,8 +196,7 @@ def test_reservation_is_exclusive_across_repository_process_owners(tmp_path: Pat
             pytest.raises(ExecutionError, match="cancelled") as raised,
             preparation_repository(second).reserve_preparation(
                 identity,
-                cancelled=lambda: True,
-                wait=_WAIT,
+                wait=RepositoryWait(timeout_seconds=30.0, cancelled=lambda: True),
             ),
         ):
             raise AssertionError("reservation must remain exclusive")

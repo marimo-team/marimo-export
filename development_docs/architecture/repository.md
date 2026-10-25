@@ -93,18 +93,18 @@ results through short catalog transactions.
 Every `ArtifactRepository` method that takes the maintenance lock receives a
 `RepositoryWait`. The lock first tries `BEGIN IMMEDIATE` once without waiting.
 When another connection holds it, the lock calls `RepositoryWait.started` once
-with the reason, then waits up to `timeout_seconds` before it raises
-`RepositoryBusyError`. A zero timeout tries once. Nested calls on the same
-thread reuse the held lock.
+with the reason, then retries in 100 ms slices until `timeout_seconds` has
+elapsed, checking `RepositoryWait.cancelled` before each slice, and raises
+`RepositoryBusyError`. Nested calls on the same thread reuse the held lock.
 
-| Caller                                      | Wait                                                     |
-| ------------------------------------------- | -------------------------------------------------------- |
-| `plan`, `prepare`, `capture`                | One wait per operation from its public `timeout`         |
-| `Session.plan()`                            | The `Client` timeout                                     |
-| Staging and commits under a reservation     | The wait stored on `PreparationReservation`              |
-| `ExportRepository.prepared()` and `prune()` | Their `timeout` argument                                 |
-| Recovery while opening                      | Zero. Opening skips recovery when another owner holds it |
-| Artifact retirement after a catalog reset   | 10 seconds, matching the catalog connection wait         |
+| Caller                                                           | Wait                                             |
+| ---------------------------------------------------------------- | ------------------------------------------------ |
+| `plan`, `prepare`, `capture`                                     | One wait per operation from its public `timeout` |
+| `Session.plan()`                                                 | The `Client` timeout                             |
+| Staging and commits under a reservation                          | The wait stored on `PreparationReservation`      |
+| `ExportRepository.prepared()`, `prune()`, and `repository prune` | Their `timeout` argument                         |
+| Recovery while opening                                           | 0.25 seconds. Opening then skips recovery        |
+| Artifact retirement after a catalog reset                        | 10 seconds, matching the catalog connection wait |
 
 Producer services build the wait with `repository_wait()`, which reports each
 wait as a `repository_wait_started` progress event.
@@ -323,9 +323,9 @@ repository above that value until retention can retire the predecessor.
 ## Recovery and failure classification
 
 Repository opening validates the SQLite schema and attempts one maintenance
-recovery with a zero wait. When another process holds maintenance ownership,
-opening continues at once and later reads verify the selected artifact before
-returning it.
+recovery with a 0.25 second wait. When another process holds maintenance
+ownership longer, opening continues and later reads verify the selected artifact
+before returning it.
 
 An incompatible schema or confirmed catalog corruption causes a complete catalog
 reset. Opening renames the catalog files, creates a fresh catalog, then retires

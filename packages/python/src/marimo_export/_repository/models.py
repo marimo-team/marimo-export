@@ -9,7 +9,7 @@ from types import MappingProxyType
 from typing import Literal, TypeAlias, cast
 
 from marimo_export._json import JsonObject, JsonValue, canonical_bytes, decode_json_object
-from marimo_export.errors import MarimoExportError
+from marimo_export.errors import ExecutionError, MarimoExportError
 from marimo_export.wire import portable_json, state_fingerprint
 
 _DIGEST = re.compile(r"[0-9a-f]{64}")
@@ -78,11 +78,24 @@ class RepositoryWait:
 
     Each acquisition first tries once without waiting. When the lock or
     reservation is held elsewhere, it calls ``started`` once with the reason and
-    then waits up to ``timeout_seconds``. A zero timeout tries once.
+    then waits up to ``timeout_seconds``, checking ``cancelled`` while it waits.
+    A zero timeout makes one maintenance lock attempt.
     """
 
     timeout_seconds: float
     started: Callable[[str], None] = lambda _reason: None
+    cancelled: Callable[[], bool] = lambda: False
+
+    def __post_init__(self) -> None:
+        if not math.isfinite(self.timeout_seconds) or self.timeout_seconds < 0:
+            raise ValueError("repository wait timeout must be a nonnegative finite number")
+
+    def require_not_cancelled(self) -> None:
+        if self.cancelled():
+            raise ExecutionError(
+                "export preparation was cancelled",
+                code="preparation_cancelled",
+            )
 
 
 @dataclass(frozen=True, slots=True)

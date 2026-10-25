@@ -280,7 +280,7 @@ blocking boundary:
 | Scratchpad execution                | Deadline resets after each response chunk         |
 | Session registry or asset download  | Absolute deadline for that bounded response       |
 | Reservation acquisition             | Bounded by the preparation timeout                |
-| Repository maintenance lock         | Fresh bound of the preparation timeout per wait   |
+| Repository maintenance lock         | Caller timeout per wait, polling cancellation     |
 | Managed process stop                | Soft wait, forced wait, and final bounded reaping |
 | Windows temporary-directory cleanup | Retries filesystem errors until the stop timeout  |
 

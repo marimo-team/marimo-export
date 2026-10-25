@@ -16,6 +16,8 @@ from marimo_export._repository.models import (
 )
 from marimo_export._repository.paths import sync_directory
 
+_CANCELLATION_POLL_SECONDS = 0.1
+
 
 class _InvalidMaintenanceSchema(RuntimeError):
     pass
@@ -34,7 +36,7 @@ def maintenance_lock(root: Path, wait: RepositoryWait) -> Iterator[None]:
             if wait.timeout_seconds <= 0:
                 raise
             wait.started("another operation holds the repository maintenance lock")
-            connection = _begin(path, timeout_seconds=deadline - time.monotonic())
+            connection = _wait_for_lock(path, wait, deadline)
         try:
             yield
             connection.commit()
@@ -48,9 +50,24 @@ def maintenance_lock(root: Path, wait: RepositoryWait) -> Iterator[None]:
             os.chmod(path, 0o600)
 
 
+def _wait_for_lock(path: Path, wait: RepositoryWait, deadline: float) -> sqlite3.Connection:
+    while True:
+        wait.require_not_cancelled()
+        remaining = deadline - time.monotonic()
+        try:
+            return _begin(path, timeout_seconds=min(_CANCELLATION_POLL_SECONDS, remaining))
+        except RepositoryBusyError:
+            if remaining <= _CANCELLATION_POLL_SECONDS:
+                raise
+
+
 def _begin(path: Path, *, timeout_seconds: float) -> sqlite3.Connection:
+    deadline = time.monotonic() + max(0.001, timeout_seconds)
     connection = _connect(path, timeout_seconds=timeout_seconds)
     try:
+        # Connecting can spend part of the budget waiting for its own write.
+        remaining = max(0.001, deadline - time.monotonic())
+        connection.execute(f"PRAGMA busy_timeout = {int(remaining * 1000)}")
         connection.execute("BEGIN IMMEDIATE")
     except BaseException as error:
         connection.close()

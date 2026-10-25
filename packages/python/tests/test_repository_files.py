@@ -233,11 +233,16 @@ def test_committed_export_survives_staging_cleanup_failure(
     with ExportRepository.open(tmp_path / "repository") as repository:
         state = _state(repository, identity, 1)
 
-        def fail_cleanup(_path: Path) -> None:
+        failed_cleanups: list[Path] = []
+
+        def fail_cleanup(path: Path, *, wait: RepositoryWait) -> None:
+            del wait
+            failed_cleanups.append(path)
             raise PermissionError("lease cleanup unavailable")
 
         monkeypatch.setattr(repository._artifacts, "discard_staging", fail_cleanup)
         export = _export(repository, identity, state, "committed")
+        assert len(failed_cleanups) == 1
         assert export.asset("index.json") is not None
         current = preparation_repository(repository).current(identity, wait=_WAIT)
         assert current is not None

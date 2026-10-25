@@ -25,7 +25,6 @@ from marimo_export._repository.models import (
     RepositoryWait,
     digest,
 )
-from marimo_export.errors import ExecutionError
 
 if TYPE_CHECKING:
     from marimo_export._repository.artifacts import ArtifactRepository
@@ -122,7 +121,6 @@ class PreparationRepository:
         identity: RepositoryIdentity,
         *,
         wait: RepositoryWait,
-        cancelled: Callable[[], bool] | None = None,
         poll_seconds: float = 0.05,
     ) -> Iterator[PreparationReservation]:
         self._require_open()
@@ -150,11 +148,7 @@ class PreparationRepository:
             while not claim_lock.acquire(
                 timeout=min(poll_seconds, max(0.001, deadline - time.monotonic()))
             ):
-                if cancelled is not None and cancelled():
-                    raise ExecutionError(
-                        "export preparation was cancelled",
-                        code="preparation_cancelled",
-                    )
+                wait.require_not_cancelled()
                 if time.monotonic() >= deadline:
                     raise RepositoryReservationTimeoutError(
                         "The export preparation reservation timed out."
@@ -162,11 +156,7 @@ class PreparationRepository:
         fence: int | None = None
         try:
             while fence is None:
-                if cancelled is not None and cancelled():
-                    raise ExecutionError(
-                        "export preparation was cancelled",
-                        code="preparation_cancelled",
-                    )
+                wait.require_not_cancelled()
                 if time.monotonic() >= deadline:
                     raise RepositoryReservationTimeoutError(
                         "The export preparation reservation timed out."
@@ -179,8 +169,10 @@ class PreparationRepository:
                     )
                 except RepositoryBusyError:
                     fence = None
+                else:
+                    if fence is None:
+                        announce()
                 if fence is None:
-                    announce()
                     time.sleep(min(poll_seconds, max(0.0, deadline - time.monotonic())))
             reservation = PreparationReservation(
                 self._leases,

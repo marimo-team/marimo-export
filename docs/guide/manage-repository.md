@@ -57,7 +57,7 @@ with ExportRepository.open(".exports") as repository:
 
 `default_path()` reports the effective default without creating it. Opening a
 repository attempts maintenance recovery. When another process holds the
-maintenance lock, opening skips that pass without waiting. Every command
+maintenance lock beyond a brief wait, opening skips that pass. Every command
 that opens the repository, including status and dry-run commands, can create the
 directory, tighten its permissions, replace a corrupt or incompatible catalog,
 or retire an invalid repository artifact.
@@ -84,19 +84,20 @@ seconds. Opening a repository holds it while recovery verifies every stored
 prepared state and export generation, so opening a repository with many exports
 can hold it for minutes.
 
-A producer operation that finds the lock held reports one progress event and
-waits up to its `--timeout` or `timeout`:
+A producer operation reports one progress event each time it finds the lock
+held, then waits up to its `--timeout` or `timeout` for that lock:
 
 ```text
 Repository wait started | another operation holds the repository maintenance lock
 ```
 
-`--jsonl` reports the same event with `"kind": "repository_wait_started"`. Two
-operations for the same exact export also wait for the first one's preparation
-reservation, and the waiter reuses that export when it commits. Raise the
-timeout when the other export routinely holds the repository longer.
-`repository.prepared()` and `repository.prune()` wait up to their own `timeout`
-argument. Read [The repository is busy or
+`build --jsonl` and `capture --jsonl` report the same event with
+`"kind": "repository_wait_started"`. Two operations for the same exact export
+also wait for the first one's preparation reservation, and the waiter reuses
+that export when it commits. Raise the timeout when the other export routinely
+holds the repository longer. `repository.prepared()`, `repository.prune()`, and
+`repository prune --timeout` wait up to their own timeout without a progress
+event. Read [The repository is busy or
 unavailable](troubleshooting#the-repository-is-busy-or-unavailable) when the
 wait expires.
 

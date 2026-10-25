@@ -47,7 +47,7 @@ def prepare(
         raise TypeError("spec must be an ExportSpec")
     if cancelled is not None and not callable(cancelled):
         raise TypeError("cancelled must be callable or None")
-    wait = repository_wait(_timeout(timeout), progress)
+    wait = repository_wait(_timeout(timeout), progress, cancelled)
     owns_repository = repository is None
     selected = ExportRepository.open() if repository is None else repository
     preparation = preparation_repository(selected)
@@ -72,7 +72,6 @@ def prepare(
         with preparation.reserve_preparation(
             preflight.repository_identity,
             wait=wait,
-            cancelled=cancelled,
         ):
             reservation_cancelled = preparation.cancellation(cancelled)
             require_not_cancelled(reservation_cancelled)

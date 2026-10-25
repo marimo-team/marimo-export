@@ -148,7 +148,8 @@ active-lease counts.
 ## `repository prune`
 
 ```text
-marimo-export repository prune [--repository DIR] [--dry-run] [--json]
+marimo-export repository prune [--dry-run] [--repository DIR]
+                               [--timeout SECONDS] [--json]
 ```
 
 Applies repository retention. `--dry-run` reports removable prepared states,
@@ -156,10 +157,11 @@ generations, and bytes. A live prune can also remove producer records and their
 observation history, which the dry-run result does not report. Active leases
 protect their artifacts.
 
+`--timeout` bounds the wait for the repository maintenance lock, default `30`.
 Opening the repository attempts maintenance recovery before either mode. When
-another process holds the maintenance transaction lock, opening continues without that
-pass. Recovery can create the repository, adjust permissions, quarantine a
-corrupt catalog, or retire an invalid artifact. The CLI uses the default
+another process holds the maintenance lock, opening continues without that pass.
+Recovery can create the repository, adjust permissions, quarantine a corrupt
+catalog, or retire an invalid artifact. The CLI uses the default
 `RepositoryLimits` policy.
 
 ## `doctor`

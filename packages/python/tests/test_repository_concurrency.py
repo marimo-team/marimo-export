@@ -39,6 +39,8 @@ from repository_test_support import _WAIT
 
 pytestmark = pytest.mark.serial
 
+_CANCELLED_WAIT = RepositoryWait(timeout_seconds=30.0, cancelled=lambda: True)
+
 
 def _digest(value: str) -> str:
     return sha256(value.encode()).hexdigest()
@@ -284,7 +286,7 @@ with preparation.reserve_preparation(identity, wait=RepositoryWait(30.0)):
         preparation = preparation_repository(repository)
         with (
             pytest.raises(ExecutionError, match="cancelled") as raised,
-            preparation.reserve_preparation(identity, cancelled=lambda: True, wait=_WAIT),
+            preparation.reserve_preparation(identity, wait=_CANCELLED_WAIT),
         ):
             raise AssertionError("crashed reservation has not expired")
         assert raised.value.code == "preparation_cancelled"
@@ -521,8 +523,7 @@ def test_same_repository_reservation_wait_cancellation_is_public_error(
         try:
             with preparation.reserve_preparation(
                 identity,
-                cancelled=lambda: True,
-                wait=RepositoryWait(timeout_seconds=10),
+                wait=RepositoryWait(timeout_seconds=10, cancelled=lambda: True),
             ):
                 raise AssertionError("cancelled reservation must not be acquired")
         except BaseException as error:
@@ -754,7 +755,7 @@ def test_capture_waits_for_another_export_commit_on_the_same_repository(
                 progress=progress,
             )
             try:
-                assert waiting.wait(timeout=5)
+                assert waiting.wait(timeout=10)
                 assert not waiter.done()
             finally:
                 release.set()
@@ -813,6 +814,7 @@ def test_capture_raises_busy_when_the_lock_outlives_its_timeout(
             "inspection_started",
             "repository_wait_started",
         ]
+        assert events[1].message == "another operation holds the repository maintenance lock"
     finally:
         release.set()
         first.close()
@@ -843,3 +845,69 @@ def test_prune_rejects_invalid_timeout(
         pytest.raises(error, match="timeout"),
     ):
         repository.prune(timeout=timeout)
+
+
+def test_reservation_wait_reports_another_preparation_once(tmp_path: Path) -> None:
+    repository = ExportRepository.open(tmp_path / "repository")
+    preparation = preparation_repository(repository)
+    identity = RepositoryIdentity(_digest("producer"), _digest("outputs"), _digest("spec"))
+    reasons: list[str] = []
+    waiting = threading.Event()
+
+    def started(reason: str) -> None:
+        reasons.append(reason)
+        waiting.set()
+
+    def wait_for_reservation() -> None:
+        wait = RepositoryWait(timeout_seconds=10, started=started)
+        with preparation.reserve_preparation(identity, wait=wait, poll_seconds=0.01):
+            pass
+
+    try:
+        with preparation.reserve_preparation(identity, wait=_WAIT):
+            waiter = threading.Thread(target=wait_for_reservation)
+            waiter.start()
+            assert waiting.wait(timeout=10)
+        waiter.join(timeout=10)
+        assert not waiter.is_alive()
+        assert reasons == ["another operation is preparing this export"]
+    finally:
+        repository.close()
+
+
+def test_open_returns_while_another_operation_holds_the_lock(tmp_path: Path) -> None:
+    root = tmp_path / "repository"
+    ExportRepository.open(root).close()
+    with maintenance_module.maintenance_lock(root, _WAIT):
+        started = time.monotonic()
+        with ExportRepository.open(root) as repository:
+            assert repository.status().generations == 0
+        assert time.monotonic() - started < 5
+
+
+def test_capture_cancelled_while_waiting_for_the_lock_stops_waiting(tmp_path: Path) -> None:
+    root = tmp_path / "repository"
+    producer = _producer(tmp_path / "notebook.py")
+    spec = _spec(states={"baseline": {"choice": "A"}})
+    cancel = threading.Event()
+
+    def progress(event: ProgressEvent) -> None:
+        if event.kind == "repository_wait_started":
+            cancel.set()
+
+    with (
+        ExportRepository.open(root) as repository,
+        maintenance_module.maintenance_lock(root, _WAIT),
+    ):
+        started = time.monotonic()
+        with pytest.raises(ExecutionError) as raised:
+            capture_session(
+                _borrowed(spec, producer),
+                spec=spec,
+                repository=repository,
+                timeout=30,
+                progress=progress,
+                cancelled=cancel.is_set,
+            )
+        assert time.monotonic() - started < 5
+    assert raised.value.code == "preparation_cancelled"

@@ -32,10 +32,10 @@ if TYPE_CHECKING:
     from marimo_export.prepared import PreparedExport
 
 # Opening has no caller timeout. A catalog reset waits as long as the catalog
-# connection that detected it. Recovery on open is opportunistic and skips a
-# repository that another operation is maintaining.
+# connection that detected it. Recovery on open is opportunistic: it rides out
+# brief lookups by peers and skips a repository another operation is maintaining.
 _CATALOG_RESET_WAIT = RepositoryWait(timeout_seconds=10.0)
-_OPPORTUNISTIC_WAIT = RepositoryWait(timeout_seconds=0.0)
+_OPEN_RECOVERY_WAIT = RepositoryWait(timeout_seconds=0.25)
 
 
 class ExportRepository:
@@ -193,7 +193,7 @@ class ExportRepository:
 
     def _recover(self) -> None:
         self._require_open()
-        self._artifacts.recover(wait=_OPPORTUNISTIC_WAIT)
+        self._artifacts.recover(wait=_OPEN_RECOVERY_WAIT)
 
     def _require_open(self) -> None:
         if self._closed:

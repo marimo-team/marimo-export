@@ -122,17 +122,22 @@ def test_repository_flag_precedes_environment_and_default(
     assert from_flag["path"] == str(explicit.resolve())
 
 
-def test_repository_prune_supports_dry_run(
+def test_repository_prune_supports_dry_run_and_timeout(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    calls: list[bool] = []
+    calls: list[tuple[bool, float]] = []
     original = ExportRepository.prune
 
-    def tracked(repository: ExportRepository, *, dry_run: bool = False) -> PruneResult:
-        calls.append(dry_run)
-        return original(repository, dry_run=dry_run)
+    def tracked(
+        repository: ExportRepository,
+        *,
+        dry_run: bool = False,
+        timeout: float = 30.0,
+    ) -> PruneResult:
+        calls.append((dry_run, timeout))
+        return original(repository, dry_run=dry_run, timeout=timeout)
 
     monkeypatch.setattr(ExportRepository, "prune", tracked)
 
@@ -144,6 +149,8 @@ def test_repository_prune_supports_dry_run(
                 "--repository",
                 str(tmp_path / "repository"),
                 "--dry-run",
+                "--timeout",
+                "5",
                 "--json",
             ]
         )
@@ -153,7 +160,7 @@ def test_repository_prune_supports_dry_run(
     assert result["dry_run"] is True
     assert result["prepared_states"] == 0
     assert result["generations"] == 0
-    assert calls == [True]
+    assert calls == [(True, 5.0)]
 
 
 def test_doctor_reports_effective_repository_and_exact_marimo_check(
