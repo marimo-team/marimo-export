@@ -911,3 +911,30 @@ def test_capture_cancelled_while_waiting_for_the_lock_stops_waiting(tmp_path: Pa
             )
         assert time.monotonic() - started < 5
     assert raised.value.code == "preparation_cancelled"
+
+
+def test_staging_cleanup_under_a_held_lock_leaves_the_directory_to_recovery(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "repository"
+    identity = RepositoryIdentity(_digest("producer"), _digest("outputs"), _digest("spec"))
+    with ExportRepository.open(root) as repository:
+        preparation = preparation_repository(repository)
+        with preparation.reserve_preparation(identity, wait=_WAIT):
+            staged = preparation.stage_export(identity)
+            (staged.path / "partial.txt").write_text("partial", encoding="utf-8")
+            with maintenance_module.maintenance_lock(root, _WAIT):
+                started = time.monotonic()
+                staged.close()
+                assert time.monotonic() - started < 5
+            assert staged.path.exists()
+        repository._recover()
+        assert not staged.path.exists()
+
+
+def test_reservation_with_zero_wait_claims_a_free_identity(tmp_path: Path) -> None:
+    identity = RepositoryIdentity(_digest("producer"), _digest("outputs"), _digest("spec"))
+    with ExportRepository.open(tmp_path / "repository") as repository:
+        wait = RepositoryWait(timeout_seconds=0)
+        with preparation_repository(repository).reserve_preparation(identity, wait=wait) as owned:
+            assert owned.alive

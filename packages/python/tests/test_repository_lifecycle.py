@@ -181,7 +181,7 @@ def test_staging_acquisition_waits_within_operation_timeout(
         assert finished.wait(timeout=10)
         worker.join()
         assert not errors
-        repository._artifacts.discard_staging(staged.pop(), wait=_WAIT)
+        repository._artifacts.discard_staging(staged.pop())
 
 
 def test_reservation_is_exclusive_across_repository_process_owners(tmp_path: Path) -> None:
@@ -645,7 +645,7 @@ def test_delayed_success_after_deadline_does_not_revive_staging_lease(
     assert relative not in repository._leases._staging
     assert relative not in repository._leases._confirmed_staging_deadline
     monkeypatch.setattr(repository._catalog, "renew_lifecycle", native_renew)
-    repository._artifacts.discard_staging(staged, wait=_WAIT)
+    repository._artifacts.discard_staging(staged)
     repository.close()
 
 

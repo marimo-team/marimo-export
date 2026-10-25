@@ -212,7 +212,7 @@ class StagedPreparedState:
         if self._closed:
             return
         self._closed = True
-        self._repository._discard_staging(self.path, wait=self._reservation.wait)
+        self._repository._discard_staging(self.path)
 
     def __enter__(self) -> StagedPreparedState:
         return self
@@ -277,7 +277,7 @@ class StagedExport:
         if self._closed:
             return
         self._closed = True
-        self._repository._discard_staging(self.path, wait=self._reservation.wait)
+        self._repository._discard_staging(self.path)
 
     def __enter__(self) -> StagedExport:
         return self

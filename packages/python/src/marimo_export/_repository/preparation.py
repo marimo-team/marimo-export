@@ -157,15 +157,11 @@ class PreparationRepository:
         try:
             while fence is None:
                 wait.require_not_cancelled()
-                if time.monotonic() >= deadline:
-                    raise RepositoryReservationTimeoutError(
-                        "The export preparation reservation timed out."
-                    )
                 remaining = deadline - time.monotonic()
                 try:
                     fence = self._leases.claim_reservation(
                         identity,
-                        timeout_seconds=min(poll_seconds, remaining),
+                        timeout_seconds=min(poll_seconds, max(0.001, remaining)),
                     )
                 except RepositoryBusyError:
                     fence = None
@@ -173,6 +169,10 @@ class PreparationRepository:
                     if fence is None:
                         announce()
                 if fence is None:
+                    if time.monotonic() >= deadline:
+                        raise RepositoryReservationTimeoutError(
+                            "The export preparation reservation timed out."
+                        )
                     time.sleep(min(poll_seconds, max(0.0, deadline - time.monotonic())))
             reservation = PreparationReservation(
                 self._leases,
@@ -286,8 +286,8 @@ class PreparationRepository:
             commit_guard=commit_guard,
         )
 
-    def _discard_staging(self, path: Path, *, wait: RepositoryWait) -> None:
-        self._artifacts.discard_staging(path, wait=wait)
+    def _discard_staging(self, path: Path) -> None:
+        self._artifacts.discard_staging(path)
 
     def _reservation(self) -> PreparationReservation:
         reservation = self._active.get()

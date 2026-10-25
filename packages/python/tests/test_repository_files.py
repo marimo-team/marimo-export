@@ -15,7 +15,6 @@ from marimo_export._diagnostics import cleanup_failures
 from marimo_export._repository.files import atomic_install
 from marimo_export._repository.paths import export_path
 from marimo_export._repository.preparation import (
-    RepositoryWait,
     preparation_repository,
 )
 from marimo_export.repository import (
@@ -173,8 +172,7 @@ def test_state_commit_preserves_primary_and_records_staging_cleanup_failure(
         def reject(*_args: object, **_kwargs: object):
             raise ValueError("commit failed")
 
-        def reject_cleanup(_path: Path, *, wait: RepositoryWait) -> None:
-            del wait
+        def reject_cleanup(_path: Path) -> None:
             raise PermissionError("cleanup unavailable")
 
         monkeypatch.setattr(repository._artifacts, "commit_prepared_state", reject)
@@ -185,7 +183,7 @@ def test_state_commit_preserves_primary_and_records_staging_cleanup_failure(
             "prepared state staging cleanup also failed: PermissionError",
         )
         monkeypatch.setattr(repository._artifacts, "discard_staging", native_discard)
-        native_discard(staged.path, wait=_WAIT)
+        native_discard(staged.path)
     repository.close()
 
 
@@ -235,8 +233,7 @@ def test_committed_export_survives_staging_cleanup_failure(
 
         failed_cleanups: list[Path] = []
 
-        def fail_cleanup(path: Path, *, wait: RepositoryWait) -> None:
-            del wait
+        def fail_cleanup(path: Path) -> None:
             failed_cleanups.append(path)
             raise PermissionError("lease cleanup unavailable")
 

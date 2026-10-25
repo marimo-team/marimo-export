@@ -101,13 +101,19 @@ elapsed, checking `RepositoryWait.cancelled` before each slice, and raises
 | ---------------------------------------------------------------- | ------------------------------------------------ |
 | `plan`, `prepare`, `capture`                                     | One wait per operation from its public `timeout` |
 | `Session.plan()`                                                 | The `Client` timeout                             |
-| Staging and commits under a reservation                          | The wait stored on `PreparationReservation`      |
+| Staging creation and commits under a reservation                 | The wait stored on `PreparationReservation`      |
+| Staging discard                                                  | Zero. A held lock releases the lease only        |
 | `ExportRepository.prepared()`, `prune()`, and `repository prune` | Their `timeout` argument                         |
 | Recovery while opening                                           | 0.25 seconds. Opening then skips recovery        |
 | Artifact retirement after a catalog reset                        | 10 seconds, matching the catalog connection wait |
 
 Producer services build the wait with `repository_wait()`, which reports each
 wait as a `repository_wait_started` progress event.
+
+Discarding a staging directory tries the lock once. When another operation holds
+it, discard releases the staging lease and leaves the directory, which the next
+recovery removes as abandoned staging. A successful install has already moved
+the staging directory, so its discard only releases the lease.
 
 An export commit holds the lock while it verifies the staged export, validates
 state membership, admits the candidate through retention, installs the

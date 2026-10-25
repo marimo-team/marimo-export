@@ -17,12 +17,15 @@ from marimo_export._repository.leases import LeaseManager
 from marimo_export._repository.models import (
     AdmissionCandidate,
     PruneResult,
+    RepositoryBusyError,
     RepositoryIdentity,
     RepositoryLimits,
     RepositoryWait,
 )
 from marimo_export._repository.sqlite.catalog import SqliteCatalog
 from marimo_export._repository.sqlite.maintenance import maintenance_lock
+
+_DISCARD_WAIT = RepositoryWait(timeout_seconds=0.0)
 
 
 class ArtifactRepository:
@@ -112,9 +115,13 @@ class ArtifactRepository:
                 timeout_seconds=wait.timeout_seconds,
             )
 
-    def discard_staging(self, path: Path, *, wait: RepositoryWait) -> None:
-        with self._maintenance(wait):
-            artifact_lifecycle.discard_owned_staging(self._context, path)
+    def discard_staging(self, path: Path) -> None:
+        try:
+            with self._maintenance(_DISCARD_WAIT):
+                artifact_lifecycle.discard_owned_staging(self._context, path)
+        except RepositoryBusyError:
+            # Recovery removes staging directories that no lease protects.
+            artifact_lifecycle.abandon_owned_staging(self._context, path)
 
     def prune(self, *, dry_run: bool, wait: RepositoryWait) -> PruneResult:
         with self._maintenance(wait):
