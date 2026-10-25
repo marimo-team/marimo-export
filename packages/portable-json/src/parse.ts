@@ -1,6 +1,6 @@
 import { portableJsonValue } from "./convert.js";
 import type { JsonValue } from "./types.js";
-import { MAX_JSON_DEPTH, MAX_JSON_VALUES } from "./types.js";
+import { jsonValueLimit, MAX_JSON_DEPTH, MAX_JSON_VALUES } from "./types.js";
 
 const MAX_JSON_DIAGNOSTIC_STRING = 256;
 const MAX_JSON_NUMBER_LEXEME_BYTES = 1_024;
@@ -270,12 +270,4 @@ function quoteJsonDiagnostic(value: string): string {
     body += token;
   }
   return `"${body}${truncated ? "..." : ""}"`;
-}
-
-function jsonValueLimit(input: number | undefined): number {
-  if (input === undefined) return MAX_JSON_VALUES;
-  if (!Number.isSafeInteger(input) || input <= 0) {
-    throw new TypeError("JSON value limits must be positive safe integers.");
-  }
-  return input;
 }

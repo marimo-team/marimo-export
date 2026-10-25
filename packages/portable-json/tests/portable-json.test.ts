@@ -61,6 +61,17 @@ describe("portable JSON conversion", () => {
     expect(() => parseStrictJson('{"first":0,"second":1}', 4)).toThrow("maximum value count");
   });
 
+  test("converts within a caller-selected value limit", () => {
+    const larger = Array.from({ length: MAX_JSON_VALUES }, () => null);
+
+    expect(portableJsonValue(larger, "value", MAX_JSON_VALUES + 1)).toHaveLength(MAX_JSON_VALUES);
+    expect(portableJsonObject({ first: 0 }, "value", 3)).toEqual({ first: 0 });
+    expect(() => portableJsonObject({ first: 0, second: 1 }, "value", 4)).toThrow(
+      "maximum JSON value count",
+    );
+    expect(() => portableJsonValue(null, "value", 0)).toThrow("positive safe integers");
+  });
+
   test("rejects sparse arrays before allocating their output", () => {
     const sparse = Array(2);
     sparse[1] = "ready";

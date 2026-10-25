@@ -1,22 +1,35 @@
 import type { JsonObject, JsonValue } from "./types.js";
-import { MAX_JSON_DEPTH, MAX_JSON_VALUES } from "./types.js";
+import { jsonValueLimit, MAX_JSON_DEPTH } from "./types.js";
 
 const MAX_DIAGNOSTIC_PATH = 512;
 const TRUNCATED_PATH = "...";
 
 interface ConversionState {
   readonly active: WeakSet<object>;
+  readonly maximumValues: number;
   count: number;
 }
 
 /** Return a detached portable JSON value. */
-export function portableJsonValue<Input>(input: Input, path = "value"): JsonValue {
-  return convertValue(input, path, 0, { active: new WeakSet(), count: 0 });
+export function portableJsonValue<Input>(
+  input: Input,
+  path = "value",
+  maximumValues?: number,
+): JsonValue {
+  return convertValue(input, path, 0, {
+    active: new WeakSet(),
+    maximumValues: jsonValueLimit(maximumValues),
+    count: 0,
+  });
 }
 
 /** Return a detached portable JSON object. */
-export function portableJsonObject<Input>(input: Input, path = "value"): JsonObject {
-  const value = portableJsonValue(input, path);
+export function portableJsonObject<Input>(
+  input: Input,
+  path = "value",
+  maximumValues?: number,
+): JsonObject {
+  const value = portableJsonValue(input, path, maximumValues);
   if (!isJsonObject(value)) {
     throw new TypeError(`${path} must be an object.`);
   }
@@ -52,7 +65,7 @@ function convertArray<Input>(
 ): readonly JsonValue[] {
   enterContainer(input, path, state);
   try {
-    if (input.length > MAX_JSON_VALUES - state.count) {
+    if (input.length > state.maximumValues - state.count) {
       throw new TypeError(`${path} exceeds the maximum JSON value count.`);
     }
     const values: JsonValue[] = [];
@@ -102,7 +115,7 @@ function enterContainer<Value extends object>(
 
 function countValue(state: ConversionState, path: string): void {
   state.count += 1;
-  if (state.count > MAX_JSON_VALUES) {
+  if (state.count > state.maximumValues) {
     throw new TypeError(`${path} exceeds the maximum JSON value count.`);
   }
 }
