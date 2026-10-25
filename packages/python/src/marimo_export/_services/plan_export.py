@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, replace
 
+from marimo_export._index_budget import IndexProjection
 from marimo_export._json import sha256_bytes
 from marimo_export._repository.preparation import (
     PreparationRepository,
@@ -18,7 +19,12 @@ from marimo_export._services.identity import ProducerIdentity, producer_identity
 from marimo_export._services.plan_wire import decode_plan_wire, spec_sha256
 from marimo_export.errors import ExecutionError, NotebookExportError
 from marimo_export.index import ExportIndex
-from marimo_export.planning import ExportPlan, PlannedState, output_plan_sha256
+from marimo_export.planning import (
+    ExportPlan,
+    PlannedState,
+    _optional_outputs,
+    output_plan_sha256,
+)
 from marimo_export.producer import OwnedNotebook, _timeout, open_notebook
 from marimo_export.progress import ProgressEvent
 from marimo_export.reader import NotebookExport
@@ -94,6 +100,7 @@ def plan(
     selected = ExportRepository.open() if repository is None else repository
     preparation = preparation_repository(selected)
     try:
+        IndexProjection.for_spec(spec).require_fits()
         preflight = preflight_plan(source, spec)
         exact = preparation.current(preflight.repository_identity, wait=wait)
         if exact is not None:
@@ -151,8 +158,9 @@ def resolve_repository_plan(
     repository: PreparationRepository,
     wait: RepositoryWait,
 ) -> ExportPlan:
-    """Attach one live repository reuse and observation snapshot to a plan."""
+    """Check the index budget, then attach repository reuse and observations."""
 
+    IndexProjection.for_plan(planned).require_fits()
     prepared = repository.lookup_prepared_states(
         producer_sha256=planned.producer_sha256,
         output_plan_sha256=planned.output_plan_sha256,
@@ -228,6 +236,7 @@ def plan_from_artifact(
         observation_revision=observations.revision,
         observations=observations.observations(index.inputs),
         exact_reuse=True,
+        optional_outputs=_optional_outputs(spec),
     )
 
 

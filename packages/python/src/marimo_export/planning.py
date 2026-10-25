@@ -70,6 +70,28 @@ class PlannedState:
 
 
 @dataclass(frozen=True, slots=True)
+class IndexBudget:
+    """A lower bound on the JSON values and bytes of an export index, beside its limits.
+
+    Planning counts every unprepared state output at the cheapest entry that
+    output can write, so the written index holds at least this much.
+    """
+
+    index_values: int
+    max_index_values: int
+    index_bytes: int
+    max_index_bytes: int
+
+    def to_dict(self) -> JsonObject:
+        return {
+            "index_values": self.index_values,
+            "max_index_values": self.max_index_values,
+            "index_bytes": self.index_bytes,
+            "max_index_bytes": self.max_index_bytes,
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class ExportPlan:
     """Resolved export work returned before preparation begins."""
 
@@ -87,6 +109,7 @@ class ExportPlan:
     observation_revision: int = 0
     observations: tuple[ObservedState, ...] = ()
     exact_reuse: bool = False
+    optional_outputs: tuple[str, ...] = ()
     identity: str = field(init=False)
 
     def __post_init__(self) -> None:
@@ -130,6 +153,12 @@ class ExportPlan:
             nonempty=True,
         )
         object.__setattr__(self, "outputs", outputs)
+        if not isinstance(self.optional_outputs, tuple):
+            raise TypeError("export plan optional_outputs must be a tuple")
+        if self.optional_outputs != tuple(sorted(set(self.optional_outputs))) or not set(
+            self.optional_outputs
+        ) <= set(outputs):
+            raise ValueError("export plan optional_outputs must be sorted plan outputs")
         reusable = _fingerprints(self.reusable_states, "export plan reusable_states")
         missing = _fingerprints(self.missing_states, "export plan missing_states")
         if set(reusable) & set(missing):
@@ -173,6 +202,14 @@ class ExportPlan:
     def state_fingerprints(self) -> tuple[str, ...]:
         return tuple(state.fingerprint for state in self.states)
 
+    @property
+    def index_budget(self) -> IndexBudget:
+        """Return the fewest values and bytes the index this plan writes contains."""
+
+        from marimo_export._index_budget import IndexProjection
+
+        return IndexProjection.for_plan(self).budget()
+
     def matches(self, notebook_export: NotebookExport) -> bool:
         """Return whether an opened export contains this resolved state relation."""
 
@@ -209,6 +246,7 @@ class ExportPlan:
             "inputs": list(self.inputs),
             "states": [state.to_dict() for state in self.states],
             "outputs": list(self.outputs),
+            "optional_outputs": list(self.optional_outputs),
             "reusable_states": list(self.reusable_states),
             "missing_states": list(self.missing_states),
             "observation_revision": self.observation_revision,
@@ -221,6 +259,7 @@ class ExportPlan:
                 for observation in self.observations
             ],
             "exact_reuse": self.exact_reuse,
+            "index_budget": self.index_budget.to_dict(),
         }
 
 
@@ -255,6 +294,14 @@ def output_plan_sha256(spec: ExportSpec) -> str:
     return sha256_bytes(canonical_bytes(outputs))
 
 
+def _optional_outputs(spec: ExportSpec) -> tuple[str, ...]:
+    """Return the sorted outputs that may be unavailable in a state."""
+
+    if not isinstance(spec, ExportSpec):
+        raise TypeError("spec must be an ExportSpec")
+    return tuple(sorted(name for name, output in spec.outputs.items() if output.optional))
+
+
 def _fingerprints(values: tuple[str, ...], path: str) -> tuple[str, ...]:
     if not isinstance(values, tuple):
         raise TypeError(f"{path} must be a tuple")
@@ -266,6 +313,7 @@ def _fingerprints(values: tuple[str, ...], path: str) -> tuple[str, ...]:
 
 __all__ = [
     "ExportPlan",
+    "IndexBudget",
     "PlannedState",
     "export_plan_identity",
     "output_plan_sha256",

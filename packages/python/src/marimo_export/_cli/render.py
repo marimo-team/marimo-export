@@ -184,7 +184,18 @@ def _plan_human(value: Mapping[str, object]) -> str:
             f"Reusable: {len(_list(value['reusable_states'], 'reusable states'))}",
             f"To prepare: {len(_list(value['missing_states'], 'missing states'))}",
             f"Observed: {len(_list(value['observations'], 'observations'))}",
+            _index_budget_human(_object(value["index_budget"], "index budget")),
         )
+    )
+
+
+def _index_budget_human(budget: Mapping[str, object]) -> str:
+    values = _integer(budget["index_values"], "index values")
+    max_values = _integer(budget["max_index_values"], "max index values")
+    size = _integer(budget["index_bytes"], "index bytes")
+    max_size = _integer(budget["max_index_bytes"], "max index bytes")
+    return (
+        f"Index: at least {values:,} of {max_values:,} values, {_bytes(size)} of {_bytes(max_size)}"
     )
 
 

@@ -235,6 +235,23 @@ changes in place. [Declare modules loaded by
 name](../concepts/preparation-and-reuse#declare-modules-loaded-by-name) shows the
 metadata block.
 
+## Size the state space to the index
+
+Every state writes one entry per output into `index.json`, which holds at most
+16 MiB and 2,000,000 JSON values. The smallest descriptor costs about 120 bytes,
+so the 16 MiB limit allows roughly 130,000 state outputs, such as 1,300 states
+with 100 outputs each. Outputs with assets cost about 200 bytes, inline JSON
+values cost their full size, and an unavailable optional output costs 50 to 70
+bytes plus its message.
+
+`plan` reports the lower bound as `index_budget`. Build and capture check the
+authored states and outputs before any notebook work, check the resolved plan,
+and check again after each state is prepared. A state space that cannot fit
+fails with `export_invalid`, a message that suggests how many states to keep,
+and `index_values` or `index_bytes` in `details`. Reduce the matrix or move
+outputs to a separate export. Prepared states stay in the repository, and a
+spec with fewer states and the same outputs reuses them.
+
 ## Check the resolved relation
 
 Run `plan` before a costly build or capture:
@@ -246,6 +263,6 @@ uv run marimo-export plan examples/quickstart/report.py \
 ```
 
 Inspect `inputs`, the complete `states` mappings, `default_alias`, `outputs`,
-`observations`, `reusable_states`, `missing_states`, and `exact_reuse`. Continue
-with [Build and capture](build-and-capture) after the relation matches the
-states and outputs your consumers need.
+`observations`, `reusable_states`, `missing_states`, `exact_reuse`, and
+`index_budget`. Continue with [Build and capture](build-and-capture) after the
+relation matches the states and outputs your consumers need.

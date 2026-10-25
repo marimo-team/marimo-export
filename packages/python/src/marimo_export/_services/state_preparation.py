@@ -5,10 +5,12 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 from typing import Protocol
 
+from marimo_export._index_budget import IndexProjection
 from marimo_export._repository.preparation import PreparationRepository, RepositoryWait
 from marimo_export._services.export_artifacts import (
     assemble_export,
     commit_captured_state,
+    prepared_state_entry,
     single_state_spec,
 )
 from marimo_export._services.identity import ProducerIdentity
@@ -91,6 +93,7 @@ def prepare_states(
     )
     captured: list[str] = []
     activity = CacheActivity()
+    projection = IndexProjection.for_plan(plan)
 
     def require_commit_current() -> None:
         require_not_cancelled(cancelled)
@@ -98,6 +101,9 @@ def prepare_states(
         require_not_cancelled(cancelled)
 
     try:
+        for fingerprint, reusable in states.items():
+            projection.measure(fingerprint, prepared_state_entry(reusable))
+        projection.require_fits()
         for completed, state in enumerate(missing_states(plan, states), start=1):
             require_not_cancelled(cancelled)
             emit(
@@ -121,6 +127,7 @@ def prepare_states(
                 commit_guard=require_commit_current,
             )
             captured.append(state.fingerprint)
+            projection.measure(state.fingerprint, prepared_state_entry(states[state.fingerprint]))
             current = CacheActivity(
                 authored_hits=result.notebook_cache.hits,
                 authored_misses=result.notebook_cache.misses,
@@ -139,6 +146,7 @@ def prepare_states(
                     elapsed_seconds=result.capture_seconds,
                 ),
             )
+            projection.require_fits()
         require_not_cancelled(cancelled)
         artifact = assemble_export(
             preparation,

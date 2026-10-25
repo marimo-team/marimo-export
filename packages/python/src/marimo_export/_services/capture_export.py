@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import replace
 
+from marimo_export._index_budget import IndexProjection
 from marimo_export._repository.preparation import preparation_repository
 from marimo_export._services.export_artifacts import (
     repository_identity,
@@ -88,6 +89,7 @@ def capture_session(
     preparation = preparation_repository(selected)
     transferred = False
     try:
+        IndexProjection.for_spec(spec).require_fits()
         require_not_cancelled(cancelled)
         emit(progress, ProgressEvent(kind="inspection_started"))
         wire = session._plan(spec)
@@ -199,6 +201,7 @@ def plan_session(
     selected = ExportRepository.open() if repository is None else repository
     preparation = preparation_repository(selected)
     try:
+        IndexProjection.for_spec(spec).require_fits()
         emit(progress, ProgressEvent(kind="inspection_started"))
         wire = session._plan(spec)
         producer = producer_from_plan_wire(wire)

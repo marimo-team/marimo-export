@@ -57,6 +57,7 @@ states that preparation must commit.
 - reusable and missing state fingerprints
 - observed vectors and their repository revision
 - exact-generation reuse status
+- the index budget, a lower bound on `index.json` values and bytes
 
 The repository identity of one exact `ExportPlan` is:
 
@@ -89,6 +90,36 @@ the baseline. Planning executes no transient state or output cells.
 `Session.plan()` provides the borrowed-session form. It reads the live document
 and baseline through the selected session, then applies the same repository
 reuse rules.
+
+## Index budget
+
+`IndexProjection` in `_index_budget.py` bounds the canonical index from below.
+It measures real records with `json_value_count()` and `canonical_bytes()`, the
+counters that `ExportIndex.to_bytes()` applies. The index root comes from a real
+`ExportIndex` with an empty `states` object. Each unprepared state counts its
+inputs and the cheapest entry each output can write. For a required output that
+is the minimum over one smallest instance of every descriptor type. An optional
+output also considers the smallest `UnavailableOutput`. A prepared state counts
+its exact `StateEntry`, including unavailable entries. Read-only snapshot
+resources live in the output asset, so they reach the index only through its
+descriptor. Members combine by the canonical JSON grammar, so a projection
+with every state measured matches `to_bytes()` except for notebook and producer
+provenance text and control bindings, which it counts at their smallest.
+
+The producer checks the projection at three points:
+
+1. `plan()`, `prepare()`, and the capture entry points bound the index from the
+   `ExportSpec` before any notebook runs. Only rows that assign the same names
+   and differ in a non-object value count as distinct states, because sparse
+   rows can collapse through baseline values.
+2. `resolve_repository_plan()` checks every resolved plan before it looks up
+   reusable states.
+3. `prepare_states()` measures reusable states, then each newly committed
+   state, and fails as soon as the projection exceeds a limit.
+
+A failed check raises `NotebookExportError` with `export_invalid` and the same
+`details` keys as `to_bytes()`. Committed prepared states stay in the
+repository.
 
 ## File preparation
 

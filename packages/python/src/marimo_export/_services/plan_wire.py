@@ -10,7 +10,12 @@ from marimo_export._json import canonical_bytes, json_object, sha256_bytes
 from marimo_export._services.identity import ProducerIdentity
 from marimo_export.errors import ExecutionError
 from marimo_export.index import ProducerProvenance
-from marimo_export.planning import ExportPlan, PlannedState, output_plan_sha256
+from marimo_export.planning import (
+    ExportPlan,
+    PlannedState,
+    _optional_outputs,
+    output_plan_sha256,
+)
 from marimo_export.spec import ExportSpec
 from marimo_export.wire import portable_json
 
@@ -104,6 +109,7 @@ def decode_plan_wire(
         reusable_states=(),
         missing_states=tuple(sorted(state.fingerprint for state in states)),
         observations=(),
+        optional_outputs=_optional_outputs(spec),
     )
 
 
