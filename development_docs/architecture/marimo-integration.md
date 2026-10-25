@@ -261,6 +261,41 @@ context stream restoration, and stream shutdown in order. A primary execution
 error remains primary while cleanup failures are attached as bounded
 diagnostics.
 
+## marimo file URLs
+
+marimo writes two local file URL forms into outputs. marimo-export parses both
+as a marimo file-format contract in `_file_urls.py`, outside `compat/`.
+
+| Form               | Example                                | marimo 0.25.2 source                                                                                                                                                                                                                                                                  |
+| ------------------ | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Virtual file       | `./@file/29676-test.png`               | `VirtualFile.url` ([virtual_file.py:69](https://github.com/marimo-team/marimo/blob/0.25.2/marimo/_runtime/virtual_file/virtual_file.py#L69)), member pattern ([dom_traversal.py:161](https://github.com/marimo-team/marimo/blob/0.25.2/marimo/_convert/common/dom_traversal.py#L161)) |
+| Empty virtual file | `@file/0-empty.txt`                    | `EMPTY_VIRTUAL_FILE` ([virtual_file.py:123](https://github.com/marimo-team/marimo/blob/0.25.2/marimo/_runtime/virtual_file/virtual_file.py#L123))                                                                                                                                     |
+| Public file        | `public/logo.png`, `./public/logo.png` | `_PUBLIC_FILE_PATTERN` ([dom_traversal.py:301](https://github.com/marimo-team/marimo/blob/0.25.2/marimo/_convert/common/dom_traversal.py#L301))                                                                                                                                       |
+
+`VirtualFileUrl.parse(url, prefixes)` reads `<byte length>-<filename>` with
+marimo's `(\d+)-(.+)` pattern after one of the caller's `VirtualFilePrefix`
+values. The server route splits the same member at its first hyphen
+([assets.py:581](https://github.com/marimo-team/marimo/blob/0.25.2/marimo/_server/api/endpoints/assets.py#L581)). Snapshot file
+closure accepts `RELATIVE` (`./@file/`). AnyWidget ESM and CSS capture also
+accept `ROOT` (`/@file/`) and `BARE` (`@file/`), the forms that marimo's
+frontend trusts as virtual file URLs
+([trusted-url.ts:31](https://github.com/marimo-team/marimo/blob/0.25.2/frontend/src/plugins/core/trusted-url.ts#L31)). The parser matches the
+complete URL, so a trailing newline that marimo's `$` anchor tolerates fails to
+parse.
+
+`PublicFileUrl.resolve(notebook_directory)` follows `_resolve_public_file`
+([dom_traversal.py:304-329](https://github.com/marimo-team/marimo/blob/0.25.2/marimo/_convert/common/dom_traversal.py#L304-L329)).
+The strictly resolved path must be a regular file inside the resolved
+`<notebook directory>/public`. Traversal segments, absolute paths, symlink
+escapes, and symlink loops resolve to `None`. A symlink that stays inside
+`public/` resolves to its target.
+
+`compat/` keeps the kernel reads: `read_virtual_file` and the virtual file
+registry walk in `compat/file_closure.py`. `exporters/_anywidget_assets.py`
+validates AnyWidget ESM and CSS and receives the virtual file reader from
+`compat/anywidget.py`. Recheck the cited lines when the supported marimo
+release changes.
+
 ## Child runs consume the cache adapter
 
 [Execution and caching](execution-and-caching.md) owns the loader, graph scope,

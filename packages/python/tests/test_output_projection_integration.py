@@ -971,3 +971,55 @@ def test_external_url_and_code_literal_remain_unchanged(tmp_path: Path) -> None:
     )
 
     assert close_output_files(cast(Any, recording), html_source, "text/html") == html_source
+
+
+@pytest.mark.parametrize(
+    "html_source",
+    (
+        '<img src="public/../secret.txt">',
+        '<img src="./public/sub/../../secret.txt">',
+        '<img src="public/escape.txt">',
+    ),
+)
+def test_public_file_outside_the_public_directory_fails_closed(
+    tmp_path: Path,
+    html_source: str,
+) -> None:
+    from marimo_export._marimo.compat.file_closure import close_output_files
+
+    public = tmp_path / "public"
+    (public / "sub").mkdir(parents=True)
+    secret = tmp_path / "secret.txt"
+    secret.write_bytes(b"secret")
+    try:
+        (public / "escape.txt").symlink_to(secret)
+    except (OSError, NotImplementedError):
+        if "escape" in html_source:
+            pytest.skip("symlinks are unavailable on this platform")
+    context = SimpleNamespace(
+        filename=str(tmp_path / "notebook.py"),
+        parent=None,
+        virtual_file_registry=SimpleNamespace(has=lambda _filename: False),
+    )
+    recording = SimpleNamespace(child=SimpleNamespace(_runtime_context=context))
+
+    with pytest.raises(OutputError, match="could not be closed"):
+        close_output_files(cast(Any, recording), html_source, "text/html")
+
+
+@pytest.mark.parametrize("url", ("/@file/6-chip.png", "@file/6-chip.png"))
+def test_snapshot_html_leaves_non_relative_virtual_file_forms_unchanged(
+    tmp_path: Path,
+    url: str,
+) -> None:
+    from marimo_export._marimo.compat.file_closure import close_output_files
+
+    context = SimpleNamespace(
+        filename=str(tmp_path / "notebook.py"),
+        parent=None,
+        virtual_file_registry=SimpleNamespace(has=lambda _filename: True),
+    )
+    recording = SimpleNamespace(child=SimpleNamespace(_runtime_context=context))
+    html_source = f'<img src="{url}">'
+
+    assert close_output_files(cast(Any, recording), html_source, "text/html") == html_source

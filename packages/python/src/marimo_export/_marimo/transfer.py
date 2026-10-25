@@ -7,10 +7,10 @@ import time
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from typing import Any, Protocol, cast
-from urllib.parse import urlsplit
 from uuid import uuid4
 
 from marimo_export._diagnostics import record_cleanup_failure
+from marimo_export._file_urls import VirtualFileUrl
 from marimo_export._json import JsonObject
 from marimo_export._limits import MAX_EXPORT_ASSET_BYTES, MAX_EXPORT_CLOSURE_BYTES
 from marimo_export._marimo.capabilities import NativeReceipt, TransferRuntime
@@ -323,20 +323,13 @@ def _validate_virtual_file(virtual_file: _VirtualFile, payload: bytes) -> None:
         or not filename
         or len(filename) > 255
         or not filename.endswith(".bin")
-        or any(character in filename for character in ("/", "\\", "\x00"))
+        # The URL carries the filename verbatim, so it must stay one plain path segment.
+        or any(character in filename for character in ("/", "\\", "\x00", "?", "#"))
     ):
         raise IntegrityError("marimo produced an invalid transfer filename")
     if not isinstance(url, str) or not url or len(url) > _MAX_VIRTUAL_FILE_URL_LENGTH:
         raise IntegrityError("marimo produced an invalid transfer URL")
-    parsed = urlsplit(url)
-    prefix = f"./@file/{len(payload)}-"
-    if (
-        parsed.scheme
-        or parsed.netloc
-        or parsed.query
-        or parsed.fragment
-        or parsed.path != f"{prefix}{filename}"
-    ):
+    if url != VirtualFileUrl(len(payload), filename).url:
         raise IntegrityError("marimo virtual-file transfer requires a relative @file URL")
 
 

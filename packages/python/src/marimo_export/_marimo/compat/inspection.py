@@ -202,13 +202,7 @@ def require_capabilities() -> MarimoCapabilities:
         from marimo._ast.app import InternalApp
         from marimo._ast.load import load_notebook_ir
         from marimo._code_mode import get_context as get_code_context
-        from marimo._convert.common.dom_traversal import (
-            _PUBLIC_FILE_PATTERN,
-            _is_virtual_file_url,
-            _parse_virtual_file_url,
-            _resolve_public_file,
-            replace_html_attributes,
-        )
+        from marimo._convert.common.dom_traversal import replace_html_attributes
         from marimo._internal import commands
         from marimo._internal.schemas import serialization
         from marimo._internal.session import SessionView
@@ -260,9 +254,6 @@ def require_capabilities() -> MarimoCapabilities:
         (ThreadSafeStdout, "projection_snapshots"),
         (ThreadSafeStream, "projection_snapshots"),
         (UIElementRegistry, "projection_snapshots"),
-        (_is_virtual_file_url, "projection_snapshots"),
-        (_parse_virtual_file_url, "projection_snapshots"),
-        (_resolve_public_file, "projection_snapshots"),
         (_broadcast_outputs, "projection_snapshots"),
         (_flush_console, "projection_snapshots"),
         (_set_run_result_status, "projection_snapshots"),
@@ -273,10 +264,8 @@ def require_capabilities() -> MarimoCapabilities:
             missing.append(name)
     if not callable(get_code_context):
         missing.append("child_sessions")
-    if (
-        not callable(getattr(SessionView, "get_model_notifications", None))
-        or not callable(getattr(UIElementRegistry, "get_object", None))
-        or not callable(getattr(_PUBLIC_FILE_PATTERN, "fullmatch", None))
+    if not callable(getattr(SessionView, "get_model_notifications", None)) or not callable(
+        getattr(UIElementRegistry, "get_object", None)
     ):
         missing.append("projection_snapshots")
     if not _blob_asset_codec(NativeBlobAsset, BLOB_SERIALIZERS, BLOB_DESERIALIZERS):

@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 import msgspec
 
+from marimo_export._file_urls import PublicFileUrl, VirtualFilePrefix, VirtualFileUrl
 from marimo_export._json import JsonValue, canonical_bytes, json_value
 from marimo_export._media_type import data_url
 from marimo_export.errors import OutputError
@@ -50,6 +51,8 @@ _CSS_URL = re.compile(
     r"url\(\s*(?P<quote>['\"]?)(?P<url>[^'\")]*?)(?P=quote)\s*\)",
     re.IGNORECASE,
 )
+# Snapshot HTML carries the relative virtual file URLs that marimo writes.
+_VIRTUAL_FILE_PREFIXES = (VirtualFilePrefix.RELATIVE,)
 _PUBLIC_REFERENCE = re.compile(r"(?:^|[\s,('\"])(?:\./)?public/")
 
 
@@ -99,17 +102,6 @@ def _close_html_files(recording: ProjectionRecording, value: str) -> str:
 
 class _ResourceResolver:
     def __init__(self, recording: ProjectionRecording) -> None:
-        from marimo._convert.common.dom_traversal import (
-            _PUBLIC_FILE_PATTERN,
-            _is_virtual_file_url,
-            _parse_virtual_file_url,
-            _resolve_public_file,
-        )
-
-        self._is_virtual_file_url = _is_virtual_file_url
-        self._parse_virtual_file_url = _parse_virtual_file_url
-        self._public_file_pattern = _PUBLIC_FILE_PATTERN
-        self._resolve_public_file = _resolve_public_file
         context = recording.child._runtime_context
         registries: list[object] = []
         seen_contexts: set[int] = set()
@@ -122,10 +114,8 @@ class _ResourceResolver:
             current = getattr(current, "parent", None)
         self._registries = tuple(registries)
         filename = context.filename
-        self._public_dir = (
-            Path(filename).resolve().parent / "public"
-            if isinstance(filename, str) and filename
-            else None
+        self._notebook_directory = (
+            Path(filename).resolve().parent if isinstance(filename, str) and filename else None
         )
         self._closed: dict[str, str] = {}
 
@@ -145,22 +135,28 @@ class _ResourceResolver:
 
     def is_known(self, value: str) -> bool:
         candidate = value.strip()
-        return bool(
-            self._is_virtual_file_url(candidate) or self._public_file_pattern.fullmatch(candidate)
+        return (
+            VirtualFileUrl.parse(candidate, _VIRTUAL_FILE_PREFIXES) is not None
+            or PublicFileUrl.parse(candidate) is not None
         )
 
     def contains_known(self, value: str) -> bool:
-        return "./@file/" in value or _PUBLIC_REFERENCE.search(value) is not None
+        return (
+            any(prefix.value in value for prefix in _VIRTUAL_FILE_PREFIXES)
+            or _PUBLIC_REFERENCE.search(value) is not None
+        )
 
     def close_url(self, value: str) -> str:
         candidate = value.strip()
         cached = self._closed.get(candidate)
         if cached is not None:
             return cached
-        if self._is_virtual_file_url(candidate):
-            closed = self._close_virtual(candidate)
-        elif self._public_file_pattern.fullmatch(candidate):
-            closed = self._close_public(candidate)
+        virtual_file = VirtualFileUrl.parse(candidate, _VIRTUAL_FILE_PREFIXES)
+        public_file = PublicFileUrl.parse(candidate)
+        if virtual_file is not None:
+            closed = self._close_virtual(candidate, virtual_file)
+        elif public_file is not None:
+            closed = self._close_public(candidate, public_file)
         else:
             return value
         self._closed[candidate] = closed
@@ -198,14 +194,9 @@ class _ResourceResolver:
             )
         return rewritten
 
-    def _close_virtual(self, url: str) -> str:
-        parsed = self._parse_virtual_file_url(url)
-        if parsed is None:
-            raise OutputError(
-                f"virtual file {url!r} is invalid",
-                code="output_execution_failed",
-            )
-        byte_length, filename = parsed
+    def _close_virtual(self, url: str, virtual_file: VirtualFileUrl) -> str:
+        byte_length = virtual_file.byte_length
+        filename = virtual_file.filename
         if byte_length > MAX_INLINE_FILE_BYTES:
             raise OutputError(
                 f"virtual file {url!r} exceeds the snapshot inline limit",
@@ -239,14 +230,13 @@ class _ResourceResolver:
             )
         return data_url(filename, data)
 
-    def _close_public(self, url: str) -> str:
-        match = self._public_file_pattern.fullmatch(url)
-        if match is None or self._public_dir is None:
+    def _close_public(self, url: str, public_file: PublicFileUrl) -> str:
+        if self._notebook_directory is None:
             raise OutputError(
                 f"public file {url!r} has no notebook directory",
                 code="output_execution_failed",
             )
-        resolved = self._resolve_public_file(self._public_dir, match.group(1))
+        resolved = public_file.resolve(self._notebook_directory)
         if resolved is None:
             raise OutputError(
                 f"public file {url!r} could not be closed",

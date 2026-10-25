@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import re
 from collections import deque
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -21,17 +20,20 @@ from marimo._runtime.virtual_file import read_virtual_file
 from marimo._types.ids import WidgetModelId
 
 from marimo_export._diagnostics import safe_diagnostic
+from marimo_export._file_urls import VirtualFileUrl
 from marimo_export._json import json_value
 from marimo_export._media_type import data_url
 from marimo_export.errors import OutputError
-
-from .anywidget_assets import portable_css, validate_embedded_esm
+from marimo_export.exporters._anywidget_assets import (
+    ANYWIDGET_VIRTUAL_FILE_PREFIXES,
+    portable_css,
+    validate_embedded_esm,
+)
 
 ANYWIDGET_PAYLOAD_SCHEMA = "marimo-export.anywidget.v1"
 
 _ANYWIDGET_REF_PREFIX = "anywidget:"
 _IPYWIDGET_REF_PREFIX = "IPY_MODEL_"
-_VIRTUAL_FILE = re.compile(r"^(?:\./|/)?@file/(?P<size>\d+)-(?P<name>.+)$")
 
 
 @dataclass(frozen=True, slots=True)
@@ -228,7 +230,7 @@ def _canonical_notification(
     if css is not None:
         if not isinstance(css, str):
             raise OutputError("AnyWidget _css state must be a string")
-        state["_css"] = portable_css(css)
+        state["_css"] = portable_css(css, read_file=_read_virtual_file)
     pairs = sorted(
         zip(message.buffer_paths, message.buffers, strict=True),
         key=lambda pair: json.dumps(pair[0], separators=(",", ":")),
@@ -252,14 +254,13 @@ def _canonical_esm_spec(
         return None
     if spec.url.startswith(("https://", "http://", "data:")):
         return spec
-    match = _VIRTUAL_FILE.fullmatch(spec.url)
-    if match is None:
+    virtual_file = VirtualFileUrl.parse(spec.url, ANYWIDGET_VIRTUAL_FILE_PREFIXES)
+    if virtual_file is None:
         raise OutputError(f"AnyWidget ESM uses an unsupported URL: {spec.url!r}")
-    expected_size = int(match.group("size"))
-    contents = read_virtual_file(match.group("name"), expected_size)
-    if len(contents) != expected_size:
+    contents = _read_virtual_file(virtual_file)
+    if len(contents) != virtual_file.byte_length:
         raise OutputError(
-            f"AnyWidget ESM {spec.url!r} declared {expected_size} bytes but "
+            f"AnyWidget ESM {spec.url!r} declared {virtual_file.byte_length} bytes but "
             f"returned {len(contents)}"
         )
     try:
@@ -271,9 +272,13 @@ def _canonical_esm_spec(
         raise OutputError("AnyWidget ESM contents do not match marimo's model code hash")
     validate_embedded_esm(source)
     digest = hashlib.sha256(contents).hexdigest()
-    url = f"./@file/{len(contents)}-anywidget-{digest}.js"
+    url = VirtualFileUrl(len(contents), f"anywidget-{digest}.js").url
     files[url.removeprefix(".")] = data_url(url, contents)
     return EsmSpec(url=url, hash=spec.hash)
+
+
+def _read_virtual_file(virtual_file: VirtualFileUrl) -> bytes:
+    return read_virtual_file(virtual_file.filename, virtual_file.byte_length)
 
 
 def _rewrite_model_refs(

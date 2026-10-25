@@ -1,13 +1,19 @@
+"""Validate AnyWidget JavaScript and CSS before they enter an export."""
+
 from __future__ import annotations
 
-import re
+from collections.abc import Callable
 from dataclasses import dataclass
 
-from marimo._runtime.virtual_file import read_virtual_file
-
+from marimo_export._file_urls import VirtualFilePrefix, VirtualFileUrl
 from marimo_export._media_type import data_url
 
-_VIRTUAL_FILE = re.compile(r"^(?:\./|/)?@file/(?P<size>\d+)-(?P<name>.+)$")
+# marimo's frontend trusts each of these prefixes as a virtual file URL.
+ANYWIDGET_VIRTUAL_FILE_PREFIXES = (
+    VirtualFilePrefix.RELATIVE,
+    VirtualFilePrefix.ROOT,
+    VirtualFilePrefix.BARE,
+)
 _JS_ALLOWED_URL_PREFIXES = ("data:", "http://", "https://")
 _JS_REGEX_PREFIX_KEYWORDS = frozenset(
     {
@@ -59,7 +65,6 @@ _JS_PUNCTUATORS = (
     "^=",
     "...",
 )
-_CSS_VIRTUAL_FILE_MARKERS = ("./@file/", "/@file/", "@file/")
 
 
 @dataclass(frozen=True)
@@ -649,12 +654,16 @@ def _javascript_identifier_part(char: str) -> bool:
     return _javascript_identifier_start(char) or char.isdigit()
 
 
-def portable_css(source: str) -> str:
-    """Inline marimo virtual assets and validate remaining CSS references."""
+def portable_css(source: str, *, read_file: Callable[[VirtualFileUrl], bytes]) -> str:
+    """Inline marimo virtual files and validate the remaining CSS references.
+
+    ``read_file`` returns the bytes of one virtual file from the running
+    kernel. Empty virtual files inline without a read.
+    """
 
     replacements: list[tuple[int, int, str]] = []
     for reference in _css_references(source):
-        replacement = _portable_css_reference(reference)
+        replacement = _portable_css_reference(reference, read_file)
         if replacement is not None:
             replacements.append((reference.start, reference.end, replacement))
     for start, end, replacement in reversed(replacements):
@@ -733,7 +742,10 @@ def _css_url_reference(source: str, opening: int, kind: str) -> tuple[_CssRefere
     return _CssReference(start, end, value, kind, "\\" in value), index + 1
 
 
-def _portable_css_reference(reference: _CssReference) -> str | None:
+def _portable_css_reference(
+    reference: _CssReference,
+    read_file: Callable[[VirtualFileUrl], bytes],
+) -> str | None:
     url = reference.value.strip()
     lowered = url.lower()
     if reference.escaped:
@@ -746,31 +758,29 @@ def _portable_css_reference(reference: _CssReference) -> str | None:
         return None
     if lowered.startswith(("data:", "http://", "https://")):
         return None
-    if any(url.startswith(marker) for marker in _CSS_VIRTUAL_FILE_MARKERS):
+    if url.startswith(tuple(prefix.value for prefix in ANYWIDGET_VIRTUAL_FILE_PREFIXES)):
         if reference.kind == "@import":
             raise ValueError("AnyWidget CSS @import virtual files must be bundled before export")
-        return _inline_css_virtual_file(url)
+        return _inline_css_virtual_file(url, read_file)
     if url.startswith("/") and not url.startswith("//"):
         return None
     raise ValueError(f"AnyWidget CSS {reference.kind} uses an unsupported asset URL: {url!r}")
 
 
-def _inline_css_virtual_file(url: str) -> str:
-    match = _VIRTUAL_FILE.fullmatch(url)
-    if match is None:
+def _inline_css_virtual_file(url: str, read_file: Callable[[VirtualFileUrl], bytes]) -> str:
+    virtual_file = VirtualFileUrl.parse(url, ANYWIDGET_VIRTUAL_FILE_PREFIXES)
+    if virtual_file is None:
         raise ValueError(f"AnyWidget CSS contains a malformed marimo virtual file URL: {url!r}")
-    expected_size = int(match.group("size"))
     try:
-        contents = (
-            b"" if expected_size == 0 else read_virtual_file(match.group("name"), expected_size)
-        )
+        contents = b"" if virtual_file.byte_length == 0 else read_file(virtual_file)
     except Exception as error:
         raise ValueError(f"AnyWidget CSS could not read marimo virtual file {url!r}") from error
-    if len(contents) != expected_size:
+    if len(contents) != virtual_file.byte_length:
         raise ValueError(
-            f"AnyWidget CSS {url!r} declared {expected_size} bytes but returned {len(contents)}"
+            f"AnyWidget CSS {url!r} declared {virtual_file.byte_length} bytes "
+            f"but returned {len(contents)}"
         )
-    return data_url(match.group("name"), contents)
+    return data_url(virtual_file.filename, contents)
 
 
 def _skip_css_trivia(source: str, index: int) -> int:
