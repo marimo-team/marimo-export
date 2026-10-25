@@ -4,11 +4,16 @@ import hashlib
 import os
 import re
 import stat
+from collections.abc import Iterable
 from pathlib import Path
-from typing import TypeAlias
+from typing import TYPE_CHECKING, TypeAlias
 
+from marimo_export._json import canonical_bytes
 from marimo_export.errors import ExecutionError
 from marimo_export.spec import StrPath
+
+if TYPE_CHECKING:
+    from marimo_export._marimo.capabilities import NotebookCell
 
 _SourceRevision: TypeAlias = tuple[int, int, int, int, int]
 
@@ -25,9 +30,9 @@ def document_sha256(notebook: StrPath) -> str:
 
     source = _notebook_path(notebook)
     payload, before_sha256, before_revision = _read_stable_source(source)
-    from marimo_export._marimo.composition import notebook_document_sha256
+    from marimo_export._marimo.composition import saved_cells
 
-    digest = notebook_document_sha256(source, payload)
+    digest = cells_document_sha256(saved_cells(source, payload))
     _, after_sha256, after_revision = _read_stable_source(source)
     if after_sha256 != before_sha256 or after_revision != before_revision:
         raise ExecutionError(
@@ -40,6 +45,21 @@ def document_sha256(notebook: StrPath) -> str:
             },
         )
     return digest
+
+
+def cells_document_sha256(cells: Iterable[NotebookCell]) -> str:
+    """Return the canonical document digest of one notebook's ordered cells."""
+
+    value = [
+        {
+            "id": cell.id,
+            "code": cell.code.rstrip(),
+            "name": cell.name,
+            "config": cell.config,
+        }
+        for cell in cells
+    ]
+    return hashlib.sha256(canonical_bytes(value)).hexdigest()
 
 
 def _notebook_path(value: StrPath) -> Path:
@@ -119,4 +139,4 @@ def _source_revision(path: Path) -> _SourceRevision:
     )
 
 
-__all__ = ["document_sha256"]
+__all__ = ["cells_document_sha256", "document_sha256"]

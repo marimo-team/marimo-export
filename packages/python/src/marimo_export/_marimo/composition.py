@@ -10,6 +10,7 @@ from marimo_export._json import JsonObject
 from marimo_export._marimo.capabilities import KernelAdapters, KernelRuntime
 
 if TYPE_CHECKING:
+    from marimo_export._marimo.capabilities import NotebookCell
     from marimo_export.integration import KernelInputObservation
     from marimo_export.observations import ObservationLedger
 
@@ -52,12 +53,12 @@ def create_kernel_adapters() -> KernelAdapters:
     )
 
 
-def notebook_document_sha256(notebook: Path, source: bytes) -> str:
-    """Read one saved notebook through the supported Marimo adapter."""
+def saved_cells(notebook: Path, source: bytes) -> tuple[NotebookCell, ...]:
+    """Parse one saved notebook's cells through the supported Marimo adapter."""
 
-    from marimo_export._marimo.compat.inspection import document_sha256_from_source
+    from marimo_export._marimo.compat.inspection import saved_cells as parse
 
-    return document_sha256_from_source(notebook, source)
+    return parse(notebook, source)
 
 
 def observe_kernel_inputs(kernel: object) -> KernelInputObservation:
@@ -93,6 +94,6 @@ __all__ = [
     "install_observation_ledger",
     "keep_cached_cells_compatible",
     "marimo_compatibility_details",
-    "notebook_document_sha256",
     "observe_kernel_inputs",
+    "saved_cells",
 ]

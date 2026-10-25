@@ -32,6 +32,19 @@ class MarimoCapabilities:
 
 
 @dataclass(frozen=True, slots=True)
+class NotebookCell:
+    """One authored cell of a marimo notebook document.
+
+    `id` is canonical. `name` is `None` when marimo generated the cell name.
+    """
+
+    id: str
+    code: str
+    name: str | None
+    config: JsonObject
+
+
+@dataclass(frozen=True, slots=True)
 class NativeReceipt:
     """One verified native cache return ready for transfer."""
 
@@ -195,6 +208,7 @@ __all__ = [
     "NativeNumpyReturn",
     "NativeReceipt",
     "NativeScalarReturn",
+    "NotebookCell",
     "PreparedExporter",
     "StateExecution",
     "TransferRuntime",

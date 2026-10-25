@@ -18,7 +18,8 @@ from marimo_export._marimo.compat.exporters import (
     preflight_exporters,
     prepared_exporters,
 )
-from marimo_export._marimo.compat.inspection import _document_sha256
+from marimo_export._marimo.compat.inspection import _notebook_cell
+from marimo_export._notebook import cells_document_sha256
 from marimo_export.errors import OutputError
 from marimo_export.exporters import importable
 
@@ -58,6 +59,10 @@ def _custom_exporter_plan(
         state_name="marimo_export_state_0123456789abcdef",
         state_code="marimo_export_state_0123456789abcdef = 'state'",
     )
+
+
+def _document_sha256(cells: list[SimpleNamespace]) -> str:
+    return cells_document_sha256(_notebook_cell(cell) for cell in cells)
 
 
 def test_document_digest_uses_portable_content_and_cell_identity() -> None:
