@@ -440,8 +440,8 @@ async def _apply_ui_update_batch(
     state: NormalizedState,
     names: tuple[str, ...],
 ) -> None:
+    from marimo._internal.commands import UpdateUIElementCommand
     from marimo._plugins.ui._core.ui_element import UIElement
-    from marimo._runtime.commands import UpdateUIElementCommand
 
     from marimo_export._marimo.compat.inspection import _is_sensitive
 

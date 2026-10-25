@@ -8,6 +8,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, cast
 
+from marimo import ui
 from marimo._messaging.notification import (
     EsmSpec,
     ModelLifecycleNotification,
@@ -15,9 +16,6 @@ from marimo._messaging.notification import (
 )
 from marimo._plugins.ui._impl.anywidget.utils import extract_buffer_paths
 from marimo._plugins.ui._impl.comm import MarimoComm
-from marimo._plugins.ui._impl.from_anywidget import (
-    anywidget as MarimoAnyWidget,
-)
 from marimo._plugins.ui._impl.from_anywidget import get_anywidget_model_id
 from marimo._runtime.virtual_file import read_virtual_file
 from marimo._types.ids import WidgetModelId
@@ -90,7 +88,7 @@ def anywidget_payload(value: object) -> AnyWidgetPayload:
 
 def _widget_value(value: object) -> Any:
     candidate = value
-    if isinstance(value, MarimoAnyWidget):
+    if isinstance(value, ui.anywidget):
         candidate = value.widget
 
     try:

@@ -18,7 +18,7 @@ from marimo_export._marimo.compat.child_run import (
 )
 from marimo_export._marimo.compat.output_data import rewrite_ui_value
 from marimo_export._marimo.composition import create_kernel_runtime
-from marimo_export.errors import ExecutionError, OutputError
+from marimo_export.errors import CompatibilityError, ExecutionError, OutputError
 from marimo_export.index import ControlBinding, ControlIndexStep
 
 
@@ -171,6 +171,30 @@ def test_attached_marimo_exposes_live_capture_capabilities() -> None:
         "setup_definition_overrides",
         "synthetic_output_cells",
     )
+
+
+@pytest.mark.parametrize(
+    ("module", "record", "capability"),
+    [
+        ("commands", "UpdateUIElementCommand", "child_ui_updates"),
+        ("schemas.serialization", "AppInstantiation", "child_sessions"),
+        ("schemas.serialization", "CellDef", "synthetic_output_cells"),
+        ("schemas.serialization", "NotebookSerializationV1", "child_sessions"),
+    ],
+)
+def test_missing_internal_record_reports_its_capability(
+    monkeypatch: pytest.MonkeyPatch,
+    module: str,
+    record: str,
+    capability: str,
+) -> None:
+    monkeypatch.delattr(f"marimo._internal.{module}.{record}")
+
+    with pytest.raises(CompatibilityError) as raised:
+        create_kernel_runtime().require_capabilities()
+
+    assert raised.value.code == "marimo_incompatible"
+    assert raised.value.details == {"missing": [capability]}
 
 
 def test_stop_provenance_tracks_exact_descendants_and_latest_result() -> None:
