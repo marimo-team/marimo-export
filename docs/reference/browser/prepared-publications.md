@@ -345,16 +345,24 @@ or text that starts with `?`. Each input whose exported values differ between
 states becomes one parameter in `inputNames` order. An input with one exported
 value carries no selection and stays out of the query.
 
-Parameters in `query` whose names are not export inputs keep their order. Input
-parameters in `query` are replaced. The result resolves back to the same state
-from every state of the export:
+Input names own their query keys, so input parameters in `query` are replaced.
+Other parameters keep their order and values. The result is serialized as
+[`application/x-www-form-urlencoded`](https://url.spec.whatwg.org/#application/x-www-form-urlencoded)
+text, so `?export=./v2/` comes back as `?export=.%2Fv2%2F` and a space becomes
+`+`. The result resolves back to the same state from every state of the export:
 
 ```ts
 resolvePreparedQuery(current, formatPreparedQuery(state)) === state;
 ```
 
+A query names a state within one export. Inputs that the query leaves out keep
+their values from the current state, so a link written for one export can
+select another state after a republished export varies more inputs. Keep the
+export in an application parameter when links must outlive a publication.
+
 A value whose text matches more than one exported value of its input raises
-`PreparedExportError` with code `query_ambiguous`.
+`PreparedExportError` with code `query_ambiguous`. A large varying input, such
+as widget state, produces a long URL that some HTTP servers reject.
 
 Keep the page URL in step with each committed state and preserve
 application-owned parameters such as `tab`:
@@ -369,31 +377,34 @@ import {
 } from "@marimo-team/marimo-export/prepared";
 
 const port: PreparedStatePort = {
-  async apply({ next }, signal) {
+  async apply({ next, reason }, signal) {
     const title = await next.state.output("title").load(jsonLoader(), { signal });
-    signal.throwIfAborted();
-    document.querySelector("#title")!.textContent = String(title);
     const url = new URL(location.href);
     url.search = formatPreparedQuery(next.state, url.search);
-    history.replaceState(history.state, "", url);
+    signal.throwIfAborted();
+    document.querySelector("#title")!.textContent = String(title);
+    if (reason !== "start") history.replaceState(history.state, "", url);
   },
 };
 
-const sharedQuery = location.search;
 const controller = new PreparedStateController(port);
 const manifestUrl = new URL("/runtime/prepared.json", location.href);
 const refresh = new PreparedPublicationRefresh(manifestUrl, controller);
 
 await refresh.start();
-await controller.updateQuery(sharedQuery).catch((error) => console.warn(error));
+await controller.updateQuery(location.search).catch((error) => console.warn(error));
 ```
 
-Read `location.search` before `refresh.start()`. The start commit writes the
-manifest state into the URL. When `interval` is the only input that varies, a
-page at `?tab=chart` that commits `{ interval: "1wk" }` shows
-`?tab=chart&interval=1wk`. Reloading that URL selects the same state. A shared
-query that names no exported value rejects `updateQuery()` and leaves the
-manifest state committed.
+`apply()` formats the query before it changes the page, so a formatting error
+rejects the transition with the previous view still visible. The start commit
+leaves the URL unchanged, and `updateQuery()` then applies the state the link
+names. A shared link therefore commits the manifest state first and the linked
+state second. A link that names no exported value rejects `updateQuery()` and
+leaves the manifest state committed.
+
+When `interval` is the only input that varies, a page at `?tab=chart` that
+commits `{ interval: "1wk" }` shows `?tab=chart&interval=1wk`. Reloading that
+URL selects the same state.
 
 ### Replace a publication
 

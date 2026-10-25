@@ -11,7 +11,24 @@ const queryText = (value: JsonValue): string =>
 const searchParams = (query: string): URLSearchParams =>
   new URLSearchParams(query.startsWith("?") ? query.slice(1) : query);
 
-const inputDomain = (notebookExport: NotebookExport, name: string): readonly JsonValue[] => {
+interface InputDomain {
+  readonly size: number;
+  readonly byText: ReadonlyMap<string, readonly JsonValue[]>;
+}
+
+// Notebook exports are immutable, so each input domain is computed once per export.
+const domains = new WeakMap<NotebookExport, Map<string, InputDomain>>();
+
+const inputDomain = (notebookExport: NotebookExport, name: string): InputDomain => {
+  let exportDomains = domains.get(notebookExport);
+  if (exportDomains === undefined) {
+    exportDomains = new Map();
+    domains.set(notebookExport, exportDomains);
+  }
+  const cached = exportDomains.get(name);
+  if (cached !== undefined) {
+    return cached;
+  }
   const values = new Map<string, JsonValue>();
   for (const state of notebookExport.states()) {
     if (Object.hasOwn(state.inputs, name)) {
@@ -19,11 +36,18 @@ const inputDomain = (notebookExport: NotebookExport, name: string): readonly Jso
       values.set(jsonKey(value), value);
     }
   }
-  return Array.from(values.values());
+  const byText = new Map<string, JsonValue[]>();
+  for (const value of values.values()) {
+    const text = queryText(value);
+    byText.set(text, [...(byText.get(text) ?? []), value]);
+  }
+  const domain = { size: values.size, byText };
+  exportDomains.set(name, domain);
+  return domain;
 };
 
-const textMatches = (domain: readonly JsonValue[], text: string): readonly JsonValue[] =>
-  domain.filter((candidate) => queryText(candidate) === text);
+const textMatches = (domain: InputDomain, text: string): readonly JsonValue[] =>
+  domain.byText.get(text) ?? [];
 
 const ambiguous = (name: string): PreparedExportError =>
   new PreparedExportError(
@@ -82,7 +106,7 @@ export const formatPreparedQuery = (state: ExportState, query = ""): string => {
   }
   for (const name of notebookExport.inputNames) {
     const domain = inputDomain(notebookExport, name);
-    if (domain.length < 2) continue;
+    if (domain.size < 2) continue;
     const text = queryText(state.inputs[name]!);
     if (textMatches(domain, text).length > 1) {
       throw ambiguous(name);

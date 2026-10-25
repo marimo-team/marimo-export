@@ -269,17 +269,16 @@ import {
   type PreparedStatePort,
 } from "@marimo-team/marimo-export/prepared";
 
-const sharedQuery = location.search;
 const port: PreparedStatePort = {
-  async apply({ next }, signal) {
+  async apply({ next, reason }, signal) {
     const output = await next.state.output("summary").load(jsonLoader(), {
       signal,
     });
-    signal.throwIfAborted();
-    console.log(output);
     const url = new URL(location.href);
     url.search = formatPreparedQuery(next.state, url.search);
-    history.replaceState(history.state, "", url);
+    signal.throwIfAborted();
+    console.log(output);
+    if (reason !== "start") history.replaceState(history.state, "", url);
   },
 };
 
@@ -288,14 +287,15 @@ const manifestUrl = new URL("/prepared/current.json", location.href);
 const refresh = new PreparedPublicationRefresh(manifestUrl, controller);
 
 await refresh.start();
-await controller.updateQuery(sharedQuery).catch((error) => console.warn(error));
+await controller.updateQuery(location.search).catch((error) => console.warn(error));
 ```
 
-Read `location.search` before `refresh.start()` because the start commit
-rewrites the query. The manifest selects `monthly`, so the start commit turns
-`/?view=print` into `/?view=print&days=30`. A later `updateInputs({ days: 7 })`
-shows `/?view=print&days=7`, and reloading that URL selects the weekly state. A
-link that names no exported value leaves the manifest state visible.
+The start commit leaves the URL unchanged so `updateQuery()` can read the shared
+link. With `days` as the varying input, `updateInputs({ days: 7 })` turns
+`/?view=print` into `/?view=print&days=7`, and reloading that URL selects the
+weekly state. A link that names no exported value leaves the manifest state
+visible. The [`formatPreparedQuery()` reference](../reference/browser/prepared-publications#formatpreparedquery-state-query)
+lists the text rules and the cases that change a link's meaning.
 
 Dispose the browser owners in reverse construction order:
 

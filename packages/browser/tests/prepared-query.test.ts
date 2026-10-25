@@ -26,6 +26,23 @@ describe("prepared query resolution", () => {
     expect(selected.inputs).toEqual({ count: 2, mode: "alternate" });
   });
 
+  it("keeps current values for inputs absent from the query", () => {
+    const notebookExport = preparedExportFixture({
+      inputs: [
+        { count: 1, mode: "baseline" },
+        { count: 2, mode: "baseline" },
+        { count: 1, mode: "alternate" },
+        { count: 2, mode: "alternate" },
+      ],
+    });
+    const current = notebookExport.resolve({ count: 2, mode: "alternate" });
+
+    expect(resolvePreparedQuery(current, "count=1").inputs).toEqual({
+      count: 1,
+      mode: "alternate",
+    });
+  });
+
   it("keeps the current state for keys outside the export input contract", () => {
     const notebookExport = preparedExportFixture({ inputs: [{ mode: "baseline" }] });
     const current = notebookExport.resolve({ mode: "baseline" });

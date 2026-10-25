@@ -179,14 +179,17 @@ cancellation. Dispose any staged resources they created when that work settles.
 `formatPreparedQuery(state, query)` from the `prepared` subpath writes the
 inputs of a state into a page query and keeps the parameters the application
 owns. `resolvePreparedQuery(current, query)` reads that query back. In
-`src/main.ts`, record the state after the outputs commit and read it on startup:
+`src/main.ts`, format the query before the outputs commit, record it after the
+commit, and read it on startup:
 
 ```ts
 import { formatPreparedQuery, resolvePreparedQuery } from "@marimo-team/marimo-export/prepared";
 
-// In show(), after the status update:
+// In show(), before current.signal.throwIfAborted():
 const url = new URL(location.href);
 url.search = formatPreparedQuery(state, url.search);
+
+// In show(), after the status update:
 history.replaceState(history.state, "", url);
 
 // Replace the final show("weekly") call:
