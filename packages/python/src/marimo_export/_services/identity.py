@@ -140,8 +140,6 @@ def _identity_from_facts(
                 "document_sha256": document_sha256,
                 "environment_sha256": environment,
                 "implementation_sha256": implementation,
-                "marimo": marimo_version,
-                "marimo_export": export_version,
                 "platform": {
                     "machine": platform.machine(),
                     "system": platform.system(),

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import re
 import stat
 from pathlib import Path
 from typing import TypeAlias
@@ -10,6 +11,13 @@ from marimo_export.errors import ExecutionError
 from marimo_export.spec import StrPath
 
 _SourceRevision: TypeAlias = tuple[int, int, int, int, int]
+
+# PEP 723 reference expression as marimo reads it: CRLF lines are accepted and
+# a block closes at its first `# ///` line.
+_SCRIPT_METADATA = re.compile(
+    r"(?m)^# /// (?P<type>[a-zA-Z0-9-]+)\r?$\n"
+    r"(?P<content>(^#(?! ///\r?$)(| .*)\r?$\n)+)^# ///(?=\r?$)"
+)
 
 
 def document_sha256(notebook: StrPath) -> str:
@@ -48,6 +56,24 @@ def _notebook_path(value: StrPath) -> Path:
         return requested.resolve(strict=True)
     except (OSError, RuntimeError) as error:
         raise ValueError(f"notebook is unavailable: {requested}") from error
+
+
+def _script_metadata(script: str) -> tuple[re.Match[str] | None, str]:
+    """Return the PEP 723 `script` block and its TOML content."""
+
+    blocks = [match for match in _SCRIPT_METADATA.finditer(script) if match["type"] == "script"]
+    if len(blocks) > 1:
+        raise ExecutionError(
+            "the notebook has more than one script metadata block",
+            code="notebook_invalid",
+        )
+    if not blocks:
+        return None, ""
+    content = "".join(
+        line[2:] if line.startswith("# ") else line[1:]
+        for line in blocks[0]["content"].splitlines(keepends=True)
+    ).replace("\r\n", "\n")
+    return blocks[0], content
 
 
 def _read_stable_source(path: Path) -> tuple[bytes, str, _SourceRevision]:

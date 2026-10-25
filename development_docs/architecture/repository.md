@@ -50,9 +50,10 @@ producer_sha256 + output_plan_sha256 + spec_sha256
 ```
 
 `producer_sha256` covers the stable notebook source, canonical notebook
-document, Python and operating-system runtime, installed distributions, local
-runtime sources, Marimo version, marimo-export version, and marimo-export
-implementation identity.
+document, Python and operating-system runtime, environment identity, and
+marimo-export implementation identity. The environment identity records the
+distribution closure, including marimo and marimo-export, and the local module
+sources reachable from the notebook's imports.
 
 `output_plan_sha256` is the output-plan identity. It covers the authored output
 declarations. Presentation HTML, CSS, JavaScript, route names, and view

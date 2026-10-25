@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import math
 import os
-import re
 import tempfile
 import time
 from collections.abc import Mapping, MutableMapping
@@ -19,6 +18,7 @@ from marimo_export._diagnostics import record_cleanup_failure
 from marimo_export._notebook import (
     _notebook_path,
     _read_stable_source,
+    _script_metadata,
     _SourceRevision,
 )
 from marimo_export._remote.managed import ManagedServer
@@ -34,13 +34,6 @@ from marimo_export.spec import ExportSpec, StrPath
 
 if TYPE_CHECKING:
     from marimo_export.limits import CaptureLimits
-
-# PEP 723 reference expression as marimo reads it: CRLF lines are accepted and
-# a block closes at its first `# ///` line.
-_SCRIPT_METADATA = re.compile(
-    r"(?m)^# /// (?P<type>[a-zA-Z0-9-]+)\r?$\n"
-    r"(?P<content>(^#(?! ///\r?$)(| .*)\r?$\n)+)^# ///(?=\r?$)"
-)
 
 
 class OwnedNotebook:
@@ -333,21 +326,7 @@ def _cache_enabled_source(source: bytes) -> bytes:
             "the notebook source is not UTF-8 text",
             code="notebook_invalid",
         ) from error
-    blocks = [match for match in _SCRIPT_METADATA.finditer(script) if match["type"] == "script"]
-    if len(blocks) > 1:
-        raise ExecutionError(
-            "the notebook has more than one script metadata block",
-            code="notebook_invalid",
-        )
-    block = blocks[0] if blocks else None
-    content = (
-        ""
-        if block is None
-        else "".join(
-            line[2:] if line.startswith("# ") else line[1:]
-            for line in block["content"].splitlines(keepends=True)
-        ).replace("\r\n", "\n")
-    )
+    block, content = _script_metadata(script)
     try:
         metadata = tomlkit.parse(content)
         table: MutableMapping[str, Any] = metadata

@@ -285,6 +285,12 @@ A borrowed session uses its loaded module objects. Restart the session after
 changing an already imported exporter module. Source drift during preparation
 raises a typed output error.
 
+Exporter source and `dependencies` enter the marimo cache key of each executed
+output. Prepared-state reuse follows the notebook's producer environment. Name
+an exporter module that the notebook never imports in the notebook's
+`[tool.marimo-export] imports` metadata, as described in
+[Declare modules loaded by name](../concepts/preparation-and-reuse#declare-modules-loaded-by-name).
+
 ## File input
 
 `ExportSpec.from_file()` accepts UTF-8 `.json`, `.yaml`, and `.yml` files up to

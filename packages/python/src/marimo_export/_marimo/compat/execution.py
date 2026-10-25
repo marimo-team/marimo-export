@@ -100,9 +100,7 @@ async def execute_state(
             environment = tracked_environment(state_child.context.parent.graph)
             if environment is None:
                 source = state_child.context.filename
-                environment = environment_identity(
-                    None if source is None else Path(source), exclude_source=True
-                )
+                environment = environment_identity(None if source is None else Path(source))
             with track_notebook_cache(
                 state_child.runner._kernel.graph,
                 run_plan.transient_cache_cells,

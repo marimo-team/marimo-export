@@ -7,21 +7,21 @@ planning, repository storage, or a cross-language boundary.
 
 ## Identity map
 
-| Name                        | Covers                                                                                                            | Primary use                                         |
-| --------------------------- | ----------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
-| Source SHA-256              | Exact saved notebook bytes                                                                                        | Detect source changes during a file operation       |
-| Document SHA-256            | Canonical parsed notebook cells and configuration                                                                 | Match saved and live notebook documents             |
-| Implementation SHA-256      | Installed marimo-export Python source manifest                                                                    | Invalidate work after an implementation change      |
-| Environment SHA-256         | Installed distributions and relevant local Python sources                                                         | Bind results to imported code and package versions  |
-| Producer SHA-256            | Notebook source and document, Python and operating system, Marimo, marimo-export, implementation, and environment | Scope observations and reusable prepared states     |
-| Output-plan SHA-256         | Canonical `ExportSpec.outputs`                                                                                    | Reuse prepared states across state-relation changes |
-| Exporter execution identity | Resolved exporter callable, options, declared dependency sources, and marimo-export implementation                | Change an executed exporter leaf's marimo cache key |
-| Spec SHA-256                | Complete canonical `ExportSpec`                                                                                   | Bind aliases, default alias, states, and outputs    |
-| State fingerprint           | Canonical complete input object                                                                                   | Address one normalized state vector                 |
-| Repository identity         | Producer, output-plan, and spec SHA-256 values                                                                    | Find the current exact export generation            |
-| Prepared-state instance     | Exact canonical prepared-state manifest                                                                           | Name one immutable prepared-state directory         |
-| Notebook export identity    | Exact canonical `index.json` bytes                                                                                | Verify one portable notebook export                 |
-| Export generation instance  | Notebook export identity                                                                                          | Name one immutable repository export directory      |
+| Name                        | Covers                                                                                             | Primary use                                         |
+| --------------------------- | -------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| Source SHA-256              | Exact saved notebook bytes                                                                         | Detect source changes during a file operation       |
+| Document SHA-256            | Canonical parsed notebook cells and configuration                                                  | Match saved and live notebook documents             |
+| Implementation SHA-256      | Installed marimo-export Python source manifest                                                     | Invalidate work after an implementation change      |
+| Environment SHA-256         | Distribution closure and local module sources reachable from the notebook's imports                | Bind results to imported code and package versions  |
+| Producer SHA-256            | Notebook source and document, Python and operating system, implementation, and environment         | Scope observations and reusable prepared states     |
+| Output-plan SHA-256         | Canonical `ExportSpec.outputs`                                                                     | Reuse prepared states across state-relation changes |
+| Exporter execution identity | Resolved exporter callable, options, declared dependency sources, and marimo-export implementation | Change an executed exporter leaf's marimo cache key |
+| Spec SHA-256                | Complete canonical `ExportSpec`                                                                    | Bind aliases, default alias, states, and outputs    |
+| State fingerprint           | Canonical complete input object                                                                    | Address one normalized state vector                 |
+| Repository identity         | Producer, output-plan, and spec SHA-256 values                                                     | Find the current exact export generation            |
+| Prepared-state instance     | Exact canonical prepared-state manifest                                                            | Name one immutable prepared-state directory         |
+| Notebook export identity    | Exact canonical `index.json` bytes                                                                 | Verify one portable notebook export                 |
+| Export generation instance  | Notebook export identity                                                                           | Name one immutable repository export directory      |
 
 `ExportPlan.identity` is the repository identity. It is SHA-256 over a canonical
 object containing `producer_sha256`, `output_plan_sha256`, and `spec_sha256`.
@@ -54,15 +54,17 @@ producer + output plan + complete ExportSpec
 Changing a state alias or the default alias changes the spec and repository
 identity while preserving matching prepared states. Changing an output
 plan changes both the output-plan and repository identities.
-Changing notebook source, relevant local source, an installed distribution, the
-Python runtime, Marimo, or marimo-export changes the producer identity.
+Changing notebook source, an imported local module, a distribution in the
+environment closure, the Python runtime, Marimo, or marimo-export changes the
+producer identity.
 
 Exporter execution identity is resolved inside the kernel when capture prepares
 exporters. It enters the transient exporter leaf source and its marimo cache key.
 It is not unconditionally part of `producer_sha256`. An exact prepared-export hit
 returns before exporter import or exporter-source validation. Exporter source
 affects that fast path only when it also belongs to the producer environment
-discovered during preflight.
+discovered during preflight, either through a notebook import or through
+`[tool.marimo-export] imports`.
 
 Presentation HTML, Cascading Style Sheets, browser JavaScript, route names, and
 view host IDs stay outside these identities. An application can change its
@@ -70,12 +72,55 @@ presentation while reusing the same prepared notebook results.
 
 ### Producer environment sources
 
-Producer identity includes installed distribution versions and relevant local
-Python files. Discovery follows the notebook directory, project roots, `src`
-layouts, imported local modules, and native extension paths. The source manifest
-records stable path and file facts before hashing. Moving or changing a relevant
-local source can therefore invalidate reuse even when the notebook bytes stay
-equal. Unrelated files outside the discovered roots stay out of the identity.
+`_environment.py` computes the environment SHA-256 from the notebook's imports.
+It reads every `import` and absolute `from ... import` statement in a `.py`
+notebook, or in the Python and `{.marimo}` fences of a Markdown notebook. It adds
+the module names listed in the table `[tool.marimo-export] imports`, read from
+the PEP 723 block of a `.py` notebook or from the `pyproject` or `header` front
+matter of a Markdown notebook. Standard-library names from
+`sys.stdlib_module_names` stay out.
+
+Each remaining top-level name resolves through `importlib.machinery.PathFinder`
+over a fixed search path: the notebook directory, the project's `src` directory,
+the project root, then `sys.path`. The project root is the nearest ancestor with
+`pyproject.toml`, `setup.cfg`, or `.git`. `importlib.util.find_spec` handles
+names that only a meta-path finder, such as an editable install, can resolve.
+The fixed prefix keeps the client and the kernel in agreement when the kernel
+extends `sys.path` with a project directory, from marimo's `runtime.pythonpath`
+setting or from a cell. The kernel recomputes producer identity and the plan
+wire rejects a mismatch, so a module that resolves only through a kernel path
+outside the project fails planning with `implementation_changed`.
+
+| Resolution                                                                      | Recorded as                                                                                        |
+| ------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| Every location inside the install root of a distribution that provides the name | Distribution root                                                                                  |
+| Any other location, including editable installs                                 | Local source: SHA-256 of each source file in the top-level module or package, keyed by import path |
+
+Every distribution that provides the name joins the closure, including the
+distribution behind an editable install and duplicate providers of one module.
+
+The provider map reads each installed distribution's `top_level.txt`, or the
+top-level entries of its installed file list when that file is absent.
+
+Local Python files are parsed in turn, so a local import reached through another
+local module joins the scope. Relative imports stay inside the top-level package
+that is already hashed. The notebook file itself stays out because source and
+document SHA-256 already cover it.
+
+The distribution closure starts from the imported distribution roots, marimo
+with its `sql` extra, and marimo-export with every declared extra. It follows
+`Requires-Dist` through `packaging.requirements.Requirement`, evaluates each
+marker for the current interpreter and the requested extras, and records the
+canonical name and version of every installed distribution it reaches. A marker
+that cannot be evaluated is followed. When one distribution name is installed
+more than once, the first on the interpreter path supplies the version, matching
+the copy Python imports. A runtime without a saved notebook
+records every installed distribution.
+
+After the scan, the identity re-reads installed distribution versions and
+re-stats the notebook and every hashed file. Any difference raises
+`RuntimeError`. A local key is the file path
+relative to the import root, so moving a project directory keeps the identity.
 
 ## Protocol registry
 
