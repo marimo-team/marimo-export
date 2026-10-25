@@ -4,6 +4,7 @@ import { anyWidgetLoader } from "@marimo-team/marimo-export/loader/anywidget";
 import { parquetRowsLoader } from "@marimo-team/marimo-export/loader/parquet";
 import type { ParquetRow, ParquetValue } from "@marimo-team/marimo-export/loader/parquet";
 import { vegaLiteLoader } from "@marimo-team/marimo-export/loader/vegalite";
+import { formatPreparedQuery, resolvePreparedQuery } from "@marimo-team/marimo-export/prepared";
 
 import { marketSummaryLoader } from "./market-summary";
 import type { MarketSummary } from "./market-summary";
@@ -121,7 +122,7 @@ async function start(): Promise<void> {
     await opened.verify();
     notebookExport = opened;
     renderViewButtons(opened);
-    requestView(viewFromHash(opened));
+    requestView(viewFromQuery(opened));
   } catch (error) {
     showError(error);
   }
@@ -151,7 +152,9 @@ function requestView(name: string): void {
   const controller = new AbortController();
   active = controller;
   setBusy(name, true);
-  history.replaceState(null, "", `#${name}`);
+  const url = new URL(location.href);
+  url.search = formatPreparedQuery(state, url.search);
+  history.replaceState(history.state, "", url);
   transition = transition.then(
     () => renderView(name, state, copy, nextRevision, controller),
     () => renderView(name, state, copy, nextRevision, controller),
@@ -379,9 +382,15 @@ function showError(cause: unknown): void {
   status.textContent = "Market data could not be opened";
 }
 
-function viewFromHash(value: NotebookExport): string {
-  const name = location.hash.slice(1);
-  return views.has(name) && hasState(value, name) ? name : "baseline";
+function viewFromQuery(value: NotebookExport): string {
+  let state: ExportState;
+  try {
+    state = resolvePreparedQuery(value.defaultState, location.search);
+  } catch (error) {
+    console.warn(error);
+    return "baseline";
+  }
+  return [...views.keys()].find((name) => state.aliases.includes(name)) ?? "baseline";
 }
 
 function hasState(value: NotebookExport, name: string): boolean {
