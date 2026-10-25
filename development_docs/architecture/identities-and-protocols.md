@@ -58,8 +58,10 @@ Changing notebook source, an imported local module, a distribution in the
 environment closure, the Python runtime, Marimo, or marimo-export changes the
 producer identity.
 
-Exporter execution identity is resolved inside the kernel when capture prepares
-exporters. It enters the transient exporter leaf source and its marimo cache key.
+`exporters/_prepare.py` resolves exporter execution identity inside the kernel
+when capture prepares exporters, and `exporters/_identity.py` freezes the loaded
+exporter modules and callable behind it. The identity enters the transient
+exporter leaf source and its marimo cache key.
 It is not unconditionally part of `producer_sha256`. An exact prepared-export hit
 returns before exporter import or exporter-source validation. Exporter source
 affects that fast path only when it also belongs to the producer environment
@@ -77,8 +79,9 @@ It reads every `import` and absolute `from ... import` statement in a `.py`
 notebook, or in the Python and `{.marimo}` fences of a Markdown notebook. It adds
 the module names listed in the table `[tool.marimo-export] imports`, read from
 the PEP 723 block of a `.py` notebook or from the `pyproject` or `header` front
-matter of a Markdown notebook. Standard-library names from
-`sys.stdlib_module_names` stay out.
+matter of a Markdown notebook. A listed name that resolves nowhere fails with
+`notebook_invalid`. Standard-library names from `sys.stdlib_module_names` stay
+out unless they resolve inside the notebook or project directory.
 
 Each remaining top-level name resolves through `importlib.machinery.PathFinder`
 over a fixed search path: the notebook directory, the project's `src` directory,
@@ -162,7 +165,7 @@ value:
 | StateSpace and ExportSpec | `spec.py`                              | JSON Schema and spec tests                   |
 | Portable JSON             | `_json.py`, `packages/portable-json`   | Cross-language fixtures                      |
 | Capture transfer          | `limits.py`, bridge transport          | Client, kernel, and transfer tests           |
-| Export index and assets   | `index.py`, readers                    | Python, browser, and malformed fixtures      |
+| Export index and assets   | `_limits.py`, `index.py`, readers      | Python, browser, and malformed fixtures      |
 | Repository retention      | `_repository/models.py`                | Admission, lease, prune, and recovery tests  |
 | Prepared manifest         | `manifest.py`, browser prepared parser | Python serialization and TypeScript parsing  |
 | Representation decoder    | Owning loader                          | Allocation, abort, and malformed-input tests |

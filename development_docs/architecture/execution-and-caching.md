@@ -76,6 +76,7 @@ The Python package pins its supported marimo release in
 - source SHA-256 digests for the private cache functions adapted by the package
   and for `hash_module`, which digests exporter callable code for exporter
   identities
+- the native receipt schema fields and the Polars lazy stub loaders
 
 `_marimo/compat/cache/probe.py` checks the installed distribution version,
 required cryptography support, private function sources, lazy-loader registry,
@@ -164,10 +165,13 @@ unchanged.
 For an owned export graph, the adapter can:
 
 - add one frozen producer-dependency input to native cell hashing
-- retry a failed native hash with a digest of the type and Arrow IPC stream of
-  each referenced PyArrow value, because Marimo's NumPy view rejects
-  object-typed columns such as strings. Cells whose native hash succeeds keep
-  their native keys.
+- retry a native hash that raises `TypeError` with a digest of the type and
+  Arrow IPC stream of each referenced PyArrow value. Cells whose native hash
+  succeeds keep their native keys. marimo 0.25.2 already hashes Arrow values
+  with non-numeric columns by execution path. The retry stays until the live
+  PyArrow build test passes with it disabled, as the
+  [producer cache key proposal](../proposals/marimo-upstream-capabilities.md#producer-cache-key-input)
+  records.
 - record the effective hit or miss for authored and projection cells
 - rerun the cells that the execution plan names live
 - turn a hit containing an unavailable UI or unhashable stub into a live run
@@ -326,8 +330,9 @@ session identity remains current.
 
 Notebook code must register external file dependencies through
 `mo.watch.file`. Other external systems need an author-owned Marimo cache key or
-side-effect boundary. marimo-export does not inspect files, network responses,
-or mutable modules to replace Marimo's invalidation decision.
+side-effect boundary. The dependency identity covers imported distributions and
+local module sources. Data files need `mo.watch.file`, and network responses
+need an authored marimo cache key.
 
 Read [marimo integration](marimo-integration.md) for transient assignments,
 output recording, replay closure, exporter preparation, transfer tickets, and

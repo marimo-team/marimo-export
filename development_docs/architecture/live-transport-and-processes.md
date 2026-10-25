@@ -119,7 +119,8 @@ closes the inherited job handle through the operating system.
 The managed path uses two server-sent event streams for different jobs:
 
 - `_SessionStream` observes the owned edit session. It waits for `kernel-ready`,
-  records cell source and status updates, and counts `completed-run` events.
+  records cell source and status updates, and counts `completed-run` events in
+  the unframed `/sse` shape of the supported marimo release.
 - `HttpKernelTransport` reads one scratchpad execution stream for each bridge
   operation. It extracts the correlated bridge response from stdout and retains
   bounded stderr only when the scratchpad reports failure.

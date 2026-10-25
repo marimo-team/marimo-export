@@ -68,7 +68,7 @@ For previews, a signed custom predicate records the packaged commit in
 It records the signing workflow commit separately, because `workflow_run` can
 start after `main` advances. Verify the signature with the predicate type and
 signing workflow from the release notes, then inspect that predicate when
-checking the preview's source; the certificate's
+checking the preview's source. The certificate's
 source digest identifies the signing workflow commit.
 
 The `preview` job publishes these assets under one GitHub prerelease:
@@ -106,13 +106,13 @@ Retries compare existing assets with the local verified bytes before reusing
 them. Empty GitHub `starter` assets left by a failed upload are removed before
 retrying. The merged pull request announcement precedes pruning, so a failed
 announcement preserves the older builds. The checksum manifest is uploaded
-after notes, announcement, and pruning succeed; it marks completed publication.
+after notes, announcement, and pruning succeed. It marks completed publication.
 A retry can finish interrupted publication without overwriting artifacts or duplicating
 the announcement. Rerun a failed preview publication with
 `gh run rerun RUN_ID --failed`. If a required upstream workflow failed, fix or
-rerun that workflow first; its successful completion retries preview readiness.
-An API failure fails the publication run so it can be retried; a pending or
-unsuccessful upstream check simply defers publication.
+rerun that workflow first. Its successful completion retries preview readiness.
+An API failure fails the publication run so it can be retried. A pending or
+unsuccessful upstream check defers publication.
 
 Create a GitHub environment named `preview` with selected deployment branches
 and tags, allowing the `main` branch only. It needs no registry credentials.
@@ -139,12 +139,12 @@ build job's exact checkout, stamped with coordinated preview versions and
 verified by `make package`.
 
 `buildDefinition.externalParameters.workflow` names the signing repository,
-ref, and workflow path; `checkoutCommit` is the packaged source commit.
+ref, and workflow path. `checkoutCommit` is the packaged source commit.
 `internalParameters.github` records the event, repository and owner IDs, and
 runner environment. `resolvedDependencies` contains two Git dependencies: the
 signing workflow ref with its commit digest, and the packaged source commit
 with its digest. Those commits can differ. `runDetails.builder.id` identifies
-the signing workflow and ref; `metadata.invocationId` identifies its run and
+the signing workflow and ref. `metadata.invocationId` identifies its run and
 attempt. The signed subjects bind this record to the artifact checksums.
 
 Verify a downloaded preview with its custom type and publication workflow:
@@ -167,7 +167,7 @@ persists its attestation through GitHub, and verifies it from the hosted API.
 The download allows five attempts, two seconds apart, for read-back visibility.
 It checks the signed checkout commit and is part of the required gate when
 release contracts change. It runs on main pushes and pull requests from this
-repository; fork pull requests run the local contracts without signing access.
+repository. Fork pull requests run the local contracts without signing access.
 Probe attestations name a test file and the CI workflow.
 
 ## Registry trust
@@ -209,13 +209,14 @@ publication.
 
 If restricting the `npm` and `pypi` environments, allow both `v*` tags for
 ordinary publication and the `main` branch for the existing recovery workflow.
-The publication jobs accept the release channel only; preview versions go to
+The publication jobs accept the release channel only. Preview versions go to
 GitHub Releases.
 
 ## Prepare the release commit
 
 Start from a branch based on synchronized `main`. Update the coordinated
-version and run:
+version, and replace "the release after" placeholders in
+`docs/reference/compatibility.md` with that version. Then run:
 
 ```console
 make bootstrap

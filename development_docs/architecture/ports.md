@@ -82,6 +82,7 @@ lifecycles:
 | `marimo_export.index`        | Inspect durable export index and control-binding records                    |
 | `marimo_export.descriptors`  | Inspect low-level output descriptors                                        |
 | `marimo_export.verification` | Verify a notebook export                                                    |
+| `marimo_export.values`       | Select notebook values and represent them in a consumer media type          |
 | `marimo_export.wire`         | Use canonical portable JSON and fingerprint operations                      |
 
 Application documentation uses `marimo_export.sessions` as the canonical import
@@ -131,14 +132,15 @@ process handles remain private adapter values.
 | `identity.py`            | Compose notebook, environment, and implementation identity |
 | `plan_wire.py`           | Decode the bounded kernel planning response                |
 
-Services may import the private `PreparationRepository` capability. Observation
-workers may import the private `ObservationRepository` capability. These
-callers import neither SQLite modules, repository tables, filesystem artifact
-internals, nor private Marimo modules.
+Services may import the private `PreparationRepository` capability. The
+observation ledger may import the private `ObservationRepository` capability.
+These callers import neither SQLite modules, repository tables, filesystem
+artifact internals, nor private Marimo modules.
 
-`_environment.py` owns installed-distribution and local-source fingerprints.
-Producer identity and the private native-cache adapter share this dependency
-inventory without importing one another.
+`_environment.py` fingerprints the installed distributions and local module
+sources that one notebook imports. Producer identity and the private
+native-cache adapter share this dependency inventory without importing one
+another.
 
 ## Repository capabilities
 
@@ -194,6 +196,7 @@ kernel boundary:
 | `CachedStateExecutor` | `StateExecution` with receipts, bindings, and cache activity     |
 | `KernelRuntime`       | Baseline inspection, exporter kernel reads, and state execution  |
 | `ExporterRuntime`     | Kernel globals, per-kernel state, and code digests for exporters |
+| `KernelRun`           | Finished run outcome, notebook filename, cells, and UI inputs    |
 | `TransferRuntime`     | Temporary virtual files for verified asset transfer              |
 | `NativeCacheReturn`   | Verified scalar, NumPy, Arrow, or BlobAsset return               |
 
@@ -201,6 +204,11 @@ kernel boundary:
 `_marimo/anywidget.py`, `_marimo/blob.py`, `_marimo/managed_server.py`, and
 `_marimo/entrypoints.py` are focused composition roots for representations and
 managed processes.
+
+`exporters/_prepare.py` and `exporters/_identity.py` read the attached kernel
+through `ExporterRuntime`. `_observations/runs.py` subscribes through
+`subscribe_run_finished()` from `_marimo/composition.py` and decides which
+`KernelRun` values reach the observation ledger.
 
 Private Marimo types enter under `_marimo/compat` and normally leave as
 package-owned records. `TransferRuntime` is the contained exception: its adapter
