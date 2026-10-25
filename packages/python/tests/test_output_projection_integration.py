@@ -319,16 +319,33 @@ app = marimo.App()
 @app.cell
 def _():
     import marimo as mo
+    import pandas as pd
     import polars as pl
+    return mo, pd, pl
 
+
+@app.cell
+def _(mo, pl):
     frame = pl.DataFrame(
         {
             "city": [f"City {index}" for index in range(25)],
             "population": [1000 * (index + 1) for index in range(25)],
         }
     )
+    knob = mo.ui.slider(1, 10)
+    return frame, knob
+
+
+@app.cell
+def _(pd):
+    sales = pd.DataFrame({"region": ["North", "South"], "total": [10, 20]})
+    return (sales,)
+
+
+@app.cell
+def _(frame, mo):
     table = mo.ui.table(frame, page_size=10)
-    return frame, mo, table
+    return (table,)
 
 
 @app.cell
@@ -354,6 +371,7 @@ def test_read_only_outputs_record_unavailable_table_functions(tmp_path: Path) ->
             outputs={
                 "table": OutputSpec.output("table", read_only=True),
                 "frame": OutputSpec.output("frame", read_only=True),
+                "sales": OutputSpec.output("sales", read_only=True),
                 "frame_cell": OutputSpec.cell("frame_cell", read_only=True),
             },
         ),
@@ -362,27 +380,33 @@ def test_read_only_outputs_record_unavailable_table_functions(tmp_path: Path) ->
     )
     state = open_export(result.path).state("baseline")
 
-    for name in ("table", "frame", "frame_cell"):
+    for name, first_row in (
+        ("table", "City 0"),
+        ("frame", "City 0"),
+        ("sales", "North"),
+        ("frame_cell", "City 0"),
+    ):
         snapshot = cast(
             dict[str, Any],
             decode_json_object(state.output(name).asset_bytes(), f"{name} snapshot"),
         )
-        output = snapshot["output"]
-        assert output is not None
-        assert "marimo-table" in output["data"]
-        assert "City 0" in html.unescape(output["data"])
+        output = html.unescape(snapshot["output"]["data"])
+        assert "<marimo-table" in output
+        assert first_row in output
+        assert "City 24" not in output
         [functions] = snapshot["resources"]["functions"].values()
         assert {"get_column_summaries", "search"} <= set(functions)
         assert functions == sorted(functions)
 
     warnings = {warning.details["output"]: warning for warning in result.warnings}
-    assert set(warnings) == {"table", "frame", "frame_cell"}
+    assert set(warnings) == {"table", "frame", "sales", "frame_cell"}
     for warning in warnings.values():
         assert warning.code == "output_read_only"
         assert "search" in cast(list[str], warning.details["functions"])
 
 
-def test_table_output_without_read_only_is_not_portable(tmp_path: Path) -> None:
+@pytest.mark.parametrize("selector", ["table", "frame"])
+def test_table_output_without_read_only_is_not_portable(tmp_path: Path, selector: str) -> None:
     notebook = tmp_path / "notebook.py"
     notebook.write_text(_TABLE_NOTEBOOK, encoding="utf-8")
 
@@ -392,7 +416,7 @@ def test_table_output_without_read_only_is_not_portable(tmp_path: Path) -> None:
             spec=ExportSpec(
                 default_state="baseline",
                 states={"baseline": {}},
-                outputs={"table": OutputSpec.output("table")},
+                outputs={selector: OutputSpec.output(selector)},
             ),
             output=tmp_path / "export",
             timeout=30,

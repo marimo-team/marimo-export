@@ -238,9 +238,25 @@ def materialize_rendered_output(
     from marimo._messaging.cell_output import CellChannel, CellOutput
     from marimo._output.formatting import try_format
 
-    formatted = try_format(value)
-    if formatted.exception is not None:
-        formatted = try_format(value, include_opinionated=False)
+    if not isinstance(owner_cell_id, str) or not owner_cell_id:
+        raise OutputError(
+            "Marimo output projection has no source owner",
+            code="output_execution_failed",
+        )
+    recording = _recording()
+    context = recording.child._runtime_context
+    owner = recording.cell_ids.get(owner_cell_id, owner_cell_id)
+    # Formatters create UI elements, such as the table for a dataframe. Build them
+    # in the child under the owner cell so replay finds them in the child's
+    # registries, with IDs that cannot replace the cell's own elements.
+    with (
+        context.install(),
+        context.with_cell_id(owner),
+        context.provide_ui_ids(f"{owner}-projection-{projection_identity}"),
+    ):
+        formatted = try_format(value)
+        if formatted.exception is not None:
+            formatted = try_format(value, include_opinionated=False)
     if formatted.exception is not None or formatted.traceback is not None:
         error = formatted.exception
         raise OutputError(
@@ -255,11 +271,6 @@ def materialize_rendered_output(
         mimetype=formatted.mimetype,
         data=formatted.data,
     )
-    if not isinstance(owner_cell_id, str) or not owner_cell_id:
-        raise OutputError(
-            "Marimo output projection has no source owner",
-            code="output_execution_failed",
-        )
     snapshot = _output_snapshot(output, owner_cell_id, projection_identity, read_only=read_only)
     return canonical_bytes(snapshot)
 

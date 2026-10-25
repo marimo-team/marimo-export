@@ -262,13 +262,18 @@ files, AnyWidget model closure, and function namespaces.
 
 The projection adapter installs private output hooks, records through
 `SessionView`, rewrites scoped identities, closes reachable resources, and
-serializes package-owned replay records.
+serializes package-owned replay records. Rendered-output formatting enters the
+child's private kernel runtime context through `install()`, `with_cell_id()`,
+and `provide_ui_ids()`. Formatter-created UI elements, such as a dataframe's
+table, then register under the owner cell with projection-scoped IDs.
 
 ### Upstream shape
 
 Marimo could expose a supported snapshot API for one cell or output owner after
 a run reaches final state. The snapshot should carry native ownership and
-cleanup rules for files, models, and functions.
+cleanup rules for files, models, and functions. A supported way to format a
+value within a cell scope, with caller-chosen UI ID prefixes, replaces the
+three runtime-context calls.
 
 marimo-export would continue to select outputs, bind them to state and producer
 identity, enforce portable limits, and write the durable export format.
