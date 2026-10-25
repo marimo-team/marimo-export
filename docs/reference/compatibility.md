@@ -71,6 +71,32 @@ A reader rejects an unknown closed schema or codec before exposing the affected
 object. Update the producer and consumer together when one of those protocols
 changes. Version a custom media type when its payload changes incompatibly.
 
+An export can gain content under the same schema identifier. Python and
+browser readers reject fields and values outside the bounds they know, so
+upgrade consumers before a producer writes the content in this table:
+
+| Export content                                                                                | Oldest reader that accepts it |
+| --------------------------------------------------------------------------------------------- | ----------------------------- |
+| Control binding `domain`                                                                      | 0.2.1                         |
+| [Unavailable output](export-format#unavailable-outputs) from an `optional` output             | The release after 0.2.2       |
+| marimo snapshot whose `resources.functions` lists functions, written for a `read_only` output | The release after 0.2.2       |
+| `index.json` with more than 100,000 JSON values                                               | The release after 0.2.2       |
+
+An export without that content stays readable by every
+`marimo-export.export.v1` reader.
+
+## Changes after 0.2.2
+
+The release after 0.2.2 changes these public contracts. Update callers when
+you upgrade.
+
+| Changed contract                  | Required action                                                                                                                                                                                                                                                                                                                |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `resolvePreparedQueryState()`     | Call `resolvePreparedQuery(current, query)` from `@marimo-team/marimo-export/prepared`. It reads the export from `current`                                                                                                                                                                                                     |
+| `resolvePreparedQuerySelection()` | Call `resolvePreparedQuery(current, query)`. A query that names no exported input returns `current` in place of `undefined`                                                                                                                                                                                                    |
+| Browser `ExportOutput`            | It is the union `AvailableExportOutput \| UnavailableExportOutput`. Narrow on `output.unavailable === null` before reading `codec`, `mediaType`, or `descriptor`. `load()` and `loadOutputs()` reject, and `resolveOutputLoader()` throws, with `output_unavailable` for an unavailable output                                 |
+| Environment identity              | It covers the modules the notebook imports. List modules loaded by name, packages a library imports on demand, and custom exporter modules the notebook never imports under [`[tool.marimo-export] imports`](../concepts/preparation-and-reuse#declare-modules-loaded-by-name), so that edits to them prepare the states again |
+
 ## Release coordination
 
 The public `marimo-export` Python and browser packages use coordinated release
@@ -95,7 +121,7 @@ uv add "marimo-export @ WHEEL_URL"
 pnpm add "TARBALL_URL"
 ```
 
-Python preview versions use `X.Y.Z.devN`; the matching browser package uses
+Python preview versions use `X.Y.Z.devN`, and the matching browser package uses
 `X.Y.Z-dev.N`. A live capture client and its kernel must use the same preview.
 The release retains the newest 30 builds. Use registry releases for dependencies
 that must remain available beyond that window.
