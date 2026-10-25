@@ -183,8 +183,7 @@ atomicity even when a failing reactive cell is not projected.
 Within each child phase, authored cells follow Marimo's native cache decision.
 The execution plan names the live cells: complete-cell owners, because console
 messages are outside Marimo's cache contract, and leaves of live exporters. The
-adapter forces those cells through native teardown in the phase that runs
-them. Cells that define UI elements or `mo.state` recreate their session-bound
+adapter forces those cells to rerun in the phase that runs them. Cells that define UI elements or `mo.state` recreate their session-bound
 objects before dependent cache keys are evaluated. Each phase uses one
 topological run. Snapshot tokens and synthetic output leaves materialize after
 the final phase.
@@ -301,9 +300,10 @@ Custom exporter leaves embed the marimo-export implementation identity and
 exporter provenance. Preparation binds the resolved callable in a
 capture-scoped context registry, and the leaf invokes it through a deterministic
 token. The registry is cleared when capture exits. Every custom
-`ExporterDefinition` is therefore live, and its leaf enters native lookup as a
-miss for every state run. `anywidget.bundle` is live because its model state is
-captured anew. Other built-in exporter leaves retain native cache reuse.
+`ExporterDefinition` is live because the callable can read state outside its
+declared source, so its leaf reruns in every state run. `anywidget.bundle` is
+live because it captures the widget model of the current session. Other
+built-in exporter leaves retain native cache reuse.
 
 ## Transfer tickets own temporary files
 

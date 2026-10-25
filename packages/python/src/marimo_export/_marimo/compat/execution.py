@@ -45,7 +45,7 @@ from marimo_export.spec import CellSource
 class _StateRunPlan:
     available_cells: frozenset[Any]
     execution_order: tuple[Any, ...]
-    live_cells: frozenset[Any]
+    forced_cells: frozenset[Any]
     output_cells: frozenset[Any]
     output_dependencies: Mapping[str, frozenset[Any]]
     output_owners: Mapping[str, Any]
@@ -179,7 +179,7 @@ def _plan_state_run(
     return _StateRunPlan(
         available_cells=available_cells,
         execution_order=execution_order,
-        live_cells=frozenset(
+        forced_cells=frozenset(
             {
                 *(child.cell_ids[cell_id] for cell_id in plan.live_cells),
                 *(child.output_cell_ids[output] for output in plan.live_outputs),
@@ -208,8 +208,8 @@ def _plan_state_run(
     )
 
 
-def _live_cells(run_plan: _StateRunPlan, cells: set[Any] | frozenset[Any]) -> frozenset[Any]:
-    return frozenset(cells & run_plan.live_cells)
+def _forced_cells(run_plan: _StateRunPlan, cells: set[Any] | frozenset[Any]) -> frozenset[Any]:
+    return frozenset(cells & run_plan.forced_cells)
 
 
 async def _execute_inputs(
@@ -240,7 +240,7 @@ async def _execute_inputs(
                 dependency_started = time.monotonic()
                 with force_cache_misses(
                     graph,
-                    _live_cells(run_plan, initialization_cells),
+                    _forced_cells(run_plan, initialization_cells),
                 ):
                     await run_state_child(runner, initialization_cells)
                 dependency_seconds += time.monotonic() - dependency_started
@@ -265,7 +265,7 @@ async def _execute_inputs(
         available_cells = set(run_plan.available_cells)
         with force_cache_misses(
             graph,
-            _live_cells(run_plan, available_cells),
+            _forced_cells(run_plan, available_cells),
         ):
             await run_state_child(runner, available_cells)
         dependency_seconds = time.monotonic() - dependency_started
@@ -295,7 +295,7 @@ async def _execute_inputs(
             if graph.cells[cell_id].stale and not graph.is_disabled(cell_id)
         )
     reactive_cells.difference_update(run_plan.ui_input_cells)
-    final_forced = _live_cells(run_plan, reactive_cells)
+    final_forced = _forced_cells(run_plan, reactive_cells)
     if reactive_cells:
         with force_cache_misses(graph, final_forced):
             await run_state_child(runner, reactive_cells)
@@ -345,7 +345,7 @@ async def _execute_outputs(
         runner.globals,
         child.recording.ui_scopes,
     )
-    with force_cache_misses(graph, _live_cells(run_plan, run_plan.output_cells)):
+    with force_cache_misses(graph, _forced_cells(run_plan, run_plan.output_cells)):
         await run_state_child(runner, set(run_plan.output_cells))
     for output, cell_id in child.output_cell_ids.items():
         raise_child_errors(

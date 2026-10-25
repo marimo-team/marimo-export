@@ -272,9 +272,10 @@ class ExecutionPlan:
     document_sha256: str
     state_name: str
     state_code: str
-    # Cells that bypass native cache reuse in every state run. Complete-cell
-    # owners run live because console records are uncached side effects. Leaves
-    # of live exporters run live because they read capture-bound process state.
+    # Authored cells and output leaves that skip native cache restoration and
+    # rerun in every state run. Complete-cell owners rerun because console
+    # records are uncached side effects. Leaves of live exporters rerun as their
+    # `ExporterDefinition` declares.
     live_cells: frozenset[str] = field(init=False)
     live_outputs: frozenset[str] = field(init=False)
 
@@ -798,7 +799,7 @@ def output_cell_code(
     reference = runtime_reference(planned_output.exporter.name)
     identity_literal = repr(f"sha256:{exporter_identity}")
     lines.extend([f"_marimo_export_exporter_identity = {identity_literal}", ""])
-    if ":" in planned_output.exporter.name:
+    if reference.custom:
         expected_token = exporter_token_name(planned_output.exporter)
         if exporter_token != expected_token:
             raise ValueError("custom exporter token does not match its specification")
@@ -847,7 +848,7 @@ def planned_output_identity(planned_output: PlannedOutput) -> str:
 def exporter_token_name(exporter: ExporterSpec) -> str:
     """Return the deterministic registry token for one custom exporter."""
 
-    if ":" not in exporter.name:
+    if not runtime_reference(exporter.name).custom:
         raise ValueError("only custom exporters have transient callable tokens")
     identity = sha256_bytes(
         canonical_bytes(

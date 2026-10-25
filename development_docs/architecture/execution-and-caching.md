@@ -166,7 +166,7 @@ For an owned export graph, the adapter can:
   object-typed columns such as strings. Cells whose native hash succeeds keep
   their native keys.
 - record the effective hit or miss for authored and projection cells
-- run the cells in the execution plan's live sets uncached
+- rerun the cells that the execution plan names live
 - turn a hit containing an unavailable UI or unhashable stub into a live run
 - recreate cells that define `mo.state` so getters and setters belong to the
   current session
@@ -179,16 +179,19 @@ exist only inside one active scope.
 
 `ExecutionPlan` derives two live sets from its planned outputs:
 
-| Set                          | Members                                                                                | Reason                                                            |
-| ---------------------------- | -------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
-| `ExecutionPlan.live_cells`   | Authored owner cell of each complete-cell output                                       | Console records are uncached side effects                         |
-| `ExecutionPlan.live_outputs` | Outputs with a live `ExporterDefinition`: `anywidget.bundle` and every custom exporter | The leaf reads a widget model or a callable bound for one capture |
+| Set                          | Members                                                                                              | Reason                                                                                                           |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `ExecutionPlan.live_cells`   | Authored owner cell ID of each complete-cell output                                                  | Console records are uncached side effects                                                                        |
+| `ExecutionPlan.live_outputs` | Name of each output whose `ExporterDefinition` is live: `anywidget.bundle` and every custom exporter | Custom callables can read undeclared state, and the AnyWidget bundle captures the current session's widget model |
 
-`compat/execution.py` maps both sets to runtime cell IDs and passes the live
-cells of each phase to `force_cache_misses`. Exporter policy stays in
+`compat/execution.py` maps owner cell IDs and output leaves to runtime cell
+IDs and passes the forced cells of each phase to `force_cache_misses`. A forced
+cell skips native restoration, reruns, and saves its result under the same key,
+so output receipts read the fresh entry. The live rule stays in
 `exporters/_definitions.py`. Leaf source is the same for live and cached
-outputs, so the live sets change no native cache key. Every other output leaf
-follows Marimo's native hit or miss.
+outputs, so the live sets change no native cache key. UI and `mo.state` cells
+rerun through the lifecycle adapter described above, and every other output
+leaf follows Marimo's native hit or miss.
 
 ### Dependency identity enters native lookup
 
