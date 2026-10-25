@@ -166,8 +166,7 @@ For an owned export graph, the adapter can:
   object-typed columns such as strings. Cells whose native hash succeeds keep
   their native keys.
 - record the effective hit or miss for authored and projection cells
-- run complete-cell owners and selected exporter leaves live when their output
-  contract includes uncached side effects or session-bound resources
+- run the cells in the execution plan's live sets uncached
 - turn a hit containing an unavailable UI or unhashable stub into a live run
 - recreate cells that define `mo.state` so getters and setters belong to the
   current session
@@ -175,6 +174,21 @@ For an owned export graph, the adapter can:
 
 Graph scopes are registered and removed through context managers. Forced cells
 exist only inside one active scope.
+
+### The execution plan names live cells
+
+`ExecutionPlan` derives two live sets from its planned outputs:
+
+| Set                          | Members                                                                                | Reason                                                            |
+| ---------------------------- | -------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| `ExecutionPlan.live_cells`   | Authored owner cell of each complete-cell output                                       | Console records are uncached side effects                         |
+| `ExecutionPlan.live_outputs` | Outputs with a live `ExporterDefinition`: `anywidget.bundle` and every custom exporter | The leaf reads a widget model or a callable bound for one capture |
+
+`compat/execution.py` maps both sets to runtime cell IDs and passes the live
+cells of each phase to `force_cache_misses`. Exporter policy stays in
+`exporters/_definitions.py`. Leaf source is the same for live and cached
+outputs, so the live sets change no native cache key. Every other output leaf
+follows Marimo's native hit or miss.
 
 ### Dependency identity enters native lookup
 

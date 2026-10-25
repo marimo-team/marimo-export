@@ -15,6 +15,10 @@ class ExporterDefinition:
     module: str
     symbol: str
     distributions: tuple[str, ...] = ()
+    # A live exporter reads process state outside its leaf's native cache key,
+    # such as a callable bound for one capture or a widget model, so its leaf
+    # runs uncached in every state run.
+    live: bool = False
 
 
 _BUILTINS = {
@@ -32,6 +36,7 @@ _BUILTINS = {
         module="marimo_export.exporters._runtime.anywidget",
         symbol="bundle",
         distributions=("anywidget",),
+        live=True,
     ),
     "blob.html": ExporterDefinition(
         module="marimo_export.exporters._runtime.blob",
@@ -87,7 +92,7 @@ def runtime_reference(name: str) -> ExporterDefinition:
     if definition is not None:
         return definition
     module, symbol = _parse_import_reference(name)
-    return ExporterDefinition(module=module, symbol=symbol)
+    return ExporterDefinition(module=module, symbol=symbol, live=True)
 
 
 def _size_option(size: JsonValue) -> JsonObject:

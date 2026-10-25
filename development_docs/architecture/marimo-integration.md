@@ -181,12 +181,13 @@ available authored cell once. This full state run preserves notebook failure
 atomicity even when a failing reactive cell is not projected.
 
 Within each child phase, authored cells follow Marimo's native cache decision.
-The adapter requests live execution for complete-cell owners because console
-messages are outside Marimo's cache contract. Cells that define UI elements or
-`mo.state` recreate their session-bound objects before dependent cache keys are
-evaluated. Each phase uses one topological run. Snapshot tokens and synthetic
-output leaves materialize after the final phase. Custom exporter leaves run
-live when their callable or widget contract requires current process resources.
+The execution plan names the live cells: complete-cell owners, because console
+messages are outside Marimo's cache contract, and leaves of live exporters. The
+adapter forces those cells through native teardown in the phase that runs
+them. Cells that define UI elements or `mo.state` recreate their session-bound
+objects before dependent cache keys are evaluated. Each phase uses one
+topological run. Snapshot tokens and synthetic output leaves materialize after
+the final phase.
 
 For each rendered-output and complete-cell output, the adapter materializes
 canonical snapshot bytes once after the source reaches its final state. It
@@ -299,10 +300,10 @@ a kernel restart to take effect. Later disk source drift fails with
 Custom exporter leaves embed the marimo-export implementation identity and
 exporter provenance. Preparation binds the resolved callable in a
 capture-scoped context registry, and the leaf invokes it through a deterministic
-token. The registry is cleared when capture exits. Custom leaves enter native
-lookup as misses for every state run. `anywidget.bundle` does the same because
-its live model state is captured anew. Other built-in exporter leaves retain
-native cache reuse.
+token. The registry is cleared when capture exits. Every custom
+`ExporterDefinition` is therefore live, and its leaf enters native lookup as a
+miss for every state run. `anywidget.bundle` is live because its model state is
+captured anew. Other built-in exporter leaves retain native cache reuse.
 
 ## Transfer tickets own temporary files
 

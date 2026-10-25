@@ -44,8 +44,8 @@ from marimo_export.spec import CellSource
 @dataclass(frozen=True, slots=True)
 class _StateRunPlan:
     available_cells: frozenset[Any]
-    complete_cell_owners: frozenset[Any]
     execution_order: tuple[Any, ...]
+    live_cells: frozenset[Any]
     output_cells: frozenset[Any]
     output_dependencies: Mapping[str, frozenset[Any]]
     output_owners: Mapping[str, Any]
@@ -163,7 +163,6 @@ def _plan_state_run(
         for cell_id in execution_order
         if cell_id not in output_cells and not child.internal.graph.is_disabled(cell_id)
     )
-    complete_cell_owners: set[Any] = set()
     output_owners: dict[str, Any] = {}
     for output, planned_output in plan.planned_outputs.items():
         owner_cell_id = planned_output.owner_cell_id
@@ -174,15 +173,18 @@ def _plan_state_run(
                 code="output_execution_failed",
             )
         output_owners[output] = runtime_id
-        if isinstance(planned_output.source, CellSource):
-            complete_cell_owners.add(runtime_id)
     ui_input_cells = frozenset(
         cell_id for name in state.ui_updates for cell_id in graph.get_defining_cells(name)
     )
     return _StateRunPlan(
         available_cells=available_cells,
-        complete_cell_owners=frozenset(complete_cell_owners),
         execution_order=execution_order,
+        live_cells=frozenset(
+            {
+                *(child.cell_ids[cell_id] for cell_id in plan.live_cells),
+                *(child.output_cell_ids[output] for output in plan.live_outputs),
+            }
+        ),
         output_cells=output_cells,
         output_dependencies={
             output: frozenset(
@@ -206,11 +208,8 @@ def _plan_state_run(
     )
 
 
-def _live_complete_cell_owners(
-    run_plan: _StateRunPlan,
-    cells: set[Any],
-) -> frozenset[Any]:
-    return frozenset(cells & run_plan.complete_cell_owners)
+def _live_cells(run_plan: _StateRunPlan, cells: set[Any] | frozenset[Any]) -> frozenset[Any]:
+    return frozenset(cells & run_plan.live_cells)
 
 
 async def _execute_inputs(
@@ -241,7 +240,7 @@ async def _execute_inputs(
                 dependency_started = time.monotonic()
                 with force_cache_misses(
                     graph,
-                    _live_complete_cell_owners(run_plan, initialization_cells),
+                    _live_cells(run_plan, initialization_cells),
                 ):
                     await run_state_child(runner, initialization_cells)
                 dependency_seconds += time.monotonic() - dependency_started
@@ -266,7 +265,7 @@ async def _execute_inputs(
         available_cells = set(run_plan.available_cells)
         with force_cache_misses(
             graph,
-            _live_complete_cell_owners(run_plan, available_cells),
+            _live_cells(run_plan, available_cells),
         ):
             await run_state_child(runner, available_cells)
         dependency_seconds = time.monotonic() - dependency_started
@@ -296,7 +295,7 @@ async def _execute_inputs(
             if graph.cells[cell_id].stale and not graph.is_disabled(cell_id)
         )
     reactive_cells.difference_update(run_plan.ui_input_cells)
-    final_forced = _live_complete_cell_owners(run_plan, reactive_cells)
+    final_forced = _live_cells(run_plan, reactive_cells)
     if reactive_cells:
         with force_cache_misses(graph, final_forced):
             await run_state_child(runner, reactive_cells)
@@ -346,19 +345,7 @@ async def _execute_outputs(
         runner.globals,
         child.recording.ui_scopes,
     )
-    forced_output_cells = frozenset(
-        child.output_cell_ids[output]
-        for output, planned_output in plan.planned_outputs.items()
-        if planned_output.exporter is not None
-        and (
-            ":" in planned_output.exporter.name
-            or planned_output.exporter.name == "anywidget.bundle"
-        )
-    )
-    if forced_output_cells:
-        with force_cache_misses(graph, forced_output_cells):
-            await run_state_child(runner, set(run_plan.output_cells))
-    else:
+    with force_cache_misses(graph, _live_cells(run_plan, run_plan.output_cells)):
         await run_state_child(runner, set(run_plan.output_cells))
     for output, cell_id in child.output_cell_ids.items():
         raise_child_errors(

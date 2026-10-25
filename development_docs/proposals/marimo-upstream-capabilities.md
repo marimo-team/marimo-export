@@ -107,8 +107,10 @@ selected hit with an empty native attempt.
 ### Upstream shape
 
 A run request could accept `force_live` cell IDs and return a typed disposition
-for each cell. Marimo would retain ownership of cache attempt construction,
-key semantics, and authored-cell invalidation.
+for each cell. `ExecutionPlan.live_cells` and `ExecutionPlan.live_outputs`
+already name those cells, so the adapter would pass the runtime IDs it
+currently hands to `force_cache_misses`. Marimo would retain ownership of cache
+attempt construction, key semantics, and authored-cell invalidation.
 
 The local `CacheActivity` record remains the consumer contract. The global
 attempt-function patch and its source digest can then leave the adapter.

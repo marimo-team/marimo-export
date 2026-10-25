@@ -272,9 +272,32 @@ class ExecutionPlan:
     document_sha256: str
     state_name: str
     state_code: str
+    # Cells that bypass native cache reuse in every state run. Complete-cell
+    # owners run live because console records are uncached side effects. Leaves
+    # of live exporters run live because they read capture-bound process state.
+    live_cells: frozenset[str] = field(init=False)
+    live_outputs: frozenset[str] = field(init=False)
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "planned_outputs", MappingProxyType(dict(self.planned_outputs)))
+        object.__setattr__(
+            self,
+            "live_cells",
+            frozenset(
+                output.owner_cell_id
+                for output in self.planned_outputs.values()
+                if isinstance(output.source, CellSource) and output.owner_cell_id is not None
+            ),
+        )
+        object.__setattr__(
+            self,
+            "live_outputs",
+            frozenset(
+                name
+                for name, output in self.planned_outputs.items()
+                if output.exporter is not None and runtime_reference(output.exporter.name).live
+            ),
+        )
         object.__setattr__(
             self,
             "ordinary_cells",
