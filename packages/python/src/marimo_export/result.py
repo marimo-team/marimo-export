@@ -128,7 +128,7 @@ class PhaseTimings:
 
 @dataclass(frozen=True, slots=True, init=False)
 class ExportWarning:
-    """A producer warning returned with a committed export."""
+    """A producer warning returned with a written or materialized export."""
 
     code: Literal[
         "export_parent_sync_failed",

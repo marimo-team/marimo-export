@@ -59,7 +59,12 @@ export function mergeMarimoReplayResources(
         throw new TypeError(`Replay UI object ${JSON.stringify(id)} has conflicting UI values.`);
       }
       uiValues.set(id, value);
-      functions.set(id, resources.functions[id]!);
+      const names = resources.functions[id]!;
+      const previousNames = functions.get(id);
+      if (previousNames !== undefined && canonicalJson(previousNames) !== canonicalJson(names)) {
+        throw new TypeError(`Replay UI object ${JSON.stringify(id)} has conflicting functions.`);
+      }
+      functions.set(id, names);
     }
 
     const grouped = new Map<string, MarimoModelLifecycleNotification[]>();

@@ -225,13 +225,13 @@ cannot call. Build results report an `output_read_only` warning that names
 those functions.
 
 A `mo.ui.table` selected by its definition name is also an
-[inferred input](#inferred-inputs) whose value is the row selection. Pass
-`selection=None` to the table when readers only view its rows.
+[inferred input](#inferred-inputs) whose value is the row selection, `[]` by
+default. A state row can declare another selection like any other input.
 
 Without `read_only`, a table fails preparation with `output_not_portable`.
-Lazy tables, such as `mo.ui.table.lazy()` and displayed Polars LazyFrames or
-DuckDB relations, load their first page through Python and fail with the same
-code. So do `mo.ui.dataframe`, `mo.ui.chat`, `mo.ui.file_browser`, and
+Lazy tables, such as `mo.ui.table.lazy()`, displayed Polars LazyFrames, and
+lazy `mo.sql` results, load their first page through Python and fail with the
+same code. So do `mo.ui.dataframe`, `mo.ui.chat`, `mo.ui.file_browser`, and
 `mo.lazy`. Set `read_only` on JSON, native, or export sources and the spec
 fails with `spec_output_invalid`.
 

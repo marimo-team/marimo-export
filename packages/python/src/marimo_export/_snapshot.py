@@ -35,8 +35,12 @@ _CELL_CHANNELS = frozenset(
 )
 
 
-def validate_snapshot(data: bytes, schema: SnapshotSchema) -> None:
-    """Validate one canonical snapshot against its complete wire schema."""
+def validate_snapshot(data: bytes, schema: SnapshotSchema) -> frozenset[str]:
+    """Validate one canonical snapshot against its complete wire schema.
+
+    Returns the Python function names that the snapshot's UI objects cannot
+    call in the export.
+    """
 
     if schema == "marimo.output.v1":
         fields = ("output", "ownerCellId", "projectionSha256", "resources", "schema")
@@ -77,7 +81,7 @@ def validate_snapshot(data: bytes, schema: SnapshotSchema) -> None:
             raise TypeError("Marimo cell snapshot console must be an array")
         for index, output in enumerate(console):
             _cell_output(output, f"console[{index}]", nullable=False)
-    _resources(root["resources"], owner, projection)
+    return _resources(root["resources"], owner, projection)
 
 
 def _cell_identity(value: JsonValue) -> JsonObject:
@@ -104,7 +108,7 @@ def _cell_output(value: JsonValue, path: str, *, nullable: bool) -> None:
     portable_json_value(output["data"], f"{path}.data")
 
 
-def _resources(value: JsonValue, owner: str, projection: str) -> None:
+def _resources(value: JsonValue, owner: str, projection: str) -> frozenset[str]:
     resources = _strict_object(
         value,
         "resources",
@@ -127,6 +131,7 @@ def _resources(value: JsonValue, owner: str, projection: str) -> None:
 
     functions = _object(resources["functions"], "resources.functions")
     parsed_functions: set[str] = set()
+    unavailable: set[str] = set()
     for namespace, names in functions.items():
         object_id = _projection_ui_object_id(
             namespace,
@@ -143,6 +148,7 @@ def _resources(value: JsonValue, owner: str, projection: str) -> None:
                 f"resources.functions[{namespace!r}] must be an array of sorted unique names"
             )
         parsed_functions.add(object_id)
+        unavailable.update(cast(list[str], names))
 
     ui_values = _object(resources["uiValues"], "resources.uiValues")
     parsed_ui_values: set[str] = set()
@@ -163,6 +169,7 @@ def _resources(value: JsonValue, owner: str, projection: str) -> None:
     if missing_values:
         object_id = min(missing_values)
         raise TypeError(f"resources.functions key {object_id!r} has no replay UI value")
+    return frozenset(unavailable)
 
 
 def _projection_ui_object_id(

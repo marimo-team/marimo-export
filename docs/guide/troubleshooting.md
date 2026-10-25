@@ -86,13 +86,13 @@ outputs:
 ```
 
 The build then reports an `output_read_only` warning for `sales` with the same
-function names. Readers see the first page. The renderer rejects interactions
-that call Python. Use `OutputSpec.json()` or the `parquet.table` exporter when the
+function names. Readers see the first page, and your renderer adapter rejects
+interactions that call Python. Use `OutputSpec.json()` or the `parquet.table` exporter when the
 consumer needs every row.
 
 Lazy tables, `mo.ui.dataframe`, `mo.ui.chat`, `mo.ui.file_browser`, `mo.lazy`,
-and a form with a `validate` callback need Python to render or submit, so they
-fail with `read_only` too. Collect a lazy frame before displaying it to export
+`mo.download` with callable data, and a form with a `validate` callback need
+Python to render, download, or submit, so they fail with `read_only` too. Collect a lazy frame before displaying it to export
 its first page. Select a value they produce, or wrap the displayed data in
 `mo.plain()`.
 

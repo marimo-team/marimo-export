@@ -18,7 +18,8 @@ def unavailable_functions(
     """Return the sorted functions an exported UI object cannot call.
 
     ``args`` are the component arguments marimo renders into the element.
-    A form without a validator registers ``validate`` but never calls it.
+    A form rendered with ``should-validate`` false registers ``validate`` but
+    never calls it.
     An eager table carries its first page in ``args``, so a read-only output
     keeps the table and lists the functions behind search, paging, sorting,
     summaries, and downloads. A lazy table loads its first page through
@@ -30,7 +31,11 @@ def unavailable_functions(
     functions = sorted(
         name
         for name in names
-        if not (name == "validate" and isinstance(element, ui.form) and element.validate is None)
+        if not (
+            name == "validate"
+            and isinstance(element, ui.form)
+            and args.get("should-validate") is False
+        )
     )
     if not functions:
         return functions

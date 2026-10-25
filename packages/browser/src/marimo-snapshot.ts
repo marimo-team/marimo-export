@@ -82,6 +82,10 @@ export interface MarimoCellOutput {
 export interface MarimoReplayResources {
   readonly files: Readonly<Record<string, string>>;
   readonly modelNotifications: readonly MarimoModelLifecycleNotification[];
+  /**
+   * Sorted Python function names registered by each UI object. An export has
+   * no kernel, so a renderer adapter rejects every call to a listed name.
+   */
   readonly functions: Readonly<Record<string, readonly string[]>>;
   readonly uiValues: Readonly<Record<string, JsonValue>>;
 }

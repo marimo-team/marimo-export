@@ -47,9 +47,10 @@ sources begin with a Python definition name and can follow supported attribute o
 item steps. A cell source identifies the complete cell.
 
 An `output` or `cell` source keeps marimo UI elements in the rendered output.
-A table calls Python to search, page, sort, and summarize rows, so its output
-sets [`read_only`](../reference/export-spec#read-only-tables). The export then
-keeps the table's first page and records each function it cannot call.
+A table calls Python to search, page, sort, and summarize rows. Set
+[`read_only`](../reference/export-spec#read-only-tables) on its output to keep
+an eager table's first page and record each function it cannot call. A lazy
+table loads its first page through Python and still fails.
 
 ## Each output is captured separately
 

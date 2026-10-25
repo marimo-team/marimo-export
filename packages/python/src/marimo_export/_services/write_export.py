@@ -7,12 +7,13 @@ import time
 from collections.abc import Callable, Iterator, Mapping
 from contextlib import suppress
 from pathlib import Path
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
-from marimo_export._json import JsonObject, JsonValue, decode_json_object
+from marimo_export._json import JsonValue
 from marimo_export._limits import MAX_EXPORT_ASSET_BYTES
 from marimo_export._limits import MAX_INDEX_BYTES as _MAX_INDEX_BYTES
 from marimo_export._secure_io import read_export_asset, read_export_index
+from marimo_export._snapshot import validate_snapshot
 from marimo_export._writer import WriteResult, materialize_export, write_export
 from marimo_export.descriptors import (
     MarimoCellDescriptor,
@@ -20,7 +21,7 @@ from marimo_export.descriptors import (
     OutputCodec,
     asset_path,
 )
-from marimo_export.errors import MarimoExportError, NotebookExportError
+from marimo_export.errors import IntegrityError, MarimoExportError, NotebookExportError
 from marimo_export.index import ExportIndex
 from marimo_export.progress import ProgressEvent
 from marimo_export.reader import open_export
@@ -156,17 +157,23 @@ def _read_only_warnings(
                     f"prepared export snapshot could not be read: {error}",
                     code="export_commit_failed",
                 ) from error
-            snapshot = decode_json_object(data, "marimo snapshot")
-            resources = cast(JsonObject, snapshot["resources"])
-            for names in cast(JsonObject, resources["functions"]).values():
-                functions.update(cast(list[str], names))
+            try:
+                functions.update(validate_snapshot(data, descriptor.codec))
+            except (TypeError, ValueError) as error:
+                raise IntegrityError(
+                    f"prepared export snapshot is invalid: {error}",
+                    details={"output": name},
+                ) from error
         if functions:
-            names = sorted(functions)
+            names: list[JsonValue] = [*sorted(functions)]
             warnings.append(
                 ExportWarning(
                     code="output_read_only",
-                    message=f"Output {name!r} is read-only. Its UI cannot call {', '.join(names)}.",
-                    details={"output": name, "functions": cast(list[JsonValue], names)},
+                    message=(
+                        f"Output {name!r} is read-only. Its tables show their first page "
+                        "and cannot call Python."
+                    ),
+                    details={"output": name, "functions": names},
                 )
             )
     return tuple(warnings)

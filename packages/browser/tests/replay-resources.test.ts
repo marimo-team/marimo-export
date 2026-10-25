@@ -187,4 +187,15 @@ describe("replay resource composition", () => {
 
     expect(result.functions).toEqual({ [objectId]: ["get_column_summaries", "search"] });
   });
+
+  test("rejects conflicting functions for one UI object", () => {
+    const objectId = `summary-projection-${digest}-ui-table`;
+
+    expect(() =>
+      mergeMarimoReplayResources([
+        snapshot([], { functions: { [objectId]: [] }, uiValues: { [objectId]: [] } }),
+        snapshot([], { functions: { [objectId]: ["search"] }, uiValues: { [objectId]: [] } }),
+      ]),
+    ).toThrow(/conflicting functions/u);
+  });
 });

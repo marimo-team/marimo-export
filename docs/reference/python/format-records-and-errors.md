@@ -329,8 +329,10 @@ depends on the exact failed operation:
 | Host and observation  | `marimo_incompatible`, `marimo_cache_patch_conflict`, `observation_rejected`, `observation_persistence_failed`, `prepared_manifest_limit_exceeded`                                                                                                                                                 |
 
 `output_read_only`, `export_parent_sync_failed`, and
-`retired_destination_cleanup_failed` are `ExportWarning` codes. They accompany
-a successful result after the new destination becomes visible.
+`retired_destination_cleanup_failed` are `ExportWarning` codes on a successful
+result. `output_read_only` describes the written export and also appears on
+`StagedDelivery.materialize()` results. The other two report post-commit
+durability work after the new destination becomes visible.
 
 `output_not_portable` identifies a selected output whose replay resources
 require live Python behavior. The error is an `OutputError`. Its details identify

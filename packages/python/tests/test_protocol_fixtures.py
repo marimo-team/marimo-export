@@ -7,6 +7,7 @@ from typing import Literal, cast
 
 import pytest
 from marimo_export._json import JsonObject, canonical_bytes, json_value
+from marimo_export._snapshot import validate_snapshot
 from marimo_export.errors import IntegrityError, NotebookExportError
 from marimo_export.index import ControlBinding, ControlOptions, ExportIndex
 from marimo_export.reader import _validate_snapshot
@@ -96,6 +97,10 @@ def test_projection_records_match_python_snapshot_contracts() -> None:
         ("cell", "marimo.cell.v1"),
     ):
         _validate_snapshot(canonical_bytes(records[name]), schema)
+    assert validate_snapshot(canonical_bytes(records["output"]), "marimo.output.v1") == {
+        "download_as",
+        "search",
+    }
 
 
 @pytest.mark.parametrize(
@@ -160,20 +165,6 @@ def test_projection_records_reject_invalid_ui_ownership() -> None:
 
     with pytest.raises(IntegrityError, match="snapshot is invalid"):
         _validate_snapshot(canonical_bytes(output), "marimo.output.v1")
-
-
-def test_projection_records_list_unavailable_python_functions() -> None:
-    records = cast(
-        JsonObject,
-        json.loads((FIXTURES / "export" / "projection-records.json").read_text(encoding="utf-8")),
-    )
-    output = cast(JsonObject, copy.deepcopy(records["output"]))
-    resources = cast(JsonObject, output["resources"])
-    functions = cast(JsonObject, resources["functions"])
-    object_id = next(iter(functions))
-    functions[object_id] = ["download_as", "search"]
-
-    _validate_snapshot(canonical_bytes(output), "marimo.output.v1")
 
 
 def test_projection_records_reject_cross_projection_model_ids() -> None:

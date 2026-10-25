@@ -78,6 +78,17 @@
     "value": ["search", "download_as"]
   },
   {
+    "name": "function names cannot repeat",
+    "record": "output",
+    "operation": "set",
+    "path": [
+      "resources",
+      "functions",
+      "cell-summary-projection-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-ui-cell-summary-ui"
+    ],
+    "value": ["search", "search"]
+  },
+  {
     "name": "model notifications require their message field",
     "record": "output",
     "operation": "set",

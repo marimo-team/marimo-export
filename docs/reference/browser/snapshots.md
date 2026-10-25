@@ -205,9 +205,12 @@ search, paging, sorting, filtering, column summaries, and downloads.
 parser requires an exact one-to-one key set.
 
 A renderer adapter must answer each function call from a listed UI object
-with an error result, so the control stops waiting for a kernel. marimo's
-static renderer, which `marimo export html` also uses, shows the table's first
-page with a row-count banner and hides paging, sorting, and selection.
+right away. With marimo's frontend, send a `function-call-result` message with
+the request's `function_call_id`, `return_value: null`, an error `status`, and
+`found: true`. `found: false` makes marimo retry the call. When the adapter
+renders in marimo's static mode, as `marimo export html` does, the table shows
+its first page with a row-count banner and hides paging, sorting, and
+selection.
 
 Each UI object ID must start with the snapshot owner and projection namespace.
 This preserves cell ownership when an application merges resources from several
