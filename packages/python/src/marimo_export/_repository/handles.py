@@ -14,6 +14,7 @@ from marimo_export._repository.models import (
     PreparedStateRecord,
     RepositoryFenceError,
     RepositoryIdentity,
+    RepositoryWait,
 )
 
 if TYPE_CHECKING:
@@ -293,7 +294,7 @@ class PreparationReservation:
         "_identity",
         "_identity_key",
         "_manager",
-        "_operation_timeout_seconds",
+        "_wait",
         "fence",
     )
 
@@ -302,13 +303,13 @@ class PreparationReservation:
         manager: LeaseManager,
         identity: RepositoryIdentity,
         fence: int,
-        operation_timeout_seconds: float,
+        wait: RepositoryWait,
     ) -> None:
         self._manager = manager
         self._identity = identity
         self._identity_key = identity.key
         self.fence = fence
-        self._operation_timeout_seconds = operation_timeout_seconds
+        self._wait = wait
         self._closed = False
 
     def close(self) -> None:
@@ -334,8 +335,8 @@ class PreparationReservation:
         return self._manager.reservation_alive(self._identity_key, self.fence)
 
     @property
-    def operation_timeout_seconds(self) -> float:
-        return self._operation_timeout_seconds
+    def wait(self) -> RepositoryWait:
+        return self._wait
 
     def __enter__(self) -> PreparationReservation:
         return self

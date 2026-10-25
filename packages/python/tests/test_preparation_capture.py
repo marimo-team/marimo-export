@@ -85,7 +85,7 @@ def test_capture_session_timeout_bounds_waits_not_total_state_time(
 
     @contextmanager
     def reserve(identity, **kwargs):
-        observed_timeouts.append(kwargs["timeout"])
+        observed_timeouts.append(kwargs["wait"].timeout_seconds)
         with native_reserve(identity, **kwargs) as reservation:
             yield reservation
 

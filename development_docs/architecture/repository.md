@@ -90,6 +90,39 @@ filesystem mutation. Retention and recovery take catalog snapshots, perform
 filesystem work outside the catalog writer transaction, then commit matching
 results through short catalog transactions.
 
+Every `ArtifactRepository` method that takes the maintenance lock receives a
+`RepositoryWait`. The lock first tries `BEGIN IMMEDIATE` once without waiting.
+When another connection holds it, the lock calls `RepositoryWait.started` once
+with the reason, then retries in 100 ms slices until `timeout_seconds` has
+elapsed, checking `RepositoryWait.cancelled` before each slice, and raises
+`RepositoryBusyError`. Nested calls on the same thread reuse the held lock.
+
+| Caller                                                           | Wait                                             |
+| ---------------------------------------------------------------- | ------------------------------------------------ |
+| `plan`, `prepare`, `capture`                                     | One wait per operation from its public `timeout` |
+| `Session.plan()`                                                 | The `Client` timeout                             |
+| Staging creation and commits under a reservation                 | The wait stored on `PreparationReservation`      |
+| Staging discard                                                  | Zero. A held lock releases the lease only        |
+| `ExportRepository.prepared()`, `prune()`, and `repository prune` | Their `timeout` argument                         |
+| Recovery while opening                                           | 0.25 seconds. Opening then skips recovery        |
+| Artifact retirement after a catalog reset                        | 10 seconds, matching the catalog connection wait |
+
+Producer services build the wait with `repository_wait()`, which reports each
+wait as a `repository_wait_started` progress event.
+
+Discarding a staging directory tries the lock once. When another operation holds
+it, discard releases the staging lease and leaves the directory, which the next
+recovery removes as abandoned staging. A successful install has already moved
+the staging directory, so its discard only releases the lease.
+
+An export commit holds the lock while it verifies the staged export, validates
+state membership, admits the candidate through retention, installs the
+directory, and commits the catalog row. Admission is a catalog snapshot plus
+victim quarantine. Verification and installation dominate the hold for exports
+with thousands of assets. Recovery on open holds the lock while it verifies
+every catalog-known state and generation, so its hold grows with the repository
+contents.
+
 SQLite stores canonical metadata bytes and artifact identities. Prepared output
 payloads stay in immutable directories. Repository services outside
 `_repository/sqlite` operate on package records and capability methods.
@@ -199,9 +232,11 @@ receives a monotonically increasing fencing token. The lease manager extends the
 reservation expiry while retaining its owner and token. It also renews staging
 paths and live artifact leases.
 
-Acquisition polls for a bounded interval and raises a repository failure with
-code `repository_reservation_timeout` when another healthy owner retains the
-identity. The active reservation exposes liveness to preparation cancellation.
+Acquisition polls until the operation's `RepositoryWait` timeout and raises a
+repository failure with code `repository_reservation_timeout` when another
+healthy owner retains the identity. A held reservation reports one wait through
+`RepositoryWait.started` before polling. The active reservation exposes liveness
+to preparation cancellation.
 
 Every state and generation commit proves:
 
@@ -294,9 +329,9 @@ repository above that value until retention can retire the predecessor.
 ## Recovery and failure classification
 
 Repository opening validates the SQLite schema and attempts one maintenance
-recovery. Another process may already hold maintenance ownership. In that case,
-opening continues and later reads verify the selected artifact before returning
-it.
+recovery with a 0.25 second wait. When another process holds maintenance
+ownership longer, opening continues and later reads verify the selected artifact
+before returning it.
 
 An incompatible schema or confirmed catalog corruption causes a complete catalog
 reset. Opening renames the catalog files, creates a fresh catalog, then retires

@@ -67,6 +67,10 @@ def discard_owned_staging(context: ArtifactContext, path: Path) -> None:
     context.leases.release_staging(relative)
 
 
+def abandon_owned_staging(context: ArtifactContext, path: Path) -> None:
+    context.leases.release_staging(path.relative_to(context.root).as_posix())
+
+
 def retire_unindexed_artifacts(context: ArtifactContext) -> None:
     """Account and retire artifact roots after an incompatible catalog reset."""
 
@@ -477,6 +481,8 @@ def _recover_one(
         ),
         reverse=True,
     )
+    if not candidates:
+        return
     if valid(target):
         for candidate in candidates:
             remove_tree(candidate)
@@ -565,6 +571,7 @@ def _digest_name(value: str) -> bool:
 
 
 __all__ = [
+    "abandon_owned_staging",
     "discard_owned_staging",
     "new_staging",
     "prune",

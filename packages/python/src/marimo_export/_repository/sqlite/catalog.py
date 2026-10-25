@@ -378,25 +378,6 @@ class SqliteCatalog:
                 now_us=now_us,
             )
 
-    def generation(
-        self,
-        identity: RepositoryIdentity,
-        instance: str,
-        *,
-        owner: str,
-        expires_at_us: int,
-        now_us: int,
-    ) -> GenerationRow | None:
-        with self.write() as connection:
-            return generations.by_instance(
-                connection,
-                identity,
-                instance,
-                owner=owner,
-                expires_at_us=expires_at_us,
-                now_us=now_us,
-            )
-
     def all_states(self) -> tuple[StateRow, ...]:
         with self.read() as connection:
             return prepared_states.all_rows(connection)

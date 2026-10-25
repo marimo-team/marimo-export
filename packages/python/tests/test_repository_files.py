@@ -23,6 +23,7 @@ from marimo_export.repository import (
 )
 from marimo_export.wire import state_fingerprint
 from repository_test_support import (
+    _WAIT,
     _export,
     _identity,
     _state,
@@ -161,7 +162,7 @@ def test_state_commit_preserves_primary_and_records_staging_cleanup_failure(
     repository = ExportRepository.open(tmp_path / "repository")
     preparation = preparation_repository(repository)
     native_discard = repository._artifacts.discard_staging
-    with preparation.reserve_preparation(identity):
+    with preparation.reserve_preparation(identity, wait=_WAIT):
         staged = preparation.stage_prepared_state(
             producer_sha256=identity.producer_sha256,
             output_plan_sha256=identity.output_plan_sha256,
@@ -230,13 +231,17 @@ def test_committed_export_survives_staging_cleanup_failure(
     with ExportRepository.open(tmp_path / "repository") as repository:
         state = _state(repository, identity, 1)
 
-        def fail_cleanup(_path: Path) -> None:
+        failed_cleanups: list[Path] = []
+
+        def fail_cleanup(path: Path) -> None:
+            failed_cleanups.append(path)
             raise PermissionError("lease cleanup unavailable")
 
         monkeypatch.setattr(repository._artifacts, "discard_staging", fail_cleanup)
         export = _export(repository, identity, state, "committed")
+        assert len(failed_cleanups) == 1
         assert export.asset("index.json") is not None
-        current = preparation_repository(repository).current(identity)
+        current = preparation_repository(repository).current(identity, wait=_WAIT)
         assert current is not None
         assert current.instance == export.instance
         current.close()

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import math
 import threading
 import time
 from collections.abc import Callable, Iterator, Mapping, Sequence
@@ -23,9 +22,9 @@ from marimo_export._repository.models import (
     RepositoryBusyError,
     RepositoryIdentity,
     RepositoryReservationTimeoutError,
+    RepositoryWait,
     digest,
 )
-from marimo_export.errors import ExecutionError
 
 if TYPE_CHECKING:
     from marimo_export._repository.artifacts import ArtifactRepository
@@ -92,6 +91,7 @@ class PreparationRepository:
         producer_sha256: str,
         output_plan_sha256: str,
         state_fingerprints: Sequence[str],
+        wait: RepositoryWait,
     ) -> Mapping[str, PreparedState]:
         self._require_open()
         digest(producer_sha256, "producer_sha256")
@@ -102,75 +102,83 @@ class PreparationRepository:
             producer_sha256=producer_sha256,
             output_plan_sha256=output_plan_sha256,
             state_fingerprints=state_fingerprints,
+            wait=wait,
         )
 
-    def current(self, identity: RepositoryIdentity) -> PreparedExportArtifact | None:
+    def current(
+        self,
+        identity: RepositoryIdentity,
+        *,
+        wait: RepositoryWait,
+    ) -> PreparedExportArtifact | None:
         self._require_open()
         _identity(identity)
-        return self._artifacts.current(identity)
+        return self._artifacts.current(identity, wait=wait)
 
     @contextmanager
     def reserve_preparation(
         self,
         identity: RepositoryIdentity,
         *,
-        cancelled: Callable[[], bool] | None = None,
+        wait: RepositoryWait,
         poll_seconds: float = 0.05,
-        timeout: float = 30.0,
     ) -> Iterator[PreparationReservation]:
         self._require_open()
         _identity(identity)
         if poll_seconds <= 0:
             raise ValueError("poll_seconds must be positive")
-        if not math.isfinite(timeout) or timeout <= 0:
-            raise ValueError("timeout must be a positive finite number")
-        deadline = time.monotonic() + timeout
+        deadline = time.monotonic() + wait.timeout_seconds
         active = self._active.get()
         if active is not None:
             if active.identity.key != identity.key:
                 raise RuntimeError("Nested preparation requires the active export identity")
             yield active
             return
+        waiting = False
+
+        def announce() -> None:
+            nonlocal waiting
+            if not waiting:
+                waiting = True
+                wait.started("another operation is preparing this export")
+
         claim_lock = self._claim_lock(identity.key)
-        while not claim_lock.acquire(
-            timeout=min(poll_seconds, max(0.001, deadline - time.monotonic()))
-        ):
-            if cancelled is not None and cancelled():
-                raise ExecutionError(
-                    "export preparation was cancelled",
-                    code="preparation_cancelled",
-                )
-            if time.monotonic() >= deadline:
-                raise RepositoryReservationTimeoutError(
-                    "The export preparation reservation timed out."
-                )
-        fence: int | None = None
-        try:
-            while fence is None:
-                if cancelled is not None and cancelled():
-                    raise ExecutionError(
-                        "export preparation was cancelled",
-                        code="preparation_cancelled",
-                    )
+        if not claim_lock.acquire(blocking=False):
+            announce()
+            while not claim_lock.acquire(
+                timeout=min(poll_seconds, max(0.001, deadline - time.monotonic()))
+            ):
+                wait.require_not_cancelled()
                 if time.monotonic() >= deadline:
                     raise RepositoryReservationTimeoutError(
                         "The export preparation reservation timed out."
                     )
+        fence: int | None = None
+        try:
+            while fence is None:
+                wait.require_not_cancelled()
                 remaining = deadline - time.monotonic()
                 try:
                     fence = self._leases.claim_reservation(
                         identity,
-                        timeout_seconds=min(poll_seconds, remaining),
+                        timeout_seconds=min(poll_seconds, max(0.001, remaining)),
                     )
                 except RepositoryBusyError:
                     fence = None
+                else:
+                    if fence is None:
+                        announce()
                 if fence is None:
+                    if time.monotonic() >= deadline:
+                        raise RepositoryReservationTimeoutError(
+                            "The export preparation reservation timed out."
+                        )
                     time.sleep(min(poll_seconds, max(0.0, deadline - time.monotonic())))
             reservation = PreparationReservation(
                 self._leases,
                 identity,
                 fence,
-                timeout,
+                wait,
             )
             token = self._active.set(reservation)
             try:
@@ -215,7 +223,7 @@ class PreparationRepository:
             raise RuntimeError("The active reservation belongs to another producer or output plan")
         return StagedPreparedState(
             self,
-            self._artifacts.new_staging(timeout_seconds=reservation.operation_timeout_seconds),
+            self._artifacts.new_staging(wait=reservation.wait),
             producer_sha256=producer_sha256,
             output_plan_sha256=output_plan_sha256,
             state_fingerprint=state_fingerprint,
@@ -230,7 +238,7 @@ class PreparationRepository:
             raise RuntimeError("The active reservation belongs to another export identity")
         return StagedExport(
             self,
-            self._artifacts.new_staging(timeout_seconds=reservation.operation_timeout_seconds),
+            self._artifacts.new_staging(wait=reservation.wait),
             identity,
             reservation,
         )
@@ -313,6 +321,7 @@ __all__ = [
     "PreparedExportArtifact",
     "PreparedState",
     "RepositoryIdentity",
+    "RepositoryWait",
     "StagedExport",
     "StagedPreparedState",
     "preparation_repository",

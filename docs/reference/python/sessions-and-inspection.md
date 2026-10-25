@@ -147,11 +147,12 @@ session.capture(
 requested export states. `capture()` prepares those states and returns a leased
 `PreparedExport`. Both leave the session active.
 
-`Session.capture(timeout=...)` uses its timeout for repository reservation and
-preparation waits. The `Client` timeout still controls HTTP requests, asset
-downloads, and server-sent event inactivity. Cancellation is checked between
-bounded phases. It cannot stop a remote scratchpad operation that is already
-running.
+`Session.capture(timeout=...)` uses its timeout for repository reservation,
+repository lock, and preparation waits. `Session.plan()` bounds its repository
+lock waits with the `Client` timeout. The `Client` timeout still controls HTTP
+requests, asset downloads, and server-sent event inactivity. Cancellation is
+checked between bounded phases. It cannot stop a remote scratchpad operation
+that is already running.
 
 Captures for the same repository identity serialize behind one fenced
 preparation reservation. A waiter can reuse the winner's committed generation.

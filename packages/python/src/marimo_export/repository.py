@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import os
 import time
 import weakref
@@ -19,6 +20,7 @@ from marimo_export._repository.models import (
     RepositoryLimits,
     RepositoryStatus,
     RepositoryUnavailableError,
+    RepositoryWait,
 )
 from marimo_export._repository.observations import ObservationRepository
 from marimo_export._repository.paths import default_repository_path, private_directory
@@ -28,6 +30,12 @@ from marimo_export._repository.sqlite.open import open_catalog
 if TYPE_CHECKING:
     from marimo_export.planning import ExportPlan
     from marimo_export.prepared import PreparedExport
+
+# Opening has no caller timeout. A catalog reset waits as long as the catalog
+# connection that detected it. Recovery on open is opportunistic: it rides out
+# brief lookups by peers and skips a repository another operation is maintaining.
+_CATALOG_RESET_WAIT = RepositoryWait(timeout_seconds=10.0)
+_OPEN_RECOVERY_WAIT = RepositoryWait(timeout_seconds=0.25)
 
 
 class ExportRepository:
@@ -64,9 +72,11 @@ class ExportRepository:
         )
         try:
             if replaced_catalogs:
-                self._artifacts.retire_catalog_snapshots(replaced_catalogs)
-                self._artifacts.retire_unindexed_artifacts()
-            # Another process may already be maintaining this repository.
+                self._artifacts.retire_catalog_snapshots(
+                    replaced_catalogs,
+                    wait=_CATALOG_RESET_WAIT,
+                )
+                self._artifacts.retire_unindexed_artifacts(wait=_CATALOG_RESET_WAIT)
             # Reads validate selected artifacts and recover corrupt entries.
             with suppress(RepositoryBusyError):
                 self._recover()
@@ -134,7 +144,7 @@ class ExportRepository:
     def clear_observations(self, plan: ExportPlan) -> int:
         return self._observations.clear(_plan(plan).producer_sha256)
 
-    def prepared(self, plan: ExportPlan) -> PreparedExport | None:
+    def prepared(self, plan: ExportPlan, *, timeout: float = 30.0) -> PreparedExport | None:
         """Open the exact verified prepared export for a resolved plan."""
 
         from marimo_export._repository.models import RepositoryIdentity
@@ -148,7 +158,8 @@ class ExportRepository:
                 plan.producer_sha256,
                 plan.output_plan_sha256,
                 plan.spec_sha256,
-            )
+            ),
+            wait=_wait(timeout),
         )
         if artifact is None:
             return None
@@ -174,19 +185,27 @@ class ExportRepository:
         value = self._catalog.status(_now_us())
         return RepositoryStatus(path=self.path, **value)
 
-    def prune(self, *, dry_run: bool = False) -> PruneResult:
+    def prune(self, *, dry_run: bool = False, timeout: float = 30.0) -> PruneResult:
         self._require_open()
         if not isinstance(dry_run, bool):
             raise TypeError("dry_run must be a boolean")
-        return self._artifacts.prune(dry_run=dry_run)
+        return self._artifacts.prune(dry_run=dry_run, wait=_wait(timeout))
 
     def _recover(self) -> None:
         self._require_open()
-        self._artifacts.recover()
+        self._artifacts.recover(wait=_OPEN_RECOVERY_WAIT)
 
     def _require_open(self) -> None:
         if self._closed:
             raise RuntimeError("The export repository is closed")
+
+
+def _wait(timeout: object) -> RepositoryWait:
+    if isinstance(timeout, bool) or not isinstance(timeout, (int, float)):
+        raise TypeError("timeout must be a number")
+    if timeout <= 0 or not math.isfinite(timeout):
+        raise ValueError("timeout must be a positive finite number")
+    return RepositoryWait(timeout_seconds=float(timeout))
 
 
 def _now_us() -> int:

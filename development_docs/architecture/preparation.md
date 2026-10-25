@@ -181,6 +181,7 @@ prepared_committed
 write_finished
 delivery_verification_started
 delivery_commit_started
+repository_wait_started
 ```
 
 State events carry completed count, total count, authored and projection cache
@@ -206,14 +207,17 @@ prepared-export reuse and prepared-state reuse add no cache activity. Read
 for field semantics.
 
 The `cancelled` callback is checked before expensive transitions, before each
-missing state, and before generation assembly. Cancellation releases the
-reservation, closes state handles, removes staging, and preserves the current
-generation.
+missing state, and before generation assembly. `RepositoryWait` carries the same
+callback, so reservation and maintenance lock waits poll it every 100 ms.
+Cancellation releases the reservation, closes state handles, removes staging,
+and preserves the current generation.
 
-Reservation acquisition is bounded. File and borrowed-session preparation use
-their public `timeout` for reservation acquisition and individual repository
-operations. Expiry raises a repository failure with code
-`repository_reservation_timeout`.
+Reservation acquisition is bounded. File and borrowed-session preparation build
+one `RepositoryWait` from their public `timeout` and progress callback. It
+bounds reservation acquisition and each repository lock wait, and it reports
+each wait as `repository_wait_started`. Reservation expiry raises a repository
+failure with code `repository_reservation_timeout`. Maintenance lock expiry
+raises `RepositoryBusyError` with code `repository_busy`.
 
 After acquisition, the service combines caller cancellation with reservation
 liveness. A lost or reclaimed reservation stops later state work and the fenced

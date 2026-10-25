@@ -11,7 +11,7 @@ from marimo_export.repository import (
     RepositoryLimits,
 )
 from marimo_export.wire import state_fingerprint
-from repository_test_support import _export, _identity, _state
+from repository_test_support import _WAIT, _export, _identity, _state
 
 pytestmark = pytest.mark.serial
 
@@ -35,7 +35,7 @@ def _metadata_bytes(root: Path, *tables: str) -> int:
 
 
 def _is_current(repository: ExportRepository, name: str) -> bool:
-    current = preparation_repository(repository).current(_identity(name))
+    current = preparation_repository(repository).current(_identity(name), wait=_WAIT)
     if current is None:
         return False
     current.close()
@@ -68,7 +68,7 @@ def test_leased_export_counts_once_against_the_budget(tmp_path: Path) -> None:
     limits = RepositoryLimits(metadata_bytes=_metadata_bytes(probe))
 
     with ExportRepository.open(root, limits=limits) as repository:
-        reader = preparation_repository(repository).current(_identity("second"))
+        reader = preparation_repository(repository).current(_identity("second"), wait=_WAIT)
         assert reader is not None
         _publish(repository, "third", 3)
         reader.close()
@@ -83,7 +83,7 @@ def test_leased_export_survives_a_full_budget(tmp_path: Path) -> None:
     limits = RepositoryLimits(metadata_bytes=_metadata_bytes(root) * 5 // 4)
 
     with ExportRepository.open(root, limits=limits) as repository:
-        reader = preparation_repository(repository).current(_identity("first"))
+        reader = preparation_repository(repository).current(_identity("first"), wait=_WAIT)
         assert reader is not None
         # Opening an export refreshes its access time. Read the other one
         # afterwards so the leased export is the least recently used.
@@ -165,7 +165,7 @@ def test_oversized_state_metadata_fails_without_evicting_exports(tmp_path: Path)
         identity = _identity("oversized")
         preparation = preparation_repository(repository)
         with (
-            preparation.reserve_preparation(identity),
+            preparation.reserve_preparation(identity, wait=_WAIT),
             preparation.stage_prepared_state(
                 producer_sha256=identity.producer_sha256,
                 output_plan_sha256=identity.output_plan_sha256,

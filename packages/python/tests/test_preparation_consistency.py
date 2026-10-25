@@ -36,6 +36,7 @@ from preparation_test_support import (
     _spec,
     _spec_sha256,
 )
+from repository_test_support import _WAIT
 
 
 def test_preparation_rejects_capture_from_another_producer(
@@ -73,7 +74,10 @@ def test_preparation_rejects_capture_from_another_producer(
     with pytest.raises(ExecutionError, match="does not match"):
         prepare(spec=spec, source=tmp_path / "notebook.py", repository=repository)
 
-    assert preparation_repository(repository).current(preflight.repository_identity) is None
+    assert (
+        preparation_repository(repository).current(preflight.repository_identity, wait=_WAIT)
+        is None
+    )
     repository.close()
 
 
@@ -105,7 +109,10 @@ def test_source_guard_failure_preserves_current_generation_pointer(
     with pytest.raises(ExecutionError, match="source changed"):
         prepare(spec=spec, source=tmp_path / "notebook.py", repository=repository)
 
-    assert preparation_repository(repository).current(preflight.repository_identity) is None
+    assert (
+        preparation_repository(repository).current(preflight.repository_identity, wait=_WAIT)
+        is None
+    )
     repository.close()
 
 
@@ -138,11 +145,12 @@ def test_owned_capture_rejects_dependency_drift_before_state_commit(
         prepare(spec=spec, source=notebook, repository=repository)
 
     storage = preparation_repository(repository)
-    assert storage.current(preflight.repository_identity) is None
+    assert storage.current(preflight.repository_identity, wait=_WAIT) is None
     states = storage.lookup_prepared_states(
         producer_sha256=preflight.producer.producer_sha256,
         output_plan_sha256=preflight.repository_identity.output_plan_sha256,
         state_fingerprints=(state_fingerprint({"choice": "A"}),),
+        wait=_WAIT,
     )
     assert states == {}
     repository.close()
@@ -186,11 +194,12 @@ def test_owned_capture_rejects_dependency_drift_before_generation_commit(
 
     assert guard_calls == 2
     storage = preparation_repository(repository)
-    assert storage.current(preflight.repository_identity) is None
+    assert storage.current(preflight.repository_identity, wait=_WAIT) is None
     states = storage.lookup_prepared_states(
         producer_sha256=preflight.producer.producer_sha256,
         output_plan_sha256=preflight.repository_identity.output_plan_sha256,
         state_fingerprints=(state_fingerprint({"choice": "A"}),),
+        wait=_WAIT,
     )
     assert set(states) == {state_fingerprint({"choice": "A"})}
     for state in states.values():
@@ -236,11 +245,12 @@ def test_borrowed_capture_rejects_runtime_drift_before_state_commit(
         spec_sha256=_spec_sha256(spec),
     )
     storage = preparation_repository(repository)
-    assert storage.current(identity) is None
+    assert storage.current(identity, wait=_WAIT) is None
     states = storage.lookup_prepared_states(
         producer_sha256=producer.producer_sha256,
         output_plan_sha256=identity.output_plan_sha256,
         state_fingerprints=(state_fingerprint({"choice": "A"}),),
+        wait=_WAIT,
     )
     assert states == {}
     repository.close()
@@ -295,11 +305,12 @@ def test_borrowed_capture_rejects_runtime_drift_before_generation_commit(
         spec_sha256=_spec_sha256(spec),
     )
     storage = preparation_repository(repository)
-    assert storage.current(identity) is None
+    assert storage.current(identity, wait=_WAIT) is None
     states = storage.lookup_prepared_states(
         producer_sha256=producer.producer_sha256,
         output_plan_sha256=identity.output_plan_sha256,
         state_fingerprints=(state_fingerprint({"choice": "A"}),),
+        wait=_WAIT,
     )
     assert set(states) == {state_fingerprint({"choice": "A"})}
     for state in states.values():
@@ -344,7 +355,7 @@ def test_export_commits_only_the_observation_revision_used_by_its_plan(
     )
 
     prepared = prepare(spec=spec, source=tmp_path / "notebook.py", repository=repository)
-    current = preparation_repository(repository).current(preflight.repository_identity)
+    current = preparation_repository(repository).current(preflight.repository_identity, wait=_WAIT)
     assert current is not None
     assert prepared.plan.observation_revision == 1
     assert current.captured_observation_revision == 1

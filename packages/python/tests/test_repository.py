@@ -14,6 +14,7 @@ from marimo_export._repository.preparation import (
     RepositoryIdentity,
     preparation_repository,
 )
+from marimo_export._repository.sqlite.maintenance import maintenance_lock
 from marimo_export.descriptors import Provenance, ScalarDescriptor
 from marimo_export.index import (
     ExportIndex,
@@ -24,9 +25,11 @@ from marimo_export.index import (
 from marimo_export.planning import ExportPlan, PlannedState, export_plan_identity
 from marimo_export.repository import (
     ExportRepository,
+    RepositoryBusyError,
     RepositoryLimits,
 )
 from marimo_export.wire import state_fingerprint
+from repository_test_support import _WAIT
 
 
 def _digest(value: str) -> str:
@@ -49,7 +52,7 @@ def _prepare_state(
     fingerprint = state_fingerprint(values)
     preparation = preparation_repository(repository)
     with (
-        preparation.reserve_preparation(identity),
+        preparation.reserve_preparation(identity, wait=_WAIT),
         preparation.stage_prepared_state(
             producer_sha256=identity.producer_sha256,
             output_plan_sha256=identity.output_plan_sha256,
@@ -161,12 +164,13 @@ def test_prepared_states_are_reused_across_exact_export_specs(tmp_path: Path) ->
             producer_sha256=second_identity.producer_sha256,
             output_plan_sha256=second_identity.output_plan_sha256,
             state_fingerprints=(state.state_fingerprint,),
+            wait=_WAIT,
         )
         assert tuple(reusable) == (state.state_fingerprint,)
         assert reusable[state.state_fingerprint].asset("output.json") is not None
 
         with (
-            preparation.reserve_preparation(first_identity),
+            preparation.reserve_preparation(first_identity, wait=_WAIT),
             preparation.stage_export(first_identity) as staged,
         ):
             _write_index(
@@ -176,10 +180,10 @@ def test_prepared_states_are_reused_across_exact_export_specs(tmp_path: Path) ->
                 {"neighbors": 3},
             )
             export = staged.commit(states=(state,), captured_observation_revision=0)
-        exact = preparation.current(first_identity)
+        exact = preparation.current(first_identity, wait=_WAIT)
         assert exact is not None
         exact.close()
-        assert preparation.current(second_identity) is None
+        assert preparation.current(second_identity, wait=_WAIT) is None
         assert export.state_fingerprints == (state.state_fingerprint,)
         export.close()
         for handle in reusable.values():
@@ -187,7 +191,7 @@ def test_prepared_states_are_reused_across_exact_export_specs(tmp_path: Path) ->
         state.close()
 
     with ExportRepository.open(root) as restarted:
-        reused = preparation_repository(restarted).current(first_identity)
+        reused = preparation_repository(restarted).current(first_identity, wait=_WAIT)
         assert reused is not None
         assert reused.asset("index.json") is not None
         reused.close()
@@ -200,7 +204,7 @@ def test_export_commit_requires_current_prepared_state_handles(tmp_path: Path) -
         state.close()
         preparation = preparation_repository(repository)
         with (
-            preparation.reserve_preparation(identity),
+            preparation.reserve_preparation(identity, wait=_WAIT),
             preparation.stage_export(identity) as staged,
         ):
             _write_index(
@@ -221,7 +225,7 @@ def test_prepared_compares_the_complete_resolved_relation(tmp_path: Path) -> Non
         state = _prepare_state(repository, identity, inputs)
         preparation = preparation_repository(repository)
         with (
-            preparation.reserve_preparation(identity),
+            preparation.reserve_preparation(identity, wait=_WAIT),
             preparation.stage_export(identity) as staged,
         ):
             _write_index(staged.path, identity, fingerprint, inputs)
@@ -255,6 +259,10 @@ def test_prepared_compares_the_complete_resolved_relation(tmp_path: Path) -> Non
         assert prepared is not None
         assert prepared.plan.exact_reuse
         prepared.close()
+        with maintenance_lock(repository.path, _WAIT), pytest.raises(RepositoryBusyError):
+            repository.prepared(plan, timeout=0.2)
+        with pytest.raises(ValueError, match="timeout"):
+            repository.prepared(plan, timeout=0)
         changed_inputs = {"neighbors": 4}
         changed_fingerprint = state_fingerprint(changed_inputs)
         changed = ExportPlan(
@@ -308,7 +316,7 @@ def test_staging_cleanup_is_idempotent(tmp_path: Path) -> None:
     identity = _identity()
     with ExportRepository.open(tmp_path / "repository") as repository:
         preparation = preparation_repository(repository)
-        with preparation.reserve_preparation(identity):
+        with preparation.reserve_preparation(identity, wait=_WAIT):
             staged = preparation.stage_prepared_state(
                 producer_sha256=identity.producer_sha256,
                 output_plan_sha256=identity.output_plan_sha256,

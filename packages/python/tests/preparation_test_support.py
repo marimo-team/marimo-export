@@ -31,6 +31,7 @@ from marimo_export.repository import (
 from marimo_export.result import CacheSummary
 from marimo_export.spec import ExportSpec, OutputSpec
 from marimo_export.wire import state_fingerprint
+from repository_test_support import _WAIT
 
 
 class _BorrowedSession(Session):
@@ -186,7 +187,10 @@ def _install_export_handle(
         states.append(_install_state(repository, identity, {"choice": choice}))
     try:
         storage = preparation_repository(repository)
-        with storage.reserve_preparation(identity), storage.stage_export(identity) as staged:
+        with (
+            storage.reserve_preparation(identity, wait=_WAIT),
+            storage.stage_export(identity) as staged,
+        ):
             (staged.path / "index.json").write_bytes(_index(spec, producer).to_bytes())
             artifact = staged.commit(states=states, captured_observation_revision=0)
         return artifact
@@ -204,7 +208,7 @@ def _install_state(
     entry = _entry(inputs)
     storage = preparation_repository(repository)
     with (
-        storage.reserve_preparation(identity),
+        storage.reserve_preparation(identity, wait=_WAIT),
         storage.stage_prepared_state(
             producer_sha256=identity.producer_sha256,
             output_plan_sha256=identity.output_plan_sha256,

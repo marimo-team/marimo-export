@@ -267,15 +267,16 @@ successfully.
 
 `--timeout` defaults to 30 seconds and must be a positive finite number. It
 bounds connection setup, inactivity while reading a scratchpad execution
-stream, each bounded asset download, and repository reservation acquisition.
+stream, each bounded asset download, repository reservation acquisition, and
+each repository lock wait.
 Progress on the stream renews the inactivity deadline. Each operation receives
 its own budget, so a progressing multi-state capture can run longer than the
 configured number of seconds.
 
-Python `Session.capture(timeout=...)` uses its argument for repository and
-preparation waits. The `Client` timeout continues to control transport
-inactivity. Cancellation is cooperative between phases and cannot stop a remote
-scratchpad operation that has already started.
+Python `Session.capture(timeout=...)` uses its argument for repository,
+reservation, and preparation waits. The `Client` timeout continues to control
+transport inactivity. Cancellation is cooperative between phases and cannot stop
+a remote scratchpad operation that has already started.
 
 ## Verify the written export
 

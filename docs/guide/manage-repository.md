@@ -57,7 +57,7 @@ with ExportRepository.open(".exports") as repository:
 
 `default_path()` reports the effective default without creating it. Opening a
 repository attempts maintenance recovery. When another process holds the
-maintenance transaction lock, opening continues without that pass. Every command
+maintenance lock beyond a brief wait, opening skips that pass. Every command
 that opens the repository, including status and dry-run commands, can create the
 directory, tighten its permissions, replace a corrupt or incompatible catalog,
 or retire an invalid repository artifact.
@@ -73,6 +73,33 @@ files are a transactional recovery step, not a backup. Preserve written notebook
 exports separately and rebuild reusable repository data from the notebook and
 `ExportSpec` after this reset.
 :::
+
+## Run several exports against one repository
+
+Several `build`, `capture`, `plan`, and `prepare` operations can share one
+repository from separate threads or processes. Lookups, staging, commits, and
+prune take the repository maintenance lock in turn. A large export holds that
+lock while it verifies and installs its generation, which can take several
+seconds. Opening a repository holds it while recovery verifies every stored
+prepared state and export generation, so opening a repository with many exports
+can hold it for minutes.
+
+A producer operation reports one progress event each time it finds the lock
+held, then waits up to its `--timeout` or `timeout` for that lock:
+
+```text
+Repository wait started | another operation holds the repository maintenance lock
+```
+
+`build --jsonl` and `capture --jsonl` report the same event with
+`"kind": "repository_wait_started"`. Two operations for the same exact export
+also wait for the first one's preparation reservation, and the waiter reuses
+that export when it commits. Raise the timeout when the other export routinely
+holds the repository longer. `repository.prepared()`, `repository.prune()`, and
+`repository prune --timeout` wait up to their own timeout without a progress
+event. Read [The repository is busy or
+unavailable](troubleshooting#the-repository-is-busy-or-unavailable) when the
+wait expires.
 
 ## Inspect storage
 

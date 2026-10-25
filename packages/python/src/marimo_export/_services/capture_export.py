@@ -12,6 +12,7 @@ from marimo_export._services.export_artifacts import (
 from marimo_export._services.plan_export import (
     ProgressCallback,
     artifact_matches_plan,
+    repository_wait,
     resolve_repository_plan,
 )
 from marimo_export._services.plan_wire import decode_plan_wire, producer_from_plan_wire
@@ -81,7 +82,7 @@ def capture_session(
         raise TypeError("spec must be an ExportSpec")
     if cancelled is not None and not callable(cancelled):
         raise TypeError("cancelled must be callable or None")
-    duration = _timeout(timeout)
+    wait = repository_wait(_timeout(timeout), progress, cancelled)
     owns_repository = repository is None
     selected = ExportRepository.open() if repository is None else repository
     preparation = preparation_repository(selected)
@@ -91,13 +92,16 @@ def capture_session(
         emit(progress, ProgressEvent(kind="inspection_started"))
         wire = session._plan(spec)
         producer = producer_from_plan_wire(wire)
-        plan = resolve_repository_plan(decode_plan_wire(wire, spec, producer), preparation)
+        plan = resolve_repository_plan(
+            decode_plan_wire(wire, spec, producer),
+            preparation,
+            wait,
+        )
         identity = repository_identity(plan)
         replacing_instance: str | None = None
         with preparation.reserve_preparation(
             identity,
-            cancelled=cancelled,
-            timeout=duration,
+            wait=wait,
         ):
             reservation_cancelled = preparation.cancellation(cancelled)
             require_not_cancelled(reservation_cancelled)
@@ -106,6 +110,7 @@ def capture_session(
             reserved_plan = resolve_repository_plan(
                 decode_plan_wire(reserved_wire, spec, reserved_producer),
                 preparation,
+                wait,
             )
             if repository_identity(reserved_plan) != identity:
                 raise ExecutionError(
@@ -114,7 +119,7 @@ def capture_session(
                 )
             producer = reserved_producer
             plan = reserved_plan
-            exact = preparation.current(identity)
+            exact = preparation.current(identity, wait=wait)
             if exact is not None:
                 try:
                     matches = artifact_matches_plan(exact, plan)
@@ -156,6 +161,7 @@ def capture_session(
                 plan=plan,
                 producer=producer,
                 preparation=preparation,
+                wait=wait,
                 repository=selected,
                 owns_repository=owns_repository,
                 capture_state=lambda state_spec: session._capture(
@@ -179,6 +185,7 @@ def plan_session(
     *,
     spec: ExportSpec,
     repository: ExportRepository | None = None,
+    timeout: float,
     progress: ProgressCallback | None = None,
 ) -> ExportPlan:
     """Plan one borrowed session without executing export states."""
@@ -187,6 +194,7 @@ def plan_session(
         raise TypeError("session must be a Session")
     if not isinstance(spec, ExportSpec):
         raise TypeError("spec must be an ExportSpec")
+    wait = repository_wait(timeout, progress)
     owns_repository = repository is None
     selected = ExportRepository.open() if repository is None else repository
     preparation = preparation_repository(selected)
@@ -194,8 +202,8 @@ def plan_session(
         emit(progress, ProgressEvent(kind="inspection_started"))
         wire = session._plan(spec)
         producer = producer_from_plan_wire(wire)
-        plan = resolve_repository_plan(decode_plan_wire(wire, spec, producer), preparation)
-        exact = preparation.current(repository_identity(plan))
+        plan = resolve_repository_plan(decode_plan_wire(wire, spec, producer), preparation, wait)
+        exact = preparation.current(repository_identity(plan), wait=wait)
         if exact is not None:
             try:
                 matches = artifact_matches_plan(exact, plan)

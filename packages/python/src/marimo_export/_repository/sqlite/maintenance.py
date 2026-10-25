@@ -12,8 +12,11 @@ from uuid import uuid4
 from marimo_export._repository.models import (
     RepositoryBusyError,
     RepositoryUnavailableError,
+    RepositoryWait,
 )
 from marimo_export._repository.paths import sync_directory
+
+_CANCELLATION_POLL_SECONDS = 0.1
 
 
 class _InvalidMaintenanceSchema(RuntimeError):
@@ -21,33 +24,63 @@ class _InvalidMaintenanceSchema(RuntimeError):
 
 
 @contextmanager
-def maintenance_lock(root: Path, *, timeout_seconds: float = 10.0) -> Iterator[None]:
+def maintenance_lock(root: Path, wait: RepositoryWait) -> Iterator[None]:
     """Serialize artifact filesystem mutations without blocking catalog heartbeats."""
 
     path = root / "maintenance.sqlite3"
-    connection = _connect(path, timeout_seconds=timeout_seconds)
-    begun = False
+    deadline = time.monotonic() + wait.timeout_seconds
     try:
         try:
-            connection.execute("BEGIN IMMEDIATE")
-        except sqlite3.OperationalError as error:
-            if any(term in str(error).lower() for term in ("locked", "busy")):
-                raise RepositoryBusyError(
-                    "The export repository maintenance lock remained busy."
-                ) from error
-            raise RepositoryUnavailableError(
-                "The export repository maintenance lock is unavailable."
-            ) from error
-        begun = True
-        yield
-        connection.commit()
-        begun = False
-    finally:
-        if begun:
+            connection = _begin(path, timeout_seconds=0)
+        except RepositoryBusyError:
+            if wait.timeout_seconds <= 0:
+                raise
+            wait.started("another operation holds the repository maintenance lock")
+            connection = _wait_for_lock(path, wait, deadline)
+        try:
+            yield
+            connection.commit()
+        except BaseException:
             connection.rollback()
-        connection.close()
+            raise
+        finally:
+            connection.close()
+    finally:
         if os.name != "nt" and path.is_file() and not path.is_symlink():
             os.chmod(path, 0o600)
+
+
+def _wait_for_lock(path: Path, wait: RepositoryWait, deadline: float) -> sqlite3.Connection:
+    while True:
+        wait.require_not_cancelled()
+        remaining = deadline - time.monotonic()
+        try:
+            return _begin(path, timeout_seconds=min(_CANCELLATION_POLL_SECONDS, remaining))
+        except RepositoryBusyError:
+            if remaining <= _CANCELLATION_POLL_SECONDS:
+                raise
+
+
+def _begin(path: Path, *, timeout_seconds: float) -> sqlite3.Connection:
+    deadline = time.monotonic() + max(0.001, timeout_seconds)
+    connection = _connect(path, timeout_seconds=timeout_seconds)
+    try:
+        # Connecting can spend part of the budget waiting for its own write.
+        remaining = max(0.001, deadline - time.monotonic())
+        connection.execute(f"PRAGMA busy_timeout = {int(remaining * 1000)}")
+        connection.execute("BEGIN IMMEDIATE")
+    except BaseException as error:
+        connection.close()
+        if not isinstance(error, sqlite3.OperationalError):
+            raise
+        if any(term in str(error).lower() for term in ("locked", "busy")):
+            raise RepositoryBusyError(
+                "The export repository maintenance lock remained busy."
+            ) from error
+        raise RepositoryUnavailableError(
+            "The export repository maintenance lock is unavailable."
+        ) from error
+    return connection
 
 
 def _connect(path: Path, *, timeout_seconds: float) -> sqlite3.Connection:
@@ -85,16 +118,9 @@ def _connect(path: Path, *, timeout_seconds: float) -> sqlite3.Connection:
         except sqlite3.DatabaseError as error:
             connection.close()
             after = _lock_stat(path)
-            if before is None or after is None or not os.path.samestat(before, after):
-                remaining = deadline - time.monotonic()
-                if remaining <= 0:
-                    raise RepositoryUnavailableError(
-                        "The export repository maintenance lock is unavailable."
-                    ) from error
-                time.sleep(min(0.01, remaining))
-                continue
             message = str(error).lower()
-            if any(term in message for term in ("locked", "busy")):
+            replaced = before is None or after is None or not os.path.samestat(before, after)
+            if replaced or any(term in message for term in ("locked", "busy")):
                 remaining = deadline - time.monotonic()
                 if remaining <= 0:
                     raise RepositoryBusyError(

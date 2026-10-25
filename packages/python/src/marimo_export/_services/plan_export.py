@@ -11,6 +11,7 @@ from marimo_export._repository.preparation import (
     PreparedExportArtifact,
     PreparedState,
     RepositoryIdentity,
+    RepositoryWait,
     preparation_repository,
 )
 from marimo_export._services.identity import ProducerIdentity, producer_identity
@@ -31,6 +32,23 @@ ProgressCallback = Callable[[ProgressEvent], None]
 class PlanPreflight:
     producer: ProducerIdentity
     repository_identity: RepositoryIdentity
+
+
+def repository_wait(
+    timeout: float,
+    progress: ProgressCallback | None,
+    cancelled: Callable[[], bool] | None = None,
+) -> RepositoryWait:
+    """Bound repository waits by the operation timeout and report each wait."""
+
+    def started(reason: str) -> None:
+        _emit(progress, ProgressEvent(kind="repository_wait_started", message=reason))
+
+    return RepositoryWait(
+        timeout_seconds=timeout,
+        started=started,
+        cancelled=cancelled or (lambda: False),
+    )
 
 
 def preflight_plan(source: StrPath, spec: ExportSpec) -> PlanPreflight:
@@ -72,12 +90,12 @@ def plan(
     if not isinstance(spec, ExportSpec):
         raise TypeError("spec must be an ExportSpec")
     owned_repository = repository is None
-    duration = _timeout(timeout)
+    wait = repository_wait(_timeout(timeout), progress)
     selected = ExportRepository.open() if repository is None else repository
     preparation = preparation_repository(selected)
     try:
         preflight = preflight_plan(source, spec)
-        exact = preparation.current(preflight.repository_identity)
+        exact = preparation.current(preflight.repository_identity, wait=wait)
         if exact is not None:
             try:
                 require_preflight_current(preflight)
@@ -97,8 +115,8 @@ def plan(
         source_path = preflight.producer.source
         if source_path is None:
             raise AssertionError("file planning requires a local source")
-        with open_notebook(source_path, timeout=duration) as producer:
-            result = plan_with_producer(producer, spec, preflight.producer, preparation)
+        with open_notebook(source_path, timeout=wait.timeout_seconds) as producer:
+            result = plan_with_producer(producer, spec, preflight.producer, preparation, wait)
             producer._require_source_stable()
         _emit(
             progress,
@@ -119,17 +137,19 @@ def plan_with_producer(
     spec: ExportSpec,
     identity: ProducerIdentity,
     repository: PreparationRepository,
+    wait: RepositoryWait,
 ) -> ExportPlan:
     """Resolve one plan through an already-open owned notebook session."""
 
     wire = producer._plan(spec)
     planned = decode_plan_wire(wire, spec, identity)
-    return resolve_repository_plan(planned, repository)
+    return resolve_repository_plan(planned, repository, wait)
 
 
 def resolve_repository_plan(
     planned: ExportPlan,
     repository: PreparationRepository,
+    wait: RepositoryWait,
 ) -> ExportPlan:
     """Attach one live repository reuse and observation snapshot to a plan."""
 
@@ -137,6 +157,7 @@ def resolve_repository_plan(
         producer_sha256=planned.producer_sha256,
         output_plan_sha256=planned.output_plan_sha256,
         state_fingerprints=planned.state_fingerprints,
+        wait=wait,
     )
     try:
         reusable = tuple(sorted(prepared))
@@ -245,6 +266,7 @@ __all__ = [
     "plan_from_artifact",
     "plan_with_producer",
     "preflight_plan",
+    "repository_wait",
     "require_preflight_current",
     "resolve_repository_plan",
 ]

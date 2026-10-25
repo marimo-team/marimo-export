@@ -23,6 +23,13 @@ repository identity. A waiting caller uses its public `timeout` as the
 reservation-acquisition deadline. After acquisition, the lease manager renews
 the reservation while bounded repository operations continue.
 
+Operations for different identities serialize on the repository maintenance lock
+for each lookup, staging directory, and commit. Each lock wait uses the same
+public `timeout` as a fresh bound and reports `repository_wait_started` once. A
+large export commit can hold the lock for several seconds while it verifies and
+installs its generation, so a concurrent producer waits through that commit and
+continues. A lock held past the waiter's `timeout` raises `RepositoryBusyError`.
+
 ```mermaid
 flowchart LR
     preflight["Preflight identity"] --> lookup["Exact generation lookup"]

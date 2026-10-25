@@ -90,9 +90,9 @@ repository.record_observation(
 repository.observation_revision(plan: ExportPlan) -> int
 repository.observations(plan: ExportPlan) -> tuple[ObservedState, ...]
 repository.clear_observations(plan: ExportPlan) -> int
-repository.prepared(plan: ExportPlan) -> PreparedExport | None
+repository.prepared(plan: ExportPlan, *, timeout: float = 30.0) -> PreparedExport | None
 repository.status() -> RepositoryStatus
-repository.prune(*, dry_run: bool = False) -> PruneResult
+repository.prune(*, dry_run: bool = False, timeout: float = 30.0) -> PruneResult
 repository.close() -> None
 ```
 
@@ -108,6 +108,10 @@ observation history and returns the number removed.
 `prepared()` returns an exact verified prepared export when the repository has
 one matching producer, output plan, and exact spec identity. It returns `None`
 when no exact export generation matches.
+
+`prepared()` and `prune()` take the repository maintenance lock. When another
+operation holds it, they wait up to `timeout` seconds and then raise
+`RepositoryBusyError`. `timeout` must be a positive finite number.
 
 `status()` reports current counts and bytes. `prune()` applies the configured
 retention policy and removes candidates when `dry_run=False`. A dry run reports
@@ -330,12 +334,12 @@ integration](host-integration).
 
 Import public repository failures from `marimo_export.repository`:
 
-| Error                        | Default code                | Meaning                                     |
-| ---------------------------- | --------------------------- | ------------------------------------------- |
-| `RepositoryError`            | `repository_error`          | Base repository failure                     |
-| `RepositoryLimitError`       | `repository_limit_exceeded` | Configured storage or record limit exceeded |
-| `RepositoryUnavailableError` | `repository_unavailable`    | Storage unavailable                         |
-| `RepositoryBusyError`        | `repository_busy`           | Lock contention exceeded its bounded wait   |
+| Error                        | Default code                | Meaning                                      |
+| ---------------------------- | --------------------------- | -------------------------------------------- |
+| `RepositoryError`            | `repository_error`          | Base repository failure                      |
+| `RepositoryLimitError`       | `repository_limit_exceeded` | Configured storage or record limit exceeded  |
+| `RepositoryUnavailableError` | `repository_unavailable`    | Storage unavailable                          |
+| `RepositoryBusyError`        | `repository_busy`           | Lock contention outlasted the caller timeout |
 
 Repository errors inherit `MarimoExportError`, so each exposes `code`,
 `details`, and `wire()`. A confirmed integrity failure retires the affected

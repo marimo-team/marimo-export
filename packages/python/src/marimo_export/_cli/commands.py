@@ -141,7 +141,7 @@ def run(
                 return CommandResult(
                     "repository-prune",
                     _prune_value(
-                        repository.prune(dry_run=arguments.dry_run),
+                        repository.prune(dry_run=arguments.dry_run, timeout=arguments.timeout),
                         repository.path,
                     ),
                 )

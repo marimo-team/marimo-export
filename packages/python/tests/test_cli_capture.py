@@ -137,6 +137,12 @@ def test_capture_jsonl_orders_preparation_write_and_result(
         progress = kwargs["progress"]
         assert callable(progress)
         callback = cast(Callable[[ProgressEvent], None], progress)
+        callback(
+            ProgressEvent(
+                kind="repository_wait_started",
+                message="another operation holds the repository maintenance lock",
+            )
+        )
         callback(ProgressEvent(kind="prepared_committed", completed=1, total=1))
         return prepared
 
@@ -162,11 +168,15 @@ def test_capture_jsonl_orders_preparation_write_and_result(
     )
 
     lines = [json.loads(line) for line in capsys.readouterr().out.splitlines()]
-    assert [line["type"] for line in lines] == ["progress", "progress", "result"]
+    assert [line["type"] for line in lines] == ["progress", "progress", "progress", "result"]
     assert [line["progress"]["kind"] for line in lines[:-1]] == [
+        "repository_wait_started",
         "prepared_committed",
         "write_finished",
     ]
+    assert lines[0]["progress"]["message"] == (
+        "another operation holds the repository maintenance lock"
+    )
     assert lines[-1]["result"] == export_result.to_dict()
 
 
