@@ -44,8 +44,9 @@ File-based builds also track the distributions and local modules that the
 notebook imports, as defined in
 [What the producer environment covers](preparation-and-reuse#what-the-producer-environment-covers).
 Editing an imported helper or upgrading an imported package invalidates prepared
-results and automatic cell-cache entries. Adding an import of a module outside
-the current scope changes that scope as well. Explicit `mo.cache` and `mo.persistent_cache` calls
+results and automatic cell-cache entries. Adding an import that resolves to a
+distribution or local module outside the current scope changes that scope as
+well, so every automatic cell-cache entry runs again once. Explicit `mo.cache` and `mo.persistent_cache` calls
 retain their authored keys and reference dependencies.
 Other notebook-only edits still let marimo reuse unaffected cells. Restart a
 live notebook session after changing imported Python code so capture sees the

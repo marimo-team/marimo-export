@@ -306,6 +306,56 @@ def test_markdown_notebook_tracks_cell_imports_and_front_matter_declaration(
     assert environment.environment_identity(notebook) != after_helper
 
 
+def test_unresolvable_declared_import_is_rejected(tmp_path: Path) -> None:
+    metadata = "# /// script\n# [tool.marimo-export]\n# imports = ['missing_plugin']\n# ///\n"
+    notebook = _notebook(tmp_path / "notebook.py", metadata=metadata)
+
+    with pytest.raises(ExecutionError, match="missing_plugin") as error:
+        producer_identity(notebook)
+
+    assert error.value.code == "notebook_invalid"
+
+
+def test_local_module_shadowing_standard_library_changes_producer_identity(
+    tmp_path: Path,
+) -> None:
+    notebook = _notebook(tmp_path / "notebook.py", "statistics")
+    module = tmp_path / "statistics.py"
+    module.write_text("VALUE = 1\n", encoding="utf-8")
+    before = _producer(notebook)
+
+    module.write_text("VALUE = 2\n", encoding="utf-8")
+
+    assert _producer(notebook) != before
+
+
+def test_editable_distribution_tracks_source_and_requirements(
+    monkeypatch: pytest.MonkeyPatch,
+    site: Path,
+    tmp_path_factory: pytest.TempPathFactory,
+) -> None:
+    project = tmp_path_factory.mktemp("editable-source")
+    package = project / "editable_module"
+    package.mkdir()
+    module = package / "__init__.py"
+    module.write_text("VALUE = 1\n", encoding="utf-8")
+    monkeypatch.syspath_prepend(str(project))
+    _install(site, "editable-dist", "1.0", requires=("required-dist",))
+    (site / "editable-dist-1.0.dist-info" / "top_level.txt").write_text(
+        "editable_module\n", encoding="utf-8"
+    )
+    _install(site, "required-dist", "1.0")
+    notebook = _notebook(tmp_path_factory.mktemp("notebooks") / "notebook.py", "editable_module")
+    before = _producer(notebook)
+
+    module.write_text("VALUE = 2\n", encoding="utf-8")
+    after_source = _producer(notebook)
+    _install(site, "required-dist", "2.0")
+
+    assert after_source != before
+    assert _producer(notebook) != after_source
+
+
 def test_imported_project_outside_notebook_directory_changes_producer_identity(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path_factory: pytest.TempPathFactory,

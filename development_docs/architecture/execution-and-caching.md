@@ -198,7 +198,8 @@ including imports inside a cell body. Marimo's own cell hash records an imported
 module by name, and by `__version__` only for `pin_modules`. Changing an
 imported helper source or a distribution in the closure invalidates automatic
 cell-cache entries before they can populate a new prepared export. Adding an
-import of a module outside the current scope changes the digest too. State vectors, output declarations, and notebook source remain outside
+import that resolves to a distribution or local module outside the current scope
+changes the digest too. State vectors, output declarations, and notebook source remain outside
 the dependency digest, preserving native reuse across state combinations and
 output plans. Native entries created outside this scoped integration have a
 different key because they carry different dependency provenance.

@@ -47,15 +47,18 @@ imports inside functions. It resolves each top-level module in this order:
 3. The Python interpreter's module path, including `PYTHONPATH` and editable
    installs.
 
-Keep helper modules in those locations. A path that a cell adds to `sys.path`
-outside the project is visible to the running notebook and absent from the
-producer environment.
+Keep helper modules in those locations. A directory that a cell or marimo's
+`runtime.pythonpath` setting adds to `sys.path` outside the project is visible to
+the running notebook and absent from the producer environment.
 
-| Resolved module         | Producer identity records                                                                                         |
-| ----------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| Installed distribution  | Distribution name and version, then every requirement it declares for this Python, platform, and extra set        |
-| Local module or package | SHA-256 of each Python and native-extension file in the top-level module or package, then the modules they import |
-| Standard library        | Nothing beyond the Python version                                                                                 |
+| Resolved module          | Producer identity records                                                                                                                |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| Installed distribution   | Name and version of the distribution and of every installed distribution its requirements reach for this Python, platform, and extra set |
+| Local or editable module | SHA-256 of each Python and native-extension file in the top-level module or package, then the modules they import                        |
+| Standard library         | Nothing beyond the Python version                                                                                                        |
+
+An editable install records both rows: the source files of its module and the
+distribution with its requirements.
 
 marimo, marimo-export, and their requirements are always in scope. That includes
 the marimo-export extras that bundled exporters import and marimo's `sql` extra,
@@ -73,8 +76,10 @@ distribution in scope.
 
 ### Declare modules loaded by name
 
-A module loaded through `importlib.import_module(name)`, or a custom exporter
-module that the notebook never imports, is outside the producer environment.
+A module loaded through `importlib.import_module(name)`, a custom exporter module
+that the notebook never imports, or an optional package that an imported library
+loads on demand, such as `openpyxl` behind `pandas.read_excel`, is outside the
+producer environment.
 Name it under `[tool.marimo-export]` in the notebook's
 [PEP 723](https://peps.python.org/pep-0723/) script metadata, the comment block
 that marimo also reads for notebook dependencies and settings:
@@ -94,8 +99,9 @@ same table in its front matter, under `pyproject` or inside the `header` script
 block.
 
 Planning and preparation fail with `notebook_invalid` when the metadata is
-invalid TOML, when `[tool.marimo-export]` holds a key other than `imports`, or
-when `imports` is anything other than a list of module names.
+invalid TOML, when `[tool.marimo-export]` holds a key other than `imports`, when
+`imports` is anything other than a list of module names, or when a declared
+module cannot be found on the module search path.
 
 ## Plan before running the notebook
 

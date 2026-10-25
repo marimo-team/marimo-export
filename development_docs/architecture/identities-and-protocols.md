@@ -85,15 +85,19 @@ over a fixed search path: the notebook directory, the project's `src` directory,
 the project root, then `sys.path`. The project root is the nearest ancestor with
 `pyproject.toml`, `setup.cfg`, or `.git`. `importlib.util.find_spec` handles
 names that only a meta-path finder, such as an editable install, can resolve.
-The fixed prefix keeps the client and the kernel in agreement after the kernel
-extends `sys.path` from marimo's `runtime.pythonpath` setting or from a cell,
-because the kernel recomputes producer identity and the plan wire rejects a
-mismatch.
+The fixed prefix keeps the client and the kernel in agreement when the kernel
+extends `sys.path` with a project directory, from marimo's `runtime.pythonpath`
+setting or from a cell. The kernel recomputes producer identity and the plan
+wire rejects a mismatch, so a module that resolves only through a kernel path
+outside the project fails planning with `implementation_changed`.
 
-| Resolution                                                                                         | Recorded as                                                                                        |
-| -------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| Every location under `site-packages` or `dist-packages`, and a distribution that provides the name | Distribution root                                                                                  |
-| Any other location                                                                                 | Local source: SHA-256 of each source file in the top-level module or package, keyed by import path |
+| Resolution                                                                      | Recorded as                                                                                        |
+| ------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| Every location inside the install root of a distribution that provides the name | Distribution root                                                                                  |
+| Any other location, including editable installs                                 | Local source: SHA-256 of each source file in the top-level module or package, keyed by import path |
+
+Every distribution that provides the name joins the closure, including the
+distribution behind an editable install and duplicate providers of one module.
 
 The provider map reads each installed distribution's `top_level.txt`, or the
 top-level entries of its installed file list when that file is absent.
@@ -108,12 +112,14 @@ with its `sql` extra, and marimo-export with every declared extra. It follows
 `Requires-Dist` through `packaging.requirements.Requirement`, evaluates each
 marker for the current interpreter and the requested extras, and records the
 canonical name and version of every installed distribution it reaches. A marker
-that cannot be evaluated is followed. The first distribution on the interpreter
-path wins, matching the one Python imports. A runtime without a saved notebook
+that cannot be evaluated is followed. When one distribution name is installed
+more than once, the first on the interpreter path supplies the version, matching
+the copy Python imports. A runtime without a saved notebook
 records every installed distribution.
 
-The scan runs twice and compares distribution versions, file digests, and file
-revisions. Any difference raises `RuntimeError`. A local key is the file path
+After the scan, the identity re-reads installed distribution versions and
+re-stats the notebook and every hashed file. Any difference raises
+`RuntimeError`. A local key is the file path
 relative to the import root, so moving a project directory keeps the identity.
 
 ## Protocol registry

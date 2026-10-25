@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+import csv
 import hashlib
 import importlib
 import importlib.machinery
@@ -15,7 +16,7 @@ import sys
 import warnings
 from collections.abc import Iterable, Iterator, Mapping
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 import tomlkit
@@ -37,7 +38,6 @@ _RUNTIME_DISTRIBUTIONS: tuple[tuple[str, frozenset[str] | None], ...] = (
     ("marimo-export", None),
 )
 _SOURCE_SUFFIXES = frozenset({".py", ".pyi", ".so", ".pyd", ".dll", ".dylib"})
-_INSTALLED_PARTS = frozenset({"site-packages", "dist-packages"})
 _PROJECT_MARKERS = ("pyproject.toml", "setup.cfg", ".git")
 # Python and `{.marimo}` code fences in a Markdown notebook. A superset of
 # marimo cell fences only widens the scope.
@@ -51,9 +51,24 @@ _Revision = tuple[int, int, int, int, int]
 
 
 @dataclass(frozen=True, slots=True)
+class _Installed:
+    metadata: Any
+    distribution: importlib.metadata.Distribution
+
+    @property
+    def version(self) -> str:
+        return str(self.metadata["Version"])
+
+    @property
+    def root(self) -> Path:
+        return Path(str(self.distribution.locate_file(""))).resolve()
+
+
+@dataclass(frozen=True, slots=True)
 class _Scope:
     distributions: tuple[tuple[str, str], ...]
-    sources: tuple[tuple[str, str, _Revision], ...]
+    sources: tuple[tuple[str, str], ...]
+    revisions: tuple[tuple[Path, _Revision], ...]
 
 
 def environment_identity(source: Path | None) -> str:
@@ -66,8 +81,10 @@ def environment_identity(source: Path | None) -> str:
     """
 
     try:
+        importlib.invalidate_caches()
         scope = _scope(source)
-        if _scope(source) != scope:
+        importlib.invalidate_caches()
+        if not _unchanged(scope):
             raise RuntimeError("runtime dependencies changed while identity was computed")
     except OSError as error:
         raise RuntimeError("local runtime sources could not be inspected") from error
@@ -77,60 +94,83 @@ def environment_identity(source: Path | None) -> str:
                 "distributions": [
                     {"name": name, "version": version} for name, version in scope.distributions
                 ],
-                "local_sources": {key: digest for key, digest, _revision in scope.sources},
+                "local_sources": dict(scope.sources),
             }
         )
     )
 
 
+def _unchanged(scope: _Scope) -> bool:
+    installed = _installed_distributions()
+    return all(
+        name in installed and installed[name].version == version
+        for name, version in scope.distributions
+    ) and all(_revision(path.stat()) == revision for path, revision in scope.revisions)
+
+
 def _scope(source: Path | None) -> _Scope:
-    importlib.invalidate_caches()
     installed = _installed_distributions()
     if source is None:
         return _Scope(
-            distributions=tuple(
-                sorted((name, distribution.version) for name, distribution in installed.items())
-            ),
+            distributions=tuple(sorted((name, entry.version) for name, entry in installed.items())),
             sources=(),
+            revisions=(),
         )
     notebook = source.resolve(strict=True)
-    search_path = _search_path(notebook)
-    providers = _providers(installed)
+    local_roots = _local_roots(notebook)
+    search_path = [*(str(root) for root in local_roots), *sys.path]
+    imports, declared, notebook_revision = _notebook_imports(notebook)
+    providers: dict[str, list[str]] | None = None
     roots: list[tuple[str, frozenset[str] | None]] = list(_RUNTIME_DISTRIBUTIONS)
-    sources: dict[str, tuple[str, _Revision]] = {}
-    pending = sorted(_notebook_imports(notebook), reverse=True)
+    sources: dict[str, str] = {}
+    revisions: dict[Path, _Revision] = {notebook: notebook_revision}
+    pending = sorted(imports, reverse=True)
     visited: set[str] = set()
     while pending:
         name = pending.pop()
-        if name in visited:
+        if name in visited or name in sys.builtin_module_names:
             continue
         visited.add(name)
-        if name in sys.stdlib_module_names or name in sys.builtin_module_names:
-            continue
         locations = _module_locations(name, search_path)
-        if not locations:
+        if name in sys.stdlib_module_names and not any(
+            path.is_relative_to(root) for path in locations for root in local_roots
+        ):
             continue
-        distributions = providers.get(name)
-        if distributions and all(_installed(path) for path in locations):
-            roots.extend((distribution, frozenset()) for distribution in distributions)
+        if not locations:
+            if name in declared:
+                raise ExecutionError(
+                    f"the declared import {name!r} cannot be resolved",
+                    code="notebook_invalid",
+                )
+            continue
+        if providers is None:
+            providers = _providers(installed)
+        distributions = providers.get(name, [])
+        roots.extend((distribution, frozenset()) for distribution in distributions)
+        # A module inside a providing distribution's install root is covered by
+        # that version. Editable and path-only modules are hashed as source.
+        if any(
+            all(path.resolve().is_relative_to(installed[distribution].root) for path in locations)
+            for distribution in distributions
+        ):
             continue
         for key, path in _module_files(locations):
             if path == notebook or key in sources:
                 continue
             payload, revision = _read_stable(path)
-            sources[key] = (hashlib.sha256(payload).hexdigest(), revision)
+            sources[key] = hashlib.sha256(payload).hexdigest()
+            revisions[path] = revision
             if path.suffix == ".py":
                 pending.extend(sorted(_parsed_imports(payload) - visited, reverse=True))
     return _Scope(
         distributions=_distribution_closure(roots, installed),
-        sources=tuple(
-            (key, digest, revision) for key, (digest, revision) in sorted(sources.items())
-        ),
+        sources=tuple(sorted(sources.items())),
+        revisions=tuple(sorted(revisions.items())),
     )
 
 
-def _notebook_imports(notebook: Path) -> frozenset[str]:
-    payload, _revision = _read_stable(notebook)
+def _notebook_imports(notebook: Path) -> tuple[frozenset[str], frozenset[str], _Revision]:
+    payload, revision = _read_stable(notebook)
     try:
         script = payload.decode("utf-8")
     except UnicodeDecodeError as error:
@@ -138,13 +178,14 @@ def _notebook_imports(notebook: Path) -> frozenset[str]:
             "the notebook source is not UTF-8 text",
             code="notebook_invalid",
         ) from error
-    names = set(_declared_imports(_metadata_content(script, notebook.suffix)))
+    declared = frozenset(_declared_imports(_metadata_content(script, notebook.suffix)))
+    names = set(declared)
     if notebook.suffix == ".py":
         names |= _parsed_imports(payload)
     else:
         for fence in _PYTHON_FENCE.finditer(script):
             names |= _parsed_imports(fence["code"])
-    return frozenset(names)
+    return frozenset(names), declared, revision
 
 
 def _metadata_content(script: str, suffix: str) -> str:
@@ -213,7 +254,7 @@ def _parsed_imports(code: str | bytes) -> frozenset[str]:
     return frozenset(names)
 
 
-def _search_path(notebook: Path) -> list[str]:
+def _local_roots(notebook: Path) -> list[Path]:
     # The kernel extends `sys.path` from marimo's `runtime.pythonpath` setting
     # and from cells. Leading with the notebook and project directories lets the
     # client and the kernel resolve project modules to the same files.
@@ -229,7 +270,7 @@ def _search_path(notebook: Path) -> list[str]:
     )
     if project is not None:
         roots.extend((project / "src", project))
-    return [*(str(root) for root in roots if root.is_dir()), *sys.path]
+    return [root for root in roots if root.is_dir()]
 
 
 def _module_locations(name: str, search_path: list[str]) -> tuple[Path, ...]:
@@ -246,10 +287,6 @@ def _module_locations(name: str, search_path: list[str]) -> tuple[Path, ...]:
     if spec.has_location and isinstance(spec.origin, str):
         return (Path(spec.origin),)
     return ()
-
-
-def _installed(path: Path) -> bool:
-    return not _INSTALLED_PARTS.isdisjoint(path.parts)
 
 
 def _module_files(locations: Iterable[Path]) -> Iterator[tuple[str, Path]]:
@@ -282,29 +319,37 @@ def _excluded_source(path: Path, root: Path) -> bool:
     )
 
 
-def _installed_distributions() -> dict[str, importlib.metadata.Distribution]:
+def _installed_distributions() -> dict[str, _Installed]:
     # The first distribution on the interpreter path is the one Python imports.
-    distributions: dict[str, importlib.metadata.Distribution] = {}
+    # Each `Distribution.metadata` access parses the file again, so parse once.
+    distributions: dict[str, _Installed] = {}
     for distribution in importlib.metadata.distributions():
-        name = distribution.metadata.get("Name")
+        metadata = distribution.metadata
+        name = metadata.get("Name")
         if isinstance(name, str) and name:
-            distributions.setdefault(canonicalize_name(name), distribution)
+            distributions.setdefault(canonicalize_name(name), _Installed(metadata, distribution))
     return distributions
 
 
-def _providers(
-    installed: Mapping[str, importlib.metadata.Distribution],
-) -> dict[str, list[str]]:
+def _providers(installed: Mapping[str, _Installed]) -> dict[str, list[str]]:
     # Python 3.10 `packages_distributions()` reads only `top_level.txt`, which
-    # many wheel builders omit. The installed file list names the same modules.
+    # many wheel builders omit. RECORD names the same modules. Reading it as
+    # text avoids `Distribution.files`, which checks every listed file exists.
     providers: dict[str, list[str]] = {}
-    for name, distribution in installed.items():
+    for name, entry in installed.items():
+        distribution = entry.distribution
         text = distribution.read_text("top_level.txt")
         if text:
             modules = {line.strip() for line in text.splitlines() if line.strip()}
         else:
+            record = distribution.read_text("RECORD")
+            files = (
+                [PurePosixPath(row[0]) for row in csv.reader(record.splitlines()) if row]
+                if record
+                else [PurePosixPath(str(file)) for file in distribution.files or ()]
+            )
             modules = set()
-            for file in distribution.files or ():
+            for file in files:
                 top = file.parts[0] if file.parts else ""
                 if top in {"", "..", "__pycache__"} or top.endswith((".dist-info", ".data")):
                     continue
@@ -318,7 +363,7 @@ def _providers(
 
 def _distribution_closure(
     roots: Iterable[tuple[str, frozenset[str] | None]],
-    installed: Mapping[str, importlib.metadata.Distribution],
+    installed: Mapping[str, _Installed],
 ) -> tuple[tuple[str, str], ...]:
     versions: dict[str, str] = {}
     followed: set[tuple[str, str]] = set()
@@ -326,17 +371,18 @@ def _distribution_closure(
     while pending:
         requested, extras = pending.pop()
         name = canonicalize_name(requested)
-        distribution = installed.get(name)
-        if distribution is None:
+        entry = installed.get(name)
+        if entry is None:
             continue
-        versions[name] = distribution.version
-        declared = distribution.metadata.get_all("Provides-Extra") or []
+        versions[name] = entry.version
+        declared = entry.metadata.get_all("Provides-Extra") or []
         selected = {"", *(declared if extras is None else extras)}
         new = {extra for extra in selected if (name, extra) not in followed}
         if not new:
             continue
         followed.update((name, extra) for extra in new)
-        for line in distribution.requires or ():
+        requirements = entry.metadata.get_all("Requires-Dist")
+        for line in entry.distribution.requires or () if requirements is None else requirements:
             try:
                 requirement = Requirement(line)
             except InvalidRequirement:

@@ -58,7 +58,7 @@ an imported exporter or helper module.
 
 Exporter source and declared dependencies contribute to the output leaf's
 marimo computation-cache identity when a state executes. Exact prepared-export
-reuse returns before importing the exporter. Name the exporter module in the
+reuse returns before importing the exporter. Name a local exporter module in the
 notebook's `[tool.marimo-export] imports` metadata when edits must invalidate
 prepared results. [Declare modules loaded by
 name](../concepts/preparation-and-reuse#declare-modules-loaded-by-name) shows the
