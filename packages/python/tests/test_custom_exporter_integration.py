@@ -375,18 +375,25 @@ def test_custom_exporter_representation_errors_follow_the_optional_policy(
     _write_notebook(notebook)
     (tmp_path / "export_exports.py").write_text(
         """
-from marimo_export.values import RepresentationDependencyError, RepresentationError
+from marimo_export.values import (
+    RepresentationDependencyError,
+    RepresentationError,
+    RepresentationRenderError,
+)
 
 
 def unrepresentable(value):
     raise RepresentationError(
-        "int has no chart form.",
-        ("chart() raised OSError: /home/alice/data.csv.",),
+        "int has no chart form. The value is a count.", ("The value is a count.",)
     )
 
 
 def renderer_missing(value):
     raise RepresentationDependencyError("Charts need a renderer.")
+
+
+def renderer_failed(value):
+    raise RepresentationRenderError("chart() raised OSError: disk unavailable.")
 """.lstrip(),
         encoding="utf-8",
     )
@@ -403,9 +410,14 @@ def renderer_missing(value):
     _capture(notebook, spec("unrepresentable"), tmp_path / "export")
     chart = open_export(tmp_path / "export").state("baseline").output("chart")
     assert chart.unavailable == UnavailableOutput(
-        reason="representation_unavailable", message="int has no chart form."
+        reason="representation_unavailable",
+        message="int has no chart form. The value is a count.",
     )
 
-    with pytest.raises(OutputError, match="Charts need a renderer") as raised:
-        _capture(notebook, spec("renderer_missing"), tmp_path / "missing")
-    assert raised.value.code == "output_execution_failed"
+    for name, message in (
+        ("renderer_missing", "Charts need a renderer"),
+        ("renderer_failed", "raised OSError: disk unavailable"),
+    ):
+        with pytest.raises(OutputError, match=message) as raised:
+            _capture(notebook, spec(name), tmp_path / name)
+        assert raised.value.code == "output_execution_failed"

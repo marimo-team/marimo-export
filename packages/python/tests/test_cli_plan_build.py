@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable
+from dataclasses import replace
 from pathlib import Path
 from typing import cast
 
@@ -132,3 +133,30 @@ def test_build_human_progress_uses_stderr_and_result_uses_stdout(
     captured = capsys.readouterr()
     assert "Built notebook export" in captured.out
     assert "State started: baseline (0/1)" in captured.err
+
+
+def test_build_reports_optional_outputs_unavailable_in_every_state(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    export_result = replace(result(tmp_path / "dist"), unavailable={"count": 1})
+    monkeypatch.setattr(sdk, "build", lambda *args, **kwargs: export_result)
+    arguments = [
+        "build",
+        str(tmp_path / "notebook.py"),
+        "--spec",
+        str(spec(tmp_path / "export.yaml")),
+        "--output",
+        str(tmp_path / "dist"),
+        "--repository",
+        str(tmp_path / "repository"),
+    ]
+
+    assert cli.main(arguments) == 0
+    captured = capsys.readouterr()
+    assert "Unavailable: count in 1 of 1 states" in captured.out
+    assert "warning: optional output 'count' is unavailable in every state" in captured.err
+
+    assert cli.main([*arguments, "--json"]) == 0
+    assert json.loads(capsys.readouterr().out)["result"]["unavailable"] == {"count": 1}

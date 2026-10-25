@@ -26,6 +26,7 @@ from marimo_export.spec import CellSource, RenderedOutputSource
 from marimo_export.values import (
     RepresentationDependencyError,
     RepresentationError,
+    RepresentationRenderError,
     RepresentationTooLarge,
 )
 
@@ -465,17 +466,18 @@ def raise_child_errors(
             error._merge_details(details)
             raise error
         if output is not None and isinstance(error, RepresentationError):
-            # A JSON form over the value limit and a missing renderer package
-            # are not facts about the value, so even optional outputs fail.
-            if isinstance(error, (RepresentationTooLarge, RepresentationDependencyError)):
+            details["exception_type"] = type(error).__name__
+            # A value limit, a missing renderer, and a raising display call are
+            # not facts about the value, so even optional outputs fail.
+            if isinstance(
+                error,
+                (RepresentationTooLarge, RepresentationDependencyError, RepresentationRenderError),
+            ):
                 raise OutputError(str(error), details=details) from error
-            # The index keeps the summary sentence. Display-method reasons can
-            # carry local paths and vary between runs.
-            detail = "".join(f" {reason}" for reason in error.reasons)
             raise UnavailableOutputError(
                 str(error),
                 reason="representation_unavailable",
-                reason_message=str(error).removesuffix(detail),
+                reason_message=str(error),
                 details=details,
             ) from error
         error_type = type(error).__name__ if error is not None else str(cell.run_result_status)

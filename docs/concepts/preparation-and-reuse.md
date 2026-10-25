@@ -129,9 +129,11 @@ named live [marimo](https://marimo.io/) session. Both execute missing states,
 commit the complete generation, and return a leased `PreparedExport`.
 
 Each state runs in an isolated child graph. One failed state, output, or
-verification step fails the producer operation. An optional output that has no
-value in a state records an unavailable entry for that state and lets the
-operation continue. A state that committed before a
+verification step fails the producer operation. An
+[optional output](outputs-and-representations#optional-outputs-can-be-unavailable-in-some-states)
+records an unavailable output instead when its selector names a missing step,
+its exporter finds no accepted representation, or a cell in its closure calls
+`mo.stop`. Other failures of an optional output still fail the operation. A state that committed before a
 later failure can remain reusable for the next attempt.
 
 ## Reuse cannot detect every external change

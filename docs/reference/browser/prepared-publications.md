@@ -222,6 +222,21 @@ previous visible application view. Resolve its promise after the complete next
 view has committed. A later request aborts `signal` and removes the transition's
 authority to commit.
 
+An [optional output](../export-spec#optional-outputs) can be unavailable in the
+next state. Check `output.unavailable` inside `apply()` and stage a placeholder
+for it, because a rejected `apply()` keeps the previous state visible. With
+`view` as the chart's staging host:
+
+```ts
+const chart = next.state.output("chart");
+if (chart.unavailable === null) {
+  view.replaceChildren();
+  await (await chart.load(imageLoader(), { signal })).mount(view, { signal });
+} else {
+  view.textContent = "No chart for this selection.";
+}
+```
+
 `restore()` synchronizes optimistic controls or the visible application view to the last
 committed publication when an input request requires no new commit or a
 non-cancellation transition fails. An abort-shaped port failure does not invoke

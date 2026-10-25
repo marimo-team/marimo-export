@@ -5,8 +5,9 @@ import json
 from pathlib import Path
 from typing import Literal, cast
 
+import marimo_export.index as index_module
 import pytest
-from marimo_export._json import JsonObject, canonical_bytes, json_value
+from marimo_export._json import JsonObject, canonical_bytes, json_value, json_value_count
 from marimo_export._snapshot import validate_snapshot
 from marimo_export.descriptors import UnavailableOutput
 from marimo_export.errors import IntegrityError, NotebookExportError, OutputUnavailableError
@@ -112,6 +113,23 @@ def test_unavailable_output_fixture_reads_as_a_typed_unavailable_entry(tmp_path:
     with pytest.raises(OutputUnavailableError):
         _ = unavailable.media_type
     assert export.verify().assets == 0
+
+
+def test_unavailable_outputs_count_against_the_index_value_limit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    data = (FIXTURES / "export" / "unavailable-output-index.json").read_bytes().removesuffix(b"\n")
+    index = ExportIndex.from_bytes(data)
+    values = json_value_count(index.to_value())
+
+    monkeypatch.setattr(index_module, "_MAX_INDEX_VALUES", values)
+    assert index.to_bytes() == data
+    monkeypatch.setattr(index_module, "_MAX_INDEX_VALUES", values - 1)
+    with pytest.raises(NotebookExportError) as raised:
+        index.to_bytes()
+    assert raised.value.details == {"index_values": values, "max_index_values": values - 1}
+    with pytest.raises(NotebookExportError):
+        ExportIndex.from_bytes(data)
 
 
 @pytest.mark.parametrize(

@@ -236,7 +236,7 @@ if (chart.unavailable === null) {
 
 For an unavailable output, `load()` rejects and `resolveOutputLoader()` throws
 with `output_unavailable` before any request or decode. The error details contain
-`output`, `state`, and `reason`. `loadOutputs()` rejects with the same error
+`output`, `fingerprint`, and `reason`. `loadOutputs()` rejects with the same error
 when one requested output is unavailable.
 
 `load()` requires one explicit loader. It checks the loader codec and media-type

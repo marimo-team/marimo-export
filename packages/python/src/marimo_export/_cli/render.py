@@ -207,6 +207,10 @@ def _export_human(value: Mapping[str, object], *, action: str) -> str:
             f"Prepared: {len(_list(value['prepared_states'], 'prepared states'))}",
             f"Reused: {len(_list(value['reused_states'], 'reused states'))}",
             f"Outputs: {len(_list(plan['outputs'], 'outputs'))}",
+            *(
+                f"Unavailable: {name} in {count} of {len(_list(plan['states'], 'states'))} states"
+                for name, count in _object(value["unavailable"], "unavailable").items()
+            ),
             (
                 f"Assets: {value['assets']} files, "
                 f"{_bytes(_integer(value['asset_bytes'], 'asset bytes'))}"

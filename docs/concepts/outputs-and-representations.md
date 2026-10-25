@@ -87,15 +87,16 @@ In a state where an optional output has no value, the export records an
 **unavailable output** with a reason and a short message in place of a
 descriptor:
 
-| Reason                       | Condition in that state                                           |
-| ---------------------------- | ----------------------------------------------------------------- |
-| `representation_unavailable` | The exporter found none of its accepted media types for the value |
-| `value_missing`              | The selector names an attribute or item the value lacks           |
-| `stopped`                    | A cell in the output's dependency closure called `mo.stop`        |
+| Reason                       | Condition in that state                                                        |
+| ---------------------------- | ------------------------------------------------------------------------------ |
+| `representation_unavailable` | No renderer or display method applies to the value for any accepted media type |
+| `value_missing`              | The selector names an attribute or item the value lacks                        |
+| `stopped`                    | A cell in the output's dependency closure called `mo.stop`                     |
 
-Other failures still fail the export, including a missing renderer package, a
-value too large for its JSON form, exceptions raised by notebook cells or
-exporters for any other reason, transfers, and integrity checks. An
+Other failures still fail the export, including a renderer or display method
+that raises, a missing renderer package, a value too large for its JSON form,
+exceptions raised by notebook cells or exporters, transfers, and integrity
+checks. An
 unavailable output references no asset.
 
 ## Consumers load, then optionally mount

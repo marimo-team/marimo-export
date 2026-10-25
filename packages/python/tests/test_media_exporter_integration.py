@@ -283,6 +283,12 @@ if __name__ == "__main__":
                 repository=repository,
                 timeout=60,
             )
+        rebuilt = build_export(
+            notebook, spec=spec, output=tmp_path / "rebuilt", repository=repository, timeout=60
+        )
+    assert rebuilt.prepared_states == ()
+    assert result.unavailable == {"chart": 1}
+    assert rebuilt.identity == result.identity
     export = open_export(result.path)
     empty = export.state("empty").output("chart")
 
@@ -335,3 +341,40 @@ if __name__ == "__main__":
 
     assert raised.value.code == "output_execution_failed"
     assert raised.value.details["output"] == "rows"
+
+
+def test_an_optional_output_fails_when_a_display_method_raises(tmp_path: Path) -> None:
+    notebook = tmp_path / "notebook.py"
+    notebook.write_text(
+        """
+import marimo
+
+app = marimo.App()
+
+
+@app.cell
+def _():
+    class Chart:
+        def _repr_png_(self):
+            raise OSError("font cache unavailable")
+
+    chart = Chart()
+    return (chart,)
+
+
+if __name__ == "__main__":
+    app.run()
+""".lstrip(),
+        encoding="utf-8",
+    )
+    spec = ExportSpec(
+        default_state="base",
+        states={"base": {}},
+        outputs={"chart": OutputSpec.export("chart", media(["image/png"]), optional=True)},
+    )
+
+    with pytest.raises(OutputError, match="raised OSError: font cache unavailable") as raised:
+        build(notebook, spec=spec, output=tmp_path / "export", timeout=60)
+
+    assert raised.value.code == "output_execution_failed"
+    assert raised.value.details["exception_type"] == "RepresentationRenderError"

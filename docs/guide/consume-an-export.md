@@ -143,9 +143,12 @@ if (chart.unavailable === null) {
   const image = await chart.load(imageLoader());
   await image.mount(view);
 } else {
-  view.textContent = chart.unavailable.message;
+  view.textContent = "No chart for this selection.";
 }
 ```
+
+`message` is producer diagnostic text for the export author. Choose the
+placeholder an end user sees from `reason` or from the application's own copy.
 
 Reading an unavailable output raises `OutputUnavailableError` in Python and
 rejects with a `NotebookExportError` coded `output_unavailable` in the browser.

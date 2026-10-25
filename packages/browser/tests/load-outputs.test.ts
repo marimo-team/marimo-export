@@ -9,7 +9,7 @@ import {
   scalarLoader,
 } from "../src/index.js";
 import type { ExportOutput, ScalarValue } from "../src/index.js";
-import { exportFixture, type MutableJsonObject } from "./fixture.js";
+import { exportFixture, mutableObject, stringValue, type MutableJsonObject } from "./fixture.js";
 
 test("loads a heterogeneous output set with each loader's result type", async () => {
   const fixture = await exportFixture();
@@ -157,4 +157,29 @@ test("rejects a callable then output before promise assimilation", async () => {
     details: { output: "then" },
   });
   expect(callable).not.toHaveBeenCalled();
+});
+
+test("rejects an unavailable output before requesting any sibling asset", async () => {
+  const fixture = await exportFixture({
+    indexTransform: (index) => {
+      const fingerprint = stringValue(mutableObject(index.aliases, "aliases").alpha, "alpha");
+      const alpha = mutableObject(mutableObject(index.states, "states")[fingerprint], "alpha");
+      mutableObject(alpha.outputs, "outputs").count = {
+        unavailable: { message: "No count for this state.", reason: "value_missing" },
+      };
+    },
+  });
+  const notebookExport = await openExport("https://example.test/stocks", { fetch: fixture.fetch });
+  const requested = fixture.requests.length;
+
+  await expect(
+    loadOutputs(notebookExport.state("alpha"), {
+      view: defineBlobAssetLoader({
+        mediaTypes: "application/vnd.example.fixture+json",
+        load: ({ payload }) => payload.data,
+      }),
+      count: scalarLoader(),
+    }),
+  ).rejects.toMatchObject({ code: "output_unavailable", details: { output: "count" } });
+  expect(fixture.requests).toHaveLength(requested);
 });

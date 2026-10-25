@@ -265,8 +265,8 @@ UnavailableOutput(reason: UnavailableReason, message: str)
 
 An `UnavailableOutput` stands in a `StateEntry` for an optional output that has
 no value in that state. `reason` is `representation_unavailable`,
-`value_missing`, or `stopped`. `message` is a printable string of at most 1,024
-UTF-8 bytes. `OutputEntry` is `OutputDescriptor | UnavailableOutput`.
+`value_missing`, or `stopped`. `message` is a nonempty string of at most 1,024 UTF-8 bytes, with no control
+characters or surrounding whitespace. `OutputEntry` is `OutputDescriptor | UnavailableOutput`.
 
 The [export format reference](../export-format) defines the serialized index,
 descriptor, scalar-tag, snapshot, and asset-envelope shapes.

@@ -174,9 +174,10 @@ or another implementation of the export format.
 - The client and attached kernel use the same marimo-export version and source
   identity.
 - One failed state, output, transfer, or verification fails the complete
-  producer operation. An optional output records an unavailable entry for a
-  missing value, missing representation, or stopped closure instead. Cleanup preserves the primary error. Post-commit parent
-  sync and retired-destination cleanup failures return typed warnings.
+  producer operation. An optional output records an unavailable output for a
+  missing value, missing representation, or stopped closure instead. Cleanup
+  preserves the primary error. Post-commit parent sync and retired-destination
+  cleanup failures return typed warnings.
 - Preparation reservations carry monotonically increasing fencing tokens.
   Publication compares the current pointer and reservation owner before commit.
 - Active artifact, staging, and preparation leases renew until their owner

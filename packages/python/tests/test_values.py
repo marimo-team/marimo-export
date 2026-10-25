@@ -16,6 +16,7 @@ from marimo_export.values import (
     Representation,
     RepresentationDependencyError,
     RepresentationError,
+    RepresentationRenderError,
     RepresentationTooLarge,
     SelectorError,
     SelectorStep,
@@ -407,6 +408,15 @@ def test_a_chart_without_vl_convert_raises_a_dependency_error(
     with pytest.raises(RepresentationError) as raised:
         represent("text", ["image/png"])
     assert type(raised.value) is RepresentationError
+
+
+def test_a_raising_display_method_raises_a_render_error() -> None:
+    class Broken:
+        def _repr_png_(self) -> bytes:
+            raise OSError("disk unavailable")
+
+    with pytest.raises(RepresentationRenderError, match="raised OSError: disk unavailable"):
+        represent(Broken(), ["image/png"])
 
 
 def test_vega_lite_charts_render_as_pdf_with_embedded_fonts() -> None:

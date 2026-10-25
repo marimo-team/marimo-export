@@ -312,6 +312,32 @@ def test_optional_outputs_normalize_to_one_wire_contract() -> None:
         OutputSpec(source=OutputSpec.json("summary").source, optional=cast(Any, 1))
 
 
+def test_read_only_and_optional_compose_in_the_wire_value_and_plan_identity() -> None:
+    def spec(output: OutputSpec) -> ExportSpec:
+        return ExportSpec(default_state="baseline", states={"baseline": {}}, outputs={"t": output})
+
+    both = spec(OutputSpec.output("table", read_only=True, optional=True))
+    variants = {
+        "plain": spec(OutputSpec.output("table")),
+        "read_only": spec(OutputSpec.output("table", read_only=True)),
+        "optional": spec(OutputSpec.output("table", optional=True)),
+        "both": both,
+    }
+
+    assert cast(dict[str, Any], both.to_value()["outputs"])["t"] == {
+        "source": {"kind": "output", "selector": "table"},
+        "read_only": True,
+        "optional": True,
+    }
+    assert ExportSpec.from_value(both.to_value()) == both
+    assert len({output_plan_sha256(value) for value in variants.values()}) == 4
+    explicit = variants["plain"].to_value()
+    cast(dict[str, Any], explicit["outputs"])["t"].update(read_only=False, optional=False)
+    assert output_plan_sha256(ExportSpec.from_value(explicit)) == output_plan_sha256(
+        variants["plain"]
+    )
+
+
 def test_programmatic_constructor_rejects_ambiguous_shorthands() -> None:
     with pytest.raises(TypeError):
         cast(Any, ExportSpec)(

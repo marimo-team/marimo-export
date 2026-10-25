@@ -275,8 +275,11 @@ manifest or state. `PreparedPublicationRefresh` reports polling failures through
 
 `output_execution_failed` with a `state` and `output` in its details means one
 state could not produce that output. When the message names a missing selector
-step, a missing representation, or a stopped cell, and the condition is
-expected for that state, declare the output `optional`. The export then records
+step, a value with no accepted representation, or a stopped cell, and the
+condition is expected for that state, declare the output `optional`. A raising
+renderer or display method, a missing renderer package, a JSON form over
+100,000 values, and an exception from a notebook cell still fail an optional
+output. Fix those in the notebook or environment. The export then records
 the reason for that state:
 
 ```python

@@ -129,7 +129,7 @@ new producer run or a Python service.
 ## `ExportOutput`
 
 An `ExportOutput` binds one published output name to one state and either one
-validated descriptor or one unavailable entry.
+validated descriptor or one unavailable output.
 
 ```python
 output.name: str
@@ -162,7 +162,8 @@ Calling an accessor for another codec raises `NotebookExportError` with code
 
 `unavailable` is `None` when the output has a value. For an
 [optional output](../export-spec#optional-outputs) without a value in this state,
-it returns an `UnavailableOutput` with `reason` and `message`:
+it returns an `UnavailableOutput` with `reason` and `message`. For an export
+whose optional `chart` output has no value in the `empty` state:
 
 ```python
 chart = export.state("empty").output("chart")
@@ -172,7 +173,7 @@ if chart.unavailable is not None:
 
 `codec`, `media_type`, `descriptor`, and every accessor raise
 `OutputUnavailableError` with code `output_unavailable` for an unavailable
-output. Its details contain `output`, `state`, and `reason`.
+output. Its details contain `output`, `fingerprint`, and `reason`.
 
 `json()` returns tuples and immutable mappings. `blob_asset()` returns a new
 immutable `BlobAsset` with `data`, `media_type`, `filename`, and recursively

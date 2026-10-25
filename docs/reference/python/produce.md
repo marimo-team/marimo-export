@@ -174,8 +174,10 @@ exports as ISO 8601 text. A selector that steps from `None`, such as
 `peak.label` while `peak` is `None`, exports `null`.
 
 `optional=True` lets the output be unavailable in a state where its selector
-names a missing attribute or item, its exporter raises `RepresentationError`, or
-a cell in its dependency closure calls `mo.stop`. The export records the reason
+names a missing attribute or item, its exporter raises a plain
+`RepresentationError`, or a cell in its dependency closure calls `mo.stop`. The
+`RepresentationRenderError`, `RepresentationDependencyError`, and
+`RepresentationTooLarge` subclasses still fail the build. The export records the reason
 in that state, and readers expose it as
 [`ExportOutput.unavailable`](reader#exportoutput). A required output fails with
 `output_execution_failed` under the same conditions. `OutputSpec.optional`
@@ -654,23 +656,28 @@ new application directory becomes visible.
 
 `build()` and `PreparedExport.write()` return immutable `ExportResult` records:
 
-| Field             | Type or meaning                                 |
-| ----------------- | ----------------------------------------------- |
-| `path`            | Absolute committed destination                  |
-| `identity`        | SHA-256 of exact canonical `index.json` bytes   |
-| `plan`            | Resolved `ExportPlan`                           |
-| `reused`          | Exact prepared-export reuse                     |
-| `prepared_states` | Fingerprints prepared by this operation         |
-| `reused_states`   | Fingerprints reused by this operation           |
-| `cache_activity`  | `CacheActivity` observed for work that ran      |
-| `assets`          | Unique asset count                              |
-| `asset_bytes`     | Bytes across unique assets                      |
-| `index_bytes`     | Canonical index byte count                      |
-| `verification`    | `VerificationResult` for the committed export   |
-| `warnings`        | `ExportWarning` values for the committed export |
-| `elapsed_seconds` | Write duration                                  |
+| Field             | Type or meaning                                                      |
+| ----------------- | -------------------------------------------------------------------- |
+| `path`            | Absolute committed destination                                       |
+| `identity`        | SHA-256 of exact canonical `index.json` bytes                        |
+| `plan`            | Resolved `ExportPlan`                                                |
+| `reused`          | Exact prepared-export reuse                                          |
+| `prepared_states` | Fingerprints prepared by this operation                              |
+| `reused_states`   | Fingerprints reused by this operation                                |
+| `cache_activity`  | `CacheActivity` observed for work that ran                           |
+| `assets`          | Unique asset count                                                   |
+| `asset_bytes`     | Bytes across unique assets                                           |
+| `index_bytes`     | Canonical index byte count                                           |
+| `verification`    | `VerificationResult` for the committed export                        |
+| `warnings`        | `ExportWarning` values for the committed export                      |
+| `elapsed_seconds` | Write duration                                                       |
+| `unavailable`     | Optional output names mapped to the number of states without a value |
 
 `result.to_dict()` returns the same nested shape used by CLI JSON output.
+
+The CLI prints each `unavailable` count in its human summary and warns when an
+optional output is unavailable in every state, which usually points to a
+selector typo or a stop condition that always holds.
 
 An `ExportWarning` contains `code`, `message`, detached mutable portable
 `details`, and `to_dict()`:

@@ -115,11 +115,11 @@ An unavailable entry appears only for an output declared `optional`. Three
 producer conditions qualify, each carried by `UnavailableOutputError` from
 `_marimo/capabilities.py`:
 
-| Reason                       | Raised by                                                                                                            |
-| ---------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `value_missing`              | Selector resolution in the transient leaf, or before it for a rendered-output source                                 |
-| `representation_unavailable` | An exporter that raises `RepresentationError` other than `RepresentationTooLarge` or `RepresentationDependencyError` |
-| `stopped`                    | Stop provenance for a cell in the output's dependency closure, before the leaf runs                                  |
+| Reason                       | Raised by                                                                                                       |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `value_missing`              | Selector resolution in the transient leaf, or before it for a rendered-output source                            |
+| `representation_unavailable` | An exporter that raises a plain `RepresentationError`, outside the render, dependency, and too-large subclasses |
+| `stopped`                    | Stop provenance for a cell in the output's dependency closure, before the leaf runs                             |
 
 `unavailable_output()` owns the policy. It returns the entry for an optional
 output, and the state run re-raises the same `OutputError` with code

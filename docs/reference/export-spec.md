@@ -158,12 +158,12 @@ value.
 
 Each output contains `source`. An export source also contains `exporter`.
 
-| Field       | Contract                                                                 |
-| ----------- | ------------------------------------------------------------------------ |
-| `source`    | One source object from the following sections                            |
-| `exporter`  | Required for an export source and invalid for other source kinds         |
+| Field       | Contract                                                                                                   |
+| ----------- | ---------------------------------------------------------------------------------------------------------- |
+| `source`    | One source object from the following sections                                                              |
+| `exporter`  | Required for an export source and invalid for other source kinds                                           |
 | `read_only` | Boolean, default `false`. Valid for `output` and `cell` sources. See [Read-only tables](#read-only-tables) |
-| `optional`  | Boolean, default `false`. Valid for every source. See [Optional outputs](#optional-outputs) |
+| `optional`  | Boolean, default `false`. Valid for every source. See [Optional outputs](#optional-outputs)                |
 
 ### JSON source
 
@@ -281,18 +281,32 @@ reason in that state's entry in place of a descriptor:
 | `value_missing`              | The selector names an attribute or item the selected value lacks         |
 | `stopped`                    | A cell in the output's dependency closure called `mo.stop` in that state |
 
-The built-in `media` exporter raises `RepresentationError` when the value has
-none of the accepted media types, and `altair.png` raises it when vl-convert
-cannot render the chart. A custom exporter can raise it for the same condition.
-Two subclasses still fail the producer operation: `RepresentationTooLarge` for a
-JSON form over 100,000 values and `RepresentationDependencyError` for a missing
-renderer such as vl-convert-python. Every other failure fails it too, including
-`altair.png` on a value that is not a chart.
+The built-in `media` exporter raises `RepresentationError` when no renderer or
+display method applies to the value for any accepted media type, such as text
+selected for `image/png`, or when the value's JSON form contains a part JSON
+cannot hold. A custom exporter can raise it for the same condition. Three
+subclasses still fail the producer operation:
+
+| Subclass                        | Condition                                               |
+| ------------------------------- | ------------------------------------------------------- |
+| `RepresentationRenderError`     | A display method or renderer such as vl-convert raised  |
+| `RepresentationDependencyError` | A renderer package such as vl-convert-python is missing |
+| `RepresentationTooLarge`        | The value's JSON form holds more than 100,000 values    |
+
+Every other failure fails the operation too, including `altair.png` on a value
+that is not a chart.
 A required output fails with code `output_execution_failed` under each of these
 conditions.
 
-Normalization writes `optional: true` and drops `optional: false`. Changing
-`optional` changes the output-plan identity, so prepared states are prepared
+`ExportResult.unavailable` counts the states where each optional output has no
+value, and the CLI warns when an optional output is unavailable in every state.
+A selector typo or a stop condition that always holds shows up there.
+
+An output may set both flags. An optional read-only table records its first
+view in states that produce it and an unavailable output in the others.
+Normalization writes `read_only: true` and `optional: true` and drops either
+flag when it is `false`, so a spec that omits both keeps its identity. Changing
+either flag changes the output-plan identity, so prepared states are prepared
 again under the new plan.
 
 ## Exporter forms

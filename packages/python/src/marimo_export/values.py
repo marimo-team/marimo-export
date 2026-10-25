@@ -252,6 +252,14 @@ class RepresentationTooLarge(RepresentationError):
     """A value is data whose JSON form holds more than ``MAX_JSON_VALUES`` values."""
 
 
+class RepresentationRenderError(RepresentationError):
+    """A display method or renderer raised while representing a value.
+
+    ``represent()`` raises it when no accepted type succeeded and at least one
+    display call raised. ``reasons`` names each call and its exception.
+    """
+
+
 class RepresentationDependencyError(RepresentationError):
     """An accepted media type needs a package that is not installed.
 
@@ -314,8 +322,9 @@ def represent(
 
     A display method that raises leaves its media types unavailable. Raises
     ``RepresentationError`` naming those failures when the value supports none
-    of the accepted types, or ``RepresentationDependencyError`` when a missing
-    renderer package left an accepted type out of reach.
+    of the accepted types. The subclass ``RepresentationDependencyError`` means a
+    missing renderer package left an accepted type out of reach, and
+    ``RepresentationRenderError`` means a display call raised.
     """
 
     accepted = normalize_accept(accept)
@@ -337,7 +346,13 @@ def represent(
                 return representation
     name = f"{type(value).__module__}.{type(value).__qualname__}"
     detail = "".join(f" {reason}" for reason in calls.reasons)
-    failure = RepresentationDependencyError if calls.dependency_missing else RepresentationError
+    failure = (
+        RepresentationDependencyError
+        if calls.dependency_missing
+        else RepresentationRenderError
+        if calls.raised
+        else RepresentationError
+    )
     raise failure(f"{name} has no representation as {', '.join(accepted)}.{detail}", calls.reasons)
 
 
@@ -359,6 +374,7 @@ class _Calls:
     def __init__(self) -> None:
         self.reasons: list[str] = []
         self.dependency_missing = False
+        self.raised = False
         self._results: dict[str, object] = {}
 
     def __call__(self, label: str, call: Callable[[], _Result]) -> _Result | None:
@@ -367,6 +383,8 @@ class _Calls:
                 self._results[label] = call()
             except Exception as error:
                 self._results[label] = None
+                self.raised = True
+                self.dependency_missing |= isinstance(error, ImportError)
                 self.note(f"{label} raised {type(error).__name__}: {error}")
         return cast("_Result | None", self._results[label])
 
@@ -903,6 +921,7 @@ __all__ = [
     "Representation",
     "RepresentationDependencyError",
     "RepresentationError",
+    "RepresentationRenderError",
     "RepresentationTooLarge",
     "SelectorError",
     "SelectorStep",
