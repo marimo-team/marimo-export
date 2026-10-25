@@ -156,6 +156,23 @@ def test_writer_accepts_an_index_at_the_value_limit_and_rejects_one_more_value(
     assert not target.exists()
 
 
+def test_writer_rejects_an_index_over_the_byte_limit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    index = _wide_index(states=2, outputs=2)
+    size = len(index.to_bytes())
+    monkeypatch.setattr(index_module, "_MAX_INDEX_BYTES", size - 1)
+    target = tmp_path / "export"
+
+    with pytest.raises(NotebookExportError) as raised:
+        write_export(index, {}, target, replace=False)
+
+    assert raised.value.code == "export_invalid"
+    assert raised.value.details == {"index_bytes": size, "max_index_bytes": size - 1}
+    assert not target.exists()
+
+
 def test_reader_rejects_an_index_over_the_value_limit(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

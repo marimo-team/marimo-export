@@ -236,7 +236,9 @@ or mismatched responses.
 
 A capture response carries the export index as its canonical `index.json`
 text. The client parses that text with `ExportIndex.from_bytes()`, so a captured
-index meets the same byte, value, and canonical-form checks as a file.
+index meets the same value and canonical-form checks as a file. The 8 MiB bridge
+response limit also covers the escaped index text, so capture accepts a smaller
+index than the 16 MiB file limit.
 
 The client submits each scratchpad operation once. It performs no automatic
 retry after a transport failure. A timeout or broken response stream can leave

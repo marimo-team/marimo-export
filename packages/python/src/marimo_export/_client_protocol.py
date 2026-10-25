@@ -75,7 +75,12 @@ class _Transfer:
     assets: tuple[_TransferAsset, ...]
 
 
-def _transfer(value: object, index: ExportIndex, limits: CaptureLimits) -> _Transfer:
+def _transfer(
+    value: object,
+    index: ExportIndex,
+    index_bytes: int,
+    limits: CaptureLimits,
+) -> _Transfer:
     data = _mapping(value, "capture transfer")
     _exact(data, {"ticket", "expires_at_ms", "assets"}, "capture transfer")
     ticket = data["ticket"]
@@ -128,7 +133,6 @@ def _transfer(value: object, index: ExportIndex, limits: CaptureLimits) -> _Tran
                 "max_asset_bytes": limits.max_asset_bytes,
             },
         )
-    index_bytes = len(index.to_bytes())
     asset_bytes = sum(asset.size for asset in assets)
     closure = index_bytes + asset_bytes
     if closure > limits.max_closure_bytes:
@@ -397,7 +401,7 @@ def _bridge_error(error: BridgeError) -> Exception:
         return ExecutionError(str(error), **kwargs)
     if code.startswith("integrity_"):
         return IntegrityError(str(error), **kwargs)
-    if code.startswith("export_"):
+    if code in {"export_invalid", "export_noncanonical"}:
         return NotebookExportError(str(error), **kwargs)
     return SessionError(str(error), **kwargs)
 

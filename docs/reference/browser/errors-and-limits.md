@@ -138,7 +138,7 @@ visible commit and clean up late or staged resources.
 | Boundary                                 |                         Limit | Behavior                                                                   |
 | ---------------------------------------- | ----------------------------: | -------------------------------------------------------------------------- |
 | `index.json` body                        |                        16 MiB | `openExport()` raises `read_limit_exceeded` before or during the body read |
-| `index.json` parsed values               |                     2,000,000 | Strict parsing rejects a larger document                                   |
+| `index.json` parsed values               |                     2,000,000 | Every value and object key counts. A larger index raises `export_invalid`  |
 | One output asset, default caller limit   |                       512 MiB | `ExportOutput.load()` and `verify()` use this when `maxBytes` is absent    |
 | One output asset, hard caller limit      |           2,147,483,647 bytes | A larger `maxBytes` raises `TypeError`                                     |
 | Complete verification, default aggregate |                         2 GiB | Declared unique asset bytes are checked before any verification fetch      |

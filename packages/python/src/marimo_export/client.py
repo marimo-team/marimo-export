@@ -190,8 +190,9 @@ class Session:
             index_text = response.get("index")
             if not isinstance(index_text, str):
                 raise TransportError("capture response index must be JSON text")
-            index = ExportIndex.from_bytes(index_text.encode("utf-8"))
-            transfer = _transfer(transfer_value, index, limits)
+            index_bytes = index_text.encode("utf-8")
+            index = ExportIndex.from_bytes(index_bytes)
+            transfer = _transfer(transfer_value, index, len(index_bytes), limits)
             assets: dict[tuple[OutputCodec, str], bytes] = {}
             for item in transfer.assets:
                 data = self._client._transport.download_asset(

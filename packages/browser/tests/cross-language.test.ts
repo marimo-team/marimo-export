@@ -88,7 +88,12 @@ describe("Python and TypeScript protocol fixtures", () => {
     expect(opened.states()).toHaveLength(2);
     await expect(
       openExport("https://example.test/stocks", { fetch: overLimit.fetch }),
-    ).rejects.toMatchObject({ code: "export_invalid" });
+    ).rejects.toMatchObject({
+      code: "export_invalid",
+      cause: expect.objectContaining({
+        message: expect.stringContaining("maximum value count"),
+      }),
+    });
   });
 
   test("decodes the Python projection record fixtures", () => {

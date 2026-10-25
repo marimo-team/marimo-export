@@ -417,8 +417,10 @@ class ExportIndex:
         data = canonical_bytes(value, max_values=_MAX_INDEX_VALUES)
         if len(data) > _MAX_INDEX_BYTES:
             raise NotebookExportError(
-                f"canonical index exceeds {_MAX_INDEX_BYTES} bytes",
+                f"export index is {len(data):,} bytes, more than the "
+                f"{_MAX_INDEX_BYTES:,}-byte limit, so export fewer states or outputs",
                 code="export_invalid",
+                details={"index_bytes": len(data), "max_index_bytes": _MAX_INDEX_BYTES},
             )
         return data
 
