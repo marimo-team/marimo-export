@@ -20,6 +20,7 @@ details, and cause before changing files or clearing repository state.
 | `read_failed`, `export_noncanonical`, `integrity_failed`, `read_limit_exceeded`         | [Inspect browser requests](#the-browser-cannot-fetch-the-export)          |
 | `output_not_portable`, `output_read_only`                                               | [Inspect UI that calls Python](#an-output-calls-python-functions)         |
 | `output_execution_failed`, `output_unavailable`                                         | [Inspect output availability](#an-output-is-unavailable-in-a-state)       |
+| `server_start_failed`                                                                   | [Read the server output](#the-notebook-server-cannot-start)               |
 | `export_parent_sync_failed`, `retired_destination_cleanup_failed`                       | [Inspect a post-commit warning](#a-commit-succeeded-with-a-warning)       |
 
 ## Check the local environment
@@ -223,6 +224,25 @@ Do not edit `index.json` or files under `assets/`. Rebuild from the notebook and
 ExportSpec when canonical JSON, size, digest, framing, or descriptor agreement
 fails. Verification proves consistency with `index.json`, so obtain the export
 again from a trusted publisher when its origin is uncertain.
+
+## The notebook server cannot start
+
+Symptom: `build`, `plan`, or `inspect` on a notebook file, or `prepare()` in
+Python, reports `server_start_failed`.
+
+When the marimo server process started and then failed, the message ends with
+its exit code and last output lines:
+
+```text
+error: the managed marimo server exited during startup with code 1: ... | ImportError: shadowed uvicorn module
+```
+
+Run the command with `--json` to read `details.log`, up to the final 8 KiB of
+server output with the access token redacted. Fix the reported cause, such as a file in
+the notebook directory that shadows an installed module, then run the command
+again. marimo-export retries a server that lost its loopback port to another
+process, so `address already in use` in the message means every retry within
+`--timeout` or `timeout` lost its port.
 
 ## Live capture cannot connect
 

@@ -92,6 +92,20 @@ The access token is absent from command arguments and temporary files. The paren
 writes it once to stdin. Server output goes to a private temporary log whose
 diagnostic rendering redacts the token and retains at most the final 8 KiB.
 
+`_free_port()` binds port 0 on loopback, reads the port, and closes the socket.
+Marimo binds that port after its imports finish, so another process can take it
+first. Uvicorn then logs the bind error and the server exits. When the exited
+server's log reports an address in use (`EADDRINUSE`, errno 48, 98, or 10048, or
+`address already in use`), `ManagedServer` stops the failed process tree through
+the shutdown path, truncates the log, and starts again on a fresh port. One
+startup deadline of `timeout` seconds and five attempts bound the retries. Any
+other early exit or readiness timeout raises `server_start_failed` at once.
+
+Each `server_start_failed` error that reads the server log appends the exit code
+of an exited server and the last three nonblank log lines to its message, so
+human CLI output and test failures show the cause. `details["log"]` keeps the
+redacted rendering of the final 8 KiB.
+
 The managed kernel lifespan must be available under the `marimo-export` entry
 point. `MARIMO_KERNEL_LIFESPAN_DENYLIST` may not contain that name. When
 `MARIMO_KERNEL_LIFESPAN_ALLOWLIST` is present, it must contain that name. The

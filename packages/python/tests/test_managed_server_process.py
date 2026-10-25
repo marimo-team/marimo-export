@@ -14,6 +14,7 @@ from types import SimpleNamespace
 from typing import Any, cast
 
 import marimo_export._remote.managed as managed_module
+import psutil
 import pytest
 from export_integration_support import NOTEBOOK_TIMEOUT
 from marimo_export._diagnostics import cleanup_failures
@@ -221,8 +222,8 @@ def test_startup_preserves_primary_error_and_closes_files(
         lambda *args, **kwargs: SimpleNamespace(pid=123, stdin=io.BytesIO()),
     )
 
-    def fail_startup(server: ManagedServer) -> None:
-        del server
+    def fail_startup(server: ManagedServer, deadline: float) -> None:
+        del server, deadline
         raise ValueError("startup failed")
 
     def fail_cleanup(
@@ -276,7 +277,7 @@ def test_managed_server_passes_token_once_through_closed_stdin(
 
     monkeypatch.setattr(managed_module.secrets, "token_urlsafe", lambda _size=None: secret)
     monkeypatch.setattr(subprocess, "Popen", start_process)
-    monkeypatch.setattr(ManagedServer, "_wait_ready", lambda _server: None)
+    monkeypatch.setattr(ManagedServer, "_wait_ready", lambda _server, _deadline: None)
     monkeypatch.setattr(
         managed_module,
         "_own_windows_process_tree",
@@ -298,7 +299,7 @@ def test_managed_server_passes_token_once_through_closed_stdin(
         assert token_input.writes == 1
         assert token_input.flushes == 1
         assert token_input.closed is True
-        assert secret not in server._logs()
+        assert secret not in server._log_path.read_text(encoding="utf-8")
     finally:
         server._process = None
         server._close_files()
@@ -350,7 +351,7 @@ def test_windows_server_assigns_suspended_process_to_job_before_startup(
     monkeypatch.setattr(
         ManagedServer,
         "_wait_ready",
-        lambda _server: events.append("server-ready"),
+        lambda _server, _deadline: events.append("server-ready"),
     )
 
     server = ManagedServer(notebook, timeout=1)
@@ -473,6 +474,128 @@ def test_managed_early_exit_redacts_secret_and_closes_stdin(
     assert secret not in repr(raised.value.wire())
     assert "<redacted>" in cast(str, raised.value.details["log"])
     assert raised.value.details["return_code"] == 17
+
+
+@pytest.mark.timeout(2 * NOTEBOOK_TIMEOUT)
+def test_managed_server_starts_on_a_fresh_port_after_losing_the_port_race(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    notebook = tmp_path / "notebook.py"
+    notebook.write_text(
+        "import marimo\n\napp = marimo.App()\n\n"
+        "@app.cell\n"
+        "def _():\n"
+        "    value = 1\n"
+        "    return (value,)\n",
+        encoding="utf-8",
+    )
+    popen = subprocess.Popen
+    started: list[int] = []
+
+    def start_process(*args: Any, **kwargs: Any) -> subprocess.Popen[bytes]:
+        process = cast("subprocess.Popen[bytes]", popen(*args, **kwargs))
+        started.append(process.pid)
+        return process
+
+    allocate_port = managed_module._free_port
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as taken:
+        taken.bind(("127.0.0.1", 0))
+        taken.listen()
+        taken_port = cast(int, taken.getsockname()[1])
+        ports = iter([taken_port])
+        monkeypatch.setattr(subprocess, "Popen", start_process)
+        monkeypatch.setattr(
+            managed_module, "_free_port", lambda: next(ports, None) or allocate_port()
+        )
+
+        server = ManagedServer(notebook, timeout=NOTEBOOK_TIMEOUT)
+        log_directory = server._log_path.parent
+        try:
+            assert server.port != taken_port
+            assert len(started) == 2
+            assert not psutil.pid_exists(started[0])
+        finally:
+            server.stop()
+
+    assert not [pid for pid in started if psutil.pid_exists(pid)]
+    assert not log_directory.exists()
+
+
+def _exiting_server(
+    monkeypatch: pytest.MonkeyPatch,
+    log: str,
+    *,
+    return_code: int,
+) -> list[int]:
+    started: list[int] = []
+
+    def start_process(args: list[str], **kwargs: object) -> SimpleNamespace:
+        log_file = cast(Any, kwargs["stdout"])
+        log_file.write(log.encode())
+        log_file.flush()
+        started.append(int(args[args.index("--port") + 1]))
+        return SimpleNamespace(pid=123, stdin=_TokenInput(), poll=lambda: return_code)
+
+    monkeypatch.setattr(subprocess, "Popen", start_process)
+    monkeypatch.setattr(
+        managed_module,
+        "_own_windows_process_tree",
+        lambda _process: _NoopTreeOwner(),
+    )
+    monkeypatch.setattr(
+        ManagedServer, "_stop_process", lambda server: setattr(server, "_process", None)
+    )
+    return started
+
+
+def test_managed_server_reports_a_non_port_startup_exit_at_once(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    secret = "managed-startup-secret"
+    notebook = tmp_path / "notebook.py"
+    notebook.write_text("import marimo\n", encoding="utf-8")
+    monkeypatch.setattr(managed_module.secrets, "token_urlsafe", lambda _size=None: secret)
+    started = _exiting_server(
+        monkeypatch,
+        "Traceback (most recent call last):\n"
+        f'  File "start.py", line 7, in main {secret}\n'
+        "ModuleNotFoundError: No module named 'missing_plugin'\n\n",
+        return_code=1,
+    )
+
+    with pytest.raises(TransportError) as raised:
+        ManagedServer(notebook, timeout=NOTEBOOK_TIMEOUT)
+
+    assert len(started) == 1
+    assert raised.value.code == "server_start_failed"
+    assert raised.value.details["return_code"] == 1
+    assert str(raised.value).endswith("No module named 'missing_plugin'")
+    assert secret not in str(raised.value)
+    assert secret not in repr(raised.value.wire())
+
+
+def test_managed_server_stops_retrying_a_port_conflict_that_persists(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    notebook = tmp_path / "notebook.py"
+    notebook.write_text("import marimo\n", encoding="utf-8")
+    started = _exiting_server(
+        monkeypatch,
+        "ERROR:    [Errno 98] error while attempting to bind on address "
+        "('127.0.0.1', 8000): address already in use\n",
+        return_code=3,
+    )
+
+    with pytest.raises(TransportError) as raised:
+        ManagedServer(notebook, timeout=NOTEBOOK_TIMEOUT)
+
+    assert 1 < len(started) < 10
+    assert raised.value.code == "server_start_failed"
+    assert raised.value.details["return_code"] == 3
+    assert "address already in use" in str(raised.value)
 
 
 def test_managed_token_input_cancellation_closes_stdin(

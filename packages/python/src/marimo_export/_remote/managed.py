@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import secrets
 import signal
 import socket
@@ -30,6 +31,15 @@ from marimo_export.integration import _owned_session_environment
 _EVENT_LIMIT = 40 * 1024 * 1024
 _HTTP_RESPONSE_LIMIT = 1024 * 1024
 _LOG_LIMIT = 8192
+_LOG_TAIL_LINES = 3
+_LOG_TAIL_LINE_LIMIT = 240
+_START_ATTEMPTS = 5
+# uvicorn logs the bind OSError and exits. Linux, macOS, and Windows report
+# errno 98, 48, and 10048. POSIX messages also carry the strerror text.
+_ADDRESS_IN_USE = re.compile(
+    r"EADDRINUSE|\[Errno (?:48|98|10048)\]|address already in use",
+    re.IGNORECASE,
+)
 _MANAGED_CACHE_COMPAT_ENV = "MARIMO_EXPORT_MANAGED_CACHE_COMPAT"
 _MANAGED_CACHE_ACTIVATION_ENV = "MARIMO_EXPORT_MANAGED_CACHE_ACTIVATION"
 _MANAGED_CACHE_TOKEN_ENV = "MARIMO_EXPORT_MANAGED_CACHE_TOKEN"
@@ -71,8 +81,8 @@ class ManagedServer:
         self.timeout = timeout
         self.access_token = secrets.token_urlsafe(32)
         self.session_id = f"s_{secrets.token_hex(16)}"
-        self.port = _free_port()
-        self.base_url = f"http://127.0.0.1:{self.port}"
+        self.port = 0
+        self.base_url = ""
         self._temporary = tempfile.TemporaryDirectory(prefix="marimo-export-build-")
         temporary_path = Path(self._temporary.name)
         self._log_path = temporary_path / "server.log"
@@ -99,36 +109,7 @@ class ManagedServer:
         environment.update(_owned_session_environment())
         try:
             _require_kernel_lifespan_policy(environment)
-            self._process = subprocess.Popen(
-                [
-                    sys.executable,
-                    "-m",
-                    "marimo_export._marimo.managed_server",
-                    "edit",
-                    str(notebook),
-                    "--headless",
-                    "--token-password-file",
-                    "-",
-                    "--no-skew-protection",
-                    "--host",
-                    "127.0.0.1",
-                    "--port",
-                    str(self.port),
-                ],
-                cwd=notebook.parent,
-                env=environment,
-                stdin=subprocess.PIPE,
-                stdout=self._log_file,
-                stderr=subprocess.STDOUT,
-                creationflags=_managed_creation_flags(),
-                start_new_session=sys.platform != "win32",
-            )
-            if sys.platform == "win32":
-                self._windows_job = _own_windows_process_tree(self._process)
-            else:
-                self._owned_groups.add(self._process.pid)
-            self._send_access_token()
-            self._wait_ready()
+            self._start(notebook, environment)
         except BaseException as error:
             try:
                 self._stop_process()
@@ -245,29 +226,83 @@ class ManagedServer:
                 },
             ) from first_failure
 
-    def _wait_ready(self) -> None:
+    def _start(self, notebook: Path, environment: Mapping[str, str]) -> None:
         deadline = time.monotonic() + self.timeout
+        for attempt in range(1, _START_ATTEMPTS + 1):
+            self._spawn(notebook, environment)
+            try:
+                self._send_access_token()
+                self._wait_ready(deadline)
+                return
+            except TransportError:
+                # The allocated port is free when chosen but marimo binds it
+                # seconds later, after imports. Another process may take it first.
+                lost_port = (
+                    attempt < _START_ATTEMPTS
+                    and time.monotonic() < deadline
+                    and self._exited_on_address_in_use()
+                )
+                if not lost_port:
+                    raise
+            self._stop_process()
+            self._owned_groups.clear()
+            self._log_file.close()
+            self._log_file = self._log_path.open("wb")
+
+    def _spawn(self, notebook: Path, environment: Mapping[str, str]) -> None:
+        self.port = _free_port()
+        self.base_url = f"http://127.0.0.1:{self.port}"
+        self._process = subprocess.Popen(
+            [
+                sys.executable,
+                "-m",
+                "marimo_export._marimo.managed_server",
+                "edit",
+                str(notebook),
+                "--headless",
+                "--token-password-file",
+                "-",
+                "--no-skew-protection",
+                "--host",
+                "127.0.0.1",
+                "--port",
+                str(self.port),
+            ],
+            cwd=notebook.parent,
+            env=environment,
+            stdin=subprocess.PIPE,
+            stdout=self._log_file,
+            stderr=subprocess.STDOUT,
+            creationflags=_managed_creation_flags(),
+            start_new_session=sys.platform != "win32",
+        )
+        if sys.platform == "win32":
+            self._windows_job = _own_windows_process_tree(self._process)
+        else:
+            self._owned_groups.add(self._process.pid)
+
+    def _exited_on_address_in_use(self) -> bool:
+        process = self._process
+        return (
+            process is not None
+            and process.poll() is not None
+            and _ADDRESS_IN_USE.search(self._log_text()) is not None
+        )
+
+    def _wait_ready(self, deadline: float) -> None:
         while True:
             process = self._process
             if process is None:
                 raise RuntimeError("managed process was not started")
             return_code = process.poll()
             if return_code is not None:
-                raise TransportError(
+                raise self._startup_failure(
                     "the managed marimo server exited during startup",
-                    code="server_start_failed",
-                    details={
-                        "return_code": return_code,
-                        "log": self._logs(),
-                    },
+                    return_code=return_code,
                 )
             remaining = deadline - time.monotonic()
             if remaining <= 0:
-                raise TransportError(
-                    "the managed marimo server did not become ready",
-                    code="server_start_failed",
-                    details={"log": self._logs()},
-                )
+                raise self._startup_failure("the managed marimo server did not become ready")
             request = urllib.request.Request(
                 f"{self.base_url}/api/sessions",
                 headers=self._headers(),
@@ -295,13 +330,9 @@ class ManagedServer:
             stream.flush()
         except BaseException as error:
             if isinstance(error, Exception):
-                primary = TransportError(
+                primary = self._startup_failure(
                     "the managed marimo server did not accept its access token",
-                    code="server_start_failed",
-                    details={
-                        "return_code": process.poll(),
-                        "log": self._logs(),
-                    },
+                    return_code=process.poll(),
                 )
                 primary.__cause__ = error
             else:
@@ -312,13 +343,9 @@ class ManagedServer:
             except BaseException as error:
                 if primary is None:
                     if isinstance(error, Exception):
-                        primary = TransportError(
+                        primary = self._startup_failure(
                             "the managed marimo token input could not be closed",
-                            code="server_start_failed",
-                            details={
-                                "return_code": process.poll(),
-                                "log": self._logs(),
-                            },
+                            return_code=process.poll(),
                         )
                         primary.__cause__ = error
                     else:
@@ -662,16 +689,38 @@ class ManagedServer:
                     raise
                 time.sleep(min(remaining, 0.01))
 
-    def _logs(self) -> str:
+    def _startup_failure(
+        self,
+        message: str,
+        *,
+        return_code: int | None = None,
+    ) -> TransportError:
+        log = self._log_text()
+        details: dict[str, object] = {
+            "log": safe_diagnostic(log, secrets=(self.access_token,), maximum_chars=_LOG_LIMIT)
+        }
+        if return_code is not None:
+            message = f"{message} with code {return_code}"
+            details["return_code"] = return_code
+        tail = [
+            safe_diagnostic(
+                line.strip(),
+                secrets=(self.access_token,),
+                maximum_chars=_LOG_TAIL_LINE_LIMIT,
+            )
+            for line in log.splitlines()
+            if line.strip()
+        ][-_LOG_TAIL_LINES:]
+        if tail:
+            message = f"{message}: {' | '.join(tail)}"
+        return TransportError(message, code="server_start_failed", details=details)
+
+    def _log_text(self) -> str:
         try:
             data = self._log_path.read_bytes()
         except OSError:
             return ""
-        return safe_diagnostic(
-            data[-_LOG_LIMIT:].decode("utf-8", errors="replace"),
-            secrets=(self.access_token,),
-            maximum_chars=_LOG_LIMIT,
-        )
+        return data[-_LOG_LIMIT:].decode("utf-8", errors="replace")
 
 
 class _SessionStream:
