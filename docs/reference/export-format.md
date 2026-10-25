@@ -265,9 +265,12 @@ Both snapshot records use the same replay resources:
 - `modelNotifications` contains the reachable AnyWidget model lifecycle
   closure in replay order. Model IDs contain the record's
   `projectionSha256` and are scoped by planned output.
-- `functions` maps every projection-scoped UI object ID to an empty array. A
-  live Python function makes the snapshot nonportable. The producer removes a
-  form's inert `validate` registration when `should-validate` is false.
+- `functions` maps every projection-scoped UI object ID to the sorted, unique
+  names of the Python functions it cannot call in the export. The array is
+  empty for ordinary controls. A table in a
+  [read-only output](export-spec#read-only-tables) lists functions such as
+  `search` and `get_column_summaries`. The producer omits a form's
+  `validate` registration when the form has no validator.
 - `uiValues` maps every projection-scoped registry-owned UI object ID to its
   accepted frontend value after state updates.
 

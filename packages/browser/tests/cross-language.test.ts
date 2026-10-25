@@ -105,7 +105,7 @@ describe("Python and TypeScript protocol fixtures", () => {
     );
 
     expect(output.ownerCellId).toBe("cell-summary");
-    expect(output.resources.functions[fixtureUiObjectId]).toEqual([]);
+    expect(output.resources.functions[fixtureUiObjectId]).toEqual(["download_as", "search"]);
     expect(output.resources.uiValues[fixtureUiObjectId]).toBe(3);
     expect(output.output?.data).toContain(`object-id="${fixtureUiObjectId}"`);
     expect(cell.cell.name).toBe("summary");

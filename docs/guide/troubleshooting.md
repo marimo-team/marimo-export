@@ -17,6 +17,7 @@ details, and cause before changing files or clearing repository state.
 | `observation_rejected`, `observation_persistence_failed`                                | [Inspect observation recording](#an-observation-was-not-retained)         |
 | `manifest_invalid`, `manifest_read_failed`, `query_ambiguous`, `query_miss`             | [Inspect the prepared publication](#a-prepared-publication-cannot-update) |
 | `read_failed`, `export_noncanonical`, `integrity_failed`, `read_limit_exceeded`         | [Inspect browser requests](#the-browser-cannot-fetch-the-export)          |
+| `output_not_portable`, `output_read_only`                                               | [Inspect UI that calls Python](#an-output-calls-python-functions)         |
 | `export_parent_sync_failed`, `retired_destination_cleanup_failed`                       | [Inspect a post-commit warning](#a-commit-succeeded-with-a-warning)       |
 
 ## Check the local environment
@@ -66,6 +67,34 @@ selected final named expression.
 If preparation fails in a cell outside the selected output dependency closure,
 inspect the full notebook run. Each state executes every available authored
 cell before the producer operation completes.
+
+## An output calls Python functions
+
+Symptom: preparation fails with `output_not_portable` and `details.reason` is
+`python_functions`.
+
+`details.functions` lists the Python functions the selected UI object calls.
+`details.object_id` names that object. A marimo table, including a dataframe
+that a cell displays, calls `search`, `get_column_summaries`, and related
+functions. Export its first page with `read_only`:
+
+```yaml
+outputs:
+  sales:
+    source: { kind: output, selector: sales }
+    read_only: true
+```
+
+The build then reports an `output_read_only` warning for `sales` with the same
+function names. Readers see the first page, and your renderer adapter rejects
+interactions that call Python. Use `OutputSpec.json()` or the `parquet.table` exporter when the
+consumer needs every row.
+
+Lazy tables, `mo.ui.dataframe`, `mo.ui.chat`, `mo.ui.file_browser`, `mo.lazy`,
+`mo.download` with callable data, and a form with a `validate` callback need
+Python to render, download, or submit, so they fail with `read_only` too. Collect a lazy frame before displaying it to export
+its first page. Select a value they produce, or wrap the displayed data in
+`mo.plain()`.
 
 ## A state cannot be resolved
 

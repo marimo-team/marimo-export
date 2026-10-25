@@ -174,7 +174,9 @@ loader catalog, result types, and peer dependency requirements.
 The Marimo output and cell loaders validate canonical replay records. They
 return data that an application can adapt to its own renderer. The records
 carry closed file resources, the reachable model lifecycle closure, and a
-function map keyed by every projected UI object ID. `uiValues` carries the
+function map keyed by every projected UI object ID. Each entry lists the
+Python functions that UI object cannot call. Consumer renderer adapters must
+reject calls to those names. `uiValues` carries the
 accepted frontend value for each registry-owned UI object after state updates.
 Model and UI object IDs are scoped by planned output so applications can merge
 several projection records before committing one presentation state.

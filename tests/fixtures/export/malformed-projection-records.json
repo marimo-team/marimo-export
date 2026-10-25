@@ -67,7 +67,7 @@
     "value": {}
   },
   {
-    "name": "static resources reject live function names",
+    "name": "function names must be sorted and unique",
     "record": "output",
     "operation": "set",
     "path": [
@@ -75,7 +75,18 @@
       "functions",
       "cell-summary-projection-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-ui-cell-summary-ui"
     ],
-    "value": ["validate"]
+    "value": ["search", "download_as"]
+  },
+  {
+    "name": "function names cannot repeat",
+    "record": "output",
+    "operation": "set",
+    "path": [
+      "resources",
+      "functions",
+      "cell-summary-projection-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-ui-cell-summary-ui"
+    ],
+    "value": ["search", "search"]
   },
   {
     "name": "model notifications require their message field",

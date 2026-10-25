@@ -231,6 +231,7 @@ class _OutputWire(_WireModel):
 
     source: _OutputSourceWire
     exporter: _UnicodeStringWire | _ExporterWire | None = None
+    read_only: bool = False
 
     @model_validator(mode="after")
     def _exporter_matches_source(self) -> _OutputWire:
@@ -351,6 +352,7 @@ class OutputSpec:
 
     source: OutputSource
     exporter: ExporterSpec | None = None
+    read_only: bool = False
 
     def __post_init__(self) -> None:
         if not isinstance(
@@ -375,6 +377,13 @@ class OutputSpec:
         if (self.exporter is not None) != isinstance(self.source, ExportSource):
             raise SpecError(
                 "export sources require exactly one exporter",
+                code="spec_output_invalid",
+            )
+        if not isinstance(self.read_only, bool):
+            raise TypeError("read_only must be a boolean")
+        if self.read_only and not isinstance(self.source, (RenderedOutputSource, CellSource)):
+            raise SpecError(
+                "read_only applies to output and cell sources",
                 code="spec_output_invalid",
             )
 
@@ -404,14 +413,19 @@ class OutputSpec:
         )
 
     @classmethod
-    def output(cls, selector: str) -> OutputSpec:
-        """Format a selected value through Marimo's output registry."""
+    def output(cls, selector: str, *, read_only: bool = False) -> OutputSpec:
+        """Format a selected value through Marimo's output registry.
+
+        Set ``read_only`` to export tables whose interactions call Python
+        functions. The export keeps the table's first rendered view.
+        """
 
         return cls(
             source=RenderedOutputSource(
                 kind="output",
                 selector=_selector(selector),
-            )
+            ),
+            read_only=read_only,
         )
 
     @classmethod
@@ -420,8 +434,12 @@ class OutputSpec:
         name: str | None = None,
         *,
         id: str | None = None,
+        read_only: bool = False,
     ) -> OutputSpec:
-        """Select one complete native cell by name or runtime ID."""
+        """Select one complete native cell by name or runtime ID.
+
+        ``read_only`` has the same meaning as in :meth:`output`.
+        """
 
         if (name is None) == (id is None):
             raise TypeError("cell source requires exactly one of name or id")
@@ -429,7 +447,7 @@ class OutputSpec:
         value = name if name is not None else id
         assert value is not None
         _validate_cell_value(value, by)
-        return cls(source=CellSource(kind="cell", by=by, value=value))
+        return cls(source=CellSource(kind="cell", by=by, value=value), read_only=read_only)
 
 
 def _state_mapping_value(
@@ -681,10 +699,7 @@ class ExportSpec:
                 raise TypeError("output names must be strings")
             if not isinstance(output, OutputSpec):
                 raise TypeError(f"outputs[{name!r}] must be an OutputSpec")
-            output_value: JsonObject = {"source": _source_to_value(output.source)}
-            if output.exporter is not None:
-                output_value["exporter"] = output.exporter.to_value()
-            output_values[name] = output_value
+            output_values[name] = _output_to_value(output)
         state_values = _state_mapping_value(states)
         decoded = self._decode(
             {
@@ -735,12 +750,13 @@ class ExportSpec:
                     else output.exporter
                 )
             )
-            parsed = OutputSpec(source=_source_from_wire(output.source), exporter=exporter)
+            parsed = OutputSpec(
+                source=_source_from_wire(output.source),
+                exporter=exporter,
+                read_only=output.read_only,
+            )
             parsed_outputs[name] = parsed
-            output_value: JsonObject = {"source": _source_to_value(parsed.source)}
-            if parsed.exporter is not None:
-                output_value["exporter"] = parsed.exporter.to_value()
-            outputs[name] = output_value
+            outputs[name] = _output_to_value(parsed)
         value: JsonObject = {
             "schema": SPEC_SCHEMA,
             "default_state": wire.default_state,
@@ -879,6 +895,15 @@ def _source_from_wire(source: _OutputSourceWire) -> OutputSource:
             selector=_selector(source.selector),
         )
     return CellSource(kind="cell", by=source.by, value=source.value)
+
+
+def _output_to_value(output: OutputSpec) -> JsonObject:
+    value: JsonObject = {"source": _source_to_value(output.source)}
+    if output.exporter is not None:
+        value["exporter"] = output.exporter.to_value()
+    if output.read_only:
+        value["read_only"] = True
+    return value
 
 
 def _source_to_value(source: OutputSource) -> JsonObject:

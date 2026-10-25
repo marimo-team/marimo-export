@@ -328,16 +328,20 @@ depends on the exact failed operation:
 | Repository            | `repository_error`, `repository_limit_exceeded`, `repository_integrity_failed`, `repository_unavailable`, `repository_busy`, `repository_reservation_timeout`, `repository_fence_stale`                                                                                                            |
 | Host and observation  | `marimo_incompatible`, `marimo_cache_patch_conflict`, `observation_rejected`, `observation_persistence_failed`, `prepared_manifest_limit_exceeded`                                                                                                                                                 |
 
-`export_parent_sync_failed` and `retired_destination_cleanup_failed` are
-post-commit `ExportWarning` codes. They accompany a successful result after the
-new destination becomes visible.
+`output_read_only`, `export_parent_sync_failed`, and
+`retired_destination_cleanup_failed` are `ExportWarning` codes on a successful
+result. `output_read_only` describes the written export and also appears on
+`StagedDelivery.materialize()` results. The other two report post-commit
+durability work after the new destination becomes visible.
 
 `output_not_portable` identifies a selected output whose replay resources
 require live Python behavior. The error is an `OutputError`. Its details identify
 the `state`, published `output`, `source_kind`, authored `selector`, and source
 `cell_id`. A complete-cell source also includes `selector_by`. When a projected
 UI object exposes Python callbacks, `reason` is `python_functions`, `functions`
-lists their registered names, and `object_id` identifies the UI object.
+lists their registered names, and `object_id` identifies the UI object. Set
+[`read_only`](../export-spec#read-only-tables) on the output to export a
+marimo table with its first page.
 
 Some repository subclasses remain implementation-owned, but their codes can
 surface through the public `RepositoryError` base. Catch the public base and

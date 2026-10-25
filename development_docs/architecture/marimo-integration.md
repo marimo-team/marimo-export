@@ -237,9 +237,28 @@ assembly keep a domain when every state that reports the control reports the
 same one, and clear it when two states disagree. A state that omits the control
 leaves its domain unchanged. Input or path disagreement fails with `control_input_conflict`.
 
-Static replay function namespaces are empty. A form registration named
-`validate` is removed when its component declares `should-validate=false`.
-Any active validation or other Python function fails projection capture.
+`compat/replay.py` reports each projected UI object's registered function
+names. `_marimo/ui_functions.py` decides which names the snapshot records,
+using public marimo UI types and the component arguments. A form rendered
+with `should-validate` false drops its `validate` registration. An eager
+`mo.ui.table`, whose `lazy` argument is false, records its names as
+unavailable functions in a `read_only` output. Any other Python function
+fails projection capture with `output_not_portable`. The written export
+reports one `output_read_only` warning per output whose snapshots list
+functions.
+
+Rendered-output formatting runs in the child context under the owner cell
+with a projection-scoped UI ID prefix. A formatter-created table, such as the
+one for a displayed dataframe, registers in the child registries beside the
+cell's own controls without replacing them.
+
+This scope is a private seam in `compat/projections.py`. It calls three methods
+on the child's private kernel runtime context: `install()`, `with_cell_id()`,
+and `provide_ui_ids()`. The upstream ask is a supported way to format a value
+within a cell scope, so that UI elements the formatter creates register under
+that cell with caller-chosen IDs.
+[marimo upstream capabilities](../proposals/marimo-upstream-capabilities.md#canonical-rendered-snapshots)
+tracks it with the rendered-snapshot candidate.
 Inspection reports the same typed paths for live editor object IDs. Direct UI
 definition dependencies identify composed roots whose defining cells reference
 other UI definitions.

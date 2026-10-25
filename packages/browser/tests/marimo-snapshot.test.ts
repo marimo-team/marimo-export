@@ -63,12 +63,27 @@ describe("Marimo snapshot records", () => {
     expect(() => parseMarimoOutputSnapshot(bytes(snapshot))).toThrow(/replay UI value/u);
   });
 
-  test("rejects live Python functions in static replay resources", () => {
+  test("lists the Python functions a read-only UI object cannot call", () => {
     const snapshot = outputSnapshot();
     const objectId = `cell-1-projection-${"a".repeat(64)}-ui-control`;
-    snapshot.resources.functions = { [objectId]: ["validate"] };
-    snapshot.resources.uiValues = { [objectId]: null };
-    expect(() => parseMarimoOutputSnapshot(bytes(snapshot))).toThrow(/must be empty/u);
+    snapshot.resources.functions = { [objectId]: ["download_as", "search"] };
+    snapshot.resources.uiValues = { [objectId]: [] };
+    expect(parseMarimoOutputSnapshot(bytes(snapshot)).resources.functions).toEqual({
+      [objectId]: ["download_as", "search"],
+    });
+  });
+
+  test("rejects unsorted or repeated function names", () => {
+    const snapshot = outputSnapshot();
+    const objectId = `cell-1-projection-${"a".repeat(64)}-ui-control`;
+    snapshot.resources.uiValues = { [objectId]: [] };
+    for (const names of [
+      ["search", "download_as"],
+      ["search", "search"],
+    ]) {
+      snapshot.resources.functions = { [objectId]: names };
+      expect(() => parseMarimoOutputSnapshot(bytes(snapshot))).toThrow(/sorted unique names/u);
+    }
   });
 
   test("requires projection UI objects to match their snapshot owner", () => {
