@@ -11,14 +11,16 @@ import threading
 import weakref
 from _thread import LockType
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from types import CodeType, ModuleType
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from marimo_export._json import JsonObject, JsonValue, canonical_bytes
-from marimo_export._marimo.capabilities import ExporterRuntime
 from marimo_export.errors import OutputError
+
+if TYPE_CHECKING:
+    from marimo_export._marimo.capabilities import ExporterRuntime
 
 ExporterKey = tuple[str, tuple[str, ...]]
 
@@ -37,9 +39,9 @@ class _ExporterSnapshot:
 
 @dataclass(slots=True)
 class _IdentityState:
-    lock: LockType
-    modules: dict[str, _ModuleSnapshot]
-    exporters: dict[ExporterKey, _ExporterSnapshot]
+    lock: LockType = field(default_factory=threading.Lock)
+    modules: dict[str, _ModuleSnapshot] = field(default_factory=dict)
+    exporters: dict[ExporterKey, _ExporterSnapshot] = field(default_factory=dict)
 
 
 def freeze_exporter_identity(
@@ -56,7 +58,7 @@ def freeze_exporter_identity(
     """Freeze loaded sources and return their deterministic cache identity."""
 
     current = {name: _module_record(name, dependency) for name, dependency in modules.items()}
-    state = _identity_state(runtime)
+    state = runtime.kernel_state(_IdentityState)
     with state.lock:
         for name, dependency in modules.items():
             previous = state.modules.get(name)
@@ -99,7 +101,7 @@ def verify_exporter_sources(
 ) -> None:
     """Reject source edits made after the exporter was frozen."""
 
-    state = _identity_state(runtime)
+    state = runtime.kernel_state(_IdentityState)
     current = {name: _module_record(name, module) for name, module in modules.items()}
     with state.lock:
         for name, module in modules.items():
@@ -274,13 +276,6 @@ def _source_changed(output: str, exporter: str, module: str) -> OutputError:
         f"output {output!r} exporter {exporter!r} source changed; restart the session",
         code="exporter_source_changed",
         details={"output": output, "exporter": exporter, "module": module},
-    )
-
-
-def _identity_state(runtime: ExporterRuntime) -> _IdentityState:
-    return runtime.kernel_state(
-        "exporter_identity",
-        lambda: _IdentityState(threading.Lock(), {}, {}),
     )
 
 

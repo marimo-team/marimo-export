@@ -4,15 +4,15 @@ from __future__ import annotations
 
 import threading
 import weakref
-from collections.abc import Callable, Mapping
+from collections.abc import Mapping
 from types import CodeType
-from typing import TypeVar, cast
+from typing import TypeVar
 
 _T = TypeVar("_T")
 
 _STATE_LOCK = threading.Lock()
-_PROCESS_STATE: dict[str, object] = {}
-_KERNEL_STATE: weakref.WeakKeyDictionary[object, dict[str, object]] = weakref.WeakKeyDictionary()
+_PROCESS_STATE: dict[type, object] = {}
+_KERNEL_STATE: weakref.WeakKeyDictionary[object, dict[type, object]] = weakref.WeakKeyDictionary()
 
 
 def kernel_globals() -> Mapping[str, object]:
@@ -24,11 +24,11 @@ def kernel_globals() -> Mapping[str, object]:
     return {} if context is None else context.globals
 
 
-def kernel_state(key: str, factory: Callable[[], _T]) -> _T:
-    """Return the value stored under ``key`` for the attached kernel.
+def kernel_state(state_type: type[_T]) -> _T:
+    """Return the attached kernel's instance of ``state_type``.
 
-    The first call for a kernel stores ``factory()``. Calls outside a kernel
-    share one process-wide value.
+    The first call for a kernel stores ``state_type()``. Calls outside a kernel
+    share one process-wide instance.
     """
 
     from marimo._runtime.context import safe_get_context
@@ -41,9 +41,10 @@ def kernel_state(key: str, factory: Callable[[], _T]) -> _T:
             # A kernel context shares this registry with its embedded app
             # contexts, so the weak key scopes state to one kernel.
             states = _KERNEL_STATE.setdefault(context.app_kernel_runner_registry, {})
-        if key not in states:
-            states[key] = factory()
-        return cast(_T, states[key])
+        state = states.get(state_type)
+        if not isinstance(state, state_type):
+            state = states[state_type] = state_type()
+        return state
 
 
 def code_sha256(code: CodeType) -> str:

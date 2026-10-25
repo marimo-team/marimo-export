@@ -1,17 +1,22 @@
 from __future__ import annotations
 
 import asyncio
+import gc
+import hashlib
 import importlib
 import sys
 import threading
+import weakref
+from collections.abc import Mapping
 from pathlib import Path
 from types import CodeType, ModuleType, SimpleNamespace
-from typing import cast
+from typing import TypeVar, cast
 
 import pytest
 from marimo_export import OutputSpec
 from marimo_export._execution import ExecutionPlan, NormalizedState, PlannedOutput
 from marimo_export._execution.plan import exporter_token_name
+from marimo_export._marimo.compat.exporters import kernel_state
 from marimo_export._marimo.compat.inspection import _notebook_cell
 from marimo_export._marimo.compat.kernel import PrivateKernelRuntime
 from marimo_export._notebook import cells_document_sha256
@@ -20,6 +25,7 @@ from marimo_export.exporters import importable
 from marimo_export.exporters._prepare import invoke_prepared_exporter, prepared_exporters
 
 _RUNTIME = PrivateKernelRuntime()
+_T = TypeVar("_T")
 
 
 def _custom_exporter_plan(
@@ -313,7 +319,7 @@ def test_prepared_exporters_reports_normal_import_failure(
     assert exporter_name not in sys.modules
 
 
-def test_prepared_exporters_uses_code_loaded_before_first_preflight(
+def test_prepared_exporters_uses_code_loaded_before_first_preparation(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -446,4 +452,71 @@ def test_exporter_identity_is_pinned_for_a_fixture_exporter(
     ) as prepared:
         identity = prepared["summary"].identity
 
-    assert identity == _PINNED_EXPORTER_IDENTITIES[sys.version_info[:2]]
+    expected = _PINNED_EXPORTER_IDENTITIES.get(sys.version_info[:2])
+    if expected is None:
+        pytest.fail(f"pin the fixture exporter identity for Python {sys.version_info[:2]}")
+    assert identity == expected
+
+
+class _KernelRuntime:
+    def __init__(self, namespace: Mapping[str, object]) -> None:
+        self.namespace = namespace
+        self.states: dict[type, object] = {}
+
+    def kernel_globals(self) -> Mapping[str, object]:
+        return self.namespace
+
+    def kernel_state(self, state_type: type[_T]) -> _T:
+        state = self.states.setdefault(state_type, state_type())
+        assert isinstance(state, state_type)
+        return state
+
+    def code_sha256(self, code: CodeType) -> str:
+        return hashlib.sha256(code.co_code).hexdigest()
+
+
+def test_prepared_exporters_resolve_modules_from_the_kernel_namespace() -> None:
+    module_name = "marimo_export_test_kernel_namespace_exporter"
+    module = ModuleType(module_name)
+    exec("def encode(value):\n    return value * 2\n", module.__dict__)
+    assert module_name not in sys.modules
+    plan = _custom_exporter_plan(module_name)
+    exporter = plan.planned_outputs["summary"].exporter
+    assert exporter is not None
+
+    with prepared_exporters(_KernelRuntime({"alias": module}), plan) as prepared:
+        assert invoke_prepared_exporter(exporter_token_name(exporter), 21, {}) == 42
+
+    assert len(prepared["summary"].identity) == 64
+    assert module_name not in sys.modules
+
+
+def test_kernel_state_is_scoped_to_one_kernel(monkeypatch: pytest.MonkeyPatch) -> None:
+    import marimo._runtime.context as runtime_context
+
+    class Registry:
+        pass
+
+    class State:
+        pass
+
+    kernel_registry = Registry()
+    context: object = SimpleNamespace(app_kernel_runner_registry=kernel_registry)
+    monkeypatch.setattr(runtime_context, "safe_get_context", lambda: context)
+    state = kernel_state(State)
+
+    # marimo gives an embedded app context its parent kernel's registry.
+    context = SimpleNamespace(app_kernel_runner_registry=kernel_registry)
+    assert kernel_state(State) is state
+
+    context = SimpleNamespace(app_kernel_runner_registry=Registry())
+    assert kernel_state(State) is not state
+
+    context = None
+    assert kernel_state(State) is kernel_state(State)
+    assert kernel_state(State) is not state
+
+    released = weakref.ref(state)
+    del state, kernel_registry
+    gc.collect()
+    assert released() is None

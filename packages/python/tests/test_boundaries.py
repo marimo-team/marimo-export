@@ -265,6 +265,8 @@ def test_compatibility_adapters_import_no_producer_or_observation_policy() -> No
         "marimo_export._observations",
         "marimo_export._repository",
         "marimo_export._services",
+        "marimo_export.exporters._identity",
+        "marimo_export.exporters._prepare",
         "marimo_export.observations",
         "marimo_export.repository",
     )
@@ -287,7 +289,9 @@ import importlib
 for name in (
     "child_run",
     "execution",
+    "exporters",
     "file_closure",
+    "kernel",
     "output_data",
     "projections",
     "receipts",
