@@ -135,6 +135,7 @@ def open_state_child(
     from marimo._ast.app import InternalApp
     from marimo._ast.load import load_notebook_ir
     from marimo._code_mode import get_context as get_code_context
+    from marimo._internal.schemas import serialization
     from marimo._runtime.app.kernel_runner import AppKernelRunner
     from marimo._runtime.context import get_context as get_runtime_context
     from marimo._runtime.runner.hooks import Priority
@@ -142,11 +143,6 @@ def open_state_child(
         _broadcast_outputs,
         _flush_console,
         _set_run_result_status,
-    )
-    from marimo._schemas.serialization import (
-        AppInstantiation,
-        CellDef,
-        NotebookSerializationV1,
     )
 
     setup_started = time.monotonic()
@@ -170,10 +166,10 @@ def open_state_child(
         )
         for output, planned_output in plan.planned_outputs.items()
     }
-    notebook = NotebookSerializationV1(
-        app=AppInstantiation(options=runtime.app_config.asdict()),
+    notebook = serialization.NotebookSerializationV1(
+        app=serialization.AppInstantiation(options=runtime.app_config.asdict()),
         cells=[
-            CellDef(
+            serialization.CellDef(
                 code=ordinary_cell_code(
                     cell.code,
                     plan.ordinary_cells.get(str(cell.id), ()),
@@ -185,7 +181,7 @@ def open_state_child(
             for cell in cells
         ]
         + [
-            CellDef(
+            serialization.CellDef(
                 code=snapshot_cell_codes[output],
                 name="_",
                 options={"hide_code": True},
@@ -194,14 +190,14 @@ def open_state_child(
             if output in snapshot_cell_codes
         ]
         + [
-            CellDef(
+            serialization.CellDef(
                 code=plan.state_code,
                 name="_",
                 options={"hide_code": True},
             )
         ]
         + [
-            CellDef(
+            serialization.CellDef(
                 code=output_cell_codes[output],
                 name="_",
                 options={"hide_code": True},

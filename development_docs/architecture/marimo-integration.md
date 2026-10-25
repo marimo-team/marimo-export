@@ -41,6 +41,16 @@ flowchart LR
 | Transfer                   | Temporary virtual files described by verified receipts  | `compat/transfer.py`               |
 | Managed process            | Runtime filename and kernel lifespan                    | managed server and kernel adapters |
 
+Compat adapters import each marimo object from the most stable surface that
+exposes it. The public `marimo` namespace comes first, such as `marimo.ui.anywidget`.
+`marimo._internal` comes next, such as `marimo._internal.commands`,
+`marimo._internal.session`, and `marimo._internal.schemas`. marimo
+[snapshot-tests](https://github.com/marimo-team/marimo/blob/main/tests/_internal/test_internal_api.py)
+the `marimo._internal` re-exports, so a rename fails marimo's own CI before a
+release. The defining private module is the last resort. `marimo._internal` is
+still private, so its imports stay under `compat/` like every other `marimo._*`
+import.
+
 `_marimo/capabilities.py` owns cross-kernel records and protocols.
 `_marimo/composition.py` constructs execution adapters.
 `_marimo/anywidget.py` and `_marimo/blob.py` own narrow representation

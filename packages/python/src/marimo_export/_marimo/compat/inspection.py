@@ -209,6 +209,9 @@ def require_capabilities() -> MarimoCapabilities:
             _resolve_public_file,
             replace_html_attributes,
         )
+        from marimo._internal.commands import UpdateUIElementCommand
+        from marimo._internal.schemas import serialization
+        from marimo._internal.session import SessionView
         from marimo._messaging.cell_output import CellOutput
         from marimo._messaging.streams import (
             ThreadSafeStderr,
@@ -232,8 +235,6 @@ def require_capabilities() -> MarimoCapabilities:
         )
         from marimo._save.stubs import BlobAsset as NativeBlobAsset
         from marimo._save.stubs.lazy_stub import BLOB_DESERIALIZERS, BLOB_SERIALIZERS
-        from marimo._schemas.serialization import CellDef, NotebookSerializationV1
-        from marimo._session.state.session_view import SessionView
     except ImportError as error:
         raise CompatibilityError(
             "the attached marimo runtime lacks required export capabilities",
@@ -246,8 +247,10 @@ def require_capabilities() -> MarimoCapabilities:
         (load_notebook_ir, "child_sessions"),
         (prune_cells_for_overrides, "definition_overrides"),
         (hash_module, "cell_cache_receipts"),
-        (CellDef, "synthetic_output_cells"),
-        (NotebookSerializationV1, "child_sessions"),
+        (getattr(serialization, "AppInstantiation", None), "child_sessions"),
+        (getattr(serialization, "CellDef", None), "synthetic_output_cells"),
+        (getattr(serialization, "NotebookSerializationV1", None), "child_sessions"),
+        (UpdateUIElementCommand, "child_ui_updates"),
         (CellOutput, "projection_snapshots"),
         (KernelStreams, "projection_snapshots"),
         (SessionView, "projection_snapshots"),
@@ -647,9 +650,9 @@ def _ui_baseline_value(value: Any, path: str) -> JsonValue:
 
 
 def _is_anywidget(value: Any) -> bool:
-    from marimo._plugins.ui._impl.from_anywidget import anywidget
+    from marimo import ui
 
-    return isinstance(value, anywidget)
+    return isinstance(value, ui.anywidget)
 
 
 def _is_sensitive(value: Any) -> bool:

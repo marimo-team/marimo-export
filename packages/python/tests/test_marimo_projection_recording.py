@@ -18,7 +18,7 @@ from marimo_export._marimo.compat.child_run import (
 )
 from marimo_export._marimo.compat.output_data import rewrite_ui_value
 from marimo_export._marimo.composition import create_kernel_runtime
-from marimo_export.errors import ExecutionError, OutputError
+from marimo_export.errors import CompatibilityError, ExecutionError, OutputError
 from marimo_export.index import ControlBinding, ControlIndexStep
 
 
@@ -171,6 +171,20 @@ def test_attached_marimo_exposes_live_capture_capabilities() -> None:
         "setup_definition_overrides",
         "synthetic_output_cells",
     )
+
+
+def test_missing_serialization_record_reports_its_capability(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from marimo._internal.schemas import serialization
+
+    monkeypatch.delattr(serialization, "CellDef")
+
+    with pytest.raises(CompatibilityError) as raised:
+        create_kernel_runtime().require_capabilities()
+
+    assert raised.value.code == "marimo_incompatible"
+    assert raised.value.details == {"missing": ["synthetic_output_cells"]}
 
 
 def test_stop_provenance_tracks_exact_descendants_and_latest_result() -> None:

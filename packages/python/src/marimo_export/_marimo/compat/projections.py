@@ -69,13 +69,13 @@ def record_child_notifications(
 ) -> Iterator[ProjectionRecording]:
     """Record one child run through Marimo's SessionView aggregation."""
 
+    from marimo._internal.session import SessionView
     from marimo._messaging.streams import (
         ThreadSafeStderr,
         ThreadSafeStdout,
         ThreadSafeStream,
     )
     from marimo._messaging.types import KernelStreams
-    from marimo._session.state.session_view import SessionView
 
     view = SessionView()
     stream = ThreadSafeStream(

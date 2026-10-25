@@ -18,7 +18,7 @@ def _install_runtime_filename() -> None:
     source_path = str(Path(source).resolve(strict=True))
     snapshot_path = str(Path(snapshot).resolve(strict=True))
 
-    from marimo._runtime.commands import AppMetadata
+    from marimo._internal.commands import AppMetadata
     from marimo._session.session import SessionImpl
 
     native = SessionImpl.create
