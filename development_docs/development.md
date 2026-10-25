@@ -81,7 +81,7 @@ fail the audit.
 ## Review dependency updates
 
 Renovate and pnpm both enforce a 14-day release cooldown. Review the actual
-manifest and lockfile changes against the current branch; a bot PR's summary
+manifest and lockfile changes against the current branch. A bot PR's summary
 may include versions that were superseded or could not be installed. Keep
 updates whose releases and required dependencies satisfy the cooldown, and
 leave newer versions for a later update. Keep compatibility constraints in
@@ -103,7 +103,7 @@ make check
 Commit `pnpm-lock.yaml` with the accepted manifest changes. When updating pnpm
 itself, both `package.json` and the lockfile's package-manager dependency records
 must name the new version. An install rejected by `minimumReleaseAge` should
-wait for maturity; keep the cooldown and its existing exclusions intact.
+wait for maturity. Keep the cooldown and its existing exclusions intact.
 
 ## Change Python producer behavior
 
@@ -220,10 +220,13 @@ and every declared dependency must be importable in the notebook kernel.
 Declare source modules that affect conversion output, including modules loaded
 dynamically. A borrowed session uses module objects already loaded at first
 exporter preparation. Restart the session for earlier edits to take effect.
-Later disk drift fails with `exporter_source_changed`. Custom exporter leaves
-rerun in every state run. The selected notebook value
-follows Marimo's native cache policy. Create `mo.watch.file` in an upstream
-cell before reading the watched path from dependent cells. Give other external
+Later disk drift fails with `exporter_source_changed`. Exact prepared-export
+reuse returns before importing the exporter, so name a local exporter module in
+the notebook's `[tool.marimo-export] imports` metadata when its edits must
+prepare the states again. Custom exporter leaves rerun in every state run. The
+selected notebook value follows Marimo's native cache policy. Create
+`mo.watch.file` in an upstream cell before reading the watched path from
+dependent cells. Give other external
 systems an author-owned Marimo cache or side-effect boundary so native
 invalidation can observe them.
 
@@ -239,7 +242,8 @@ summary_exporter = importable(
 
 To add a built-in exporter:
 
-1. Register the ID in `exporters/_definitions.py`.
+1. Register the ID in `exporters/_definitions.py`. Set `live=True` when the
+   leaf must skip native cache restoration and rerun in every state run.
 2. Expose a typed descriptor factory.
 3. Implement the callable under `exporters/_runtime`.
 4. Define a closed option schema and deterministic defaults.

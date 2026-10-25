@@ -23,7 +23,7 @@ report/
 ```
 
 `index.json` is the single entry point. Asset paths are derived from codec and
-SHA-256 rather than supplied as arbitrary paths.
+SHA-256.
 
 An export directory may contain application-owned sidecar files beside
 `index.json`. The declared export closure consists of `index.json` and the exact

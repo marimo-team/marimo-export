@@ -186,7 +186,7 @@ float32 and extension tokens. Envelope failures surface as `asset_invalid`.
 [Portable JSON](../portable-json) defines its separate 256-level and
 100,000-value limits.
 
-The current AnyWidget loader parses its inner JSON document before graph
+The AnyWidget loader parses its inner JSON document before graph
 validation and applies no separate depth or value-count limit to that graph.
 Use `maxBytes` to set a conservative outer asset budget and load AnyWidget
 content from a trusted publisher.

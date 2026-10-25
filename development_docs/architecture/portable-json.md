@@ -57,7 +57,10 @@ parsePortableJson(source)
 `maximumValues` defaults to 100,000. A document owner passes its own limit, as
 the export index reader does with 2,000,000 on both strict parsing and
 conversion. Python `json_value()`, `json_object()`, `canonical_bytes()`, and
-`decode_json()` take the same limit as `max_values`.
+`decode_json()` take the same limit as `max_values`. The index limit lives in
+`MAX_INDEX_VALUES` in `_limits.py` and `INDEX_MAX_VALUES` in
+`packages/browser/src/schema.ts`. Both test suites check them against
+`tests/fixtures/export/index-limits.json`.
 
 For valid `JsonValue` input, `portableJsonValue()` and `portableJsonObject()`
 detach the accepted tree and recursively freeze the JavaScript result.

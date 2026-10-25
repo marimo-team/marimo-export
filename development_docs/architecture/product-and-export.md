@@ -15,7 +15,7 @@ format stores that relation as canonical JSON and content-addressed assets.
 | ExportPlan        | Inferred inputs, complete states, identities, and reusable work                                 |
 | Exported state    | One complete input assignment, canonical fingerprint, aliases, and named outputs                |
 | Control binding   | Scoped UI object ID mapped to an input and semantic tree path                                   |
-| Output            | Published name, typed source, and optional value exporter                                       |
+| Output            | Published name, typed source, optional value exporter, and `read_only` and `optional` flags     |
 | Representation    | Stable codec and media type for one output name                                                 |
 | Output descriptor | Representation, provenance, and inline data or an asset reference                               |
 | Asset             | Content-addressed export payload bytes                                                          |
@@ -69,7 +69,11 @@ scalar, NumPy, Arrow, and BlobAsset cache representations while encoding
 composite portable values as canonical JSON. An export projection converts the
 selected value to a BlobAsset. Rendered-output and complete-cell projections
 capture Marimo-owned output records through the child recording stream and
-`SessionView`.
+`SessionView`. `_marimo/ui_functions.py` decides which Python functions of a
+projected UI object may enter the export. A `read_only` rendered-output or cell
+output keeps an eager marimo table and lists the functions behind its search,
+paging, sorting, summaries, and downloads. Any other UI object that needs a
+Python function fails with `output_not_portable`.
 
 ## Selectors and exporters
 
@@ -96,7 +100,8 @@ Vega-Lite, negotiated media, Parquet, and AnyWidget. The `media` exporter wraps
 the same media rules. Their bytes match when both run the same library versions
 and the figure has the same style. Exporter execution loads optional
 distributions when their implementation needs them. The capture-scoped registry
-freezes the resolved callables and modules, invokes each callable as
+in `exporters/_prepare.py` freezes the resolved custom callables and modules
+through `exporters/_identity.py`, invokes each callable as
 `exporter(value, **options)`, and verifies source stability before commit.
 
 ## Every state has an entry for every output

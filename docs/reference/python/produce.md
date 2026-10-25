@@ -392,8 +392,8 @@ state output at the cheapest entry that output can write: the cheapest
 descriptor, or an unavailable output when the output is in `optional_outputs`.
 Outputs with assets or large inline values write more. `plan()`, `prepare()`,
 `build()`, and capture raise `NotebookExportError` with `export_invalid` when
-either lower bound exceeds its limit. The error `details` carry `index_values` and `max_index_values`, or
-`index_bytes` and `max_index_bytes`.
+either lower bound exceeds its limit. The error `details` carry `index_values`
+and `max_index_values`, or `index_bytes` and `max_index_bytes`.
 
 `matches()` compares the spec, default, notebook, input and output names,
 aliases, fingerprints, and complete input vectors. The identity helpers live in
@@ -651,7 +651,7 @@ mean that the notebook has no cacheable cells. `to_dict()` returns the four
 nonnegative fields. Exceptions raised by the callback propagate to the producer
 call.
 
-Producer progress callbacks are notifications, not transaction guards. A
+A producer progress callback cannot roll back the step it reports. A
 `state_finished` event follows the prepared-state commit. A
 `prepared_committed` event follows the generation commit. A `write_finished`
 event follows destination commit and verification. An exception from one of

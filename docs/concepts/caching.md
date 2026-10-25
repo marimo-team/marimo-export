@@ -9,7 +9,7 @@ marimo-export and [marimo](https://marimo.io/) reuse different work. The export
 repository reuses finished state and output data. marimo's computation cache
 reuses notebook cell results when a state still needs to run.
 
-In the quickstart, we can see the two kinds of reuse happen at different times:
+In the quickstart, the two kinds of reuse happen at different times:
 
 | Request                         | marimo-export                 | marimo                                            |
 | ------------------------------- | ----------------------------- | ------------------------------------------------- |
@@ -40,14 +40,25 @@ the cell's compiled behavior, tracked references, and registered side effects.
 On a usable hit, marimo restores compatible definitions and skips the cell body.
 On a miss, marimo executes the cell and persists the successful result.
 
+When a state runs, these cells skip restoration and execute again. An output
+cell is the cell that marimo-export generates to select one output's value and
+convert it to the output's representation:
+
+| Output                 | Cell that runs again | Reason                                      |
+| ---------------------- | -------------------- | ------------------------------------------- |
+| `cell` source          | The selected cell    | Console records are uncached side effects   |
+| `anywidget.bundle`     | The output cell      | The bundle reads the session's widget model |
+| Custom `module:symbol` | The output cell      | The callable can read undeclared state      |
+
 File-based builds also track the distributions and local modules that the
 notebook imports, as defined in
 [What the producer environment covers](preparation-and-reuse#what-the-producer-environment-covers).
 Editing an imported helper or upgrading an imported package invalidates prepared
 results and automatic cell-cache entries. Adding an import that resolves to a
 distribution or local module outside the current scope changes that scope as
-well, so every automatic cell-cache entry runs again once. Explicit `mo.cache` and `mo.persistent_cache` calls
-retain their authored keys and reference dependencies.
+well, so every automatic cell-cache entry runs again once. Explicit `mo.cache`
+and `mo.persistent_cache` calls retain their authored keys and reference
+dependencies.
 Other notebook-only edits still let marimo reuse unaffected cells. Restart a
 live notebook session after changing imported Python code so capture sees the
 new module values.

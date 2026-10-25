@@ -120,7 +120,9 @@ focused modules. `_repository/preparation.py` contains the private preparation
 capability used by producer services. `_repository/observations.py` contains the
 private raw observation capability used by the ledger and preparation.
 `_marimo/capabilities.py` contains package-owned execution records and
-protocols.
+protocols. `exporters/_prepare.py` resolves custom exporters through the
+`ExporterRuntime` port, and `_observations/runs.py` records the `KernelRun`
+values that the compat hook reports.
 
 The browser dependency direction is:
 
@@ -199,6 +201,7 @@ for integrity, staging, mounts, and disposal.
 | `spec.py`                          | Authored StateSpace, ExportSpec, and OutputSpec                   |
 | `planning.py`, `_execution`        | Public plan records, baseline, normalization, transient cells     |
 | `_services`                        | Plan, prepare, capture, artifact assembly, durable write          |
+| `_index_budget.py`                 | Lower bound on index values and bytes for plans and preparation   |
 | `_build.py`                        | Destination preflight and prepare-write composition               |
 | `observations.py`, `_observations` | Observation records, queue, worker, run filter, source binding    |
 | `repository.py`                    | Public repository facade, status, pruning, lifecycle              |
@@ -206,7 +209,9 @@ for integrity, staging, mounts, and disposal.
 | `_repository/observations.py`      | Private raw observation persistence for ledger and preparation    |
 | `_repository/sqlite`               | SQL schema, connections, transactions, retention queries          |
 | `_repository` artifact modules     | Immutable files, staging, leases, fencing, recovery               |
+| `exporters`                        | Exporter definitions, custom preparation, AnyWidget asset checks  |
 | `_marimo/capabilities.py`          | Package-owned execution records and protocols                     |
+| `_marimo` bridge and policy files  | `bridge.py`, `transfer.py`, `file_urls.py`, `ui_functions.py`     |
 | `_marimo` composition roots        | Concrete adapter construction and managed entry points            |
 | `_marimo/compat`                   | Private Marimo inspection, execution, cache, projection, transfer |
 | `_remote`                          | HTTP, authentication, scratchpad transport, managed process tree  |

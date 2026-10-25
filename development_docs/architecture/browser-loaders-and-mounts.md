@@ -136,7 +136,10 @@ own envelope fields before supplying a prepared manifest to the controller.
 ## Loading crosses the integrity boundary
 
 `ExportOutput.load(loader, options)` requires one explicit loader whose codec
-and media-type predicate accept the output descriptor.
+and media-type predicate accept the output descriptor. An output whose
+`unavailable` field is set rejects with `output_unavailable` before any loader
+runs. `loadOutputs()` rejects before starting any load when one requested
+output is unavailable.
 
 Before invoking a representation runtime, browser core checks:
 
@@ -188,8 +191,8 @@ Conflicting resources or replay order fail before the application stages DOM.
 
 Native Marimo rendering remains an application adapter. The host owns the pinned
 frontend graph, stores, custom-element definitions, styles, and registries used
-by its live and Prepared presentation. Export's reader and resource composition
-return records for that adapter. The
+by its live and prepared presentation. The browser reader and resource
+composition return records for that adapter. The
 [Studio integration record](../proposals/studio-prepared-runtime.md) links one
 consumer's native frontend ownership.
 

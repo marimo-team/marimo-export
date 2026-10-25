@@ -37,13 +37,13 @@ Run focused package commands while developing, then finish with `make check`.
    and portable artifacts in immutable directories. Marimo's native cache
    remains the computation cache.
 4. Producer functions call services under `_services`. Those services use the
-   private `PreparationRepository`. Observation workers use the private
+   private `PreparationRepository`. The observation ledger uses the private
    `ObservationRepository`. Reader, public repository, inspection, and
    diagnostic operations use their focused owners.
 5. Private `marimo._*` imports stay under `_marimo/compat`. The package pins
    its supported Marimo release in `packages/python/pyproject.toml` and
-   validates the exact cache sources recorded by the compatibility metadata
-   before installing a reversible adapter lease.
+   validates the marimo source digests recorded in
+   `_marimo/compat/release.json` before installing a reversible adapter lease.
 6. `OwnedNotebook` owns a temporary notebook copy, loopback server, session,
    process groups, and cleanup. `prepare` uses one owned context when work is
    missing. `capture` borrows one active edit session.
@@ -72,10 +72,13 @@ CLI and applications -> public Python SDK
   repository API      -> ExportRepository -> SQLite and artifact adapters
   diagnostics         -> Marimo composition root
 
-Observation worker -> ObservationRepository -> SQLite adapter
+Observation ledger -> ObservationRepository -> SQLite adapter
+Observation runs   -> KernelRun records -> Marimo composition root -> compat run hook
 Producer services  -> PreparationRepository -> repository adapters
 
+Marimo bridge            -> exporter preparation -> ExporterRuntime port
 Marimo composition roots -> private Marimo compatibility adapters
+Compatibility adapters   -> marimo-export policy modules
 
 Browser application -> prepared controller -> browser core -> loader facade
                                                         -> one loader runtime
@@ -90,8 +93,23 @@ Browser application -> prepared controller -> browser core -> loader facade
   to services. `_repository/observations.py` is the private raw observation
   capability available to the ledger and preparation. `_repository/sqlite`
   owns SQL and schema details.
-- `_marimo/composition.py`, `_marimo/anywidget.py`, `_marimo/blob.py`, and
-  `_marimo/entrypoints.py` construct private Marimo adapters.
+- `_marimo/composition.py`, `_marimo/anywidget.py`, `_marimo/blob.py`,
+  `_marimo/entrypoints.py`, and `_marimo/managed_server.py` construct private
+  Marimo adapters.
+- `_marimo/compat/observations.py` reports each finished cell-runner pass as a
+  `KernelRun`. `_observations/runs.py` decides which runs become observations,
+  and `_observations/source.py` binds them to one stable source revision.
+- `exporters/_prepare.py` resolves and freezes exporters through the
+  `ExporterRuntime` port. `PrivateKernelRuntime` in `_marimo/compat/kernel.py`
+  implements it with the kernel reads in `_marimo/compat/exporters.py`.
+  `exporters/_identity.py` hashes exporter sources and detects drift.
+- Compatibility adapters delegate these decisions to marimo-export policy
+  modules. `_marimo/file_urls.py` parses marimo file URLs,
+  `_marimo/ui_functions.py` decides which UI functions an output may list,
+  `exporters/_anywidget_assets.py` validates AnyWidget modules and styles,
+  `_environment.py` computes the import-scoped environment identity that
+  producer identity and the native cell cache share, and `_execution/plan.py`
+  decides which output cells run live.
 - `_remote` owns HTTP, authentication, scratchpad transport, server-sent
   events, and managed process ownership.
 - Browser core imports no specialized chart, table, array, or widget runtime.
@@ -129,32 +147,38 @@ may write sparse rows because one captured baseline supplies omitted values. An
 observation is one successful complete input vector retained as authoring
 evidence. A prepared state is a reusable portable result for one producer,
 output plan, and state fingerprint. A prepared export is a leased immutable
-generation for one exact ExportSpec. An output is one published name and
-representation for every state. An asset is a content-addressed file referenced
-by an output descriptor. A consumer is a Python reader, browser reader, agent,
-or another implementation of the export format.
+generation for one exact ExportSpec. An output is one published name with a
+representation in every state, or an unavailable entry where an optional output
+has no value. An asset is a content-addressed file referenced by an output
+descriptor. A consumer is a Python reader, browser reader, agent, or another
+implementation of the export format.
 
 ## Change routing
 
-| Change                                         | Primary owner                                                                  | Required companions                                          |
-| ---------------------------------------------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------ |
-| StateSpace, ExportSpec, or state normalization | `spec.py`, `_execution/plan.py`, `planning.py`                                 | YAML, JSON, programmatic, matrix, and live-state tests       |
-| Observation lifecycle                          | `observations.py`, `_observations`, `_repository/observations.py`, compat hook | Success, source-match, queue, revision, and close tests      |
-| Planning or preparation                        | `_services`, `prepared.py`, `progress.py`                                      | Exact reuse, incremental state, cancellation, and live tests |
-| Repository or retention                        | `repository.py`, `_repository`                                                 | SQLite, filesystem, concurrency, fencing, and recovery tests |
-| Export format or local reader                  | `descriptors.py`, `index.py`, `wire.py`, `reader.py`                           | Browser schema and canonical fixtures                        |
-| Marimo integration or cache                    | `_marimo/capabilities.py`, composition, one compat adapter                     | Probe, adapter, build, and capture tests                     |
-| Managed process lifecycle                      | `producer.py`, `_remote/managed.py`, managed entry points                      | Startup, shutdown, source, and descendant tests              |
-| Prepared browser control                       | `packages/browser/src/prepared`                                                | Manifest, refresh, transition, cancellation, packed tests    |
-| Browser reader or loader contract              | `packages/browser`                                                             | TypeScript and cross-language tests                          |
-| Portable JSON contract                         | `packages/portable-json`, `_json.py`                                           | Cross-language fixtures and packed consumers                 |
-| One output representation                      | `packages/loader-*` and exporter runtime                                       | Peer dependency, malformed input, abort, and disposal tests  |
-| Value selection or media negotiation           | `values.py`                                                                    | Grammar, resolution, renderer, and standard-library tests    |
-| CLI or public Python API                       | `_cli`, package root, public records                                           | Human output, JSON, JSONL, exit, and wheel smoke             |
-| Application directory delivery                 | `delivery.py`, `_directory*`                                                   | Materialization, races, rollback, and Windows tests          |
-| External consumer integration                  | Public SDK and browser `prepared` subpath                                      | Consumer revision and cross-repository acceptance tests      |
-| Example or browser transition                  | `examples/vite-vanilla`                                                        | Typecheck, build, desktop, and narrow browser proof          |
-| Public documentation                           | `docs/`, VitePress config                                                      | Examples, links, search, LLM bundles, and rendered proof     |
+| Change                                         | Primary owner                                                               | Required companions                                          |
+| ---------------------------------------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| StateSpace, ExportSpec, or state normalization | `spec.py`, `_execution/plan.py`, `planning.py`                              | YAML, JSON, programmatic, matrix, and live-state tests       |
+| Observation lifecycle                          | `observations.py`, `_observations/runs.py`, `_repository/observations.py`   | Success, queue, and close tests                              |
+| Observation source matching                    | `_observations/source.py`, `compat/observations.py`                         | Source-match, revision, and `KernelRun` tests                |
+| Planning or preparation                        | `_services`, `prepared.py`, `progress.py`, `_index_budget.py`               | Exact reuse, incremental state, cancellation, and live tests |
+| Repository or retention                        | `repository.py`, `_repository`                                              | SQLite, filesystem, concurrency, fencing, and recovery tests |
+| Export format or local reader                  | `descriptors.py`, `index.py`, `wire.py`, `reader.py`, `_limits.py`          | Browser schema and canonical fixtures                        |
+| Marimo integration or cache                    | `_marimo/capabilities.py`, composition, one compat adapter                  | Probe, adapter, build, and capture tests                     |
+| Live outputs and cache bypass                  | `_execution/plan.py`, `exporters/_definitions.py`                           | Warm-build cache hit and miss tests                          |
+| Environment identity                           | `_environment.py`                                                           | Import closure, script metadata, and reuse tests             |
+| Exporter resolution or identity                | `exporters/_prepare.py`, `exporters/_identity.py`, `compat/exporters.py`    | Identity pin, source drift, and custom exporter build tests  |
+| marimo file URLs or exported UI functions      | `_marimo/file_urls.py`, `_marimo/ui_functions.py`                           | URL grammar, read-only table, and transfer tests             |
+| Managed process lifecycle                      | `producer.py`, `_remote/managed.py`, managed entry points                   | Startup, shutdown, source, and descendant tests              |
+| Prepared browser control                       | `packages/browser/src/prepared`                                             | Manifest, refresh, transition, cancellation, packed tests    |
+| Browser reader or loader contract              | `packages/browser`                                                          | TypeScript and cross-language tests                          |
+| Portable JSON contract                         | `packages/portable-json`, `_json.py`                                        | Cross-language fixtures and packed consumers                 |
+| One output representation                      | `packages/loader-*`, `exporters/_runtime`, `exporters/_anywidget_assets.py` | Peer dependency, malformed input, abort, and disposal tests  |
+| Value selection or media negotiation           | `values.py`                                                                 | Grammar, resolution, renderer, and standard-library tests    |
+| CLI or public Python API                       | `_cli`, package root, public records                                        | Human output, JSON, JSONL, exit, and wheel smoke             |
+| Application directory delivery                 | `delivery.py`, `_directory*`                                                | Materialization, races, rollback, and Windows tests          |
+| External consumer integration                  | Public SDK and browser `prepared` subpath                                   | Consumer revision and cross-repository acceptance tests      |
+| Example or browser transition                  | `examples/vite-vanilla`                                                     | Typecheck, build, desktop, and narrow browser proof          |
+| Public documentation                           | `docs/`, VitePress config                                                   | Examples, links, search, LLM bundles, and rendered proof     |
 
 ## Core invariants
 

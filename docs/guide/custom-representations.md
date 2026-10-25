@@ -56,9 +56,12 @@ bytes to `dependencies`, including ordinary imported helpers. A live session
 uses module objects already loaded in that kernel, so restart it after changing
 an imported exporter or helper module.
 
-Exporter source and declared dependencies contribute to the output leaf's
-marimo computation-cache identity when a state executes. Exact prepared-export
-reuse returns before importing the exporter. Name a local exporter module in the
+When a state executes, the
+[output cell](../concepts/caching#marimo-decides-whether-a-cell-can-be-restored)
+that runs the exporter skips marimo's cell cache and runs again, because a custom callable can read state outside its
+selected value. marimo-export checks the exporter source and declared
+dependencies for drift before the state completes. Exact prepared-export reuse
+returns before importing the exporter. Name a local exporter module in the
 notebook's `[tool.marimo-export] imports` metadata when edits must invalidate
 prepared results. [Declare modules loaded by
 name](../concepts/preparation-and-reuse#declare-modules-loaded-by-name) shows the

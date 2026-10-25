@@ -82,6 +82,16 @@ states record `output.unavailable` with a `reason` and `message`. Check it
 before loading, because loading an unavailable output fails with
 `output_unavailable`.
 
+A marimo table calls Python for search, paging, and sorting, so a rendered
+`mo.ui.table` fails preparation with `output_not_portable`. Pass
+`read_only=True` to `OutputSpec.output()` or `OutputSpec.cell()`, or write
+`read_only: true` in YAML, to keep the table's first page. The build reports an
+`output_read_only` warning that names the functions the exported table cannot
+call. Lazy tables, `mo.ui.dataframe`, chat, file browser, and `mo.lazy` still
+fail with `read_only`, because their first view needs Python. Collect a lazy
+frame before displaying it, or export the dataframe through `parquet.table`
+when the app pages or filters the rows.
+
 ## Immutable browser entry
 
 ```ts
@@ -123,8 +133,9 @@ await controller.updateInputs({ region: "Northeast" });
 ```
 
 The port loads and commits the complete application state. Stage multi-output
-views before changing visible hosts. `restore()` can reinstate the last committed
-publication after a failure.
+views before changing visible hosts, and stage a placeholder for an optional
+output whose `unavailable` is set. The port's optional `restore(publication)`
+reinstates the last committed state after the controller rejects a request.
 
 ## Custom BlobAsset pair
 

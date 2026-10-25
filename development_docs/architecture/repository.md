@@ -155,8 +155,10 @@ public marimo-export operations and carry no database schema or SQL.
 
 `ObservationLedger` receives portable input vectors that are complete for the
 eligible user-interface root relation observed in one successful normal notebook
-run. The marimo adapter records a candidate after a run that
-finished with no exception, interruption, cancellation, or scratch-cell work.
+run. The compat hook reports each finished pass as a `KernelRun`.
+`_observations/runs.py` records a candidate for a `completed` run outside the
+scratchpad. A raised exception, a cancelled cell, or an interruption marks the
+run `failed` or `interrupted`, and the ledger skips it.
 
 Before persistence, the worker verifies that the live cell signature matches
 one stable saved notebook revision. The resulting producer identity binds the

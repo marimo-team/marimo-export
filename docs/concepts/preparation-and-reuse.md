@@ -133,8 +133,9 @@ verification step fails the producer operation. An
 [optional output](outputs-and-representations#optional-outputs-can-be-unavailable-in-some-states)
 records an unavailable output instead when its selector names a missing step,
 its exporter finds no accepted representation, or a cell in its closure calls
-`mo.stop`. Other failures of an optional output still fail the operation. A state that committed before a
-later failure can remain reusable for the next attempt.
+`mo.stop`. Other failures of an optional output still fail the operation. A
+state that committed before a later failure can remain reusable for the next
+attempt.
 
 ## Reuse cannot detect every external change
 

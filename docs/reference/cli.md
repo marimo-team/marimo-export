@@ -278,18 +278,18 @@ for planning, result, warning, and error field contracts.
 
 ## Exit codes
 
-|  Exit | Meaning                                   |
-| ----: | ----------------------------------------- |
-|   `0` | Success                                   |
-|   `1` | Unexpected internal failure               |
-|   `2` | Arguments or local value shape            |
-|   `3` | Environment, transport, or live session   |
-|   `4` | Export planning or marimo compatibility   |
-|   `5` | State execution or output materialization |
-|   `6` | Export or asset integrity                 |
-|   `7` | Filesystem or export repository           |
-| `130` | Interrupted                               |
-| `141` | Closed output pipe                        |
+|  Exit | Meaning                                         |
+| ----: | ----------------------------------------------- |
+|   `0` | Success                                         |
+|   `1` | Unexpected internal failure                     |
+|   `2` | Arguments or local value shape                  |
+|   `3` | Environment, transport, or live session         |
+|   `4` | Export planning or marimo compatibility         |
+|   `5` | State execution or output materialization       |
+|   `6` | Invalid or oversized export, or asset integrity |
+|   `7` | Filesystem or export repository                 |
+| `130` | Interrupted                                     |
+| `141` | Closed output pipe                              |
 
 [Build and capture](../guide/build-and-capture) provides the complete producer
 workflow.
