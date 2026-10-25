@@ -108,7 +108,7 @@ provenance text and control bindings, which it counts at their smallest.
 
 The producer checks the projection at three points:
 
-1. `preflight_plan()` and the capture entry points bound the index from the
+1. `plan()`, `prepare()`, and the capture entry points bound the index from the
    `ExportSpec` before any notebook runs. Only rows that assign the same names
    and differ in a non-object value count as distinct states, because sparse
    rows can collapse through baseline values.

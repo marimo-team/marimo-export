@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from marimo_export._diagnostics import record_cleanup_failure
+from marimo_export._index_budget import IndexProjection
 from marimo_export._repository.preparation import (
     PreparationRepository,
     RepositoryWait,
@@ -53,6 +54,7 @@ def prepare(
     preparation = preparation_repository(selected)
     transferred = False
     try:
+        IndexProjection.for_spec(spec).require_fits()
         preflight = preflight_plan(source, spec)
         require_not_cancelled(cancelled)
         exact = preparation.current(preflight.repository_identity, wait=wait)

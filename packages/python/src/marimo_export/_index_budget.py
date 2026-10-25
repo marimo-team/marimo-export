@@ -39,7 +39,7 @@ from marimo_export.descriptors import (
 )
 from marimo_export.errors import NotebookExportError
 from marimo_export.index import ExportIndex, NotebookProvenance, ProducerProvenance, StateEntry
-from marimo_export.planning import IndexBudget, optional_outputs
+from marimo_export.planning import IndexBudget, _optional_outputs
 from marimo_export.spec import ExportSpec
 from marimo_export.wire import state_fingerprint
 
@@ -101,7 +101,7 @@ def _minimal_descriptors() -> tuple[OutputDescriptor, ...]:
             asset=asset,
             provenance=provenance,
             media_type="a/b",
-            filename=None,
+            filename=_SHORTEST_TEXT,
             metadata={},
         ),
     )
@@ -115,6 +115,8 @@ def _minimal_unavailable() -> tuple[UnavailableOutput, ...]:
 
 
 def _cheapest(entries: Iterable[OutputEntry]) -> _Cost:
+    """Return the fewest values and the fewest bytes, each over every entry."""
+
     costs = [_cost(entry.to_value()) for entry in entries]
     return _Cost(min(cost.values for cost in costs), min(cost.bytes for cost in costs))
 
@@ -192,7 +194,7 @@ class IndexProjection:
         return cls(
             inputs=names,
             outputs=tuple(spec.outputs),
-            optional_outputs=optional_outputs(spec),
+            optional_outputs=_optional_outputs(spec),
             aliases=tuple(spec.states),
             states={str(position): inputs for position, inputs in enumerate(rows.values())},
         )
@@ -220,7 +222,7 @@ class IndexProjection:
             raise NotebookExportError(
                 f"the export index needs at least {budget.index_values:,} JSON values, more "
                 f"than the {budget.max_index_values:,}-value limit, so "
-                + _reduction(states, budget.index_values, budget.max_index_values),
+                + _reduction(states, budget),
                 code="export_invalid",
                 details={
                     "index_values": budget.index_values,
@@ -230,8 +232,7 @@ class IndexProjection:
         if budget.index_bytes > budget.max_index_bytes:
             raise NotebookExportError(
                 f"the export index needs at least {budget.index_bytes:,} bytes, more than "
-                f"the {budget.max_index_bytes:,}-byte limit, so "
-                + _reduction(states, budget.index_bytes, budget.max_index_bytes),
+                f"the {budget.max_index_bytes:,}-byte limit, so " + _reduction(states, budget),
                 code="export_invalid",
                 details={
                     "index_bytes": budget.index_bytes,
@@ -250,8 +251,11 @@ class IndexProjection:
         self._members += _member(_DIGEST, entry)
 
 
-def _reduction(states: int, needed: int, limit: int) -> str:
-    keep = states * limit // needed
+def _reduction(states: int, budget: IndexBudget) -> str:
+    keep = min(
+        states * budget.max_index_values // budget.index_values,
+        states * budget.max_index_bytes // budget.index_bytes,
+    )
     if 0 < keep < states:
         return f"export at most about {keep:,} of the {states:,} states, or fewer outputs"
     return "export fewer outputs"

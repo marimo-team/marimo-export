@@ -71,7 +71,7 @@ class PlannedState:
 
 @dataclass(frozen=True, slots=True)
 class IndexBudget:
-    """The fewest JSON values and bytes the export index can hold, beside its limits.
+    """A lower bound on the JSON values and bytes of an export index, beside its limits.
 
     Planning counts every unprepared state output at the cheapest entry that
     output can write, so the written index holds at least this much.
@@ -204,7 +204,7 @@ class ExportPlan:
 
     @property
     def index_budget(self) -> IndexBudget:
-        """Return the lower bound of the index this plan writes."""
+        """Return the fewest values and bytes the index this plan writes contains."""
 
         from marimo_export._index_budget import IndexProjection
 
@@ -294,7 +294,7 @@ def output_plan_sha256(spec: ExportSpec) -> str:
     return sha256_bytes(canonical_bytes(outputs))
 
 
-def optional_outputs(spec: ExportSpec) -> tuple[str, ...]:
+def _optional_outputs(spec: ExportSpec) -> tuple[str, ...]:
     """Return the sorted outputs that may be unavailable in a state."""
 
     if not isinstance(spec, ExportSpec):
@@ -316,6 +316,5 @@ __all__ = [
     "IndexBudget",
     "PlannedState",
     "export_plan_identity",
-    "optional_outputs",
     "output_plan_sha256",
 ]

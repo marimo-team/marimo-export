@@ -114,20 +114,21 @@ run or a Python service.
 `export_invalid` with `index_values` and `max_index_values`, or `index_bytes`
 and `max_index_bytes`, in `details` means `index.json` would exceed its value or
 byte limit. Planning raises it before the notebook runs when the authored states
-and outputs already exceed a limit. Preparation raises it after a prepared state
-proves that the remaining states cannot fit.
+and outputs already exceed a limit, or after inspection when the resolved states
+do. Preparation raises it after a prepared state proves that the remaining
+states cannot fit.
 
-The message suggests how many states to keep. Check the lower bound before a
-build:
+The message suggests how many states to keep. Remove states, or split the
+outputs across two exports, then confirm that the smaller spec fits:
 
 ```bash
 uv run marimo-export plan report.py --spec report.export.yaml --json
 ```
 
 Compare `index_budget.index_values` and `index_budget.index_bytes` with their
-limits. Remove states or outputs, or split the outputs across two exports.
-States prepared before the failure stay in the repository, and a smaller spec
-reuses them.
+limits. States prepared before the failure stay in the repository. A spec with
+fewer states and the same outputs reuses them. Changing the outputs changes the
+output plan, so its states are prepared again.
 
 ## The destination cannot commit
 

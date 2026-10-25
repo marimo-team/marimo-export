@@ -241,16 +241,16 @@ Every state writes one entry per output into `index.json`, which holds at most
 16 MiB and 2,000,000 JSON values. The smallest descriptor costs about 120 bytes,
 so the 16 MiB limit allows roughly 130,000 state outputs, such as 1,300 states
 with 100 outputs each. Outputs with assets cost about 200 bytes, inline JSON
-values cost their full size, and an unavailable optional output costs about 50
+values cost their full size, and an unavailable optional output costs 50 to 70
 bytes plus its message.
 
-`plan` reports the lower bound as `index_budget`. Build checks the same bound
-before it starts the notebook, capture checks it before it inspects the session,
-and both check again after each state is prepared. A state space that cannot
-fit fails with `export_invalid`, a message that suggests how many states to
-keep, and `index_values` or `index_bytes` in `details`. Reduce the matrix or
-move outputs to a separate export. States that were already prepared stay in
-the repository, so a smaller spec reuses them.
+`plan` reports the lower bound as `index_budget`. Build and capture check the
+authored states and outputs before any notebook work, check the resolved plan,
+and check again after each state is prepared. A state space that cannot fit
+fails with `export_invalid`, a message that suggests how many states to keep,
+and `index_values` or `index_bytes` in `details`. Reduce the matrix or move
+outputs to a separate export. Prepared states stay in the repository, and a
+spec with fewer states and the same outputs reuses them.
 
 ## Check the resolved relation
 

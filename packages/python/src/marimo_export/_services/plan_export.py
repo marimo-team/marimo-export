@@ -22,7 +22,7 @@ from marimo_export.index import ExportIndex
 from marimo_export.planning import (
     ExportPlan,
     PlannedState,
-    optional_outputs,
+    _optional_outputs,
     output_plan_sha256,
 )
 from marimo_export.producer import OwnedNotebook, _timeout, open_notebook
@@ -60,7 +60,6 @@ def repository_wait(
 def preflight_plan(source: StrPath, spec: ExportSpec) -> PlanPreflight:
     """Compute the exact repository identity without opening a notebook session."""
 
-    IndexProjection.for_spec(spec).require_fits()
     identity = producer_identity(source)
     repository_identity = RepositoryIdentity(
         producer_sha256=identity.producer_sha256,
@@ -101,6 +100,7 @@ def plan(
     selected = ExportRepository.open() if repository is None else repository
     preparation = preparation_repository(selected)
     try:
+        IndexProjection.for_spec(spec).require_fits()
         preflight = preflight_plan(source, spec)
         exact = preparation.current(preflight.repository_identity, wait=wait)
         if exact is not None:
@@ -236,7 +236,7 @@ def plan_from_artifact(
         observation_revision=observations.revision,
         observations=observations.observations(index.inputs),
         exact_reuse=True,
-        optional_outputs=optional_outputs(spec),
+        optional_outputs=_optional_outputs(spec),
     )
 
 

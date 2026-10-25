@@ -304,22 +304,22 @@ portable JSON object. The `details` property returns a detached object.
 
 ### General error classes
 
-| Error                    | Default code              | Contract                                           |
-| ------------------------ | ------------------------- | -------------------------------------------------- |
-| `MarimoExportError`      | `marimo_export_error`     | Base typed failure                                 |
-| `SpecError`              | `spec_invalid`            | Export specification invalid                       |
-| `TransportError`         | `transport_failed`        | Server request, stream, or bridge failure          |
-| `CaptureLimitError`      | `capture_limit_exceeded`  | Capture exceeded its transfer limits               |
-| `SessionError`           | `session_error`           | Live or owned session unavailable                  |
-| `NotebookExportError`    | `export_invalid`          | Export missing, malformed, or unreadable           |
-| `ExportUnavailableError` | `export_unavailable`      | Valid export storage temporarily unavailable       |
-| `IntegrityError`         | `integrity_failed`        | Asset integrity or envelope validation failed      |
-| `CompatibilityError`     | `marimo_incompatible`     | Installed marimo adapter capability mismatch       |
-| `ExecutionError`         | `state_execution_failed`  | Baseline or state execution failed                 |
-| `OutputError`            | `output_execution_failed` | Published output execution failed                  |
-| `CodecError`             | `codec_invalid`           | Native cache return cannot enter the export format |
-| `StateUnavailableError`  | `state_unavailable`       | Complete input vector absent from the export       |
-| `OutputUnavailableError` | `output_unavailable`      | Optional output has no value in the read state     |
+| Error                    | Default code              | Contract                                            |
+| ------------------------ | ------------------------- | --------------------------------------------------- |
+| `MarimoExportError`      | `marimo_export_error`     | Base typed failure                                  |
+| `SpecError`              | `spec_invalid`            | Export specification invalid                        |
+| `TransportError`         | `transport_failed`        | Server request, stream, or bridge failure           |
+| `CaptureLimitError`      | `capture_limit_exceeded`  | Capture exceeded its transfer limits                |
+| `SessionError`           | `session_error`           | Live or owned session unavailable                   |
+| `NotebookExportError`    | `export_invalid`          | Export missing, malformed, unreadable, or too large |
+| `ExportUnavailableError` | `export_unavailable`      | Valid export storage temporarily unavailable        |
+| `IntegrityError`         | `integrity_failed`        | Asset integrity or envelope validation failed       |
+| `CompatibilityError`     | `marimo_incompatible`     | Installed marimo adapter capability mismatch        |
+| `ExecutionError`         | `state_execution_failed`  | Baseline or state execution failed                  |
+| `OutputError`            | `output_execution_failed` | Published output execution failed                   |
+| `CodecError`             | `codec_invalid`           | Native cache return cannot enter the export format  |
+| `StateUnavailableError`  | `state_unavailable`       | Complete input vector absent from the export        |
+| `OutputUnavailableError` | `output_unavailable`      | Optional output has no value in the read state      |
 
 Repository failures live in `marimo_export.repository`. Observation failures
 live in `marimo_export.observations`. `PreparedManifestLimitError` lives in

@@ -13,7 +13,7 @@ from marimo_export.index import ProducerProvenance
 from marimo_export.planning import (
     ExportPlan,
     PlannedState,
-    optional_outputs,
+    _optional_outputs,
     output_plan_sha256,
 )
 from marimo_export.spec import ExportSpec
@@ -109,7 +109,7 @@ def decode_plan_wire(
         reusable_states=(),
         missing_states=tuple(sorted(state.fingerprint for state in states)),
         observations=(),
-        optional_outputs=optional_outputs(spec),
+        optional_outputs=_optional_outputs(spec),
     )
 
 

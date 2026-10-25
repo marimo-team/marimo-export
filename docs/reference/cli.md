@@ -35,9 +35,10 @@ repository reuse, and missing work. An exact repository match avoids notebook
 startup. Cold planning executes the initial autorun.
 
 The `Index` line and the `index_budget` JSON field report the fewest values and
-bytes the export index can hold, beside the 2,000,000-value and 16 MiB limits.
-A plan whose lower bound exceeds a limit fails with `export_invalid` before the
-notebook starts.
+bytes the export index contains, beside the 2,000,000-value and 16 MiB limits.
+A plan whose lower bound exceeds a limit fails with `export_invalid` and exit
+code `6`. When the authored states and outputs alone exceed a limit, the plan
+fails before the notebook starts.
 
 ## `build`
 
