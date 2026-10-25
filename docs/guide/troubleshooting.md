@@ -224,9 +224,10 @@ Inspect the manifest request and document before changing controller state:
   headers, and response size.
 - `manifest_invalid` means the manifest fields do not agree with one another or
   with the opened immutable export. Republish the manifest and matching export.
-- `query_ambiguous` means one query value matches more than one typed exported
-  value. Route the control through an unambiguous value or narrow the exported
-  domain.
+- `query_ambiguous` means one query text names more than one typed exported
+  value of an input, such as the string `"1"` and the number `1`. Reading and
+  formatting a query both raise it. Route the control through an unambiguous
+  value or narrow the exported domain.
 - `query_miss` means a recognized parameter was repeated or matched no exported
   state. Restore a value present in the current export.
 

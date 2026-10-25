@@ -2,7 +2,7 @@ import type { JsonObject, JsonValue } from "@marimo-team/portable-json";
 
 import { preparedControlInputPatch } from "./control.js";
 import type { PreparedPublication } from "./manifest.js";
-import { resolvePreparedQuerySelection } from "./query.js";
+import { queryInputPatch } from "./query.js";
 
 export const preparedControlPatch = (
   publication: PreparedPublication,
@@ -20,5 +20,7 @@ export const preparedControlPatch = (
 export const preparedQueryPatch = (
   publication: PreparedPublication,
   query: string,
-): JsonObject | undefined =>
-  resolvePreparedQuerySelection(publication.notebookExport, publication.state, query)?.inputs;
+): JsonObject | undefined => {
+  const patch = queryInputPatch(publication.notebookExport, query);
+  return patch === undefined ? undefined : publication.state.resolve(patch).inputs;
+};

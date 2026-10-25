@@ -7,7 +7,7 @@ export { fetchPreparedExportManifest, fetchPreparedManifestDocument } from "./ma
 export { PreparedStateController } from "./controller.js";
 export { PreparedPublicationRefresh } from "./refresh.js";
 export { preparedControlInputPatch, samePreparedInputs } from "./control.js";
-export { resolvePreparedQuerySelection, resolvePreparedQueryState } from "./query.js";
+export { formatPreparedQuery, resolvePreparedQuery } from "./query.js";
 export { isPreparedAbort } from "./cancellation.js";
 export { isPreparedExportError, PreparedExportError } from "./errors.js";
 

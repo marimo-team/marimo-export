@@ -174,6 +174,38 @@ superseded load cannot replace the outputs, selected button, or status message.
 Some third-party decoders and browser module evaluations can finish after
 cancellation. Dispose any staged resources they created when that work settles.
 
+## Keep the selected state in the URL
+
+`formatPreparedQuery(state, query)` from the `prepared` subpath writes the
+inputs of a state into a page query and keeps the parameters the application
+owns. `resolvePreparedQuery(current, query)` reads that query back. In
+`src/main.ts`, record the state after the outputs commit and read it on startup:
+
+```ts
+import { formatPreparedQuery, resolvePreparedQuery } from "@marimo-team/marimo-export/prepared";
+
+// In show(), after the status update:
+const url = new URL(location.href);
+url.search = formatPreparedQuery(state, url.search);
+history.replaceState(history.state, "", url);
+
+// Replace the final show("weekly") call:
+let initial = notebookExport.defaultState;
+try {
+  initial = resolvePreparedQuery(initial, location.search);
+} catch (error) {
+  console.warn(error);
+}
+await show(initial.aliases.includes("monthly") ? "monthly" : "weekly");
+```
+
+Selecting Monthly on `/?theme=dark` shows `/?theme=dark&days=30`. Reloading
+that URL opens the monthly state. Only inputs whose exported values differ
+between states appear in the query, so `days` is the single parameter for this
+export. A link whose `days` value matches no exported state falls back to the
+weekly default. [Prepared publications](../reference/browser/prepared-publications#formatpreparedquery-state-query)
+lists the text rules and query errors.
+
 ## Mount an interactive output
 
 Some loaders return a value with `mount(element)`. A mount returns an idempotent

@@ -48,7 +48,7 @@ Opening validates canonical `index.json`. Output assets remain lazy until
 | Need                                                                              | Reference                                              |
 | --------------------------------------------------------------------------------- | ------------------------------------------------------ |
 | Open an export, select a state, load an output, or supply authenticated fetch     | [Browser reader](browser/reader)                       |
-| Follow a changing manifest, route inputs, or own an atomic application transition | [Prepared publications](browser/prepared-publications) |
+| Follow a changing manifest, route inputs, sync the URL query, or own a transition | [Prepared publications](browser/prepared-publications) |
 | Choose a built-in loader, mount an interactive result, or write a custom loader   | [Output loaders](browser/loaders)                      |
 | Consume rendered-output and complete-cell replay records                          | [marimo snapshots](browser/snapshots)                  |
 | Handle errors, choose byte limits, or check browser requirements                  | [Errors and limits](browser/errors-and-limits)         |

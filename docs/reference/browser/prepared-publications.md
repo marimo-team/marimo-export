@@ -314,14 +314,86 @@ returns `true` after applying a recognized selection. No match raises
 `query_miss`. Text that matches more than one typed exported value raises
 `query_ambiguous`.
 
-`resolvePreparedQuerySelection()` returns `undefined` when no recognized input
-is present. `resolvePreparedQueryState()` returns the current exported state in
-that case.
-
 Arrays and objects use their exact `JSON.stringify()` text in the exported
 domain. For example, `?symbols=%5B%22AAPL%22%2C%22MSFT%22%5D` selects the array
 `["AAPL", "MSFT"]` when that value appears in an exported state. A string whose
 text is identical to another typed value can make the query ambiguous.
+
+### `resolvePreparedQuery(current, query)`
+
+```ts
+function resolvePreparedQuery(current: ExportState, query: string): ExportState;
+```
+
+Reads `query` with the `updateQuery()` rules and returns the exported state that
+the recognized parameters select from `current.notebookExport`. Inputs absent
+from the query keep their values from `current`. A query with no recognized
+input returns `current`. `query` accepts `location.search` with or without its
+leading `?`.
+
+A recognized vector absent from the export raises `NotebookExportError` with
+code `state_unavailable`.
+
+### `formatPreparedQuery(state, query?)`
+
+```ts
+function formatPreparedQuery(state: ExportState, query?: string): string;
+```
+
+Returns a query in `location.search` form that selects `state`: an empty string
+or text that starts with `?`. Each input whose exported values differ between
+states becomes one parameter in `inputNames` order. An input with one exported
+value carries no selection and stays out of the query.
+
+Parameters in `query` whose names are not export inputs keep their order. Input
+parameters in `query` are replaced. The result resolves back to the same state
+from every state of the export:
+
+```ts
+resolvePreparedQuery(current, formatPreparedQuery(state)) === state;
+```
+
+A value whose text matches more than one exported value of its input raises
+`PreparedExportError` with code `query_ambiguous`.
+
+Keep the page URL in step with each committed state and preserve
+application-owned parameters such as `tab`:
+
+```ts
+import { jsonLoader } from "@marimo-team/marimo-export/loader/json";
+import {
+  formatPreparedQuery,
+  PreparedPublicationRefresh,
+  PreparedStateController,
+  type PreparedStatePort,
+} from "@marimo-team/marimo-export/prepared";
+
+const port: PreparedStatePort = {
+  async apply({ next }, signal) {
+    const title = await next.state.output("title").load(jsonLoader(), { signal });
+    signal.throwIfAborted();
+    document.querySelector("#title")!.textContent = String(title);
+    const url = new URL(location.href);
+    url.search = formatPreparedQuery(next.state, url.search);
+    history.replaceState(history.state, "", url);
+  },
+};
+
+const sharedQuery = location.search;
+const controller = new PreparedStateController(port);
+const manifestUrl = new URL("/runtime/prepared.json", location.href);
+const refresh = new PreparedPublicationRefresh(manifestUrl, controller);
+
+await refresh.start();
+await controller.updateQuery(sharedQuery).catch((error) => console.warn(error));
+```
+
+Read `location.search` before `refresh.start()`. The start commit writes the
+manifest state into the URL. When `interval` is the only input that varies, a
+page at `?tab=chart` that commits `{ interval: "1wk" }` shows
+`?tab=chart&interval=1wk`. Reloading that URL selects the same state. A shared
+query that names no exported value rejects `updateQuery()` and leaves the
+manifest state committed.
 
 ### Replace a publication
 

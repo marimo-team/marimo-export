@@ -254,6 +254,49 @@ non-cancellation application failure invokes `restore()` when the port provides
 it. Polling errors call `onError`, while an explicit `refresh.refresh()` rejects
 to its caller.
 
+### Keep the URL in step with the state
+
+`formatPreparedQuery(state, query)` writes the inputs of a committed state into
+the page query and keeps parameters the application owns. A shared or reloaded
+link selects the same state through `updateQuery()`:
+
+```ts
+import { jsonLoader } from "@marimo-team/marimo-export/loader/json";
+import {
+  formatPreparedQuery,
+  PreparedPublicationRefresh,
+  PreparedStateController,
+  type PreparedStatePort,
+} from "@marimo-team/marimo-export/prepared";
+
+const sharedQuery = location.search;
+const port: PreparedStatePort = {
+  async apply({ next }, signal) {
+    const output = await next.state.output("summary").load(jsonLoader(), {
+      signal,
+    });
+    signal.throwIfAborted();
+    console.log(output);
+    const url = new URL(location.href);
+    url.search = formatPreparedQuery(next.state, url.search);
+    history.replaceState(history.state, "", url);
+  },
+};
+
+const controller = new PreparedStateController(port);
+const manifestUrl = new URL("/prepared/current.json", location.href);
+const refresh = new PreparedPublicationRefresh(manifestUrl, controller);
+
+await refresh.start();
+await controller.updateQuery(sharedQuery).catch((error) => console.warn(error));
+```
+
+Read `location.search` before `refresh.start()` because the start commit
+rewrites the query. The manifest selects `monthly`, so the start commit turns
+`/?view=print` into `/?view=print&days=30`. A later `updateInputs({ days: 7 })`
+shows `/?view=print&days=7`, and reloading that URL selects the weekly state. A
+link that names no exported value leaves the manifest state visible.
+
 Dispose the browser owners in reverse construction order:
 
 ```ts

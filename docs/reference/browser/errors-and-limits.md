@@ -105,7 +105,7 @@ class PreparedExportError extends Error {
 | ---------------------- | -------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
 | `manifest_invalid`     | The document, identity, export URL, input vector, fingerprint, or control binding is invalid | Fix the route or republish a matching manifest and export            |
 | `manifest_read_failed` | The manifest request, response, stream, or byte limit failed                                 | Check routing, CORS, authentication, response status, and body size  |
-| `query_ambiguous`      | One query text matches more than one typed exported value                                    | Use an unambiguous state control or change the exported input domain |
+| `query_ambiguous`      | One query text names more than one typed exported value while reading or formatting a query  | Use an unambiguous state control or change the exported input domain |
 | `query_miss`           | A recognized query parameter is repeated or matches no exported value                        | Supply one value whose text matches the exported domain              |
 
 `isPreparedExportError()` recognizes a frozen, branded prepared error across
