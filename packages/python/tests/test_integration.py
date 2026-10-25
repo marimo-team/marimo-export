@@ -8,6 +8,7 @@ from typing import cast
 import marimo as mo
 import marimo_export.integration as integration
 import pytest
+from export_integration_support import NOTEBOOK_TIMEOUT
 from marimo_export import (
     ExportSpec,
     OutputSpec,
@@ -83,7 +84,7 @@ def test_owned_session_signal_covers_file_producers_without_parent_leak(
     notebook = _notebook(tmp_path / "notebook.py")
     assert is_owned_session() is False
 
-    description = inspect_notebook(notebook)
+    description = inspect_notebook(notebook, timeout=NOTEBOOK_TIMEOUT)
     assert _inspected_owned_value(description) is True
     assert is_owned_session() is False
 
@@ -91,11 +92,12 @@ def test_owned_session_signal_covers_file_producers_without_parent_leak(
         notebook,
         spec=_spec(),
         output=tmp_path / "build",
+        timeout=NOTEBOOK_TIMEOUT,
     )
     assert open_export(built.path).state("baseline").output("owned").json() is True
     assert is_owned_session() is False
 
-    with open_notebook(notebook) as producer:
+    with open_notebook(notebook, timeout=NOTEBOOK_TIMEOUT) as producer:
         assert _inspected_owned_value(producer.inspect()) is True
         with (
             ExportRepository.open(tmp_path / "capture-repository") as repository,
@@ -140,7 +142,7 @@ if __name__ == "__main__":
     )
 
     with pytest.raises(ExecutionError) as raised:
-        inspect_notebook(notebook, timeout=30)
+        inspect_notebook(notebook, timeout=NOTEBOOK_TIMEOUT)
 
     assert raised.value.code == "state_execution_failed"
     details = raised.value.details
@@ -186,7 +188,7 @@ if __name__ == "__main__":
         encoding="utf-8",
     )
 
-    description = inspect_notebook(notebook, timeout=30)
+    description = inspect_notebook(notebook, timeout=NOTEBOOK_TIMEOUT)
 
     definitions = {item.name for item in description.definitions}
     assert "answer" in definitions
@@ -232,7 +234,7 @@ if __name__ == "__main__":
         outputs={"selected": OutputSpec.json("selected")},
     )
 
-    description = inspect_notebook(notebook, timeout=30)
+    description = inspect_notebook(notebook, timeout=NOTEBOOK_TIMEOUT)
     definitions = {item.name: item for item in description.definitions}
     assert definitions["dataset_picker"].kind == "ui"
     assert definitions["dataset_picker"].value == ("Two Moons",)
@@ -242,7 +244,7 @@ if __name__ == "__main__":
             notebook,
             spec=spec,
             repository=repository,
-            timeout=30,
+            timeout=NOTEBOOK_TIMEOUT,
         )
 
     assert resolved.inputs == ("dataset_picker",)
@@ -332,13 +334,13 @@ if __name__ == "__main__":
 """.lstrip(),
         encoding="utf-8",
     )
-    server = ManagedServer(notebook, timeout=30)
+    server = ManagedServer(notebook, timeout=NOTEBOOK_TIMEOUT)
     try:
         server.activate()
         with Client(
             server.base_url,
             access_token=server.access_token,
-            timeout=30,
+            timeout=NOTEBOOK_TIMEOUT,
         ) as client:
             observed = client.session(server.session_id).observe_inputs()
     finally:
@@ -378,18 +380,20 @@ if __name__ == "__main__":
 """.lstrip(),
         encoding="utf-8",
     )
-    definitions = {item.name: item for item in inspect_notebook(notebook, timeout=30).definitions}
+    definitions = {
+        item.name: item for item in inspect_notebook(notebook, timeout=NOTEBOOK_TIMEOUT).definitions
+    }
     assert definitions["safe"].portable_input
     assert not definitions["unsafe"].portable_input
     assert not definitions["widget"].portable_input
 
-    server = ManagedServer(notebook, timeout=30)
+    server = ManagedServer(notebook, timeout=NOTEBOOK_TIMEOUT)
     try:
         server.activate()
         with Client(
             server.base_url,
             access_token=server.access_token,
-            timeout=30,
+            timeout=NOTEBOOK_TIMEOUT,
         ) as client:
             observed = client.session(server.session_id).observe_inputs()
     finally:

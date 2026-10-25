@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 from export_integration_support import (
+    NOTEBOOK_TIMEOUT,
     build,
 )
 from export_integration_support import (
@@ -30,7 +31,7 @@ def _prepare_with_mode(
     output: Path,
 ) -> None:
     if mode == "build":
-        build(notebook, spec=spec, output=output, timeout=30)
+        build(notebook, spec=spec, output=output, timeout=NOTEBOOK_TIMEOUT)
         return
     _capture(notebook, spec, output)
 
@@ -129,7 +130,9 @@ if __name__ == "__main__":
 """.lstrip(),
         encoding="utf-8",
     )
-    cells = {cell.name: cell.id for cell in inspect_notebook(notebook, timeout=30).cells}
+    cells = {
+        cell.name: cell.id for cell in inspect_notebook(notebook, timeout=NOTEBOOK_TIMEOUT).cells
+    }
     output = tmp_path / f"{mode}-export"
 
     with pytest.raises(ExecutionError) as raised:
@@ -204,7 +207,7 @@ if __name__ == "__main__":
         states={"one": {"x": 1}, "two": {"x": 2}},
         outputs={"snapshot": OutputSpec.json("snapshot")},
     )
-    server = ManagedServer(notebook, timeout=30)
+    server = ManagedServer(notebook, timeout=NOTEBOOK_TIMEOUT)
     try:
         server.activate()
         _capture_live(server, spec, tmp_path / "first")
@@ -246,7 +249,9 @@ if __name__ == "__main__":
         encoding="utf-8",
     )
 
-    definitions = {item.name: item for item in inspect_notebook(notebook, timeout=30).definitions}
+    definitions = {
+        item.name: item for item in inspect_notebook(notebook, timeout=NOTEBOOK_TIMEOUT).definitions
+    }
     assert definitions["safe_negative"].portable_input
     assert definitions["safe_positive"].portable_input
     assert not definitions["unsafe_negative"].portable_input
@@ -260,7 +265,7 @@ if __name__ == "__main__":
             outputs={"total": OutputSpec.json("total")},
         ),
         output=tmp_path / "accepted",
-        timeout=30,
+        timeout=NOTEBOOK_TIMEOUT,
     )
     assert open_export(accepted.path).state("baseline").output("total").json() == 0
 
@@ -274,7 +279,7 @@ if __name__ == "__main__":
                     outputs={"value": OutputSpec.json(name)},
                 ),
                 output=tmp_path / name,
-                timeout=30,
+                timeout=NOTEBOOK_TIMEOUT,
             )
         assert raised.value.code == "spec_input_invalid"
 
@@ -331,7 +336,7 @@ def describe(value):
             )
         },
     )
-    server = ManagedServer(notebook, timeout=30)
+    server = ManagedServer(notebook, timeout=NOTEBOOK_TIMEOUT)
     try:
         server.activate()
         for position in range(2):

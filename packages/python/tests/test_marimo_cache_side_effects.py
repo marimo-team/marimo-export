@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from export_integration_support import NOTEBOOK_TIMEOUT
 from marimo_export import ExportSpec, OutputSpec, build
 
 
@@ -34,7 +35,7 @@ if __name__ == "__main__":
             outputs={"answer": OutputSpec.json("answer")},
         ),
         output=tmp_path / "export",
-        timeout=30,
+        timeout=NOTEBOOK_TIMEOUT,
     )
 
     assert list(tmp_path.rglob(".*-export.json")) == []

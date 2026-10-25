@@ -6,6 +6,7 @@ from pathlib import Path
 
 import marimo_export._marimo.composition as composition
 import pytest
+from export_integration_support import NOTEBOOK_TIMEOUT
 from marimo_export._marimo.capabilities import NotebookCell
 from marimo_export._notebook import document_sha256
 from marimo_export.errors import ExecutionError
@@ -50,7 +51,10 @@ def second():
 def test_static_document_digest_matches_managed_inspection(tmp_path: Path) -> None:
     notebook = _notebook(tmp_path / "notebook.py", hide_code=True)
 
-    assert document_sha256(notebook) == inspect_notebook(notebook).document_sha256
+    assert (
+        document_sha256(notebook)
+        == inspect_notebook(notebook, timeout=NOTEBOOK_TIMEOUT).document_sha256
+    )
 
 
 def test_document_digest_tracks_code_name_config_and_order(tmp_path: Path) -> None:

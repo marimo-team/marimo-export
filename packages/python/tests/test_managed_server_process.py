@@ -15,6 +15,7 @@ from typing import Any, cast
 
 import marimo_export._remote.managed as managed_module
 import pytest
+from export_integration_support import NOTEBOOK_TIMEOUT
 from marimo_export._diagnostics import cleanup_failures
 from marimo_export._remote.managed import ManagedServer
 from marimo_export.errors import TransportError
@@ -367,7 +368,7 @@ def test_windows_server_assigns_suspended_process_to_job_before_startup(
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="Marimo parent polling is POSIX-only")
-@pytest.mark.timeout(45)
+@pytest.mark.timeout(2 * NOTEBOOK_TIMEOUT)
 def test_managed_server_stops_after_its_owner_is_killed(tmp_path: Path) -> None:
     notebook = tmp_path / "notebook.py"
     notebook.write_text(
@@ -384,7 +385,7 @@ def test_managed_server_stops_after_its_owner_is_killed(tmp_path: Path) -> None:
         "import json, sys, time\n"
         "from pathlib import Path\n"
         "from marimo_export._remote.managed import ManagedServer\n"
-        "server = ManagedServer(Path(sys.argv[1]), timeout=15)\n"
+        f"server = ManagedServer(Path(sys.argv[1]), timeout={NOTEBOOK_TIMEOUT})\n"
         "server.activate()\n"
         "print(json.dumps({'pid': server._process.pid, 'port': server.port}), flush=True)\n"
         "time.sleep(60)\n"

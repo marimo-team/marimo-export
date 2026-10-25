@@ -4,6 +4,9 @@ from pathlib import Path
 
 import pytest
 from export_integration_support import (
+    NOTEBOOK_TIMEOUT,
+)
+from export_integration_support import (
     capture_export as _capture,
 )
 from export_integration_support import (
@@ -90,7 +93,7 @@ def fail_on_two(value):
         states={"four": {"x": 4}, "five": {"x": 5}, "six": {"x": 6}},
         outputs=count_spec.outputs,
     )
-    server = ManagedServer(notebook, timeout=30)
+    server = ManagedServer(notebook, timeout=NOTEBOOK_TIMEOUT)
     try:
         server.activate()
         _capture_live(server, count_spec, tmp_path / "first")

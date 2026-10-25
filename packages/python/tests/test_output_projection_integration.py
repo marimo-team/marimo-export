@@ -9,7 +9,7 @@ from types import SimpleNamespace
 from typing import Any, cast
 
 import pytest
-from export_integration_support import build
+from export_integration_support import NOTEBOOK_TIMEOUT, build
 from marimo_export import ExportSpec, OutputSpec, open_export
 from marimo_export._json import decode_json_object
 from marimo_export.errors import OutputError
@@ -49,7 +49,7 @@ if __name__ == "__main__":
         },
     )
 
-    result = build(notebook, spec=spec, output=tmp_path / "export", timeout=30)
+    result = build(notebook, spec=spec, output=tmp_path / "export", timeout=NOTEBOOK_TIMEOUT)
     state = open_export(result.path).state("baseline")
     snapshot = cast(
         dict[str, Any],
@@ -115,7 +115,7 @@ if __name__ == "__main__":
             outputs={"form": OutputSpec.output("form")},
         ),
         output=tmp_path / "export",
-        timeout=30,
+        timeout=NOTEBOOK_TIMEOUT,
     )
     snapshot = cast(
         dict[str, Any],
@@ -219,7 +219,7 @@ if __name__ == "__main__":
         },
     )
 
-    result = build(notebook, spec=spec, output=tmp_path / "export", timeout=30)
+    result = build(notebook, spec=spec, output=tmp_path / "export", timeout=NOTEBOOK_TIMEOUT)
     export = open_export(result.path)
     resource_ids: dict[str, dict[str, set[str]]] = {"cell": {}, "output": {}}
     for state_name, scale in (("scale-2", 2), ("scale-3", 3)):
@@ -291,7 +291,7 @@ if __name__ == "__main__":
                 outputs={"form": OutputSpec.output("form")},
             ),
             output=tmp_path / "export",
-            timeout=30,
+            timeout=NOTEBOOK_TIMEOUT,
         )
 
     assert raised.value.code == "output_not_portable"
@@ -376,7 +376,7 @@ def test_read_only_outputs_record_unavailable_table_functions(tmp_path: Path) ->
             },
         ),
         output=tmp_path / "export",
-        timeout=30,
+        timeout=NOTEBOOK_TIMEOUT,
     )
     state = open_export(result.path).state("baseline")
 
@@ -419,7 +419,7 @@ def test_table_output_without_read_only_is_not_portable(tmp_path: Path, selector
                 outputs={selector: OutputSpec.output(selector)},
             ),
             output=tmp_path / "export",
-            timeout=30,
+            timeout=NOTEBOOK_TIMEOUT,
         )
 
     assert raised.value.code == "output_not_portable"
@@ -470,7 +470,7 @@ if __name__ == "__main__":
                 outputs={"control": OutputSpec.output("control", read_only=True)},
             ),
             output=tmp_path / "export",
-            timeout=30,
+            timeout=NOTEBOOK_TIMEOUT,
         )
 
     assert raised.value.code == "output_not_portable"
@@ -509,7 +509,7 @@ if __name__ == "__main__":
             },
         ),
         output=tmp_path / "export",
-        timeout=30,
+        timeout=NOTEBOOK_TIMEOUT,
     )
     state = open_export(result.path).state("baseline")
     snapshot = cast(
@@ -576,7 +576,7 @@ if __name__ == "__main__":
             },
         ),
         output=tmp_path / "export",
-        timeout=30,
+        timeout=NOTEBOOK_TIMEOUT,
     )
     state = open_export(result.path).state("baseline")
 
@@ -706,7 +706,7 @@ if __name__ == "__main__":
             },
         ),
         output=tmp_path / "export",
-        timeout=30,
+        timeout=NOTEBOOK_TIMEOUT,
     )
 
     snapshot = cast(
@@ -796,7 +796,7 @@ if __name__ == "__main__":
             outputs={"view": OutputSpec.output("view")},
         ),
         output=tmp_path / "export",
-        timeout=30,
+        timeout=NOTEBOOK_TIMEOUT,
     )
     snapshot = cast(
         dict[str, Any],
@@ -843,7 +843,7 @@ if __name__ == "__main__":
             outputs={"editor": OutputSpec.output("editor")},
         ),
         output=tmp_path / "export",
-        timeout=30,
+        timeout=NOTEBOOK_TIMEOUT,
     )
     snapshot = cast(
         dict[str, Any],
@@ -961,7 +961,7 @@ if __name__ == "__main__":
                 outputs={"view": OutputSpec.output("view")},
             ),
             output=tmp_path / "export",
-            timeout=30,
+            timeout=NOTEBOOK_TIMEOUT,
         )
 
 
@@ -1001,7 +1001,7 @@ if __name__ == "__main__":
                 outputs={"view": OutputSpec.output("view")},
             ),
             output=tmp_path / "export",
-            timeout=30,
+            timeout=NOTEBOOK_TIMEOUT,
         )
 
 

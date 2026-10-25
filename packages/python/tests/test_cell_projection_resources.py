@@ -6,7 +6,7 @@ from typing import Any, cast
 from uuid import UUID
 
 import pytest
-from export_integration_support import build
+from export_integration_support import NOTEBOOK_TIMEOUT, build
 from marimo_export import ExportSpec, OutputSpec, open_export
 from marimo_export._json import decode_json_object
 from marimo_export._marimo.compat.replay import _resolve_ui_object_id
@@ -83,7 +83,7 @@ if __name__ == "__main__":
             },
         ),
         output=tmp_path / "export",
-        timeout=30,
+        timeout=NOTEBOOK_TIMEOUT,
     )
     notebook_export = open_export(result.path)
     state = notebook_export.state("selected")
@@ -175,7 +175,7 @@ if __name__ == "__main__":
                 outputs={"secret": OutputSpec.cell("secret_cell")},
             ),
             output=tmp_path / "export",
-            timeout=30,
+            timeout=NOTEBOOK_TIMEOUT,
         )
 
     assert raised.value.code == "output_execution_failed"
@@ -249,7 +249,7 @@ if __name__ == "__main__":
     for index, spec in enumerate(specs):
         output = tmp_path / f"export-{index}"
         with pytest.raises(ExecutionError) as raised:
-            build(notebook, spec=spec, output=output, timeout=30)
+            build(notebook, spec=spec, output=output, timeout=NOTEBOOK_TIMEOUT)
         assert raised.value.code == "input_value_invalid"
         assert raised.value.details == {"state": "revealed", "input": "filters"}
         assert "classified-value" not in str(raised.value)

@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, cast
 
-from export_integration_support import build
+from export_integration_support import NOTEBOOK_TIMEOUT, build
 from export_integration_support import capture_session as _capture_session
 from marimo_export import ExportSpec, OutputSpec, open_export
 from marimo_export._json import decode_json_object
@@ -50,8 +50,8 @@ if __name__ == "__main__":
         },
     )
 
-    first = build(notebook, spec=spec, output=tmp_path / "first", timeout=30)
-    second = build(notebook, spec=spec, output=tmp_path / "second", timeout=30)
+    first = build(notebook, spec=spec, output=tmp_path / "first", timeout=NOTEBOOK_TIMEOUT)
+    second = build(notebook, spec=spec, output=tmp_path / "second", timeout=NOTEBOOK_TIMEOUT)
 
     for result in (first, second):
         state = open_export(result.path).state("selected")
@@ -119,7 +119,7 @@ if __name__ == "__main__":
         },
     )
 
-    with open_notebook(notebook, timeout=30) as producer:
+    with open_notebook(notebook, timeout=NOTEBOOK_TIMEOUT) as producer:
         session = producer._require_open()
         counter.write_text("", encoding="utf-8")
         _capture_session(session, spec, tmp_path / "first")
@@ -191,7 +191,7 @@ if __name__ == "__main__":
         outputs={"metric": OutputSpec.json("metric")},
     )
 
-    with open_notebook(notebook, timeout=30) as producer:
+    with open_notebook(notebook, timeout=NOTEBOOK_TIMEOUT) as producer:
         counter.write_text("", encoding="utf-8")
         _capture_session(producer._require_open(), spec, tmp_path / "export")
 
@@ -239,7 +239,7 @@ if __name__ == "__main__":
             },
         ),
         output=tmp_path / "export",
-        timeout=30,
+        timeout=NOTEBOOK_TIMEOUT,
     )
     notebook_export = open_export(result.path)
 

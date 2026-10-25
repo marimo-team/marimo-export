@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from export_integration_support import NOTEBOOK_TIMEOUT
 from marimo._config.manager import get_default_config_manager
 from marimo._environments import script_metadata
 from marimo._runtime.callbacks.cache import cache_cells_enabled
@@ -67,7 +68,7 @@ def test_owned_notebook_detects_source_change_before_next_operation(tmp_path: Pa
     counter = tmp_path / "autoruns.txt"
     _write_notebook(notebook, counter)
 
-    with open_notebook(notebook, timeout=30) as producer:
+    with open_notebook(notebook, timeout=NOTEBOOK_TIMEOUT) as producer:
         notebook.write_text(
             notebook.read_text(encoding="utf-8") + "\n# changed\n", encoding="utf-8"
         )
@@ -78,7 +79,7 @@ def test_owned_notebook_detects_source_change_before_next_operation(tmp_path: Pa
 def test_owned_notebook_context_is_single_use(tmp_path: Path) -> None:
     notebook = tmp_path / "notebook.py"
     _write_notebook(notebook, tmp_path / "autoruns.txt")
-    producer = open_notebook(notebook, timeout=30)
+    producer = open_notebook(notebook, timeout=NOTEBOOK_TIMEOUT)
 
     with producer:
         pass
@@ -92,7 +93,7 @@ def test_session_capture_returns_prepared_export_and_borrows_the_session(tmp_pat
     _write_notebook(notebook, counter)
     repository = ExportRepository.open(tmp_path / "repository")
     try:
-        with open_notebook(notebook, timeout=30) as producer:
+        with open_notebook(notebook, timeout=NOTEBOOK_TIMEOUT) as producer:
             session = producer._require_open()
             plan = session.plan(spec=_spec(), repository=repository)
             assert plan.missing_states == plan.state_fingerprints

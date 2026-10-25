@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import os
 import sys
+import textwrap
 import time
 from contextlib import suppress
 from pathlib import Path
 
 import pytest
+from export_integration_support import NOTEBOOK_TIMEOUT
 from marimo_export import ExportSpec, OutputSpec, build, open_export
 from marimo_export._remote.managed import ManagedServer
 from marimo_export.errors import TransportError
@@ -16,9 +18,10 @@ pytestmark = pytest.mark.serial
 
 # Whole-build watchdogs include startup, activation, capture, and teardown.
 # The API timeouts bound individual waits within those phases.
+_WATCHDOG = 2 * NOTEBOOK_TIMEOUT
 
 
-@pytest.mark.timeout(120)
+@pytest.mark.timeout(_WATCHDOG)
 def test_owned_initial_autorun_restores_native_cell_cache(tmp_path: Path) -> None:
     marker = tmp_path / "autorun-count.txt"
     notebook = tmp_path / "notebook.py"
@@ -48,7 +51,7 @@ def test_owned_initial_autorun_restores_native_cell_cache(tmp_path: Path) -> Non
     authored = notebook.read_bytes()
 
     for _ in range(2):
-        with open_notebook(notebook, timeout=10) as producer:
+        with open_notebook(notebook, timeout=NOTEBOOK_TIMEOUT) as producer:
             server = producer._server
             assert server is not None
             assert server._process is not None
@@ -59,7 +62,7 @@ def test_owned_initial_autorun_restores_native_cell_cache(tmp_path: Path) -> Non
     assert notebook.read_bytes() == authored
 
 
-@pytest.mark.timeout(120)
+@pytest.mark.timeout(_WATCHDOG)
 def test_managed_server_preserves_environment_sitecustomize(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -98,13 +101,13 @@ if __name__ == "__main__":
             outputs={"startup": OutputSpec.json("startup")},
         ),
         output=tmp_path / "export",
-        timeout=30,
+        timeout=NOTEBOOK_TIMEOUT,
     )
 
     assert open_export(result.path).state("baseline").output("startup").json() == "loaded"
 
 
-@pytest.mark.timeout(120)
+@pytest.mark.timeout(_WATCHDOG)
 def test_managed_cache_markers_are_absent_from_notebook_processes(tmp_path: Path) -> None:
     notebook = tmp_path / "notebook.py"
     notebook.write_text(
@@ -148,10 +151,67 @@ if __name__ == "__main__":
             outputs={"visibility": OutputSpec.json("visibility")},
         ),
         output=tmp_path / "export",
-        timeout=30,
+        timeout=NOTEBOOK_TIMEOUT,
     )
 
     assert open_export(result.path).state("baseline").output("visibility").json() == "None:None"
+
+
+# Each hold runs in marimo's spawned kernel process until the test releases it.
+_KERNEL_HOLDS = {
+    "kernel readiness": "hold()\n",
+    "kernel instantiation": (
+        "from contextlib import asynccontextmanager\n"
+        "from marimo_export._marimo.compat import managed_kernel\n"
+        "lifespan = managed_kernel.kernel_lifespan\n"
+        "\n"
+        "@asynccontextmanager\n"
+        "async def held_lifespan(value):\n"
+        "    hold()\n"
+        "    async with lifespan(value):\n"
+        "        yield\n"
+        "\n"
+        "managed_kernel.kernel_lifespan = held_lifespan\n"
+    ),
+}
+
+
+@pytest.mark.timeout(_WATCHDOG)
+@pytest.mark.parametrize("phase", sorted(_KERNEL_HOLDS))
+def test_managed_activation_names_the_kernel_phase_that_timed_out(
+    phase: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    release = tmp_path / "release"
+    hold = textwrap.indent(_KERNEL_HOLDS[phase], "    ")
+    (tmp_path / "sitecustomize.py").write_text(
+        "import sys\n"
+        "import time\n"
+        "from pathlib import Path\n"
+        "\n"
+        "def hold():\n"
+        f"    while not Path({str(release)!r}).exists():\n"
+        "        time.sleep(0.05)\n"
+        "\n"
+        "if sys.argv[-1:] == ['--multiprocessing-fork']:\n"
+        f"{hold}",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("PYTHONPATH", str(tmp_path))
+    notebook = tmp_path / "notebook.py"
+    notebook.write_text("import marimo\n\napp = marimo.App()\n", encoding="utf-8")
+
+    server = ManagedServer(notebook, timeout=NOTEBOOK_TIMEOUT)
+    try:
+        # Server startup keeps the full budget. The session waits get a short one.
+        server.timeout = 5
+        with pytest.raises(TransportError) as raised:
+            server.activate()
+        assert str(raised.value) == f"the managed marimo {phase} timed out"
+    finally:
+        release.touch()
+        server.stop()
 
 
 @pytest.mark.parametrize(
@@ -199,7 +259,7 @@ def test_managed_build_rejects_extension_policy_before_notebook_execution(
     assert not marker.exists()
 
 
-@pytest.mark.timeout(30)
+@pytest.mark.timeout(_WATCHDOG)
 @pytest.mark.skipif(sys.platform == "win32", reason="POSIX process group contract")
 def test_managed_shutdown_stops_notebook_child_process(tmp_path: Path) -> None:
     heartbeat = tmp_path / "heartbeat.txt"
@@ -235,7 +295,7 @@ def test_managed_shutdown_stops_notebook_child_process(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
-    server = ManagedServer(notebook, timeout=10)
+    server = ManagedServer(notebook, timeout=NOTEBOOK_TIMEOUT)
     pid = 0
     try:
         server.activate()
@@ -257,7 +317,7 @@ def test_managed_shutdown_stops_notebook_child_process(tmp_path: Path) -> None:
                 os.kill(pid, 9)
 
 
-@pytest.mark.timeout(30)
+@pytest.mark.timeout(_WATCHDOG)
 @pytest.mark.skipif(sys.platform == "win32", reason="POSIX process group contract")
 def test_managed_shutdown_stops_child_session_while_ps_stalls(
     monkeypatch: pytest.MonkeyPatch,
@@ -304,7 +364,7 @@ def test_managed_shutdown_stops_child_session_while_ps_stalls(
         encoding="utf-8",
     )
 
-    server = ManagedServer(notebook, timeout=10)
+    server = ManagedServer(notebook, timeout=NOTEBOOK_TIMEOUT)
     pid = 0
     try:
         server.activate()

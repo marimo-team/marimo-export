@@ -5,7 +5,7 @@ import re
 from pathlib import Path
 
 import pytest
-from export_integration_support import build
+from export_integration_support import NOTEBOOK_TIMEOUT, build
 from marimo_export import ExportSpec, OutputSpec, open_export
 from marimo_export.errors import OutputError
 from marimo_export.exporters import media
@@ -58,7 +58,7 @@ if __name__ == "__main__":
         },
     )
 
-    result = build(notebook, spec=spec, output=tmp_path / "export", timeout=60)
+    result = build(notebook, spec=spec, output=tmp_path / "export", timeout=NOTEBOOK_TIMEOUT)
     export = open_export(result.path)
 
     for name in ("narrow", "wide"):
@@ -115,7 +115,7 @@ if __name__ == "__main__":
         },
     )
 
-    result = build(notebook, spec=spec, output=tmp_path / "export", timeout=60)
+    result = build(notebook, spec=spec, output=tmp_path / "export", timeout=NOTEBOOK_TIMEOUT)
     state = open_export(result.path).state("base")
 
     assert b"/MediaBox [ 0 0 250.38 83.46 ]" in state.output("figure").blob_asset().data
@@ -158,7 +158,7 @@ if __name__ == "__main__":
         },
     )
 
-    result = build(notebook, spec=spec, output=tmp_path / "export", timeout=60)
+    result = build(notebook, spec=spec, output=tmp_path / "export", timeout=NOTEBOOK_TIMEOUT)
     state = open_export(result.path).state("base")
 
     assert state.output("days").json() == (
@@ -209,7 +209,7 @@ if __name__ == "__main__":
     spec = ExportSpec(default_state="base", states={"base": {}}, outputs={"chart": output})
 
     with pytest.raises(OutputError, match=re.escape(message)) as raised:
-        build(notebook, spec=spec, output=tmp_path / "export", timeout=60)
+        build(notebook, spec=spec, output=tmp_path / "export", timeout=NOTEBOOK_TIMEOUT)
 
     assert raised.value.code == "output_execution_failed"
     assert raised.value.details["output"] == "chart"
