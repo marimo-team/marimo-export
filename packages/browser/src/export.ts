@@ -1,7 +1,7 @@
 import { isAbortError } from "./abort.js";
 import { decodeBlobAsset } from "./blob-asset.js";
 import { sha256Hex, validateNativeFile, verifyBytes } from "./integrity.js";
-import { resolveOutputLoader } from "./loader.js";
+import { resolveOutputLoader, unavailableOutputError } from "./loader.js";
 import { parseMediaType } from "./media-type.js";
 import { parseStrictJson, portableJsonObject } from "@marimo-team/portable-json";
 import type { JsonObject, JsonValue } from "@marimo-team/portable-json";
@@ -9,12 +9,14 @@ import {
   canonicalJson,
   compareUnicodeScalarStrings,
   INDEX_MAX_VALUES,
+  isUnavailableOutput,
   parseExportIndex,
 } from "./schema.js";
 import type { ParsedExportIndex, ParsedState } from "./schema.js";
 import { fetchBytes, normalizeBase, resolveExportUrl } from "./transport.js";
 import type {
   AnyOutputLoader,
+  AvailableExportOutput,
   LoadOptions,
   OpenExportOptions,
   OutputCodec,
@@ -24,6 +26,8 @@ import type {
   NotebookExport,
   ExportOutput,
   ExportState,
+  UnavailableExportOutput,
+  UnavailableOutput,
   VerificationResult,
   VerifyOptions,
 } from "./types.js";
@@ -271,8 +275,8 @@ class ExportStateValue implements ExportState {
   readonly fingerprint: string;
   readonly aliases: readonly string[];
   readonly inputs: JsonObject;
-  readonly #outputs: readonly ExportOutputValue[];
-  readonly #outputsByName: ReadonlyMap<string, ExportOutputValue>;
+  readonly #outputs: readonly ExportOutput[];
+  readonly #outputsByName: ReadonlyMap<string, ExportOutput>;
 
   constructor(
     notebookExport: NotebookExportValue,
@@ -286,9 +290,12 @@ class ExportStateValue implements ExportState {
     this.aliases = aliases;
     this.inputs = state.inputs;
     this.#outputs = Object.freeze(
-      notebookExport.outputNames.map(
-        (outputName) => new ExportOutputValue(this, outputName, state.outputs[outputName]!, reader),
-      ),
+      notebookExport.outputNames.map((outputName) => {
+        const output = state.outputs[outputName]!;
+        return isUnavailableOutput(output)
+          ? new UnavailableExportOutputValue(this, outputName, output)
+          : new ExportOutputValue(this, outputName, output, reader);
+      }),
     );
     this.#outputsByName = new Map(this.#outputs.map((output) => [output.name, output]));
     Object.freeze(this);
@@ -339,9 +346,10 @@ class ExportStateValue implements ExportState {
   }
 }
 
-class ExportOutputValue implements ExportOutput {
+class ExportOutputValue implements AvailableExportOutput {
   readonly state: ExportStateValue;
   readonly name: string;
+  readonly unavailable = null;
   readonly codec: OutputCodec;
   readonly mediaType: ReturnType<typeof parseMediaType>;
   readonly descriptor: OutputDescriptor;
@@ -384,6 +392,27 @@ class ExportOutputValue implements ExportOutput {
     } catch (error) {
       throwLoaderError(error, options.signal, this);
     }
+  }
+}
+
+class UnavailableExportOutputValue implements UnavailableExportOutput {
+  readonly state: ExportStateValue;
+  readonly name: string;
+  readonly unavailable: UnavailableOutput;
+
+  constructor(state: ExportStateValue, name: string, unavailable: UnavailableOutput) {
+    this.state = state;
+    this.name = name;
+    this.unavailable = unavailable;
+    Object.freeze(this);
+  }
+
+  async load<C extends OutputCodec, T>(
+    _loader: OutputLoader<C, T>,
+    options: LoadOptions = {},
+  ): Promise<T> {
+    throwIfAborted(options.signal);
+    throw unavailableOutputError(this);
   }
 }
 
@@ -462,6 +491,7 @@ function uniqueAssets(
   for (const state of states) {
     for (const output of state.outputs()) {
       if (
+        output.unavailable !== null ||
         output.descriptor.codec === "marimo.scalar.v1" ||
         output.descriptor.codec === "marimo.json.v1"
       ) {

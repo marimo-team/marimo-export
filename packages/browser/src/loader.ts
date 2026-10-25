@@ -1,6 +1,7 @@
 import { parseMediaType } from "./media-type.js";
 import type {
   AnyOutputLoader,
+  AvailableExportOutput,
   BlobAssetLoadInput,
   BlobAssetLoader,
   MediaType,
@@ -10,6 +11,7 @@ import type {
   OutputLoader,
   ExportOutput,
   ScalarValue,
+  UnavailableExportOutput,
 } from "./types.js";
 import { NotebookExportError } from "./types.js";
 import {
@@ -76,6 +78,7 @@ export function resolveOutputLoader(
   loaders: readonly AnyOutputLoader[],
 ): AnyOutputLoader {
   if (!Array.isArray(loaders)) throw new TypeError("loaders must be an array.");
+  if (output.unavailable !== null) throw unavailableOutputError(output);
   const matches: AnyOutputLoader[] = [];
   for (const loader of loaders) {
     if (!isRecordValue(loader) || loader.codec !== output.codec) continue;
@@ -176,7 +179,21 @@ export function imageLoader(): BlobAssetLoader<MountableValue> {
   });
 }
 
-function invalidLoader(output: ExportOutput, cause: unknown): NotebookExportError {
+export function unavailableOutputError(output: UnavailableExportOutput): NotebookExportError {
+  return new NotebookExportError(
+    "output_unavailable",
+    `Output ${JSON.stringify(output.name)} is unavailable in this state: ${output.unavailable.message}`,
+    {
+      details: {
+        output: output.name,
+        fingerprint: output.state.fingerprint,
+        reason: output.unavailable.reason,
+      },
+    },
+  );
+}
+
+function invalidLoader(output: AvailableExportOutput, cause: unknown): NotebookExportError {
   return new NotebookExportError("loader_invalid", "OutputLoader validation failed.", {
     cause,
     details: {

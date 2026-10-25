@@ -1,0 +1,142 @@
+[
+  {
+    "name": "representation unavailable",
+    "entry": {
+      "unavailable": {
+        "message": "builtins.str has no representation as image/png.",
+        "reason": "representation_unavailable"
+      }
+    },
+    "valid": true
+  },
+  {
+    "name": "value missing",
+    "entry": {
+      "unavailable": {
+        "message": "selector 'report[\"total\"]' is unavailable: item 'total' is unavailable",
+        "reason": "value_missing"
+      }
+    },
+    "valid": true
+  },
+  {
+    "name": "stopped",
+    "entry": {
+      "unavailable": {
+        "message": "cell 'Hbol' stopped execution",
+        "reason": "stopped"
+      }
+    },
+    "valid": true
+  },
+  {
+    "name": "message of 1024 bytes",
+    "entry": {
+      "unavailable": {
+        "message": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+        "reason": "stopped"
+      }
+    },
+    "valid": true
+  },
+  {
+    "name": "unknown reason",
+    "entry": {
+      "unavailable": {
+        "message": "No chart.",
+        "reason": "failed"
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "missing message",
+    "entry": {
+      "unavailable": {
+        "reason": "stopped"
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "extra reason field",
+    "entry": {
+      "unavailable": {
+        "message": "No chart.",
+        "reason": "stopped",
+        "code": "x"
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "empty message",
+    "entry": {
+      "unavailable": {
+        "message": "",
+        "reason": "stopped"
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "control character in message",
+    "entry": {
+      "unavailable": {
+        "message": "No\nchart.",
+        "reason": "stopped"
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "edge whitespace in message",
+    "entry": {
+      "unavailable": {
+        "message": " No chart.",
+        "reason": "stopped"
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "message over 1024 bytes",
+    "entry": {
+      "unavailable": {
+        "message": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+        "reason": "stopped"
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "reason not an object",
+    "entry": {
+      "unavailable": "stopped"
+    },
+    "valid": false
+  },
+  {
+    "name": "descriptor fields beside unavailable",
+    "entry": {
+      "codec": "marimo.json.v1",
+      "unavailable": {
+        "message": "No chart.",
+        "reason": "stopped"
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "reason not a string",
+    "entry": {
+      "unavailable": {
+        "message": "No chart.",
+        "reason": [
+          "stopped"
+        ]
+      }
+    },
+    "valid": false
+  }
+]

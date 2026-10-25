@@ -18,6 +18,8 @@ import type {
   Provenance,
   ScalarDescriptor,
   ScalarValue,
+  UnavailableOutput,
+  UnavailableReason,
 } from "./types.js";
 import { isNotebookExportError, NotebookExportError } from "./types.js";
 import { isJsonBoolean, isJsonNumber, isJsonString, isRecordValue } from "./value-types.js";
@@ -35,6 +37,12 @@ const MAX_CONTROL_OPTIONS = 4_096;
 const MAX_PROVENANCE_BYTES = 2_048;
 const MAX_ASSET_SIZE = 2_147_483_647;
 const MAX_METADATA_BYTES = 256 * 1024;
+const MAX_UNAVAILABLE_MESSAGE_BYTES = 1_024;
+const UNAVAILABLE_REASONS: readonly UnavailableReason[] = [
+  "representation_unavailable",
+  "stopped",
+  "value_missing",
+];
 const WINDOWS_RESERVED = /[<>:"/\\|?*]/u;
 const WINDOWS_DEVICE = /^(?:CON|CONIN\$|CONOUT\$|PRN|AUX|NUL|COM[1-9¹²³]|LPT[1-9¹²³])$/iu;
 const EDGE_WHITESPACE: ReadonlySet<number> = new Set([
@@ -42,9 +50,15 @@ const EDGE_WHITESPACE: ReadonlySet<number> = new Set([
   0x1680, 0x2000, 0x2001, 0x2002, 0x2003, 0x2004, 0x2005, 0x2006, 0x2007, 0x2008, 0x2009, 0x200a,
   0x2028, 0x2029, 0x202f, 0x205f, 0x3000, 0xfeff,
 ]);
+export type ParsedOutput = OutputDescriptor | UnavailableOutput;
+
 export interface ParsedState {
   readonly inputs: JsonObject;
-  readonly outputs: Readonly<Record<string, OutputDescriptor>>;
+  readonly outputs: Readonly<Record<string, ParsedOutput>>;
+}
+
+export function isUnavailableOutput(output: ParsedOutput): output is UnavailableOutput {
+  return !Object.hasOwn(output, "codec");
 }
 
 export interface ParsedExportIndex {
@@ -117,9 +131,9 @@ export function parseExportIndex<Input>(input: Input): ParsedExportIndex {
           requireExactKeys(outputRecord, outputSet, `${path}.outputs`);
           const parsedOutputs = Object.freeze(
             Object.fromEntries(
-              Object.entries(outputRecord).map(([outputName, descriptor]) => [
+              Object.entries(outputRecord).map(([outputName, output]) => [
                 exportName(outputName, `${path}.outputs key`),
-                parseDescriptor(descriptor, outputName),
+                parseOutput(output, outputName),
               ]),
             ),
           );
@@ -286,8 +300,27 @@ function parseControlPathStep(
   fail(`${path}.kind must be index, key, or element`);
 }
 
-function parseDescriptor(input: JsonValue | undefined, outputName: string): OutputDescriptor {
-  const value = record(input, `output ${JSON.stringify(outputName)}`);
+function parseOutput(input: JsonValue | undefined, outputName: string): ParsedOutput {
+  const path = `output ${JSON.stringify(outputName)}`;
+  const value = record(input, path);
+  if (!Object.hasOwn(value, "unavailable")) return parseDescriptor(value, outputName);
+  exactFields(value, ["unavailable"], path);
+  const unavailable = strictRecord(value.unavailable, `${path}.unavailable`, ["message", "reason"]);
+  const reason = UNAVAILABLE_REASONS.find((item) => item === unavailable.reason);
+  if (reason === undefined) {
+    fail(`${path}.unavailable.reason must be one of ${UNAVAILABLE_REASONS.join(", ")}`);
+  }
+  return Object.freeze({
+    reason,
+    message: boundedPrintable(
+      unavailable.message,
+      `${path}.unavailable.message`,
+      MAX_UNAVAILABLE_MESSAGE_BYTES,
+    ),
+  });
+}
+
+function parseDescriptor(value: JsonObject, outputName: string): OutputDescriptor {
   const codec = value.codec;
   if (codec === "marimo.scalar.v1") return parseScalar(value, outputName);
   if (codec === "marimo.json.v1") return parseJson(value, outputName);
@@ -456,6 +489,7 @@ function validateRepresentations(
   for (const state of Object.values(states)) {
     for (const name of outputNames) {
       const descriptor = state.outputs[name]!;
+      if (isUnavailableOutput(descriptor)) continue;
       const representation = `${descriptor.codec}\0${descriptor.mediaType}`;
       const previous = representations.get(name);
       if (previous !== undefined && previous !== representation) {
@@ -475,7 +509,11 @@ function validateAssets(states: Readonly<Record<string, ParsedState>>): void {
   let total = 0;
   for (const state of Object.values(states)) {
     for (const descriptor of Object.values(state.outputs)) {
-      if (descriptor.codec === "marimo.scalar.v1" || descriptor.codec === "marimo.json.v1") {
+      if (
+        isUnavailableOutput(descriptor) ||
+        descriptor.codec === "marimo.scalar.v1" ||
+        descriptor.codec === "marimo.json.v1"
+      ) {
         continue;
       }
       const identity = `${descriptor.codec}\0${descriptor.asset.sha256}`;

@@ -18,7 +18,7 @@ from marimo_export.descriptors import (
     JsonDescriptor,
     OutputCodec,
     ScalarDescriptor,
-    _descriptor,
+    _output_entry,
     asset_path,
 )
 from marimo_export.errors import ExecutionError
@@ -73,7 +73,7 @@ def commit_captured_state(
     entry = index.states[state.fingerprint]
     metadata: JsonObject = {
         "inputs": entry.inputs,
-        "outputs": {name: descriptor.to_value() for name, descriptor in entry.outputs.items()},
+        "outputs": {name: output.to_value() for name, output in entry.outputs.items()},
         "control_bindings": {
             object_id: binding.to_value() for object_id, binding in index.control_bindings.items()
         },
@@ -83,7 +83,7 @@ def commit_captured_state(
         output_plan_sha256=plan.output_plan_sha256,
         state_fingerprint=state.fingerprint,
     ) as staged:
-        for descriptor in entry.outputs.values():
+        for _, _, descriptor in index.descriptor_entries():
             if isinstance(descriptor, (ScalarDescriptor, JsonDescriptor)):
                 continue
             identity = (descriptor.codec, descriptor.asset.sha256)
@@ -133,7 +133,7 @@ def assemble_export(
     )
     with repository.stage_export(repository_identity(plan)) as staged:
         (staged.path / "index.json").write_bytes(index.to_bytes())
-        _copy_assets(staged.path, index, entries, prepared)
+        _copy_assets(staged.path, index, prepared)
         return staged.commit(
             states=[prepared[fingerprint] for fingerprint in plan.state_fingerprints],
             captured_observation_revision=plan.observation_revision,
@@ -163,7 +163,7 @@ def _prepared_records(
         outputs = json_object(metadata["outputs"], "prepared state outputs")
         entries[state.fingerprint] = StateEntry(
             inputs=json_object(metadata["inputs"], "prepared state inputs"),
-            outputs={name: _descriptor(value, name) for name, value in outputs.items()},
+            outputs={name: _output_entry(value, name) for name, value in outputs.items()},
         )
         control_values = json_object(
             metadata["control_bindings"],
@@ -189,16 +189,12 @@ def _prepared_records(
 def _copy_assets(
     destination: Path,
     index: ExportIndex,
-    entries: Mapping[str, StateEntry],
     prepared: Mapping[str, PreparedState],
 ) -> None:
     owners: dict[tuple[OutputCodec, str], PreparedState] = {}
-    for fingerprint, entry in entries.items():
-        for descriptor in entry.outputs.values():
-            if not isinstance(descriptor, (ScalarDescriptor, JsonDescriptor)):
-                owners.setdefault(
-                    (descriptor.codec, descriptor.asset.sha256), prepared[fingerprint]
-                )
+    for fingerprint, _, descriptor in index.descriptor_entries():
+        if not isinstance(descriptor, (ScalarDescriptor, JsonDescriptor)):
+            owners.setdefault((descriptor.codec, descriptor.asset.sha256), prepared[fingerprint])
     for codec, asset in index.assets():
         relative = asset_path(codec, asset.sha256)
         owner = owners.get((codec, asset.sha256))

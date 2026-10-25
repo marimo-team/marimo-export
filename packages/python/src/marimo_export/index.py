@@ -62,9 +62,11 @@ from marimo_export.descriptors import (
     NumpyDescriptor,
     OutputCodec,
     OutputDescriptor,
+    OutputEntry,
     ScalarDescriptor,
-    _descriptor,
+    UnavailableOutput,
     _descriptor_asset_facts,
+    _output_entry,
 )
 from marimo_export.errors import NotebookExportError
 from marimo_export.wire import FrozenJsonValue, _freeze_json, state_fingerprint
@@ -246,23 +248,23 @@ class ControlBinding:
 
 @dataclass(frozen=True, slots=True, init=False)
 class StateEntry:
-    outputs: Mapping[str, OutputDescriptor]
+    outputs: Mapping[str, OutputEntry]
     _inputs_bytes: bytes = field(repr=False)
 
     def __init__(
         self,
         *,
         inputs: Mapping[str, JsonValue],
-        outputs: Mapping[str, OutputDescriptor],
+        outputs: Mapping[str, OutputEntry],
     ) -> None:
         input_value = portable_json_object(inputs, "state.inputs")
         if not isinstance(outputs, Mapping) or not outputs:
             raise ValueError("state.outputs must contain at least one output")
-        parsed_outputs: dict[str, OutputDescriptor] = {}
-        for name, descriptor in outputs.items():
+        parsed_outputs: dict[str, OutputEntry] = {}
+        for name, entry in outputs.items():
             export_name = _export_name(name, "state.outputs key")
             if not isinstance(
-                descriptor,
+                entry,
                 (
                     ScalarDescriptor,
                     JsonDescriptor,
@@ -271,10 +273,11 @@ class StateEntry:
                     NumpyDescriptor,
                     ArrowDescriptor,
                     BlobAssetDescriptor,
+                    UnavailableOutput,
                 ),
             ):
                 raise TypeError(f"state.outputs[{export_name!r}] has an invalid descriptor")
-            parsed_outputs[export_name] = descriptor
+            parsed_outputs[export_name] = entry
         object.__setattr__(self, "_inputs_bytes", canonical_bytes(input_value))
         object.__setattr__(self, "outputs", MappingProxyType(parsed_outputs))
 
@@ -285,7 +288,7 @@ class StateEntry:
     def to_value(self) -> JsonObject:
         return {
             "inputs": self.inputs,
-            "outputs": {name: descriptor.to_value() for name, descriptor in self.outputs.items()},
+            "outputs": {name: entry.to_value() for name, entry in self.outputs.items()},
         }
 
 
@@ -354,6 +357,8 @@ class ExportIndex:
             if state_fingerprint(state.inputs) != fingerprint:
                 raise ValueError(f"export.states key {fingerprint!r} does not match state inputs")
             for output_name, descriptor in state.outputs.items():
+                if isinstance(descriptor, UnavailableOutput):
+                    continue
                 current = (descriptor.codec, descriptor.media_type)
                 previous = representation.setdefault(output_name, current)
                 if previous != current:
@@ -552,9 +557,12 @@ class ExportIndex:
         )
 
     def descriptor_entries(self) -> Iterator[tuple[str, str, OutputDescriptor]]:
+        """Yield every available output descriptor with its state and output name."""
+
         for state_name, state in self.states.items():
-            for output_name, descriptor in state.outputs.items():
-                yield state_name, output_name, descriptor
+            for output_name, entry in state.outputs.items():
+                if not isinstance(entry, UnavailableOutput):
+                    yield state_name, output_name, entry
 
 
 def _control_binding(value: object, object_id: str) -> ControlBinding:
@@ -659,8 +667,8 @@ def _state(value: object, fingerprint: str) -> StateEntry:
     return StateEntry(
         inputs=_object(item["inputs"], f"{path}.inputs"),
         outputs={
-            _export_name(name, f"{path}.outputs key"): _descriptor(descriptor, name)
-            for name, descriptor in output_values.items()
+            _export_name(name, f"{path}.outputs key"): _output_entry(entry, name)
+            for name, entry in output_values.items()
         },
     )
 

@@ -9,7 +9,7 @@ import {
 } from "../src/index.js";
 import { canonicalJson } from "../src/schema.js";
 import { sha256Hex } from "../src/integrity.js";
-import { exportFixture, mutableObject, stringValue } from "./fixture.js";
+import { availableOutput, exportFixture, mutableObject, stringValue } from "./fixture.js";
 
 const encoder = new TextEncoder();
 
@@ -47,7 +47,9 @@ describe("export", () => {
     );
     expect(notebookExport.state("alpha").aliases).toEqual(["alpha", "first"]);
     expect(notebookExport.state("first")).toBe(notebookExport.state("alpha"));
-    expect(notebookExport.state("alpha").output("count").descriptor.provenance).toEqual({
+    expect(
+      availableOutput(notebookExport.state("alpha").output("count")).descriptor.provenance,
+    ).toEqual({
       pythonType: "fixture.Value",
     });
     expect(
@@ -59,7 +61,9 @@ describe("export", () => {
     expect(Object.isFrozen(notebookExport)).toBe(true);
     expect(Object.isFrozen(notebookExport.state("alpha"))).toBe(true);
     expect(Object.isFrozen(notebookExport.state("alpha").inputs)).toBe(true);
-    expect(Object.isFrozen(notebookExport.state("alpha").output("view").descriptor)).toBe(true);
+    expect(
+      Object.isFrozen(availableOutput(notebookExport.state("alpha").output("view")).descriptor),
+    ).toBe(true);
   });
 
   test("resolves complete vectors and sparse immutable patches", async () => {

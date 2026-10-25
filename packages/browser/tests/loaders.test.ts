@@ -8,7 +8,7 @@ import {
   resolveOutputLoader,
   scalarLoader,
 } from "../src/index.js";
-import { exportFixture } from "./fixture.js";
+import { availableOutput, exportFixture } from "./fixture.js";
 
 describe("OutputLoader", () => {
   test("matches BlobAsset media types by lowercase essence", async () => {
@@ -18,7 +18,7 @@ describe("OutputLoader", () => {
     const notebookExport = await openExport("https://example.test/stocks", {
       fetch: fixture.fetch,
     });
-    const output = notebookExport.state("alpha").output("view");
+    const output = availableOutput(notebookExport.state("alpha").output("view"));
     const loader = defineBlobAssetLoader({
       mediaTypes: "application/vnd.example.fixture+json",
       load: ({ mediaType }) => mediaType.parameters.get("charset"),

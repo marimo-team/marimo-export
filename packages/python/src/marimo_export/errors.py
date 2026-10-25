@@ -117,3 +117,9 @@ class StateUnavailableError(NotebookExportError):
     """An export has no state for the requested complete input vector."""
 
     code = "state_unavailable"
+
+
+class OutputUnavailableError(NotebookExportError):
+    """An optional export output has no value in the selected state."""
+
+    code = "output_unavailable"

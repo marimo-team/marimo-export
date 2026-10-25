@@ -4,27 +4,40 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vite-plus/test";
 
 import {
+  loadOutputs,
   openExport,
   parseMarimoCellSnapshot,
   parseMarimoOutputSnapshot,
+  resolveOutputLoader,
   scalarLoader,
 } from "../src/index.js";
+import { jsonLoader } from "../src/loader/json.js";
 import { canonicalJson } from "../src/schema.js";
 import { isRecordValue } from "../src/value-types.js";
 import type { MutableJsonObject, MutableJsonValue } from "./fixture.js";
-import { exportFixture, mutableArray, mutableObject } from "./fixture.js";
+import { exportFixture, mutableArray, mutableObject, stringValue } from "./fixture.js";
 import canonicalCases from "../../../tests/fixtures/canonical-json/cases.json" with { type: "json" };
 import httpModuleUrlCases from "../../../tests/fixtures/export/http-module-urls.json" with { type: "json" };
 import indexLimits from "../../../tests/fixtures/export/index-limits.json" with { type: "json" };
 import inputNameCases from "../../../tests/fixtures/export/input-names.json" with { type: "json" };
 import malformedProjectionRecords from "../../../tests/fixtures/export/malformed-projection-records.json" with { type: "json" };
+import unavailableOutputEntries from "../../../tests/fixtures/export/unavailable-output-entries.json" with { type: "json" };
 import projectionRecords from "../../../tests/fixtures/export/projection-records.json" with { type: "json" };
 
 const scalarIndex = fileURLToPath(
   new URL("../../../tests/fixtures/export/scalar-index.json", import.meta.url),
 );
+const unavailableOutputIndex = fileURLToPath(
+  new URL("../../../tests/fixtures/export/unavailable-output-index.json", import.meta.url),
+);
 const fixtureUiObjectId =
   "cell-summary-projection-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-ui-cell-summary-ui";
+
+interface UnavailableOutputEntry {
+  readonly name: string;
+  readonly entry: MutableJsonValue;
+  readonly valid: boolean;
+}
 
 interface HttpModuleUrlCase {
   readonly name: string;
@@ -95,6 +108,68 @@ describe("Python and TypeScript protocol fixtures", () => {
       }),
     });
   });
+
+  test("reads an unavailable output emitted by Python without fetching an asset", async () => {
+    const index = (await readFile(unavailableOutputIndex, "utf8")).trimEnd();
+    const requests: string[] = [];
+    const notebookExport = await openExport("https://example.test/fixture", {
+      fetch: async (input) => {
+        requests.push(input instanceof Request ? input.url : input.toString());
+        return new Response(index);
+      },
+    });
+    const available = notebookExport.state("one").output("label");
+    const unavailable = notebookExport.state("two").output("label");
+
+    expect(available.unavailable).toBeNull();
+    await expect(available.load(jsonLoader())).resolves.toEqual({ choice: "A", label: "First" });
+    expect(unavailable.unavailable).toEqual({
+      reason: "representation_unavailable",
+      message: "builtins.str has no representation as image/png.",
+    });
+    expect(Object.isFrozen(unavailable.unavailable)).toBe(true);
+    const expected = {
+      code: "output_unavailable",
+      details: {
+        output: "label",
+        fingerprint: notebookExport.state("two").fingerprint,
+        reason: "representation_unavailable",
+      },
+    };
+    await expect(unavailable.load(jsonLoader())).rejects.toMatchObject(expected);
+    expect(() => resolveOutputLoader(unavailable, [jsonLoader()])).toThrow(
+      expect.objectContaining(expected),
+    );
+    await expect(
+      loadOutputs(notebookExport.state("two"), { answer: scalarLoader(), label: jsonLoader() }),
+    ).rejects.toMatchObject(expected);
+    await expect(notebookExport.verify()).resolves.toMatchObject({ assets: 0 });
+    expect(requests).toEqual(["https://example.test/fixture/index.json"]);
+  });
+
+  test.each(fixtureCases<UnavailableOutputEntry>(unavailableOutputEntries))(
+    "$name matches the durable unavailable-output policy",
+    async ({ entry, valid }) => {
+      const index = mutableObject(
+        JSON.parse(await readFile(unavailableOutputIndex, "utf8")),
+        "unavailable output index",
+      );
+      const states = mutableObject(index.states, "states");
+      const fingerprint = stringValue(mutableObject(index.aliases, "aliases").two, "alias two");
+      const outputs = mutableObject(mutableObject(states[fingerprint], "state").outputs, "outputs");
+      outputs.label = structuredClone(entry);
+
+      const opened = openExport("https://example.test/fixture", {
+        fetch: async () => new Response(canonicalJson(index)),
+      });
+      if (!valid) {
+        await expect(opened).rejects.toMatchObject({ code: "export_invalid" });
+        return;
+      }
+      const output = (await opened).state("two").output("label");
+      expect(output.unavailable).toEqual(mutableObject(entry, "entry").unavailable);
+    },
+  );
 
   test("decodes the Python projection record fixtures", () => {
     const output = parseMarimoOutputSnapshot(

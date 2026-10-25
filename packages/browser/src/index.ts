@@ -15,6 +15,7 @@ export type {
   AnyOutputLoader,
   ArrowDescriptor,
   AssetDescriptor,
+  AvailableExportOutput,
   BlobAsset,
   BlobAssetDescriptor,
   BlobAssetLoadInput,
@@ -53,6 +54,9 @@ export type {
   ExportState,
   ScalarDescriptor,
   ScalarValue,
+  UnavailableExportOutput,
+  UnavailableOutput,
+  UnavailableReason,
   VerificationResult,
   VerifyOptions,
 } from "./types.js";
