@@ -61,7 +61,7 @@ Opening validates canonical `index.json`. Output assets remain lazy until
 | Notebook export      | One canonical `index.json` and its declared content-addressed assets                             |
 | Exported state       | One complete input vector whose outputs are present in the notebook export                       |
 | State alias          | An authored state name that selects an exported state. Several aliases can select the same state |
-| Output               | One published name and representation in every exported state                                    |
+| Output               | One published name and representation. An optional output can be unavailable in some states      |
 | Representation       | The codec and media type that define how one output is stored and decoded                        |
 | Output descriptor    | Representation, provenance, and an inline value or asset reference                               |
 | Loader               | A codec-aware decoder selected explicitly by the application                                     |

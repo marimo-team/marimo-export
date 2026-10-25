@@ -99,16 +99,34 @@ distributions when their implementation needs them. The capture-scoped registry
 freezes the resolved callables and modules, invokes each callable as
 `exporter(value, **options)`, and verifies source stability before commit.
 
-## Every state has every output
+## Every state has an entry for every output
 
 The durable relation is:
 
 ```text
-states × outputs -> descriptor
+states × outputs -> descriptor | unavailable
 ```
 
 The state fingerprint is SHA-256 over canonical JSON for the complete input
-object. One output name keeps one codec and media type across every state.
+object. One output name keeps one codec and media type across every state where
+it has a descriptor.
+
+An unavailable entry appears only for an output declared `optional`. Three
+producer conditions qualify, each carried by `UnavailableOutputError` from
+`_marimo/capabilities.py`:
+
+| Reason                       | Raised by                                                                                                            |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `value_missing`              | Selector resolution in the transient leaf, or before it for a rendered-output source                                 |
+| `representation_unavailable` | An exporter that raises `RepresentationError` other than `RepresentationTooLarge` or `RepresentationDependencyError` |
+| `stopped`                    | Stop provenance for a cell in the output's dependency closure, before the leaf runs                                  |
+
+`unavailable_output()` owns the policy. It returns the entry for an optional
+output, and the state run re-raises the same `OutputError` with code
+`output_execution_failed` for a required output. Every other failure fails the
+producer operation. The `optional` flag belongs to the output plan, so toggling
+it changes the output-plan identity and prepared states never cross between the
+two policies.
 
 Export format version 1 has a closed codec set. The BlobAsset codec carries
 extensible media types, so a custom representation adds a media type, Python
@@ -130,7 +148,7 @@ codec and media-type inventory.
 - projection-scoped UI object IDs bound to input names and semantic paths
 - authored aliases mapped to state fingerprints
 - fingerprint-keyed complete state vectors
-- one descriptor for every state and output
+- one descriptor or unavailable entry for every state and output
 
 `ExportIndex.to_bytes()` emits canonical UTF-8 JSON. Python and TypeScript use
 the same number spelling, key order, scalar tags, fingerprints, codec names,
@@ -194,7 +212,8 @@ file replacement races, and size or digest changes.
 2. Every state vector is complete before execution.
 3. An input name has one defining notebook cell.
 4. An AnyWidget patch records complete serializer-owned state.
-5. Every state records the configured output set.
+5. Every state records the configured output set, with unavailable entries only
+   for optional outputs.
 6. One output name keeps one representation across states.
 7. `index.json` references every asset and no undeclared asset.
 8. A committed directory passes the same reader used by consumers.

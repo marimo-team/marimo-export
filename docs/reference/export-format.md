@@ -109,10 +109,11 @@ Each state entry contains exactly:
 | `inputs`  | Complete object with the exact root input-name set |
 | `outputs` | Object with the exact root output-name set         |
 
-Every alias targets a declared state. Several aliases may target the same
-fingerprint when authored rows normalize to the same complete vector. One
-output name keeps one codec and media type across every state. `default_state`
-references one declared fingerprint.
+Each `outputs` value is an output descriptor or an unavailable output. Every
+alias targets a declared state. Several aliases may target the same fingerprint
+when authored rows normalize to the same complete vector. One output name keeps
+one codec and media type across every state where it has a descriptor.
+`default_state` references one declared fingerprint.
 
 ## Output descriptors
 
@@ -145,6 +146,37 @@ The descriptor shape is closed by codec:
 
 `provenance` contains exactly `python_type`. `asset` contains exactly `sha256`
 and `size`. Readers reject missing and unknown descriptor fields.
+
+## Unavailable outputs
+
+An [optional output](export-spec#optional-outputs) that has no value in a state
+stores an unavailable output in place of a descriptor:
+
+```json
+{
+  "unavailable": {
+    "message": "builtins.str has no representation as image/png.",
+    "reason": "representation_unavailable"
+  }
+}
+```
+
+The object contains exactly `unavailable`. `unavailable` contains exactly:
+
+| Field     | Contract                                                                                           |
+| --------- | -------------------------------------------------------------------------------------------------- |
+| `reason`  | `representation_unavailable`, `value_missing`, or `stopped`                                        |
+| `message` | Nonempty string of at most 1,024 UTF-8 bytes, with no control characters or surrounding whitespace |
+
+`representation_unavailable` means the exporter found none of its accepted
+representations for the selected value. `value_missing` means the selector names
+an attribute or item the value lacks in that state. `stopped` means a cell in
+the output's dependency closure called `mo.stop`. The message describes the
+condition for a person.
+
+An unavailable output references no asset and takes no part in representation
+consistency. Readers expose it as `ExportOutput.unavailable` and reject reads
+of its value with `output_unavailable`.
 
 ## Native codecs
 
@@ -331,6 +363,7 @@ Readers verify:
 
 - canonical index bytes
 - exact input and output key sets
+- closed unavailable-output records
 - state fingerprints
 - representation consistency across states
 - asset path identity
@@ -354,6 +387,7 @@ the lowercase SHA-256 of the exact canonical `index.json` bytes.
 | Input, output, alias, and producer version name |                    255 UTF-8 bytes |
 | Control binding path                            |                    256 typed steps |
 | Control domain options                          |                       4,096 values |
+| Unavailable output message                      |                  1,024 UTF-8 bytes |
 | Media type                                      |        1,024 printable ASCII bytes |
 | BlobAsset metadata                              | 256 KiB of canonical portable JSON |
 | Browser BlobAsset MessagePack nesting           |                         256 levels |
@@ -397,7 +431,9 @@ Resolution returns an exported state already present in the export.
 ## Versioning
 
 The schema identifier and codec identifiers version durable behavior. A reader
-rejects an unknown export schema or native codec. Custom representations should
+rejects an unknown export schema or native codec. Readers released before
+unavailable outputs reject an index that contains one, so upgrade consumers
+together with producers that write optional outputs. Custom representations should
 use versioned media types so producer and consumer changes remain explicit.
 
 [Consume an export](../guide/consume-an-export) provides Python, browser, and

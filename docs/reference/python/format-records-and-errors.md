@@ -116,7 +116,8 @@ ExportIndex(
 `default_state` is a state fingerprint. `aliases` maps authored state names to
 fingerprints. Every `StateEntry` must have the exact declared input and output
 sets. A state key must equal the fingerprint of its complete inputs. One output
-name keeps the same codec and media type across every state.
+name keeps the same codec and media type across every state where it has a
+descriptor.
 
 Methods:
 
@@ -140,21 +141,21 @@ canonical bytes. Format failures raise `NotebookExportError` with
 
 `assets()` deduplicates by `(codec, SHA-256)` and rejects conflicting descriptor
 facts for a reused identity. `descriptor_entries()` yields state fingerprint,
-output name, and descriptor for every relation entry.
+output name, and descriptor for every available output in every state.
 
 ### Index component records
 
-| Record               | Fields or signature                                                                            |
-| -------------------- | ---------------------------------------------------------------------------------------------- |
-| `NotebookProvenance` | `filename: str \| None`, `document_sha256: str`                                                |
-| `ProducerProvenance` | `marimo: str`, `marimo_export: str`, `implementation_sha256: str`                              |
-| `StateEntry`         | `StateEntry(*, inputs, outputs)`, immutable `outputs`, detached `inputs` property              |
-| `ControlBinding`     | `input: str`, `path: tuple[ControlPathStep, ...]`, `domain: ControlDomain \| None = None`      |
-| `ControlIndexStep`   | `value: int`, fixed `kind="index"`                                                             |
-| `ControlKeyStep`     | `value: str`, fixed `kind="key"`                                                               |
-| `ControlElementStep` | Fixed `kind="element"`                                                                         |
-| `ControlRange`       | `start`, `stop`, `step` as `int \| float`, fixed `kind="range"`                                |
-| `ControlOptions`     | `ControlOptions(values)`, frozen `values: tuple[FrozenJsonValue, ...]`, fixed `kind="options"` |
+| Record               | Fields or signature                                                                                          |
+| -------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `NotebookProvenance` | `filename: str \| None`, `document_sha256: str`                                                              |
+| `ProducerProvenance` | `marimo: str`, `marimo_export: str`, `implementation_sha256: str`                                            |
+| `StateEntry`         | `StateEntry(*, inputs, outputs)`, immutable `outputs: Mapping[str, OutputEntry]`, detached `inputs` property |
+| `ControlBinding`     | `input: str`, `path: tuple[ControlPathStep, ...]`, `domain: ControlDomain \| None = None`                    |
+| `ControlIndexStep`   | `value: int`, fixed `kind="index"`                                                                           |
+| `ControlKeyStep`     | `value: str`, fixed `kind="key"`                                                                             |
+| `ControlElementStep` | Fixed `kind="element"`                                                                                       |
+| `ControlRange`       | `start`, `stop`, `step` as `int \| float`, fixed `kind="range"`                                              |
+| `ControlOptions`     | `ControlOptions(values)`, frozen `values: tuple[FrozenJsonValue, ...]`, fixed `kind="options"`               |
 
 Every record exposes `to_value()`. `ControlPathStep` is the union of the three
 step records. An empty path binds a root control. An `index` step selects a
@@ -256,6 +257,17 @@ normalize negative zero.
 scalar or JSON union. `AssetDescriptor` is the union of the five asset-backed
 descriptors.
 
+### Unavailable outputs
+
+```python
+UnavailableOutput(reason: UnavailableReason, message: str)
+```
+
+An `UnavailableOutput` stands in a `StateEntry` for an optional output that has
+no value in that state. `reason` is `representation_unavailable`,
+`value_missing`, or `stopped`. `message` is a printable string of at most 1,024
+UTF-8 bytes. `OutputEntry` is `OutputDescriptor | UnavailableOutput`.
+
 The [export format reference](../export-format) defines the serialized index,
 descriptor, scalar-tag, snapshot, and asset-envelope shapes.
 
@@ -307,6 +319,7 @@ portable JSON object. The `details` property returns a detached object.
 | `OutputError`            | `output_execution_failed` | Published output execution failed                  |
 | `CodecError`             | `codec_invalid`           | Native cache return cannot enter the export format |
 | `StateUnavailableError`  | `state_unavailable`       | Complete input vector absent from the export       |
+| `OutputUnavailableError` | `output_unavailable`      | Optional output has no value in the read state     |
 
 Repository failures live in `marimo_export.repository`. Observation failures
 live in `marimo_export.observations`. `PreparedManifestLimitError` lives in
@@ -323,7 +336,7 @@ depends on the exact failed operation:
 | Exporter and codec    | `runtime_distribution_unavailable`, `exporter_unavailable`, `exporter_invalid`, `exporter_dependency_unavailable`, `exporter_identity_failed`, `exporter_source_changed`, `codec_invalid`, `cache_receipt_missing`, `cache_receipt_invalid`                                                        |
 | Session and transport | `transport_failed`, `session_error`, `session_not_found`, `session_ambiguous`, `client_closed`, `owned_notebook_closed`, `bridge_version_mismatch`, `implementation_changed`                                                                                                                       |
 | Notebook execution    | `notebook_invalid`, `notebook_changed`, `parent_document_changed`, `parent_state_changed`, `state_execution_failed`, `state_cleanup_failed`, `output_execution_failed`, `output_not_portable`, `output_cell_unavailable`, `preparation_cancelled`, `server_start_failed`, `server_shutdown_failed` |
-| Reader and integrity  | `export_invalid`, `export_noncanonical`, `export_unavailable`, `integrity_failed`, `asset_invalid`, `asset_undeclared`, `asset_conflict`, `state_input_invalid`, `state_not_found`, `state_unavailable`, `output_not_found`                                                                        |
+| Reader and integrity  | `export_invalid`, `export_noncanonical`, `export_unavailable`, `integrity_failed`, `asset_invalid`, `asset_undeclared`, `asset_conflict`, `state_input_invalid`, `state_not_found`, `state_unavailable`, `output_not_found`, `output_unavailable`                                                  |
 | Destination           | `destination_invalid`, `destination_exists`, `destination_changed`, `export_commit_failed`                                                                                                                                                                                                         |
 | Repository            | `repository_error`, `repository_limit_exceeded`, `repository_integrity_failed`, `repository_unavailable`, `repository_busy`, `repository_reservation_timeout`, `repository_fence_stale`                                                                                                            |
 | Host and observation  | `marimo_incompatible`, `marimo_cache_patch_conflict`, `observation_rejected`, `observation_persistence_failed`, `prepared_manifest_limit_exceeded`                                                                                                                                                 |

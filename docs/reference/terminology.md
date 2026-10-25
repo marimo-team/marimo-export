@@ -47,12 +47,13 @@ The concept pages introduce them through worked examples.
 
 | Term                     | Meaning                                                                                                                                                                                |
 | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Output                   | One published name and representation available for every exported state.                                                                                                              |
+| Output                   | One published name and representation for every exported state.                                                                                                                        |
+| Optional output          | An output declared `optional`. In a state where it has no value, the export records an unavailable output with a reason and message in place of a descriptor.                          |
 | Output source            | The `json`, `native`, `export`, `output`, or `cell` selection declared by an output spec.                                                                                              |
 | Selector                 | A path from one Python definition through supported attribute or item steps to a selected notebook result.                                                                             |
 | Exporter                 | A producer-side converter that returns a `BlobAsset` or a JSON value for one selected value.                                                                                           |
 | Output plan              | The complete set of authored output declarations. Its identity changes when an output source, exporter, option, or declared dependency changes.                                        |
-| Output representation    | The codec and media type that define how one output is stored and decoded. One output name keeps the same representation across every state.                                           |
+| Output representation    | The codec and media type that define how one output is stored and decoded. One output name keeps the same representation across every state where it is available.                     |
 | Codec                    | A versioned identifier for the native storage envelope, such as `marimo.json.v1` or `numpy.npy.v1`.                                                                                    |
 | Media type               | The standard content label for data inside a `BlobAsset` envelope. Custom representations should use a versioned media type.                                                           |
 | Output descriptor        | The `index.json` record that declares an output's representation, provenance, and inline value or asset reference.                                                                     |

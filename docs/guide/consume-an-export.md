@@ -117,6 +117,41 @@ require a peer runtime.
 [Output representations](../reference/representations) maps stored
 representations to browser loaders and their peer dependencies.
 
+## Handle an unavailable output
+
+An output declared `optional` in the `ExportSpec` can be unavailable in some
+states. Its `unavailable` field holds the reason and message, and is `None` in
+Python or `null` in the browser when the output has a value. These examples open
+an export at `dist/charts` whose optional `chart` output has no value in the
+exported state named `empty`:
+
+```python
+from marimo_export import open_export
+
+chart = open_export("dist/charts").state("empty").output("chart")
+if chart.unavailable is not None:
+    print(chart.unavailable.reason, chart.unavailable.message)
+```
+
+```ts
+import { imageLoader, openExport } from "@marimo-team/marimo-export";
+
+const view = document.getElementById("chart")!;
+const chartExport = await openExport("/charts/");
+const chart = chartExport.state("empty").output("chart");
+if (chart.unavailable === null) {
+  const image = await chart.load(imageLoader());
+  await image.mount(view);
+} else {
+  view.textContent = chart.unavailable.message;
+}
+```
+
+Reading an unavailable output raises `OutputUnavailableError` in Python and
+rejects with a `NotebookExportError` coded `output_unavailable` in the browser.
+TypeScript narrows `chart` to `AvailableExportOutput` after the `null` check, so
+`codec`, `mediaType`, and `descriptor` are available only on that branch.
+
 ## Follow a prepared publication
 
 Applications can open a `marimo-export.prepared.v1` manifest with the browser

@@ -14,6 +14,7 @@ import pytest
 from marimo_export import values
 from marimo_export.values import (
     Representation,
+    RepresentationDependencyError,
     RepresentationError,
     RepresentationTooLarge,
     SelectorError,
@@ -389,6 +390,23 @@ def test_altair_charts_and_vega_lite_specifications_render_through_vl_convert() 
     assert png.data.startswith(_PNG)
     width, height = _png_size(png.data)
     assert (width / 2, height / 2) == (png.width, png.height)
+
+
+def test_a_chart_without_vl_convert_raises_a_dependency_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setitem(sys.modules, "vl_convert", None)
+    specification = {
+        "$schema": "https://vega.github.io/schema/vega-lite/v6.json",
+        "data": {"values": [{"x": 1}]},
+        "mark": "point",
+    }
+
+    with pytest.raises(RepresentationDependencyError, match="need vl-convert-python"):
+        represent(specification, ["image/png"])
+    with pytest.raises(RepresentationError) as raised:
+        represent("text", ["image/png"])
+    assert type(raised.value) is RepresentationError
 
 
 def test_vega_lite_charts_render_as_pdf_with_embedded_fonts() -> None:

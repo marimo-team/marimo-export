@@ -12,6 +12,7 @@ from export_integration_support import (
 )
 from marimo_export import ExportSpec, OutputSpec, open_export
 from marimo_export._remote.managed import ManagedServer
+from marimo_export.descriptors import UnavailableOutput
 from marimo_export.errors import OutputError
 from marimo_export.exporters import importable
 from marimo_export.sessions import Client
@@ -364,3 +365,47 @@ if __name__ == "__main__":
         open_export(tmp_path / "restarted").state("baseline").output("summary").blob_asset().data
         == b"stable:41:disk-v222"
     )
+
+
+def test_custom_exporter_representation_errors_follow_the_optional_policy(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    notebook = tmp_path / "notebook.py"
+    _write_notebook(notebook)
+    (tmp_path / "export_exports.py").write_text(
+        """
+from marimo_export.values import RepresentationDependencyError, RepresentationError
+
+
+def unrepresentable(value):
+    raise RepresentationError(
+        "int has no chart form.",
+        ("chart() raised OSError: /home/alice/data.csv.",),
+    )
+
+
+def renderer_missing(value):
+    raise RepresentationDependencyError("Charts need a renderer.")
+""".lstrip(),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("PYTHONPATH", str(tmp_path))
+
+    def spec(name: str) -> ExportSpec:
+        exporter = importable(f"export_exports:{name}")
+        return ExportSpec(
+            default_state="baseline",
+            states={"baseline": {}},
+            outputs={"chart": OutputSpec.export("answer", exporter, optional=True)},
+        )
+
+    _capture(notebook, spec("unrepresentable"), tmp_path / "export")
+    chart = open_export(tmp_path / "export").state("baseline").output("chart")
+    assert chart.unavailable == UnavailableOutput(
+        reason="representation_unavailable", message="int has no chart form."
+    )
+
+    with pytest.raises(OutputError, match="Charts need a renderer") as raised:
+        _capture(notebook, spec("renderer_missing"), tmp_path / "missing")
+    assert raised.value.code == "output_execution_failed"

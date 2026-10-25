@@ -254,6 +254,7 @@ class PlannedOutput:
     cell: CellDefinition | None = None
     owner_cell_id: str | None = None
     read_only: bool = False
+    optional: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -574,6 +575,7 @@ def _resolve_planned_outputs(
             cell=cell,
             owner_cell_id=owner_cell_id,
             read_only=output.read_only,
+            optional=output.optional,
         )
     return planned
 

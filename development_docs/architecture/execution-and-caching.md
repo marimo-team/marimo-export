@@ -101,7 +101,8 @@ print(check.status, check.details)
 plan, prepared exporters, and producer identities. It returns `StateExecution`
 with:
 
-- native receipts for every output
+- native receipts for every available output
+- unavailable entries for optional outputs without a value
 - scoped control bindings
 - authored and projection cache activity
 - state-run timings

@@ -18,6 +18,7 @@ from marimo_export._json import (
     decode_json_object,
     json_value,
 )
+from marimo_export._marimo.capabilities import UnavailableOutputError
 from marimo_export.descriptors import (
     ARROW_MEDIA_TYPE,
     JSON_MEDIA_TYPE,
@@ -158,9 +159,11 @@ def select_value(selector: str, namespace: Mapping[str, object]) -> object:
     try:
         return ValueSelector(selector).resolve(namespace)
     except LookupError as error:
-        raise OutputError(
-            f"selector {selector!r} is unavailable: {error}",
-            code="output_execution_failed",
+        message = f"selector {selector!r} is unavailable: {error}"
+        raise UnavailableOutputError(
+            message,
+            reason="value_missing",
+            reason_message=message,
         ) from error
 
 

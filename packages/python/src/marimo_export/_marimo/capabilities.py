@@ -4,19 +4,24 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping
 from contextlib import AbstractContextManager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import Literal, Protocol
 
-from marimo_export._execution.plan import Baseline, ExecutionPlan, NormalizedState
+from marimo_export._diagnostics import safe_diagnostic
+from marimo_export._execution.plan import Baseline, ExecutionPlan, NormalizedState, PlannedOutput
 from marimo_export._json import JsonObject
+from marimo_export._limits import MAX_UNAVAILABLE_MESSAGE_BYTES
 from marimo_export.descriptors import (
     JsonDescriptor,
     OutputCodec,
     OutputDescriptor,
     ScalarDescriptor,
     ScalarValue,
+    UnavailableOutput,
+    UnavailableReason,
 )
+from marimo_export.errors import OutputError
 from marimo_export.index import ControlBinding
 from marimo_export.integration import KernelInputObservation
 from marimo_export.progress import CacheActivity
@@ -153,14 +158,57 @@ class PreparedExporter:
             raise ValueError("prepared exporter token is invalid")
 
 
+class UnavailableOutputError(OutputError):
+    """One output has no value in one state run.
+
+    The error fails a required output with code ``output_execution_failed``.
+    An optional output records ``unavailable`` in its state entry instead.
+    ``reason_message`` omits the state alias because prepared states are
+    shared by every alias of one complete input vector.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        reason: UnavailableReason,
+        reason_message: str,
+        details: Mapping[str, object] | None = None,
+    ) -> None:
+        super().__init__(message, details=details)
+        self.unavailable = UnavailableOutput(
+            reason=reason,
+            message=safe_diagnostic(
+                reason_message, maximum_chars=MAX_UNAVAILABLE_MESSAGE_BYTES
+            ).strip()
+            or "output is unavailable",
+        )
+
+
+def unavailable_output(
+    planned_output: PlannedOutput,
+    error: OutputError,
+) -> UnavailableOutput | None:
+    """Return the entry an optional output records for ``error``, or None to fail."""
+
+    if planned_output.optional and isinstance(error, UnavailableOutputError):
+        return error.unavailable
+    return None
+
+
 @dataclass(frozen=True, slots=True)
 class StateExecution:
-    """Receipts and diagnostics from one state run."""
+    """Receipts and diagnostics from one state run.
+
+    ``receipts`` cover the available outputs and ``unavailable`` names the
+    optional outputs without a value, so together they cover every output.
+    """
 
     receipts: tuple[NativeReceipt, ...]
     control_bindings: Mapping[str, ControlBinding]
     cache: CacheActivity
     timings: StateRunTimings
+    unavailable: Mapping[str, UnavailableOutput] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if not isinstance(self.cache, CacheActivity):
@@ -175,6 +223,7 @@ class StateExecution:
                 raise TypeError("state execution control bindings must contain ControlBinding")
             parsed[object_id] = binding
         object.__setattr__(self, "control_bindings", MappingProxyType(parsed))
+        object.__setattr__(self, "unavailable", MappingProxyType(dict(self.unavailable)))
 
 
 class CachedStateExecutor(Protocol):
@@ -249,4 +298,6 @@ __all__ = [
     "RunOutcome",
     "StateExecution",
     "TransferRuntime",
+    "UnavailableOutputError",
+    "unavailable_output",
 ]

@@ -129,7 +129,9 @@ named live [marimo](https://marimo.io/) session. Both execute missing states,
 commit the complete generation, and return a leased `PreparedExport`.
 
 Each state runs in an isolated child graph. One failed state, output, or
-verification step fails the producer operation. A state that committed before a
+verification step fails the producer operation. An optional output that has no
+value in a state records an unavailable entry for that state and lets the
+operation continue. A state that committed before a
 later failure can remain reusable for the next attempt.
 
 ## Reuse cannot detect every external change

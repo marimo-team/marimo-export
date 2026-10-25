@@ -65,6 +65,7 @@ guard return `false`.
 | `loader_unavailable`            | No loader accepts the output codec and media type                                       | Import the matching loader and its peer runtime                                                                |
 | `output_not_found`              | An output name is absent from the selected state                                        | Inspect `outputNames` and use a published name                                                                 |
 | `output_representation_changed` | One output name changes codec or media type across states                               | Rebuild with one stable representation per output                                                              |
+| `output_unavailable`            | An optional output has no value in the selected state                                   | Check `output.unavailable` before loading and render a placeholder                                             |
 | `export_invalid`                | The index schema, shape, values, names, descriptors, or state fingerprints are invalid  | Regenerate the export with a compatible producer                                                               |
 | `export_noncanonical`           | `index.json` parses but its exact bytes are not canonical JSON                          | Regenerate the index through marimo-export                                                                     |
 | `read_failed`                   | Fetch, response status, body availability, or stream reading failed                     | Check the URL, CORS, authentication, deployment, and network                                                   |
@@ -163,6 +164,7 @@ expand what a standard producer writes.
 | Control path                                     |                                            256 steps |
 | Control domain options                           |                                         4,096 values |
 | Descriptor provenance text                       |                                    2,048 UTF-8 bytes |
+| Unavailable output message                       |                                    1,024 UTF-8 bytes |
 | BlobAsset metadata                               |                            256 KiB of canonical JSON |
 | BlobAsset MessagePack nesting                    |                                           256 levels |
 | BlobAsset MessagePack values                     |                                              100,000 |
@@ -227,7 +229,7 @@ appending a newline changes canonical `index.json` bytes and its identity.
 
 ### A loader is unavailable
 
-Compare `output.codec` and `output.mediaType.essence` with the [loader
+Compare the available output's `codec` and `mediaType.essence` with the [loader
 catalog](loaders#loader-catalog). Install the listed peer beside
 `@marimo-team/marimo-export`.
 

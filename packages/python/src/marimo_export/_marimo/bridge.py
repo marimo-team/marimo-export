@@ -17,6 +17,7 @@ from marimo_export._marimo.capabilities import KernelAdapters, KernelRuntime
 from marimo_export._marimo.composition import create_kernel_adapters
 from marimo_export._marimo.transfer import create_ticket, release, sweep_expired
 from marimo_export._services.identity import managed_runtime_source, runtime_producer_identity
+from marimo_export.descriptors import OutputEntry
 from marimo_export.errors import (
     ExecutionError,
     MarimoExportError,
@@ -278,6 +279,7 @@ async def _capture(spec: ExportSpec, adapters: KernelAdapters) -> JsonObject:
     ui_names = tuple(name for name in plan.inputs if baseline.definitions[name].kind == "ui")
     parent_ui = await runtime.declared_ui_values(ui_names)
     receipts = []
+    entries: list[dict[str, OutputEntry]] = []
     control_bindings: dict[str, ControlBinding] = {}
     notebook_hits = 0
     notebook_misses = 0
@@ -299,6 +301,12 @@ async def _capture(spec: ExportSpec, adapters: KernelAdapters) -> JsonObject:
                     producer_identity,
                 )
                 receipts.extend(executed.receipts)
+                entries.append(
+                    {
+                        **executed.unavailable,
+                        **{receipt.output: receipt.descriptor for receipt in executed.receipts},
+                    }
+                )
                 _merge_control_bindings(control_bindings, executed.control_bindings)
                 notebook_hits += executed.cache.authored_hits
                 notebook_misses += executed.cache.authored_misses
@@ -342,22 +350,20 @@ async def _capture(spec: ExportSpec, adapters: KernelAdapters) -> JsonObject:
             if consistency_error is not None:
                 raise consistency_error
 
-    expected_receipts = len(plan.states) * len(plan.outputs)
-    if len(receipts) != expected_receipts:
+    expected_entries = len(plan.states) * len(plan.outputs)
+    actual_entries = sum(len(outputs) for outputs in entries)
+    if len(entries) != len(plan.states) or actual_entries != expected_entries:
         raise ExecutionError(
             "state execution did not produce the complete output relation",
             code="cache_receipt_missing",
-            details={"expected": expected_receipts, "actual": len(receipts)},
+            details={"expected": expected_entries, "actual": actual_entries},
         )
     aliases: dict[str, str] = {}
     states: dict[str, StateEntry] = {}
-    offset = 0
-    for state in plan.states:
-        state_receipts = receipts[offset : offset + len(plan.outputs)]
-        offset += len(plan.outputs)
+    for state, outputs in zip(plan.states, entries, strict=True):
         states[state.fingerprint] = StateEntry(
             inputs=state.inputs,
-            outputs={receipt.output: receipt.descriptor for receipt in state_receipts},
+            outputs={output: outputs[output] for output in plan.outputs},
         )
         aliases.update((alias, state.fingerprint) for alias in state.aliases)
     producer = ProducerProvenance(

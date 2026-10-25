@@ -38,7 +38,8 @@ The notebook starts with `days: 7`. The empty `weekly` row keeps that value. The
 | `monthly` | `{"days": 30}` | JSON in index | Rendered output file |
 
 This table is the **state-output relation**. Each row is an exported state with a
-complete input vector. Each column is a named output available in every state.
+complete input vector. Each column is a named output with an entry in every
+state.
 
 The embedded quickstart application reads that generated export. Switching the
 report window selects another row and renders both outputs from it.

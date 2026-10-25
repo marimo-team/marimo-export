@@ -18,6 +18,7 @@ details, and cause before changing files or clearing repository state.
 | `manifest_invalid`, `manifest_read_failed`, `query_ambiguous`, `query_miss`             | [Inspect the prepared publication](#a-prepared-publication-cannot-update) |
 | `read_failed`, `export_noncanonical`, `integrity_failed`, `read_limit_exceeded`         | [Inspect browser requests](#the-browser-cannot-fetch-the-export)          |
 | `output_not_portable`, `output_read_only`                                               | [Inspect UI that calls Python](#an-output-calls-python-functions)         |
+| `output_execution_failed`, `output_unavailable`                                         | [Inspect output availability](#an-output-is-unavailable-in-a-state)       |
 | `export_parent_sync_failed`, `retired_destination_cleanup_failed`                       | [Inspect a post-commit warning](#a-commit-succeeded-with-a-warning)       |
 
 ## Check the local environment
@@ -269,6 +270,21 @@ Inspect the manifest request and document before changing controller state:
 Keep the last committed browser publication visible while repairing the next
 manifest or state. `PreparedPublicationRefresh` reports polling failures through
 `onError`. An explicit `refresh()` rejects to its caller.
+
+## An output is unavailable in a state
+
+`output_execution_failed` with a `state` and `output` in its details means one
+state could not produce that output. When the message names a missing selector
+step, a missing representation, or a stopped cell, and the condition is
+expected for that state, declare the output `optional`. The export then records
+the reason for that state:
+
+```python
+OutputSpec.export("chart", media(["image/png"]), optional=True)
+```
+
+Readers raise or reject with `output_unavailable` when code reads that output.
+Check `output.unavailable` first.
 
 ## A loader or mount fails
 

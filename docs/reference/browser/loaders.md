@@ -437,7 +437,8 @@ strings, or a predicate over the parsed `MediaType`. String matching uses the
 lowercase media-type essence and ignores parameters.
 
 `resolveOutputLoader(output, loaders)` selects exactly one compatible loader
-from the candidate loader array. No match raises `loader_unavailable`. More than one match
+from the candidate loader array. An unavailable output raises
+`output_unavailable`. No match raises `loader_unavailable`. More than one match
 raises `loader_ambiguous`. A malformed loader or non-boolean `accepts()` result
 raises `loader_invalid`.
 

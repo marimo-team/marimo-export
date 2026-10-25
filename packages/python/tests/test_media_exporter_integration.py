@@ -3,12 +3,16 @@ from __future__ import annotations
 import json
 import re
 from pathlib import Path
+from typing import Any, cast
 
 import pytest
 from export_integration_support import build
 from marimo_export import ExportSpec, OutputSpec, open_export
-from marimo_export.errors import OutputError
+from marimo_export import build as build_export
+from marimo_export.descriptors import UnavailableOutput
+from marimo_export.errors import OutputError, OutputUnavailableError
 from marimo_export.exporters import media
+from marimo_export.repository import ExportRepository
 from marimo_export.values import Size
 
 
@@ -214,3 +218,120 @@ if __name__ == "__main__":
     assert raised.value.code == "output_execution_failed"
     assert raised.value.details["output"] == "chart"
     assert raised.value.details["state"] == "base"
+
+
+def test_an_optional_output_records_the_states_without_an_accepted_representation(
+    tmp_path: Path,
+) -> None:
+    pytest.importorskip("matplotlib")
+    notebook = tmp_path / "notebook.py"
+    notebook.write_text(
+        """
+import marimo
+
+app = marimo.App()
+
+
+@app.cell
+def _():
+    rows = 3
+    return (rows,)
+
+
+@app.cell
+def _(rows):
+    from matplotlib.figure import Figure
+
+    if rows:
+        chart = Figure(figsize=(2, 2))
+        chart.subplots().plot(range(rows))
+    else:
+        chart = "No rows to plot."
+    return (chart,)
+
+
+if __name__ == "__main__":
+    app.run()
+""".lstrip(),
+        encoding="utf-8",
+    )
+    spec = ExportSpec(
+        default_state="rows",
+        states={"rows": {}, "empty": {"rows": 0}},
+        outputs={
+            "chart": OutputSpec.export("chart", media(["image/png"]), optional=True),
+            "rows": OutputSpec.json("rows"),
+        },
+    )
+
+    with ExportRepository.open(tmp_path / "repository") as repository:
+        result = build_export(
+            notebook, spec=spec, output=tmp_path / "export", repository=repository, timeout=60
+        )
+        required = ExportSpec(
+            default_state=spec.default_state,
+            states=cast(dict[str, Any], spec.to_value()["states"]),
+            outputs={**spec.outputs, "chart": OutputSpec.export("chart", media(["image/png"]))},
+        )
+        with pytest.raises(
+            OutputError, match=re.escape("builtins.str has no representation as image/png")
+        ):
+            build_export(
+                notebook,
+                spec=required,
+                output=tmp_path / "required",
+                repository=repository,
+                timeout=60,
+            )
+    export = open_export(result.path)
+    empty = export.state("empty").output("chart")
+
+    assert export.state("rows").output("chart").unavailable is None
+    assert export.state("rows").output("chart").blob_asset().media_type == "image/png"
+    assert export.state("empty").output("rows").json() == 0
+    assert empty.unavailable == UnavailableOutput(
+        reason="representation_unavailable",
+        message="builtins.str has no representation as image/png.",
+    )
+    with pytest.raises(OutputUnavailableError) as raised:
+        empty.blob_asset()
+    assert raised.value.code == "output_unavailable"
+    assert raised.value.details["reason"] == "representation_unavailable"
+    assert export.verify().assets == 1
+
+
+def test_an_optional_output_still_fails_when_its_json_form_exceeds_the_value_limit(
+    tmp_path: Path,
+) -> None:
+    notebook = tmp_path / "notebook.py"
+    notebook.write_text(
+        """
+import marimo
+
+app = marimo.App()
+
+
+@app.cell
+def _():
+    rows = list(range(100_001))
+    return (rows,)
+
+
+if __name__ == "__main__":
+    app.run()
+""".lstrip(),
+        encoding="utf-8",
+    )
+    spec = ExportSpec(
+        default_state="base",
+        states={"base": {}},
+        outputs={
+            "rows": OutputSpec.export("rows", media(["application/json"]), optional=True),
+        },
+    )
+
+    with pytest.raises(OutputError, match="more than 100,000 JSON values") as raised:
+        build(notebook, spec=spec, output=tmp_path / "export", timeout=60)
+
+    assert raised.value.code == "output_execution_failed"
+    assert raised.value.details["output"] == "rows"

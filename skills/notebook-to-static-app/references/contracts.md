@@ -75,6 +75,13 @@ after their responses finish.
 Each descriptor exposes codec, media type, originating Python type, and an inline
 value or content-addressed asset.
 
+Pass `optional=True` to an `OutputSpec` factory when some states legitimately
+have no value, such as a state where the chart value is a text placeholder or a
+branch that calls `mo.stop`. Those
+states record `output.unavailable` with a `reason` and `message`. Check it
+before loading, because loading an unavailable output fails with
+`output_unavailable`.
+
 ## Immutable browser entry
 
 ```ts
