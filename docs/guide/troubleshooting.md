@@ -12,6 +12,7 @@ details, and cause before changing files or clearing repository state.
 | --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
 | `runtime_distribution_unavailable`                                                      | [Install the exporter package](#an-exporter-package-is-missing)           |
 | `state_input_invalid`, `state_not_found`, `state_unavailable`                           | [Inspect state selection](#a-state-cannot-be-resolved)                    |
+| `export_invalid` with `index_values` or `index_bytes`                                   | [Reduce the export](#the-export-cannot-fit-the-index)                     |
 | `destination_exists`, `destination_changed`, `export_commit_failed`                     | [Inspect the destination](#the-destination-cannot-commit)                 |
 | `repository_limit_exceeded`, `repository_reservation_timeout`, `repository_fence_stale` | [Inspect repository coordination](#the-repository-is-busy-or-unavailable) |
 | `observation_rejected`, `observation_persistence_failed`                                | [Inspect observation recording](#an-observation-was-not-retained)         |
@@ -107,6 +108,26 @@ exported.
 List `notebookExport.states()` or inspect `ExportPlan.states`, then select an
 available name or vector. Computing a new vector requires another preparation
 run or a Python service.
+
+## The export cannot fit the index
+
+`export_invalid` with `index_values` and `max_index_values`, or `index_bytes`
+and `max_index_bytes`, in `details` means `index.json` would exceed its value or
+byte limit. Planning raises it before the notebook runs when the authored states
+and outputs already exceed a limit. Preparation raises it after a prepared state
+proves that the remaining states cannot fit.
+
+The message suggests how many states to keep. Check the lower bound before a
+build:
+
+```bash
+uv run marimo-export plan report.py --spec report.export.yaml --json
+```
+
+Compare `index_budget.index_values` and `index_budget.index_bytes` with their
+limits. Remove states or outputs, or split the outputs across two exports.
+States prepared before the failure stay in the repository, and a smaller spec
+reuses them.
 
 ## The destination cannot commit
 

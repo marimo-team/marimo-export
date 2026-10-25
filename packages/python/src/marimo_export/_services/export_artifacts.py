@@ -150,6 +150,27 @@ def repository_identity(plan: ExportPlan) -> RepositoryIdentity:
     )
 
 
+def prepared_state_entry(state: PreparedState) -> StateEntry:
+    """Return the index entry that one prepared state contributes."""
+
+    return _state_entry(_prepared_metadata(state))
+
+
+def _state_entry(metadata: JsonObject) -> StateEntry:
+    outputs = json_object(metadata["outputs"], "prepared state outputs")
+    return StateEntry(
+        inputs=json_object(metadata["inputs"], "prepared state inputs"),
+        outputs={name: _output_entry(value, name) for name, value in outputs.items()},
+    )
+
+
+def _prepared_metadata(state: PreparedState) -> JsonObject:
+    metadata = json_object(state.metadata, "prepared state metadata")
+    if set(metadata) != {"inputs", "outputs", "control_bindings"}:
+        raise ExecutionError("prepared state metadata is invalid", code="export_invalid")
+    return metadata
+
+
 def _prepared_records(
     plan: ExportPlan,
     prepared: Mapping[str, PreparedState],
@@ -157,14 +178,8 @@ def _prepared_records(
     entries: dict[str, StateEntry] = {}
     bindings: dict[str, ControlBinding] = {}
     for state in plan.states:
-        metadata = json_object(prepared[state.fingerprint].metadata, "prepared state metadata")
-        if set(metadata) != {"inputs", "outputs", "control_bindings"}:
-            raise ExecutionError("prepared state metadata is invalid", code="export_invalid")
-        outputs = json_object(metadata["outputs"], "prepared state outputs")
-        entries[state.fingerprint] = StateEntry(
-            inputs=json_object(metadata["inputs"], "prepared state inputs"),
-            outputs={name: _output_entry(value, name) for name, value in outputs.items()},
-        )
+        metadata = _prepared_metadata(prepared[state.fingerprint])
+        entries[state.fingerprint] = _state_entry(metadata)
         control_values = json_object(
             metadata["control_bindings"],
             "prepared state control bindings",
@@ -206,4 +221,10 @@ def _copy_assets(
         shutil.copyfile(source, target)
 
 
-__all__ = ["assemble_export", "commit_captured_state", "repository_identity", "single_state_spec"]
+__all__ = [
+    "assemble_export",
+    "commit_captured_state",
+    "prepared_state_entry",
+    "repository_identity",
+    "single_state_spec",
+]

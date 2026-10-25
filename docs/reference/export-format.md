@@ -399,6 +399,14 @@ Every JSON value and every object key in `index.json` counts toward its
 2,000,000-value limit. Python producers fail with `export_invalid` before they
 write a larger index, and Python and browser readers reject one.
 
+Producers check both limits before they run the notebook. The check counts the
+authored states and outputs, with each state output at the cheapest entry it can
+write: the cheapest descriptor, or an unavailable output for an optional output.
+After each state is prepared, the producer counts that state at its exact cost
+and checks again. Assets, including the resources of a read-only snapshot, live
+outside `index.json` and count only through their descriptors. An export that cannot fit stops at the
+first check that proves it, and the states it already prepared stay reusable.
+
 The [browser errors and limits](browser/errors-and-limits) reference lists
 browser defaults and caller overrides.
 

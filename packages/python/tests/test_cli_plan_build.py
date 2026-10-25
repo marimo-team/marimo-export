@@ -52,6 +52,34 @@ def test_plan_delegates_to_the_public_sdk_and_repository(
     assert recorded["timeout"] == 30.0
 
 
+def test_plan_prints_the_index_budget(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    resolved = plan()
+    budget = resolved.index_budget
+    monkeypatch.setattr(sdk, "plan", lambda *_args, **_kwargs: resolved)
+
+    assert (
+        cli.main(
+            [
+                "plan",
+                str(tmp_path / "notebook.py"),
+                "--spec",
+                str(spec(tmp_path / "export.yaml")),
+                "--repository",
+                str(tmp_path / "repository"),
+            ]
+        )
+        == 0
+    )
+
+    lines = capsys.readouterr().out.splitlines()
+    assert f"Index: at least {budget.index_values:,} of 2,000,000 values, " in "\n".join(lines)
+    assert any(line.endswith(" of 16.0 MiB") for line in lines)
+
+
 @pytest.mark.parametrize("machine_flag", ["--json", "--jsonl"])
 def test_build_machine_modes_have_one_terminal_result(
     machine_flag: str,

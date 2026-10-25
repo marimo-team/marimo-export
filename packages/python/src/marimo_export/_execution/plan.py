@@ -545,6 +545,9 @@ def public_export_plan(
         reusable_states=reusable,
         missing_states=missing,
         exact_reuse=exact_reuse,
+        optional_outputs=tuple(
+            sorted(name for name, output in plan.planned_outputs.items() if output.optional)
+        ),
     )
 
 

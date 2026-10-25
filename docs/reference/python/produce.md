@@ -369,6 +369,8 @@ returns.
 | `observation_revision` | Repository observation revision used by the plan                   |
 | `observations`         | `ObservedState` records projected to the plan inputs               |
 | `exact_reuse`          | Whether one matching prepared export supplied the plan             |
+| `optional_outputs`     | Sorted outputs that may be unavailable in a state                  |
+| `index_budget`         | `IndexBudget` lower bound of the index this plan writes            |
 
 Each `PlannedState` has sorted `aliases`, a complete immutable `inputs` mapping,
 and its `fingerprint`. `plan.state_fingerprints` returns every normalized
@@ -382,6 +384,16 @@ export_plan_identity(
 ) -> str
 output_plan_sha256(spec: ExportSpec) -> str
 ```
+
+`marimo_export.planning.IndexBudget` reports `index_values` and `index_bytes`
+beside the `max_index_values` and `max_index_bytes` limits. Each count is the
+fewest JSON values or bytes the written `index.json` can hold. It counts every
+state output at the cheapest entry that output can write: the cheapest
+descriptor, or an unavailable output when the output is in `optional_outputs`.
+Outputs with assets or large inline values write more. `plan()`, `prepare()`, `build()`, and capture
+raise `NotebookExportError` with `export_invalid` when either lower bound exceeds
+its limit. The error `details` carry `index_values` and `max_index_values`, or
+`index_bytes` and `max_index_bytes`.
 
 `matches()` compares the spec, default, notebook, input and output names,
 aliases, fingerprints, and complete input vectors. The identity helpers live in
