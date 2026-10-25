@@ -4,7 +4,8 @@ import os
 from pathlib import Path
 
 import pytest
-from marimo_export._file_urls import PublicFileUrl, VirtualFilePrefix, VirtualFileUrl
+from marimo._runtime.virtual_file import EMPTY_VIRTUAL_FILE, VirtualFile
+from marimo_export._marimo.file_urls import PublicFileUrl, VirtualFilePrefix, VirtualFileUrl
 
 RELATIVE = (VirtualFilePrefix.RELATIVE,)
 EVERY_PREFIX = (VirtualFilePrefix.RELATIVE, VirtualFilePrefix.ROOT, VirtualFilePrefix.BARE)
@@ -16,6 +17,15 @@ def test_virtual_file_url_parses_marimo_file_names() -> None:
     )
     assert VirtualFileUrl.parse("./@file/29676-25241121-ZSE6dgpj.png", RELATIVE) == (
         VirtualFileUrl(29676, "25241121-ZSE6dgpj.png")
+    )
+
+
+def test_virtual_file_url_parses_the_urls_marimo_writes() -> None:
+    registered = VirtualFile("12345-AbCdEfGh.png", b"abc")
+
+    assert VirtualFileUrl.parse(registered.url, RELATIVE) == VirtualFileUrl(3, "12345-AbCdEfGh.png")
+    assert VirtualFileUrl.parse(EMPTY_VIRTUAL_FILE.url, (VirtualFilePrefix.BARE,)) == (
+        VirtualFileUrl(0, "empty.txt")
     )
 
 
@@ -55,7 +65,8 @@ def test_relative_prefix_rejects_other_virtual_file_forms(url: str) -> None:
         "./@file/-test.png",
         "./@file/12-",
         "./@file/12-line\nbreak.png",
-        f"./@file/{'9' * 5000}-big.png",
+        "./@file/12-a.png\n",
+        f"./@file/{'9' * 21}-big.png",
     ],
 )
 def test_virtual_file_url_rejects_malformed_urls(url: str) -> None:
@@ -88,19 +99,28 @@ def test_public_file_resolves_nested_files(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize("path", ["../secret.txt", "sub/../../secret.txt"])
-def test_public_file_rejects_traversal(tmp_path: Path, path: str) -> None:
+def test_public_file_rejects_traversal_outside_public(tmp_path: Path, path: str) -> None:
     (tmp_path / "public" / "sub").mkdir(parents=True)
     (tmp_path / "secret.txt").write_bytes(b"shh")
 
     assert PublicFileUrl(path).resolve(tmp_path) is None
 
 
-def test_public_file_rejects_an_absolute_path(tmp_path: Path) -> None:
-    (tmp_path / "public").mkdir()
-    secret = tmp_path / "secret.txt"
-    secret.write_bytes(b"shh")
+def test_public_file_resolves_traversal_that_stays_inside_public(tmp_path: Path) -> None:
+    (tmp_path / "public" / "sub").mkdir(parents=True)
+    image = tmp_path / "public" / "image.png"
+    image.write_bytes(b"img")
 
-    assert PublicFileUrl(str(secret)).resolve(tmp_path) is None
+    assert PublicFileUrl("sub/../image.png").resolve(tmp_path) == image.resolve()
+
+
+def test_public_file_rejects_anchored_paths(tmp_path: Path) -> None:
+    (tmp_path / "public").mkdir()
+    inside = tmp_path / "public" / "image.png"
+    inside.write_bytes(b"img")
+
+    assert PublicFileUrl(str(inside)).resolve(tmp_path) is None
+    assert PublicFileUrl("//host/share/image.png").resolve(tmp_path) is None
 
 
 def test_public_file_rejects_directories_and_missing_files(tmp_path: Path) -> None:

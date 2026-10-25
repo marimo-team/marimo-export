@@ -1007,19 +1007,17 @@ def test_public_file_outside_the_public_directory_fails_closed(
         close_output_files(cast(Any, recording), html_source, "text/html")
 
 
-@pytest.mark.parametrize("url", ("/@file/6-chip.png", "@file/6-chip.png"))
-def test_snapshot_html_leaves_non_relative_virtual_file_forms_unchanged(
-    tmp_path: Path,
-    url: str,
-) -> None:
+def test_empty_virtual_file_closes_without_a_registry_read(tmp_path: Path) -> None:
     from marimo_export._marimo.compat.file_closure import close_output_files
 
     context = SimpleNamespace(
         filename=str(tmp_path / "notebook.py"),
         parent=None,
-        virtual_file_registry=SimpleNamespace(has=lambda _filename: True),
+        virtual_file_registry=SimpleNamespace(has=lambda _filename: False),
     )
     recording = SimpleNamespace(child=SimpleNamespace(_runtime_context=context))
-    html_source = f'<img src="{url}">'
+    html_source = '<img src="@file/0-empty.txt">'
 
-    assert close_output_files(cast(Any, recording), html_source, "text/html") == html_source
+    assert close_output_files(cast(Any, recording), html_source, "text/html") == (
+        '<img src="data:text/plain;base64,">'
+    )

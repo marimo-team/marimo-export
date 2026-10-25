@@ -11,8 +11,8 @@ from typing import TYPE_CHECKING, Any, cast
 
 import msgspec
 
-from marimo_export._file_urls import PublicFileUrl, VirtualFilePrefix, VirtualFileUrl
 from marimo_export._json import JsonValue, canonical_bytes, json_value
+from marimo_export._marimo.file_urls import PublicFileUrl, VirtualFilePrefix, VirtualFileUrl
 from marimo_export._media_type import data_url
 from marimo_export.errors import OutputError
 
@@ -51,8 +51,9 @@ _CSS_URL = re.compile(
     r"url\(\s*(?P<quote>['\"]?)(?P<url>[^'\")]*?)(?P=quote)\s*\)",
     re.IGNORECASE,
 )
-# Snapshot HTML carries the relative virtual file URLs that marimo writes.
-_VIRTUAL_FILE_PREFIXES = (VirtualFilePrefix.RELATIVE,)
+# marimo writes registered files as `./@file/` URLs and empty buffers as
+# `@file/0-empty.txt`.
+_VIRTUAL_FILE_PREFIXES = (VirtualFilePrefix.RELATIVE, VirtualFilePrefix.BARE)
 _PUBLIC_REFERENCE = re.compile(r"(?:^|[\s,('\"])(?:\./)?public/")
 
 
@@ -141,10 +142,7 @@ class _ResourceResolver:
         )
 
     def contains_known(self, value: str) -> bool:
-        return (
-            any(prefix.value in value for prefix in _VIRTUAL_FILE_PREFIXES)
-            or _PUBLIC_REFERENCE.search(value) is not None
-        )
+        return VirtualFilePrefix.RELATIVE in value or _PUBLIC_REFERENCE.search(value) is not None
 
     def close_url(self, value: str) -> str:
         candidate = value.strip()
@@ -197,6 +195,9 @@ class _ResourceResolver:
     def _close_virtual(self, url: str, virtual_file: VirtualFileUrl) -> str:
         byte_length = virtual_file.byte_length
         filename = virtual_file.filename
+        if byte_length == 0:
+            # marimo serves empty buffers without registering them.
+            return data_url(filename, b"")
         if byte_length > MAX_INLINE_FILE_BYTES:
             raise OutputError(
                 f"virtual file {url!r} exceeds the snapshot inline limit",

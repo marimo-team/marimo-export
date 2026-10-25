@@ -3,7 +3,7 @@ from __future__ import annotations
 import base64
 
 import pytest
-from marimo_export._file_urls import VirtualFileUrl
+from marimo_export._marimo.file_urls import VirtualFileUrl
 from marimo_export.exporters._anywidget_assets import portable_css, validate_embedded_esm
 
 

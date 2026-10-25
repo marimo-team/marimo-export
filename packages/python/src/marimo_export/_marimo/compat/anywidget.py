@@ -20,20 +20,19 @@ from marimo._runtime.virtual_file import read_virtual_file
 from marimo._types.ids import WidgetModelId
 
 from marimo_export._diagnostics import safe_diagnostic
-from marimo_export._file_urls import VirtualFileUrl
 from marimo_export._json import json_value
+from marimo_export._marimo.file_urls import VirtualFilePrefix, VirtualFileUrl
 from marimo_export._media_type import data_url
 from marimo_export.errors import OutputError
-from marimo_export.exporters._anywidget_assets import (
-    ANYWIDGET_VIRTUAL_FILE_PREFIXES,
-    portable_css,
-    validate_embedded_esm,
-)
+from marimo_export.exporters._anywidget_assets import portable_css, validate_embedded_esm
 
 ANYWIDGET_PAYLOAD_SCHEMA = "marimo-export.anywidget.v1"
 
 _ANYWIDGET_REF_PREFIX = "anywidget:"
 _IPYWIDGET_REF_PREFIX = "IPY_MODEL_"
+# marimo registers inline ESM source as a `./@file/` virtual file. An `_esm` that
+# is already a URL carries the hash of the URL text, which the content check rejects.
+_ESM_VIRTUAL_FILE_PREFIXES = (VirtualFilePrefix.RELATIVE,)
 
 
 @dataclass(frozen=True, slots=True)
@@ -254,10 +253,13 @@ def _canonical_esm_spec(
         return None
     if spec.url.startswith(("https://", "http://", "data:")):
         return spec
-    virtual_file = VirtualFileUrl.parse(spec.url, ANYWIDGET_VIRTUAL_FILE_PREFIXES)
+    virtual_file = VirtualFileUrl.parse(spec.url, _ESM_VIRTUAL_FILE_PREFIXES)
     if virtual_file is None:
         raise OutputError(f"AnyWidget ESM uses an unsupported URL: {spec.url!r}")
-    contents = _read_virtual_file(virtual_file)
+    try:
+        contents = _read_virtual_file(virtual_file)
+    except Exception as error:
+        raise OutputError(f"AnyWidget ESM {spec.url!r} could not be read") from error
     if len(contents) != virtual_file.byte_length:
         raise OutputError(
             f"AnyWidget ESM {spec.url!r} declared {virtual_file.byte_length} bytes but "

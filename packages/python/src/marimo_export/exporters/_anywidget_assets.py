@@ -5,11 +5,12 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from marimo_export._file_urls import VirtualFilePrefix, VirtualFileUrl
+from marimo_export._marimo.file_urls import VirtualFilePrefix, VirtualFileUrl
 from marimo_export._media_type import data_url
 
-# marimo's frontend trusts each of these prefixes as a virtual file URL.
-ANYWIDGET_VIRTUAL_FILE_PREFIXES = (
+# AnyWidget CSS is author-written, and marimo's frontend trusts each of these
+# prefixes as a virtual file URL.
+_CSS_VIRTUAL_FILE_PREFIXES = (
     VirtualFilePrefix.RELATIVE,
     VirtualFilePrefix.ROOT,
     VirtualFilePrefix.BARE,
@@ -758,7 +759,7 @@ def _portable_css_reference(
         return None
     if lowered.startswith(("data:", "http://", "https://")):
         return None
-    if url.startswith(tuple(prefix.value for prefix in ANYWIDGET_VIRTUAL_FILE_PREFIXES)):
+    if url.startswith(_CSS_VIRTUAL_FILE_PREFIXES):
         if reference.kind == "@import":
             raise ValueError("AnyWidget CSS @import virtual files must be bundled before export")
         return _inline_css_virtual_file(url, read_file)
@@ -768,7 +769,7 @@ def _portable_css_reference(
 
 
 def _inline_css_virtual_file(url: str, read_file: Callable[[VirtualFileUrl], bytes]) -> str:
-    virtual_file = VirtualFileUrl.parse(url, ANYWIDGET_VIRTUAL_FILE_PREFIXES)
+    virtual_file = VirtualFileUrl.parse(url, _CSS_VIRTUAL_FILE_PREFIXES)
     if virtual_file is None:
         raise ValueError(f"AnyWidget CSS contains a malformed marimo virtual file URL: {url!r}")
     try:
