@@ -196,10 +196,18 @@ Parsing records that location but does not import it.
 
 ### `functions` and `uiValues`
 
-`functions` records every projection-scoped UI object namespace. Each value must
-be an empty array because a live Python function cannot cross the static export
-boundary. `uiValues` stores the accepted frontend value for the same UI object.
-The parser requires an exact one-to-one key set.
+`functions` records every projection-scoped UI object namespace. Each value is
+a sorted array of unique Python function names that the UI object cannot call
+in the export. Ordinary controls have an empty array. A table from a
+[read-only output](../export-spec#read-only-tables) lists the functions behind
+search, paging, sorting, filtering, column summaries, and downloads.
+`uiValues` stores the accepted frontend value for the same UI object. The
+parser requires an exact one-to-one key set.
+
+A renderer adapter must answer each function call from a listed UI object
+with an error result, so the control stops waiting for a kernel. marimo's
+static renderer, which `marimo export html` also uses, shows the table's first
+page with a row-count banner and hides paging, sorting, and selection.
 
 Each UI object ID must start with the snapshot owner and projection namespace.
 This preserves cell ownership when an application merges resources from several
@@ -214,7 +222,8 @@ A snapshot is renderer-neutral data. A consumer adapter decides how to:
 2. expose closed files to that renderer
 3. replay model messages into a browser-local AnyWidget registry
 4. route UI values through exported control bindings
-5. own view replacement and disposal
+5. reject function calls listed in `functions`
+6. own view replacement and disposal
 
 Use [`anyWidgetLoader()`](loaders#anywidget) when the output representation is
 an `anywidget.bundle` intended to mount directly. Use snapshot records when an

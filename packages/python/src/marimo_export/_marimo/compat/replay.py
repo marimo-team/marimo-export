@@ -16,6 +16,7 @@ from marimo_export._marimo.compat.output_data import (
     rewrite_ui_value,
     scoped_ui_id,
 )
+from marimo_export._marimo.ui_functions import unavailable_functions
 from marimo_export.errors import OutputError
 
 if TYPE_CHECKING:
@@ -27,6 +28,8 @@ def resources(
     outputs: tuple[Any, ...],
     projection_identity: str,
     owner_cell_id: str,
+    *,
+    read_only: bool,
 ) -> tuple[JsonObject, ProjectionReplacements]:
     _projection_identity(projection_identity)
     files: dict[str, str] = {}
@@ -132,27 +135,17 @@ def resources(
         recording.ui_scopes.setdefault(object_id, set()).add(scoped_id)
     functions: JsonObject = {}
     for object_id in sorted(ui_ids):
-        names = sorted(registry[object_id].functions) if object_id in registry else []
-        if names:
-            element = ui_elements[object_id]
-            args = getattr(element, "_component_args", None)
-            inert_form_validation = (
-                names == ["validate"]
-                and isinstance(args, Mapping)
-                and args.get("should-validate") is False
-            )
-            if not inert_form_validation:
-                raise OutputError(
-                    f"UI object {object_id!r} exposes nonportable Python functions",
-                    code="output_not_portable",
-                    details={
-                        "object_id": object_id,
-                        "reason": "python_functions",
-                        "functions": names,
-                    },
-                )
-            names = []
-        functions[scoped_ui_ids[object_id]] = names
+        element = ui_elements[object_id]
+        functions[scoped_ui_ids[object_id]] = cast(
+            JsonValue,
+            unavailable_functions(
+                element,
+                list(registry[object_id].functions) if object_id in registry else [],
+                getattr(element, "_component_args", {}),
+                object_id=object_id,
+                read_only=read_only,
+            ),
+        )
     ui_replacements = {
         **scoped_ui_ids,
         **scoped_random_ids,

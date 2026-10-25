@@ -46,6 +46,11 @@ The quickstart uses `json` for `summary` and `output` for `report`. Selected-val
 sources begin with a Python definition name and can follow supported attribute or
 item steps. A cell source identifies the complete cell.
 
+An `output` or `cell` source keeps marimo UI elements in the rendered output.
+A table calls Python to search, page, sort, and summarize rows, so its output
+sets [`read_only`](../reference/export-spec#read-only-tables). The export then
+keeps the table's first page and records each function it cannot call.
+
 ## Each output is captured separately
 
 marimo-export captures each named output separately for every state. This

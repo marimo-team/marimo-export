@@ -128,10 +128,11 @@ class PhaseTimings:
 
 @dataclass(frozen=True, slots=True, init=False)
 class ExportWarning:
-    """A recoverable producer warning returned after export commit."""
+    """A producer warning returned with a committed export."""
 
     code: Literal[
         "export_parent_sync_failed",
+        "output_read_only",
         "retired_destination_cleanup_failed",
     ]
     message: str
@@ -142,6 +143,7 @@ class ExportWarning:
         *,
         code: Literal[
             "export_parent_sync_failed",
+            "output_read_only",
             "retired_destination_cleanup_failed",
         ],
         message: str,
@@ -149,6 +151,7 @@ class ExportWarning:
     ) -> None:
         if code not in {
             "export_parent_sync_failed",
+            "output_read_only",
             "retired_destination_cleanup_failed",
         }:
             raise ValueError("export warning code is invalid")

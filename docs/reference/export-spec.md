@@ -157,6 +157,8 @@ value.
 ## Output specs
 
 Each output contains `source`. An export source also contains `exporter`.
+A rendered-output or complete-cell source may set
+[`read_only: true`](#read-only-tables).
 
 ### JSON source
 
@@ -206,6 +208,32 @@ source: { kind: cell, by: name, value: summary_cell }
 Set `by` to `name` for an authored cell name or `id` for an inspected runtime cell
 ID. A complete-cell source stores `marimo.cell.v1` with cell identity, config,
 terminal output, console records, outcome, and replay resources.
+
+### Read-only tables
+
+```yaml
+source: { kind: output, selector: sales }
+read_only: true
+```
+
+A marimo table calls Python functions for search, paging, sorting, filtering,
+column summaries, and downloads. `read_only: true` lets a rendered-output or
+complete-cell source export `mo.ui.table` values and dataframes that marimo
+displays as tables. The snapshot keeps the table's first page, column types,
+and row count, and its `resources.functions` lists each function the table
+cannot call. Build results report an `output_read_only` warning that names
+those functions.
+
+A `mo.ui.table` selected by its definition name is also an
+[inferred input](#inferred-inputs) whose value is the row selection. Pass
+`selection=None` to the table when readers only view its rows.
+
+Without `read_only`, a table fails preparation with `output_not_portable`.
+Lazy tables, such as `mo.ui.table.lazy()` and displayed Polars LazyFrames or
+DuckDB relations, load their first page through Python and fail with the same
+code. So do `mo.ui.dataframe`, `mo.ui.chat`, `mo.ui.file_browser`, and
+`mo.lazy`. Set `read_only` on JSON, native, or export sources and the spec
+fails with `spec_output_invalid`.
 
 JSON, native, export, and rendered-output selectors contain no whitespace
 outside a JSON-string item and accept:
@@ -314,6 +342,7 @@ spec = ExportSpec(
         "table": OutputSpec.native("selected_prices"),
         "report": OutputSpec.output("report.view"),
         "summary_cell": OutputSpec.cell("summary_cell"),
+        "sales": OutputSpec.output("sales", read_only=True),
         "chart": OutputSpec.export("performance", altair.vegalite()),
         "prices": OutputSpec.export(
             "selected_prices",

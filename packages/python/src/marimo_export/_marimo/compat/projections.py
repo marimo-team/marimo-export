@@ -231,6 +231,7 @@ def materialize_rendered_output(
     *,
     owner_cell_id: str | None,
     projection_identity: str,
+    read_only: bool,
 ) -> bytes:
     """Format one value into canonical inert output snapshot bytes."""
 
@@ -259,7 +260,7 @@ def materialize_rendered_output(
             "Marimo output projection has no source owner",
             code="output_execution_failed",
         )
-    snapshot = _output_snapshot(output, owner_cell_id, projection_identity)
+    snapshot = _output_snapshot(output, owner_cell_id, projection_identity, read_only=read_only)
     return canonical_bytes(snapshot)
 
 
@@ -291,6 +292,7 @@ def materialize_projection_token(
             select_value(source.selector.source, child.runner.globals),
             owner_cell_id=planned_output.owner_cell_id,
             projection_identity=planned_output_identity(planned_output),
+            read_only=planned_output.read_only,
         )
         return
     if not isinstance(source, CellSource):
@@ -307,6 +309,7 @@ def materialize_projection_token(
         code_sha256=cell.code_sha256,
         config=cell.config,
         projection_identity=planned_output_identity(planned_output),
+        read_only=planned_output.read_only,
     )
 
 
@@ -317,6 +320,7 @@ def materialize_complete_cell(
     code_sha256: str,
     config: Mapping[str, JsonValue],
     projection_identity: str,
+    read_only: bool,
 ) -> bytes:
     """Materialize one terminal cell snapshot from the current child recording."""
 
@@ -354,6 +358,7 @@ def materialize_complete_cell(
         outputs,
         projection_identity,
         cell_id,
+        read_only=read_only,
     )
     snapshot: JsonObject = {
         "schema": "marimo.cell.v1",
@@ -422,6 +427,8 @@ def _output_snapshot(
     output: Any,
     owner_cell_id: str,
     projection_identity: str,
+    *,
+    read_only: bool,
 ) -> JsonObject:
     from marimo_export._marimo.compat.output_data import cell_output_value
     from marimo_export._marimo.compat.replay import resources
@@ -432,6 +439,7 @@ def _output_snapshot(
         (output,),
         projection_identity,
         owner_cell_id,
+        read_only=read_only,
     )
     return {
         "schema": "marimo.output.v1",

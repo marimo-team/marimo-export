@@ -12,6 +12,7 @@ from jsonschema import Draft202012Validator
 from marimo_export import ExportSpec, OutputSpec
 from marimo_export.errors import SpecError
 from marimo_export.exporters import altair, importable, media, parquet
+from marimo_export.planning import output_plan_sha256
 from marimo_export.spec import (
     SPEC_SCHEMA,
     CellSource,
@@ -212,6 +213,71 @@ def test_output_sources_and_exporters_are_validated_at_construction() -> None:
     with pytest.raises(SpecError) as raised:
         ExportSpec.from_value(value)
     assert raised.value.code == "spec_exporter_invalid"
+
+
+def test_read_only_outputs_share_one_contract_and_plan_identity(tmp_path: Path) -> None:
+    path = tmp_path / "tables.yaml"
+    path.write_text(
+        """
+schema: marimo-export.spec.v2
+default_state: baseline
+states:
+  baseline: {}
+outputs:
+  table:
+    source: {kind: output, selector: table}
+    read_only: true
+  frame:
+    source: {kind: cell, by: name, value: frame_cell}
+    read_only: true
+""".lstrip(),
+        encoding="utf-8",
+    )
+    programmatic = ExportSpec(
+        default_state="baseline",
+        states={"baseline": {}},
+        outputs={
+            "table": OutputSpec.output("table", read_only=True),
+            "frame": OutputSpec.cell("frame_cell", read_only=True),
+        },
+    )
+    interactive = ExportSpec(
+        default_state="baseline",
+        states={"baseline": {}},
+        outputs={
+            "table": OutputSpec.output("table"),
+            "frame": OutputSpec.cell("frame_cell"),
+        },
+    )
+
+    decoded = ExportSpec.from_file(path)
+
+    assert decoded.to_value() == programmatic.to_value()
+    assert decoded.to_value()["outputs"] == {
+        "frame": {
+            "source": {"kind": "cell", "by": "name", "value": "frame_cell"},
+            "read_only": True,
+        },
+        "table": {"source": {"kind": "output", "selector": "table"}, "read_only": True},
+    }
+    assert interactive.to_value()["outputs"] == {
+        "frame": {"source": {"kind": "cell", "by": "name", "value": "frame_cell"}},
+        "table": {"source": {"kind": "output", "selector": "table"}},
+    }
+    assert output_plan_sha256(decoded) != output_plan_sha256(interactive)
+    Draft202012Validator(ExportSpec.json_schema()).validate(programmatic.to_value())
+
+
+def test_read_only_requires_a_rendered_output_or_cell_source() -> None:
+    with pytest.raises(SpecError) as raised:
+        OutputSpec(source=OutputSpec.json("summary").source, read_only=True)
+    assert raised.value.code == "spec_output_invalid"
+
+    value = _value()
+    value["outputs"]["summary"]["read_only"] = True
+    with pytest.raises(SpecError) as raised:
+        ExportSpec.from_value(value)
+    assert raised.value.code == "spec_output_invalid"
 
 
 def test_programmatic_constructor_rejects_ambiguous_shorthands() -> None:

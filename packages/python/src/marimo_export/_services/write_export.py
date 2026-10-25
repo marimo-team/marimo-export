@@ -7,18 +7,24 @@ import time
 from collections.abc import Callable, Iterator, Mapping
 from contextlib import suppress
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
+from marimo_export._json import JsonObject, JsonValue, decode_json_object
 from marimo_export._limits import MAX_EXPORT_ASSET_BYTES
 from marimo_export._limits import MAX_INDEX_BYTES as _MAX_INDEX_BYTES
 from marimo_export._secure_io import read_export_asset, read_export_index
 from marimo_export._writer import WriteResult, materialize_export, write_export
-from marimo_export.descriptors import OutputCodec, asset_path
+from marimo_export.descriptors import (
+    MarimoCellDescriptor,
+    MarimoOutputDescriptor,
+    OutputCodec,
+    asset_path,
+)
 from marimo_export.errors import MarimoExportError, NotebookExportError
 from marimo_export.index import ExportIndex
 from marimo_export.progress import ProgressEvent
 from marimo_export.reader import open_export
-from marimo_export.result import ExportResult
+from marimo_export.result import ExportResult, ExportWarning
 from marimo_export.spec import StrPath
 from marimo_export.verification import verify_export
 
@@ -63,13 +69,20 @@ def write_prepared_export(
     if not isinstance(replace, bool):
         raise TypeError("replace must be a boolean")
     index, assets = _prepared_source(prepared)
+    read_only_warnings = _read_only_warnings(index, assets)
     written = write_export(
         index,
         assets,
         output,
         replace=replace,
     )
-    return _export_result(prepared, written, started=started, progress=progress)
+    return _export_result(
+        prepared,
+        written,
+        read_only_warnings,
+        started=started,
+        progress=progress,
+    )
 
 
 def materialize_prepared_export(
@@ -91,8 +104,15 @@ def materialize_prepared_export(
         ) from error
     try:
         index, assets = _prepared_source(prepared)
+        read_only_warnings = _read_only_warnings(index, assets)
         written = materialize_export(index, assets, destination)
-        return _export_result(prepared, written, started=started, progress=progress)
+        return _export_result(
+            prepared,
+            written,
+            read_only_warnings,
+            started=started,
+            progress=progress,
+        )
     except BaseException as error:
         with suppress(OSError):
             shutil.rmtree(destination)
@@ -114,9 +134,48 @@ def _prepared_source(
     return index, _ArtifactAssets(source, index)
 
 
+def _read_only_warnings(
+    index: ExportIndex,
+    assets: Mapping[tuple[OutputCodec, str], bytes],
+) -> tuple[ExportWarning, ...]:
+    warnings: list[ExportWarning] = []
+    for name in index.outputs:
+        functions: set[str] = set()
+        snapshots: set[str] = set()
+        for state in index.states.values():
+            descriptor = state.outputs[name]
+            if not isinstance(descriptor, (MarimoOutputDescriptor, MarimoCellDescriptor)):
+                break
+            if descriptor.asset.sha256 in snapshots:
+                continue
+            snapshots.add(descriptor.asset.sha256)
+            try:
+                data = assets[(descriptor.codec, descriptor.asset.sha256)]
+            except OSError as error:
+                raise NotebookExportError(
+                    f"prepared export snapshot could not be read: {error}",
+                    code="export_commit_failed",
+                ) from error
+            snapshot = decode_json_object(data, "marimo snapshot")
+            resources = cast(JsonObject, snapshot["resources"])
+            for names in cast(JsonObject, resources["functions"]).values():
+                functions.update(cast(list[str], names))
+        if functions:
+            names = sorted(functions)
+            warnings.append(
+                ExportWarning(
+                    code="output_read_only",
+                    message=f"Output {name!r} is read-only. Its UI cannot call {', '.join(names)}.",
+                    details={"output": name, "functions": cast(list[JsonValue], names)},
+                )
+            )
+    return tuple(warnings)
+
+
 def _export_result(
     prepared: PreparedExport,
     written: WriteResult,
+    read_only_warnings: tuple[ExportWarning, ...],
     *,
     started: float,
     progress: Callable[[ProgressEvent], None] | None,
@@ -135,7 +194,7 @@ def _export_result(
         asset_bytes=written.asset_bytes,
         index_bytes=written.index_bytes,
         verification=verification,
-        warnings=written.warnings,
+        warnings=(*read_only_warnings, *written.warnings),
         elapsed_seconds=time.monotonic() - started,
     )
     if progress is not None:

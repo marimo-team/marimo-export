@@ -237,9 +237,13 @@ assembly keep a domain when every state that reports the control reports the
 same one, and clear it when two states disagree. A state that omits the control
 leaves its domain unchanged. Input or path disagreement fails with `control_input_conflict`.
 
-Static replay function namespaces are empty. A form registration named
-`validate` is removed when its component declares `should-validate=false`.
-Any active validation or other Python function fails projection capture.
+`compat/replay.py` reports each projected UI object's registered function
+names. `_marimo/ui_functions.py` decides which names the snapshot records,
+using public marimo UI types. A form without a validator drops its `validate`
+registration. A `mo.ui.table` in a `read_only` output records its names as
+unavailable functions. Any other Python function fails projection capture
+with `output_not_portable`. The written export reports one `output_read_only`
+warning per output whose snapshots list functions.
 Inspection reports the same typed paths for live editor object IDs. Direct UI
 definition dependencies identify composed roots whose defining cells reference
 other UI definitions.

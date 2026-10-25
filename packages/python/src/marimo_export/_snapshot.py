@@ -134,12 +134,14 @@ def _resources(value: JsonValue, owner: str, projection: str) -> None:
             owner,
             projection,
         )
-        if not isinstance(names, list) or any(
-            not isinstance(name, str) or not name for name in names
+        if (
+            not isinstance(names, list)
+            or any(not isinstance(name, str) or not name for name in names)
+            or names != sorted(set(names))
         ):
-            raise TypeError(f"resources.functions[{namespace!r}] must be an array of names")
-        if names:
-            raise TypeError(f"resources.functions[{namespace!r}] must be empty for static replay")
+            raise TypeError(
+                f"resources.functions[{namespace!r}] must be an array of sorted unique names"
+            )
         parsed_functions.add(object_id)
 
     ui_values = _object(resources["uiValues"], "resources.uiValues")

@@ -162,7 +162,7 @@ def test_projection_records_reject_invalid_ui_ownership() -> None:
         _validate_snapshot(canonical_bytes(output), "marimo.output.v1")
 
 
-def test_projection_records_reject_live_python_functions() -> None:
+def test_projection_records_list_unavailable_python_functions() -> None:
     records = cast(
         JsonObject,
         json.loads((FIXTURES / "export" / "projection-records.json").read_text(encoding="utf-8")),
@@ -171,10 +171,9 @@ def test_projection_records_reject_live_python_functions() -> None:
     resources = cast(JsonObject, output["resources"])
     functions = cast(JsonObject, resources["functions"])
     object_id = next(iter(functions))
-    functions[object_id] = ["validate"]
+    functions[object_id] = ["download_as", "search"]
 
-    with pytest.raises(IntegrityError, match="snapshot is invalid"):
-        _validate_snapshot(canonical_bytes(output), "marimo.output.v1")
+    _validate_snapshot(canonical_bytes(output), "marimo.output.v1")
 
 
 def test_projection_records_reject_cross_projection_model_ids() -> None:

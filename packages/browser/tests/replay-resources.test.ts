@@ -155,7 +155,7 @@ describe("replay resource composition", () => {
     expect(result.modelNotifications).toEqual(messages);
   });
 
-  test("validates replay ownership and function capability before composition", () => {
+  test("validates replay ownership and function names before composition", () => {
     expect(() =>
       mergeMarimoReplayResources([
         snapshot([], {
@@ -168,10 +168,23 @@ describe("replay resource composition", () => {
     expect(() =>
       mergeMarimoReplayResources([
         snapshot([], {
-          functions: { [objectId]: ["validate"] },
+          functions: { [objectId]: ["search", "download_as"] },
           uiValues: { [objectId]: null },
         }),
       ]),
-    ).toThrow(/must be empty for static replay/u);
+    ).toThrow(/sorted unique names/u);
+  });
+
+  test("keeps the functions a read-only UI object cannot call", () => {
+    const objectId = `summary-projection-${digest}-ui-table`;
+
+    const result = mergeMarimoReplayResources([
+      snapshot([], {
+        functions: { [objectId]: ["get_column_summaries", "search"] },
+        uiValues: { [objectId]: [] },
+      }),
+    ]);
+
+    expect(result.functions).toEqual({ [objectId]: ["get_column_summaries", "search"] });
   });
 });

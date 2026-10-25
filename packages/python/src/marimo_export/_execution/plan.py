@@ -253,6 +253,7 @@ class PlannedOutput:
     exporter: ExporterSpec | None
     cell: CellDefinition | None = None
     owner_cell_id: str | None = None
+    read_only: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -572,6 +573,7 @@ def _resolve_planned_outputs(
             exporter=output.exporter,
             cell=cell,
             owner_cell_id=owner_cell_id,
+            read_only=output.read_only,
         )
     return planned
 
@@ -838,10 +840,8 @@ def output_cell_code(
 def planned_output_identity(planned_output: PlannedOutput) -> str:
     value: JsonObject = {
         "name": planned_output.name,
-        "source": _planned_source_value(planned_output),
+        **_planned_output_value(planned_output),
     }
-    if planned_output.exporter is not None:
-        value["exporter"] = planned_output.exporter.to_value()
     return sha256_bytes(canonical_bytes(value))
 
 
@@ -878,10 +878,7 @@ def _state_token_name(
 ) -> str:
     outputs: JsonObject = {}
     for name, planned_output in planned_outputs.items():
-        value: JsonObject = {"source": _planned_source_value(planned_output)}
-        if planned_output.exporter is not None:
-            value["exporter"] = planned_output.exporter.to_value()
-        outputs[name] = value
+        outputs[name] = _planned_output_value(planned_output)
     payload = json_object(
         {
             "inputs": inputs,
@@ -891,6 +888,15 @@ def _state_token_name(
     )
     suffix = sha256_bytes(canonical_bytes(payload))[:16]
     return f"marimo_export_state_{suffix}"
+
+
+def _planned_output_value(planned_output: PlannedOutput) -> JsonObject:
+    value: JsonObject = {"source": _planned_source_value(planned_output)}
+    if planned_output.exporter is not None:
+        value["exporter"] = planned_output.exporter.to_value()
+    if planned_output.read_only:
+        value["read_only"] = True
+    return value
 
 
 def _planned_source_value(planned_output: PlannedOutput) -> JsonObject:

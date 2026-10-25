@@ -1,7 +1,7 @@
 import { parseStrictJson, portableJsonObject, portableJsonValue } from "@marimo-team/portable-json";
 import type { JsonObject, JsonValue } from "@marimo-team/portable-json";
 
-import { canonicalJson } from "./schema.js";
+import { canonicalJson, compareUnicodeScalarStrings } from "./schema.js";
 import { isJsonNumber, isJsonString, isRecordValue } from "./value-types.js";
 
 const decoder = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
@@ -241,14 +241,16 @@ export function parseResources(
   const parsedFunctions = Object.freeze(
     Object.fromEntries(
       Object.entries(functions).map(([namespace, names]) => {
-        if (!Array.isArray(names) || names.some((name) => !isJsonString(name) || !name)) {
+        if (
+          !Array.isArray(names) ||
+          !names.every(isJsonString) ||
+          names.some(
+            (name, index) =>
+              !name || (index > 0 && compareUnicodeScalarStrings(names[index - 1]!, name) >= 0),
+          )
+        ) {
           throw new TypeError(
-            `resources.functions[${JSON.stringify(namespace)}] must be an array of names.`,
-          );
-        }
-        if (names.length > 0) {
-          throw new TypeError(
-            `resources.functions[${JSON.stringify(namespace)}] must be empty for static replay.`,
+            `resources.functions[${JSON.stringify(namespace)}] must be an array of sorted unique names.`,
           );
         }
         return [

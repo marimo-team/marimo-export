@@ -137,8 +137,13 @@ Use the factory that matches the stored representation:
 OutputSpec.json(selector: str) -> OutputSpec
 OutputSpec.native(selector: str) -> OutputSpec
 OutputSpec.export(selector: str, exporter: ExporterSpec) -> OutputSpec
-OutputSpec.output(selector: str) -> OutputSpec
-OutputSpec.cell(name: str | None = None, *, id: str | None = None) -> OutputSpec
+OutputSpec.output(selector: str, *, read_only: bool = False) -> OutputSpec
+OutputSpec.cell(
+    name: str | None = None,
+    *,
+    id: str | None = None,
+    read_only: bool = False,
+) -> OutputSpec
 ```
 
 | Factory    | Stored output                                                                                  |
@@ -148,6 +153,10 @@ OutputSpec.cell(name: str | None = None, *, id: str | None = None) -> OutputSpec
 | `export()` | `BlobAsset` or canonical JSON returned by an explicit exporter                                 |
 | `output()` | Formatted `marimo.output.v1` snapshot and replay resources                                     |
 | `cell()`   | Complete `marimo.cell.v1` snapshot selected by authored cell name or inspected runtime ID      |
+
+`read_only=True` exports marimo tables and displayed dataframes with their
+first page and lists the Python functions the table cannot call. See
+[Read-only tables](../export-spec#read-only-tables).
 
 `cell()` requires exactly one of `name` or `id`. Selected-value factories parse
 the selector during construction with
@@ -630,28 +639,32 @@ new application directory becomes visible.
 
 `build()` and `PreparedExport.write()` return immutable `ExportResult` records:
 
-| Field             | Type or meaning                                |
-| ----------------- | ---------------------------------------------- |
-| `path`            | Absolute committed destination                 |
-| `identity`        | SHA-256 of exact canonical `index.json` bytes  |
-| `plan`            | Resolved `ExportPlan`                          |
-| `reused`          | Exact prepared-export reuse                    |
-| `prepared_states` | Fingerprints prepared by this operation        |
-| `reused_states`   | Fingerprints reused by this operation          |
-| `cache_activity`  | `CacheActivity` observed for work that ran     |
-| `assets`          | Unique asset count                             |
-| `asset_bytes`     | Bytes across unique assets                     |
-| `index_bytes`     | Canonical index byte count                     |
-| `verification`    | `VerificationResult` for the committed export  |
-| `warnings`        | Recoverable post-commit `ExportWarning` values |
-| `elapsed_seconds` | Write duration                                 |
+| Field             | Type or meaning                                 |
+| ----------------- | ----------------------------------------------- |
+| `path`            | Absolute committed destination                  |
+| `identity`        | SHA-256 of exact canonical `index.json` bytes   |
+| `plan`            | Resolved `ExportPlan`                           |
+| `reused`          | Exact prepared-export reuse                     |
+| `prepared_states` | Fingerprints prepared by this operation         |
+| `reused_states`   | Fingerprints reused by this operation           |
+| `cache_activity`  | `CacheActivity` observed for work that ran      |
+| `assets`          | Unique asset count                              |
+| `asset_bytes`     | Bytes across unique assets                      |
+| `index_bytes`     | Canonical index byte count                      |
+| `verification`    | `VerificationResult` for the committed export   |
+| `warnings`        | `ExportWarning` values for the committed export |
+| `elapsed_seconds` | Write duration                                  |
 
 `result.to_dict()` returns the same nested shape used by CLI JSON output.
 
 An `ExportWarning` contains `code`, `message`, detached mutable portable
-`details`, and `to_dict()`. Current warning codes are `export_parent_sync_failed` and
-`retired_destination_cleanup_failed`. The destination is already visible when
-either warning is returned.
+`details`, and `to_dict()`:
+
+| Code                                 | Meaning                                                                                      |
+| ------------------------------------ | -------------------------------------------------------------------------------------------- |
+| `output_read_only`                   | A read-only output's tables cannot call Python. `details` names `output` and its `functions` |
+| `export_parent_sync_failed`          | The destination is visible, but its parent directory entry was not synchronized              |
+| `retired_destination_cleanup_failed` | The destination is visible, and the previous tree remains beside it                          |
 
 Use [Read and verify exports](reader) after writing the notebook export, or
 [Sessions and inspection](sessions-and-inspection) to prepare from a running
