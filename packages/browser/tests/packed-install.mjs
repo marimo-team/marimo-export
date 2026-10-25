@@ -25,14 +25,20 @@ document.querySelector("#app")!.textContent = String(outputs.count);
   {
     name: "prepared",
     peers: [],
-    source: `import {
+    source: `import type { ExportState } from "@marimo-team/marimo-export";
+import {
   PreparedStateController,
   fetchPreparedManifestDocument,
+  formatPreparedQuery,
   parsePreparedExportManifest,
+  resolvePreparedQuery,
 } from "@marimo-team/marimo-export/prepared";
 document.querySelector("#app")!.textContent = typeof PreparedStateController;
 void parsePreparedExportManifest;
 void fetchPreparedManifestDocument;
+const syncQuery = (state: ExportState): string =>
+  formatPreparedQuery(resolvePreparedQuery(state, location.search), location.search);
+void syncQuery;
 `,
   },
   {

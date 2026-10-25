@@ -254,6 +254,49 @@ non-cancellation application failure invokes `restore()` when the port provides
 it. Polling errors call `onError`, while an explicit `refresh.refresh()` rejects
 to its caller.
 
+### Keep the URL in step with the state
+
+`formatPreparedQuery(state, query)` writes the inputs of a committed state into
+the page query and keeps parameters the application owns. A shared or reloaded
+link selects the same state through `updateQuery()`:
+
+```ts
+import { jsonLoader } from "@marimo-team/marimo-export/loader/json";
+import {
+  formatPreparedQuery,
+  PreparedPublicationRefresh,
+  PreparedStateController,
+  type PreparedStatePort,
+} from "@marimo-team/marimo-export/prepared";
+
+const port: PreparedStatePort = {
+  async apply({ next, reason }, signal) {
+    const output = await next.state.output("summary").load(jsonLoader(), {
+      signal,
+    });
+    const url = new URL(location.href);
+    url.search = formatPreparedQuery(next.state, url.search);
+    signal.throwIfAborted();
+    console.log(output);
+    if (reason !== "start") history.replaceState(history.state, "", url);
+  },
+};
+
+const controller = new PreparedStateController(port);
+const manifestUrl = new URL("/prepared/current.json", location.href);
+const refresh = new PreparedPublicationRefresh(manifestUrl, controller);
+
+await refresh.start();
+await controller.updateQuery(location.search).catch((error) => console.warn(error));
+```
+
+The start commit leaves the URL unchanged so `updateQuery()` can read the shared
+link. With `days` as the varying input, `updateInputs({ days: 7 })` turns
+`/?view=print` into `/?view=print&days=7`, and reloading that URL selects the
+weekly state. A `days` value that matches no exported state rejects
+`updateQuery()` with `query_miss` and leaves the manifest state visible. The [`formatPreparedQuery()` reference](../reference/browser/prepared-publications#formatpreparedquery-state-query)
+lists the text rules and the cases that change a link's meaning.
+
 Dispose the browser owners in reverse construction order:
 
 ```ts

@@ -27,8 +27,10 @@ and response data can affect the run.
 
 After the export completes, `public/export/index.json` describes five states and
 five named outputs. Open the URL printed by Vite. The saved-view buttons switch
-the summary, chart, table, image, and quote explorer between exported states. The
-browser runs no Python process.
+the summary, chart, table, image, and quote explorer between exported states.
+Each switch writes the selected `interval` and `symbols_selector` values into the
+page query, so reloading or sharing the URL opens the same view. The browser runs
+no Python process.
 
 A second matching export reuses the prepared export before notebook startup.
 Edit one state row in `finance.export.yaml` to see planning prepare the new state

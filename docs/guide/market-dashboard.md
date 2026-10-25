@@ -59,8 +59,9 @@ server included in the locked workspace. The dashboard switches among five
 exported states and loads [Parquet](https://parquet.apache.org/) rows, a
 domain-specific market summary, a [Vega-Lite](https://vega.github.io/vega-lite/)
 chart specification, a [PNG](https://www.w3.org/TR/png/) image, and an
-[AnyWidget](https://anywidget.dev/) interactive value. The browser runs no
-Python process.
+[AnyWidget](https://anywidget.dev/) interactive value. Each switch writes the
+selected `interval` and `symbols_selector` values into the page query, so a
+reloaded or shared URL opens the same view. The browser runs no Python process.
 
 The example connects three authored sources:
 

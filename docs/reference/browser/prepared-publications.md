@@ -314,14 +314,98 @@ returns `true` after applying a recognized selection. No match raises
 `query_miss`. Text that matches more than one typed exported value raises
 `query_ambiguous`.
 
-`resolvePreparedQuerySelection()` returns `undefined` when no recognized input
-is present. `resolvePreparedQueryState()` returns the current exported state in
-that case.
-
 Arrays and objects use their exact `JSON.stringify()` text in the exported
 domain. For example, `?symbols=%5B%22AAPL%22%2C%22MSFT%22%5D` selects the array
 `["AAPL", "MSFT"]` when that value appears in an exported state. A string whose
 text is identical to another typed value can make the query ambiguous.
+
+### `resolvePreparedQuery(current, query)`
+
+```ts
+function resolvePreparedQuery(current: ExportState, query: string): ExportState;
+```
+
+Reads `query` with the `updateQuery()` rules and returns the exported state that
+the recognized parameters select from `current.notebookExport`. Inputs absent
+from the query keep their values from `current`. A query with no recognized
+input returns `current`. `query` accepts `location.search` with or without its
+leading `?`.
+
+A recognized vector absent from the export raises `NotebookExportError` with
+code `state_unavailable`.
+
+### `formatPreparedQuery(state, query?)`
+
+```ts
+function formatPreparedQuery(state: ExportState, query?: string): string;
+```
+
+Returns a query in `location.search` form that selects `state`: an empty string
+or text that starts with `?`. Each input whose exported values differ between
+states becomes one parameter in `inputNames` order. An input with one exported
+value carries no selection and stays out of the query.
+
+Input names own their query keys, so input parameters in `query` are replaced.
+Other parameters keep their order and values. The result is serialized as
+[`application/x-www-form-urlencoded`](https://url.spec.whatwg.org/#application/x-www-form-urlencoded)
+text, so `?export=./v2/` comes back as `?export=.%2Fv2%2F` and a space becomes
+`+`. The result resolves back to the same state from every state of the export:
+
+```ts
+resolvePreparedQuery(current, formatPreparedQuery(state)) === state;
+```
+
+A query names a state within one export. Inputs that the query leaves out keep
+their values from the current state, so a link written for one export can
+select another state after a republished export varies more inputs. Keep the
+export in an application parameter when links must outlive a publication.
+
+A value whose text matches more than one exported value of its input raises
+`PreparedExportError` with code `query_ambiguous`. A large varying input, such
+as widget state, produces a long URL that some HTTP servers reject.
+
+Keep the page URL in step with each committed state and preserve
+application-owned parameters such as `tab`:
+
+```ts
+import { jsonLoader } from "@marimo-team/marimo-export/loader/json";
+import {
+  formatPreparedQuery,
+  PreparedPublicationRefresh,
+  PreparedStateController,
+  type PreparedStatePort,
+} from "@marimo-team/marimo-export/prepared";
+
+const port: PreparedStatePort = {
+  async apply({ next, reason }, signal) {
+    const title = await next.state.output("title").load(jsonLoader(), { signal });
+    const url = new URL(location.href);
+    url.search = formatPreparedQuery(next.state, url.search);
+    signal.throwIfAborted();
+    document.querySelector("#title")!.textContent = String(title);
+    if (reason !== "start") history.replaceState(history.state, "", url);
+  },
+};
+
+const controller = new PreparedStateController(port);
+const manifestUrl = new URL("/runtime/prepared.json", location.href);
+const refresh = new PreparedPublicationRefresh(manifestUrl, controller);
+
+await refresh.start();
+await controller.updateQuery(location.search).catch((error) => console.warn(error));
+```
+
+`apply()` formats the query before it changes the page, so a formatting error
+rejects the transition with the previous view still visible. The start commit
+leaves the URL unchanged, and `updateQuery()` then applies the state the link
+names. A shared link therefore commits the manifest state first and the linked
+state second. A URL without input parameters makes `updateQuery()` return
+`false`. An input parameter whose value matches no exported value rejects
+`updateQuery()` with `query_miss` and leaves the manifest state committed.
+
+When `interval` is the only input that varies, a page at `?tab=chart` that
+commits `{ interval: "1wk" }` shows `?tab=chart&interval=1wk`. Reloading that
+URL selects the same state.
 
 ### Replace a publication
 
