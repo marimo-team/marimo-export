@@ -173,18 +173,28 @@ def test_attached_marimo_exposes_live_capture_capabilities() -> None:
     )
 
 
+@pytest.mark.parametrize(
+    ("record", "capability"),
+    [
+        ("AppInstantiation", "child_sessions"),
+        ("CellDef", "synthetic_output_cells"),
+        ("NotebookSerializationV1", "child_sessions"),
+    ],
+)
 def test_missing_serialization_record_reports_its_capability(
     monkeypatch: pytest.MonkeyPatch,
+    record: str,
+    capability: str,
 ) -> None:
     from marimo._internal.schemas import serialization
 
-    monkeypatch.delattr(serialization, "CellDef")
+    monkeypatch.delattr(serialization, record)
 
     with pytest.raises(CompatibilityError) as raised:
         create_kernel_runtime().require_capabilities()
 
     assert raised.value.code == "marimo_incompatible"
-    assert raised.value.details == {"missing": ["synthetic_output_cells"]}
+    assert raised.value.details == {"missing": [capability]}
 
 
 def test_stop_provenance_tracks_exact_descendants_and_latest_result() -> None:

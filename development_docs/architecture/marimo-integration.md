@@ -42,14 +42,17 @@ flowchart LR
 | Managed process            | Runtime filename and kernel lifespan                    | managed server and kernel adapters |
 
 Compat adapters import each marimo object from the most stable surface that
-exposes it. The public `marimo` namespace comes first, such as `marimo.ui.anywidget`.
-`marimo._internal` comes next, such as `marimo._internal.commands`,
-`marimo._internal.session`, and `marimo._internal.schemas`. marimo
-[snapshot-tests](https://github.com/marimo-team/marimo/blob/main/tests/_internal/test_internal_api.py)
-the `marimo._internal` re-exports, so a rename fails marimo's own CI before a
-release. The defining private module is the last resort. `marimo._internal` is
-still private, so its imports stay under `compat/` like every other `marimo._*`
-import.
+exposes it. The public `marimo` namespace comes first, such as
+`marimo.ui.anywidget`. `marimo._internal` comes next, such as
+`marimo._internal.commands`, `marimo._internal.session`, and
+`marimo._internal.schemas`. marimo
+[snapshot-tests](https://github.com/marimo-team/marimo/blob/0.25.2/tests/_internal/test_internal_api.py)
+the names that `marimo._internal` exports, so removing or renaming one fails
+marimo's CI. The snapshot lists `marimo._internal.schemas.serialization` by
+module name only, so `require_capabilities()` probes the serialization records
+that compat builds. The defining private module is the last resort.
+`marimo._internal` is still private, so its imports stay under `compat/` like
+every other `marimo._*` import.
 
 `_marimo/capabilities.py` owns cross-kernel records and protocols.
 `_marimo/composition.py` constructs execution adapters.

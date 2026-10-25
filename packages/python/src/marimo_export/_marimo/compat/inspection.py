@@ -247,6 +247,7 @@ def require_capabilities() -> MarimoCapabilities:
         (load_notebook_ir, "child_sessions"),
         (prune_cells_for_overrides, "definition_overrides"),
         (hash_module, "cell_cache_receipts"),
+        # marimo snapshots `serialization` by module name only, so probe its members.
         (getattr(serialization, "AppInstantiation", None), "child_sessions"),
         (getattr(serialization, "CellDef", None), "synthetic_output_cells"),
         (getattr(serialization, "NotebookSerializationV1", None), "child_sessions"),
