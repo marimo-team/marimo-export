@@ -10,9 +10,8 @@ from marimo_export._json import JsonObject
 from marimo_export._marimo.capabilities import KernelAdapters, KernelRuntime
 
 if TYPE_CHECKING:
-    from marimo_export._marimo.capabilities import NotebookCell
+    from marimo_export._marimo.capabilities import KernelRun, NotebookCell
     from marimo_export.integration import KernelInputObservation
-    from marimo_export.observations import ObservationLedger
 
 
 def create_kernel_runtime() -> KernelRuntime:
@@ -69,15 +68,23 @@ def observe_kernel_inputs(kernel: object) -> KernelInputObservation:
     return observe(kernel)
 
 
-def install_observation_ledger(
+def subscribe_run_finished(
     context: object,
-    ledger: ObservationLedger,
+    callback: Callable[[KernelRun], None],
 ) -> Callable[[], None]:
-    """Attach an observation ledger through the supported private adapter."""
+    """Deliver the context's finished kernel runs through the supported adapter."""
 
-    from marimo_export._marimo.compat.observations import install_observation_ledger as install
+    from marimo_export._marimo.compat.observations import subscribe_run_finished as subscribe
 
-    return install(context, ledger)
+    return subscribe(context, callback)
+
+
+def kernel_filename(context: object) -> str | None:
+    """Return the notebook path reported by the context's kernel."""
+
+    from marimo_export._marimo.compat.observations import kernel_filename as filename
+
+    return filename(context)
 
 
 def keep_cached_cells_compatible() -> Callable[[], None]:
@@ -91,9 +98,10 @@ def keep_cached_cells_compatible() -> Callable[[], None]:
 __all__ = [
     "create_kernel_adapters",
     "create_kernel_runtime",
-    "install_observation_ledger",
     "keep_cached_cells_compatible",
+    "kernel_filename",
     "marimo_compatibility_details",
     "observe_kernel_inputs",
     "saved_cells",
+    "subscribe_run_finished",
 ]

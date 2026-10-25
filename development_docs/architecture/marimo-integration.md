@@ -25,6 +25,7 @@ flowchart LR
 | Boundary                   | Stable contract                                         | Adapter owner                      |
 | -------------------------- | ------------------------------------------------------- | ---------------------------------- |
 | Saved inspection           | `NotebookCell` rows for one saved notebook              | `compat/inspection.py`             |
+| Run observation            | `KernelRun` delivered by `subscribe_run_finished`       | `compat/observations.py`           |
 | Kernel inspection          | `MarimoCapabilities`, `Baseline`, definition records    | `compat/inspection.py`             |
 | Exporter preparation       | Importable callables and deterministic identities       | `compat/exporters.py`              |
 | Exporter source identity   | Frozen loaded modules and restart-required drift        | `compat/exporter_identity.py`      |
@@ -135,7 +136,9 @@ passed to `ManagedServer` and remains absent from its parent process.
 
 `_notebook.py` computes the canonical document digest from `NotebookCell`
 rows, both for a saved notebook and for the live cells that `inspect_baseline`
-reads.
+reads. The observation ledger subscribes to `KernelRun` records and applies its
+success, scratch, source-binding, and saved-cell matching rules in
+`_observations/runs.py` and `_observations/source.py`.
 
 `marimo_export.integration.observe_kernel_inputs(kernel)` is the host boundary
 for live state ledgers. It accepts a kernel-shaped object with `graph` and

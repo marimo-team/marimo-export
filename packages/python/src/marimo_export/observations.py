@@ -78,7 +78,7 @@ def install_observation_ledger(
 
     if not isinstance(ledger, Ledger):
         raise TypeError("ledger must be an ObservationLedger")
-    from marimo_export._marimo.entrypoints import install_observation_ledger as install
+    from marimo_export._observations.runs import install_observation_ledger as install
 
     return install(context, ledger)
 
