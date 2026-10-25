@@ -4,7 +4,7 @@ from dataclasses import replace
 from pathlib import Path
 
 import pytest
-from export_integration_support import native_session
+from export_integration_support import NOTEBOOK_TIMEOUT, native_session
 from marimo_export import ExportRepository, ExportSpec, OutputSpec, open_export, prepare
 from marimo_export.errors import ExecutionError
 from marimo_export.index import ControlIndexStep, ControlKeyStep
@@ -67,7 +67,7 @@ if __name__ == "__main__":
         },
         outputs={"controls": OutputSpec.cell("controls"), "result": OutputSpec.json("result")},
     )
-    with prepare(notebook, spec=spec, timeout=30) as prepared:
+    with prepare(notebook, spec=spec, timeout=NOTEBOOK_TIMEOUT) as prepared:
         prepared.write(tmp_path / "export")
     exported = open_export(tmp_path / "export")
     assert exported.state("baseline").output("result").json() == 3

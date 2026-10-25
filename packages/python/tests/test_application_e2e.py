@@ -9,6 +9,7 @@ from collections.abc import Mapping
 from pathlib import Path
 
 import pytest
+from export_integration_support import NOTEBOOK_TIMEOUT
 from marimo_export import open_export
 from marimo_export._remote.managed import ManagedServer
 from marimo_export.sessions import Client
@@ -126,6 +127,8 @@ def test_notebook_application_builds_reuses_and_captures_export(tmp_path: Path) 
         str(build_path),
         "--repository",
         str(build_repository),
+        "--timeout",
+        str(NOTEBOOK_TIMEOUT),
     )
 
     assert build.returncode == 0, build.stdout + build.stderr
@@ -147,6 +150,8 @@ def test_notebook_application_builds_reuses_and_captures_export(tmp_path: Path) 
         str(warm_build_path),
         "--repository",
         str(build_repository),
+        "--timeout",
+        str(NOTEBOOK_TIMEOUT),
     )
     assert warm_build.returncode == 0, warm_build.stdout + warm_build.stderr
     assert _projection_cache(warm_build.stdout) == (0, 0)
@@ -154,7 +159,7 @@ def test_notebook_application_builds_reuses_and_captures_export(tmp_path: Path) 
     assert "Prepared reused (2/2)" in warm_build.stderr
     assert _NOTEBOOK.read_bytes() == source
 
-    server = ManagedServer(_NOTEBOOK, timeout=120)
+    server = ManagedServer(_NOTEBOOK, timeout=NOTEBOOK_TIMEOUT)
     try:
         server.activate()
         capture = _run(
@@ -170,7 +175,7 @@ def test_notebook_application_builds_reuses_and_captures_export(tmp_path: Path) 
             "--repository",
             str(capture_repository),
             "--timeout",
-            "120",
+            str(NOTEBOOK_TIMEOUT),
             extra_environment={"MARIMO_EXPORT_ACCESS_TOKEN": server.access_token},
         )
         assert capture.returncode == 0, capture.stdout + capture.stderr
@@ -181,7 +186,7 @@ def test_notebook_application_builds_reuses_and_captures_export(tmp_path: Path) 
         with Client(
             server.base_url,
             access_token=server.access_token,
-            timeout=30,
+            timeout=NOTEBOOK_TIMEOUT,
         ) as client:
             assert client.session(server.session_id).id == server.session_id
     finally:

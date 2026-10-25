@@ -16,7 +16,7 @@ from collections.abc import Callable, Mapping
 from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
-from typing import BinaryIO, Protocol, cast
+from typing import BinaryIO, Literal, Protocol, cast
 from urllib.parse import urlencode
 
 import psutil
@@ -39,6 +39,8 @@ _KERNEL_LIFESPAN_ALLOWLIST_ENV = "MARIMO_KERNEL_LIFESPAN_ALLOWLIST"
 _KERNEL_LIFESPAN_DENYLIST_ENV = "MARIMO_KERNEL_LIFESPAN_DENYLIST"
 _KERNEL_LIFESPAN_NAME = "marimo-export"
 _MARIMO_ANCESTOR_PID_ENV = "MARIMO_ANCESTOR_PID"
+
+_SessionPhase = Literal["kernel readiness", "kernel instantiation", "initial notebook run"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -149,11 +151,13 @@ class ManagedServer:
         stream.wait_for_kernel()
         self._record_owned_process_groups()
         instantiated_runs = stream.completed_runs
+        # marimo sends kernel-ready once the kernel process connects. The
+        # kernel enters its lifespan during instantiation, before any cell runs.
         self._post_json(
             "/api/kernel/instantiate",
             {"objectIds": [], "values": [], "autoRun": False},
         )
-        stream.wait_for_completed_run(instantiated_runs)
+        stream.wait_for_completed_run(instantiated_runs, "kernel instantiation")
         self._require_cache_activation()
         session_start_seconds = time.monotonic() - session_started
         completed_runs = stream.completed_runs
@@ -165,7 +169,7 @@ class ManagedServer:
                 "codes": list(stream.codes),
             },
         )
-        stream.wait_for_completed_run(completed_runs)
+        stream.wait_for_completed_run(completed_runs, "initial notebook run")
         from marimo_export._client_protocol import _bridge_error
         from marimo_export._remote.client import BridgeError, HttpKernelTransport
 
@@ -721,8 +725,8 @@ class _SessionStream:
     def wait_for_kernel(self) -> None:
         self._wait(lambda: self._kernel_ready, "kernel readiness")
 
-    def wait_for_completed_run(self, after: int) -> None:
-        self._wait(lambda: self._completed_runs > after, "initial notebook run")
+    def wait_for_completed_run(self, after: int, label: _SessionPhase) -> None:
+        self._wait(lambda: self._completed_runs > after, label)
         with self._condition:
             active = {
                 cell_id: status
@@ -731,7 +735,7 @@ class _SessionStream:
             }
         if active:
             raise TransportError(
-                "the managed notebook left cells active after its initial run",
+                f"the managed marimo {label} left cells active",
                 code="server_start_failed",
                 details={"cells": sorted(active)[:16]},
             )
@@ -753,14 +757,20 @@ class _SessionStream:
                 code="server_shutdown_failed",
             )
 
-    def _wait(self, predicate: Callable[[], bool], label: str) -> None:
+    def _wait(self, predicate: Callable[[], bool], label: _SessionPhase) -> None:
         deadline = time.monotonic() + self._timeout
         with self._condition:
             activity_generation = self._activity_generation
             while not predicate():
                 if self._failure is not None:
+                    # The stream read timeout can fire before the wait deadline
+                    # while the server sends nothing, such as before the kernel
+                    # connects or between marimo's 20 s keep-alives.
+                    outcome = (
+                        "timed out" if isinstance(self._failure, TimeoutError) else "stream failed"
+                    )
                     raise TransportError(
-                        f"the managed marimo {label} stream failed",
+                        f"the managed marimo {label} {outcome}",
                         code="server_start_failed",
                     ) from self._failure
                 if self._activity_generation != activity_generation:

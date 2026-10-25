@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from export_integration_support import NOTEBOOK_TIMEOUT
 from marimo_export import ExportSpec, OutputSpec
 from marimo_export._build import build
 from marimo_export.errors import ExecutionError
@@ -94,14 +95,14 @@ def test_build_prepares_once_then_reuses_without_starting_a_notebook(tmp_path: P
             spec=_spec(),
             output=tmp_path / "first",
             repository=repository,
-            timeout=30,
+            timeout=NOTEBOOK_TIMEOUT,
         )
         second = build(
             notebook,
             spec=_spec(),
             output=tmp_path / "second",
             repository=repository,
-            timeout=30,
+            timeout=NOTEBOOK_TIMEOUT,
         )
     finally:
         repository.close()
@@ -130,7 +131,7 @@ def test_source_change_after_identity_preflight_fails_before_publish(
     monkeypatch.setattr("marimo_export._services.prepare_export.open_notebook", changed)
 
     with pytest.raises(ExecutionError):
-        build(notebook, spec=_spec(), output=tmp_path / "dist", timeout=30)
+        build(notebook, spec=_spec(), output=tmp_path / "dist", timeout=NOTEBOOK_TIMEOUT)
 
     assert not (tmp_path / "dist").exists()
 

@@ -7,7 +7,7 @@ from pathlib import Path
 import numpy as np
 import pyarrow as pa
 import pytest
-from export_integration_support import build
+from export_integration_support import NOTEBOOK_TIMEOUT, build
 from marimo_export import ExportSpec, OutputSpec, open_export
 from marimo_export.descriptors import ArrowDescriptor, NumpyDescriptor
 from marimo_export.errors import OutputError
@@ -61,8 +61,8 @@ def test_native_values_survive_warm_builds_and_changed_output_plans(
         },
     )
 
-    first = build(notebook, spec=spec, output=tmp_path / "first", timeout=30)
-    second = build(notebook, spec=spec, output=tmp_path / "second", timeout=30)
+    first = build(notebook, spec=spec, output=tmp_path / "first", timeout=NOTEBOOK_TIMEOUT)
+    second = build(notebook, spec=spec, output=tmp_path / "second", timeout=NOTEBOOK_TIMEOUT)
     assert counter.read_text() == "x"
 
     for result in (first, second):
@@ -86,7 +86,9 @@ def test_native_values_survive_warm_builds_and_changed_output_plans(
         states={"baseline": {}},
         outputs={"answer": OutputSpec.native("scalar")},
     )
-    changed = build(notebook, spec=changed_spec, output=tmp_path / "changed", timeout=30)
+    changed = build(
+        notebook, spec=changed_spec, output=tmp_path / "changed", timeout=NOTEBOOK_TIMEOUT
+    )
     assert open_export(changed.path).state("baseline").output("answer").scalar() == 42
     assert counter.read_text() == "x"
 
@@ -133,13 +135,13 @@ if __name__ == "__main__":
             outputs={output: OutputSpec.native("value")},
         )
 
-    build(notebook, spec=spec("first"), output=tmp_path / "first", timeout=30)
+    build(notebook, spec=spec("first"), output=tmp_path / "first", timeout=NOTEBOOK_TIMEOUT)
     runs_after_first_plan = counter.read_text(encoding="utf-8")
     second = build(
         notebook,
         spec=spec("second"),
         output=tmp_path / "second",
-        timeout=30,
+        timeout=NOTEBOOK_TIMEOUT,
     )
 
     assert runs_after_first_plan == "2"
@@ -228,7 +230,7 @@ if __name__ == "__main__":
         )
 
     write_helper(10)
-    first = build(notebook, spec=spec("first"), output=tmp_path / "first", timeout=30)
+    first = build(notebook, spec=spec("first"), output=tmp_path / "first", timeout=NOTEBOOK_TIMEOUT)
     first_state = open_export(first.path).state("two")
     assert first_state.output("first_upstream").scalar() == 21
     assert first_state.output("first_local").scalar() == 21
@@ -238,7 +240,7 @@ if __name__ == "__main__":
         notebook,
         spec=spec("second", expanded=True),
         output=tmp_path / "second",
-        timeout=30,
+        timeout=NOTEBOOK_TIMEOUT,
     )
     combined = open_export(second.path).state("combined")
     assert combined.output("second_upstream").scalar() == 12
@@ -251,7 +253,7 @@ if __name__ == "__main__":
         notebook,
         spec=spec("second", expanded=True),
         output=tmp_path / "notebook-edit",
-        timeout=30,
+        timeout=NOTEBOOK_TIMEOUT,
     )
     edited_state = open_export(notebook_edit.path).state("combined")
     assert edited_state.output("second_upstream").scalar() == 12
@@ -263,7 +265,7 @@ if __name__ == "__main__":
         notebook,
         spec=spec("second", expanded=True),
         output=tmp_path / "changed",
-        timeout=30,
+        timeout=NOTEBOOK_TIMEOUT,
     )
     changed_export = open_export(changed.path)
     for output in ("second_upstream", "second_local"):
@@ -301,7 +303,7 @@ if __name__ == "__main__":
     )
 
     with pytest.raises(OutputError) as raised:
-        build(notebook, spec=spec, output=tmp_path / "export", timeout=30)
+        build(notebook, spec=spec, output=tmp_path / "export", timeout=NOTEBOOK_TIMEOUT)
 
     assert raised.value.code == "output_execution_failed"
     assert not (tmp_path / "export").exists()
@@ -352,8 +354,8 @@ if __name__ == "__main__":
         },
     )
 
-    result = build(notebook, spec=spec, output=tmp_path / "export", timeout=30)
-    warm = build(notebook, spec=spec, output=tmp_path / "warm", timeout=30)
+    result = build(notebook, spec=spec, output=tmp_path / "export", timeout=NOTEBOOK_TIMEOUT)
+    warm = build(notebook, spec=spec, output=tmp_path / "warm", timeout=NOTEBOOK_TIMEOUT)
     state = open_export(result.path).state("baseline")
 
     # Custom exporter outputs run for every prepared state, so only the native
@@ -404,7 +406,7 @@ if __name__ == "__main__":
     )
 
     with pytest.raises(OutputError) as raised:
-        build(notebook, spec=spec, output=tmp_path / "export", timeout=30)
+        build(notebook, spec=spec, output=tmp_path / "export", timeout=NOTEBOOK_TIMEOUT)
 
     assert raised.value.code == "output_execution_failed"
     assert raised.value.details["exception_type"] == "TypeError"

@@ -73,7 +73,7 @@ def test_session_stream_inactivity_timeout_resets_on_accepted_progress(
     stream._condition = cast(Any, _Condition())
     monkeypatch.setattr(time, "monotonic", lambda: now[0])
 
-    stream._wait(lambda: stream._completed_runs > 0, "test run")
+    stream._wait(lambda: stream._completed_runs > 0, "initial notebook run")
 
     assert now[0] == 2.25
 

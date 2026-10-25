@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from export_integration_support import NOTEBOOK_TIMEOUT
 from export_integration_support import native_session as _native_session
 from marimo_export import (
     ExportRepository,
@@ -135,7 +136,7 @@ if __name__ == "__main__":
         encoding="utf-8",
     )
 
-    description = inspect_notebook(notebook, timeout=30)
+    description = inspect_notebook(notebook, timeout=NOTEBOOK_TIMEOUT)
     definitions = {definition.name: definition for definition in description.definitions}
 
     assert tuple(definitions["lower"].control_paths.values()) == ((),)
@@ -206,7 +207,7 @@ if __name__ == "__main__":
         encoding="utf-8",
     )
 
-    description = inspect_notebook(notebook, timeout=30)
+    description = inspect_notebook(notebook, timeout=NOTEBOOK_TIMEOUT)
     definitions = {definition.name: definition for definition in description.definitions}
 
     assert definitions["alias"].input_dependencies == ()
@@ -264,7 +265,7 @@ if __name__ == "__main__":
         encoding="utf-8",
     )
 
-    description = inspect_notebook(notebook, timeout=30)
+    description = inspect_notebook(notebook, timeout=NOTEBOOK_TIMEOUT)
 
     assert description.inputs_for({"child": OutputSpec.output("child_view")}) == ("parent",)
     assert description.inputs_for({"base": OutputSpec.output("base")}) == ("base",)

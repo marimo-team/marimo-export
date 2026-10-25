@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any, cast
 
 import pytest
+from export_integration_support import NOTEBOOK_TIMEOUT
 from marimo_export import ExportSpec, OutputSpec, build, open_export
 from marimo_export._json import decode_json_object
 from marimo_export.errors import SpecError
@@ -67,7 +68,7 @@ if __name__ == "__main__":
             },
         ),
         output=tmp_path / "export",
-        timeout=30,
+        timeout=NOTEBOOK_TIMEOUT,
     )
     state = open_export(result.path).state("selected")
     fixed = cast(
@@ -140,7 +141,7 @@ if __name__ == "__main__":
                 },
             ),
             output=tmp_path / "export",
-            timeout=30,
+            timeout=NOTEBOOK_TIMEOUT,
         )
 
     assert raised.value.code == "spec_input_invalid"

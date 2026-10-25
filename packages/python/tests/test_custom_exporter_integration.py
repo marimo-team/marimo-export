@@ -5,6 +5,9 @@ from pathlib import Path
 
 import pytest
 from export_integration_support import (
+    NOTEBOOK_TIMEOUT,
+)
+from export_integration_support import (
     capture_export as _capture,
 )
 from export_integration_support import (
@@ -125,7 +128,7 @@ def test_live_capture_forces_custom_output_and_requires_restart_after_source_dri
             )
         },
     )
-    server = ManagedServer(notebook, timeout=30)
+    server = ManagedServer(notebook, timeout=NOTEBOOK_TIMEOUT)
     try:
         server.activate()
         first_activity = _capture_live(server, spec, tmp_path / "first")
@@ -329,13 +332,13 @@ if __name__ == "__main__":
             )
         },
     )
-    server = ManagedServer(notebook, timeout=30)
+    server = ManagedServer(notebook, timeout=NOTEBOOK_TIMEOUT)
     try:
         server.activate()
         with Client(
             server.base_url,
             access_token=server.access_token,
-            timeout=30,
+            timeout=NOTEBOOK_TIMEOUT,
         ) as client:
             description = client.session(server.session_id).inspect()
         assert any(definition.name == "preloaded_encode" for definition in description.definitions)

@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 from export_integration_support import (
+    NOTEBOOK_TIMEOUT,
     build,
 )
 from export_integration_support import (
@@ -68,7 +69,7 @@ if __name__ == "__main__":
             outputs={"summary": OutputSpec.json("summary")},
         ),
         output=tmp_path / "export",
-        timeout=30,
+        timeout=NOTEBOOK_TIMEOUT,
     )
     export = open_export(result.path)
 
@@ -124,7 +125,7 @@ if __name__ == "__main__":
                 outputs={"flag": OutputSpec.json("flag")},
             ),
             output=output,
-            timeout=30,
+            timeout=NOTEBOOK_TIMEOUT,
         )
 
     assert raised.value.code == "input_value_invalid"
@@ -161,7 +162,7 @@ if __name__ == "__main__":
         encoding="utf-8",
     )
 
-    description = inspect_notebook(notebook, timeout=30)
+    description = inspect_notebook(notebook, timeout=NOTEBOOK_TIMEOUT)
     widget = next(item for item in description.definitions if item.name == "widget")
     assert description.implementation_sha256 == implementation_identity()
     assert widget.input_mode == "patch"
@@ -183,7 +184,7 @@ if __name__ == "__main__":
             },
         ),
         output=tmp_path / "export",
-        timeout=30,
+        timeout=NOTEBOOK_TIMEOUT,
     )
     payload = open_export(result.path).state("baseline").output("widget").blob_asset().data
 
@@ -226,7 +227,7 @@ if __name__ == "__main__":
             outputs={"widget": OutputSpec.export("widget", anywidget_exporter.bundle())},
         ),
         output=tmp_path / "export",
-        timeout=30,
+        timeout=NOTEBOOK_TIMEOUT,
     )
     payload = json.loads(
         open_export(result.path).state("baseline").output("widget").blob_asset().data
@@ -284,7 +285,7 @@ if __name__ == "__main__":
         },
     )
 
-    with open_notebook(notebook, timeout=30) as producer:
+    with open_notebook(notebook, timeout=NOTEBOOK_TIMEOUT) as producer:
         session = producer._require_open()
         first_activity = _capture_session(session, spec, tmp_path / "first")
         state_file.write_text("2", encoding="utf-8")

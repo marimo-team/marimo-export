@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from export_integration_support import NOTEBOOK_TIMEOUT
 from marimo_export import ExportRepository, ExportSpec, build, open_export
 from marimo_export.descriptors import MarimoOutputDescriptor
 
@@ -34,6 +35,7 @@ def test_quickstart_builds_and_reads_two_states_and_two_outputs(tmp_path: Path) 
             spec=ExportSpec.from_file(EXAMPLE / "report.export.yaml"),
             output=output,
             repository=repository,
+            timeout=NOTEBOOK_TIMEOUT,
         )
 
     assert result.verification.states == 2

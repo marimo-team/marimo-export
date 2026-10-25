@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from export_integration_support import NOTEBOOK_TIMEOUT
 from marimo_export import ExportRepository, ExportSpec, OutputSpec, StateSpace, prepare
 from marimo_export.index import ControlOptions, ControlRange
 
@@ -47,12 +48,16 @@ def test_prepared_export_records_the_values_each_control_can_send(tmp_path: Path
     }
 
     with ExportRepository.open(tmp_path / "repository") as repository:
-        with prepare(notebook, spec=spec, repository=repository, timeout=30) as prepared:
+        with prepare(
+            notebook, spec=spec, repository=repository, timeout=NOTEBOOK_TIMEOUT
+        ) as prepared:
             assert not prepared.reused
             bindings = prepared.open().control_bindings.values()
             assert {(binding.input, binding.domain) for binding in bindings} == expected
 
-        with prepare(notebook, spec=spec, repository=repository, timeout=30) as reused:
+        with prepare(
+            notebook, spec=spec, repository=repository, timeout=NOTEBOOK_TIMEOUT
+        ) as reused:
             assert reused.reused
             bindings = reused.open().control_bindings.values()
             assert {(binding.input, binding.domain) for binding in bindings} == expected
@@ -95,7 +100,7 @@ if __name__ == "__main__":
 
     with (
         ExportRepository.open(tmp_path / "repository") as repository,
-        prepare(notebook, spec=spec, repository=repository, timeout=30) as prepared,
+        prepare(notebook, spec=spec, repository=repository, timeout=NOTEBOOK_TIMEOUT) as prepared,
     ):
         bindings = prepared.open().control_bindings.values()
         assert {(binding.input, binding.domain) for binding in bindings} == {

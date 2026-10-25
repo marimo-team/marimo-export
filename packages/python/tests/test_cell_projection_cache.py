@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any, cast
 
 import pytest
-from export_integration_support import build
+from export_integration_support import NOTEBOOK_TIMEOUT, build
 from marimo_export import ExportSpec, OutputSpec, open_export
 from marimo_export._json import decode_json_object
 from marimo_export.exporters import anywidget, blob, importable
@@ -103,8 +103,8 @@ if __name__ == "__main__":
         },
     )
 
-    first = build(notebook, spec=spec, output=tmp_path / "first", timeout=30)
-    second = build(notebook, spec=spec, output=tmp_path / "second", timeout=30)
+    first = build(notebook, spec=spec, output=tmp_path / "first", timeout=NOTEBOOK_TIMEOUT)
+    second = build(notebook, spec=spec, output=tmp_path / "second", timeout=NOTEBOOK_TIMEOUT)
 
     for result in (first, second):
         snapshot = cast(
@@ -193,10 +193,12 @@ if __name__ == "__main__":
         return snapshot["console"][0]["data"]
 
     write_notebook(default=1)
-    build(notebook, spec=spec(2), output=tmp_path / "warm", timeout=30)
+    build(notebook, spec=spec(2), output=tmp_path / "warm", timeout=NOTEBOOK_TIMEOUT)
 
     counter.write_text("0", encoding="utf-8")
-    final_miss = build(notebook, spec=spec(3), output=tmp_path / "final-miss", timeout=30)
+    final_miss = build(
+        notebook, spec=spec(3), output=tmp_path / "final-miss", timeout=NOTEBOOK_TIMEOUT
+    )
     assert counter.read_text(encoding="utf-8") == "1"
     assert console_value(tmp_path / "final-miss") == "value=3\n"
     assert (
@@ -206,7 +208,9 @@ if __name__ == "__main__":
 
     write_notebook(default=4)
     counter.write_text("0", encoding="utf-8")
-    final_hit = build(notebook, spec=spec(3), output=tmp_path / "final-hit", timeout=30)
+    final_hit = build(
+        notebook, spec=spec(3), output=tmp_path / "final-hit", timeout=NOTEBOOK_TIMEOUT
+    )
     assert counter.read_text(encoding="utf-8") == "2"
     assert console_value(tmp_path / "final-hit") == "value=3\n"
     assert (
@@ -260,9 +264,9 @@ if __name__ == "__main__":
         },
     )
     write_notebook(1)
-    first = build(notebook, spec=spec, output=tmp_path / "first", timeout=30)
+    first = build(notebook, spec=spec, output=tmp_path / "first", timeout=NOTEBOOK_TIMEOUT)
     write_notebook(2)
-    second = build(notebook, spec=spec, output=tmp_path / "second", timeout=30)
+    second = build(notebook, spec=spec, output=tmp_path / "second", timeout=NOTEBOOK_TIMEOUT)
 
     for result, expected in ((first, "value=1"), (second, "value=2")):
         state = open_export(result.path).state("baseline")
@@ -327,9 +331,9 @@ if __name__ == "__main__":
         },
     )
     source.write_text("first", encoding="utf-8")
-    first = build(notebook, spec=spec, output=tmp_path / "first", timeout=30)
+    first = build(notebook, spec=spec, output=tmp_path / "first", timeout=NOTEBOOK_TIMEOUT)
     source.write_text("second", encoding="utf-8")
-    second = build(notebook, spec=spec, output=tmp_path / "second", timeout=30)
+    second = build(notebook, spec=spec, output=tmp_path / "second", timeout=NOTEBOOK_TIMEOUT)
 
     for result, expected in ((first, "first"), (second, "second")):
         state = open_export(result.path).state("baseline")
@@ -367,12 +371,12 @@ def test_value_projection_uses_native_file_invalidation(tmp_path: Path) -> None:
         outputs={"value": OutputSpec.json("summary")},
     )
     source.write_text("first", encoding="utf-8")
-    build(notebook, spec=spec, output=tmp_path / "first", timeout=30)
+    build(notebook, spec=spec, output=tmp_path / "first", timeout=NOTEBOOK_TIMEOUT)
     source.write_text("second", encoding="utf-8")
     upstream_counter.write_text("0", encoding="utf-8")
     downstream_counter.write_text("0", encoding="utf-8")
 
-    second = build(notebook, spec=spec, output=tmp_path / "second", timeout=30)
+    second = build(notebook, spec=spec, output=tmp_path / "second", timeout=NOTEBOOK_TIMEOUT)
 
     assert upstream_counter.read_text(encoding="utf-8") == "1"
     assert downstream_counter.read_text(encoding="utf-8") == "1"
@@ -400,12 +404,12 @@ def test_rendered_projection_uses_native_file_invalidation(tmp_path: Path) -> No
         outputs={"output": OutputSpec.output("view")},
     )
     source.write_text("first", encoding="utf-8")
-    build(notebook, spec=spec, output=tmp_path / "first", timeout=30)
+    build(notebook, spec=spec, output=tmp_path / "first", timeout=NOTEBOOK_TIMEOUT)
     source.write_text("second", encoding="utf-8")
     upstream_counter.write_text("0", encoding="utf-8")
     downstream_counter.write_text("0", encoding="utf-8")
 
-    second = build(notebook, spec=spec, output=tmp_path / "second", timeout=30)
+    second = build(notebook, spec=spec, output=tmp_path / "second", timeout=NOTEBOOK_TIMEOUT)
     snapshot = cast(
         dict[str, Any],
         decode_json_object(
@@ -446,12 +450,12 @@ def test_shared_projection_owner_keeps_complete_cell_live_after_native_file_chan
         },
     )
     source.write_text("first", encoding="utf-8")
-    build(notebook, spec=spec, output=tmp_path / "first", timeout=30)
+    build(notebook, spec=spec, output=tmp_path / "first", timeout=NOTEBOOK_TIMEOUT)
     source.write_text("second", encoding="utf-8")
     upstream_counter.write_text("0", encoding="utf-8")
     downstream_counter.write_text("0", encoding="utf-8")
 
-    second = build(notebook, spec=spec, output=tmp_path / "second", timeout=30)
+    second = build(notebook, spec=spec, output=tmp_path / "second", timeout=NOTEBOOK_TIMEOUT)
     state = open_export(second.path).state("baseline")
     output = cast(
         dict[str, Any],
@@ -521,10 +525,10 @@ if __name__ == "__main__":
         },
     )
     source.write_text("first", encoding="utf-8")
-    build(notebook, spec=spec, output=tmp_path / "first", timeout=30)
+    build(notebook, spec=spec, output=tmp_path / "first", timeout=NOTEBOOK_TIMEOUT)
     source.write_text("second", encoding="utf-8")
     counter.write_text("0", encoding="utf-8")
-    second = build(notebook, spec=spec, output=tmp_path / "second", timeout=30)
+    second = build(notebook, spec=spec, output=tmp_path / "second", timeout=NOTEBOOK_TIMEOUT)
 
     state = open_export(second.path).state("baseline")
     cell = cast(
@@ -608,8 +612,8 @@ def encode(value):
         },
     )
 
-    first = build(notebook, spec=spec, output=tmp_path / "first", timeout=30)
-    warm = build(notebook, spec=spec, output=tmp_path / "warm", timeout=30)
+    first = build(notebook, spec=spec, output=tmp_path / "first", timeout=NOTEBOOK_TIMEOUT)
+    warm = build(notebook, spec=spec, output=tmp_path / "warm", timeout=NOTEBOOK_TIMEOUT)
 
     assert (first.cache_activity.projection_hits, first.cache_activity.projection_misses) == (
         0,
