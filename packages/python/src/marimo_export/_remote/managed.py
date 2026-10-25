@@ -79,7 +79,7 @@ class ManagedServer:
     ) -> None:
         self.notebook = notebook
         self.timeout = timeout
-        self.access_token = secrets.token_urlsafe(32)
+        self.access_token = ""
         self.session_id = f"s_{secrets.token_hex(16)}"
         self.port = 0
         self.base_url = ""
@@ -244,12 +244,15 @@ class ManagedServer:
                 )
                 if not lost_port:
                     raise
-            self._stop_process()
-            self._owned_groups.clear()
-            self._log_file.close()
-            self._log_file = self._log_path.open("wb")
+                self._stop_process()
+                self._owned_groups.clear()
+                self._log_file.close()
+                self._log_file = self._log_path.open("wb")
 
     def _spawn(self, notebook: Path, environment: Mapping[str, str]) -> None:
+        # Readiness polling sends the token to whichever process holds the
+        # port, so a server that lost its port race also lost its token.
+        self.access_token = secrets.token_urlsafe(32)
         self.port = _free_port()
         self.base_url = f"http://127.0.0.1:{self.port}"
         self._process = subprocess.Popen(
@@ -696,9 +699,14 @@ class ManagedServer:
         return_code: int | None = None,
     ) -> TransportError:
         log = self._log_text()
-        details: dict[str, object] = {
-            "log": safe_diagnostic(log, secrets=(self.access_token,), maximum_chars=_LOG_LIMIT)
-        }
+        # Escaping can expand each character up to ten times. Render the whole
+        # tail, then keep its end, where the failure is reported.
+        rendered = safe_diagnostic(
+            log,
+            secrets=(self.access_token,),
+            maximum_chars=10 * len(log) + 4,
+        )
+        details: dict[str, object] = {"log": rendered[-_LOG_LIMIT:]}
         if return_code is not None:
             message = f"{message} with code {return_code}"
             details["return_code"] = return_code
@@ -720,7 +728,11 @@ class ManagedServer:
             data = self._log_path.read_bytes()
         except OSError:
             return ""
-        return data[-_LOG_LIMIT:].decode("utf-8", errors="replace")
+        if len(data) > _LOG_LIMIT:
+            # A cut inside marimo's access URL line would leave a token
+            # fragment that redaction cannot recognize.
+            data = data[-_LOG_LIMIT:].partition(b"\n")[2]
+        return data.decode("utf-8", errors="replace")
 
 
 class _SessionStream:

@@ -227,22 +227,22 @@ again from a trusted publisher when its origin is uncertain.
 
 ## The notebook server cannot start
 
-Symptom: `build`, `plan`, or `inspect` on a notebook file, or `prepare()` in
-Python, reports `server_start_failed`.
+Symptom: a command or Python call that runs a notebook file, such as `build`,
+`plan`, `inspect`, or `prepare()`, reports `server_start_failed`.
 
 When the marimo server process started and then failed, the message ends with
 its exit code and last output lines:
 
 ```text
-error: the managed marimo server exited during startup with code 1: ... | ImportError: shadowed uvicorn module
+error: the managed marimo server exited during startup with code 1: ... | AttributeError: module 'uvicorn' has no attribute '__version__'
 ```
 
 Run the command with `--json` to read `details.log`, up to the final 8 KiB of
-server output with the access token redacted. Fix the reported cause, such as a file in
-the notebook directory that shadows an installed module, then run the command
-again. marimo-export retries a server that lost its loopback port to another
-process, so `address already in use` in the message means every retry within
-`--timeout` or `timeout` lost its port.
+server output with the access token redacted. Fix the reported cause, such as the empty
+`uvicorn.py` in the notebook directory that shadows the installed module in this
+example, then run the command again. marimo-export retries a server that lost
+its loopback port to another process, so `address already in use` in the message
+means the final attempt within `--timeout` or `timeout` lost its port too.
 
 ## Live capture cannot connect
 

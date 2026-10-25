@@ -513,8 +513,10 @@ def test_managed_server_starts_on_a_fresh_port_after_losing_the_port_race(
         log_directory = server._log_path.parent
         try:
             assert server.port != taken_port
-            assert len(started) == 2
+            assert len(started) >= 2
             assert not psutil.pid_exists(started[0])
+            if sys.platform != "win32":
+                assert _live_processes_and_groups({started[0]}, {started[0]}) == (set(), set())
         finally:
             server.stop()
 
@@ -522,20 +524,38 @@ def test_managed_server_starts_on_a_fresh_port_after_losing_the_port_race(
     assert not log_directory.exists()
 
 
-def _exiting_server(
+_PORT_CONFLICT_LOG = (
+    "ERROR:    [Errno 98] error while attempting to bind on address "
+    "('127.0.0.1', 8000): address already in use\n"
+)
+
+
+def _exiting_servers(
     monkeypatch: pytest.MonkeyPatch,
-    log: str,
-    *,
-    return_code: int,
-) -> list[int]:
-    started: list[int] = []
+    attempts: list[tuple[str, int]],
+) -> list[tuple[str, ...]]:
+    """Fake one exiting server per attempt and record spawns and stops."""
+
+    events: list[tuple[str, ...]] = []
+    remaining = iter(attempts)
+    attempt = attempts[-1]
 
     def start_process(args: list[str], **kwargs: object) -> SimpleNamespace:
+        nonlocal attempt
+        log, return_code = attempt = next(remaining, attempt)
         log_file = cast(Any, kwargs["stdout"])
         log_file.write(log.encode())
         log_file.flush()
-        started.append(int(args[args.index("--port") + 1]))
-        return SimpleNamespace(pid=123, stdin=_TokenInput(), poll=lambda: return_code)
+        token_input = _TokenInput()
+        events.append(("spawn", args[args.index("--port") + 1]))
+        process = SimpleNamespace(pid=123, stdin=token_input, poll=lambda: return_code)
+        process.token_input = token_input
+        return process
+
+    def stop_process(server: ManagedServer) -> None:
+        process = cast(Any, server._process)
+        events.append(("stop", process.token_input.payload.decode().strip()))
+        server._process = None
 
     monkeypatch.setattr(subprocess, "Popen", start_process)
     monkeypatch.setattr(
@@ -543,10 +563,8 @@ def _exiting_server(
         "_own_windows_process_tree",
         lambda _process: _NoopTreeOwner(),
     )
-    monkeypatch.setattr(
-        ManagedServer, "_stop_process", lambda server: setattr(server, "_process", None)
-    )
-    return started
+    monkeypatch.setattr(ManagedServer, "_stop_process", stop_process)
+    return events
 
 
 def test_managed_server_reports_a_non_port_startup_exit_at_once(
@@ -557,23 +575,52 @@ def test_managed_server_reports_a_non_port_startup_exit_at_once(
     notebook = tmp_path / "notebook.py"
     notebook.write_text("import marimo\n", encoding="utf-8")
     monkeypatch.setattr(managed_module.secrets, "token_urlsafe", lambda _size=None: secret)
-    started = _exiting_server(
+    events = _exiting_servers(
         monkeypatch,
-        "Traceback (most recent call last):\n"
-        f'  File "start.py", line 7, in main {secret}\n'
-        "ModuleNotFoundError: No module named 'missing_plugin'\n\n",
-        return_code=1,
+        [
+            (
+                "Traceback (most recent call last):\n"
+                f'  File "start.py", line 7, in main {secret}\n'
+                "ModuleNotFoundError: No module named 'missing_plugin'\n\n",
+                1,
+            )
+        ],
     )
 
     with pytest.raises(TransportError) as raised:
         ManagedServer(notebook, timeout=NOTEBOOK_TIMEOUT)
 
-    assert len(started) == 1
+    assert [event[0] for event in events] == ["spawn", "stop"]
     assert raised.value.code == "server_start_failed"
     assert raised.value.details["return_code"] == 1
     assert str(raised.value).endswith("No module named 'missing_plugin'")
     assert secret not in str(raised.value)
     assert secret not in repr(raised.value.wire())
+
+
+def test_managed_server_retries_a_lost_port_with_a_fresh_port_and_token(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    notebook = tmp_path / "notebook.py"
+    notebook.write_text("import marimo\n", encoding="utf-8")
+    events = _exiting_servers(
+        monkeypatch,
+        [
+            (_PORT_CONFLICT_LOG, 3),
+            ("ModuleNotFoundError: No module named 'missing_plugin'\n", 1),
+        ],
+    )
+
+    with pytest.raises(TransportError) as raised:
+        ManagedServer(notebook, timeout=NOTEBOOK_TIMEOUT)
+
+    assert [event[0] for event in events] == ["spawn", "stop", "spawn", "stop"]
+    assert events[0][1] != events[2][1]
+    assert events[1][1] != events[3][1]
+    assert raised.value.details["return_code"] == 1
+    assert str(raised.value).endswith("No module named 'missing_plugin'")
+    assert "address already in use" not in repr(raised.value.wire())
 
 
 def test_managed_server_stops_retrying_a_port_conflict_that_persists(
@@ -582,20 +629,41 @@ def test_managed_server_stops_retrying_a_port_conflict_that_persists(
 ) -> None:
     notebook = tmp_path / "notebook.py"
     notebook.write_text("import marimo\n", encoding="utf-8")
-    started = _exiting_server(
-        monkeypatch,
-        "ERROR:    [Errno 98] error while attempting to bind on address "
-        "('127.0.0.1', 8000): address already in use\n",
-        return_code=3,
-    )
+    events = _exiting_servers(monkeypatch, [(_PORT_CONFLICT_LOG, 3)])
 
     with pytest.raises(TransportError) as raised:
         ManagedServer(notebook, timeout=NOTEBOOK_TIMEOUT)
 
-    assert 1 < len(started) < 10
+    ports = [event[1] for event in events if event[0] == "spawn"]
+    assert 1 < len(ports) < 10
+    assert len(set(ports)) == len(ports)
     assert raised.value.code == "server_start_failed"
     assert raised.value.details["return_code"] == 3
     assert "address already in use" in str(raised.value)
+
+
+def test_managed_startup_log_keeps_its_end_and_redacts_a_cut_token(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    secret = "managed-startup-secret"
+    notebook = tmp_path / "notebook.py"
+    notebook.write_text("import marimo\n", encoding="utf-8")
+    monkeypatch.setattr(managed_module.secrets, "token_urlsafe", lambda _size=None: secret)
+    url_line = f"URL: http://localhost:2718?access_token={secret}\n"
+    cause = "RuntimeError: the real cause\n"
+    # Size the log so the retained 8 KiB window starts inside the token.
+    filler_size = managed_module._LOG_LIMIT - 10 - len(cause)
+    filler = "x" * (filler_size - 1) + "\n"
+    _exiting_servers(monkeypatch, [(url_line + filler + cause, 1)])
+
+    with pytest.raises(TransportError) as raised:
+        ManagedServer(notebook, timeout=NOTEBOOK_TIMEOUT)
+
+    log = cast(str, raised.value.details["log"])
+    assert log.endswith("RuntimeError: the real cause\\x0a")
+    assert str(raised.value).endswith("RuntimeError: the real cause")
+    assert secret[-9:] not in repr(raised.value.wire())
 
 
 def test_managed_token_input_cancellation_closes_stdin(
