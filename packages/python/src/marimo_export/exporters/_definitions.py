@@ -15,6 +15,12 @@ class ExporterDefinition:
     module: str
     symbol: str
     distributions: tuple[str, ...] = ()
+    # Capture binds a custom exporter's callable through a registry token.
+    custom: bool = False
+    # A live exporter's leaf skips native cache restoration and reruns in every
+    # state run. Custom callables can read state outside their declared source,
+    # and the AnyWidget bundle captures the widget model of the current session.
+    live: bool = False
 
 
 _BUILTINS = {
@@ -32,6 +38,7 @@ _BUILTINS = {
         module="marimo_export.exporters._runtime.anywidget",
         symbol="bundle",
         distributions=("anywidget",),
+        live=True,
     ),
     "blob.html": ExporterDefinition(
         module="marimo_export.exporters._runtime.blob",
@@ -87,7 +94,7 @@ def runtime_reference(name: str) -> ExporterDefinition:
     if definition is not None:
         return definition
     module, symbol = _parse_import_reference(name)
-    return ExporterDefinition(module=module, symbol=symbol)
+    return ExporterDefinition(module=module, symbol=symbol, custom=True, live=True)
 
 
 def _size_option(size: JsonValue) -> JsonObject:

@@ -166,8 +166,7 @@ For an owned export graph, the adapter can:
   object-typed columns such as strings. Cells whose native hash succeeds keep
   their native keys.
 - record the effective hit or miss for authored and projection cells
-- run complete-cell owners and selected exporter leaves live when their output
-  contract includes uncached side effects or session-bound resources
+- rerun the cells that the execution plan names live
 - turn a hit containing an unavailable UI or unhashable stub into a live run
 - recreate cells that define `mo.state` so getters and setters belong to the
   current session
@@ -175,6 +174,24 @@ For an owned export graph, the adapter can:
 
 Graph scopes are registered and removed through context managers. Forced cells
 exist only inside one active scope.
+
+### The execution plan names live cells
+
+`ExecutionPlan` derives two live sets from its planned outputs:
+
+| Set                          | Members                                                                                              | Reason                                                                                                           |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `ExecutionPlan.live_cells`   | Authored owner cell ID of each complete-cell output                                                  | Console records are uncached side effects                                                                        |
+| `ExecutionPlan.live_outputs` | Name of each output whose `ExporterDefinition` is live: `anywidget.bundle` and every custom exporter | Custom callables can read undeclared state, and the AnyWidget bundle captures the current session's widget model |
+
+`compat/execution.py` maps owner cell IDs and output leaves to runtime cell
+IDs and passes the forced cells of each phase to `force_cache_misses`. A forced
+cell skips native restoration, reruns, and saves its result under the same key,
+so output receipts read the fresh entry. The live rule stays in
+`exporters/_definitions.py`. Leaf source is the same for live and cached
+outputs, so the live sets change no native cache key. UI and `mo.state` cells
+rerun through the lifecycle adapter described above, and every other output
+leaf follows Marimo's native hit or miss.
 
 ### Dependency identity enters native lookup
 

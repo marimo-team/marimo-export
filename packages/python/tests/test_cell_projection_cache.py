@@ -3,9 +3,11 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, cast
 
+import pytest
 from export_integration_support import build
 from marimo_export import ExportSpec, OutputSpec, open_export
 from marimo_export._json import decode_json_object
+from marimo_export.exporters import anywidget, blob, importable
 
 
 def _write_external_dependency_notebook(
@@ -537,3 +539,84 @@ if __name__ == "__main__":
     assert cell["console"][0]["data"] == "second\n"
     assert state.output("value").json() == "summary=second"
     assert "summary=second" in output["output"]["data"]
+
+
+def test_warm_build_reruns_only_live_exporter_leaves_and_complete_cell_owners(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    notebook = tmp_path / "notebook.py"
+    notebook.write_text(
+        """
+import marimo
+
+app = marimo.App()
+
+
+@app.cell
+def _():
+    import marimo as mo
+    value = 42
+    return mo, value
+
+
+@app.cell
+def _(mo):
+    import anywidget
+    import traitlets
+
+    class Counter(anywidget.AnyWidget):
+        _esm = "export default { render() {} }"
+        count = traitlets.Int(1).tag(sync=True)
+
+    widget = mo.ui.anywidget(Counter())
+    return (widget,)
+
+
+@app.cell
+def report(mo, value):
+    print(f"value={value}")
+    mo.md(f"# Value {value}")
+    return
+
+
+if __name__ == "__main__":
+    app.run()
+""".lstrip(),
+        encoding="utf-8",
+    )
+    (tmp_path / "live_exports.py").write_text(
+        """
+from marimo_export.outputs import BlobAsset
+
+
+def encode(value):
+    return BlobAsset(data=str(value).encode("utf-8"), media_type="text/plain")
+""".lstrip(),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("PYTHONPATH", str(tmp_path))
+    spec = ExportSpec(
+        default_state="baseline",
+        states={"baseline": {}},
+        outputs={
+            "answer": OutputSpec.json("value"),
+            "document": OutputSpec.export("value", blob.json()),
+            "report": OutputSpec.cell("report"),
+            "summary": OutputSpec.export("value", importable("live_exports:encode")),
+            "widget": OutputSpec.export("widget", anywidget.bundle()),
+        },
+    )
+
+    first = build(notebook, spec=spec, output=tmp_path / "first", timeout=30)
+    warm = build(notebook, spec=spec, output=tmp_path / "warm", timeout=30)
+
+    assert (first.cache_activity.projection_hits, first.cache_activity.projection_misses) == (
+        0,
+        5,
+    )
+    assert (warm.cache_activity.projection_hits, warm.cache_activity.projection_misses) == (3, 2)
+    # The widget cell recreates its session-bound UI element, and the
+    # complete-cell owner reruns for its console record.
+    assert (warm.cache_activity.authored_hits, warm.cache_activity.authored_misses) == (1, 2)
+    assert open_export(warm.path).state("baseline").output("summary").blob_asset().data == b"42"

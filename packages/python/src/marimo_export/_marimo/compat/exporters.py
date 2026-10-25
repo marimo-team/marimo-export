@@ -74,7 +74,7 @@ def prepared_exporters(
         exporter = plan.planned_outputs[output].exporter
         if exporter is None:
             raise RuntimeError("prepared exporter output has no exporter specification")
-        custom = ":" in exporter.name
+        custom = runtime_reference(exporter.name).custom
         values[output] = PreparedExporter(
             identity=identity,
             token=exporter_token_name(exporter) if custom else None,

@@ -21,7 +21,7 @@ from marimo_export._execution import (
 from marimo_export._execution.plan import exporter_token_name
 from marimo_export._json import canonical_bytes, sha256_bytes
 from marimo_export.errors import SpecError
-from marimo_export.exporters import importable, media
+from marimo_export.exporters import anywidget, importable, media
 
 
 def _baseline() -> Baseline:
@@ -413,6 +413,37 @@ def test_unknown_state_input_is_rejected_during_planning() -> None:
 
     assert raised.value.code == "spec_definition_missing"
     assert raised.value.details == {"definitions": ["missing"]}
+
+
+def test_plan_runs_complete_cell_owners_and_live_exporter_leaves_uncached() -> None:
+    baseline = replace(
+        _baseline(),
+        cells=(
+            CellDefinition(
+                id="cell-summary",
+                name="summary",
+                code_sha256="d" * 64,
+                config={},
+            ),
+        ),
+    )
+    spec = ExportSpec(
+        default_state="baseline",
+        states={"baseline": {}},
+        outputs={
+            "prices": OutputSpec.native("df"),
+            "chart": OutputSpec.export("df", media(["image/png"])),
+            "rendered": OutputSpec.output("df"),
+            "summary": OutputSpec.cell("summary"),
+            "custom": OutputSpec.export("df", importable("acme.exports:encode")),
+            "widget": OutputSpec.export("selector", anywidget.bundle()),
+        },
+    )
+
+    plan = create_execution_plan(spec, baseline)
+
+    assert plan.live_cells == {"cell-summary"}
+    assert plan.live_outputs == {"custom", "widget"}
 
 
 def test_output_cell_reads_state_and_source_without_definitions() -> None:

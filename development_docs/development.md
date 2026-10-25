@@ -221,7 +221,7 @@ Declare source modules that affect conversion output, including modules loaded
 dynamically. A borrowed session uses module objects already loaded at first
 exporter preparation. Restart the session for earlier edits to take effect.
 Later disk drift fails with `exporter_source_changed`. Custom exporter leaves
-run live when their process resources require it. The selected notebook value
+rerun in every state run. The selected notebook value
 follows Marimo's native cache policy. Create `mo.watch.file` in an upstream
 cell before reading the watched path from dependent cells. Give other external
 systems an author-owned Marimo cache or side-effect boundary so native
