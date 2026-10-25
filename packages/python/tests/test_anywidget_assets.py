@@ -2,12 +2,17 @@ from __future__ import annotations
 
 import base64
 
-import marimo_export._marimo.compat.anywidget_assets as portable_assets
 import pytest
+from marimo_export._marimo.file_urls import VirtualFileUrl
+from marimo_export.exporters._anywidget_assets import portable_css, validate_embedded_esm
+
+
+def _unread(virtual_file: VirtualFileUrl) -> bytes:
+    raise AssertionError(f"unexpected virtual file read: {virtual_file}")
 
 
 def test_embedded_esm_accepts_self_contained_and_remote_dependencies() -> None:
-    portable_assets.validate_embedded_esm(
+    validate_embedded_esm(
         r"""
         const ordinary = "import './string.js'";
         const template = `import("./template.js") ${"export * from './expression.js'"}`;
@@ -32,7 +37,7 @@ def test_embedded_esm_rejects_unresolved_dependencies() -> None:
         'new URL("./asset.svg", import.meta.url);',
     ):
         with pytest.raises(ValueError, match=r"must use a literal data:"):
-            portable_assets.validate_embedded_esm(source)
+            validate_embedded_esm(source)
 
 
 def test_css_accepts_remote_and_document_local_references() -> None:
@@ -45,7 +50,7 @@ def test_css_accepts_remote_and_document_local_references() -> None:
     @import "data:text/css,.label%7Bcolor:green%7D";
     """
 
-    assert portable_assets.portable_css(css) == css
+    assert portable_css(css, read_file=_unread) == css
 
 
 def test_css_rejects_unresolved_assets() -> None:
@@ -55,31 +60,47 @@ def test_css_rejects_unresolved_assets() -> None:
         "@import var(--theme);",
     ):
         with pytest.raises(ValueError, match="AnyWidget CSS"):
-            portable_assets.portable_css(css)
+            portable_css(css, read_file=_unread)
 
 
-def test_css_inlines_marimo_virtual_files(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize("prefix", ["./@file/", "/@file/", "@file/"])
+def test_css_inlines_marimo_virtual_files(prefix: str) -> None:
     content = b"<svg/>"
+    reads: list[VirtualFileUrl] = []
 
-    def read(name: str, size: int) -> bytes:
-        assert (name, size) == ("icon.svg", len(content))
+    def read(virtual_file: VirtualFileUrl) -> bytes:
+        reads.append(virtual_file)
         return content
 
-    monkeypatch.setattr(portable_assets, "read_virtual_file", read)
-
-    css = portable_assets.portable_css(
-        f'.icon {{ background: url("./@file/{len(content)}-icon.svg"); }}'
+    css = portable_css(
+        f'.icon {{ background: url("{prefix}{len(content)}-icon.svg"); }}',
+        read_file=read,
     )
 
-    assert f"data:image/svg+xml;base64,{base64.b64encode(content).decode()}" in css
+    assert css == (
+        f'.icon {{ background: url("data:image/svg+xml;base64,'
+        f'{base64.b64encode(content).decode()}"); }}'
+    )
+    assert reads == [VirtualFileUrl(len(content), "icon.svg")]
 
 
-def test_css_rejects_incomplete_or_imported_virtual_files(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(portable_assets, "read_virtual_file", lambda _name, _size: b"x")
+def test_css_inlines_empty_virtual_files_without_reading() -> None:
+    css = portable_css('.icon { background: url("@file/0-empty.txt"); }', read_file=_unread)
 
+    assert css == '.icon { background: url("data:text/plain;base64,"); }'
+
+
+def test_css_rejects_malformed_virtual_file_urls() -> None:
+    for url in ("./@file/icon.svg", "/@file/-icon.svg", "@file/12-"):
+        with pytest.raises(ValueError, match="malformed marimo virtual file URL"):
+            portable_css(f'.icon {{ background: url("{url}"); }}', read_file=_unread)
+
+
+def test_css_rejects_incomplete_or_imported_virtual_files() -> None:
     with pytest.raises(ValueError, match="declared 4 bytes but returned 1"):
-        portable_assets.portable_css('.icon { background: url("./@file/4-icon.svg"); }')
+        portable_css(
+            '.icon { background: url("./@file/4-icon.svg"); }',
+            read_file=lambda _virtual_file: b"x",
+        )
     with pytest.raises(ValueError, match="virtual files must be bundled"):
-        portable_assets.portable_css('@import "./@file/12-theme.css";')
+        portable_css('@import "./@file/12-theme.css";', read_file=_unread)

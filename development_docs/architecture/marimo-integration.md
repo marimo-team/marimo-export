@@ -280,6 +280,47 @@ context stream restoration, and stream shutdown in order. A primary execution
 error remains primary while cleanup failures are attached as bounded
 diagnostics.
 
+## marimo file URLs
+
+marimo writes virtual file URLs and notebook `public/` URLs into outputs.
+`_marimo/file_urls.py` parses them as marimo's output URL contract, with no
+private marimo import.
+
+| Form               | Example                                | marimo 0.25.2 source                                                                                                                              |
+| ------------------ | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Virtual file       | `./@file/29676-test.png`               | `VirtualFile.url` ([virtual_file.py:69](https://github.com/marimo-team/marimo/blob/0.25.2/marimo/_runtime/virtual_file/virtual_file.py#L69))      |
+| Empty virtual file | `@file/0-empty.txt`                    | `EMPTY_VIRTUAL_FILE` ([virtual_file.py:123](https://github.com/marimo-team/marimo/blob/0.25.2/marimo/_runtime/virtual_file/virtual_file.py#L123)) |
+| Public file        | `public/logo.png`, `./public/logo.png` | `_PUBLIC_FILE_PATTERN` ([dom_traversal.py:301](https://github.com/marimo-team/marimo/blob/0.25.2/marimo/_convert/common/dom_traversal.py#L301))   |
+
+`VirtualFileUrl.parse(url, prefixes)` reads the `<byte length>-<filename>`
+path segment after one of the caller's `VirtualFilePrefix` values with
+marimo's `(\d+)-(.+)` pattern
+([dom_traversal.py:161](https://github.com/marimo-team/marimo/blob/0.25.2/marimo/_convert/common/dom_traversal.py#L161)),
+capped at 20 digits. The server route splits the same segment at its first
+hyphen ([assets.py:581](https://github.com/marimo-team/marimo/blob/0.25.2/marimo/_server/api/endpoints/assets.py#L581)).
+Each caller accepts the prefixes marimo can write on its path:
+
+| Caller                | Prefixes                        | Reason                                                                                                                                                                                 |
+| --------------------- | ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Snapshot file closure | `./@file/`, `@file/`            | Registered files and the empty file. A zero-length file closes to an empty data URL.                                                                                                   |
+| AnyWidget ESM capture | `./@file/`                      | marimo registers inline `_esm` source. An `_esm` URL carries the hash of its URL text and fails the content hash check.                                                                |
+| AnyWidget CSS capture | `./@file/`, `/@file/`, `@file/` | Author-written CSS. marimo's frontend trusts all three prefixes ([trusted-url.ts:31](https://github.com/marimo-team/marimo/blob/0.25.2/frontend/src/plugins/core/trusted-url.ts#L31)). |
+| Transfer              | `./@file/`                      | marimo-export registers each transfer file and compares the exact URL.                                                                                                                 |
+
+`PublicFileUrl.resolve(notebook_directory)` applies the containment rule of
+`_resolve_public_file`
+([dom_traversal.py:304-329](https://github.com/marimo-team/marimo/blob/0.25.2/marimo/_convert/common/dom_traversal.py#L304-L329)).
+The path must be relative, and the regular file it resolves to after following
+symlinks must stay inside `<notebook directory>/public`. A `..` segment that
+stays inside `public/` resolves. Absolute, drive, and UNC paths, paths that
+resolve outside `public/`, symlink loops, directories, and missing files return `None`.
+
+`compat/` keeps the kernel reads: `read_virtual_file` and the virtual file
+registry walk in `compat/file_closure.py`. `exporters/_anywidget_assets.py`
+validates AnyWidget ESM and CSS and receives the virtual file reader from
+`compat/anywidget.py`. Recheck the cited lines when the supported marimo
+release changes.
+
 ## Child runs consume the cache adapter
 
 [Execution and caching](execution-and-caching.md) owns the loader, graph scope,

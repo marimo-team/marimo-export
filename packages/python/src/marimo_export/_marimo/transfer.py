@@ -7,13 +7,13 @@ import time
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from typing import Any, Protocol, cast
-from urllib.parse import urlsplit
 from uuid import uuid4
 
 from marimo_export._diagnostics import record_cleanup_failure
 from marimo_export._json import JsonObject
 from marimo_export._limits import MAX_EXPORT_ASSET_BYTES, MAX_EXPORT_CLOSURE_BYTES
 from marimo_export._marimo.capabilities import NativeReceipt, TransferRuntime
+from marimo_export._marimo.file_urls import VirtualFileUrl
 from marimo_export.descriptors import JsonDescriptor, OutputCodec, ScalarDescriptor
 from marimo_export.errors import IntegrityError
 
@@ -25,6 +25,9 @@ _MAX_ACTIVE_TICKETS = 64
 _MAX_ACTIVE_TRANSFER_BYTES = 2 * MAX_EXPORT_CLOSURE_BYTES
 _MAX_VIRTUAL_FILE_URL_LENGTH = 2048
 _TICKET_ID = re.compile(r"[0-9a-f]{32}")
+# The ticket URL carries the filename verbatim. marimo names transfer files
+# `<thread id>-<random letters and digits>.bin`.
+_TRANSFER_FILENAME = re.compile(r"[A-Za-z0-9._-]{1,251}\.bin")
 
 
 class _VirtualFile(Protocol):
@@ -318,25 +321,11 @@ def _validate_virtual_file(virtual_file: _VirtualFile, payload: bytes) -> None:
     url = virtual_file.url
     if virtual_file.buffer != payload:
         raise IntegrityError("marimo changed the transfer virtual-file bytes")
-    if (
-        not isinstance(filename, str)
-        or not filename
-        or len(filename) > 255
-        or not filename.endswith(".bin")
-        or any(character in filename for character in ("/", "\\", "\x00"))
-    ):
+    if not isinstance(filename, str) or _TRANSFER_FILENAME.fullmatch(filename) is None:
         raise IntegrityError("marimo produced an invalid transfer filename")
     if not isinstance(url, str) or not url or len(url) > _MAX_VIRTUAL_FILE_URL_LENGTH:
         raise IntegrityError("marimo produced an invalid transfer URL")
-    parsed = urlsplit(url)
-    prefix = f"./@file/{len(payload)}-"
-    if (
-        parsed.scheme
-        or parsed.netloc
-        or parsed.query
-        or parsed.fragment
-        or parsed.path != f"{prefix}{filename}"
-    ):
+    if url != VirtualFileUrl(len(payload), filename).url:
         raise IntegrityError("marimo virtual-file transfer requires a relative @file URL")
 
 

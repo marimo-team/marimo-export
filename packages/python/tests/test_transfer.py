@@ -85,6 +85,42 @@ def _asset_receipt(name: str, payload: bytes) -> NativeReceipt:
     )
 
 
+@pytest.mark.parametrize(
+    ("filename", "url"),
+    [
+        ("asset.bin", "./@file/5-asset.bin?download=1"),
+        ("asset.bin", "./@file/5-asset.bin#part"),
+        ("asset.bin", "/@file/5-asset.bin"),
+        ("asset.bin", "https://marimo.test/@file/5-asset.bin"),
+        ("asset.bin", "./@file/6-asset.bin"),
+        ("asset?.bin", "./@file/5-asset?.bin"),
+        ("asset#.bin", "./@file/5-asset#.bin"),
+        ("as\tset.bin", "./@file/5-as\tset.bin"),
+        ("as set.bin", "./@file/5-as set.bin"),
+    ],
+)
+def test_transfer_rejects_virtual_files_outside_the_relative_url_form(
+    monkeypatch: pytest.MonkeyPatch,
+    filename: str,
+    url: str,
+) -> None:
+    registry = _Registry()
+    host = _Host(registry)
+    monkeypatch.setattr(
+        host,
+        "create_virtual_file",
+        lambda data: _File(filename=filename, buffer=data, url=url),
+    )
+    transfer._TICKETS.clear()
+    try:
+        with pytest.raises(IntegrityError, match="marimo"):
+            create_ticket([_asset_receipt("first", b"first")], host=host)
+
+        assert registry.files == {}
+    finally:
+        transfer._TICKETS.clear()
+
+
 def test_transfer_registration_cancellation_retains_failed_cleanup_lease(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
