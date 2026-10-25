@@ -174,21 +174,21 @@ def test_attached_marimo_exposes_live_capture_capabilities() -> None:
 
 
 @pytest.mark.parametrize(
-    ("record", "capability"),
+    ("module", "record", "capability"),
     [
-        ("AppInstantiation", "child_sessions"),
-        ("CellDef", "synthetic_output_cells"),
-        ("NotebookSerializationV1", "child_sessions"),
+        ("commands", "UpdateUIElementCommand", "child_ui_updates"),
+        ("schemas.serialization", "AppInstantiation", "child_sessions"),
+        ("schemas.serialization", "CellDef", "synthetic_output_cells"),
+        ("schemas.serialization", "NotebookSerializationV1", "child_sessions"),
     ],
 )
-def test_missing_serialization_record_reports_its_capability(
+def test_missing_internal_record_reports_its_capability(
     monkeypatch: pytest.MonkeyPatch,
+    module: str,
     record: str,
     capability: str,
 ) -> None:
-    from marimo._internal.schemas import serialization
-
-    monkeypatch.delattr(serialization, record)
+    monkeypatch.delattr(f"marimo._internal.{module}.{record}")
 
     with pytest.raises(CompatibilityError) as raised:
         create_kernel_runtime().require_capabilities()

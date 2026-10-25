@@ -209,7 +209,7 @@ def require_capabilities() -> MarimoCapabilities:
             _resolve_public_file,
             replace_html_attributes,
         )
-        from marimo._internal.commands import UpdateUIElementCommand
+        from marimo._internal import commands
         from marimo._internal.schemas import serialization
         from marimo._internal.session import SessionView
         from marimo._messaging.cell_output import CellOutput
@@ -247,11 +247,12 @@ def require_capabilities() -> MarimoCapabilities:
         (load_notebook_ir, "child_sessions"),
         (prune_cells_for_overrides, "definition_overrides"),
         (hash_module, "cell_cache_receipts"),
-        # marimo snapshots `serialization` by module name only, so probe its members.
+        # Probe members by name so a missing record reports its capability. marimo
+        # snapshots `serialization` by module name only.
+        (getattr(commands, "UpdateUIElementCommand", None), "child_ui_updates"),
         (getattr(serialization, "AppInstantiation", None), "child_sessions"),
         (getattr(serialization, "CellDef", None), "synthetic_output_cells"),
         (getattr(serialization, "NotebookSerializationV1", None), "child_sessions"),
-        (UpdateUIElementCommand, "child_ui_updates"),
         (CellOutput, "projection_snapshots"),
         (KernelStreams, "projection_snapshots"),
         (SessionView, "projection_snapshots"),
