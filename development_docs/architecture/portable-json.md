@@ -48,11 +48,16 @@ them to mutate an object's prototype.
 The private TypeScript workspace root exposes:
 
 ```text
-portableJsonValue(input, path?)
-portableJsonObject(input, path?)
+portableJsonValue(input, path?, maximumValues?)
+portableJsonObject(input, path?, maximumValues?)
 parseStrictJson(source, maximumValues?)
 parsePortableJson(source)
 ```
+
+`maximumValues` defaults to 100,000. A document owner passes its own limit, as
+the export index reader does with 2,000,000 on both strict parsing and
+conversion. Python `json_value()`, `json_object()`, `canonical_bytes()`, and
+`decode_json()` take the same limit as `max_values`.
 
 For valid `JsonValue` input, `portableJsonValue()` and `portableJsonObject()`
 detach the accepted tree and recursively freeze the JavaScript result.

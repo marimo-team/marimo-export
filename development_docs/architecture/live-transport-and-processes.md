@@ -234,6 +234,10 @@ one known operation, and an object of operation-specific parameters. The client
 uses a random response marker plus the request ID to reject missing, duplicated,
 or mismatched responses.
 
+A capture response carries the export index as its canonical `index.json`
+text. The client parses that text with `ExportIndex.from_bytes()`, so a captured
+index meets the same byte, value, and canonical-form checks as a file.
+
 The client submits each scratchpad operation once. It performs no automatic
 retry after a transport failure. A timeout or broken response stream can leave
 the remote scratchpad operation running, so caller retry is a new operation with

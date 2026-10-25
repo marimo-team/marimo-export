@@ -15,6 +15,7 @@ from marimo_export.errors import (
     CompatibilityError,
     ExecutionError,
     IntegrityError,
+    NotebookExportError,
     OutputError,
     SessionError,
     SpecError,
@@ -396,6 +397,8 @@ def _bridge_error(error: BridgeError) -> Exception:
         return ExecutionError(str(error), **kwargs)
     if code.startswith("integrity_"):
         return IntegrityError(str(error), **kwargs)
+    if code.startswith("export_"):
+        return NotebookExportError(str(error), **kwargs)
     return SessionError(str(error), **kwargs)
 
 

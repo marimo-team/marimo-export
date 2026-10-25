@@ -96,6 +96,22 @@ def _json_value(
     raise TypeError(f"{path} must be JSON-compatible, got {type(value).__name__}")
 
 
+def json_value_count(value: JsonValue) -> int:
+    """Return the count that ``max_values`` bounds: every value and object key."""
+
+    count = 0
+    pending = [value]
+    while pending:
+        item = pending.pop()
+        count += 1
+        if isinstance(item, dict):
+            count += len(item)
+            pending.extend(item.values())
+        elif isinstance(item, list):
+            pending.extend(item)
+    return count
+
+
 def _count_json_value(count: list[int], path: str, max_values: int) -> None:
     count[0] += 1
     if count[0] > max_values:
@@ -174,8 +190,13 @@ def json_string(value: object, path: str = "value") -> str:
     return value
 
 
-def json_object(value: object, path: str = "value") -> JsonObject:
-    parsed = json_value(value, path)
+def json_object(
+    value: object,
+    path: str = "value",
+    *,
+    max_values: int = _MAX_JSON_VALUES,
+) -> JsonObject:
+    parsed = json_value(value, path, max_values=max_values)
     if not isinstance(parsed, dict):
         raise TypeError(f"{path} must be an object")
     return parsed

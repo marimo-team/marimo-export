@@ -37,12 +37,14 @@ from marimo_export._json import (
     decode_json_object,
     json_object,
     json_string,
+    json_value_count,
     portable_json_object,
     portable_json_value,
 )
 from marimo_export._limits import MAX_CONTROL_ID_BYTES as _MAX_CONTROL_ID_BYTES
 from marimo_export._limits import MAX_CONTROL_OPTIONS as _MAX_CONTROL_OPTIONS
 from marimo_export._limits import MAX_INDEX_BYTES as _MAX_INDEX_BYTES
+from marimo_export._limits import MAX_INDEX_VALUES as _MAX_INDEX_VALUES
 from marimo_export._limits import MAX_NAME_BYTES as _MAX_NAME_BYTES
 from marimo_export._portable import validate_portable_basename
 from marimo_export.descriptors import (
@@ -68,7 +70,6 @@ from marimo_export.errors import NotebookExportError
 from marimo_export.wire import FrozenJsonValue, _freeze_json, state_fingerprint
 
 EXPORT_SCHEMA = "marimo-export.export.v1"
-_MAX_INDEX_VALUES = 2_000_000
 _MAX_SAFE_INTEGER = 2**53 - 1
 _MAX_CONTROL_PATH_STEPS = 256
 
@@ -404,7 +405,16 @@ class ExportIndex:
         }
 
     def to_bytes(self) -> bytes:
-        data = canonical_bytes(self.to_value())
+        value = self.to_value()
+        values = json_value_count(value)
+        if values > _MAX_INDEX_VALUES:
+            raise NotebookExportError(
+                f"export index holds {values:,} JSON values, more than the "
+                f"{_MAX_INDEX_VALUES:,}-value limit, so export fewer states or outputs",
+                code="export_invalid",
+                details={"index_values": values, "max_index_values": _MAX_INDEX_VALUES},
+            )
+        data = canonical_bytes(value, max_values=_MAX_INDEX_VALUES)
         if len(data) > _MAX_INDEX_BYTES:
             raise NotebookExportError(
                 f"canonical index exceeds {_MAX_INDEX_BYTES} bytes",
@@ -415,7 +425,7 @@ class ExportIndex:
     @classmethod
     def from_value(cls, value: object) -> ExportIndex:
         try:
-            root = json_object(value, "export")
+            root = json_object(value, "export", max_values=_MAX_INDEX_VALUES)
             _exact_fields(
                 root,
                 {

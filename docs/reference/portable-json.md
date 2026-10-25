@@ -60,6 +60,9 @@ its representation bytes before returning a `JsonValue`.
 | Integer magnitude                         | JavaScript safe-integer range |
 | Strict JSON number lexeme                 |              1,024 characters |
 
+The value limit is the default for one tree. `index.json` has its own
+2,000,000-value limit, listed in [Export format](export-format#protocol-limits).
+
 Conversion rejects sparse arrays, active container cycles, nonfinite numbers,
 unsafe integers, invalid Unicode strings, and incompatible object types. A
 repeated container reference is copied at each position. Object keys such as

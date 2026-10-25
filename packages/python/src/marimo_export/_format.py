@@ -6,8 +6,9 @@ import keyword
 import re
 from collections.abc import Mapping, Sequence
 from pathlib import PurePosixPath, PureWindowsPath
+from typing import cast
 
-from marimo_export._json import JsonObject, json_object, json_string
+from marimo_export._json import JsonObject, json_string
 from marimo_export._limits import MAX_NAME_BYTES, MAX_PROVENANCE_BYTES
 
 SHA256 = re.compile(r"[0-9a-f]{64}")
@@ -21,7 +22,11 @@ _EDGE_WHITESPACE = frozenset(
 
 
 def object_value(value: object, path: str) -> JsonObject:
-    return json_object(value, path)
+    """Narrow one member of a JSON tree that ``json_object`` already validated."""
+
+    if not isinstance(value, dict):
+        raise TypeError(f"{path} must be an object")
+    return cast(JsonObject, value)
 
 
 def exact_fields(value: Mapping[str, object], expected: set[str], path: str) -> None:

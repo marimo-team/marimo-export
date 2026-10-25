@@ -379,6 +379,7 @@ async def _capture(spec: ExportSpec, adapters: KernelAdapters) -> JsonObject:
         aliases=aliases,
         states=states,
     )
+    index_bytes = index.to_bytes()
     ticket = create_ticket(receipts, host=adapters.transfer)
     output_cache = CacheSummary(
         hits=sum(receipt.disposition == "hit" for receipt in receipts),
@@ -397,7 +398,7 @@ async def _capture(spec: ExportSpec, adapters: KernelAdapters) -> JsonObject:
         cleanup_seconds=state_cleanup_seconds,
     )
     return {
-        "index": index.to_value(),
+        "index": index_bytes.decode("utf-8"),
         "transfer": ticket.wire(),
         "output_cache": {
             "hits": output_cache.hits,

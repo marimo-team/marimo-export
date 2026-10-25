@@ -5,7 +5,12 @@ import { resolveOutputLoader } from "./loader.js";
 import { parseMediaType } from "./media-type.js";
 import { parseStrictJson, portableJsonObject } from "@marimo-team/portable-json";
 import type { JsonObject, JsonValue } from "@marimo-team/portable-json";
-import { canonicalJson, compareUnicodeScalarStrings, parseExportIndex } from "./schema.js";
+import {
+  canonicalJson,
+  compareUnicodeScalarStrings,
+  INDEX_MAX_VALUES,
+  parseExportIndex,
+} from "./schema.js";
 import type { ParsedExportIndex, ParsedState } from "./schema.js";
 import { fetchBytes, normalizeBase, resolveExportUrl } from "./transport.js";
 import type {
@@ -26,7 +31,6 @@ import { isNotebookExportError, NotebookExportError } from "./types.js";
 import { isCallableValue } from "./value-types.js";
 
 const INDEX_MAX_BYTES = 16 * 1024 * 1024;
-const INDEX_MAX_VALUES = 2_000_000;
 const DEFAULT_ASSET_MAX_BYTES = 512 * 1024 * 1024;
 const HARD_ASSET_MAX_BYTES = 2_147_483_647;
 const DEFAULT_VERIFY_MAX_BYTES = 2 * 1024 * 1024 * 1024;
