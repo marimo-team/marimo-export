@@ -22,24 +22,27 @@ flowchart LR
     adapters --> marimo
 ```
 
-| Boundary                   | Stable contract                                         | Adapter owner                      |
-| -------------------------- | ------------------------------------------------------- | ---------------------------------- |
-| Saved inspection           | `NotebookCell` rows for one saved notebook              | `compat/inspection.py`             |
-| Run observation            | `KernelRun` delivered by `subscribe_run_finished`       | `compat/observations.py`           |
-| Kernel inspection          | `MarimoCapabilities`, `Baseline`, definition records    | `compat/inspection.py`             |
-| Exporter kernel reads      | `ExporterRuntime` globals, state, and code digests      | `compat/exporters.py`              |
-| State orchestration        | `NormalizedState`, `ExecutionPlan`, `StateExecution`    | `compat/execution.py`              |
-| Child-run lifecycle        | Cache activity, execution, cleanup, and error status    | `compat/child_run.py`              |
-| Native receipt decoding    | Stable cache bytes and export descriptors               | `compat/receipts.py`               |
-| Cache codec adaptation     | Native loader, lifecycle, attempt, barrier, and receipt | `compat/cache/`                    |
-| Interactive host cache     | UI, Polars, and tensor restore capability               | `compat/cache/host.py`             |
-| Projection materialization | Recording, formatting, and canonical snapshot bytes     | `compat/projections.py`            |
-| Replay resource closure    | Model, function, file, and UI replay resources          | `compat/replay.py`                 |
-| Structured output data     | Identifier rewriting and portable output values         | `compat/output_data.py`            |
-| Snapshot file closure      | Virtual and notebook public file inlining               | `compat/file_closure.py`           |
-| AnyWidget capture          | One live widget graph as canonical bytes                | `compat/anywidget.py`              |
-| Transfer                   | Temporary virtual files described by verified receipts  | `compat/transfer.py`               |
-| Managed process            | Runtime filename and kernel lifespan                    | managed server and kernel adapters |
+| Boundary                   | Stable contract                                         | Adapter owner              |
+| -------------------------- | ------------------------------------------------------- | -------------------------- |
+| Saved inspection           | `NotebookCell` rows for one saved notebook              | `compat/inspection.py`     |
+| Run observation            | `KernelRun` delivered by `subscribe_run_finished`       | `compat/observations.py`   |
+| Kernel inspection          | `MarimoCapabilities`, `Baseline`, definition records    | `compat/inspection.py`     |
+| Exporter kernel reads      | `ExporterRuntime` globals, state, and code digests      | `compat/exporters.py`      |
+| State orchestration        | `NormalizedState`, `ExecutionPlan`, `StateExecution`    | `compat/execution.py`      |
+| Child-run lifecycle        | Cache activity, execution, cleanup, and error status    | `compat/child_run.py`      |
+| Native receipt decoding    | Stable cache bytes and export descriptors               | `compat/receipts.py`       |
+| Cache codec adaptation     | Native loader, lifecycle, attempt, barrier, and receipt | `compat/cache/`            |
+| Interactive host cache     | UI, Polars, and tensor restore capability               | `compat/cache/host.py`     |
+| Projection materialization | Recording, formatting, and canonical snapshot bytes     | `compat/projections.py`    |
+| Replay resource closure    | Model, function, file, and UI replay resources          | `compat/replay.py`         |
+| Structured output data     | Identifier rewriting and portable output values         | `compat/output_data.py`    |
+| Snapshot file closure      | Virtual and notebook public file inlining               | `compat/file_closure.py`   |
+| AnyWidget capture          | One live widget graph as canonical bytes                | `compat/anywidget.py`      |
+| Native blob values         | `BlobAsset` and JSON exporter results as native blobs   | `compat/blob.py`           |
+| Transfer                   | Temporary virtual files described by verified receipts  | `compat/transfer.py`       |
+| Attached kernel runtime    | `KernelRuntime` composed from the kernel adapters       | `compat/kernel.py`         |
+| Managed server             | Authored notebook as the runtime filename               | `compat/managed_server.py` |
+| Managed kernel lifespan    | Cache activation inside the owned kernel                | `compat/managed_kernel.py` |
 
 Compat adapters import each marimo object from the most stable surface that
 exposes it. The public `marimo` namespace comes first, such as
@@ -59,13 +62,37 @@ every other `marimo._*` import.
 `_marimo/anywidget.py` and `_marimo/blob.py` own narrow representation
 bindings. `_marimo/entrypoints.py` selects the managed kernel lifespan.
 
+## Release gate
+
+`_marimo/compat/cache/probe.py` checks the installed marimo distribution
+version and the SHA-256 of the source of each private symbol that
+`release.json` lists. A drifted symbol fails with `marimo_incompatible`, and
+the error details name it under `symbols`. The probe also checks the receipt
+schema fields, Polars stub loaders, and the other capabilities listed in
+[Execution and caching](execution-and-caching.md).
+
+The version check alone accepts unreleased marimo source. marimo `main` at
+`a61726dcda47` (2026-10-24) still declares version 0.25.2 in `pyproject.toml`,
+and the probe rejects it for three digests: `CachedLifecycle.setup`,
+`LazyLoader._effective_verification`, and
+`LazyLoader._resolve_effective_signer`. The digest set identifies the
+supported Python sources more precisely than the version does.
+
+The digests cover Python sources only. Wire formats sit outside them. marimo
+#11378 on `main` sends kernel notifications on `/sse` as `event: marimo` with
+`{"marimo": {"op": ..., ...}}` data, while `_SessionStream` in
+`_remote/managed.py` reads `op` and `data` at the top level and would miss
+`kernel-ready` on `main`. Refresh the digests together with the version
+pin, adapter tests, and live build and capture evidence.
+
 ## Exporter preparation
 
 `exporters/_prepare.py` resolves each selected exporter callable and its
 declared dependency modules. `exporters/_identity.py` freezes their loaded
 sources, computes the exporter identity, and raises `exporter_source_changed`
 when a frozen source changes before the kernel restarts. Both read marimo
-through the `ExporterRuntime` port that `compat/exporters.py` implements:
+through the `ExporterRuntime` port. `PrivateKernelRuntime` in
+`compat/kernel.py` implements it with the kernel reads in `compat/exporters.py`:
 
 | Call                       | Result                                                                         |
 | -------------------------- | ------------------------------------------------------------------------------ |
@@ -95,12 +122,24 @@ path steps so browser updates can route back to one root input. Inspection
 rejects duplicate authored cell names. Runtime IDs select unnamed cells or an
 exact live cell instance.
 
-`document_sha256()` reads one revision-stable byte snapshot and passes it to the
-adapter with the authored path as its logical filename. The compatibility
-adapter parses those bytes and passes ordered cell IDs, code, names, and config
-through the same canonical record hasher used by live inspection. The caller
-rechecks the source hash and file revision after parsing. It starts no session
-and executes no cell.
+`document_sha256()` reads one revision-stable byte snapshot and passes it to
+`saved_cells` with the authored path as its logical filename. The compat
+adapter parses those bytes into ordered `NotebookCell` rows. `_notebook.py`
+hashes them with `cells_document_sha256()`, the same function that
+`inspect_baseline` applies to the live cells. The caller rechecks the source
+hash and file revision after parsing. It starts no session and executes no
+cell.
+
+The observation ledger subscribes to `KernelRun` records and applies its
+success, scratch, source-binding, and saved-cell matching rules in
+`_observations/runs.py` and `_observations/source.py`.
+
+`marimo_export.integration.observe_kernel_inputs(kernel)` is the host boundary
+for live state ledgers. It accepts a kernel-shaped object with `graph` and
+`globals`, then returns immutable portable root values and typed live control
+bindings. The compat inspector owns UI traversal, AnyWidget frontend values,
+input dependencies, canonical root ownership, and sensitive-tree exclusion.
+Ordinary globals are outside this finish-hook path.
 
 ## OwnedNotebook owns the process tree
 
@@ -152,19 +191,6 @@ ordinary globals.
 `marimo_export.integration.is_owned_session()` exposes the managed-kernel
 lifecycle to host integrations. The marker is set in the child environment
 passed to `ManagedServer` and remains absent from its parent process.
-
-`_notebook.py` computes the canonical document digest from `NotebookCell`
-rows, both for a saved notebook and for the live cells that `inspect_baseline`
-reads. The observation ledger subscribes to `KernelRun` records and applies its
-success, scratch, source-binding, and saved-cell matching rules in
-`_observations/runs.py` and `_observations/source.py`.
-
-`marimo_export.integration.observe_kernel_inputs(kernel)` is the host boundary
-for live state ledgers. It accepts a kernel-shaped object with `graph` and
-`globals`, then returns immutable portable root values and typed live control
-bindings. The compat inspector owns UI traversal, AnyWidget frontend values,
-input dependencies, canonical root ownership, and sensitive-tree exclusion.
-Ordinary globals are outside this finish-hook path.
 
 The caller's startup path remains intact. A project `sitecustomize` retains its
 normal behavior.
