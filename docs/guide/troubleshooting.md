@@ -195,7 +195,10 @@ still be running, so marimo-export does not retry it automatically.
 `bridge_version_mismatch` means the client and selected kernel loaded different
 marimo-export versions or source identities. Restart the server in the same
 environment as the client. `implementation_changed` means local package source
-changed during the operation. Restart the client process and repeat the check.
+changed during the operation, or the kernel resolved an imported module that the
+client cannot find. Restart the client process and repeat the check. Keep helper
+modules in the notebook directory, the project's `src` directory or root, or on
+`PYTHONPATH` so both processes resolve them.
 
 ## The browser cannot fetch the export
 

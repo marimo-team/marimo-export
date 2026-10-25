@@ -45,7 +45,7 @@ async def kernel_lifespan(_: None) -> AsyncIterator[None]:
     if not isinstance(context, KernelRuntimeContext) or context.filename is None:
         raise RuntimeError("managed cache integration requires a file-backed marimo kernel")
     require_cache_capabilities()
-    environment = environment_identity(Path(context.filename), exclude_source=True)
+    environment = environment_identity(Path(context.filename))
     release_stop_provenance = install_parent_stop_provenance(context)
     try:
         with managed_cache_compat(context._kernel._hooks, context.graph, environment=environment):

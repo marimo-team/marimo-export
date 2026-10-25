@@ -123,7 +123,7 @@ def test_owned_capture_rejects_dependency_drift_before_state_commit(
     spec = _spec(states={"baseline": {"choice": "A"}})
     notebook = tmp_path / "notebook.py"
     dependency = tmp_path / "dependency.py"
-    _identity_notebook(notebook)
+    _identity_notebook(notebook, "dependency")
     dependency.write_text("VALUE = 1\n", encoding="utf-8")
     preflight = preflight_plan(notebook, spec)
     producer = _FakeProducer(
@@ -163,7 +163,7 @@ def test_owned_capture_rejects_dependency_drift_before_generation_commit(
     spec = _spec(states={"baseline": {"choice": "A"}})
     notebook = tmp_path / "notebook.py"
     dependency = tmp_path / "dependency.py"
-    _identity_notebook(notebook)
+    _identity_notebook(notebook, "dependency")
     dependency.write_text("VALUE = 1\n", encoding="utf-8")
     preflight = preflight_plan(notebook, spec)
     guard_calls = 0

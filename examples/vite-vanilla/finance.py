@@ -9,6 +9,9 @@
 #     "yfinance==1.3.0",
 # ]
 # requires-python = ">=3.10"
+#
+# [tool.marimo-export]
+# imports = ["market_summary"]
 # ///
 
 import marimo

@@ -91,8 +91,10 @@ producer identity + output-plan identity + ExportSpec identity
 ```
 
 The producer identity covers the notebook source and document, the installed
-marimo and marimo-export implementations, Python and platform facts, installed
-distribution versions, and relevant local source files. The output-plan
+marimo-export implementation, Python and platform facts, and the distributions
+and local modules that the notebook imports. [What the producer environment
+covers](../concepts/preparation-and-reuse#what-the-producer-environment-covers)
+defines that scope. The output-plan
 identity covers the output declarations. The ExportSpec identity covers the
 complete requested relation.
 
@@ -108,9 +110,10 @@ artifact.
 
 Exact reuse also means the notebook performs no data refresh and imports no
 exporter module. A different output destination does not change the repository
-identity. When freshness depends on mutable files, services, or custom exporter
-source outside the producer source roots, include a version or digest in notebook
-source, an exported input, or the affected cell's marimo computation-cache key.
+identity. Declare a custom exporter module that the notebook never imports in
+the notebook's `[tool.marimo-export] imports` metadata. When freshness depends
+on mutable files or services, include a version or digest in notebook source, an
+exported input, or the affected cell's marimo computation-cache key.
 A separate export repository forces notebook startup, but a matching marimo
 computation-cache key can still restore a prior cell result.
 

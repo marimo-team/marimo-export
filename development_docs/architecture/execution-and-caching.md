@@ -178,10 +178,12 @@ exist only inside one active scope.
 
 ### Dependency identity enters native lookup
 
-`_environment.py` fingerprints installed distribution versions and discovered
-local Python dependencies. Native cache lookup excludes the authored notebook
-from that digest. Marimo hashes notebook cells and their reactive references
-individually, so an unrelated notebook edit preserves reusable computations.
+`_environment.py` fingerprints the distribution closure and local module
+sources reachable from the notebook's imports, as described in
+[Producer environment sources](identities-and-protocols.md#producer-environment-sources).
+The authored notebook stays out of that digest. Marimo hashes notebook cells and
+their reactive references individually, so a notebook edit that keeps the import
+set preserves reusable computations.
 
 The managed parent freezes this dependency identity before its initial autorun.
 State children reuse that identity. A borrowed child freezes the identity from
@@ -192,9 +194,11 @@ persists the result through its native loader. The executed cell and notebook
 globals retain their authored form.
 
 This input covers local modules whose `__version__` stays constant or is absent,
-including imports inside a cell body. Changing a helper source or installed
-distribution invalidates automatic cell-cache entries before they can populate
-a new prepared export. State vectors, output declarations, and notebook source remain outside
+including imports inside a cell body. Marimo's own cell hash records an imported
+module by name, and by `__version__` only for `pin_modules`. Changing an
+imported helper source or a distribution in the closure invalidates automatic
+cell-cache entries before they can populate a new prepared export. Adding an
+import of a module outside the current scope changes the digest too. State vectors, output declarations, and notebook source remain outside
 the dependency digest, preserving native reuse across state combinations and
 output plans. Native entries created outside this scoped integration have a
 different key because they carry different dependency provenance.

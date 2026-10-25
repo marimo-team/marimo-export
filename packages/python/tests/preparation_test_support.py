@@ -123,15 +123,16 @@ def _entry(inputs: JsonObject) -> StateEntry:
     )
 
 
-def _identity_notebook(path: Path) -> None:
+def _identity_notebook(path: Path, *imports: str) -> None:
+    statements = "".join(f"    import {name}\n" for name in imports)
     path.write_text(
-        """import marimo
+        f"""import marimo
 
 app = marimo.App()
 
 @app.cell
 def _():
-    answer = "A"
+{statements}    answer = "A"
     return (answer,)
 """,
         encoding="utf-8",
