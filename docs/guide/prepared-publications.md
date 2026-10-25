@@ -293,8 +293,8 @@ await controller.updateQuery(location.search).catch((error) => console.warn(erro
 The start commit leaves the URL unchanged so `updateQuery()` can read the shared
 link. With `days` as the varying input, `updateInputs({ days: 7 })` turns
 `/?view=print` into `/?view=print&days=7`, and reloading that URL selects the
-weekly state. A link that names no exported value leaves the manifest state
-visible. The [`formatPreparedQuery()` reference](../reference/browser/prepared-publications#formatpreparedquery-state-query)
+weekly state. A `days` value that matches no exported state rejects
+`updateQuery()` with `query_miss` and leaves the manifest state visible. The [`formatPreparedQuery()` reference](../reference/browser/prepared-publications#formatpreparedquery-state-query)
 lists the text rules and the cases that change a link's meaning.
 
 Dispose the browser owners in reverse construction order:

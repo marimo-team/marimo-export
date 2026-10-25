@@ -399,8 +399,9 @@ await controller.updateQuery(location.search).catch((error) => console.warn(erro
 rejects the transition with the previous view still visible. The start commit
 leaves the URL unchanged, and `updateQuery()` then applies the state the link
 names. A shared link therefore commits the manifest state first and the linked
-state second. A link that names no exported value rejects `updateQuery()` and
-leaves the manifest state committed.
+state second. A URL without input parameters makes `updateQuery()` return
+`false`. An input parameter whose value matches no exported value rejects
+`updateQuery()` with `query_miss` and leaves the manifest state committed.
 
 When `interval` is the only input that varies, a page at `?tab=chart` that
 commits `{ interval: "1wk" }` shows `?tab=chart&interval=1wk`. Reloading that
