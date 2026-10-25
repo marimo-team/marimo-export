@@ -92,7 +92,9 @@ STATIC_APP_PYTHONPATH="$STATIC_APP_DIR${PYTHONPATH:+:$PYTHONPATH}"
 ## Capture an open notebook
 
 Start the notebook with the environment and custom exporter modules available.
-List its sessions:
+When the server keeps marimo's default token authentication, set
+`MARIMO_EXPORT_ACCESS_TOKEN` to the `access_token` value from the printed URL
+before running `inspect` or `capture`. List its sessions:
 
 ```bash
 NOTEBOOK_PORT=2718

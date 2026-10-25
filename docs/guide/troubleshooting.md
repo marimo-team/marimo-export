@@ -14,6 +14,7 @@ details, and cause before changing files or clearing repository state.
 | `state_input_invalid`, `state_not_found`, `state_unavailable`                           | [Inspect state selection](#a-state-cannot-be-resolved)                    |
 | `export_invalid` with `index_values` or `index_bytes`                                   | [Reduce the export](#the-export-cannot-fit-the-index)                     |
 | `destination_exists`, `destination_changed`, `export_commit_failed`                     | [Inspect the destination](#the-destination-cannot-commit)                 |
+| `repository_busy`                                                                       | [Inspect repository coordination](#the-repository-is-busy-or-unavailable) |
 | `repository_limit_exceeded`, `repository_reservation_timeout`, `repository_fence_stale` | [Inspect repository coordination](#the-repository-is-busy-or-unavailable) |
 | `observation_rejected`, `observation_persistence_failed`                                | [Inspect observation recording](#an-observation-was-not-retained)         |
 | `manifest_invalid`, `manifest_read_failed`, `query_ambiguous`, `query_miss`             | [Inspect the prepared publication](#a-prepared-publication-cannot-update) |
@@ -178,7 +179,7 @@ repository integrity error also requires reopening or preparing the export again
 The dry run covers prepared states, export generations, and bytes. A live prune can
 also remove producer records and their observation history. Export that history
 before pruning when it must be retained. Active artifact leases protect their
-files. [Manage repository reuse](manage-repository) describes the retained
+files. [Repository storage](manage-repository) describes the retained
 data and clear scope.
 
 For `repository_limit_exceeded`, close unused prepared exports and prepared

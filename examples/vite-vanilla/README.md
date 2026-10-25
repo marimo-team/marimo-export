@@ -56,7 +56,15 @@ Start the notebook:
 pnpm run notebook
 ```
 
-After the notebook finishes loading, list its session from another terminal:
+`marimo edit` requires its access token. In another terminal, set
+`MARIMO_EXPORT_ACCESS_TOKEN` to the `access_token` value from the printed URL,
+and use that URL's host and port if marimo chose a port other than 2718:
+
+```bash
+export MARIMO_EXPORT_ACCESS_TOKEN="..."
+```
+
+After the notebook finishes loading, list its session from that terminal:
 
 ```bash
 uv run --locked --package marimo-export-vite-vanilla-example \

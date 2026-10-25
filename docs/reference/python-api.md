@@ -39,6 +39,7 @@ with their display methods.
 | ----------------------------------------------------------------------- | ----------------------------------------------------------------- |
 | Define states and outputs, plan work, prepare, or build                 | [Produce an export](python/produce)                               |
 | Open states and decode outputs                                          | [Read and verify exports](python/reader)                          |
+| Parse value selectors or render a value in an accepted media type       | [Select and represent values](python/values)                      |
 | Inspect a notebook or capture a live session                            | [Sessions and inspection](python/sessions-and-inspection)         |
 | Configure retention or record observed inputs                           | [Repository and observations](python/repository-and-observations) |
 | Commit an application directory or retain a Python prepared publication | [Delivery and publications](python/delivery-and-publications)     |

@@ -96,8 +96,7 @@ descriptor:
 Other failures still fail the export, including a renderer or display method
 that raises, a missing renderer package, a value too large for its JSON form,
 exceptions raised by notebook cells or exporters, transfers, and integrity
-checks. An
-unavailable output references no asset.
+checks. An unavailable output references no asset.
 
 ## Consumers load, then optionally mount
 

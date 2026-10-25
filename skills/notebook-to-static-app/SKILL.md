@@ -26,8 +26,7 @@ from the references. The checkout is authoritative.
 - Leave the source notebook byte-for-byte unchanged.
 - Use notebook definition names in state-row keys and output selectors.
 - Run every selected output through normal marimo execution.
-- Treat browser choices as a finite product surface, not a free-form Python
-  prompt.
+- Offer browser choices only from the finite set of prepared states.
 - Choose CLI `build` for a saved file and CLI `capture` for an existing live
   session. Both write a deployment directory. Python `capture()` returns a
   leased prepared export.
@@ -61,8 +60,8 @@ marimo-export features.
 
 ### 2. Choose the finite interaction model
 
-Design three to seven named states unless the notebook supports a genuinely
-different meaningful range. Each state should represent a recognizable scenario,
+Design three to seven named states unless the notebook supports a different
+meaningful range. Each state should represent a recognizable scenario,
 policy, cohort, threshold, or comparison.
 
 Use sparse overrides. Let omitted inputs come from the captured baseline.
@@ -95,7 +94,8 @@ For `build`, run:
 uv run --project "$STATIC_APP_DIR" marimo-export inspect "$NOTEBOOK_PATH" --json
 ```
 
-For `capture`, set `NOTEBOOK_PORT` and `SESSION_ID`, then run:
+For `capture`, set `NOTEBOOK_PORT`, `SESSION_ID`, and, when the server uses
+token authentication, `MARIMO_EXPORT_ACCESS_TOKEN`, then run:
 
 ```bash
 uv run --project "$STATIC_APP_DIR" marimo-export inspect \
@@ -166,11 +166,14 @@ Keep one transition owner that:
 
 1. aborts stale loads
 2. disposes mounted charts or widgets
-3. loads all outputs for the selected state
+3. loads every available output for the selected state and stages a
+   placeholder for each optional output whose `unavailable` is set
 4. commits the new view only if the transition is still current
 5. renders a recoverable error when loading fails
 
-Make state controls shareable through a URL hash or query parameter.
+Keep the selected state in the page query. `formatPreparedQuery(state, query)`
+from the `prepared` subpath writes it, and `resolvePreparedQuery(current, query)`
+or `PreparedStateController.updateQuery(query)` reads a shared link back.
 
 Follow the marimo design system:
 
@@ -217,6 +220,9 @@ Treat failures as product evidence.
   environment.
 - Unsupported output: choose a data definition or write a focused exporter and
   loader pair.
+- Table fails with `output_not_portable`: set `read_only` on an eager table's
+  output, collect a lazy frame before displaying it, or export the dataframe
+  through `parquet.table`.
 - Custom exporter import failure: keep its module in the app and run the
   notebook, build, and capture with the app directory on `PYTHONPATH`.
 - Capture package mismatch: run the notebook from the app environment with the

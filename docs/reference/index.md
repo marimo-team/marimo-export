@@ -25,6 +25,7 @@ marimo-export?](../overview) for the main concepts.
 | Choose the Python surface                                               | [Python API](python-api)                                          |
 | Plan, prepare, capture, build, and write                                | [Produce an export](python/produce)                               |
 | Open, select, decode, and verify                                        | [Python reader](python/reader)                                    |
+| Parse value selectors or render a value in an accepted media type       | [Select and represent values](python/values)                      |
 | Connect to sessions and inspect notebooks                               | [Sessions and inspection](python/sessions-and-inspection)         |
 | Retain prepared work and observations                                   | [Repository and observations](python/repository-and-observations) |
 | Retain a Python prepared publication or commit an application directory | [Delivery and publications](python/delivery-and-publications)     |

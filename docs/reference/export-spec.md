@@ -60,7 +60,8 @@ state space with one application-owned output plan.
 
 An ExportSpec defines the finite state-output relation to publish. Each named
 output selects a notebook value and may name an exporter. Execution turns that
-source and exporter into one stable output representation across all states.
+source and exporter into one stable output representation across the states
+where the output is available.
 
 ```yaml
 schema: marimo-export.spec.v2

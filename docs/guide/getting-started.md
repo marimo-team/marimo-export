@@ -133,7 +133,7 @@ package, and network access. Review the notebook before running it.
 `build` runs both states, writes the notebook export, and verifies `index.json`
 and both report assets.
 
-You should see:
+`verify` prints:
 
 ```text
 Verified 2 assets and 923 B for 2 states
@@ -142,8 +142,8 @@ Verified 2 assets and 923 B for 2 states
 The byte count can change when the supported marimo snapshot encoding changes.
 The stable result is two states with two named outputs each.
 
-The static application below reads the same generated export. Switch between
-the two states to see the JSON summary and rendered report change together.
+The quickstart application reads the same generated export. Switch between the
+two states to see the JSON summary and rendered report change together.
 
 <StaticApp example="quickstart" />
 

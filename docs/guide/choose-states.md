@@ -185,8 +185,8 @@ outputs:
     source: { kind: cell, by: name, value: summary_cell }
 ```
 
-Every normalized state must produce every named output. One output name also
-keeps the same codec and media type across all states.
+Every normalized state must produce every required output. One output name also
+keeps the same codec and media type across the states where it is available.
 
 ## Install exporter dependencies in the producer
 
@@ -224,8 +224,8 @@ imports. Custom exporter calls run for each state that needs preparation.
 Restart a live session after changing an exporter or helper module that the
 session already imported.
 
-When a state executes, exporter source and declared dependencies contribute to
-the output leaf's marimo computation-cache identity and are checked again before
+When a state executes, the [output cell](../concepts/caching#marimo-decides-whether-a-cell-can-be-restored)
+that runs a custom exporter skips marimo's cell cache and reruns. Exporter source and declared dependencies are checked before
 capture completes. Exact prepared-export reuse returns before importing the
 exporter. Name a local exporter module that the notebook never imports in the
 notebook's `[tool.marimo-export] imports` metadata when an edit must invalidate
@@ -244,10 +244,10 @@ with 100 outputs each. Outputs with assets cost about 200 bytes, inline JSON
 values cost their full size, and an unavailable optional output costs 50 to 70
 bytes plus its message.
 
-`plan` reports the lower bound as `index_budget`. Build and capture check the
-authored states and outputs before any notebook work, check the resolved plan,
-and check again after each state is prepared. A state space that cannot fit
-fails with `export_invalid`, a message that suggests how many states to keep,
+`plan` reports the lower bound as `index_budget`. Planning, preparation, build,
+and capture check the authored states and outputs before any notebook work and
+check the resolved plan again. Preparation also checks after each state it
+prepares. A state space that cannot fit fails with `export_invalid`, a message that suggests how many states to keep,
 and `index_values` or `index_bytes` in `details`. Reduce the matrix or move
 outputs to a separate export. Prepared states stay in the repository, and a
 spec with fewer states and the same outputs reuses them.

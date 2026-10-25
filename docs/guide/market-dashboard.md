@@ -89,8 +89,8 @@ The [export repository](manage-repository) stores reusable prepared states.
 The matching `ExportSpec`, producer identity, and state fingerprints let the
 second build reuse the prepared export before notebook startup.
 
-This second build demonstrates reuse, not market-data freshness. Exact reuse can
-return before the notebook imports Yahoo Finance or requests data. A different
+The second build retrieves no new market data. Exact reuse can return before
+the notebook imports Yahoo Finance or requests data. A different
 output directory also retains the same repository identity. Use the
 [freshness boundary](build-and-capture#inspect-reuse-before-preparation) when a
 new market-data retrieval is required.
@@ -103,8 +103,15 @@ Start the notebook from `examples/vite-vanilla`:
 pnpm run notebook
 ```
 
-After the notebook finishes loading, list its live sessions from another
-terminal:
+`marimo edit` requires its access token. In another terminal, set
+`MARIMO_EXPORT_ACCESS_TOKEN` to the `access_token` value from the printed URL,
+and use that URL's host and port if marimo chose a port other than 2718:
+
+```bash
+export MARIMO_EXPORT_ACCESS_TOKEN="..."
+```
+
+After the notebook finishes loading, list its live sessions from that terminal:
 
 ```bash
 uv run --locked --package marimo-export-vite-vanilla-example \
