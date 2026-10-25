@@ -477,6 +477,8 @@ def _recover_one(
         ),
         reverse=True,
     )
+    if not candidates:
+        return
     if valid(target):
         for candidate in candidates:
             remove_tree(candidate)
