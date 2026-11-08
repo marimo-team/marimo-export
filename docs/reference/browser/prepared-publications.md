@@ -100,9 +100,9 @@ interface PreparedPublication {
 
 Give each `instance` its own `export_url`, such as `./<instance>/`.
 `PreparedPublicationRefresh` keeps the opened export while `instance` and the
-resolved URL both stay equal, and opens the export again when either changes. A
-reused URL can pair a new `instance` with a cached `index.json`, which the
-reader then keeps until the value of `instance` or the URL changes.
+resolved URL both stay equal, and opens the export again when either changes. The
+browser never compares `index.json` with `instance`, so a reused URL can keep
+serving a cached index under a new `instance`.
 
 Unknown or missing fields fail validation. `export_url` resolves relative to the
 manifest URL, then must produce an HTTP or HTTPS export base without a fragment

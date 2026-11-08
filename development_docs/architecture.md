@@ -241,14 +241,14 @@ errors.
 
 ## Trust boundaries
 
-| Boundary                        | Authority and guarantee                                                                                                                                                                     |
-| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Notebook and exporter execution | Runs with the producer process's files, credentials, packages, and network access                                                                                                           |
-| Export repository               | Uses local ownership and permissions for producer cache data. It is not a deployment tree or publisher-authentication mechanism                                                             |
-| Live transport                  | HTTPS protects non-loopback transport. The access token authorizes the client, and the server token satisfies Marimo server checks. The selected kernel retains its full producer authority |
-| Notebook export verification    | The writer and `marimo-export verify` prove canonical index, declared closure, framing, sizes, and digests agree with the loaded integrity root. Browser readers check size and framing     |
-| Prepared manifest route         | Selects one export identity and state. The application authenticates the route and constrains allowed origins                                                                               |
-| Browser mount                   | Grants the loaded chart, widget, or custom module the page's DOM, network, and global JavaScript authority                                                                                  |
+| Boundary                        | Authority and guarantee                                                                                                                                                                                                                                               |
+| ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Notebook and exporter execution | Runs with the producer process's files, credentials, packages, and network access                                                                                                                                                                                     |
+| Export repository               | Uses local ownership and permissions for producer cache data. It is not a deployment tree or publisher-authentication mechanism                                                                                                                                       |
+| Live transport                  | HTTPS protects non-loopback transport. The access token authorizes the client, and the server token satisfies Marimo server checks. The selected kernel retains its full producer authority                                                                           |
+| Notebook export verification    | The writer and `marimo-export verify` prove canonical index, declared closure, framing, sizes, and digests agree with the loaded integrity root. Browser readers check the canonical index, size, and framing, so the export host must be trusted as much as the page |
+| Prepared manifest route         | Selects one export identity and state. The application authenticates the route and constrains allowed origins                                                                                                                                                         |
+| Browser mount                   | Grants the loaded chart, widget, or custom module the page's DOM, network, and global JavaScript authority                                                                                                                                                            |
 
 Keep these guarantees separate in adapters and diagnostics. Repository recovery
 can quarantine local data. Export verification cannot establish who published

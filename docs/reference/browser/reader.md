@@ -316,7 +316,8 @@ The result counts exported states, state-output pairs, unique assets, and
 verified bytes. Inline scalar and JSON values contribute to `outputs` but not to
 `assets` or `bytesVerified`.
 
-Run `marimo-export verify` to compare asset bytes with their SHA-256 digests.
+`bytesVerified` counts bytes that passed the size and framing checks. Run
+`marimo-export verify` to compare asset bytes with their SHA-256 digests.
 Browser verification does not authenticate the index producer or execute an
 interactive representation.
 

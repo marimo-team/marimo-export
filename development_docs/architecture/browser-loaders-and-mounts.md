@@ -91,7 +91,8 @@ Manifest parsing rejects unknown fields and bounds the export URL and refresh
 interval. `openPreparedPublication()` opens the notebook export.
 `resolvePreparedPublication()` checks its base URL, resolves the complete input
 vector, and verifies the selected fingerprint. The publication carries
-`manifest.instance` as its identity for reuse decisions.
+`manifest.instance` for reuse decisions. The browser trusts that value without
+comparing it with the opened index, so the export host must be trusted.
 
 `PreparedStateController` owns pending input intent, sparse input updates,
 patchable control updates, query-string selection, transition cancellation,
@@ -150,8 +151,9 @@ Before invoking a representation runtime, browser core checks:
 - BlobAsset envelope and descriptor agreement
 
 The loader then validates representation shape, allocation bounds, and the
-abort signal. The exporter owns digest and state-fingerprint verification, so
-browser code runs on origins where `crypto.subtle` is undefined.
+abort signal. The exporter computes and verifies digests and state fingerprints.
+Browser code compares those stored values by equality, so it runs on origins
+where `crypto.subtle` is undefined.
 
 BlobAsset envelopes use a strict MessagePack scanner. It limits nesting to 256
 levels and values to 100,000, rejects duplicate string map keys and trailing

@@ -43,7 +43,10 @@ pnpm add @marimo-team/marimo-export
 
 The package targets [ECMAScript 2022](https://tc39.es/ecma262/2022/). Opening and
 verifying an export require browser `fetch`, `URL`, `TextEncoder`, `TextDecoder`,
-and `AbortSignal`, and work on any HTTP or HTTPS origin.
+and `AbortSignal`, and work on any HTTP or HTTPS origin. The reader relies on
+digests checked when the export was written, so a same-sized change in transit or
+in a cache goes undetected. Serve exports over HTTPS from a host you trust as much
+as the page.
 
 ## Open an export
 

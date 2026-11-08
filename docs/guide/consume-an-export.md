@@ -209,7 +209,8 @@ Verification reads every declared asset. API and JSON results return exported
 state, state-output-pair, unique-asset, and verified-byte counts. Human CLI
 output omits the state-output-pair count. `index.json` is the integrity root.
 The CLI and Python reader compare each asset with its SHA-256 digest. The browser
-reader checks each asset's size and format.
+reader checks each asset's size and its NPY, Arrow, or BlobAsset framing, and
+representation parsers run when an output is loaded.
 
 ## Retain evidence for an agent
 
