@@ -6,7 +6,7 @@ description: Routes to the TypeScript reader, prepared publication, loader, snap
 # Browser API reference
 
 `@marimo-team/marimo-export` opens a notebook export over HTTP, selects results
-that are already present, verifies output bytes before decoding them, and mounts
+that are already present, checks each output's size and format before decoding it, and mounts
 interactive values when the application requests a mount.
 
 ```bash
@@ -27,8 +27,8 @@ the browser-native JavaScript module format, and targets ES2022:
 Place DOM mounts, Blob URLs, dynamic imports, canvas rendering, and widget styles
 inside a client-side boundary in React, Next.js, Astro, or another
 server-rendered application. Opening an absolute HTTP export can run in another
-web-compatible runtime when it supplies the required Fetch, URL, abort, text,
-and Web Crypto APIs.
+web-compatible runtime when it supplies the required Fetch, URL, abort, and text
+APIs.
 
 ```ts
 import { openExport } from "@marimo-team/marimo-export";
@@ -67,7 +67,7 @@ Opening validates canonical `index.json`. Output assets remain lazy until
 | Loader               | A codec-aware decoder selected explicitly by the application                                     |
 | Mount                | The resource-owning step that attaches an interactive loaded value to a document element         |
 | Prepared manifest    | Snake-case JSON that points to one notebook export and selected exported state                   |
-| Prepared publication | A verified manifest, immutable notebook export, and selected exported state                      |
+| Prepared publication | A validated manifest, immutable notebook export, and selected exported state                     |
 
 The browser API resolves finite exported states. A request for an input vector
 outside the notebook export requires another preparation run or a Python
@@ -78,11 +78,14 @@ service.
 The browser applies three separate checks:
 
 1. `openExport()` validates the index and state-output relation.
-2. `ExportOutput.load()` verifies one selected asset before its loader runs.
-3. `NotebookExport.verify()` verifies every unique declared asset.
+2. `ExportOutput.load()` checks one selected asset's size and its NPY, Arrow, or
+   BlobAsset framing before its loader runs.
+3. `NotebookExport.verify()` applies those checks to every unique declared asset.
 
-These checks establish consistency with the loaded index. They do not
-authenticate who produced the index. Opening, selecting, loading inert records,
+The exporter and `marimo-export verify` compare asset digests.
+
+Browser checks catch truncated, substituted-format, and malformed responses. They
+do not authenticate who produced the index or detect a same-sized byte change. Opening, selecting, loading inert records,
 and verifying do not import notebook-authored browser modules. Mounting an
 AnyWidget, Vega-Lite chart, or custom interactive value grants that code the
 page's authority.

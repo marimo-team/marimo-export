@@ -94,7 +94,7 @@ active. Python callers can use `capture()` when they need to retain the leased
   outputs, and representations.
 - [`quote_detail.py`](quote_detail.py) owns the browser widget rendered by the
   notebook and application.
-- [`src/main.ts`](src/main.ts) verifies the export, loads each representation,
+- [`src/main.ts`](src/main.ts) checks the export, loads each representation,
   and owns browser transitions and mount disposal.
 
 The [browser application guide](../../docs/guide/browser-applications.md) develops

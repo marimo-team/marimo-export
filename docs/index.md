@@ -50,7 +50,7 @@ features:
       width: "24"
       height: "24"
       wrap: true
-    details: Browser applications and agents verify and read the export without a Python runtime or notebook source.
+    details: Browser applications and agents open and read the export without a Python runtime or notebook source.
     link: ./guide/consume-an-export
     linkText: Read an export
 ---

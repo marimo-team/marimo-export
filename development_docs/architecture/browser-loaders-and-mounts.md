@@ -1,7 +1,7 @@
 # Browser loaders and mounts
 
 The browser package opens one notebook export, resolves exact exported states,
-loads verified representations, and mounts interactive values into an
+loads representations, and mounts interactive values into an
 application-owned document.
 
 ## Package direction
@@ -31,7 +31,7 @@ transport, integrity, native BlobAsset decoding, built-in loaders, and
 result type, runtime dependency, cancellation behavior, and mount disposal.
 
 Most loader workspaces implement `OutputLoader` against browser contracts. The
-AnyWidget workspace accepts verified bytes and returns a loaded mount value. Its
+AnyWidget workspace accepts size-checked bytes and returns a loaded mount value. Its
 public browser facade owns media matching and `BlobAssetLoader` construction, so
 the package dependency remains one-way from browser to the AnyWidget decoder.
 
@@ -46,8 +46,7 @@ Applications import those public subpaths. They do not import the private
 ## Opening and resolution are immutable
 
 `openExport(base)` fetches and validates `index.json`, then returns an immutable
-`NotebookExport`. Its `identity` is the SHA-256 of the fetched canonical index
-bytes. Assets remain lazy.
+`NotebookExport`. Assets remain lazy.
 
 `state(name)` selects an authored name. `resolve(completeInputs)` selects one
 exact vector. `state.resolve(patch)` completes a sparse transition from the
@@ -90,8 +89,10 @@ immutable notebook export instances. The strict prepared manifest is:
 
 Manifest parsing rejects unknown fields and bounds the export URL and refresh
 interval. `openPreparedPublication()` opens the notebook export.
-`resolvePreparedPublication()` checks its identity and base URL, resolves the
-complete input vector, and verifies the selected fingerprint.
+`resolvePreparedPublication()` checks its base URL, resolves the complete input
+vector, and verifies the selected fingerprint. The publication carries
+`manifest.instance` for reuse decisions. The browser trusts that value without
+comparing it with the opened index, so the export host must be trusted.
 
 `PreparedStateController` owns pending input intent, sparse input updates,
 patchable control updates, query-string selection, transition cancellation,
@@ -123,7 +124,7 @@ lifecycle before calling the application port's optional disposer.
 manifest, query, and state-selection failures.
 
 `PreparedPublicationRefresh` fetches the manifest with `cache: "no-store"`.
-When the export identity and base URL remain equal, it reuses the opened export.
+When the manifest `instance` and base URL remain equal, it reuses the opened export.
 When a new instance appears, it opens and validates that export before replacing
 the publication. A local selection survives replacement when the input names
 match and the replacement export resolves the complete current vector. The
@@ -146,12 +147,13 @@ Before invoking a representation runtime, browser core checks:
 - codec-derived asset path under the selected export base
 - declared and caller byte limits
 - response body availability and exact length
-- SHA-256 digest
 - codec framing
 - BlobAsset envelope and descriptor agreement
 
 The loader then validates representation shape, allocation bounds, and the
-abort signal.
+abort signal. The exporter computes and verifies digests and state fingerprints.
+Browser code compares those stored values by equality, so it runs on origins
+where `crypto.subtle` is undefined.
 
 BlobAsset envelopes use a strict MessagePack scanner. It limits nesting to 256
 levels and values to 100,000, rejects duplicate string map keys and trailing

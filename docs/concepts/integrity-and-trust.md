@@ -8,7 +8,7 @@ description: Learn what verification checks, how to trust a publisher, and when 
 The quickstart's `report` output points to an asset file named by its SHA-256
 digest. Its descriptor records the expected path, size, and digest.
 
-If one byte changes, verification fails. If another publisher replaces
+If one byte changes, `marimo-export verify` fails. If another publisher replaces
 `index.json` and every asset with a different self-consistent export,
 verification can succeed and the export identity changes. The first case is an
 integrity failure. The second requires publisher authentication.
@@ -18,28 +18,47 @@ integrity failure. The second requires publisher authentication.
 `index.json` uses canonical JSON, so one supported value has one byte
 representation. The SHA-256 digest of those exact bytes is the export identity.
 
-Each asset path follows from its codec and digest. A reader rejects an asset when
-its path, size, digest, framing, or descriptor agreement is invalid.
+Each asset path follows from its codec and digest. The exporter, the Python
+reader, and `marimo-export verify` reject an asset when its path, size, digest,
+framing, or descriptor agreement is invalid. The browser reader applies the same
+checks except for the digest comparison.
 
 ## Opening, loading, and verifying read different files
 
-| Operation                                      | Reads                     | Establishes                                    |
-| ---------------------------------------------- | ------------------------- | ---------------------------------------------- |
-| `open_export()` or `openExport()`              | `index.json`              | Canonical index and state-output relation      |
-| Asset-backed output read or browser `load()`   | One selected output asset | Descriptor, size, format, and digest agreement |
-| `verify_export()` or `NotebookExport.verify()` | Every declared asset      | Complete declared asset closure                |
+| Operation                                   | Reads                     | Establishes                                                      |
+| ------------------------------------------- | ------------------------- | ---------------------------------------------------------------- |
+| `open_export()` or `openExport()`           | `index.json`              | Canonical index and state-output relation                        |
+| Python asset-backed output read             | One selected output asset | Descriptor, size, format, and digest agreement                   |
+| Browser `load()`                            | One selected output asset | Size, NPY, Arrow, or BlobAsset framing, then the loader's parser |
+| `verify_export()` or `marimo-export verify` | Every declared asset      | Complete declared asset closure, with digests                    |
+| Browser `NotebookExport.verify()`           | Every declared asset      | Size of every asset, and NPY, Arrow, or BlobAsset framing        |
 
-Opening leaves assets unread. Run complete verification before deployment,
+Opening leaves assets unread. Run `marimo-export verify` before deployment,
 before an agent treats exported data as evidence, or while investigating storage
 corruption.
 
+## Browsers rely on digests checked at build time
+
+The exporter computes every digest and verifies the export before it commits the
+directory. A browser reader requests each asset by its digest-named path and
+checks its canonical index, byte length, and NPY, Arrow, or BlobAsset framing. It
+runs on any HTTP or HTTPS origin, including a plain-HTTP address on a private
+network where
+[`crypto.subtle`](https://developer.mozilla.org/en-US/docs/Web/API/Crypto/subtle)
+is undefined.
+
+A same-sized change made in transit, in storage, or in a CDN or HTTP cache reaches
+the loader undetected. Serve exports over HTTPS from a host you trust as much as
+the application page, because a mounted AnyWidget or chart from that host runs
+with the page's authority.
+
 ## Integrity does not identify the publisher
 
-Verification establishes consistency with the loaded `index.json`. Authenticate
-who supplied that index through a controlled origin, authenticated transport,
+`marimo-export verify` establishes consistency with the loaded `index.json`.
+Authenticate who supplied that index through a controlled origin, authenticated transport,
 trusted artifact registry, or separate signature policy.
 
-Keep the export identity with a result when a consumer must pin exact content.
+In Python, keep the export identity with a result when a consumer must pin exact content.
 State fingerprints, output names, representations, and asset digests can further
 identify the selected evidence.
 

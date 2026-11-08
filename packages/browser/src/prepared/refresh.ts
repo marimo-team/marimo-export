@@ -173,7 +173,7 @@ export class PreparedPublicationRefresh {
     let publication: PreparedPublication;
     if (
       current !== undefined &&
-      current.notebookExport.identity === manifest.instance &&
+      current.manifest.instance === manifest.instance &&
       current.notebookExport.base.href === preparedExportBase(manifest, this.#manifestUrl).href
     ) {
       const resolved = resolvePreparedPublication(

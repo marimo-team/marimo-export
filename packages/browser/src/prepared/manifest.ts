@@ -82,9 +82,6 @@ export const resolvePreparedPublication = (
   manifestUrl: URL,
   notebookExport: NotebookExport,
 ): PreparedPublication => {
-  if (manifest.instance !== notebookExport.identity) {
-    invalid("The prepared manifest does not match the immutable export identity.");
-  }
   const expected = preparedExportBase(manifest, manifestUrl);
   if (notebookExport.base.href !== expected.href) {
     invalid("The prepared manifest export URL does not match the opened immutable export.");

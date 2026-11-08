@@ -6,7 +6,7 @@ facade. The workspace package is private and the public browser package carries
 its compiled implementation.
 
 The loader passes column and row selection to
-[Hyparquet](https://github.com/hyparam/hyparquet), reads verified BlobAsset bytes,
+[Hyparquet](https://github.com/hyparam/hyparquet), reads BlobAsset bytes,
 and returns a frozen outer row array. Individual row objects and nested values
 retain Hyparquet's runtime shapes. Cancellation rejects the loader call and
 removes its result authority, while an in-progress Hyparquet decode can still

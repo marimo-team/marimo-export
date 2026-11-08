@@ -138,7 +138,7 @@ export class PreparedStateController {
     if (
       this.#transitions.target === undefined &&
       current !== undefined &&
-      current.notebookExport.identity === selected.notebookExport.identity &&
+      current.notebookExport === selected.notebookExport &&
       current.state.fingerprint === selected.state.fingerprint
     ) {
       this.#transitions.setMetadata(selected);

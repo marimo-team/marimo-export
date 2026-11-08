@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vite-plus/test";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import type {
   PreparedExportManifest,
@@ -11,6 +11,9 @@ import {
   PreparedStateController,
   resolvePreparedPublication,
 } from "../src/prepared/index.js";
+import { defineOutputLoader } from "../src/index.js";
+import { exportFixture, mutableObject, stringValue } from "./fixture.js";
+import type { Fixture } from "./fixture.js";
 import {
   preparedExportFixture,
   preparedManifestFixture,
@@ -48,7 +51,86 @@ const refreshHarness = (publications: readonly PreparedPublication[]) => {
   return { applied, fetchManifest, openPublication, refresh, state };
 };
 
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
+const manifestDocument = (fixture: Fixture, alias: string, instance: string, exportUrl: string) => {
+  const fingerprint = stringValue(mutableObject(fixture.index.aliases, "aliases")[alias], alias);
+  const state = mutableObject(mutableObject(fixture.index.states, "states")[fingerprint], alias);
+  return JSON.stringify({
+    schema: "marimo-export.prepared.v1",
+    instance,
+    export_url: exportUrl,
+    inputs: state.inputs,
+    state_fingerprint: fingerprint,
+  });
+};
+
 describe("prepared publication refresh", () => {
+  it("follows real exports by manifest instance on an origin without crypto.subtle", async () => {
+    const first = await exportFixture({ basePath: "/first/" });
+    const second = await exportFixture({ basePath: "/second/" });
+    let manifest = manifestDocument(first, "alpha", "1".repeat(64), "./first/");
+    const fetch: typeof globalThis.fetch = async (input, init) => {
+      const url = input instanceof Request ? input.url : input.toString();
+      if (new URL(url).pathname === "/current") return new Response(manifest);
+      return (url.includes("/first/") ? first : second).fetch(input, init);
+    };
+    vi.stubGlobal("crypto", { subtle: undefined });
+    const arrayLoader = defineOutputLoader({
+      codec: "numpy.npy.v1",
+      accepts: () => true,
+      load: ({ payload }) => payload,
+    });
+    const loads: string[] = [];
+    const state = new PreparedStateController({
+      async apply({ next }, signal) {
+        await next.state.output("array").load(arrayLoader, { signal });
+        loads.push(`${next.notebookExport.base.pathname}${String(next.state.aliases[0])}`);
+      },
+    });
+    const refresh = new PreparedPublicationRefresh(new URL("http://insecure.test/current"), state, {
+      fetch,
+    });
+    const indexReads = (fixture: Fixture) =>
+      fixture.requests.filter((request) => request.endsWith("/index.json")).length;
+
+    await refresh.start();
+    manifest = manifestDocument(first, "zeta", "1".repeat(64), "./first/");
+    await refresh.refresh();
+    expect(indexReads(first)).toBe(1);
+
+    manifest = manifestDocument(second, "alpha", "2".repeat(64), "./second/");
+    await refresh.refresh();
+
+    expect(indexReads(second)).toBe(1);
+
+    manifest = manifestDocument(second, "alpha", "3".repeat(64), "./second/");
+    await refresh.refresh();
+
+    expect(indexReads(second)).toBe(2);
+    expect(loads).toEqual(["/first/alpha", "/first/zeta", "/second/alpha", "/second/alpha"]);
+    await refresh.dispose();
+    await state.dispose();
+  });
+
+  it("rejects a manifest whose export URL differs from the opened export", () => {
+    const notebookExport = preparedExportFixture({
+      base: "https://example.test/opened/",
+      inputs: [{ mode: "baseline" }],
+    });
+    const manifest = preparedManifestFixture(
+      notebookExport,
+      { mode: "baseline" },
+      { exportUrl: "https://example.test/elsewhere/" },
+    );
+
+    expect(() =>
+      resolvePreparedPublication(manifest, new URL("https://example.test/current"), notebookExport),
+    ).toThrow(expect.objectContaining({ code: "manifest_invalid" }));
+  });
+
   it("reuses an unchanged immutable export while applying updated manifest state", async () => {
     const notebookExport = preparedExportFixture({
       inputs: [{ mode: "baseline" }, { mode: "alternate" }],
@@ -83,17 +165,20 @@ describe("prepared publication refresh", () => {
     expect(harness.state.snapshot().current?.state.inputs).toEqual({ mode: "alternate" });
   });
 
-  it("preserves an available local selection across immutable export identities", async () => {
+  it("preserves an available local selection across immutable export instances", async () => {
     const firstExport = preparedExportFixture({
       inputs: [{ mode: "baseline" }, { mode: "alternate" }],
     });
     const secondExport = preparedExportFixture({
       base: "https://example.test/export-2/",
-      identity: "2".repeat(64),
       inputs: [{ mode: "baseline" }, { mode: "alternate" }],
     });
     const first = preparedPublicationFixture(firstExport, { mode: "baseline" });
-    const second = preparedPublicationFixture(secondExport, { mode: "baseline" });
+    const second = preparedPublicationFixture(
+      secondExport,
+      { mode: "baseline" },
+      { instance: "2".repeat(64) },
+    );
     const harness = refreshHarness([first, second]);
     await harness.refresh.start();
     await harness.state.updateInputs({ mode: "alternate" });
@@ -112,11 +197,14 @@ describe("prepared publication refresh", () => {
       });
       const secondExport = preparedExportFixture({
         base: "https://example.test/export-2/",
-        identity: "2".repeat(64),
         inputs: available ? [{ mode: "baseline" }, { mode: "alternate" }] : [{ mode: "baseline" }],
       });
       const first = preparedPublicationFixture(firstExport, { mode: "baseline" });
-      const second = preparedPublicationFixture(secondExport, { mode: "baseline" });
+      const second = preparedPublicationFixture(
+        secondExport,
+        { mode: "baseline" },
+        { instance: "2".repeat(64) },
+      );
       const harness = refreshHarness([first, second]);
       await harness.refresh.start();
       let finishOpening = () => {};
@@ -148,16 +236,13 @@ describe("prepared publication refresh", () => {
     },
   );
 
-  it("opens a matching immutable identity again when its base URL changes", async () => {
-    const identity = "1".repeat(64);
+  it("opens a matching instance again when its export URL changes", async () => {
     const firstExport = preparedExportFixture({
       base: "https://example.test/export-1/",
-      identity,
       inputs: [{ mode: "baseline" }, { mode: "alternate" }],
     });
     const secondExport = preparedExportFixture({
       base: "https://example.test/export-2/",
-      identity,
       inputs: [{ mode: "baseline" }, { mode: "alternate" }],
     });
     const first = preparedPublicationFixture(firstExport, { mode: "baseline" });
@@ -168,7 +253,12 @@ describe("prepared publication refresh", () => {
     const openPublication = vi.fn(async (manifest: PreparedExportManifest) =>
       manifest.exportUrl === firstExport.base.href ? first : second,
     );
-    const state = new PreparedStateController({ async apply() {} });
+    const applied: PreparedStateChange[] = [];
+    const state = new PreparedStateController({
+      async apply(change) {
+        applied.push(change);
+      },
+    });
     const refresh = new PreparedPublicationRefresh(new URL("https://example.test/current"), state, {
       dependencies: { fetchManifest, openPublication },
     });
@@ -178,6 +268,7 @@ describe("prepared publication refresh", () => {
     await refresh.refresh();
 
     expect(openPublication).toHaveBeenCalledTimes(2);
+    expect(applied.at(-1)?.next.notebookExport).toBe(secondExport);
     expect(state.snapshot().current?.notebookExport).toBe(secondExport);
     expect(state.snapshot().current?.state.inputs).toEqual({ mode: "alternate" });
   });
@@ -186,11 +277,14 @@ describe("prepared publication refresh", () => {
     const firstExport = preparedExportFixture({ inputs: [{ count: 0 }] });
     const secondExport = preparedExportFixture({
       base: "https://example.test/export-2/",
-      identity: "2".repeat(64),
       inputs: [{ count: 0 }, { count: 1 }],
     });
     const first = preparedPublicationFixture(firstExport, { count: 0 });
-    const second = preparedPublicationFixture(secondExport, { count: 0 });
+    const second = preparedPublicationFixture(
+      secondExport,
+      { count: 0 },
+      { instance: "2".repeat(64) },
+    );
     const harness = refreshHarness([first, second]);
     await harness.refresh.start();
     await expect(harness.state.updateInputs({ count: 1 })).rejects.toMatchObject({
@@ -321,8 +415,9 @@ describe("prepared publication refresh", () => {
       { mode: "baseline" },
     );
     const second = preparedPublicationFixture(
-      preparedExportFixture({ identity: "2".repeat(64), inputs: [{ mode: "replacement" }] }),
+      preparedExportFixture({ inputs: [{ mode: "replacement" }] }),
       { mode: "replacement" },
+      { instance: "2".repeat(64) },
     );
     const harness = refreshHarness([first, second]);
     await harness.refresh.start();

@@ -43,9 +43,10 @@ pnpm add @marimo-team/marimo-export
 
 The package targets [ECMAScript 2022](https://tc39.es/ecma262/2022/). Opening and
 verifying an export require browser `fetch`, `URL`, `TextEncoder`, `TextDecoder`,
-`AbortSignal`, and [Web Crypto](https://developer.mozilla.org/en-US/docs/Web/API/Web_Crypto_API).
-Serve the application over HTTPS or from a browser-recognized local development
-origin so Web Crypto is available.
+and `AbortSignal`, and work on any HTTP or HTTPS origin. The reader relies on
+digests checked when the export was written, so a same-sized change in transit or
+in a cache goes undetected. Serve exports over HTTPS from a host you trust as much
+as the page.
 
 ## Open an export
 
@@ -63,13 +64,13 @@ document.querySelector("#summary")!.textContent = JSON.stringify(summary, null, 
 ```
 
 `openExport()` validates canonical `index.json`. Output assets remain lazy until
-a loader or complete verification requests them. Each load verifies the selected
-asset before decoding it.
+a loader or complete verification requests them. Each load checks the selected
+asset's size and format before decoding it.
 
-Verification checks the notebook export against its loaded `index.json`. The
-application still authenticates the publisher and delivery origin.
+`marimo-export verify` compares every asset with its digest. The application
+authenticates the publisher and delivery origin.
 
-The reader exposes the export identity, spec SHA-256, default state, notebook and
+The reader exposes the spec SHA-256, default state, notebook and
 producer facts, input names, control bindings, output names, aliases, and
 normalized states.
 
@@ -150,7 +151,7 @@ or other application-owned state.
 
 ## Browser trust boundary
 
-HTML loaders return verified source text without inserting it into the document.
+HTML loaders return source text without inserting it into the document.
 Mounting charts, widgets, or custom interactive values grants the mounted code
 the page's authority. Apply the application's rendering policy,
 [Content Security Policy](https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP), and origin rules before

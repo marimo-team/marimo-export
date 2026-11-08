@@ -1,8 +1,8 @@
 import { isAbortError } from "./abort.js";
 import { decodeBlobAsset } from "./blob-asset.js";
-import { sha256Hex, validateNativeFile, verifyBytes } from "./integrity.js";
 import { resolveOutputLoader, unavailableOutputError } from "./loader.js";
 import { parseMediaType } from "./media-type.js";
+import { validateNativeFile } from "./native-file.js";
 import { parseStrictJson, portableJsonObject } from "@marimo-team/portable-json";
 import type { JsonObject, JsonValue } from "@marimo-team/portable-json";
 import {
@@ -84,10 +84,7 @@ export async function openExport(
     assetReadOptions(INDEX_MAX_BYTES, options.signal),
   );
   const wire = decodeCanonicalIndex(bytes);
-  const parsed = parseExportIndex(wire);
-  const identity = await sha256Hex(bytes);
-  await validateFingerprints(parsed, options.signal);
-  return new NotebookExportValue(normalized, identity, parsed, fetcher);
+  return new NotebookExportValue(normalized, parseExportIndex(wire), fetcher);
 }
 
 function decodeCanonicalIndex(bytes: Uint8Array): JsonValue {
@@ -114,29 +111,8 @@ function decodeCanonicalIndex(bytes: Uint8Array): JsonValue {
   return value;
 }
 
-async function validateFingerprints(
-  index: ParsedExportIndex,
-  signal: AbortSignal | undefined,
-): Promise<void> {
-  for (const [fingerprint, state] of Object.entries(index.states)) {
-    throwIfAborted(signal);
-    // Keep hashing bounded when exports contain many states.
-    // oxlint-disable-next-line no-await-in-loop
-    const actual = await sha256Hex(encoder.encode(canonicalJson(state.inputs)));
-    throwIfAborted(signal);
-    if (actual !== fingerprint) {
-      throw new NotebookExportError(
-        "export_invalid",
-        `State fingerprint ${fingerprint} does not match its inputs.`,
-        { details: { fingerprint } },
-      );
-    }
-  }
-}
-
 class NotebookExportValue implements NotebookExport {
   readonly #baseHref: string;
-  readonly identity: string;
   readonly specSha256: string;
   readonly defaultState: ExportStateValue;
   readonly notebook: ParsedExportIndex["notebook"];
@@ -149,14 +125,8 @@ class NotebookExportValue implements NotebookExport {
   readonly #statesByInputs: ReadonlyMap<string, ExportStateValue>;
   readonly #reader: AssetReader;
 
-  constructor(
-    base: URL,
-    identity: string,
-    index: ParsedExportIndex,
-    fetcher: typeof globalThis.fetch,
-  ) {
+  constructor(base: URL, index: ParsedExportIndex, fetcher: typeof globalThis.fetch) {
     this.#baseHref = base.href;
-    this.identity = identity;
     this.specSha256 = index.specSha256;
     this.notebook = index.notebook;
     this.producer = index.producer;
@@ -197,6 +167,9 @@ class NotebookExportValue implements NotebookExport {
     this.#statesByInputs = new Map(
       this.#states.map((state) => [canonicalJson(state.inputs), state]),
     );
+    if (this.#statesByInputs.size !== this.#states.length) {
+      throw new NotebookExportError("export_invalid", "Export states must have distinct inputs.");
+    }
     Object.freeze(this);
   }
 
@@ -462,8 +435,6 @@ class AssetReader {
       path,
       fetchOptions,
     );
-    throwIfAborted(options.signal);
-    await verifyBytes(bytes, descriptor.asset);
     throwIfAborted(options.signal);
     validateNativeFile(descriptor.codec, bytes);
     if (descriptor.codec === "marimo.blob-asset.msgpack.v1") {

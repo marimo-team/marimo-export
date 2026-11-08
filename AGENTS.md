@@ -48,7 +48,7 @@ Run focused package commands while developing, then finish with `make check`.
    process groups, and cleanup. `prepare` uses one owned context when work is
    missing. `capture` borrows one active edit session.
 7. `packages/portable-json` owns the cross-language JSON boundary.
-   `packages/browser` owns export parsing, integrity, immutable readers,
+   `packages/browser` owns export parsing, asset checks, immutable readers,
    prepared-publication control, and loader contracts. Each
    `packages/loader-*` owns one representation runtime.
 8. Applications compose the public Python SDK and browser `prepared` subpath.
@@ -209,7 +209,8 @@ implementation of the export format.
 - Repository storage failures preserve the current prepared export. Confirmed
   integrity failures retire the affected artifact for cleanup.
 - `index.json` is canonical UTF-8 JSON and the single export entry point.
-- Readers verify the declared asset closure before decoding output data.
+- The exporter and Python readers verify asset digests. Browser readers check
+  index canonicalization, asset size, and format before decoding output data.
 - Application delivery re-verifies each materialized export before committing
   the complete outer directory.
 - Opening and verification execute no notebook-authored browser module.

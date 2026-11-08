@@ -10,14 +10,14 @@ The concept pages introduce them through worked examples.
 
 ## Product objects
 
-| Term            | Meaning                                                                                                                                    |
-| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| Notebook result | A Python value, rendered output, or complete cell produced by the notebook before export.                                                  |
-| Producer        | The Python environment that inspects a notebook, executes selected states, and creates portable results.                                   |
-| Consumer        | A Python reader, browser reader, agent, or custom implementation that reads a completed notebook export.                                   |
-| Notebook export | One canonical `index.json` and the content-addressed assets declared by that index. Use **export** after the full noun is clear.           |
-| Export identity | The lowercase SHA-256 digest of the exact canonical `index.json` bytes. Python and browser readers expose it as `NotebookExport.identity`. |
-| Provenance      | Records that identify the source notebook, producer implementation, selected state, output representation, and asset bytes.                |
+| Term            | Meaning                                                                                                                            |
+| --------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| Notebook result | A Python value, rendered output, or complete cell produced by the notebook before export.                                          |
+| Producer        | The Python environment that inspects a notebook, executes selected states, and creates portable results.                           |
+| Consumer        | A Python reader, browser reader, agent, or custom implementation that reads a completed notebook export.                           |
+| Notebook export | One canonical `index.json` and the content-addressed assets declared by that index. Use **export** after the full noun is clear.   |
+| Export identity | The lowercase SHA-256 digest of the exact canonical `index.json` bytes. The Python reader exposes it as `NotebookExport.identity`. |
+| Provenance      | Records that identify the source notebook, producer implementation, selected state, output representation, and asset bytes.        |
 
 ## States and inputs
 
@@ -70,7 +70,7 @@ The concept pages introduce them through worked examples.
 | Repository artifact      | A prepared-state or export-generation directory managed by the export repository. A repository artifact can contain several output assets.                                                                            |
 | Projection               | The isolated output-specific capture used to produce one planned output. Projection-scoped identifiers prevent resources from separate outputs from colliding.                                                        |
 | Control binding          | A durable mapping from one projection-scoped UI object ID to an exported input and a typed path within that input. `PreparedStateController` uses it to route accepted control values.                                |
-| Output loader            | A consumer-side decoder selected explicitly for an output's codec and media type. A browser loader receives verified data and returns inert data or a mountable value.                                                |
+| Output loader            | A consumer-side decoder selected explicitly for an output's codec and media type. A browser loader receives size-checked data and returns inert data or a mountable value.                                            |
 | Mount                    | The browser lifecycle that attaches a mountable value to a document element and returns a disposable view.                                                                                                            |
 
 ## Planning and preparation
@@ -105,7 +105,7 @@ The concept pages introduce them through worked examples.
 | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Open                                | Parse and validate `index.json`, construct immutable reader objects, and leave assets lazy.                                                                                     |
 | Resolve                             | Select a state already present in the notebook export by alias, complete input vector, or sparse patch from an existing state.                                                  |
-| Load                                | Verify one output asset when present, then decode its representation through an explicit browser loader.                                                                        |
+| Load                                | Check one output asset when present, then decode its representation through an explicit browser loader.                                                                         |
 | Prepared manifest                   | A bounded `marimo-export.prepared.v1` JSON record that names one notebook export identity, export URL, complete input vector, state fingerprint, and optional refresh interval. |
 | Prepared publication in Python      | A controller-owned `PreparedExport` and application metadata selected for one application key.                                                                                  |
 | Prepared publication in the browser | The value that joins a validated prepared manifest, its opened notebook export, and its selected state.                                                                         |
@@ -116,14 +116,14 @@ The concept pages introduce them through worked examples.
 
 ## Integrity and trust
 
-| Term                     | Meaning                                                                                                                                                                        |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Canonical JSON           | JSON encoded under one closed set of ordering, number, string, and tag rules so the same supported value has one byte representation.                                          |
-| Portable JSON            | Null, booleans, Unicode strings, JavaScript-safe finite numbers, arrays, and string-keyed objects accepted with matching Python and JavaScript semantics.                      |
-| Verification             | Validation of the canonical index and every declared asset against sizes, SHA-256 digests, framing, representation invariants, and descriptor agreement.                       |
-| Integrity root           | The loaded canonical `index.json` whose declarations determine the files and identities that verification checks.                                                              |
-| Authentication           | Evidence supplied by a delivery channel or another trust system that establishes who published the integrity root. Export verification establishes consistency with that root. |
-| marimo computation cache | marimo-owned storage for notebook cell results, invalidation, restoration, serialization, signing, and cache stores. It is separate from the export repository.                |
+| Term                     | Meaning                                                                                                                                                                                      |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Canonical JSON           | JSON encoded under one closed set of ordering, number, string, and tag rules so the same supported value has one byte representation.                                                        |
+| Portable JSON            | Null, booleans, Unicode strings, JavaScript-safe finite numbers, arrays, and string-keyed objects accepted with matching Python and JavaScript semantics.                                    |
+| Verification             | Validation of the canonical index and every declared asset against sizes, SHA-256 digests, framing, representation invariants, and descriptor agreement. Browser verification omits digests. |
+| Integrity root           | The loaded canonical `index.json` whose declarations determine the files and identities that verification checks.                                                                            |
+| Authentication           | Evidence supplied by a delivery channel or another trust system that establishes who published the integrity root. Export verification establishes consistency with that root.               |
+| marimo computation cache | marimo-owned storage for notebook cell results, invalidation, restoration, serialization, signing, and cache stores. It is separate from the export repository.                              |
 
 Read [States](../concepts/states-and-inputs),
 [Outputs](../concepts/outputs-and-representations),

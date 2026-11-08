@@ -58,8 +58,8 @@ guard return `false`.
 | ------------------------------- | --------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
 | `abort`                         | An export operation or output load lost caller authority                                | Ignore stale work or retry with a live signal                                                                  |
 | `asset_invalid`                 | A BlobAsset MessagePack envelope or its descriptor agreement is invalid                 | Rebuild or replace the export                                                                                  |
-| `decode_failed`                 | Native framing, a snapshot parser, or the selected loader rejected data                 | Confirm the producer and loader versions, then rebuild the representation                                      |
-| `integrity_failed`              | Declared size, observed size, SHA-256, or Web Crypto verification failed                | Stop using the artifact and redeploy from a verified source                                                    |
+| `decode_failed`                 | Native framing, a snapshot parser, or the selected loader rejected data                 | Confirm the producer and loader versions, run `marimo-export verify`, then rebuild the representation          |
+| `integrity_failed`              | An asset's declared or observed byte length differs from its descriptor                 | Stop using the artifact and redeploy from a verified source                                                    |
 | `loader_ambiguous`              | More than one registered loader accepts the output                                      | Narrow media-type predicates or pass one explicit loader                                                       |
 | `loader_invalid`                | A loader is malformed, throws in `accepts()`, or returns a non-boolean acceptance value | Correct the loader contract                                                                                    |
 | `loader_unavailable`            | No loader accepts the output codec and media type                                       | Import the matching loader and its peer runtime                                                                |
@@ -76,8 +76,8 @@ guard return `false`.
 
 `details` is bounded diagnostic context. Its fields vary by failure site. Common
 fields include output name, codec, media type, requested and available names,
-path, response status, declared and observed bytes, byte limits, expected and
-observed digests, and input key sets. Branch on `code` first and treat additional
+path, response status, declared and observed bytes, byte limits, and input key
+sets. Branch on `code` first and treat additional
 fields as optional.
 
 An error thrown by a loader passes through unchanged when it is already a
@@ -102,12 +102,12 @@ class PreparedExportError extends Error {
 }
 ```
 
-| Code                   | Meaning                                                                                      | Recovery                                                             |
-| ---------------------- | -------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
-| `manifest_invalid`     | The document, identity, export URL, input vector, fingerprint, or control binding is invalid | Fix the route or republish a matching manifest and export            |
-| `manifest_read_failed` | The manifest request, response, stream, or byte limit failed                                 | Check routing, CORS, authentication, response status, and body size  |
-| `query_ambiguous`      | One query text names more than one typed exported value while reading or formatting a query  | Use an unambiguous state control or change the exported input domain |
-| `query_miss`           | A recognized query parameter is repeated or matches no exported value                        | Supply one value whose text matches the exported domain              |
+| Code                   | Meaning                                                                                     | Recovery                                                             |
+| ---------------------- | ------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| `manifest_invalid`     | The document, export URL, input vector, fingerprint, or control binding is invalid          | Fix the route or republish a matching manifest and export            |
+| `manifest_read_failed` | The manifest request, response, stream, or byte limit failed                                | Check routing, CORS, authentication, response status, and body size  |
+| `query_ambiguous`      | One query text names more than one typed exported value while reading or formatting a query | Use an unambiguous state control or change the exported input domain |
+| `query_miss`           | A recognized query parameter is repeated or matches no exported value                       | Supply one value whose text matches the exported domain              |
 
 `isPreparedExportError()` recognizes a frozen, branded prepared error across
 package copies. Construction validates the code and message and freezes the
@@ -197,7 +197,6 @@ Opening and loading use these web platform capabilities:
 
 - the [Fetch API](https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API) and readable response streams
 - strict `TextEncoder` and `TextDecoder` support
-- [`SubtleCrypto.digest()`](https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto/digest) with SHA-256
 - `AbortController`, `AbortSignal`, and `AbortSignal.throwIfAborted()`
 - `URL`, `Object.hasOwn()`, frozen objects, and `structuredClone()`
 - typed arrays, including BigInt typed arrays for 64-bit NumPy integers
@@ -205,10 +204,9 @@ Opening and loading use these web platform capabilities:
 Mounts can also require the DOM, Blob and object URL APIs, dynamic module import,
 canvas or SVG support, and the capabilities of a selected peer runtime.
 
-Web Crypto is available in a [secure
+Opening, loading, verifying, and mounting an AnyWidget work on HTTP and HTTPS
+origins, including origins outside a [secure
 context](https://developer.mozilla.org/en-US/docs/Web/Security/Secure_Contexts).
-Serve an application over HTTPS or from a browser-recognized local development
-origin. A missing Web Crypto implementation raises `integrity_failed`.
 
 The package manifest does not declare a browser-version matrix. Check these
 capabilities in every supported application browser and run mounted runtime

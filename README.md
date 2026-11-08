@@ -37,8 +37,9 @@ receiving the notebook source.
   native cell cache when a new state needs to run.
 - **Build your own application.** Read through Python, TypeScript, or the
   documented export format. Your application owns presentation and deployment.
-- **Verify what you read.** Readers validate the index and check asset sizes and
-  hashes before decoding.
+- **Verify what you ship.** The exporter and `marimo-export verify` compare every
+  asset with its digest. The browser reader validates the index, then checks each
+  asset's size and format before decoding.
 
 [Try the exported application](https://marimo-team.github.io/marimo-export/overview)
 or [compare deployment options](docs/why.md).

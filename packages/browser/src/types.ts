@@ -306,7 +306,6 @@ export interface VerificationResult {
 
 export interface NotebookExport {
   readonly base: URL;
-  readonly identity: string;
   readonly specSha256: string;
   readonly defaultState: ExportState;
   readonly notebook: NotebookProvenance;

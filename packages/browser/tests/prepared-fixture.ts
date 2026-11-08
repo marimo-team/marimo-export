@@ -8,18 +8,17 @@ import type { PreparedExportManifest, PreparedPublication } from "../src/prepare
 interface PreparedExportFixtureOptions {
   readonly base?: string;
   readonly controlBindings?: Readonly<Record<string, ControlBinding>>;
-  readonly identity?: string;
   readonly inputs: readonly JsonObject[];
 }
 
 interface PreparedManifestFixtureOptions {
   readonly exportUrl?: string;
+  readonly instance?: string;
   readonly refreshIntervalMs?: number;
 }
 
 export const preparedExportFixture = (options: PreparedExportFixtureOptions): NotebookExport => {
   const base = new URL(options.base ?? "https://example.test/export/");
-  const identity = options.identity ?? "1".repeat(64);
   const inputNames = Object.freeze(Object.keys(options.inputs[0] ?? {}));
   const statesByInputs = new Map<string, ExportState>();
   let notebookExport: NotebookExport;
@@ -47,7 +46,6 @@ export const preparedExportFixture = (options: PreparedExportFixtureOptions): No
   notebookExport = {
     base,
     controlBindings: Object.freeze({ ...options.controlBindings }),
-    identity,
     inputNames,
     specSha256: "f".repeat(64),
     defaultState: states[0]!,
@@ -89,7 +87,7 @@ export const preparedManifestFixture = (
   const state = notebookExport.resolve(inputs);
   const manifest = {
     schema: "marimo-export.prepared.v1",
-    instance: notebookExport.identity,
+    instance: options.instance ?? "1".repeat(64),
     exportUrl: options.exportUrl ?? notebookExport.base.href,
     inputs: state.inputs,
     stateFingerprint: state.fingerprint,

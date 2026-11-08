@@ -9,7 +9,6 @@ export const PAGE_MODULE_CACHE_SYMBOL = Symbol.for(
   "@marimo-team/marimo-export:anywidget-module-cache:v1",
 );
 const PAGE_MODULE_CACHE_VERSION = 1;
-const encoder = new TextEncoder();
 
 interface PageModuleCache {
   readonly version: typeof PAGE_MODULE_CACHE_VERSION;
@@ -26,7 +25,7 @@ export async function loadPageAnyWidget(
   spec: EsmSpec,
   files: Readonly<Record<string, string>>,
 ): Promise<AnyWidget> {
-  const source = await moduleSource(spec, files);
+  const source = moduleSource(spec, files);
   const modules = pageModuleCache().modules;
   const existing = modules.get(source.cacheKey);
   if (existing !== undefined) return existing;
@@ -43,22 +42,19 @@ export async function loadPageAnyWidget(
   return promise;
 }
 
-export async function anyWidgetModuleCacheKey(
+export function anyWidgetModuleCacheKey(
   spec: EsmSpec,
   files: Readonly<Record<string, string>>,
-): Promise<string> {
-  return (await moduleSource(spec, files)).cacheKey;
+): string {
+  return moduleSource(spec, files).cacheKey;
 }
 
-async function moduleSource(
-  spec: EsmSpec,
-  files: Readonly<Record<string, string>>,
-): Promise<ModuleSource> {
+function moduleSource(spec: EsmSpec, files: Readonly<Record<string, string>>): ModuleSource {
   const key = embeddedFileKey(spec.url);
   const embedded = files[key];
   if (embedded !== undefined) {
     return {
-      cacheKey: await digestIdentity([spec.hash, "embedded", key, embedded]),
+      cacheKey: JSON.stringify([spec.hash, "embedded", key, embedded]),
       importUrl: spec.url,
       embedded,
     };
@@ -66,7 +62,7 @@ async function moduleSource(
   const importUrl = new URL(spec.url).href;
   const kind = importUrl.startsWith("data:") ? "data" : "url";
   return {
-    cacheKey: await digestIdentity([spec.hash, kind, importUrl]),
+    cacheKey: JSON.stringify([spec.hash, kind, importUrl]),
     importUrl,
     embedded: undefined,
   };
@@ -115,12 +111,6 @@ function base64Bytes(value: string): Uint8Array<ArrayBuffer> {
     bytes[index] = binary.charCodeAt(index);
   }
   return bytes;
-}
-
-async function digestIdentity(parts: readonly string[]): Promise<string> {
-  const bytes = encoder.encode(JSON.stringify(parts));
-  const digest = await crypto.subtle.digest("SHA-256", new Uint8Array(bytes));
-  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
 function pageModuleCache(): PageModuleCache {

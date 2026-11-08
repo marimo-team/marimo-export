@@ -117,8 +117,8 @@ console.log(report.output?.mimetype);
 ```
 
 The parser converts snake-case manifest fields into camel-case TypeScript
-properties. Opening checks that the manifest identity, export URL, complete
-input vector, and state fingerprint agree with the immutable export.
+properties. Opening checks that the export URL, complete input vector, and state
+fingerprint agree with the immutable export.
 
 ## Run a changing publication service
 

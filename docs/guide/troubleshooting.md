@@ -281,16 +281,15 @@ Inspect the failed request for `index.json` first.
 - A browser CORS error means the export origin does not allow the application
   origin.
 - `export_noncanonical` means the server or a build step changed `index.json`.
-- `integrity_failed` means an asset differs from its descriptor.
+- `integrity_failed` means an asset's byte length differs from its descriptor.
+  Run `marimo-export verify` on the directory you uploaded to compare digests as well.
 - `read_limit_exceeded` means the configured or default byte bound rejected the
   response.
 
 Use a custom `fetch` implementation for supported credentials or request
 policy. Keep the export URL free of user information and bearer secrets.
 
-If the browser reports `integrity_failed` before a digest comparison, verify that
-the page runs in a secure context with Web Crypto. Use HTTPS or a
-browser-recognized loopback development origin. Raise a byte limit only after
+Raise a byte limit only after
 the declared size and publisher are trusted and the application has enough
 memory.
 
