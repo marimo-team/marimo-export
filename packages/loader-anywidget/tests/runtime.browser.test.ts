@@ -42,6 +42,7 @@ afterEach(async () => {
   Reflect.deleteProperty(globalThis, DUAL_PENDING_GATE);
   Reflect.deleteProperty(globalThis, DUAL_RETRY_IMPORT);
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 describe("AnyWidget native browser runtime", () => {
@@ -350,6 +351,17 @@ describe("AnyWidget native browser runtime", () => {
       firstHost.remove();
       secondHost.remove();
     }
+  });
+
+  test("imports an embedded module on an origin without crypto.subtle", async () => {
+    const [cache] = await moduleCacheCopies();
+    vi.stubGlobal("crypto", { subtle: undefined });
+    const spec = { hash: "no-subtle-browser-module-v1", url: "/@file/no-subtle.js" };
+    const files = { "/@file/no-subtle.js": moduleUrl("export default { render() {} };") };
+
+    await expect(cache.loadPageAnyWidget(spec, files)).resolves.toMatchObject({
+      render: expect.any(Function),
+    });
   });
 
   test("shares pending and sequential imports across module-cache copies", async () => {
