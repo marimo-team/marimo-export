@@ -40,7 +40,7 @@ extended attributes.
 ## Configure the host
 
 The host must preserve paths and bytes exactly. It may compress responses in
-transit because readers verify the decoded body.
+transit because readers measure the decoded body.
 
 | Resource                               | Recommended cache policy                                        |
 | -------------------------------------- | --------------------------------------------------------------- |
@@ -85,11 +85,15 @@ into the document.
 
 ## Separate integrity from publisher trust
 
-`openExport()` validates canonical `index.json`. Loading an output verifies the
-selected asset. `NotebookExport.verify()` and `marimo-export verify` read every
-declared asset.
+`openExport()` validates canonical `index.json`. Loading an output checks the
+selected asset's size and its NPY, Arrow, or BlobAsset framing.
+`NotebookExport.verify()` applies those checks to every declared asset. `marimo-export verify` also compares every asset with
+its SHA-256 digest, so run it on the directory you deploy.
 
-These checks prove consistency with `index.json`. Authenticate the publisher
+Browser readers open exports on any HTTP or HTTPS origin and rely on those
+build-time digests. A same-sized change made in transit, in storage, or in a CDN
+or HTTP cache reaches the loader, so serve exports over HTTPS from a host you
+trust as much as the application page. Authenticate the publisher
 through the deployment origin, signed release artifacts, or another mechanism
 owned by your application. marimo computation-cache signing protects producer
 cache restoration and is separate from notebook export authentication.

@@ -7,7 +7,7 @@ description: Built-in output results, peer runtimes, mount ownership, cancellati
 
 An `OutputLoader` accepts one codec and media type, validates its representation,
 and returns browser data or a mountable value. `ExportOutput.load()` selects the
-loader explicitly and verifies asset bytes before calling it.
+loader explicitly and checks the asset's size and framing before calling it.
 
 ```ts
 import { openExport } from "@marimo-team/marimo-export";

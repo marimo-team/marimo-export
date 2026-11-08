@@ -36,8 +36,12 @@ producer process's filesystem, credential, package, and network access. Managed
 process ownership supplies startup, timeout, cancellation, and cleanup. It is
 not an operating-system security sandbox.
 
-Opening and verifying a notebook export establish consistency with its loaded
-`index.json`. The application authenticates the publisher and delivery origin.
+The exporter, the Python reader, and `marimo-export verify` compare asset bytes
+with the SHA-256 digests in `index.json`. The browser reader validates the
+canonical index, each asset's size, and native framing, so a same-sized change
+made in transit, in storage, or in a CDN or HTTP cache reaches its loaders. Serve
+exports over HTTPS from a host trusted as much as the application page. The
+application authenticates the publisher and delivery origin.
 Mounting an AnyWidget, Vega-Lite chart, or custom interactive representation
 grants that code the browser page's authority. Exported HTML remains untrusted
 markup until the application applies its rendering and sanitization policy.

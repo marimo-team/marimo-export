@@ -155,7 +155,7 @@ Selected window: 30 days
 ```
 
 `openExport()` validates canonical `index.json`. The JSON loader reads the inline
-summary. The rendered-output loader verifies and decodes the selected report
+summary. The rendered-output loader checks and decodes the selected report
 asset as an inert snapshot. The example presents its Markdown as text, so it
 does not attach notebook-authored markup to the page.
 

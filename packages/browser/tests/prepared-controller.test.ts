@@ -228,7 +228,6 @@ describe("prepared state controller", () => {
     const firstExport = preparedExportFixture({ inputs: [{ count: 0 }] });
     const secondExport = preparedExportFixture({
       base: "https://example.test/export-2/",
-      identity: "2".repeat(64),
       inputs: [{ count: 0 }, { count: 1 }],
     });
     const { port } = recordingPort();
@@ -240,7 +239,9 @@ describe("prepared state controller", () => {
     });
     expect(controller.snapshot().pendingInputs).toEqual({ count: 1 });
 
-    await controller.replacePublication(preparedPublicationFixture(secondExport, { count: 0 }));
+    await controller.replacePublication(
+      preparedPublicationFixture(secondExport, { count: 0 }, { instance: "2".repeat(64) }),
+    );
 
     expect(controller.snapshot().current?.notebookExport).toBe(secondExport);
     expect(controller.snapshot().current?.state.inputs).toEqual({ count: 1 });
@@ -269,7 +270,6 @@ describe("prepared state controller", () => {
     const firstExport = preparedExportFixture({ inputs: [{ mode: "baseline" }] });
     const secondExport = preparedExportFixture({
       base: "https://example.test/export-2/",
-      identity: "2".repeat(64),
       inputs: [{ choice: "A" }],
     });
     const { port } = recordingPort();
@@ -280,7 +280,9 @@ describe("prepared state controller", () => {
     });
 
     await expect(
-      controller.replacePublication(preparedPublicationFixture(secondExport, { choice: "A" })),
+      controller.replacePublication(
+        preparedPublicationFixture(secondExport, { choice: "A" }, { instance: "2".repeat(64) }),
+      ),
     ).resolves.toBeUndefined();
 
     expect(controller.snapshot().current?.state.inputs).toEqual({ choice: "A" });
@@ -293,7 +295,6 @@ describe("prepared state controller", () => {
     });
     const secondExport = preparedExportFixture({
       base: "https://example.test/export-2/",
-      identity: "2".repeat(64),
       inputs: [{ mode: "baseline" }, { mode: "alternate" }],
     });
     let entered: (() => void) | undefined;
@@ -319,7 +320,7 @@ describe("prepared state controller", () => {
     expect(controller.snapshot().pendingInputs).toBeUndefined();
 
     await controller.replacePublication(
-      preparedPublicationFixture(secondExport, { mode: "baseline" }),
+      preparedPublicationFixture(secondExport, { mode: "baseline" }, { instance: "2".repeat(64) }),
     );
     expect(controller.snapshot().current?.state.inputs).toEqual({ mode: "baseline" });
   });

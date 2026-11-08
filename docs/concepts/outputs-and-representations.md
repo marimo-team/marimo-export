@@ -109,7 +109,7 @@ const summary = await state.output("summary").load(jsonLoader());
 const report = await state.output("report").load(marimoOutputLoader());
 ```
 
-Loading verifies the selected asset before decoding it. Loading an unavailable
+Loading checks the selected asset's size and format before decoding it. Loading an unavailable
 output fails with `output_unavailable` before any fetch or decode. Check
 `output.unavailable` to choose a placeholder instead. The report loader
 returns an inert rendered-output snapshot. Other loaders can return a value with

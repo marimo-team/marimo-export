@@ -8,7 +8,7 @@ its compiled implementation.
 
 The loader validates the Arrow media type, registers bounded
 [LZ4](https://github.com/Benzinga/lz4js) decompression, and returns a
-[Flechette](https://github.com/uwdata/flechette) table from verified export bytes.
+[Flechette](https://github.com/uwdata/flechette) table from export bytes.
 
 Run focused checks from the repository root:
 

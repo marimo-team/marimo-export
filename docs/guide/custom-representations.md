@@ -116,7 +116,7 @@ const summary = await state.output("summary_data").load(summaryLoader);
 ```
 
 Use a new media-type version when a consumer cannot read both the old and new
-payload shape. The export verifies the BlobAsset envelope and bytes. The loader
+payload shape. The exporter verifies the BlobAsset envelope and bytes. The loader
 owns representation-specific shape validation.
 
 ## Return a mountable value

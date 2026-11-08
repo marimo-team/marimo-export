@@ -33,9 +33,8 @@ reuse and consumer readers can complete without constructing that adapter.
 `@marimo-team/marimo-export` uses
 [ECMAScript modules](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Modules),
 the browser-native JavaScript module format, and targets ES2022. Opening and
-verifying an export require standard web APIs including `fetch`, `URL`, an
-optional `AbortSignal`, and
-[Web Crypto](https://developer.mozilla.org/en-US/docs/Web/API/Web_Crypto_API).
+verifying an export require standard web APIs including `fetch`, `URL`, and an
+optional `AbortSignal`.
 
 Loading and mounting add representation-specific browser requirements:
 

@@ -359,7 +359,7 @@ MessagePack values.
 
 ## Verification
 
-Readers verify:
+The exporter, the Python reader, and `marimo-export verify` check:
 
 - canonical index bytes
 - exact input and output key sets
@@ -374,10 +374,14 @@ Readers verify:
 - descriptor and envelope agreement
 - complete declared asset closure
 
+The browser reader checks the same list except for state fingerprints and
+SHA-256.
+
 The loaded `index.json` is the integrity root. Verification establishes
 consistency with that index. It does not authenticate who produced the index.
-Python `NotebookExport.identity` and browser `NotebookExport.identity` expose
-the lowercase SHA-256 of the exact canonical `index.json` bytes.
+Python `NotebookExport.identity` exposes the lowercase SHA-256 of the exact
+canonical `index.json` bytes, and the prepared manifest `instance` carries that
+value to browsers.
 
 ## Protocol limits
 
@@ -414,7 +418,7 @@ browser defaults and caller overrides.
 ## HTTP delivery
 
 Serve `index.json` and each declared asset at byte-stable HTTP or HTTPS URLs.
-Content encoding is permitted because browser readers verify the decoded body.
+Content encoding is permitted because browser readers measure the decoded body.
 Use immutable caching for content-addressed assets. A replaceable `index.json`
 needs a revalidation policy that matches the application's freshness contract.
 

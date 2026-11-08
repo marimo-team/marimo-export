@@ -31,8 +31,8 @@ authored `outputs` mapping, and its digest is the **output-plan identity**.
 `NotebookExport.identity` and `PreparedExport.identity` are the notebook export
 identity. The repository stores that value as the export generation instance.
 The `instance` field in `marimo-export.prepared.v1` carries the same notebook
-export identity so a browser can reject a manifest that points at different
-index bytes.
+export identity. The browser compares it by equality to decide whether a refresh
+can keep the opened export.
 
 A prepared-state instance has another digest. It is SHA-256 over
 `prepared-state.json`, which declares the producer, output plan, state

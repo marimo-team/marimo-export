@@ -179,7 +179,9 @@ refresh_interval_ms  when configured
 export default. `export_url` must be a nonempty string of at most 8192 UTF-8
 bytes. `refresh_interval_ms` accepts `0` or an integer from 250 through 60,000.
 Zero disables polling while preserving an explicit refresh policy in the
-manifest.
+manifest. Give each export identity its own `export_url`, such as
+`./<identity>/`, because the browser trusts `instance` to name the export at that
+URL.
 
 Serialize the response through the bounded public helper:
 

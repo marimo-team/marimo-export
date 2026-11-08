@@ -40,12 +40,10 @@ Opening performs these operations:
 2. Fetch at most 16 MiB.
 3. Decode strict UTF-8 JSON and reject duplicate keys.
 4. Require the exact canonical JSON bytes and export schema.
-5. Validate names, descriptors, aliases, state shapes, and representation consistency.
-6. Recompute every state fingerprint.
-7. Hash the index bytes as `NotebookExport.identity`.
+5. Validate names, descriptors, aliases, state shapes, distinct state inputs, and representation consistency.
 
-The operation does not fetch output assets. Pass `signal` to abort the fetch,
-stream read, parsing checkpoints, or fingerprint work.
+The operation does not fetch output assets. Pass `signal` to abort the fetch or
+stream read.
 
 ### Preserve a routing query
 
@@ -94,7 +92,6 @@ cannot bypass the browser's CORS policy.
 ```ts
 interface NotebookExport {
   readonly base: URL;
-  readonly identity: string;
   readonly specSha256: string;
   readonly defaultState: ExportState;
   readonly notebook: NotebookProvenance;
@@ -123,7 +120,6 @@ interface ProducerProvenance {
 | Property          | Value                                                                               |
 | ----------------- | ----------------------------------------------------------------------------------- |
 | `base`            | Detached normalized export URL, including its fixed query                           |
-| `identity`        | Lowercase SHA-256 of the exact canonical `index.json` bytes                         |
 | `specSha256`      | Identity of the canonical ExportSpec that selected the relation                     |
 | `defaultState`    | Exported state named by the index default fingerprint                               |
 | `notebook`        | Optional source filename and document SHA-256                                       |
@@ -243,7 +239,8 @@ when one requested output is unavailable.
 predicate before reading bytes. Inline scalar and JSON values require no asset
 request. Asset-backed outputs use a path derived from codec and SHA-256, request
 it with `cache: "force-cache"`, enforce the declared and caller byte limits,
-verify size and SHA-256, validate native framing, then invoke the loader.
+check the exact size, validate NPY, Arrow, or BlobAsset framing, then invoke the
+loader. Marimo output and cell loaders parse their JSON snapshot.
 
 The default `maxBytes` is 512 MiB. Pass a smaller value for an untrusted or
 memory-constrained workflow. The maximum accepted value is 2,147,483,647 bytes.
@@ -311,16 +308,17 @@ const result = await notebookExport.verify();
 ```
 
 `verify()` collects every unique asset identified by codec and SHA-256. It
-checks the declared total before fetching, then reads and verifies each asset
-sequentially. The default per-asset limit is 512 MiB. The default aggregate
+checks the declared total before fetching, then reads each asset sequentially
+and checks its size and its NPY, Arrow, or BlobAsset framing. The default per-asset limit is 512 MiB. The default aggregate
 limit is 2 GiB.
 
 The result counts exported states, state-output pairs, unique assets, and
 verified bytes. Inline scalar and JSON values contribute to `outputs` but not to
 `assets` or `bytesVerified`.
 
-Verification establishes consistency with `index.json`. It does not authenticate
-the index producer or execute an interactive representation.
+Run `marimo-export verify` to compare asset bytes with their SHA-256 digests.
+Browser verification does not authenticate the index producer or execute an
+interactive representation.
 
 ## Reader types
 

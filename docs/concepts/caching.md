@@ -92,7 +92,7 @@ requires a new producer run.
 | Notebook export          | Canonical `index.json` and declared assets | Consumers          |
 
 A written notebook export remains readable after both producer-side stores are
-removed. Its readers select exported states and verify output assets.
+removed. Its readers select exported states and check output assets.
 
 Related: [Publishing](exports-and-publications) covers how an application
 receives newer exports. [Reuse](preparation-and-reuse) defines exact identities,

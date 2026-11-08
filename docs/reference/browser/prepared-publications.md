@@ -43,14 +43,14 @@ application](../../guide/browser-applications) describes that DOM pattern.
 
 ## Publication objects
 
-| Object                       | Contract                                                                                 |
-| ---------------------------- | ---------------------------------------------------------------------------------------- |
-| Prepared manifest            | Snake-case JSON served by an application route                                           |
-| `PreparedExportManifest`     | Parsed immutable TypeScript value with camel-case properties                             |
-| `NotebookExport`             | Immutable reader opened from the manifest `instance` and `export_url`                    |
-| `PreparedPublication`        | `{ manifest, notebookExport, state }` after URL, identity, input, and fingerprint checks |
-| `PreparedStateController`    | Mutable input intent and serialized application transitions                              |
-| `PreparedPublicationRefresh` | Manifest fetching, immutable export reuse, publication replacement, and polling          |
+| Object                       | Contract                                                                        |
+| ---------------------------- | ------------------------------------------------------------------------------- |
+| Prepared manifest            | Snake-case JSON served by an application route                                  |
+| `PreparedExportManifest`     | Parsed immutable TypeScript value with camel-case properties                    |
+| `NotebookExport`             | Immutable reader opened from the manifest `export_url`                          |
+| `PreparedPublication`        | `{ manifest, notebookExport, state }` after URL, input, and fingerprint checks  |
+| `PreparedStateController`    | Mutable input intent and serialized application transitions                     |
+| `PreparedPublicationRefresh` | Manifest fetching, immutable export reuse, publication replacement, and polling |
 
 The TypeScript API names the parsed value `PreparedExportManifest`. In prose,
 **prepared manifest** means the protocol document. The browser follows a
@@ -75,7 +75,7 @@ Serve this exact JSON shape:
 | Wire field            | Parsed property     | Contract                                                                                               |
 | --------------------- | ------------------- | ------------------------------------------------------------------------------------------------------ |
 | `schema`              | `schema`            | Exact value `marimo-export.prepared.v1`                                                                |
-| `instance`            | `instance`          | Lowercase SHA-256 of the selected export's canonical `index.json`                                      |
+| `instance`            | `instance`          | Lowercase SHA-256 of the selected export's canonical `index.json`, compared by equality in the browser |
 | `export_url`          | `exportUrl`         | Nonempty URL reference of at most 8,192 UTF-8 bytes                                                    |
 | `inputs`              | `inputs`            | Complete portable JSON input vector                                                                    |
 | `state_fingerprint`   | `stateFingerprint`  | Fingerprint of `inputs` in the selected export                                                         |
@@ -97,6 +97,12 @@ interface PreparedPublication {
   readonly state: ExportState;
 }
 ```
+
+Give each `instance` its own `export_url`, such as `./<instance>/`.
+`PreparedPublicationRefresh` keeps the opened export while `instance` and the
+resolved URL both stay equal, and opens the export again when either changes. A
+reused URL can pair a new `instance` with a cached `index.json`, which the
+reader then keeps until the value of `instance` or the URL changes.
 
 Unknown or missing fields fail validation. `export_url` resolves relative to the
 manifest URL, then must produce an HTTP or HTTPS export base without a fragment
@@ -170,9 +176,8 @@ function resolvePreparedPublication(
 ): PreparedPublication;
 ```
 
-Checks that `manifest.instance` equals `notebookExport.identity`, that the
-resolved export URL equals `notebookExport.base`, that the complete input vector
-exists, and that its fingerprint matches. It reuses an already opened export and
+Checks that the resolved export URL equals `notebookExport.base`, that the
+complete input vector exists, and that its fingerprint matches. It reuses an already opened export and
 performs no network request.
 
 ### `openPreparedPublication(manifest, manifestUrl, options?)`
@@ -429,7 +434,7 @@ applies the selected result with reason `publication`. Pending intent survives
 when both exports have the same input-name set. It is discarded when the input
 contract changes.
 
-When the export identity and state fingerprint already match the committed
+When the publication keeps the same `NotebookExport` and state fingerprint as the committed
 publication, replacement updates manifest metadata without calling `apply()`.
 
 ### Cancel, settle, and dispose
@@ -486,7 +491,7 @@ has no current or target publication.
 
 `refresh()` fetches the current manifest. Concurrent calls share the active
 refresh operation. The refresh object reuses the opened `NotebookExport` when
-identity and base URL match. A new identity is opened and validated before
+`instance` and base URL match. A new `instance` is opened and validated before
 publication replacement.
 
 A local state selection survives refresh when the input-name set matches and
@@ -517,8 +522,8 @@ dispose staged mounts on every failure path.
 
 The manifest authenticates neither its server nor its export. Validate the
 server through the deployment's HTTPS, authentication, and origin policy. The
-`instance` digest detects an export whose index differs from the selected
-identity.
+producer computes `instance` from the selected export, and the browser trusts
+that value to name the export at `export_url`.
 
 [Errors and limits](errors-and-limits) separates prepared errors, reader
 errors, application errors, and aborts.

@@ -1,4 +1,4 @@
-import { describe, expect, test, vi } from "vite-plus/test";
+import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 
 import {
   NotebookExportError,
@@ -7,11 +7,13 @@ import {
   openExport,
   scalarLoader,
 } from "../src/index.js";
-import { canonicalJson } from "../src/schema.js";
-import { sha256Hex } from "../src/integrity.js";
 import { availableOutput, exportFixture, mutableObject, stringValue } from "./fixture.js";
 
 const encoder = new TextEncoder();
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 describe("export", () => {
   test("opens only the canonical index and exposes immutable exact states", async () => {
@@ -21,7 +23,6 @@ describe("export", () => {
     });
 
     expect(notebookExport.base.href).toBe("https://example.test/stocks/");
-    expect(notebookExport.identity).toBe(await sha256Hex(fixture.indexBytes));
     expect(notebookExport.specSha256).toBe("d".repeat(64));
     expect(notebookExport.defaultState).toBe(notebookExport.state("alpha"));
     expect(fixture.requests).toEqual(["https://example.test/stocks/index.json"]);
@@ -244,17 +245,24 @@ describe("export", () => {
     expect(fixture.requests).toHaveLength(4);
   });
 
-  test("rejects integrity failures before invoking a loader", async () => {
+  test.each([
+    ["size", "integrity_failed", (bytes: Uint8Array) => bytes.slice(0, -1)],
+    [
+      "format",
+      "decode_failed",
+      (bytes: Uint8Array) => {
+        const changed = bytes.slice();
+        changed[0] = 0;
+        return changed;
+      },
+    ],
+  ])("rejects an asset with the wrong %s before invoking a loader", async (_name, code, change) => {
     const fixture = await exportFixture();
     const brokenFetch: typeof globalThis.fetch = async (input, init) => {
       const response = await fixture.fetch(input, init);
       const url = input instanceof Request ? input.url : input.toString();
-      if (new URL(url).pathname.endsWith(".npy")) {
-        const bytes = new Uint8Array(await response.arrayBuffer());
-        bytes[bytes.length - 1] = bytes[bytes.length - 1]! ^ 1;
-        return new Response(bytes);
-      }
-      return response;
+      if (!new URL(url).pathname.endsWith(".npy")) return response;
+      return new Response(change(new Uint8Array(await response.arrayBuffer())));
     };
     const notebookExport = await openExport("https://example.test/stocks?file=notebook.py", {
       fetch: brokenFetch,
@@ -267,12 +275,31 @@ describe("export", () => {
     });
 
     await expect(notebookExport.state("alpha").output("array").load(loader)).rejects.toMatchObject({
-      code: "integrity_failed",
+      code,
     });
     expect(
       fixture.requests.every((request) => new URL(request).search === "?file=notebook.py"),
     ).toBe(true);
     expect(load).not.toHaveBeenCalled();
+  });
+
+  test("opens, loads, and verifies an export on an origin without crypto.subtle", async () => {
+    const fixture = await exportFixture();
+    vi.stubGlobal("crypto", { subtle: undefined });
+    const loader = defineOutputLoader({
+      codec: "numpy.npy.v1",
+      accepts: () => true,
+      load: ({ payload }) => payload,
+    });
+
+    const notebookExport = await openExport("http://insecure.test/stocks", {
+      fetch: fixture.fetch,
+    });
+
+    await expect(notebookExport.state("alpha").output("array").load(loader)).resolves.toEqual(
+      new Uint8Array([0x93, 0x4e, 0x55, 0x4d, 0x50, 0x59, 0x01, 0x00]),
+    );
+    await expect(notebookExport.verify()).resolves.toMatchObject({ assets: 3 });
   });
 
   test("enforces caller byte and aggregate limits before fetching assets", async () => {
@@ -297,7 +324,7 @@ describe("export", () => {
 });
 
 describe("canonical export validation", () => {
-  test("rejects whitespace, duplicate keys, and a wrong fingerprint", async () => {
+  test("rejects whitespace and duplicate keys", async () => {
     const fixture = await exportFixture();
     const encodings = [
       encoder.encode(`${new TextDecoder().decode(fixture.indexBytes)}\n`),
@@ -315,23 +342,21 @@ describe("canonical export validation", () => {
         NotebookExportError,
       );
     }
+  });
 
-    const wrong = structuredClone(fixture.index);
-    const states = mutableObject(wrong.states, "states");
-    const aliases = mutableObject(wrong.aliases, "aliases");
-    const alpha = stringValue(aliases.alpha, "aliases.alpha");
-    const wrongFingerprint = "f".repeat(64);
-    states[wrongFingerprint] = states[alpha]!;
-    delete states[alpha];
-    if (wrong.default_state === alpha) wrong.default_state = wrongFingerprint;
-    for (const alias of Object.keys(aliases)) {
-      if (aliases[alias] === alpha) aliases[alias] = wrongFingerprint;
-    }
-    const bytes = encoder.encode(canonicalJson(wrong));
+  test("rejects two states with the same inputs", async () => {
+    const fixture = await exportFixture({
+      indexTransform(index) {
+        const states = mutableObject(index.states, "states");
+        const aliases = mutableObject(index.aliases, "aliases");
+        const alpha = mutableObject(states[stringValue(aliases.alpha, "aliases.alpha")], "alpha");
+        const zeta = mutableObject(states[stringValue(aliases.zeta, "aliases.zeta")], "zeta");
+        zeta.inputs = alpha.inputs!;
+      },
+    });
+
     await expect(
-      openExport("https://example.test/stocks", {
-        fetch: async () => new Response(bytes),
-      }),
+      openExport("https://example.test/stocks", { fetch: fixture.fetch }),
     ).rejects.toMatchObject({ code: "export_invalid" });
   });
 

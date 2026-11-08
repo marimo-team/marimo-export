@@ -37,7 +37,7 @@ frozen record. Invalid record shapes raise `TypeError`. Strict JSON syntax and
 value-limit failures raise `SyntaxError`.
 
 `marimoOutputLoader()` and `marimoCellLoader()` apply the same parsers after the
-browser reader verifies the asset. A parser failure reached through
+browser reader checks the asset size. A parser failure reached through
 `ExportOutput.load()` becomes `NotebookExportError` code `decode_failed` with
 output context.
 

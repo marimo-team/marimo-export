@@ -38,7 +38,7 @@ Application policy chooses which observed vectors become prepared states and
 which revision changes request another preparation.
 
 Native frontend hosts own model registries, replay checkpoints, UI state, and
-remount decisions. The export browser API supplies verified snapshots, loaders,
+remount decisions. The export browser API supplies snapshots, loaders,
 and requested-state transitions for those hosts to consume.
 
 The published marimo release recorded in `packages/python/pyproject.toml`
@@ -176,7 +176,7 @@ the exact records, codecs, writer transaction, and reader invariants.
 
 ## Browser lifecycle
 
-The browser core opens and verifies immutable notebook exports. Loader subpaths
+The browser core opens and size-checks immutable notebook exports. Loader subpaths
 decode one representation. The `prepared` subpath adds:
 
 - strict `marimo-export.prepared.v1` parsing
@@ -246,7 +246,7 @@ errors.
 | Notebook and exporter execution | Runs with the producer process's files, credentials, packages, and network access                                                                                                           |
 | Export repository               | Uses local ownership and permissions for producer cache data. It is not a deployment tree or publisher-authentication mechanism                                                             |
 | Live transport                  | HTTPS protects non-loopback transport. The access token authorizes the client, and the server token satisfies Marimo server checks. The selected kernel retains its full producer authority |
-| Notebook export verification    | Proves canonical index, declared closure, framing, sizes, and digests agree with the loaded integrity root                                                                                  |
+| Notebook export verification    | The writer and `marimo-export verify` prove canonical index, declared closure, framing, sizes, and digests agree with the loaded integrity root. Browser readers check size and framing     |
 | Prepared manifest route         | Selects one export identity and state. The application authenticates the route and constrains allowed origins                                                                               |
 | Browser mount                   | Grants the loaded chart, widget, or custom module the page's DOM, network, and global JavaScript authority                                                                                  |
 
