@@ -43,7 +43,7 @@ jobs:
       github.event.workflow_run.head_branch == 'main' &&
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.head_repository.full_name == github.repository)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-p-small
     timeout-minutes: 5
     outputs:
       channel: ${{ steps.identity.outputs.channel }}
@@ -92,7 +92,7 @@ jobs:
       actions: read
       contents: read
       attestations: read
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-p-small
     timeout-minutes: 45
     steps:
       - name: Check out repository
@@ -208,7 +208,7 @@ jobs:
   attest:
     name: Attest build provenance
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-p-small
     timeout-minutes: 10
     outputs:
       predicate_type: ${{ steps.provenance.outputs.predicate_type }}
@@ -254,7 +254,7 @@ jobs:
     needs:
       - build
       - attest
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-p-small
     timeout-minutes: 10
     environment:
       name: npm
@@ -299,7 +299,7 @@ jobs:
     needs:
       - publish-npm
       - build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-p-small
     timeout-minutes: 10
     steps:
       - name: Check out repository
@@ -334,7 +334,7 @@ jobs:
     needs:
       - build
       - attest
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-p-small
     timeout-minutes: 10
     environment:
       name: pypi
@@ -373,7 +373,7 @@ jobs:
     needs:
       - publish-pypi
       - build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-p-small
     timeout-minutes: 10
     steps:
       - name: Check out repository
@@ -404,7 +404,7 @@ jobs:
   release-notes:
     name: Create GitHub release
     needs: [verify-npm, verify-pypi, build]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-p-small
     timeout-minutes: 10
     permissions:
       actions: read
@@ -465,7 +465,7 @@ jobs:
       - publish-pypi
       - verify-pypi
       - release-notes
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-p-small
     timeout-minutes: 1
     steps:
       - name: Require completed publication and verification
@@ -494,7 +494,7 @@ jobs:
     name: Publish preview
     needs: [build, attest]
     if: needs.build.outputs.channel == 'preview'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-p-small
     timeout-minutes: 10
     concurrency:
       group: publish-preview-release
