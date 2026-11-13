@@ -16,7 +16,7 @@ permissions:
 jobs:
   changes:
     name: Changes
-    runs-on: ubuntu-p-small
+    runs-on: "${{ vars.CI_RUNNER_SMALL || 'ubuntu-latest' }}"
     permissions:
       contents: read
       pull-requests: read
@@ -44,7 +44,7 @@ jobs:
     name: Quality
     needs: changes
     if: needs.changes.outputs.quality == 'true'
-    runs-on: ubuntu-p-small
+    runs-on: "${{ vars.CI_RUNNER_SMALL || 'ubuntu-latest' }}"
     timeout-minutes: 20
     steps:
       - name: Check out repository
@@ -78,7 +78,7 @@ jobs:
     name: Python ${{ matrix.python-version }} / ${{ matrix.os }}
     needs: changes
     if: needs.changes.outputs.python_contracts == 'true'
-    runs-on: ${{ matrix.os }}
+    runs-on: "${{ matrix.os == 'windows-latest' && (vars.CI_RUNNER_WINDOWS || 'windows-latest') || (matrix.os) }}"
     timeout-minutes: 45
     strategy:
       fail-fast: false
@@ -159,7 +159,7 @@ jobs:
     name: Frontend
     needs: changes
     if: needs.changes.outputs.frontend_contracts == 'true'
-    runs-on: ubuntu-p-small
+    runs-on: "${{ vars.CI_RUNNER_SMALL || 'ubuntu-latest' }}"
     timeout-minutes: 30
 
     steps:
@@ -191,7 +191,7 @@ jobs:
     name: Package
     needs: changes
     if: needs.changes.outputs.distribution == 'true'
-    runs-on: ubuntu-p-small
+    runs-on: "${{ vars.CI_RUNNER_SMALL || 'ubuntu-latest' }}"
     timeout-minutes: 30
     steps:
       - name: Check out repository
@@ -217,7 +217,7 @@ jobs:
     name: Release contracts
     needs: changes
     if: needs.changes.outputs.release_contracts == 'true'
-    runs-on: ubuntu-p-small
+    runs-on: "${{ vars.CI_RUNNER_SMALL || 'ubuntu-latest' }}"
     timeout-minutes: 10
     steps:
       - name: Check out repository
@@ -239,7 +239,7 @@ jobs:
     if: >-
       needs.changes.outputs.release_contracts == 'true' &&
       (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository)
-    runs-on: ubuntu-p-small
+    runs-on: "${{ vars.CI_RUNNER_SMALL || 'ubuntu-latest' }}"
     timeout-minutes: 10
     permissions:
       contents: read
@@ -296,7 +296,7 @@ jobs:
     if: always()
     needs:
       [changes, quality, test-python, test-frontend, package, release-contracts, preview-provenance]
-    runs-on: ubuntu-p-small
+    runs-on: "${{ vars.CI_RUNNER_SMALL || 'ubuntu-latest' }}"
     timeout-minutes: 5
     steps:
       - name: Verify required jobs
