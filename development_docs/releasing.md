@@ -195,7 +195,6 @@ publication, then configure its trusted publisher before the first coordinated
 release. The npm package must exist before the first trusted publication.
 
 The publisher checks that the `npm` and `pypi` environments exist.
-The protected `release` environment controls access to the release App.
 
 If restricting the `npm` and `pypi` environments, allow both `v*` tags for
 ordinary publication and the `main` branch for the existing recovery workflow.
