@@ -1,0 +1,9 @@
+{
+  "repository": "marimo-team/marimo-export",
+  "files": ["packages/python/pyproject.toml", "uv.lock", "packages/browser/package.json"],
+  "command": ["./scripts/release.sh"],
+  "docs": "RELEASING.md",
+  "checks": [["uv", "lock", "--check"]],
+  "metadata": ["python3", "scripts/release-metadata.py"],
+  "prepare": ["bash", "scripts/prepare-release.sh"]
+}

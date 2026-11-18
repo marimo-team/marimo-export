@@ -72,3 +72,7 @@ map.
 
 First-time contributors may be asked to sign the
 [marimo contributor license agreement](https://marimo.io/cla).
+
+## Releases
+
+See [Releases](RELEASING.md) for the release PR workflow.
