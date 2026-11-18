@@ -11,7 +11,7 @@ The preview channel uses GitHub download URLs for iteration and downstream CI.
 
 ```console
 make check
-./scripts/release.sh --dry-run
+./scripts/release.sh patch
 ```
 
 `make package` writes the release candidates under `dist/python` and
@@ -34,15 +34,7 @@ bundles that implementation into the browser package, so consumers install one
 npm package. The artifact verifier rejects workspace, link, file, and catalog
 dependency sources in published package metadata.
 
-Update the two public manifests, then refresh the locks:
-
-```console
-VERSION=x.y.z
-uv version --package marimo-export "$VERSION"
-pnpm --dir packages/browser pkg set "version=$VERSION"
-uv lock
-pnpm install --lockfile-only
-```
+The [release PR workflow](../RELEASING.md) updates both versions and the Python lockfile.
 
 ## Rolling previews
 
@@ -200,54 +192,22 @@ publishing performs its OpenID Connect exchange inside `npm publish`.
 npm requires a package to exist before it can accept a trusted-publisher
 configuration. Reserve the package name through an authenticated maintainer
 publication, then configure its trusted publisher before the first coordinated
-release. The release preflight checks that the package exists.
+release. The npm package must exist before the first trusted publication.
 
-The release preflight checks that the `npm` and `pypi` environments exist.
-Required reviewers remain an optional repository policy. Apply a repository
-ruleset to `v*` tags when the release process needs maintainer approval before
-publication.
+The publisher checks that the `npm` and `pypi` environments exist.
+The protected `release` environment controls access to the release App.
 
 If restricting the `npm` and `pypi` environments, allow both `v*` tags for
 ordinary publication and the `main` branch for the existing recovery workflow.
 The publication jobs accept the release channel only. Preview versions go to
 GitHub Releases.
 
-## Prepare the release commit
+## Request and approve a release
 
-Start from a branch based on synchronized `main`. Update the coordinated
-version, and replace "the release after" placeholders in
-`docs/reference/compatibility.md` with that version. Then run:
-
-```console
-make bootstrap
-make check
-```
-
-Review these artifact facts before merging:
-
-- the wheel, source archive, and source-rebuilt wheel report the same version
-- the browser tarball contains every declared export target and its bundled
-  portable JSON implementation
-- Python wheel entry points include the CLI and Marimo kernel lifespan
-- packed manifests point to the public repository
-
-Merge after CI and documentation checks pass for the release commit.
-
-## Tag the verified commit
-
-Fetch `main` and tags from a clean checkout, then run:
-
-```console
-git fetch origin main --tags
-./scripts/release.sh --dry-run
-./scripts/release.sh
-```
-
-The preflight requires `HEAD` to equal `origin/main`. A branch checkout and a
-detached checkout at that commit are both accepted. It also requires a clean
-tree, an unused final-version tag, matching public package versions, both
-publishing environments, and successful push-event CI for the exact commit. The
-final command creates and pushes an annotated `vX.Y.Z` tag.
+Use the [release PR workflow](../RELEASING.md).
+Review the coordinated versions, package checks, and documentation before merging.
+Replace compatibility placeholders with the requested version in the release PR.
+The tagging workflow waits for CI on the exact merge commit before creating the tag.
 
 The publish workflow then:
 

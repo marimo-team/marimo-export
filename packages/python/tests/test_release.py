@@ -249,67 +249,38 @@ def test_publish_preflight_accepts_exact_sha_with_successful_ci(tmp_path: Path) 
     assert result.returncode == 0, result.stderr
 
 
-def test_release_preflight_accepts_detached_checkout_at_origin_main(tmp_path: Path) -> None:
-    remote = tmp_path / "remote.git"
-    checkout = tmp_path / "checkout"
+def test_release_dispatches_main_without_local_git_changes(tmp_path: Path) -> None:
     commands = tmp_path / "commands"
-    remote.mkdir()
-    checkout.mkdir()
     commands.mkdir()
-    _git(remote, "init", "--bare")
-    _git(checkout, "init", "--initial-branch=main")
-    _git(checkout, "config", "user.email", "release@example.com")
-    _git(checkout, "config", "user.name", "marimo-export Release")
-    scripts = checkout / "scripts"
-    scripts.mkdir()
-    shutil.copy2(ROOT / "scripts/release.sh", scripts / "release.sh")
-    _git(checkout, "add", "scripts/release.sh")
-    _git(checkout, "commit", "-m", "release")
-    _git(checkout, "remote", "add", "origin", str(remote))
-    _git(checkout, "push", "--set-upstream", "origin", "main")
-    _git(checkout, "checkout", "--detach")
-    assert _git(checkout, "branch", "--show-current") == ""
-
-    _write_command(commands / "uv", "#!/bin/sh\nprintf '0.1.0\\n'\n")
-    _write_command(commands / "node", "#!/bin/sh\nprintf '0.1.0\\n'\n")
-    _write_command(
-        commands / "curl",
-        """#!/bin/sh
-case "$*" in
-  *0.1.0*) printf '404\n' ;;
-  *) printf '200\n' ;;
-esac
-""",
-    )
+    command_log = tmp_path / "calls"
+    _write_command(commands / "git", "#!/bin/sh\nexit 93\n")
     _write_command(
         commands / "gh",
-        """#!/bin/sh
-if [ "$1 $2" = "repo view" ]; then
-    case "$*" in
-      *visibility*) printf 'PUBLIC\n' ;;
-      *) printf 'https://example.test/marimo-export\n' ;;
-    esac
-elif [ "$1" = "api" ]; then
-    printf '1\n'
-else
-    printf '123\ncompleted\nsuccess\nhttps://example.test/ci\n'
-fi
-""",
+        '#!/bin/sh\nprintf "%s\\n" "$@" > "$COMMAND_LOG"\n',
     )
-
     result = subprocess.run(
-        [_bash(), "scripts/release.sh", "--dry-run"],
-        cwd=checkout,
+        [_bash(), str(ROOT / "scripts/release.sh"), "patch"],
+        cwd=tmp_path,
         env={
             **os.environ,
+            "COMMAND_LOG": str(command_log),
             "PATH": f"{commands}{os.pathsep}{os.environ['PATH']}",
         },
         capture_output=True,
         text=True,
     )
-
-    assert result.returncode == 0, result.stdout + result.stderr
-    assert "Dry run complete" in result.stdout
+    assert result.returncode == 0, result.stderr
+    assert command_log.read_text().splitlines() == [
+        "workflow",
+        "run",
+        "release-pr.yml",
+        "--repo",
+        "marimo-team/marimo-export",
+        "--ref",
+        "main",
+        "-f",
+        "version=patch",
+    ]
 
 
 def _verify_registry(root: Path, registry: str, scenario: str) -> subprocess.CompletedProcess[str]:
