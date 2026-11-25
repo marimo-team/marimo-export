@@ -249,14 +249,14 @@ def test_publish_preflight_accepts_exact_sha_with_successful_ci(tmp_path: Path) 
     assert result.returncode == 0, result.stderr
 
 
-def test_release_dispatches_main_without_local_git_changes(tmp_path: Path) -> None:
+def test_release_requests_shared_preparation_without_local_git_changes(tmp_path: Path) -> None:
     commands = tmp_path / "commands"
     commands.mkdir()
     command_log = tmp_path / "calls"
     _write_command(commands / "git", "#!/bin/sh\nexit 93\n")
     _write_command(
         commands / "gh",
-        '#!/bin/sh\nprintf "%s\\n" "$@" > "$COMMAND_LOG"\n',
+        '#!/bin/sh\nprintf "%s\\n" "$@" "$GITHUB_REPOSITORY" > "$COMMAND_LOG"\n',
     )
     result = subprocess.run(
         [_bash(), str(ROOT / "scripts/release.sh"), "patch"],
@@ -271,15 +271,10 @@ def test_release_dispatches_main_without_local_git_changes(tmp_path: Path) -> No
     )
     assert result.returncode == 0, result.stderr
     assert command_log.read_text().splitlines() == [
-        "workflow",
-        "run",
-        "release-pr.yml",
-        "--repo",
+        "release-control",
+        "request",
+        "patch",
         "marimo-team/marimo-export",
-        "--ref",
-        "main",
-        "-f",
-        "version=patch",
     ]
 
 
